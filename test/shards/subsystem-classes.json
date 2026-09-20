@@ -7,28 +7,28 @@
     "bootstrap-membership": 252,
     "cdc-metadata": 56,
     "cli-tooling": 96,
-    "control-plane": 193,
+    "control-plane": 194,
     "convergence-topology": 91,
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 240,
+    "placement-rebalance": 254,
     "query-sql": 160,
     "release-packaging": 11,
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
-    "storage-partition": 146,
+    "storage-partition": 148,
     "storage-raft": 80,
     "test-infrastructure": 133,
     "transactions": 14,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2138,
-  "digest": "fnv1a32-93e5c6ae",
+  "censusSize": 2155,
+  "digest": "fnv1a32-005dd08f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-1061c5c4",
+  "observationDigest": "fnv1a32-e04bc86b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -536,6 +536,7 @@
     "test/control-plane/live-transport-evidence.test.js": "control-plane",
     "test/control-plane/membership-count-neutral-steady-trim.test.js": "control-plane",
     "test/control-plane/membership-epoch-contract.test.js": "control-plane",
+    "test/control-plane/membership-epoch-reader-divergence.test.js": "control-plane",
     "test/control-plane/membership-layer-boundary.guard.test.js": "control-plane",
     "test/control-plane/membership-lifecycle-controller-live-delegates-only.test.js": "control-plane",
     "test/control-plane/membership-lifecycle-controller.test.js": "control-plane",
@@ -1158,6 +1159,8 @@
     "test/partition/merge-source-replication.test.js": "storage-partition",
     "test/partition/message-handler-registry-routing.property.test.js": "storage-partition",
     "test/partition/message-handler-registry.test.js": "storage-partition",
+    "test/partition/overflow-budget-admitted-case-grid.test.js": "storage-partition",
+    "test/partition/overflow-budget-unmintable-partitions.test.js": "storage-partition",
     "test/partition/partition-cdc-generator.test.js": "storage-partition",
     "test/partition/partition-cdc-parameterized-insert-or-ignore.test.js": "storage-partition",
     "test/partition/partition-coordinator.test.js": "storage-partition",
@@ -1513,6 +1516,7 @@
     "test/rebalancer/interlock-skip-label-fidelity.test.js": "placement-rebalance",
     "test/rebalancer/late-dispatch-honored-stops-redrive.test.js": "placement-rebalance",
     "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": "placement-rebalance",
+    "test/rebalancer/membership-epoch-domain-census.test.js": "placement-rebalance",
     "test/rebalancer/message-group-operation-routing.integration.test.js": "placement-rebalance",
     "test/rebalancer/message-group-rebalancer-wiring.test.js": "placement-rebalance",
     "test/rebalancer/move-planner-capacity-gating.test.js": "placement-rebalance",
@@ -1551,6 +1555,18 @@
     "test/rebalancer/operation-workflow-target-progress-advance-reentry.test.js": "placement-rebalance",
     "test/rebalancer/operation-workflow-target-sync-active-progress-contract.test.js": "placement-rebalance",
     "test/rebalancer/orphaned-operation-reconcile-redrive.test.js": "placement-rebalance",
+    "test/rebalancer/overflow-budget-add-like-producer-census.test.js": "placement-rebalance",
+    "test/rebalancer/overflow-budget-audit-freeze.test.js": "placement-rebalance",
+    "test/rebalancer/overflow-budget-carried-forward-details.test.js": "placement-rebalance",
+    "test/rebalancer/overflow-budget-d3-correction.test.js": "placement-rebalance",
+    "test/rebalancer/overflow-budget-derived-truth.test.js": "placement-rebalance",
+    "test/rebalancer/overflow-budget-evidence-binding.test.js": "placement-rebalance",
+    "test/rebalancer/overflow-budget-inherited-receipts.test.js": "placement-rebalance",
+    "test/rebalancer/overflow-budget-matrix-validator.test.js": "placement-rebalance",
+    "test/rebalancer/overflow-budget-mintable-five-routes.test.js": "placement-rebalance",
+    "test/rebalancer/overflow-budget-partition-sets.test.js": "placement-rebalance",
+    "test/rebalancer/overflow-budget-round3-pin.test.js": "placement-rebalance",
+    "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js": "placement-rebalance",
     "test/rebalancer/pending-move-tracking.property.test.js": "placement-rebalance",
     "test/rebalancer/placement-wrapping-duplicate-adds.test.js": "placement-rebalance",
     "test/rebalancer/planner-single-path-enforcement.test.js": "placement-rebalance",
@@ -1643,6 +1659,7 @@
     "test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js": "placement-rebalance",
     "test/rebalancer/self-source-removal-dispatches-in-process.test.js": "placement-rebalance",
     "test/rebalancer/spread-cure-at-target-minting-gap.test.js": "placement-rebalance",
+    "test/rebalancer/spread-cure-authorization-future-transition.test.js": "placement-rebalance",
     "test/rebalancer/spread-cure-transition-authorization-production-path.test.js": "placement-rebalance",
     "test/rebalancer/spread-cure-transition-authorization-row.test.js": "placement-rebalance",
     "test/rebalancer/spread-cure-transition-authorization.test.js": "placement-rebalance",
@@ -3179,6 +3196,11 @@
     "test/control-plane/lease-sweep-stale-row-reaper.test.js": {
       "files": [
         "src/config/configuration-manager.js"
+      ]
+    },
+    "test/control-plane/membership-epoch-reader-divergence.test.js": {
+      "directories": [
+        "solve/epics/formation-seed-decoupling"
       ]
     },
     "test/control-plane/membership-layer-boundary.guard.test.js": {
@@ -6067,6 +6089,30 @@
         "test/partition/fixtures/critical-spread-transition-authority/recorded-guard-shapes.json"
       ]
     },
+    "test/partition/overflow-budget-admitted-case-grid.test.js": {
+      "files": [
+        "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test/rebalancer/overflow-budget-add-like-producer-census.test.js",
+        "test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+        "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js"
+      ],
+      "directories": [
+        "solve/epics/formation-seed-decoupling"
+      ]
+    },
+    "test/partition/overflow-budget-unmintable-partitions.test.js": {
+      "files": [
+        "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test/rebalancer/overflow-budget-add-like-producer-census.test.js",
+        "test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+        "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js"
+      ],
+      "directories": [
+        "solve/epics/formation-seed-decoupling"
+      ]
+    },
     "test/partition/partition-coordinator.test.js": {
       "files": [
         "src/partition/partition-coordinator.js"
@@ -6667,6 +6713,11 @@
         "src/rebalancer/unified-rebalancer-priority-readiness.js"
       ]
     },
+    "test/rebalancer/membership-epoch-domain-census.test.js": {
+      "directories": [
+        "solve/epics/formation-seed-decoupling"
+      ]
+    },
     "test/rebalancer/message-group-operation-routing.integration.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
@@ -6685,6 +6736,237 @@
         "src/rebalancer/operation-workflow-owner-shared.js",
         "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
         "src/rebalancer/replica-operation-update-disposition.js"
+      ]
+    },
+    "test/rebalancer/overflow-budget-add-like-producer-census.test.js": {
+      "files": [
+        "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test/rebalancer/overflow-budget-add-like-producer-census.test.js",
+        "test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+        "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js"
+      ],
+      "directories": [
+        "solve/epics/formation-seed-decoupling",
+        "src"
+      ]
+    },
+    "test/rebalancer/overflow-budget-audit-freeze.test.js": {
+      "files": [
+        "package.json",
+        "scripts/quest-evidence/overflow-budget-audit-evidence-binding.js",
+        "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test/rebalancer/overflow-budget-add-like-producer-census.test.js",
+        "test/rebalancer/overflow-budget-audit-observation.js",
+        "test/rebalancer/overflow-budget-audit-render.js",
+        "test/rebalancer/overflow-budget-audit-support.js",
+        "test/rebalancer/overflow-budget-evidence-binding.test.js",
+        "test/rebalancer/overflow-budget-matrix-validator.test.js",
+        "test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+        "test/rebalancer/overflow-budget-prose-blind.js",
+        "test/rebalancer/overflow-budget-receipt-emission.js",
+        "test/rebalancer/overflow-budget-round3-pin.json",
+        "test/rebalancer/overflow-budget-round3-pin.test.js",
+        "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js"
+      ],
+      "directories": [
+        ".githooks",
+        ".github",
+        "examples",
+        "solve/epics/formation-seed-decoupling",
+        "solve/quests",
+        "src"
+      ]
+    },
+    "test/rebalancer/overflow-budget-carried-forward-details.test.js": {
+      "directories": [
+        "solve/epics/formation-seed-decoupling"
+      ]
+    },
+    "test/rebalancer/overflow-budget-d3-correction.test.js": {
+      "files": [
+        "package.json",
+        "scripts/quest-evidence/overflow-budget-audit-evidence-binding.js",
+        "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test/rebalancer/overflow-budget-add-like-producer-census.test.js",
+        "test/rebalancer/overflow-budget-audit-observation.js",
+        "test/rebalancer/overflow-budget-audit-render.js",
+        "test/rebalancer/overflow-budget-audit-support.js",
+        "test/rebalancer/overflow-budget-evidence-binding.test.js",
+        "test/rebalancer/overflow-budget-matrix-validator.test.js",
+        "test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+        "test/rebalancer/overflow-budget-prose-blind.js",
+        "test/rebalancer/overflow-budget-receipt-emission.js",
+        "test/rebalancer/overflow-budget-round3-pin.json",
+        "test/rebalancer/overflow-budget-round3-pin.test.js",
+        "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js"
+      ],
+      "directories": [
+        ".githooks",
+        ".github",
+        "examples",
+        "solve/epics/formation-seed-decoupling",
+        "solve/quests",
+        "src"
+      ]
+    },
+    "test/rebalancer/overflow-budget-derived-truth.test.js": {
+      "files": [
+        "package.json",
+        "scripts/quest-evidence/overflow-budget-audit-evidence-binding.js",
+        "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test/rebalancer/overflow-budget-add-like-producer-census.test.js",
+        "test/rebalancer/overflow-budget-audit-observation.js",
+        "test/rebalancer/overflow-budget-audit-render.js",
+        "test/rebalancer/overflow-budget-audit-support.js",
+        "test/rebalancer/overflow-budget-evidence-binding.test.js",
+        "test/rebalancer/overflow-budget-matrix-validator.test.js",
+        "test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+        "test/rebalancer/overflow-budget-prose-blind.js",
+        "test/rebalancer/overflow-budget-receipt-emission.js",
+        "test/rebalancer/overflow-budget-round3-pin.json",
+        "test/rebalancer/overflow-budget-round3-pin.test.js",
+        "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js"
+      ],
+      "directories": [
+        ".githooks",
+        ".github",
+        "examples",
+        "solve/epics/formation-seed-decoupling",
+        "solve/quests",
+        "src"
+      ]
+    },
+    "test/rebalancer/overflow-budget-evidence-binding.test.js": {
+      "files": [
+        "package.json",
+        "scripts/quest-evidence/overflow-budget-audit-evidence-binding.js",
+        "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test/rebalancer/overflow-budget-add-like-producer-census.test.js",
+        "test/rebalancer/overflow-budget-audit-observation.js",
+        "test/rebalancer/overflow-budget-audit-render.js",
+        "test/rebalancer/overflow-budget-audit-support.js",
+        "test/rebalancer/overflow-budget-evidence-binding.test.js",
+        "test/rebalancer/overflow-budget-matrix-validator.test.js",
+        "test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+        "test/rebalancer/overflow-budget-prose-blind.js",
+        "test/rebalancer/overflow-budget-receipt-emission.js",
+        "test/rebalancer/overflow-budget-round3-pin.json",
+        "test/rebalancer/overflow-budget-round3-pin.test.js",
+        "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js"
+      ],
+      "directories": [
+        ".githooks",
+        ".github",
+        "examples",
+        "solve/epics/formation-seed-decoupling",
+        "solve/quests",
+        "src"
+      ]
+    },
+    "test/rebalancer/overflow-budget-inherited-receipts.test.js": {
+      "files": [
+        "package.json",
+        "scripts/quest-evidence/overflow-budget-audit-evidence-binding.js",
+        "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test/rebalancer/overflow-budget-add-like-producer-census.test.js",
+        "test/rebalancer/overflow-budget-audit-observation.js",
+        "test/rebalancer/overflow-budget-audit-render.js",
+        "test/rebalancer/overflow-budget-audit-support.js",
+        "test/rebalancer/overflow-budget-evidence-binding.test.js",
+        "test/rebalancer/overflow-budget-matrix-validator.test.js",
+        "test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+        "test/rebalancer/overflow-budget-prose-blind.js",
+        "test/rebalancer/overflow-budget-receipt-emission.js",
+        "test/rebalancer/overflow-budget-round3-pin.json",
+        "test/rebalancer/overflow-budget-round3-pin.test.js",
+        "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js"
+      ],
+      "directories": [
+        ".githooks",
+        ".github",
+        "examples",
+        "solve/epics/formation-seed-decoupling",
+        "solve/quests",
+        "src"
+      ]
+    },
+    "test/rebalancer/overflow-budget-matrix-validator.test.js": {
+      "files": [
+        "src/rebalancer/replica-placement-cure-policy.js",
+        "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test/rebalancer/overflow-budget-add-like-producer-census.test.js",
+        "test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+        "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js"
+      ],
+      "directories": [
+        "solve/epics/formation-seed-decoupling"
+      ]
+    },
+    "test/rebalancer/overflow-budget-mintable-five-routes.test.js": {
+      "files": [
+        "src/rebalancer/move-planner-priority-spread-cure.js",
+        "src/rebalancer/replica-placement-cure-policy.js",
+        "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test/rebalancer/overflow-budget-add-like-producer-census.test.js",
+        "test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+        "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js"
+      ],
+      "directories": [
+        "solve/epics/formation-seed-decoupling"
+      ]
+    },
+    "test/rebalancer/overflow-budget-partition-sets.test.js": {
+      "directories": [
+        "solve/epics/formation-seed-decoupling"
+      ]
+    },
+    "test/rebalancer/overflow-budget-round3-pin.test.js": {
+      "files": [
+        "package.json",
+        "scripts/quest-evidence/overflow-budget-audit-evidence-binding.js",
+        "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test/rebalancer/overflow-budget-add-like-producer-census.test.js",
+        "test/rebalancer/overflow-budget-audit-observation.js",
+        "test/rebalancer/overflow-budget-audit-render.js",
+        "test/rebalancer/overflow-budget-audit-support.js",
+        "test/rebalancer/overflow-budget-evidence-binding.test.js",
+        "test/rebalancer/overflow-budget-matrix-validator.test.js",
+        "test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+        "test/rebalancer/overflow-budget-prose-blind.js",
+        "test/rebalancer/overflow-budget-receipt-emission.js",
+        "test/rebalancer/overflow-budget-round3-pin.json",
+        "test/rebalancer/overflow-budget-round3-pin.test.js",
+        "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js"
+      ],
+      "directories": [
+        ".githooks",
+        ".github",
+        "examples",
+        "solve/epics/formation-seed-decoupling",
+        "solve/quests",
+        "src"
+      ]
+    },
+    "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js": {
+      "files": [
+        "src/rebalancer/unified-rebalancer-follow-up-move.js",
+        "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test/rebalancer/overflow-budget-add-like-producer-census.test.js",
+        "test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+        "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js"
+      ],
+      "directories": [
+        "solve/epics/formation-seed-decoupling"
       ]
     },
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js": {
@@ -6872,6 +7154,11 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/unified-service-lifecycle.js",
         "src/rebalancer/replica-status.js"
+      ]
+    },
+    "test/rebalancer/spread-cure-authorization-future-transition.test.js": {
+      "directories": [
+        "solve/epics/formation-seed-decoupling"
       ]
     },
     "test/rebalancer/spread-cure-transition-authorization.test.js": {

@@ -1,0 +1,73 @@
+{
+  "schema": "solve-quest/2",
+  "id": "overflow-budget-audit-evidence-binding",
+  "class": "process",
+  "epic": "formation-seed-decoupling",
+  "statement": "The read-only overflow-budget audit was superseded after its third verification round upheld its content - 25 of 27 matrix rows, all nine enforcement-entry-gate statuses and three architectural results - and rejected it on three ordinary defects: two hand-off rows carry does_not_depend together with explicit-authority-required; the receipts a row cites are pointers to a test file and are not bound to the row, field, value or domain they are said to prove, so a flipped dependency citing an unrelated test stays green and any row may claim producer reachability by citing a file that calls itself real-chain; and a finding's open flag and a required external artifact's exists flag are hand-written booleans from which a gate item can be made demonstrated. This quest makes that inherited audit trustworthy enough to freeze, and does nothing else. It corrects five-relocation-handoff-overlap and ledger-relocation-handoff-overlap to the existing disposition that fits a measured does_not_depend, qualified by its domain - a budget-dependent authority requirement is unreachable within the ordinary hand-off domain, the relocation itself stays reachable and legitimate, the spread-recovery two-owner finding is kept, and no ledger authority appears - and lets gate item 3 follow from the corrected rows by derivation. It replaces pointer receipts with receipts a measuring test emits and asserts, each binding the matrix row id, the receipt kind, the classification field, the expected value, the stated domain, the witness identity and the result that witness produced, so that the validator demands the binding rather than the file, a receipt for one row never satisfies another, a receipt for one value never satisfies another, and a real-chain receipt names the row and the producer and transition facts its drive established. It removes hand-written truth: a finding is resolved only by a resolution artifact on disk that names the finding and carries a compatible result, and a required external artifact is satisfied only by what the repository holds - its existence, its kind, the gate requirement it names and, where it is a quest, its sealed and approved state - so gate status is a pure, monotonic derivation from validated evidence that no removal, corruption, substitution or metadata edit can improve, and item 8 stays not-yet. It pins the round-3 content of the 25 upheld rows and every other inherited value so that anything but the authorized D3 correction turns a receipt red, keeps the architectural results as results, and on an independent approving verification freezes the corrected matrix, the gate document, the evidence bindings and the surviving findings behind a manifest that names that verification.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/overflow-budget-audit-evidence-binding/evidence/receipt.json",
+      "requiredReceipts": [
+        "d3-handoff-rows-corrected-with-domain-qualification",
+        "gate-item-3-follows-from-the-corrected-rows-by-derivation",
+        "inherited-round-3-content-unchanged-except-d3",
+        "every-dependency-receipt-is-row-field-value-domain-bound",
+        "every-producer-reachability-receipt-is-row-and-producer-bound",
+        "measuring-tests-emit-the-receipts-they-are-cited-for",
+        "receipt-binding-mutants-all-fail-structurally",
+        "finding-resolution-derives-from-resolution-artifacts",
+        "external-artifacts-are-observed-from-repository-state",
+        "gate-item-8-stays-not-yet-under-any-audit-metadata-edit",
+        "gate-derivation-is-monotonic-under-removal-corruption-and-substitution",
+        "the-three-round-3-attacks-no-longer-work",
+        "inherited-audit-receipts-still-green",
+        "no-production-file-changed",
+        "freeze-manifest-names-an-approving-verification-and-matches-the-frozen-bytes"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "read-only-production",
+      "statement": "No file under src, examples, .github or .githooks changes; no behaviour changes anywhere."
+    },
+    {
+      "id": "d3-only-content-change",
+      "statement": "The only matrix values that change are the two hand-off rows' disposition with its domain qualification and whatever follows from them by derivation (gate item 3's selected rows, its selection pin and its derived status, the generated markdown); the representation of receipts, finding resolution and external artifacts changes form, never the classification it carries. No new matrix class, row, disposition, dependency value or authorization kind."
+    },
+    {
+      "id": "inherited-not-reaudited",
+      "statement": "The 25 upheld rows and the other round-3 results are inherited and pinned, not reworked. If an inherited fact is found false the quest stops and reports it; it does not widen."
+    },
+    {
+      "id": "bound-by-structure",
+      "statement": "A receipt binding is data the measuring test produces and asserts and the validator compares field by field. Nothing rests on a filename convention, on prose inside a test, or on a test merely existing or declaring a kind."
+    },
+    {
+      "id": "no-hand-written-truth",
+      "statement": "No boolean or status in the matrix or gate data declares a finding resolved, an artifact present or an item demonstrated; an absent or invalid artifact leaves the finding open and the requirement unmet whatever the metadata says."
+    },
+    {
+      "id": "monotonic-derivation",
+      "statement": "Removing, invalidating, disconnecting or substituting evidence never improves a gate status; every such mutant is run against the real validator and derivation and must fail or leave the status no better."
+    },
+    {
+      "id": "architectural-results-stand",
+      "statement": "Producer identity stays invisible to the guard and the lab's ledger and operation-less attribution stays unrecoverable; no guard-visible producer identity is invented and no attribution is inferred from timing."
+    },
+    {
+      "id": "freeze-only-on-approval",
+      "statement": "The freeze manifest is written only after an independent approving verification is recorded in this quest's log, names it, and is refused by its own check if that verification is absent, is followed by a rejection, or the frozen bytes differ. Nobody freezes by hand."
+    },
+    {
+      "id": "no-widening",
+      "statement": "No epoch-domain closing, membership-ceiling or transition-object work, owner repair or enforcement work; if row-bound evidence cannot be represented without a larger architecture change, that is reported as this quest's result."
+    },
+    {
+      "id": "no-new-apparatus",
+      "statement": "One quest-evidence script for the probe and test-side support only; no new npm script, workflow or standalone checker."
+    }
+  ],
+  "sealedAt": "88f0ce083a851a795db75eb5295679de65295578"
+}
