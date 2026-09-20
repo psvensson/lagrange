@@ -497,7 +497,8 @@ function createRaftRsNodeClass(context) {
       const trapped = ran.outcome === RAFT_RS_CALL_OUTCOME.TRAPPED;
       const unhealthy = ran.outcome === RAFT_RS_CALL_OUTCOME.RUNTIME_UNHEALTHY;
       return Object.freeze({
-        admitted: admission === null ? !trapped && !unhealthy :
+        admitted: admission === null ?
+          ran.outcome === RAFT_RS_CALL_OUTCOME.COMPLETED :
           admission.admitted,
         outcome: admission === null ? ran.outcome : admission.outcome,
         detail: admission === null ? ran.error : admission.detail,

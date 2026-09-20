@@ -428,6 +428,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: this.unifiedAddress,
       [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: this.replicaIds,
       [RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG]: this.logAdapter,
+      [RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE]: this.db,
       [RAFT_PARTITION_NODE_REQUEST.TIMING]: this.raftTimingConfig,
       [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]: hostedConsensusSubstrate(this),
       [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: this.deferElection,

@@ -72,6 +72,11 @@ function buildSeamNode({
     [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: buildPeerAddress,
     [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
     [RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
+    // Declared requirements are all required: the backend subscribes this
+    // one on the node it builds, so a request that omits it never produces a
+    // node at all. The packet path under test never rolls an apply back.
+    [RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK]: () =>
+      undefined,
   });
 }
 

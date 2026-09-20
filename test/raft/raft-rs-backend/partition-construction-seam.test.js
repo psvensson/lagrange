@@ -19,6 +19,8 @@ import path from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
+import Database from 'better-sqlite3';
+
 import {
   PartitionService,
 } from '../../../src/partition/partition-service.js';
@@ -68,6 +70,10 @@ function minimalPartitionRequest(overrides) {
         return undefined;
       },
     },
+    // The replica's own storage handle. liferaft keeps its record in the log
+    // it was handed; a backend whose record is more than entries is handed
+    // the storage itself.
+    [RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE]: new Database(MEMORY_DB),
     [RAFT_PARTITION_NODE_REQUEST.TIMING]: STANDALONE_TIMING,
     [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]: {},
     [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: true,
@@ -272,8 +278,14 @@ async () => {
   }
 });
 
-test('the experimental backend refuses partition construction by name rather ' +
-  'than building a liferaft node',
+// Phase 5 supersedes phase 4's refusal: the experimental backend now builds
+// the node a partition group runs on, and the real partition driven through
+// it is test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js. What is
+// measured here is the OTHER half - that the boundary is still a boundary: a
+// request missing a declared field is refused by the field's own name rather
+// than defaulted or looked up somewhere else.
+test('the experimental backend builds a partition node, and refuses a ' +
+  'request that does not carry a declared requirement, by that name',
 async () => {
   const provider = createRaftProvider({
     [RAFT_BACKEND_OPTION]: RAFT_BACKEND.RAFT_RS_WASM,
@@ -283,15 +295,29 @@ async () => {
     'function',
     'the name is present on both backends, so a caller never takes a ' +
     'quieter path because a method was missing');
-  let refusal = null;
-  try {
-    provider.createPartitionNode({});
-    assert.fail('the experimental backend must not build a partition node yet');
-  } catch (error) {
-    refusal = error;
+  // Every declared field is required: dropping one at a time shows the
+  // refusal names the field, and the field names come from the contract
+  // owner rather than from this file.
+  const mandatory = [
+    RAFT_PARTITION_NODE_REQUEST.GROUP_ID,
+    RAFT_PARTITION_NODE_REQUEST.PEER_ID,
+    RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE,
+    RAFT_PARTITION_NODE_REQUEST.TIMING,
+    RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER,
+    RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS,
+    RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY,
+    RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS,
+  ];
+  for (const field of mandatory) {
+    const request = minimalPartitionRequest({[field]: undefined});
+    let refusal = null;
+    try {
+      provider.createPartitionNode(request);
+      assert.fail(`a request without ${field} must be refused`);
+    } catch (error) {
+      refusal = error;
+    }
+    assert.ok(refusal.message.includes(field),
+      `the refusal names the missing requirement; it said ${refusal.message}`);
   }
-  assert.ok(
-    refusal.message.includes(
-      RAFT_PROVIDER_CONTRACT_METHOD.CREATE_PARTITION_NODE),
-    `the refusal names what was refused; it said ${refusal.message}`);
 });

@@ -14,6 +14,8 @@
 
 import {
   RAFT_RS_CALL_OUTCOME,
+  RAFT_RS_FATAL_IS_AN_ERROR_INSTANCE,
+  RAFT_RS_GROUP_ORIGIN,
   RAFT_RS_PANIC_CHANNEL,
   RAFT_RS_PANIC_JOINER,
   RAFT_RS_RUNTIME_ERROR_MSG,
@@ -28,7 +30,7 @@ import {createRaftRsGroup, restoreRaftRsGroup} from './raft-rs-group.js';
  * is what the panic hook wrote to console.error while the trap was unwinding.
  * Capturing it is the only way a host learns what happened.
  * @param {Function} work - The work to run.
- * @return {Object} {threw, error, diagnosis}.
+ * @return {Object} {threw, fatal, error, diagnosis}.
  */
 function runCapturingThePanicChannel(work) {
   const captured = [];
@@ -39,10 +41,13 @@ function runCapturingThePanicChannel(work) {
   };
   try {
     const value = work();
-    return {threw: false, value, error: null, diagnosis: null};
+    return {threw: false, fatal: false, value, error: null, diagnosis: null};
   } catch (error) {
     return {
       threw: true,
+      // The binding returns its Errs as strings and a fatal arrives as a
+      // WebAssembly.RuntimeError, so what was thrown says which happened.
+      fatal: (error instanceof Error) === RAFT_RS_FATAL_IS_AN_ERROR_INSTANCE,
       value: undefined,
       error: String(error?.message || error),
       diagnosis: captured.join(RAFT_RS_PANIC_JOINER.LINES),
@@ -65,13 +70,18 @@ class RaftRsHostedGroup {
    * @param {string} parts.peerId - This peer's raft id, a decimal string.
    * @param {Object} parts.store - The group's durable Raft record.
    * @param {number} parts.handle - Its handle in the current runtime.
+   * @param {string} [parts.origin] - How it came to be here, by name.
    */
-  constructor({key, groupId, peerId, store, handle}) {
+  constructor({
+    key, groupId, peerId, store, handle,
+    origin = RAFT_RS_GROUP_ORIGIN.ADOPTED,
+  }) {
     this.key = key;
     this.groupId = groupId;
     this.peerId = peerId;
     this.store = store;
     this.handle = handle;
+    this.origin = origin;
   }
 }
 
@@ -134,18 +144,45 @@ class RaftRsRuntimeHost {
   }
 
   /**
-   * Create a fresh group in this runtime and hold it.
+   * Bring one group up in this runtime and hold it.
+   *
+   * A group that already has a durable record comes back FROM THAT RECORD -
+   * the same restore path a runtime replacement uses - and only a group with
+   * no record is created from the bootstrap membership the caller passed. A
+   * restart is not a second formation, so the bootstrap list is an input to
+   * creation alone and can never overwrite a committed configuration.
    * @param {Object} options - The group's inputs.
    * @return {number} Its handle.
    */
   openGroup({key, groupId, peerId, store, voters, learners, tuning}) {
-    const handle = createRaftRsGroup({
-      core: this.runtime, store, groupId, peerId, voters, learners, tuning,
-    });
+    const resumed = store.hasDurableRecord(groupId);
+    const handle = resumed ?
+      restoreRaftRsGroup({
+        core: this.runtime, store, groupId, peerId, tuning}) :
+      createRaftRsGroup({
+        core: this.runtime, store, groupId, peerId, voters, learners, tuning,
+      });
     this.groupsById.set(key ?? groupId,
       new RaftRsHostedGroup({
-        key: key ?? groupId, groupId, peerId, store, handle}));
+        key: key ?? groupId,
+        groupId,
+        peerId,
+        store,
+        handle,
+        origin: resumed ?
+          RAFT_RS_GROUP_ORIGIN.RESTORED_FROM_DURABLE_RECORD :
+          RAFT_RS_GROUP_ORIGIN.CREATED_FRESH,
+      }));
     return handle;
+  }
+
+  /**
+   * How a hosted group came to be in this runtime, by name.
+   * @param {string} key - What this host calls it.
+   * @return {string} A RAFT_RS_GROUP_ORIGIN value.
+   */
+  originOf(key) {
+    return this.hostedGroup(key).origin;
   }
 
   /**
@@ -186,6 +223,14 @@ class RaftRsRuntimeHost {
         value: ran.value, error: null, diagnosis: null,
       });
     }
+    if (!ran.fatal) {
+      // raft-rs declined the call and returned. Nothing unwound, so the
+      // runtime is exactly as it was and every other group in it is fine.
+      return Object.freeze({
+        outcome: RAFT_RS_CALL_OUTCOME.CORE_REFUSED,
+        value: undefined, error: ran.error, diagnosis: null,
+      });
+    }
     this.healthState = RAFT_RS_RUNTIME_HEALTH.UNHEALTHY_AFTER_TRAP;
     this.trap = Object.freeze({
       key, groupId: hosted.groupId, error: ran.error,
@@ -212,6 +257,7 @@ class RaftRsRuntimeHost {
         groupId: hosted.groupId,
         peerId: hosted.peerId,
       });
+      hosted.origin = RAFT_RS_GROUP_ORIGIN.RESTORED_FROM_DURABLE_RECORD;
       restored.push(hosted.key);
     }
     this.healthState = RAFT_RS_RUNTIME_HEALTH.HEALTHY;

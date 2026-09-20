@@ -14,6 +14,7 @@ import {
   RAFT_RS_BOOLEAN_COLUMN,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
+  RAFT_RS_SCHEDULING_ELIGIBILITY,
   RAFT_RS_SQL,
   RAFT_RS_STORE_ERROR_MSG,
   RAFT_RS_ZERO_INDEX,
@@ -102,6 +103,7 @@ class RaftRsDurableStore {
     this.db.exec(RAFT_RS_SQL.CREATE_HARD_STATE_TABLE);
     this.db.exec(RAFT_RS_SQL.CREATE_APPLIED_STATE_TABLE);
     this.db.exec(RAFT_RS_SQL.CREATE_SNAPSHOT_TABLE);
+    this.db.exec(RAFT_RS_SQL.CREATE_RETIREMENT_TABLE);
   }
 
   /**
@@ -267,6 +269,59 @@ class RaftRsDurableStore {
         },
       } : null,
     };
+  }
+
+  /**
+   * Whether this group has a durable record to come back from.
+   *
+   * A named question rather than an exception: a caller deciding between
+   * creating a fresh group and restoring one asks it, and gets a state
+   * instead of reading emptiness out of a thrown error.
+   * @param {string} groupId - The group.
+   * @return {boolean} Whether a record exists.
+   */
+  hasDurableRecord(groupId) {
+    const record = this.readDurableRecord(groupId);
+    return record.hardState !== null || record.entries.length > 0 ||
+      record.confState.voters.length > 0;
+  }
+
+  /**
+   * Durably retire one peer of one group: it is no longer an active local
+   * Raft runtime and must not be scheduled again, in this process or in any
+   * later one.
+   *
+   * Idempotent (R14): retiring a peer already retired keeps the first answer,
+   * so the record says when the decision was taken rather than when it was
+   * last repeated.
+   * @param {string} groupId - The group.
+   * @param {string} peerId - The raft peer id, as a decimal string.
+   * @param {string} retiredAt - When the decision was taken.
+   * @return {string} The recorded retirement moment.
+   */
+  putRetirement(groupId, peerId, retiredAt) {
+    // Not journalled: the journal's vocabulary is the raft-rs host contract's
+    // Ready-loop writes, and retirement is not one of them.
+    this.db.prepare(RAFT_RS_SQL.INSERT_RETIREMENT)
+      .run(groupId, peerId, retiredAt);
+    return this.readRetirement(groupId, peerId).retiredAt;
+  }
+
+  /**
+   * Whether this peer may run at all, read from the durable record.
+   * @param {string} groupId - The group.
+   * @param {string} peerId - The raft peer id, as a decimal string.
+   * @return {Object} {eligibility, retiredAt}.
+   */
+  readRetirement(groupId, peerId) {
+    const row = this.db.prepare(RAFT_RS_SQL.SELECT_RETIREMENT)
+      .get(groupId, peerId);
+    return Object.freeze({
+      eligibility: row === undefined ?
+        RAFT_RS_SCHEDULING_ELIGIBILITY.ELIGIBLE :
+        RAFT_RS_SCHEDULING_ELIGIBILITY.RETIRED,
+      retiredAt: row === undefined ? null : row.retired_at,
+    });
   }
 }
 

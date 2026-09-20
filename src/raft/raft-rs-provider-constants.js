@@ -25,6 +25,18 @@ const RAFT_RS_PROVIDER_METHOD = Object.freeze({
 // raft-rs-node-constants.js holds that object's own partition of the census.
 const RAFT_RS_PROVIDER_SERVED = Object.freeze([
   RAFT_RS_PROVIDER_METHOD.CREATE_NODE_CLASS,
+  // Phase 5: a real partition group runs on this backend. The durable store
+  // is opened on the replica's own database, every bootstrap member's raft
+  // identity is REGISTERED rather than taken from its position, the tick
+  // driver runs on the substrate the group handed over, and the durable
+  // retirement record is read before anything ticks.
+  RAFT_RS_PROVIDER_METHOD.CREATE_PARTITION_NODE,
+  // The tick driver is what an election follows from under this backend, so
+  // starting and clearing it are the same owner. They serve nodes this
+  // backend built and refuse anything else by name.
+  RAFT_RS_PROVIDER_METHOD.START_ELECTION_TIMER,
+  RAFT_RS_PROVIDER_METHOD.CLEAR_TIMERS,
+  RAFT_RS_PROVIDER_METHOD.REQUEST_ELECTION_NOW,
   RAFT_RS_PROVIDER_METHOD.PROPOSE,
   RAFT_RS_PROVIDER_METHOD.SHUTDOWN_NODE,
   RAFT_RS_PROVIDER_METHOD.GET_CURRENT_TERM,
@@ -33,14 +45,6 @@ const RAFT_RS_PROVIDER_SERVED = Object.freeze([
 
 // Deferred, each with the reason it is deferred rather than missing.
 const RAFT_RS_PROVIDER_DEFERRED = Object.freeze({
-  [RAFT_RS_PROVIDER_METHOD.CREATE_PARTITION_NODE]:
-    'a partition group is a real Raft group on durable storage, not the ' +
-    'message-group node createNodeClass builds: it needs the durable store ' +
-    'opened on the replica\'s own database, a peer identity registered for ' +
-    'every bootstrap member, a tick driver and the retirement record. Phase ' +
-    '4 opened the boundary; driving a real partition through it is the next ' +
-    'step, and until it is driven this backend refuses rather than building ' +
-    'something that would look like a partition and not be one.',
   [RAFT_RS_PROVIDER_METHOD.PROPOSE_WITH_LEADER_ROUTING]:
     'leader routing needs the transport integration that phase 1 does not ' +
     'build; raft-rs answers who the leader is through status(), but the ' +
@@ -51,16 +55,6 @@ const RAFT_RS_PROVIDER_DEFERRED = Object.freeze({
     'authority, so a join is a proposed configuration change, not a call ' +
     'that edits a local array. The binding exposes the primitive; the ' +
     'workflow that uses it is a later phase.',
-  [RAFT_RS_PROVIDER_METHOD.START_ELECTION_TIMER]:
-    'raft-rs has no host-owned election timer: elections follow from tick() ' +
-    'and the core\'s own election_tick. The tick driver is later phase work.',
-  [RAFT_RS_PROVIDER_METHOD.REQUEST_ELECTION_NOW]:
-    'campaign() is the core\'s primitive, but §11 of the binding direction ' +
-    'forbids calling it on a learner, a removed peer, or a peer that is not ' +
-    'a voter in its own committed ConfState. Phase 1 drove no election ' +
-    'scenario, so the guard that would make this safe is unmeasured.',
-  [RAFT_RS_PROVIDER_METHOD.CLEAR_TIMERS]:
-    'there are no host timers to clear until the tick driver exists.',
 });
 
 // The core status fields the seam's two numeric getters read.

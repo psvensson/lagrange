@@ -25,6 +25,14 @@ const RAFT_PARTITION_NODE_REQUEST = Object.freeze({
   PEER_ADDRESS: 'peerAddress',
   BOOTSTRAP_PEER_IDS: 'bootstrapPeerIds',
   DURABLE_LOG: 'durableLog',
+  // The replica's own durable storage handle. A backend whose record is not
+  // an entry log - raft-rs keeps a hard state, an applied position, a
+  // configuration state and a snapshot beside its entries - needs the storage
+  // itself, not a log shaped for one backend's entries. It is named here
+  // because addendum §1 says a backend that needs something absent from this
+  // list changes the boundary rather than reaching around it: reading it off
+  // the log adapter would be exactly that reach.
+  DURABLE_STORAGE: 'durableStorage',
   TIMING: 'timing',
   SUBSTRATE: 'substrate',
   DEFER_ELECTION: 'deferElection',

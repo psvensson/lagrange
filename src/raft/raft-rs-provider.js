@@ -15,6 +15,13 @@ import {
 } from './raft-rs-provider-constants.js';
 import {createRaftRsNodeClass} from './raft-rs-node.js';
 import {loadRaftRsCore} from './raft-rs-core.js';
+import {
+  RAFT_RS_TICK_SCHEDULING,
+  buildRaftRsPartitionNode,
+} from './raft-rs-partition-node.js';
+import {
+  RAFT_RS_PARTITION_ERROR_MSG,
+} from './raft-rs-partition-node-constants.js';
 
 /**
  * One group of this backend: a handle inside the shared WASM runtime, its
@@ -90,9 +97,127 @@ class RaftRsWasmProvider {
   constructor(options = {}) {
     this.options = options;
     this.core = options.core || loadRaftRsCore();
+    // What this backend holds about each partition node IT built: the tick
+    // driver, the peer registry and the durable retirement record. It is a
+    // WeakMap so the node stays the only handle, and so the seam's node
+    // surface does not grow a member for the backend's own bookkeeping.
+    this.partitionControls = new WeakMap();
     for (const name of Object.keys(RAFT_RS_PROVIDER_DEFERRED)) {
       this[name] = () => refuseDeferred(name);
     }
+  }
+
+  /**
+   * What this backend holds about one node it built.
+   * @param {Object} node - The node the seam passed back.
+   * @return {Object} Its control.
+   * @private
+   */
+  partitionControlOf(node) {
+    const control = this.partitionControls.get(node);
+    if (control === undefined) {
+      throw new Error(RAFT_RS_PARTITION_ERROR_MSG.notAPartitionNode());
+    }
+    return control;
+  }
+
+  /**
+   * Build the node one partition group runs on.
+   * @param {Object} request - The partition group's requirements.
+   * @return {Object} The node.
+   */
+  createPartitionNode(request) {
+    const control = buildRaftRsPartitionNode(request);
+    this.partitionControls.set(control.node, control);
+    return control.node;
+  }
+
+  /**
+   * Register one logical Lagrange replica's raft identity with this node's
+   * own durable registry, and answer what it is.
+   *
+   * The identity is a derivation of the replica's own name (§10), so every
+   * peer that registers the same replica computes the same value - but a peer
+   * can only ADDRESS an identity it holds a reservation for, because the
+   * derivation is one-way. Adding a replica to a group is therefore a
+   * Lagrange workflow step that names the joining replica to each existing
+   * peer before any configuration change is proposed; the backend never
+   * discovers a replica by reading a service row.
+   * @param {Object} node - A node this backend built.
+   * @param {string} replicaIdentity - The joining replica's logical name.
+   * @return {string} Its raft peer id, as an exact decimal string.
+   */
+  registerPartitionPeer(node, replicaIdentity) {
+    return this.partitionControlOf(node).registry
+      .registerReplica(replicaIdentity);
+  }
+
+  /**
+   * How this backend is scheduling one partition node, by name.
+   * @param {Object} node - A node this backend built.
+   * @return {Object} {scheduling, retired, ticksDriven, peerId}.
+   */
+  partitionScheduling(node) {
+    const control = this.partitionControlOf(node);
+    return Object.freeze({
+      scheduling: control.scheduling,
+      retired: control.retired,
+      ticksDriven: control.ticksDriven,
+      peerId: control.peerId,
+    });
+  }
+
+  /**
+   * Durably retire one replica from runtime scheduling and stop driving it.
+   *
+   * Not a campaign guard: after this the host gives the core no ticks at all,
+   * in this process and - because the record is durable and read before the
+   * tick driver exists - in every later one.
+   * @param {Object} node - A node this backend built.
+   * @param {string} retiredAt - When the decision was taken.
+   * @return {Object} {scheduling, retiredAt}.
+   */
+  retireFromScheduling(node, retiredAt) {
+    const control = this.partitionControlOf(node);
+    const recorded = control.store.putRetirement(
+      control.groupId, control.peerId, retiredAt);
+    control.retirement = control.store.readRetirement(
+      control.groupId, control.peerId);
+    control.driver.retired = true;
+    control.driver.stop();
+    control.driver.state = RAFT_RS_TICK_SCHEDULING.REFUSED_RETIRED;
+    return Object.freeze({
+      scheduling: control.scheduling, retiredAt: recorded});
+  }
+
+  /**
+   * Start driving this group's core, which is how an election becomes
+   * possible under this backend: raft-rs has no host-owned election timer,
+   * elections follow from tick().
+   * @param {Object} node - A node this backend built.
+   * @return {string} The named scheduling state.
+   */
+  startElectionTimer(node) {
+    const control = this.partitionControlOf(node);
+    return control.driver.start(() => control.node.tickOnce());
+  }
+
+  /**
+   * Stop driving this group's core.
+   * @param {Object} node - A node this backend built.
+   * @return {string} The named scheduling state.
+   */
+  clearTimers(node) {
+    return this.partitionControlOf(node).driver.stop();
+  }
+
+  /**
+   * Ask this peer to campaign now, through the guarded path.
+   * @param {Object} node - A node this backend built.
+   * @return {Object} {campaigned, refusal, detail}.
+   */
+  requestElectionNow(node) {
+    return this.partitionControlOf(node).campaign();
   }
 
   /** The seam names this backend answers from the core.
