@@ -182,3 +182,75 @@ At step 2 the recorded external-systems hypothesis is retained:
 > authority.
 
 None of that is pulled into the successor.
+
+## Addendum (owner, 2026-09-20, after phase 1): the subject of `proved-unreachable` is structural
+
+Phase 1 measured that the inherited validator lets `proved-unreachable` mean
+only that the guard's over-target state is unreachable, which the two hand-off
+rows cannot state without falsifying two upheld measurements. The owner
+accepts the lead's ruling in substance - the relocation is reachable, its
+ordinary hand-off class is real and producer-reachable, the compatibility
+budget does not affect its admission within the complete stated domain, so a
+missing replacement authority for that hand-off is not a real requirement, and
+no ledger authority is introduced - and tightens its representation before
+any freeze.
+
+1. **Structural subject.** What a `proved-unreachable` row claims unreachable
+   is a validated enum, never prose: `guard-admission-state` for the seven
+   inherited rows (semantics, tests and checks unchanged but for the mechanical
+   explicit value) and `budget-dependent-authority-requirement` for
+   `five-relocation-handoff-overlap` and `ledger-relocation-handoff-overlap`.
+   The proposition for the latter:
+
+   > Within the complete ordinary hand-off domain, the operation/admission
+   > class is reachable, but no state exists in which compatibility-budget
+   > removal changes its admission. Therefore no authority requirement exists
+   > whose purpose is to replace that budget dependency for this class.
+
+   That is what is proved unreachable - not the operation, not the guard state.
+2. **The proof shape is bound to the subject.** The validator selects the
+   discipline from the subject. `guard-admission-state`: the round-3
+   discipline, unchanged. `budget-dependent-authority-requirement`: at least
+   guardReachable yes; producerReachable as inherited for the row; dependency
+   `does_not_depend`; a row-bound differential receipt; the complete stated
+   domain; actual-budget against zero-budget executions; zero decision
+   differences; and membership in the set where the budget can actually be
+   evaluated, so the proof is not vacuous.
+3. **Cross-subject mutants**, each failing: an inherited row moved to the new
+   subject; a hand-off row moved to the old one; a guard-unreachability
+   receipt on an authority-requirement row; a does-not-depend receipt on a
+   guard-unreachability row; guardReachable yes under the old subject;
+   guardReachable no under the new; `ledger authority required` while the
+   differential stays `does_not_depend`. Required evidence derives from the
+   subject, never from row-specific special cases.
+4. **No new taxonomy.** The disposition stays `proved-unreachable`; no other
+   row is revisited unless the tightening reveals an actual contradiction.
+5. **The D3 conclusion, exactly.** Both rows establish together: the
+   relocation transition exists; the guard-visible hand-off state exists; its
+   admission does not depend on the compatibility overflow budget; therefore
+   removing the budget creates no missing authority requirement for the class.
+   The spread-owner duplication stays a separate architectural finding,
+   justified because two modules decide the same spread-recovery semantic, not
+   because these rows need replacement authority. Ledger:
+
+   > ordinary +1 relocation is covered by the normal replacement allowance; no
+   > ledger-local reason for additional overflow authority has been
+   > demonstrated.
+6. **D1 and D2 exactly as scoped**; the round-3 attacks fail for structural
+   reasons.
+7. **One more freeze invariant.**
+
+   > A reader that sees only the structured matrix and validated receipts,
+   > without reading explanatory prose, can determine exactly what proposition
+   > each disposition asserts and what evidence proves it.
+
+   If that is false, no freeze. The frozen matrix designs later authority
+   changes; its semantics cannot depend on someone remembering why an
+   overloaded value meant two things.
+8. **Verification and freeze.** The complete successor goes unchanged to the
+   independent adversarial verifier, who reports separately on D1; D2; D3;
+   cross-subject substitution; preservation of the 25 inherited rows; the real
+   chained-REPLACE witness; all nine mechanically derived gate statuses; and
+   the absence of production changes. On approval the manifest is written from
+   the verified artifacts. No epoch or membership-transition work before the
+   freeze exists; afterwards the order is unchanged.
