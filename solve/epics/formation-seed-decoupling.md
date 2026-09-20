@@ -85,6 +85,7 @@ authorizes:
   - scripts/quest-evidence/overflow-budget-audit-evidence-binding.js
   - scripts/quest-evidence/replica-membership-model-reduction.js
   - scripts/quest-evidence/raft-backend-evaluation.js
+  - scripts/quest-evidence/raft-rs-experimental-partition-backend.js
   - scripts/quest-evidence/readiness-admission-transitions-observed.js
   - scripts/quest-evidence/readiness-routing-denial-cause-carried.js
   - test/rebalancer
@@ -1043,6 +1044,31 @@ step list and the transition-identity candidate in the section above included.
 - If it succeeds: provider interface, experimental backend, formation
   comparison, ConfState authoritative with service rows as its projection,
   liferaft removed.
+
+## The experimental raft-rs partition backend (owner, 2026-09-21)
+
+[binding-direction-raft-rs-experimental-backend-2026-09-21.md](formation-seed-decoupling/binding-direction-raft-rs-experimental-backend-2026-09-21.md).
+- `raft-backend-evaluation` is exhausted and is never repaired again. Its
+  terminal result: **findings delivered; receipts not certified**. The rejected
+  artifact is not certified evidence and is not a golden oracle. What motivated
+  the integration is the three independent verifier reports, kept in full.
+- The quest `raft-rs-experimental-partition-backend` integrates the raft-rs
+  RawNode/WASM core behind the existing provider seam: fresh clusters only, the
+  existing transport, real durable storage, `ConfState` authoritative for
+  consensus membership and projected outward to Lagrange metadata, deterministic
+  restart from durable state, run side by side with liferaft.
+- Never: migrate liferaft logs, remove liferaft, become the default backend
+  silently, resume membership-model-reduction, or build a Lagrange-owned
+  committed-membership protocol above liferaft.
+- Order: real persistence first (the commit index durably recorded with or
+  before applying), then ConfState authority, then the scenarios. Snapshots and
+  compaction are an explicit acceptance area, not postponed. One WASM runtime
+  holding many RawNodes, with a trap treated as a runtime-health event; no
+  runtime sharding is pre-built. The ingress rule is corrected: a sender absent
+  from the receiver's ConfState is not rejected for all message classes.
+- Acceptance: correctness, operational viability, architectural reduction
+  (a complexity ledger; adding a mechanism while leaving the local membership
+  machinery active is not success), and a migration decision from a closed set.
 
 ## Simulator frozen (2026-09-19)
 
