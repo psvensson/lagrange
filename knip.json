@@ -28,7 +28,8 @@
     "dist/**",
     "data/**",
     "data2/**",
-    "data3/**"
+    "data3/**",
+    "test/raft/backend-evaluation/raft-core/pkg/**"
   ],
   "ignoreDependencies": [
     "lagrange",

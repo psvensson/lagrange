@@ -1,0 +1,168 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "raft-backend-evaluation",
+  "status": "pass",
+  "testFileDigests": {
+    "test/raft/backend-evaluation/liferaft-two-caches-two-configurations.test.js": "b8b9aefff3f7e5f8c25e8e7790c370a1a5896a5978810fd344eaf8a480a888ea",
+    "test/raft/backend-evaluation/liferaft-configuration-locality.test.js": "744495966751c13c10700ae5f63a621e2ea8f7a5775667fa6e79f20e02b059c2",
+    "test/raft/backend-evaluation/liferaft-term-and-vote-restart.test.js": "5691121ff54e83d1ebc18eec972392b97703bb5454e8fcd94a6b94f9ef2ad82e",
+    "test/raft/backend-evaluation/minimum-backend-contract.test.js": "e536015df4edf2cd27f58ec3571e7c6b9c5bc15318be7acf120c3c0222f7215c",
+    "test/raft/backend-evaluation/forked-binding-artifact.test.js": "f554f0f2a4367767f73f4b3cec38289e7522656739140c062be234fb30849359",
+    "test/raft/backend-evaluation/core-membership-scenarios.test.js": "03c9908fccfa7fde1cc3423f9dbea4e3ec2b28678278a92ca7d8b6ec9f8fc9a0",
+    "test/raft/backend-evaluation/core-membership-invariants.test.js": "b66f329c577e4ecc97f6a53bba8e19e62806a51fe4b9678dbe95713c208e48a6",
+    "test/raft/backend-evaluation/core-restart-and-ordering.test.js": "79c8420d64a45f8832c82471fbf36fb221b0bccd3498dc0e9538eddf3c7f7758",
+    "test/raft/backend-evaluation/core-identity-and-cost.test.js": "a0a9cb6a2ff6ec8701f93967c893014d8a5d1f95ae86871f460e51adde405a78",
+    "test/raft/backend-evaluation/evaluation-derivation.test.js": "bdc677456f7276fe810b7eed2936a6f8f9c7dda0954201f0312f6eb638bd6aef",
+    "test/raft/backend-evaluation/no-production-file-changed.test.js": "72601969eec1e1db2652a908c2e1b24396a03e299b4678adeaf196a87527ebf7"
+  },
+  "generatedAt": "2026-09-20T15:06:05.977Z",
+  "receipts": [
+    {
+      "id": "liferaft-same-partition-two-caches-yield-two-voting-configurations-without-consensus",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^liferaft: the same partition under two caches yields two voting configurations with no consensus operation$\" test/raft/backend-evaluation/liferaft-two-caches-two-configurations.test.js",
+      "detail": "one partition, caches saying {A,B,C} and {A,B,D}; each Raft instance reports its own voting configuration and majority with no consensus operation run",
+      "testFile": "test/raft/backend-evaluation/liferaft-two-caches-two-configurations.test.js"
+    },
+    {
+      "id": "liferaft-configuration-is-local-unreplicated-and-without-generation",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^liferaft configuration is local, unreplicated and without generation$\" test/raft/backend-evaluation/liferaft-configuration-locality.test.js",
+      "detail": "a join emits no message, the other node is unchanged, and the protocol packet is identical across a configuration change",
+      "testFile": "test/raft/backend-evaluation/liferaft-configuration-locality.test.js"
+    },
+    {
+      "id": "liferaft-term-and-vote-across-restart-on-the-production-persistence-path",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^liferaft term and vote across a restart on the production persistence path$\" test/raft/backend-evaluation/liferaft-term-and-vote-restart.test.js",
+      "detail": "a real granted vote at a higher term, then the real sqlite restart path; what term and vote survive is read from the durable file",
+      "testFile": "test/raft/backend-evaluation/liferaft-term-and-vote-restart.test.js"
+    },
+    {
+      "id": "minimum-backend-contract-derived-from-production-call-sites",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the minimum backend contract is derived from production call sites$\" test/raft/backend-evaluation/minimum-backend-contract.test.js",
+      "detail": "the recorded contract equals a census regenerated from src, and every operation it calls missing is measured absent",
+      "testFile": "test/raft/backend-evaluation/minimum-backend-contract.test.js"
+    },
+    {
+      "id": "binding-exposes-raft-primitives-not-convenience-membership",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the forked binding exposes raft primitives and no convenience membership methods$\" test/raft/backend-evaluation/forked-binding-artifact.test.js",
+      "detail": "propose/apply/identify/observe configuration changes exist; addNode, removeNode, addLearner and promote do not",
+      "testFile": "test/raft/backend-evaluation/forked-binding-artifact.test.js"
+    },
+    {
+      "id": "three-voter-group-elects-and-commits-deterministically",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a three-voter group elects and commits deterministically$\" test/raft/backend-evaluation/core-membership-scenarios.test.js",
+      "detail": "one leader, the same ConfState reported by every peer, one entry applied at one index",
+      "testFile": "test/raft/backend-evaluation/core-membership-scenarios.test.js"
+    },
+    {
+      "id": "sequential-replacement-learner-catch-up-promote-remove-measured",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^sequential replacement: learner added, caught up, promoted, old voter removed$\" test/raft/backend-evaluation/core-membership-scenarios.test.js",
+      "detail": "Lagrange-style replacement driven as three committed configuration changes, with catch-up read from the leader's own progress",
+      "testFile": "test/raft/backend-evaluation/core-membership-scenarios.test.js"
+    },
+    {
+      "id": "joint-replacement-by-conf-change-v2-enter-commit-leave-measured",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^joint replacement: one ConfChangeV2 enters, commits and leaves the joint configuration$\" test/raft/backend-evaluation/core-membership-scenarios.test.js",
+      "detail": "the same replacement as one ConfChangeV2: enter the joint configuration, commit it, leave it",
+      "testFile": "test/raft/backend-evaluation/core-membership-scenarios.test.js"
+    },
+    {
+      "id": "conf-state-converges-after-apply-and-membership-decisions-come-from-the-core",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^ConfState converges after apply and membership decisions come from the core$\" test/raft/backend-evaluation/core-membership-invariants.test.js",
+      "detail": "after commit and apply each peer reports the ConfState its own apply returned; quorum comes from the core, not from service rows",
+      "testFile": "test/raft/backend-evaluation/core-membership-invariants.test.js"
+    },
+    {
+      "id": "disagreeing-service-caches-leave-raft-membership-identical",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^disagreeing service caches leave raft membership identical$\" test/raft/backend-evaluation/core-membership-invariants.test.js",
+      "detail": "peers fed mutually contradictory service-row views still report one identical configuration",
+      "testFile": "test/raft/backend-evaluation/core-membership-invariants.test.js"
+    },
+    {
+      "id": "second-conf-change-while-one-is-pending-observed-not-prescribed",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a second configuration change while one is pending is observed, not prescribed$\" test/raft/backend-evaluation/core-membership-invariants.test.js",
+      "detail": "return value, committed entry types, resulting ConfState and whether the second change took effect are recorded; only the record's consistency is asserted",
+      "testFile": "test/raft/backend-evaluation/core-membership-invariants.test.js"
+    },
+    {
+      "id": "restart-at-each-of-nine-boundaries-reconstructs-membership-from-durable-raft-state-alone",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a restart at each of the nine boundaries reconstructs membership from durable raft state alone$\" test/raft/backend-evaluation/core-restart-and-ordering.test.js",
+      "detail": "nine crash points from proposed-not-persisted to joint-left; each restart is rebuilt from the durable record alone",
+      "testFile": "test/raft/backend-evaluation/core-restart-and-ordering.test.js"
+    },
+    {
+      "id": "ready-persistence-ordering-holds-and-returned-conf-state-is-the-durable-one",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^ready and persistence ordering holds and the returned ConfState is the durable one$\" test/raft/backend-evaluation/core-restart-and-ordering.test.js",
+      "detail": "nothing advances before it is written down, and the ConfState apply_conf_change returned is the one stored and the one the core reports",
+      "testFile": "test/raft/backend-evaluation/core-restart-and-ordering.test.js"
+    },
+    {
+      "id": "peer-identity-is-stable-unreused-and-safe-across-the-js-boundary",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^peer identity is stable, never reused, and safe across the JavaScript boundary$\" test/raft/backend-evaluation/core-identity-and-cost.test.js",
+      "detail": "identity-derived ids stable across restart and address change, never reused after retirement, and carried above 2^53 without loss",
+      "testFile": "test/raft/backend-evaluation/core-identity-and-cost.test.js"
+    },
+    {
+      "id": "multi-raft-cost-separates-runtime-from-rawnode-in-the-intended-hosting-shape",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^Multi-Raft cost separates the runtime from the RawNode in the intended hosting shape$\" test/raft/backend-evaluation/core-identity-and-cost.test.js",
+      "detail": "one runtime holding many handles; one-time runtime cost, per-RawNode bytes, idle tick and has_ready scan measured at N = 1, 100, 1000",
+      "testFile": "test/raft/backend-evaluation/core-identity-and-cost.test.js"
+    },
+    {
+      "id": "artifact-integrity-digest-matches",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the forked binding artifact digest matches the recorded one$\" test/raft/backend-evaluation/forked-binding-artifact.test.js",
+      "detail": "the .wasm and glue these scenarios load hash to the digests checked in beside them",
+      "testFile": "test/raft/backend-evaluation/forked-binding-artifact.test.js"
+    },
+    {
+      "id": "build-is-pinned-and-reproducibility-is-reported-honestly",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the forked binding build is pinned and its reproducibility is reported honestly$\" test/raft/backend-evaluation/forked-binding-artifact.test.js",
+      "detail": "Cargo.lock, rust-toolchain.toml, rustc, wasm-pack, wasm-bindgen, crate version and build command pinned; a second build's digest recorded as measured",
+      "testFile": "test/raft/backend-evaluation/forked-binding-artifact.test.js"
+    },
+    {
+      "id": "membership-in-every-scenario-is-reported-by-the-core-not-declared",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^membership in every scenario is reported by the core, not declared$\" test/raft/backend-evaluation/evaluation-derivation.test.js",
+      "detail": "every membership scenario reads the configuration back from the core, and no assertion's expected value is a written-down membership",
+      "testFile": "test/raft/backend-evaluation/evaluation-derivation.test.js"
+    },
+    {
+      "id": "earlier-spike-findings-are-accounted-for",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the earlier raft-logic spike findings are accounted for$\" test/raft/backend-evaluation/evaluation-derivation.test.js",
+      "detail": "the twelve checks the spike census finds are each accounted for, together with the measured configuration-change sites in its sources",
+      "testFile": "test/raft/backend-evaluation/evaluation-derivation.test.js"
+    },
+    {
+      "id": "three-verdicts-and-deletion-forecast-follow-by-derivation-and-document-is-in-sync",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the three verdicts and the deletion forecast follow by derivation and the document is in sync$\" test/raft/backend-evaluation/evaluation-derivation.test.js",
+      "detail": "consensus core, WASM boundary and Lagrange migration each cite their own driven scenarios; the forecast is labelled; the generated document renders both",
+      "testFile": "test/raft/backend-evaluation/evaluation-derivation.test.js"
+    },
+    {
+      "id": "no-production-file-changed",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^no production file changed$\" test/raft/backend-evaluation/no-production-file-changed.test.js",
+      "detail": "measured from the quest's sealedAt commit, or the merge base before sealing; fails closed when the comparison sees none of this quest's own files",
+      "testFile": "test/raft/backend-evaluation/no-production-file-changed.test.js"
+    }
+  ]
+}
