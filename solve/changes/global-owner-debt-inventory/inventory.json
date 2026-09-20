@@ -6,7 +6,7 @@
       {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 428635,
-        "sha256": "0431ca6deae17370b6b28f297f35aab64dd83ecc6dc224a3f65de8e9041f589a"
+        "sha256": "5216266bf860a7f487d33fa7b20c23783dcc8df0f9e844137b08012936190c57"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2457509,
-        "sha256": "8c7c7523a519cf3c5f7697fdca2c6630269cccda443b255675fe346049e70941"
+        "bytes": 2477311,
+        "sha256": "ff97c65bb97af8fe6723df21754e71151431728ccf3b0f894f366ccc81e052ed"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "0f5faf49ac55704a6956905f74d4926d57009b3e5aeffe0e1efe914dbecbed83"
+        "sha256": "083d341c59e7d172f3a7a1e2d1b574a5eb1003fcb86701d6ef7887bf665f0c73"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,17 +39,17 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "ac6c4aa88a3957d4e1563baa7d569fdb029ab71d10a25901a3d3fec89ce34d73"
+        "sha256": "4f691497f202c82003a6aad049b154ae645d71229be9667225043d1b871be76a"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
-        "bytes": 8425,
-        "sha256": "78c01631a29adf0dd09037c94669359ec3503c90a54145e30d61326668ff016e"
+        "bytes": 9212,
+        "sha256": "a354e0b20e529a595b22c01b6b32e6917f534729836d393303345aa353cd8ec3"
       },
       {
         "path": "eslint.config.js",
-        "bytes": 3192,
-        "sha256": "a785c08672141f786cbdcf706d85e14a853454c796328bf874e65a5e34a10682"
+        "bytes": 3454,
+        "sha256": "0074535a37dc1df890f1371c93ca401214150b4dbd5940b9a2bfbbdb82495a25"
       },
       {
         "path": "dependency-cruiser.config.cjs",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "46e65195caac5dfccac94231865ac9b36a85f16823af0d710e269e015e477091"
+    "inputDigest": "bd0d634e5e75946555a6b0161e4deadd5c1147d7afcebb738f6f02946b050f3c"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 428635,
-        "sha256": "0431ca6deae17370b6b28f297f35aab64dd83ecc6dc224a3f65de8e9041f589a"
+        "sha256": "5216266bf860a7f487d33fa7b20c23783dcc8df0f9e844137b08012936190c57"
       },
       "declaredCount": 1816,
       "observedCount": 1816,
@@ -88,8 +88,8 @@
     "fileSize": {
       "authority": {
         "path": "scripts/check-file-size-thresholds.js",
-        "bytes": 8425,
-        "sha256": "78c01631a29adf0dd09037c94669359ec3503c90a54145e30d61326668ff016e"
+        "bytes": 9212,
+        "sha256": "a354e0b20e529a595b22c01b6b32e6917f534729836d393303345aa353cd8ec3"
       },
       "thresholds": {
         "source": 800,
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "0f5faf49ac55704a6956905f74d4926d57009b3e5aeffe0e1efe914dbecbed83"
+          "sha256": "083d341c59e7d172f3a7a1e2d1b574a5eb1003fcb86701d6ef7887bf665f0c73"
         },
         "cloneGroups": 57,
         "duplicatedLines": 1845,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "ac6c4aa88a3957d4e1563baa7d569fdb029ab71d10a25901a3d3fec89ce34d73"
+          "sha256": "4f691497f202c82003a6aad049b154ae645d71229be9667225043d1b871be76a"
         },
         "cloneGroups": 793,
         "duplicatedLines": 30519,
@@ -152,49 +152,50 @@
     "lintExclusions": {
       "identity": {
         "path": "eslint.config.js",
-        "bytes": 3192,
-        "sha256": "a785c08672141f786cbdcf706d85e14a853454c796328bf874e65a5e34a10682"
+        "bytes": 3454,
+        "sha256": "0074535a37dc1df890f1371c93ca401214150b4dbd5940b9a2bfbbdb82495a25"
       },
       "patterns": [
+        "src/raft/raft-rs-wasm/pkg/**",
         "test/**/*-part-*.js",
         "test/**/*-segment-*.js",
         "test/**/*-tail-*.js"
       ],
-      "observedCount": 39,
-      "assignedCount": 39
+      "observedCount": 40,
+      "assignedCount": 40
     },
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2457509,
-        "sha256": "8c7c7523a519cf3c5f7697fdca2c6630269cccda443b255675fe346049e70941"
+        "bytes": 2477311,
+        "sha256": "ff97c65bb97af8fe6723df21754e71151431728ccf3b0f894f366ccc81e052ed"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "bcb2b2e5408d9582144f0d936bb84ba75aafb80172d12763c5f8bc5acf807ecf",
-      "moduleCount": 4841,
-      "edgeCount": 22375,
+      "sourceDigest": "91ec672ae707be871395f57dc08872b0cf51b9709ce71a51129eafdb0e4c687d",
+      "moduleCount": 4886,
+      "edgeCount": 22545,
       "unresolvedCount": 34
     }
   },
   "assignment": {
-    "sourceSignalCount": 2634,
-    "assignedSignalCount": 2634,
-    "uniqueAssignmentCount": 2634,
-    "digest": "7035763ba51fa48397300d3671aba98428949b6bd6996081b31cb8598d479136"
+    "sourceSignalCount": 2635,
+    "assignedSignalCount": 2635,
+    "uniqueAssignmentCount": 2635,
+    "digest": "7064b48caafe3be6227ec7e9e7173f8c8de6a4da2731506ca43c66d333e079b6"
   },
   "signalCounts": {
     "cognitive": 160,
     "complexity": 1816,
     "duplication": 571,
     "fileSize": 48,
-    "lintExclusion": 39
+    "lintExclusion": 40
   },
   "summary": {
-    "filesWithDebt": 1349,
+    "filesWithDebt": 1350,
     "rankedBoundaryCount": 118,
     "semanticBoundaryCount": 21,
     "fallbackBoundaryCount": 97,
@@ -807,7 +808,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 14,
-      "importOut": 42,
+      "importOut": 43,
       "score": 168.2,
       "topPaths": [
         "src/partition/partition-service-entry-apply-base.js",
@@ -1154,6 +1155,34 @@
       ]
     },
     {
+      "key": "area:src/raft",
+      "owner": null,
+      "boundary": "src/raft",
+      "classification": "owner-area-fallback",
+      "ownerAreas": [
+        "src/raft"
+      ],
+      "fileCount": 11,
+      "signalCount": 16,
+      "complexity": 12,
+      "cognitive": 3,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 1,
+      "importIn": 181,
+      "importOut": 52,
+      "score": 75,
+      "topPaths": [
+        "src/raft/liferaft-incoming-data.js",
+        "src/raft/liferaft-provider.js",
+        "src/raft/replica-leadership-state.js",
+        "src/raft/constants.js",
+        "src/raft/liferaft-follower-batch.js"
+      ]
+    },
+    {
       "key": "area:src/diagnostics",
       "owner": null,
       "boundary": "src/diagnostics",
@@ -1207,34 +1236,6 @@
         "src/node/failure-detector.js",
         "src/node/message-group-service-handler.js",
         "src/node/replica-state-machine-transition.js"
-      ]
-    },
-    {
-      "key": "area:src/raft",
-      "owner": null,
-      "boundary": "src/raft",
-      "classification": "owner-area-fallback",
-      "ownerAreas": [
-        "src/raft"
-      ],
-      "fileCount": 10,
-      "signalCount": 15,
-      "complexity": 12,
-      "cognitive": 3,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 178,
-      "importOut": 51,
-      "score": 72,
-      "topPaths": [
-        "src/raft/liferaft-incoming-data.js",
-        "src/raft/liferaft-provider.js",
-        "src/raft/replica-leadership-state.js",
-        "src/raft/constants.js",
-        "src/raft/liferaft-follower-batch.js"
       ]
     },
     {

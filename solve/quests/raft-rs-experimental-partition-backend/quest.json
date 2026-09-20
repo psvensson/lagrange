@@ -1,0 +1,90 @@
+{
+  "schema": "solve-quest/2",
+  "id": "raft-rs-experimental-partition-backend",
+  "class": "product",
+  "epic": "formation-seed-decoupling",
+  "statement": "Lagrange has no committed Raft membership: liferaft's join and leave edit a local in-memory peer array whose quorum is computed from that array, each node reconciles its own array from cached service rows, a SYNCING row is a voter, no generation records the configuration, and term and vote are never persisted, so a restarted replica returns at term 0 free to vote again in a term it already voted in - all measured on the real production owners and reconfirmed at every round of the exhausted evaluation. That evaluation delivered findings but never certified its receipts; what justifies this work is that three independent adversarial verifiers each drove the raft-rs core themselves and each concluded the consensus core viable, the WASM RawNode boundary viable with named gaps, and migration undetermined with no decisive incompatibility. This quest is the experimental integration that turns that into evidence at the real Lagrange boundary, and it is not a production cutover. Behind the existing provider seam, selected explicitly by configuration and never silently the default, it runs fresh clusters on the raft-rs RawNode core over the existing Lagrange transport and real durable storage, with liferaft untouched, its logs unmigrated and its behaviour unchanged. Persistence comes first: a production-shaped Ready and apply loop whose order is derived from raft-rs 0.7's own documented host contract, durably preserving log entries, the hard state's term, vote and commit, applied progress, the configuration state and snapshot state, recording the commit index with or before applying committed entries, writing the configuration state and its applied progress atomically wherever recovery correctness requires them to agree, and reconstructing a restarted replica from its own durable Raft record with nothing inferred from a service or system-table cache. Then the central experiment: the core's configuration state is the authority for consensus membership and Lagrange rows project it outward rather than deriving it, proved against the liferaft case that started this - two peers whose caches disagree, one holding a still-syncing replica the other has never seen, must both observe the membership the committed configuration determines, and no cache mutation may alter quorum membership. Around the core it puts a safety boundary that validates what the host can know authoritatively - group and partition identity present, the recipient local, the envelope well formed, cross-group delivery unable to reach the core, corrupt encoding refused - without reproducing Raft's own checks and without the rule a verifier falsified, that a sender absent from the receiver's applied configuration may be refused, which rejects legitimate membership-transition traffic; whichever hostile messages still reach a trap are enumerated rather than hidden. A trap marks its runtime unhealthy, so the host stops dispatching into it, instantiates a fresh one and restores its groups from durable state, measured at real scales on real storage rather than against the evaluation's figures, in one runtime holding many groups with no sharding subsystem built in advance. It holds peer identity to a mapping that survives restart, ignores address, never follows list position, is never reassigned after retirement and crosses the JavaScript boundary exactly; it keeps a peer that is no longer a voter from participating in an election as though it were one, and settles pre-vote and check-quorum by running failure scenarios rather than by assumption; it leaves the judgment of whether a learner has caught up with Lagrange and the safe commitment of the change with the core; it drives the sequential add-learner, catch-up, promote and remove workflow through formation and recovery while keeping joint support tested; it exposes an explicit membership-change-in-progress result at the provider boundary instead of recreating a compatibility budget, with the core remaining the authority on whether another change can take effect; it establishes the snapshot and compaction contract now rather than after a cutover, so that configuration state and applied state never diverge across a restore; and it adds to the existing durable replica operation only the fields an integration falsifier proves necessary, with no separate transition subsystem and no speculative reason or generation fields. Every scenario runs on both backends and their application-level outcomes and safety properties are compared, without demanding identical internals and without preserving liferaft behaviour where that behaviour is itself the measured defect. It keeps a complexity ledger, because a backend that adds a mechanism while leaving every local membership machinery active is not a successful outcome, and it names precisely what can disappear after a cutover without deleting it here. Its result is one migration decision from a closed set - recommend cutover, continue experimental with named blockers, or reject with a named incompatibility - derived from what the scenarios measured, and a positive result is not forced.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/raft-rs-experimental-partition-backend/evidence/receipt.json",
+      "requiredReceipts": [
+        "backend-seam-selects-explicitly-and-liferaft-behaviour-is-unchanged",
+        "ready-and-apply-loop-order-derives-from-the-raft-rs-host-contract",
+        "commit-index-is-durable-with-or-before-applying-committed-entries",
+        "conf-state-and-its-applied-progress-are-written-atomically",
+        "restart-reconstructs-raft-state-from-its-own-durable-record-on-real-storage",
+        "no-recovery-state-is-inferred-from-a-service-or-system-table-cache",
+        "conf-state-is-the-membership-authority-under-divergent-hostile-caches",
+        "lagrange-rows-project-membership-and-never-alter-the-configuration",
+        "ingress-validation-refuses-routing-faults-and-admits-transition-traffic",
+        "hostile-messages-that-still-reach-a-trap-are-enumerated",
+        "a-trap-marks-the-runtime-unhealthy-and-its-groups-restore-from-durable-state",
+        "multi-raft-host-and-runtime-replacement-measured-at-real-scales",
+        "peer-identity-is-stable-address-independent-unreused-and-exact",
+        "a-peer-that-is-no-longer-a-voter-cannot-participate-as-one",
+        "pre-vote-and-check-quorum-settled-by-failure-scenarios-not-assumption",
+        "learner-promotion-is-gated-by-lagrange-on-the-cores-own-progress",
+        "sequential-membership-workflow-completes-through-formation-and-recovery",
+        "membership-change-in-progress-is-an-explicit-provider-result",
+        "snapshot-and-compaction-contract-holds-and-state-does-not-diverge",
+        "replica-operation-gained-only-fields-a-falsifier-required",
+        "every-scenario-runs-on-both-backends-and-outcomes-are-compared",
+        "complexity-ledger-recorded-and-deletion-candidates-named",
+        "migration-decision-follows-from-the-scenarios-by-derivation",
+        "liferaft-is-untouched-its-logs-unmigrated-and-it-remains-the-default"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "experimental-only",
+      "statement": "liferaft stays, its logs are never migrated, its behaviour is unchanged, and the raft-rs backend is selected explicitly by test or harness configuration and never becomes the default. Fresh clusters only."
+    },
+    {
+      "id": "conf-state-is-authority",
+      "statement": "The core's configuration state is the authority for consensus membership under this backend. Lagrange rows project it; no row, cache or lifecycle status alters the active configuration, and no decision reads a status where the committed configuration answers the question."
+    },
+    {
+      "id": "durable-record-only",
+      "statement": "A restarted replica reconstructs its Raft state from its own durable Raft record. No recovery state is inferred from a service or system-table cache, from another peer's memory, or from anything the test declares."
+    },
+    {
+      "id": "host-contract-from-the-source",
+      "statement": "The loop's order is derived from raft-rs 0.7's own documented contract with a citation per step, and the adapter is shown to follow it. Where the library's documentation and its example disagree, the safety note governs and both are cited."
+    },
+    {
+      "id": "primitives-not-policy",
+      "statement": "The binding exposes raft-rs primitives; no addNode, removeNode, addLearner, promote or replace convenience call. Membership policy - catch-up judgment, promotion, replacement sequencing - lives in Lagrange."
+    },
+    {
+      "id": "no-transition-subsystem",
+      "statement": "No separate MembershipTransition object, table or subsystem, no membership ceiling, no compatibility overflow budget, no permanent authorization object, and no Lagrange-owned committed-membership protocol. Only fields an integration falsifier proves necessary are added to the existing durable replica operation."
+    },
+    {
+      "id": "ingress-is-envelope-only",
+      "statement": "The safety boundary around the core validates routing and envelope invariants only. It never refuses a sender merely for being absent from the receiver’s applied configuration, and a test drives a membership-transition race to show legitimate traffic is admitted. Raft protocol checks are not reproduced."
+    },
+    {
+      "id": "identity-from-production",
+      "statement": "Every fact a receipt rests on is emitted by production state or by the core itself, never declared by a test, and the expectation a check compares against never comes from the code path under test. This is the architectural result of the stopped overflow-budget audit and the three rejections of the stopped evaluation, and it binds here."
+    },
+    {
+      "id": "no-golden-oracle",
+      "statement": "The exhausted raft-backend-evaluation and its artifact are uncertified historical evidence. They may be cited for what a named verifier measured, never used as an oracle, a baseline or a source of expected values."
+    },
+    {
+      "id": "measured-not-assumed",
+      "statement": "Scale, recovery, pre-vote and check-quorum questions are settled by measurement on real storage and the real transport at this quest’s own scales; the evaluation’s figures are historical only. A scenario not driven is recorded undriven and unanswered, and never counts as passed."
+    },
+    {
+      "id": "complexity-ledger",
+      "statement": "Each landing records authoritative membership sources, decision owners, voter-count and census functions, membership reconciliation paths, persistent fields, compatibility exceptions and Raft-specific guard branches, added against removed, and names what a cutover would delete without deleting it here."
+    },
+    {
+      "id": "verified-source",
+      "statement": "Source changes land only behind an independent adversarial verification that attacks the harness before trusting a reported outcome."
+    }
+  ],
+  "sealedAt": "9f71d700e175047473c9ea4ed51d655849e8a178"
+}
