@@ -127,3 +127,89 @@ membership generation; much of the authorization carrier; chained-REPLACE
 admission arithmetic; membership interpretations of SYNCING; local
 join()/leave() reconciliation; some formation-specific repair machinery. The
 committed configuration itself supplies the missing structural identity.
+
+## Addendum (owner, 2026-09-20): the evaluation tightened before sealing
+
+The extended Rust/WASM binding stays inside the Lagrange evaluation and is not
+upstreamed yet: establish the contract Lagrange needs first, or raft-logic gets
+designed around assumptions the evaluation later disproves. The owner does not
+redirect again; the quest tests the missing primitive at its proper owner. The
+acceptance result wanted:
+
+> Can raft-rs/WASM make Raft membership a replicated fact which remains correct
+> despite divergent Lagrange metadata caches, crash/restart and concurrent
+> configuration-change attempts, at an acceptable Multi-Raft cost?
+
+If yes, the next architectural decision is probably to build the experimental
+Lagrange Raft backend rather than invent CommittedMembership above liferaft. If
+it fails, the failure says whether the problem is raft-rs, WASM, the current
+binding, or the hosting model.
+
+1. **Raft primitives, not convenience membership.** No `addNode()` /
+   `removeNode()` in the experimental binding. Expose `propose_conf_change_v2`,
+   `apply_conf_change`, enough to identify committed `EntryConfChange` /
+   `EntryConfChangeV2` entries, and the resulting `ConfState`. The policy - add
+   learner, wait until caught up, promote, remove old voter - stays in Lagrange.
+2. **Ready/persistence ordering is a major acceptance item**, probably the
+   highest-risk part of the wrapper: persist Raft state, apply committed
+   configuration changes through `apply_conf_change()`, and make the returned
+   `ConfState` the durable configuration used on restore, in the raft-rs
+   model's order. Restart at each boundary: proposed but not persisted;
+   persisted but not committed; committed but not application-applied; conf
+   change applied but ConfState not durably recorded; ConfState recorded but
+   Ready not advanced; Ready advanced; joint configuration entered; joint
+   configuration committed; joint configuration left.
+
+   > Restart must reconstruct the same Raft membership from durable Raft state
+   > alone.
+
+   No service-row cache is allowed to repair it.
+3. **Convergence, not instantaneous identity.**
+
+   > After the relevant configuration entry has been committed and applied on
+   > each surviving peer, their ConfState converges to the same configuration,
+   > without consulting Lagrange service rows.
+
+   During the intermediate period quorum and membership decisions come from
+   raft-rs's own configuration state, not Lagrange's cache.
+4. **The second pending ConfChange is observed, not prescribed.** raft-rs keeps
+   `pending_conf_index` and may neutralise a second proposal into a normal empty
+   entry rather than reject it. Measure the return value, the emitted log entry,
+   the committed entry type, the resulting ConfState, and whether the second
+   requested change ever takes effect. Lagrange then decides whether its
+   provider turns that into an explicit membership-change-in-progress refusal.
+5. **Stable peer identity is a hard invariant.** `Lagrange replica identity ->
+   stable mapping -> Raft u64 peer identity`: stable across restart; stable
+   across address change; distinct replicas on one physical node get distinct
+   ids where needed; a deleted replica id is never reassigned to another
+   logical replica; deterministic reconstruction. At the JS boundary an
+   arbitrary Rust u64 does not pass safely through a JavaScript Number: BigInt,
+   strings, split words, or a deliberately constrained encoding.
+6. **Both replacement styles, separately.** Sequential Lagrange-style (A B C
+   voters; + D learner; D catches up; D promoted; B removed) and ConfChangeV2
+   replacement (old A B C; new A C D; joint; new only). The evaluation says what
+   each costs and what semantics it provides; it does not decide which Lagrange
+   uses. The multi-phase operation may stay useful for learner catch-up while
+   the voter replacement becomes a joint change.
+7. **Three verdicts, not one.** Consensus core viable? WASM boundary viable?
+   Lagrange migration viable? A result such as "raft-rs core PASS, current
+   raft-logic wrapper FAIL, WASM RawNode adapter PASS" is still very positive.
+8. **Multi-Raft measurements separate WASM overhead from RawNode overhead** at
+   1 / 100 / 1,000 handles: one-time WASM/module/runtime memory; incremental
+   bytes per RawNode; tick cost per idle group; step cost; has_ready scan cost;
+   Ready processing cost; configuration-change cost - in the intended hosting
+   shape, never accidentally 1,000 heavyweight runtimes (or the reverse). The
+   result says what architecture to build.
+9. **The checked-in fork pins its toolchain.** Cargo.lock; rust-toolchain.toml /
+   exact rustc; wasm-pack version; wasm-bindgen version; crate source/version;
+   build command; WASM SHA-256. An artifact-integrity receipt and a
+   reproducible-build receipt are distinct; byte-for-byte reproducibility is
+   not a blocker, but the distinction is honest.
+
+**Part A sharpened.** Same partition, same underlying state, node A's cache
+says peers {A,B,C}, node B's cache says {A,B,D}: what does each Raft instance
+believe its quorum is? Different voting configurations without any consensus
+operation having occurred probably closes the architectural question about
+liferaft. Then term/vote before a crash and after a restart from the actual
+production persistence path: absent term persistence would be an independent
+reason not to keep investing in that backend.
