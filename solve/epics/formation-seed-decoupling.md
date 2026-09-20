@@ -82,6 +82,7 @@ authorizes:
   - scripts/check-guideline-deferred-outcomes.js
   - scripts/check-complexity.js
   - scripts/quest-evidence/critical-spread-overflow-budget-audit.js
+  - scripts/quest-evidence/overflow-budget-audit-evidence-binding.js
   - scripts/quest-evidence/readiness-admission-transitions-observed.js
   - scripts/quest-evidence/readiness-routing-denial-cause-carried.js
   - test/rebalancer
@@ -948,6 +949,22 @@ The guard never reconstructs why an operation ought to be legal.
 - During the epoch, membership and identity steps, test whether an explicit
   transition object makes the membership ceiling unnecessary or merely
   derived. If it does, prefer it.
+
+## The audit's narrow successor (owner, 2026-09-20)
+
+[owner-direction-audit-successor-2026-09-20.md](formation-seed-decoupling/owner-direction-audit-successor-2026-09-20.md).
+- Round 3 of `critical-spread-overflow-budget-audit` was rejected on three
+  ordinary defects, so the stopping condition held: no attempt 4. The audit is
+  superseded by `overflow-budget-audit-evidence-binding`.
+- The successor's whole scope: correct the two D3 hand-off rows; bind every
+  receipt to the row, field, value and domain it proves; derive finding
+  resolution and external-artifact existence from checkable artifacts; verify
+  independently; freeze the matrix and the gate document on approval.
+- No production change, no new matrix class, no re-audit of the 25 upheld
+  rows, and none of the epoch, membership-transition, owner-repair or
+  enforcement work. The matrix is not frozen by hand.
+- The order after the freeze is unchanged, with step 2 opening on membership
+  identities and explicit transitions rather than a count formula.
 
 ## Simulator frozen (2026-09-19)
 
