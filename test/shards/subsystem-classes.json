@@ -19,16 +19,16 @@
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 146,
-    "storage-raft": 90,
+    "storage-raft": 91,
     "test-infrastructure": 133,
     "transactions": 14,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2148,
-  "digest": "fnv1a32-ea397c80",
+  "censusSize": 2149,
+  "digest": "fnv1a32-7486a451",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-894af20d",
+  "observationDigest": "fnv1a32-6e24aae9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1426,6 +1426,7 @@
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
     "test/raft/raft-rs-backend/ingress-safety-boundary.test.js": "storage-raft",
     "test/raft/raft-rs-backend/node-object-surface.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/partition-construction-seam.test.js": "storage-raft",
     "test/raft/raft-rs-backend/peer-identity.test.js": "storage-raft",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "storage-raft",
@@ -6525,7 +6526,6 @@
       ],
       "directories": [
         "src/partition",
-        "src/raft",
         "src/raft/spike"
       ]
     },

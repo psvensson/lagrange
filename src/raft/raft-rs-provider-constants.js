@@ -8,6 +8,7 @@
 
 const RAFT_RS_PROVIDER_METHOD = Object.freeze({
   CREATE_NODE_CLASS: 'createNodeClass',
+  CREATE_PARTITION_NODE: 'createPartitionNode',
   PROPOSE: 'propose',
   PROPOSE_WITH_LEADER_ROUTING: 'proposeWithLeaderRouting',
   JOIN_PEER: 'joinPeer',
@@ -32,6 +33,14 @@ const RAFT_RS_PROVIDER_SERVED = Object.freeze([
 
 // Deferred, each with the reason it is deferred rather than missing.
 const RAFT_RS_PROVIDER_DEFERRED = Object.freeze({
+  [RAFT_RS_PROVIDER_METHOD.CREATE_PARTITION_NODE]:
+    'a partition group is a real Raft group on durable storage, not the ' +
+    'message-group node createNodeClass builds: it needs the durable store ' +
+    'opened on the replica\'s own database, a peer identity registered for ' +
+    'every bootstrap member, a tick driver and the retirement record. Phase ' +
+    '4 opened the boundary; driving a real partition through it is the next ' +
+    'step, and until it is driven this backend refuses rather than building ' +
+    'something that would look like a partition and not be one.',
   [RAFT_RS_PROVIDER_METHOD.PROPOSE_WITH_LEADER_ROUTING]:
     'leader routing needs the transport integration that phase 1 does not ' +
     'build; raft-rs answers who the leader is through status(), but the ' +

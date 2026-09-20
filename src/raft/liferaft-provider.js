@@ -1,4 +1,20 @@
 import LifeRaft from './liferaft.js';
+import {
+  RAFT_PARTITION_NODE_REQUEST,
+} from './raft-provider-contract-constants.js';
+
+// The liferaft option keys a partition group's node is constructed with. They
+// are liferaft's own names; the request the provider receives uses none of
+// them, which is what makes the request backend-neutral.
+const LIFERAFT_NODE_OPTION = Object.freeze({
+  HEARTBEAT: 'heartbeat',
+  ELECTION_MIN: 'election min',
+  ELECTION_MAX: 'election max',
+  LOG: 'Log',
+  SNAPSHOT_CATCHUP_NEEDED: 'onSnapshotCatchupNeeded',
+  TIME_SOURCE: 'timeSource',
+  RANDOM_SOURCE: 'randomSource',
+});
 
 const LIFERAFT_PROVIDER_ERROR_MSG = Object.freeze({
   MISSING_COMMAND_API: 'raft node does not support command()',
@@ -129,6 +145,79 @@ class LiferaftProvider {
     }
 
     return ProviderRaftNode;
+  }
+
+  /**
+   * Build the node one partition group runs on.
+   *
+   * This is the backend boundary: the caller hands over the group's own
+   * requirements (`RAFT_PARTITION_NODE_REQUEST`) and gets back a running
+   * node. Nothing liferaft-shaped crosses inward - the option names below
+   * are liferaft's, and translating the request into them is this backend's
+   * job, not the partition service's.
+   * @param {Object} request - The partition group's requirements.
+   * @return {Object} A liferaft node for this group.
+   */
+  createPartitionNode(request) {
+    const durableLog = request[RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG];
+    const sendToPeer = request[RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER];
+    const resolvePeerAddress =
+      request[RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS];
+    const applyCommittedEntry =
+      request[RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY];
+    const snapshotCatchupNeeded =
+      request[RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED];
+    const timing = request[RAFT_PARTITION_NODE_REQUEST.TIMING];
+
+    class PartitionGroupRaftNode extends LifeRaft {
+      /**
+       * liferaft's own initialize arms its timers. The partition group owns
+       * when its election starts, so the node is built inert and the caller
+       * arms it.
+       * @param {Object} _options - liferaft's options.
+       * @param {Function} [callback] - liferaft's completion callback.
+       */
+      initialize(_options, callback) {
+        if (callback) {
+          callback();
+        }
+      }
+
+      /**
+       * @param {*} command - The committed command.
+       * @param {*} effects - What applying it produced.
+       */
+      prepareCommitApply(command, effects) {
+        applyCommittedEntry(command, effects);
+      }
+
+      /**
+       * liferaft calls this on the CLONED node standing for the peer, so
+       * `this.address` is the destination.
+       * @param {Object} packet - The raft packet.
+       * @param {Function} callback - liferaft's completion callback.
+       */
+      write(packet, callback) {
+        const peerAddress = resolvePeerAddress(this.address);
+        sendToPeer(peerAddress, packet)
+          .then((result) => callback(null, result))
+          .catch((error) => callback(error));
+      }
+    }
+
+    return new PartitionGroupRaftNode(
+      request[RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS],
+      {
+        [LIFERAFT_NODE_OPTION.HEARTBEAT]: timing.heartbeatMs,
+        [LIFERAFT_NODE_OPTION.ELECTION_MIN]: timing.electionMinMs,
+        [LIFERAFT_NODE_OPTION.ELECTION_MAX]: timing.electionMaxMs,
+        [LIFERAFT_NODE_OPTION.LOG]: function() {
+          return durableLog;
+        },
+        [LIFERAFT_NODE_OPTION.SNAPSHOT_CATCHUP_NEEDED]: snapshotCatchupNeeded,
+        ...request[RAFT_PARTITION_NODE_REQUEST.SUBSTRATE],
+      },
+    );
   }
 
   /**

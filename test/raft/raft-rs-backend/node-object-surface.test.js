@@ -257,37 +257,37 @@ test('a trap taken through the node marks the runtime unhealthy in production',
     }
   });
 
-test('the partition service builds its raft node without the provider seam',
+// Phase 3 recorded, as a fact derived from src, that no module under
+// src/partition reached the provider seam to build its node: the partition
+// service extended LifeRaft itself. Phase 4 closed that (addendum §1), so the
+// same census now says the opposite, and what remains of the LifeRaft
+// dependency is stated exactly rather than left implied.
+test('no partition module builds a raft node outside the provider seam',
   async () => {
-    // Not an assertion about what ought to be: the finding is derived from
-    // src, so it changes when src changes.
     const sites = seamBypassSites(REPOSITORY_ROOT);
-    assert.ok(sites.directSubclasses.length > 0,
-      'if no module extends LifeRaft directly any more, this finding is ' +
-      'stale and the seam covers node construction');
-    assert.ok(
-      sites.directSubclasses.some(
+    assert.deepEqual(
+      sites.directSubclasses.filter(
         (file) => file.startsWith('src/partition/')),
-      'the partition service is the host this quest integrates with, and it ' +
-      'is the one that constructs its node outside the seam');
+      [],
+      'nothing under src/partition extends LifeRaft any more; the backend ' +
+      'builds the node');
+    // The state vocabulary is NOT closed yet, and this says so rather than
+    // implying it: the modules that still read LifeRaft's own class constants
+    // are the interface-reduction table's remaining work.
     assert.ok(sites.stateComparisons.length > 0,
-      'modules that are not liferaft compare the node state against ' +
-      'LifeRaft\'s own class constants, so the state vocabulary is not the ' +
-      'seam\'s either');
-    // The provider seam is still what a message-group node is built through,
-    // so the backend serves createNodeClass rather than refusing it.
+      'modules that are not liferaft still compare node state against ' +
+      'LifeRaft\'s own class constants');
+    // A control on the search itself: liferaft's own provider still builds a
+    // LifeRaft subclass, so an empty result above is a fact and not a broken
+    // census.
+    assert.ok(fs.readFileSync(
+      path.join(REPOSITORY_ROOT, 'src/raft/liferaft-provider.js'), 'utf8')
+      .includes('extends LifeRaft'));
+    // Both backends answer the partition-construction name; the experimental
+    // one refuses by name rather than being absent.
     const provider = createRaftProvider({
       [RAFT_BACKEND_OPTION]: RAFT_BACKEND.RAFT_RS_WASM,
     });
     assert.equal(typeof provider.createNodeClass, 'function');
-    const seamSources = sites.seamConstructionSites;
-    assert.ok(seamSources.length > 0);
-    assert.ok(seamSources.every((file) => file.startsWith('src/raft/')),
-      'every createNodeClass caller lives under src/raft; nothing in ' +
-      'src/partition reaches the seam to build its node');
-    // A control: the same search finds the liferaft provider's own class,
-    // so an empty result above would be a broken search rather than a fact.
-    assert.ok(fs.readFileSync(
-      path.join(REPOSITORY_ROOT, 'src/raft/liferaft-provider.js'), 'utf8')
-      .includes('createNodeClass'));
+    assert.equal(typeof provider.createPartitionNode, 'function');
   });

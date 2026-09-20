@@ -21,6 +21,9 @@ import {
   resolveReplicaCheckpointsRoot,
 } from '../raft/snapshot-install.js';
 import {RAFT_EVENT} from '../raft/constants.js';
+import {
+  RAFT_PARTITION_NODE_REQUEST,
+} from '../raft/raft-provider-contract-constants.js';
 import {RAFT_SNAPSHOT_INSTALL_OUTCOME} from '../raft/snapshot-install-constants.js';
 import {
   cleanupStaleTransferStaging,
@@ -403,84 +406,53 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       electionMaxMs,
       tickIntervalMs: Number.isFinite(tickIntervalMs) ? tickIntervalMs : null,
     };
-    const self = this;
-    const deferElection = this.deferElection;
-    class RaftNode extends LifeRaft {
-      /**
-       * Override initialize to support deferred election start.
-       * When deferElection is true, we don't start the heartbeat timer.
-       * Call startElection() later to begin the election process.
-       * @param {Object} options - Initialization options.
-       * @param {Function} callback - Completion callback.
-       */
-      initialize(options, callback) {
-        if (deferElection) {
-          self.logger.debug(
-            PARTITION_SERVICE_LOG_MSG.DEFERRING_ELECTION_START,
-            {replicaId: self.replicaId, partitionId: self.partitionId},
-          );
-          if (callback) callback();
-        } else {
-          if (callback) callback();
-        }
-      }
-      prepareCommitApply(command, effects) {
-        self.applyCommittedEntry(command, effects);
-        self.storage.recordAppliedAdvance();
-      }
-      /**
-       * Write method for sending Raft messages to peers.
-       * Called by liferaft when it needs to communicate with other nodes.
-       * Sends packets directly to transport without type conversion.
-       * Note: When liferaft calls node.write(), 'this' is the cloned node
-       * representing the peer, so 'this.address' is the destination address.
-       * Requirements: 10.2, 10.3, 10.4
-       * @param {Object} packet - Raft protocol packet (packet.address is sender)
-       * @param {Function} callback - Completion callback
-       */
-      write(packet, callback) {
-        const peerAddress = self.buildPeerAddress(this.address);
-        self.transport
-          .deliver(
-            peerAddress,
-            packet,
-            resolveRaftTransportDeliveryOptions({
-              ...packet,
-              targetAddress: peerAddress,
-            }),
-          )
-          .then((result) => callback(null, result))
-          .catch((err) => callback(err));
-      }
+    if (this.deferElection) {
+      this.logger.debug(
+        PARTITION_SERVICE_LOG_MSG.DEFERRING_ELECTION_START,
+        {replicaId: this.replicaId, partitionId: this.partitionId},
+      );
     }
     // Restart recovery reloads committed state from the durable DB without
     // re-applying entries through applyCommittedEntry, so a fresh HLC clock would
     // not witness already-committed HLCs and could regress below a value this node
     // previously committed. Warm the clock from the max committed HLC on the log.
     this.warmHlcFromCommittedLog();
-    const logAdapter = this.logAdapter;
-    this.raft = new RaftNode(this.unifiedAddress, {
-      [PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT]: heartbeatMs,
-      [PARTITION_SERVICE_LIFERAFT_TIMER.ELECTION_MIN]: electionMinMs,
-      [PARTITION_SERVICE_LIFERAFT_TIMER.ELECTION_MAX]: electionMaxMs,
-      [PARTITION_SERVICE_LIFERAFT_TIMER.LOG]: function() {
-        return logAdapter;
-      },
-      // S4 snapshot catch-up decision seam: forwarded to the service's
-      // settable onSnapshotCatchupNeeded (dispatch ownership is S6
-      // production wiring; guards inject their own seam).
-      onSnapshotCatchupNeeded: (decision) => {
+    // The backend boundary (binding direction addendum §1): the group states
+    // its own requirements and the selected backend builds the node. Nothing
+    // liferaft-shaped is named here, and nothing is read from a global - a
+    // backend that needs something absent from this request changes the
+    // boundary rather than reaching around it.
+    this.raft = this.raftProvider.createPartitionNode({
+      [RAFT_PARTITION_NODE_REQUEST.GROUP_ID]: this.partitionId,
+      [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: this.replicaId,
+      [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: this.unifiedAddress,
+      [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: this.replicaIds,
+      [RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG]: this.logAdapter,
+      [RAFT_PARTITION_NODE_REQUEST.TIMING]: this.raftTimingConfig,
+      [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]: hostedConsensusSubstrate(this),
+      [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: this.deferElection,
+      [RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER]: (peerAddress, packet) =>
+        this.transport.deliver(
+          peerAddress,
+          packet,
+          resolveRaftTransportDeliveryOptions({
+            ...packet,
+            targetAddress: peerAddress,
+          }),
+        ),
+      [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: (address) =>
+        this.buildPeerAddress(address),
+      [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]:
+        (command, effects) => {
+          this.applyCommittedEntry(command, effects);
+          this.storage.recordAppliedAdvance();
+        },
+      [RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: (decision) => {
         if (typeof this.onSnapshotCatchupNeeded ===
             PARTITION_SERVICE_TYPE.FUNCTION) {
           this.onSnapshotCatchupNeeded(decision);
         }
       },
-      // Consensus timers belong to the node hosting this replica whenever
-      // that node owns a clock. Without one the key is absent and liferaft
-      // keeps its own tick-tock, so production is byte-identical.
-      // Consensus runs on the hosting node's substrate when that node owns
-      // one, and on liferaft's own otherwise.
-      ...hostedConsensusSubstrate(this),
     });
     // Recorded-gap closure (S4, pre-existing defect): base liferaft always
     // boots at term 0, but an INSTALLED replica carries a durable
