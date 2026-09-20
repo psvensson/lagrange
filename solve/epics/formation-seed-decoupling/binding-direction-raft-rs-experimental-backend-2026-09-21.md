@@ -283,3 +283,134 @@ complexity than it introduces?
 **D. Migration decision.** One of: `recommend raft-rs backend cutover`;
 `continue experimental - named blockers`; `reject raft-rs backend - named
 incompatibility`. A positive result is not forced.
+
+## Phase-4 addendum (owner, 2026-09-21): the partition seam is authorised
+
+Phase 3 established, and the lead verified, that
+`src/partition/partition-service-raft-init-base.js:408` constructs
+`class RaftNode extends LifeRaft` directly and never calls the provider, so
+selecting the raft-rs backend does not change the node a partition runs on. The
+owner's decisions:
+
+1. **The partition construction seam change is authorised** - necessary scope,
+   not optional refactoring, because the quest exists to answer whether real
+   Lagrange partition groups can run on raft-rs. The narrowest change that
+   creates a real backend boundary: `PartitionService` ->
+   `RaftProvider.createPartitionNode(...)` -> `liferaft` or `raft-rs-wasm`. The
+   default stays liferaft; with it selected, partition behaviour stays
+   decision-for-decision equivalent where measurable; unknown names fail closed;
+   no production code silently chooses raft-rs; selection stays explicit through
+   test or harness configuration; no generalized plugin framework. The provider
+   receives the real requirements of a partition group rather than hidden
+   globals - partition/group identity, logical peer identity, durable storage
+   handle or context, transport/send capability, bootstrap membership where
+   appropriate, tick and lifecycle hooks - and only what the two real backends
+   need.
+2. **The liferaft-internal lifecycle event is a separate migration seam.** The
+   commit-rollback event is not hidden or emulated to make raft-rs look
+   compatible. Identify exactly what semantic fact the partition lifecycle
+   consumes from it, then define the smallest backend-neutral semantic event or
+   result the partition service actually requires.
+
+   > Abstract the semantic contract, not the liferaft event name.
+
+   If it encodes liferaft-only behaviour rather than something partitions
+   genuinely need, the dependency is removed instead of reproduced. Kept a
+   distinct change from constructor routing so each can be differentially
+   verified.
+3. **No complete LifeRaft imitation.** Not an ever-growing facade over 20
+   methods, 33 properties and 27 events. Every consumed member is classified as
+   a true partition/consensus semantic requirement, a generic lifecycle or
+   transport requirement, a liferaft implementation detail, or unused and dead;
+   only the first two survive into the backend-neutral contract. raft-rs never
+   lies about unsupported states such as mapping `PreCandidate` onto
+   `CANDIDATE`. Prefer changing a small number of partition consumers to use the
+   narrower interface over making raft-rs impersonate LifeRaft. Before and after
+   surface size goes in the complexity ledger; a successful seam makes the
+   required backend interface smaller than LifeRaft's public surface.
+4. **`pre_vote` and `check_quorum` stay OFF for the seam conversion**, not
+   changed in the same patch. Phase 3's measurements support the target
+   `{pre_vote: true, check_quorum: true}`, which also aligns with the intended
+   semantics - PreVote reduces disruption from a partitioned or rejoining node,
+   CheckQuorum makes a leader step down after losing quorum activity - but
+   changing them alters election behaviour and would complicate the earlier
+   receipts. Order: complete the seam under the settings phases 1-3 were
+   measured on; establish the real partition backend; then a small independent
+   election-policy step re-running the failure scenarios over all four
+   combinations, judged against the same deterministic scenarios. The
+   conclusion is not encoded before that re-measurement.
+5. **Retirement is scheduling eligibility, not a campaign guard.**
+
+   > A logically retired replica must cease receiving election ticks or
+   > participating in elections even if its local stale ConfState still contains
+   > itself.
+
+   A retired replica gets no ticks, no forced campaign, no participation as an
+   active local Raft runtime, and restart preserves retirement before ticking
+   starts. The learner and non-voter campaign guards remain but are not the
+   primary protection. The reproduced case is tested: remove a peer while
+   partitioned, its stale local state still lists itself, heal or restart, and
+   durable retirement prevents it disrupting the live cluster before
+   configuration catch-up.
+6. **The seam must not turn service status back into membership.** With the
+   raft-rs backend, `ConfState` remains authoritative; the constructor migration
+   never reintroduces `services.status -> provider peer set` as a hidden
+   bootstrap or reconciliation rule. Lifecycle values such as `SYNCING` remain
+   observations that may control catch-up workflow, routing, promotion policy
+   and diagnostics, and may never independently change who raft-rs considers a
+   voter or learner. The phase-2 hostile-cache acceptance tests are retained
+   through the real partition path.
+7. **Phase 4 continues only after the real partition path works.** The next
+   proof is not another message-group test: drive one real partition through the
+   new seam - fresh partition; elect; propose, commit and apply; restart;
+   membership read from the durable `ConfState`; learner addition; catch-up;
+   promotion; removal or relocation; hostile service-cache mutations throughout.
+   Only then do broader formation and failure runs begin. If the partition
+   service requires a LifeRaft-specific member that cannot be mapped to a
+   backend-neutral semantic requirement, stop and report instead of extending
+   the compatibility facade automatically.
+8. **Generated WASM and glue move out of `src`** if cheap: hand-written adapter
+   and loader stay under `src/raft/`, generated and vendored build output moves
+   to an explicit non-source location, because generated code should not
+   participate in source lint, complexity and unused-export accounting, a large
+   excluded subtree hides future hand-written code placed there, and the
+   loader's digest verification does not need `src`. Digest verification, pinned
+   source and toolchain metadata and the vendored raft-rs citations are kept. No
+   baseline is raised. If the move creates a larger structural problem than
+   expected, stop and retain the explicit exclusions rather than spending a
+   large phase on repository layout.
+9. **Reduce rather than enlarge the backend-neutral interface.** The goal is not
+   that raft-rs implements LifeRaft, but that partitions depend on a minimal
+   Raft semantic interface both backends can implement: lifecycle start and
+   close; tick; message ingress; proposal; committed-entry delivery; leadership
+   and state observation; membership and configuration observation; snapshot and
+   recovery; membership-change operations. Internal raft-rs concepts are not
+   exposed unless consumers genuinely require them.
+10. **Sequencing and budget.** Continue through the partition seam and the first
+    real raft-rs partition proof - the highest-value next step and necessary to
+    answer the migration question - then **pause before any large phase-5
+    expansion** and report: which LifeRaft dependencies remained; the size of
+    the backend-neutral interface; whether a real partition survives restart;
+    whether ConfState remains authoritative under hostile caches; whether
+    sequential membership change works; what can now be deleted; and the
+    expected scope and cost of the remaining formation and failure corpus.
+    Another large phase is not spent merely because it was numbered in the
+    original plan if the real-partition proof has changed what it should
+    contain. Independent adversarial verification remains required before
+    landing.
+11. **Complexity acceptance** adds to the ledger: concrete LifeRaft imports
+    removed from partition code; concrete LifeRaft enum reads removed;
+    backend-neutral methods introduced; compatibility shim methods introduced;
+    LifeRaft-only events removed or replaced; source checker exclusions removed
+    after the generated output moves; membership authority sources before and
+    after. The desired direction is fewer concrete LifeRaft dependencies, one
+    consensus-membership authority, a smaller backend surface, no additional
+    membership census and no new generic framework. A facade about as large as
+    LifeRaft itself is evidence the seam is at the wrong level, and work stops.
+12. **The method discipline stands.** Phase 1's production-before-test deviation
+    remains recorded; phases 2 and 3's corrected method continues - test or
+    falsifier first, observe the intended red, implement, retain the
+    load-bearing falsifiers - and test-first is never claimed for work not done
+    that way. The verifier is asked specifically to attack whether the default
+    liferaft partition construction and behaviour remained unchanged while the
+    raft-rs path became reachable.
