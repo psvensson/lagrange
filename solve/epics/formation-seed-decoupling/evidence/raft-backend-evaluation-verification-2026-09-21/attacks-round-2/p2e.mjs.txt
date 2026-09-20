@@ -1,0 +1,7 @@
+import {createDeterministicCluster, confChangeV2} from './forked-core-harness.js';
+const c=createDeterministicCluster({voters:['1','2','3'],learners:[]}); c.core.campaign(c.handleOf('1')); c.settle(400);
+c.core.propose_conf_change_v2(c.handleOf('1'),confChangeV2([{type:1,nodeId:'3'}])); c.settle(400); c.tickPeer('1',5); c.settle(400);
+console.log('before: 3 own voters',c.coreConfStateOf('3').voters.join(),'| leader',c.leaderId());
+c.core.campaign(c.handleOf('3')); let err=null; try{c.settle(400);}catch(e){err=String(e?.message||e);}
+console.log('settle after campaign ->',err,'| stepRejections',JSON.stringify(c.stepRejections.map(r=>`${r.from}->${r.to} t${r.msgType}: ${r.reason}`)));
+for(const id of ['1','2']){const s=c.core.status(c.handleOf(id)); console.log(' peer',id,'state',s.raftState,'term',String(s.term),'vote',String(s.vote),'lead',String(s.lead));}

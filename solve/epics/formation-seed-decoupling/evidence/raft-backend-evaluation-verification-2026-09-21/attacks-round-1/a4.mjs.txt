@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import {RESTART_BOUNDARY} from './forked-core-harness.js';
+import {runRestartBoundary, INTENTIONALLY_INDISTINGUISHABLE} from './core-scenarios.js';
+const B = Object.values(RESTART_BOUNDARY);
+function perRecord(record){
+  assert.equal(record.driven, true, 'not driven: '+record.reason);
+  assert.equal(record.witness.refusals, 0);
+  const local = record.localRestoreCorrectness;
+  assert.equal(local.messagesDeliveredDuringWindow, 0,'delivered');
+  assert.deepEqual(local.restoredConfState.voters, local.entitledByDurableState.voters,'LOCAL: voters entitled');
+  assert.deepEqual(local.restoredConfState.votersOutgoing, local.entitledByDurableState.votersOutgoing,'LOCAL: outgoing entitled');
+  assert.deepEqual(local.restoredConfState.learners, local.entitledByDurableState.learners,'LOCAL: learners entitled');
+  assert.equal(local.classification, record.facts.durableConfState,'LOCAL: classification');
+  assert.equal(record.eventualClusterConvergence.converged, true,'CONVERGENCE only');
+}
+const cs=(r)=>r.confState;
+const corruptions = {
+  'confstate:add-voter-9': (r)=>{ r.confState={...cs(r), voters:[...cs(r).voters,'9']}; },
+  'confstate:learner->voter': (r)=>{ const l=cs(r).learners||[]; if(!l.length) return 'n/a'; r.confState={...cs(r), voters:[...cs(r).voters,...l], learners:[]}; },
+  'confstate:drop-outgoing': (r)=>{ if(!(cs(r).votersOutgoing||[]).length) return 'n/a'; r.confState={...cs(r), votersOutgoing:[]}; },
+  'confstate:drop-a-voter': (r,v)=>{ r.confState={...cs(r), voters:cs(r).voters.filter(x=>x!==v && x!=='3').concat([v]).slice(0)}; },
+  'applied:behind(0)': (r)=>{ r.appliedIndex='0'; },
+  'applied:ahead-of-log(+5)': (r)=>{ r.appliedIndex=String(Number(r.entries.at(-1).index)+5); },
+  'applied:ahead-of-commit(last)': (r)=>{ if(Number(r.entries.at(-1).index)<=Number(r.hardState.commit)) return 'n/a'; r.appliedIndex=String(r.entries.at(-1).index); },
+  'hardstate:omitted': (r)=>{ r.hardState=null; },
+  'hardstate:vote-dropped': (r)=>{ r.hardState={...r.hardState, vote:'0'}; },
+  'hardstate:term-0': (r)=>{ r.hardState={...r.hardState, term:'0'}; },
+  'hardstate:commit-0': (r)=>{ r.hardState={...r.hardState, commit:'0'}; },
+};
+const ce=console.error; let last=''; console.error=(...a)=>{last=a.join(' ').split('\n')[0];};
+for (const [name,fn] of Object.entries(corruptions)) {
+  const out={};
+  for (const role of ['follower','leader']) for (const b of B) {
+    let na=false; globalThis.__corrupt=(r,v)=>{ if(fn(r,v)==='n/a') na=true; };
+    let verdict; last='';
+    try { const rec=runRestartBoundary(b,role); perRecord(rec); verdict='SILENTLY ACCEPTED'; }
+    catch(e){ const m=String(e.message||e).split('\n')[0]; verdict = m==='unreachable' ? 'core panic: '+last.replace(/.*raft-0.7.0\//,'') : 'red: '+m; }
+    if (na) verdict='n/a';
+    (out[verdict] ||= []).push(role[0]+':'+b);
+    if (verdict.startsWith('core panic')) break; // runtime poisoned? continue anyway in fresh process not possible; note
+  }
+  console.log('### '+name); for (const [v,l] of Object.entries(out)) console.log('   '+v+'  <= '+l.length+' rows: '+l.join(', '));
+}

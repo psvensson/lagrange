@@ -1,0 +1,13 @@
+import {createDeterministicCluster, loadForkedCore} from './forked-core-harness.js';
+const core=loadForkedCore(); const enc=(s)=>Buffer.from(s,'utf8');
+const fatalMsg=(to)=>({from:'2',to,term:'1',logTerm:'0',index:'0',msgType:8,entries:[],commit:'99',reject:false,rejectHint:'0'});
+const by=createDeterministicCluster({voters:['1','2','3'],learners:['4']}); by.core.campaign(by.handleOf('1')); by.settle(400);
+const mem0=core.wasm_memory_bytes();
+// one victim group of many single handles created UP FRONT so no create_node is needed during the storm
+const victims=[]; for(let i=0;i<400;i++){ victims.push(core.create_node({id:'2',peers:['1','2','3'],learners:[],electionTick:10,heartbeatTick:3})); }
+let fatals=0, firstBad=null;
+for(const h of victims){ try{ core.step(h,fatalMsg('2')); }catch(e){ if(/unreachable/.test(e.message)) fatals++; else { firstBad=`fatal #${fatals+1}: step threw ${e.message}`; break; } }
+  // bystander health after every fatal
+  try{ by.core.propose(by.handleOf('1'),enc('k')); by.settle(400); by.core.conf_state(by.handleOf('3')); }catch(e){ firstBad=`after ${fatals} fatals the BYSTANDER group failed: ${e.message}`; break; } }
+console.log('fatals',fatals,'|',firstBad,'| mem growth',core.wasm_memory_bytes()-mem0);
+for(const [n,f] of [['bystander conf_state',()=>core.conf_state(by.handleOf('1'))],['bystander status',()=>core.status(by.handleOf('2')).commit],['bystander tick',()=>core.tick(by.handleOf('1'))],['bystander has_ready',()=>core.has_ready(by.handleOf('1'))],['bystander take_ready',()=>Object.keys(core.take_ready(by.handleOf('1'))).length],['create_node',()=>core.create_node({id:'1',peers:['1'],learners:[],electionTick:10,heartbeatTick:3})],['handle_count',()=>core.handle_count()],['wasm_memory_bytes',()=>core.wasm_memory_bytes()]]){ try{console.log(' ',n,'->',JSON.stringify(f()));}catch(e){console.log(' ',n,'THREW',String(e.message));} }

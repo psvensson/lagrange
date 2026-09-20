@@ -1,0 +1,12 @@
+import {createDeterministicCluster, confChangeV2} from './forked-core-harness.js';
+for (const stop of ['persisted-not-committed','committed-not-applied','conf-state-recorded-not-advanced','ready-advanced']) {
+  const c=createDeterministicCluster({voters:['1','2','3'],learners:['4']}); c.core.campaign(c.handleOf('1')); c.settle(400);
+  c.stopAt('1',stop);
+  c.core.propose_conf_change_v2(c.handleOf('1'),confChangeV2([{type:1,nodeId:'2'},{type:0,nodeId:'4'}],0)); c.settle(400);
+  const stopped=c.stoppedAt('1'); c.crash('1');
+  c.core.campaign(c.handleOf('3')); c.settle(400);
+  let leader=c.leaderId(); for(let i=0;i<10;i++){ if(c.leaderId())c.tickPeer(c.leaderId(),5); c.settle(400);} 
+  const cs=c.coreConfStateOf('3');
+  console.log(`old leader died at ${stopped}: new leader ${leader}; after 50 leader ticks peer 3 reports voters [${cs.voters}] outgoing [${cs.votersOutgoing}] autoLeave ${cs.autoLeave} -> ${cs.votersOutgoing.length?'STILL JOINT':'left joint'}`);
+  c.free();
+}

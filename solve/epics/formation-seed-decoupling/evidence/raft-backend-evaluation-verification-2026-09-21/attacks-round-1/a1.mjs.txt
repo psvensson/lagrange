@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';
+import {RESTART_BOUNDARY} from './forked-core-harness.js';
+import {runRestartBoundary, INTENTIONALLY_INDISTINGUISHABLE} from './core-scenarios.js';
+const B = Object.values(RESTART_BOUNDARY);
+function perRecord(record){
+  assert.equal(record.driven, true, 'not driven: '+record.reason);
+  assert.equal(record.witness.refusals, 0);
+  assert.ok(record.facts.durableConfEntryShape || Number(record.facts.durableLastIndex) < Number(record.facts.confIndex), 'anchor');
+  const local = record.localRestoreCorrectness;
+  assert.equal(local.messagesDeliveredDuringWindow, 0);
+  assert.deepEqual(local.restoredConfState.voters, local.entitledByDurableState.voters,'voters entitled');
+  assert.deepEqual(local.restoredConfState.votersOutgoing, local.entitledByDurableState.votersOutgoing);
+  assert.deepEqual(local.restoredConfState.learners, local.entitledByDurableState.learners);
+  assert.equal(local.classification, record.facts.durableConfState,'classification');
+  assert.equal(record.eventualClusterConvergence.converged, true,'converged');
+}
+function matrix(records, role){
+  const claims = new Map(INTENTIONALLY_INDISTINGUISHABLE.map((c) => [[...c.boundaries].sort().join('|'), c]));
+  const forRole = records;
+  const hs = forRole.map(r=>r.signature);
+  assert.equal(new Set(hs).size, hs.length, 'HOST signature collision');
+  const by = new Map();
+  for (const r of forRole) by.set(r.durableSignature,[...(by.get(r.durableSignature)||[]),r]);
+  for (const m of by.values()){ if(m.length===1) continue;
+    const key=m.map(r=>r.boundary).sort().join('|');
+    assert.ok(claims.get(key), 'unclaimed durable collision ['+key+']');
+    const images=m.map(r=>JSON.stringify(r.localRestoreCorrectness.restoredImage));
+    assert.equal(new Set(images).size,1,'restore images differ');
+  }
+}
+for (const role of ['follower','leader']) {
+  globalThis.__shift = null;
+  const base = {}; const stops = {};
+  for (const b of B) { base[b] = runRestartBoundary(b, role); stops[b] = {...globalThis.__lastStop}; }
+  matrix(Object.values(base), role);
+  for (const b of B) for (const shift of [-1, +1]) {
+    globalThis.__shift = {cycle: stops[b].cycle, shift, index: stops[b].index};
+    let verdict;
+    try {
+      const rec = runRestartBoundary(b, role);
+      perRecord(rec);
+      const recs = B.map(x => x===b ? rec : base[x]);
+      matrix(recs, role);
+      verdict = 'STAYED GREEN (sig '+rec.signature+' vs base '+base[b].signature+')';
+    } catch (e) { verdict = 'RED: '+String(e.message).split('\n')[0]; }
+    console.log(role, b, 'shift', shift, '->', verdict);
+  }
+}

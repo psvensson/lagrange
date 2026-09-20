@@ -1,0 +1,20 @@
+import {createDeterministicCluster, confChangeV2} from './forked-core-harness.js';
+const enc=(s)=>Buffer.from(s,'utf8');
+function removed(learnsIt){ const c=createDeterministicCluster({voters:['1','2','3'],learners:[]}); c.core.campaign(c.handleOf('1')); c.settle(400);
+  if(!learnsIt) c.setIsolated('3',true);
+  c.core.propose_conf_change_v2(c.handleOf('1'),confChangeV2([{type:1,nodeId:'3'}])); c.settle(400); c.tickPeer('1',5); c.settle(400); return c; }
+for (const learnsIt of [true,false]) {
+  const c=removed(learnsIt); const own=c.coreConfStateOf('3').voters.join(); 
+  let out='no panic'; let campaigns=0;
+  try{ for(let i=0;i<400;i++){ c.core.tick(c.handleOf('3')); const st=c.core.status(c.handleOf('3')); if(Number(st.raftState)!==0) campaigns++; if(!learnsIt){ /* keep it cut off */ } c.settle(400);} }catch(e){ out='THREW '+String(e?.message||e); }
+  const st=(()=>{try{const s=c.core.status(c.handleOf('3'));return `state${s.raftState} term${s.term}`;}catch(e){return 'dead: '+e.message;}})();
+  console.log(`removed peer 3, learned of removal=${learnsIt}, own voters=[${own}] : 400 ticks ->`,out,'| non-follower observations',campaigns,'|',st, '| leader 1 view', c.coreConfStateOf('1').voters.join(), 'leader term', c.core.status(c.handleOf('1')).term);
+  if(!learnsIt){ c.setIsolated('3',false); try{ for(let i=0;i<60;i++){c.core.tick(c.handleOf('3')); c.settle(400);} console.log('  reconnected+ticked: 3 =',(()=>{const s=c.core.status(c.handleOf('3'));return `state${s.raftState} term${s.term}`})(),'| 1 =',(()=>{const s=c.core.status(c.handleOf('1'));return `state${s.raftState} term${s.term}`})(),'stepRejections',c.stepRejections.length);}catch(e){console.log('  reconnect THREW',String(e?.message||e));} }
+  // explicit host campaign
+  try{ c.core.campaign(c.handleOf('3')); c.settle(400); console.log('  host campaign(): no throw; state',c.core.status(c.handleOf('3')).raftState);}catch(e){console.log('  host campaign() ->',String(e?.message||e));}
+  try{c.free();}catch(e){}
+}
+// restart of a removed peer from its durable record, then ticks
+{ const c=removed(true); c.crash('3'); c.restart('3'); let out='no panic'; try{ for(let i=0;i<400;i++){c.core.tick(c.handleOf('3')); c.settle(400);} }catch(e){out='THREW '+String(e?.message||e);} console.log('removed peer restarted from durable record [voters '+c.coreConfStateOf('3').voters+'], 400 ticks ->',out); try{c.free();}catch(e){} }
+// a learner ticking
+{ const c=createDeterministicCluster({voters:['1','2','3'],learners:['4']}); c.core.campaign(c.handleOf('1')); c.settle(400); let out='no panic'; try{ for(let i=0;i<400;i++){c.core.tick(c.handleOf('4'));c.settle(400);} c.core.campaign(c.handleOf('4')); c.settle(400); out+=' ; host campaign on learner: state '+c.core.status(c.handleOf('4')).raftState;}catch(e){out='THREW '+String(e?.message||e);} console.log('learner 4: 400 ticks + campaign ->',out); try{c.free();}catch(e){} }

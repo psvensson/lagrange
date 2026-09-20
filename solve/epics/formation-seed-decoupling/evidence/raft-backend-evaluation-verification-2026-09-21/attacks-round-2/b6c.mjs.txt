@@ -1,0 +1,26 @@
+import {createDeterministicCluster, membershipArray, assertMembershipEqual, derivedMembership, changedNodeIds, confChangeV2, selectMembers, auditMembershipProvenance} from './forked-core-harness.js';
+import {rawMembershipAssertions} from './membership-assertion-census.js';
+const c=createDeterministicCluster({voters:['1','2','3'],learners:[]}); c.core.campaign(c.handleOf('1')); c.settle(400);
+const cs=c.coreConfStateOf('1'); const v=membershipArray(cs,'voters');
+const t=(n,f)=>{try{f();console.log(n,'-> ACCEPTED');}catch(e){console.log(n,'-> refused:',String(e.message).slice(0,90));}};
+console.log('frozen?',Object.isFrozen(v));
+const forged=membershipArray(cs,'voters'); forged.length=0; forged.push('7','8','9');
+t('1. branded array emptied and refilled with 7,8,9, compared with itself-as-expectation',()=>assertMembershipEqual(forged,forged,'x'));
+const exp=membershipArray(cs,'voters'); exp.push('9'); 
+t('2. expectation = branded core array with 9 pushed in; actual = audit-visible field',()=>{ const r={voters:exp}; const a=auditMembershipProvenance(r); if(a.violations.length) throw new Error('audit saw it'); console.log('   audit:',JSON.stringify(a)); });
+t('3. spread clone as expectation',()=>assertMembershipEqual(v,[...v],'x'));
+t('4. declared literal laundered via confChangeV2/changedNodeIds',()=>assertMembershipEqual(v,changedNodeIds(confChangeV2([{type:0,nodeId:'1'},{type:0,nodeId:'2'},{type:0,nodeId:'3'}])),'x'));
+t('5. derivedMembership from an invented change (remove 1,2,3 add 5,6,7) equals forged actual',()=>{ const d=derivedMembership(v,{adding:changedNodeIds(confChangeV2([{type:0,nodeId:'5'},{type:0,nodeId:'6'},{type:0,nodeId:'7'}])),removing:changedNodeIds(confChangeV2([{type:1,nodeId:'1'},{type:1,nodeId:'2'},{type:1,nodeId:'3'}]))},'invented'); const act=membershipArray(cs,'voters'); act.length=0; act.push('5','6','7'); assertMembershipEqual(act,d,'x'); });
+t('6. mutate the core-read ConfState object in place, then read it through membershipArray',()=>{ cs.voters=['4','5','6']; assertMembershipEqual(membershipArray(cs,'voters'),changedNodeIds(confChangeV2([{type:0,nodeId:'4'},{type:0,nodeId:'5'},{type:0,nodeId:'6'}])),'x'); });
+c.free();
+const SRC={
+ 'a. assert aliased':"import assert from 'node:assert/strict';\nconst check = assert;\ncheck.deepEqual(record.confStateByPeer['1'].voters, ['1','2','3']);",
+ 'b. destructured':"import assert from 'node:assert/strict';\nconst {voters} = record.confStateByPeer['1'];\nassert.deepEqual(voters, ['1','2','3']);",
+ 'c. JSON.stringify via helper':"import assert from 'node:assert/strict';\nfunction same(a,b){ if (JSON.stringify(a)!==JSON.stringify(b)) { throw new Error('differs'); } }\nsame(record.confStateByPeer['1'].voters, ['1','2','3']);",
+ 'd. if/throw':"if (record.confStateByPeer['1'].voters.join() !== '1,2,3') { throw new Error('x'); }",
+ 'e. indexed loop through destructure':"import assert from 'node:assert/strict';\nconst {voters: v} = record.confStateByPeer['1'];\nconst lit=['1','2','3'];\nfor (let i=0;i<3;i+=1){ assert.equal(v[i], lit[i]); }",
+ 'f. computed key':"import assert from 'node:assert/strict';\nconst k='vot'+'ers';\nassert.deepEqual(record.confStateByPeer['1'][k], ['1','2','3']);",
+ 'g. control: direct':"import assert from 'node:assert/strict';\nassert.deepEqual(record.confStateByPeer['1'].voters, ['1','2','3']);",
+ 'h. control: const alias':"import assert from 'node:assert/strict';\nconst x = record.confStateByPeer['1'].voters;\nassert.equal(x.length, 3);",
+};
+for(const [n,src] of Object.entries(SRC)){ const r=rawMembershipAssertions(src,'synthetic'); console.log('census',n,'->',r.length?'REFUSED':'NOT SEEN'); }

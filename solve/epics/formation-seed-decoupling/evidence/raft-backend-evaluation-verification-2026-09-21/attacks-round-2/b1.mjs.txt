@@ -1,0 +1,55 @@
+import {createDeterministicCluster, confChangeV2, CONF_CHANGE_TYPE, CONF_CHANGE_TRANSITION, RESTART_BOUNDARY} from './forked-core-harness.js';
+const enc=(s)=>Buffer.from(s,'utf8');
+const STOPS=['proposed-not-persisted','persisted-not-committed','committed-not-applied','conf-applied-conf-state-not-recorded','conf-state-recorded-not-advanced','ready-advanced'];
+const SHAPES={
+  ncn:['n','c','n'], nncnn:['n','n','c','n','n'], nnc:['n','n','c'], cnn:['c','n','n'], n_c:['n','S','c'], c:['c'],
+};
+const CHANGES={
+  simple:()=>confChangeV2([{type:CONF_CHANGE_TYPE.ADD_NODE,nodeId:'4'}]),
+  joint:()=>confChangeV2([{type:CONF_CHANGE_TYPE.REMOVE_NODE,nodeId:'2'},{type:CONF_CHANGE_TYPE.ADD_NODE,nodeId:'4'}],CONF_CHANGE_TRANSITION.EXPLICIT),
+  jointAuto:()=>confChangeV2([{type:CONF_CHANGE_TYPE.REMOVE_NODE,nodeId:'2'},{type:CONF_CHANGE_TYPE.ADD_NODE,nodeId:'4'}],CONF_CHANGE_TRANSITION.AUTO),
+};
+function run(shapeName, changeName, stop, role, voters){
+  const cluster=createDeterministicCluster({voters, learners:['4']});
+  const out={shapeName,changeName,stop,role,voters:voters.length};
+  try{
+    cluster.core.campaign(cluster.handleOf('1')); cluster.settle(400);
+    const leader=cluster.leaderId(); const victim= role==='leader'?leader:(voters.length>1?'3':leader);
+    cluster.stopAt(victim, stop);
+    const h=cluster.handleOf(leader);
+    for(const k of SHAPES[shapeName]){
+      if(k==='n') cluster.core.propose(h,enc('x'));
+      else if(k==='S') cluster.settle(400);
+      else cluster.core.propose_conf_change_v2(h,CHANGES[changeName]());
+    }
+    cluster.settle(400);
+    out.stoppedAt=cluster.stoppedAt(victim); out.ci=cluster.stoppedAtEntryIndex(victim);
+    if(!out.ci){out.result='not-driven';return out;}
+    const r=cluster.durableRecordOf(victim);
+    out.durable=`L${r.entries.at(-1)?.index} C${r.hardState?.commit} A${r.appliedIndex} T${r.hardState?.term} V${r.hardState?.vote}`;
+    out.phase=cluster.readyPhaseOf(victim);
+    out.wl=r.writeLog.map(w=>w.write).slice(-7).join(',');
+    cluster.crash(victim);
+    if(role==='leader' && voters.length>1){ for(const c of ['2','3']){ cluster.core.campaign(cluster.handleOf(c)); cluster.settle(400); if(cluster.leaderId())break;} }
+    try{ cluster.restart(victim); cluster.setIsolated(victim,true); cluster.settle(400);
+      out.isoCalls=cluster.applyConfChangeCalls(victim).join(',');
+      const cs=cluster.coreConfStateOf(victim); out.isoConf=`${cs.voters}|${cs.votersOutgoing}|${cs.learners}`;
+      const st=cluster.statuses().get(victim); out.isoStatus=`c${st.commit} a${st.applied} t${st.term} v${st.vote}`;
+      cluster.setIsolated(victim,false);
+      for(let i=0;i<12;i++){ const l=cluster.leaderId(); if(!l){ for(const c of cluster.aliveIds().sort()){ try{cluster.core.campaign(cluster.handleOf(c));}catch(e){out.campErr=String(e.message)} cluster.settle(400); if(cluster.leaderId())break;} } else cluster.tickPeer(l,5); cluster.settle(400);} 
+      const all=[...cluster.confStates()].map(([id,c])=>`${id}:${c.voters}|${c.votersOutgoing}|${c.learners}`);
+      out.final=all.join(' ; ');
+      out.errs=JSON.stringify([...cluster.peers.keys()].flatMap(id=>cluster.applyConfChangeErrors(id)));
+      out.stepRej=cluster.stepRejections.length;
+      out.result='restarted';
+    }catch(e){ out.result='RESTART-FAILED: '+String(e.message).slice(0,200); }
+    return out;
+  } finally { try{cluster.free();}catch(e){ out.freeErr=String(e.message);} }
+}
+const only=process.argv[2];
+for(const voters of [['1','2','3'],['1']])
+for(const shapeName of Object.keys(SHAPES)) for(const changeName of Object.keys(CHANGES)) for(const stop of STOPS) for(const role of ['follower','leader']){
+  if(voters.length===1 && (role==='follower'||changeName!=='simple')) continue;
+  let o; try{o=run(shapeName,changeName,stop,role,voters);}catch(e){o={shapeName,changeName,stop,role,result:'THREW '+String(e.message).slice(0,200)};}
+  console.log(JSON.stringify(o));
+}

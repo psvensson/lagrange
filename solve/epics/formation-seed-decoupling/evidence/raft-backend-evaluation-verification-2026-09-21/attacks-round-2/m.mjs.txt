@@ -1,0 +1,4 @@
+import {runHostOrderMutantAt, runHostOrderMutant, runHostOrderMutants} from './core-scenarios.js';
+for (const m of ['none','an-inert-mutant-that-changes-nothing']) { for (const stop of ['ready-advanced','conf-state-recorded-not-advanced','conf-applied-conf-state-not-recorded']) { const r=runHostOrderMutantAt(m,stop); console.log(m.padEnd(38),stop.padEnd(38),'->',r.outcome,'|',r.message); }
+  console.log('  overall (worst of three stops):',runHostOrderMutant(m).outcome); }
+const all=runHostOrderMutants(); for(const r of all.mutants){ console.log(r.mutant.padEnd(45),r.outcome.padEnd(28),JSON.stringify(r.attempts.map(a=>a.outcome))); }
