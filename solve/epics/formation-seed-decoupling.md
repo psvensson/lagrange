@@ -85,7 +85,6 @@ authorizes:
   - scripts/quest-evidence/overflow-budget-audit-evidence-binding.js
   - scripts/quest-evidence/replica-membership-model-reduction.js
   - scripts/quest-evidence/raft-backend-evaluation.js
-  - test/raft
   - scripts/quest-evidence/readiness-admission-transitions-observed.js
   - scripts/quest-evidence/readiness-routing-denial-cause-carried.js
   - test/rebalancer
