@@ -80,9 +80,11 @@ class PartitionNodeCluster {
    * @param {string} options.partitionId - The group.
    * @param {Array<string>} options.replicaIds - Logical Lagrange replica ids.
    */
-  constructor({partitionId, replicaIds}) {
+  constructor({partitionId, replicaIds, substrateFor = null}) {
     this.partitionId = partitionId;
     this.replicaIds = [...replicaIds];
+    this.substrateFor = substrateFor;
+    this.isolated = new Set();
     this.directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
     this.provider = createRaftProvider({
       [RAFT_BACKEND_OPTION]: RAFT_BACKEND.RAFT_RS_WASM,
@@ -140,10 +142,11 @@ class PartitionNodeCluster {
       },
       [RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE]: db,
       [RAFT_PARTITION_NODE_REQUEST.TIMING]: PARTITION_TIMING,
-      [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]: {},
+      [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]:
+        this.substrateFor === null ? {} : this.substrateFor(replicaId),
       [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: true,
       [RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER]: (peerAddress, packet) => {
-        this.queue(peerAddress, packet);
+        this.queue(replicaId, peerAddress, packet);
         return Promise.resolve();
       },
       [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: (peerReplicaId) =>
@@ -203,16 +206,40 @@ class PartitionNodeCluster {
   }
 
   /**
-   * The transport: hold an envelope for its recipient.
+   * The transport: hold an envelope for its recipient. An isolated replica
+   * neither sends nor receives, which is how a peer is cut off from the
+   * cluster without being stopped.
+   * @param {string} fromReplicaId - Who sent it.
    * @param {string} address - Where it is going.
    * @param {Object} envelope - The envelope.
    * @private
    */
-  queue(address, envelope) {
-    const replica = this.replicas.get(this.replicaIdOf(address));
+  queue(fromReplicaId, address, envelope) {
+    const toReplicaId = this.replicaIdOf(address);
+    if (this.isolated.has(fromReplicaId) || this.isolated.has(toReplicaId)) {
+      return;
+    }
+    const replica = this.replicas.get(toReplicaId);
     if (replica) {
       replica.inbox.push(envelope);
     }
+  }
+
+  /**
+   * Cut one replica off from the cluster.
+   * @param {string} replicaId - The replica.
+   */
+  isolate(replicaId) {
+    this.isolated.add(replicaId);
+    this.replica(replicaId).inbox.length = 0;
+  }
+
+  /**
+   * Let it talk again.
+   * @param {string} replicaId - The replica.
+   */
+  heal(replicaId) {
+    this.isolated.delete(replicaId);
   }
 
   /** Deliver everything the transport is holding. */

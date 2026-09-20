@@ -13,6 +13,7 @@
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
@@ -21,6 +22,18 @@ import {TextDecoder, TextEncoder} from 'node:util';
 import Database from 'better-sqlite3';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {
+  PartitionService,
+} from '../../../src/partition/partition-service.js';
+import {createRaftProvider} from '../../../src/raft/raft-backend-selection.js';
+import {
+  RAFT_BACKEND,
+  RAFT_BACKEND_OPTION,
+} from '../../../src/raft/raft-backend-constants.js';
+import {RAFT_EVENT} from '../../../src/raft/constants.js';
+import {
+  RAFT_RS_NODE_EVENT_VALUES,
+} from '../../../src/raft/raft-rs-node-constants.js';
 import {
   RAFT_PARTITION_NODE_REQUEST,
 } from '../../../src/raft/raft-provider-contract-constants.js';
@@ -385,6 +398,56 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
   } finally {
     cluster.dispose();
   }
+});
+
+// Addendum §7's stop condition, measured rather than assumed: a real
+// PartitionService is built on the experimental backend and what it demands
+// that this backend does not serve is recorded by name. The backend is NOT
+// grown a member to satisfy it - that is the facade the owner forbade - so
+// this test's job is to keep the demand visible and to fail if the facade
+// ever appears.
+test('a real partition service on the experimental backend demands exactly ' +
+  'one liferaft-internal event, and the backend does not grow one for it',
+async () => {
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'raft-rs-service-demand-'));
+  const provider = createRaftProvider({
+    [RAFT_BACKEND_OPTION]: RAFT_BACKEND.RAFT_RS_WASM,
+  });
+  const service = new PartitionService({
+    partitionId: 'service-demand-partition',
+    tableId: 'demand-table',
+    tableName: 'demand_table',
+    replicaId: 'replica-demand-1',
+    replicaIds: ['replica-demand-1', 'replica-demand-2'],
+    nodeId: 'node-demand-1',
+    dbPath: path.join(directory, 'replica.sqlite'),
+    deferElection: true,
+    raftProvider: provider,
+  });
+  let refusal = null;
+  try {
+    await service.initialize();
+  } catch (error) {
+    refusal = error;
+  } finally {
+    try {
+      await service.shutdown();
+    } catch {
+      // The service never finished initializing; the files still close.
+    }
+    fs.rmSync(directory, {recursive: true, force: true});
+  }
+  assert.ok(refusal !== null,
+    'the service must not silently run on a backend that does not serve it');
+  // The event's own producer names it, so this is not a literal here.
+  assert.ok(refusal.message.includes(RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE),
+    'the refusal names the liferaft-internal event the service subscribed; ' +
+    `it said ${refusal.message}`);
+  // And the backend still refuses it rather than emitting it: no facade.
+  assert.ok(!RAFT_RS_NODE_EVENT_VALUES
+    .includes(RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE),
+  'the experimental backend must not have grown the liferaft event');
 });
 
 test('the partition request names the durable storage the group runs on, ' +
