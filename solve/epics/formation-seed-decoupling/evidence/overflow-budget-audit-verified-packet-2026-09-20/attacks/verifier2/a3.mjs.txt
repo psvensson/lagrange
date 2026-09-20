@@ -1,0 +1,11 @@
+import {attack,readM,run} from './h.mjs'; import {toHandoff,declareVacuous} from './a2.mjs'; import {BIND,PIN} from './emit.mjs';
+const which=process.argv[2];
+const SETS={
+ all:readM().rows.filter(r=>r.enforcementDisposition!=='proved-unreachable').map(r=>r.id),
+ unclassified:readM().rows.filter(r=>r.enforcementDisposition==='still-unclassified').map(r=>r.id),
+ replaceOnly:readM().rows.filter(r=>r.enforcementDisposition==='still-unclassified'&&r.producerOperationTypes.join()==='REPLACE').map(r=>r.id),
+};
+const {dir,r}=attack('A3-'+which,d=>{for(const id of SETS[which]) toHandoff(d,id); declareVacuous(d);});
+console.log('moved',SETS[which].length,'rows');
+const e=run(dir,BIND,'^the committed receipts are the ones the measuring tests emit$'); console.log('  EMISSION CHECK:',e.pass?'GREEN (not refused)':'RED :: '+e.err);
+const p=run(dir,PIN,'^every inherited round-3 value is pinned'); console.log('  (pin):',p.pass?'GREEN':'RED :: '+p.err);

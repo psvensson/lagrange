@@ -1,0 +1,2 @@
+import {run,V} from './h.mjs'; import path from 'node:path';
+const r=run(path.join(V,'fx',process.argv[2]),process.argv[3],null); console.log(r.out.split('\n').filter(l=>/not ok|error:|expected|actual|^\s+[-+] /.test(l)).slice(0,60).join('\n'));

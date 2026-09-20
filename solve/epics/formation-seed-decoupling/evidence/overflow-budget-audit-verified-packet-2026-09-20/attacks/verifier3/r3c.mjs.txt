@@ -1,0 +1,12 @@
+import {regenerate} from './emit.mjs'; import {attack,run} from './h.mjs'; import {after} from './r3a.mjs';
+const prod=(d,id)=>d.matrix.producers.find(p=>p.id===id);
+const typesOf=(d,r)=>[...new Set(r.producers.flatMap(p=>prod(d,p).addLikeTypes))].sort();
+const mk=(P,Q,n=7)=>d=>{ let k=0; for(const r of d.matrix.rows){
+    if(r.unreachableSubject==='guard-admission-state'&&k<n){k++; r.producers=[P]; r.producerOperationTypes=typesOf(d,r);}
+    if(r.enforcementDisposition==='still-unclassified'&&r.producerOperationTypes.join()==='REPLACE'){ r.producers=[...r.producers,Q]; r.producerOperationTypes=typesOf(d,r);} } };
+if(process.argv[2]==='regen'){ regenerate('R3-regen-rowProducers',mk('planner-paired-relocation-replace','follow-up-deficit-add')); }
+else if(process.argv[2]==='hybrid'){ const {dir,r}=attack('R3-hybrid',d=>{ prod(d,'planner-paired-relocation-replace').addLikeTypes=['ADD','REPLACE'];
+    let k=0; for(const r of d.matrix.rows){ if(r.unreachableSubject==='guard-admission-state'&&k<4){k++; r.producers=['coordinator-successor-replace'];}
+      if(r.id.endsWith('-relocation-census-disagreement-overlap')) r.producers=[...r.producers,'follow-up-deficit-add']; r.producerOperationTypes=typesOf(d,r);} }); after(dir,r); }
+else { const Ps=['planner-paired-relocation-replace','follow-up-unhealthy-source-replace','coordinator-successor-replace'], Qs=['follow-up-deficit-add','provisioning-create-operation','coordinator-create-operation','planner-under-representation-add'];
+  let n=0,imp=0; for(const P of Ps) for(const Q of Qs) for(const cnt of [4,7]){ const {r,dir}=attack('R3-fam',mk(P,Q,cnt)); n++; if(r.pass) imp++; } console.log({family:n,validatorGreenWithItem4Demonstrated:imp}); }

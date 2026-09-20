@@ -1,0 +1,122 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "overflow-budget-audit-evidence-binding",
+  "status": "fail",
+  "testFileDigests": {
+    "test/rebalancer/overflow-budget-d3-correction.test.js": "f5e234f11cbe23cf652a40b87f4a0a4621b862620664bf44e6c030560cdff1e5",
+    "test/rebalancer/overflow-budget-round3-pin.test.js": "322f4d286821c075920085d0891d4d1ff4ba15f92a8ff91569c65fc7a633b833",
+    "test/rebalancer/overflow-budget-evidence-binding.test.js": "4eb80cb727064d278f1179111a2a92211f60045d8ebc80cd9dffc29a691901f8",
+    "test/rebalancer/overflow-budget-derived-truth.test.js": "0a13cbc15a1ac1fa57995eaf14395e3e199434cc7733828271b9c2eca8274c18",
+    "test/rebalancer/overflow-budget-inherited-receipts.test.js": "fe2fa8d97b789a21f4736511e4526a5e2df5e4991badfb9009beebfaab085ec5",
+    "test/rebalancer/overflow-budget-audit-freeze.test.js": "970bfaa284eb81a078be5baf59b9a55e7615498b09cf85f0f7b6e0b425d90a2f"
+  },
+  "generatedAt": "2026-09-20T08:37:32.195Z",
+  "receipts": [
+    {
+      "id": "d3-handoff-rows-corrected-with-domain-qualification",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the two hand-off rows carry the disposition that fits a measured does_not_depend$\" test/rebalancer/overflow-budget-d3-correction.test.js",
+      "detail": "both hand-off rows leave explicit-authority-required for the existing disposition that fits, with a structured domain qualification whose subject is a budget-dependent authority requirement and never the relocation; the spread-recovery finding and the repair group stay and no ledger authority appears",
+      "testFile": "test/rebalancer/overflow-budget-d3-correction.test.js"
+    },
+    {
+      "id": "gate-item-3-follows-from-the-corrected-rows-by-derivation",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^gate item 3 selects the corrected rows and derives its own status$\" test/rebalancer/overflow-budget-d3-correction.test.js",
+      "detail": "item 3 selects by disposition, so the corrected rows leave its support by selection; its selection minimum is re-pinned as the recorded mechanical consequence and its status comes out of deriveGateStatus",
+      "testFile": "test/rebalancer/overflow-budget-d3-correction.test.js"
+    },
+    {
+      "id": "inherited-round-3-content-unchanged-except-d3",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every inherited round-3 value is pinned and unchanged except the D3 correction$\" test/rebalancer/overflow-budget-round3-pin.test.js",
+      "detail": "a digest of each upheld row and of every other inherited section at its round-3 content, minus the named representational fields the successor replaces; the exclusion list is declared in the pin itself",
+      "testFile": "test/rebalancer/overflow-budget-round3-pin.test.js"
+    },
+    {
+      "id": "every-dependency-receipt-is-row-field-value-domain-bound",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every dependency receipt binds the row, the field, the value and the domain$\" test/rebalancer/overflow-budget-evidence-binding.test.js",
+      "detail": "each row resolves its dependency receipt by id and the validator compares the bound row id, kind, classification field, expected value, domain id and witness identity against the row's own values",
+      "testFile": "test/rebalancer/overflow-budget-evidence-binding.test.js"
+    },
+    {
+      "id": "every-producer-reachability-receipt-is-row-and-producer-bound",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every producer-reachability receipt binds the row and the producer it drove$\" test/rebalancer/overflow-budget-evidence-binding.test.js",
+      "detail": "a producerReachable yes resolves a real-chain receipt naming this row and one of this row's producers, carrying the producer and transition facts the drive established",
+      "testFile": "test/rebalancer/overflow-budget-evidence-binding.test.js"
+    },
+    {
+      "id": "measuring-tests-emit-the-receipts-they-are-cited-for",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the committed receipts are the ones the measuring tests emit$\" test/rebalancer/overflow-budget-evidence-binding.test.js",
+      "detail": "the measuring tests emit their receipts and the committed receipt file is compared to that emission byte for byte, so it cannot be hand-written",
+      "testFile": "test/rebalancer/overflow-budget-evidence-binding.test.js"
+    },
+    {
+      "id": "receipt-binding-mutants-all-fail-structurally",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every receipt-binding mutant fails structurally$\" test/rebalancer/overflow-budget-evidence-binding.test.js",
+      "detail": "swap a receipt between rows, change the row id, change the expected value, cite a valid unrelated differential, cite a real-chain receipt for another producer, remove the binding, change the domain, point at an unknown receipt - each run against the real validator",
+      "testFile": "test/rebalancer/overflow-budget-evidence-binding.test.js"
+    },
+    {
+      "id": "finding-resolution-derives-from-resolution-artifacts",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a finding is resolved only by a resolution artifact that names it$\" test/rebalancer/overflow-budget-derived-truth.test.js",
+      "detail": "a gate-blocking finding carries no open flag; it is resolved only by a resolution artifact that exists, parses, names the finding and carries a compatible result",
+      "testFile": "test/rebalancer/overflow-budget-derived-truth.test.js"
+    },
+    {
+      "id": "external-artifacts-are-observed-from-repository-state",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a required external artifact is observed from repository state$\" test/rebalancer/overflow-budget-derived-truth.test.js",
+      "detail": "no exists flag: the observation reads the repository from a given root - the artifact is present, is of the required kind, names the gate requirement and, for a quest, is sealed and approved",
+      "testFile": "test/rebalancer/overflow-budget-derived-truth.test.js"
+    },
+    {
+      "id": "gate-item-8-stays-not-yet-under-any-audit-metadata-edit",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^gate item 8 stays not-yet under every audit metadata edit$\" test/rebalancer/overflow-budget-derived-truth.test.js",
+      "detail": "the round-3 attack (open false, unlink, exists true) and its variants run against the real validator and derivation; item 8 never reaches demonstrated",
+      "testFile": "test/rebalancer/overflow-budget-derived-truth.test.js"
+    },
+    {
+      "id": "gate-derivation-is-monotonic-under-removal-corruption-and-substitution",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^gate derivation is monotonic under removal, corruption and substitution$\" test/rebalancer/overflow-budget-derived-truth.test.js",
+      "detail": "the six inherited monotonicity mutants plus the D1 and D2 cases: removing a row, a receipt, a binding, an artifact or a finding, falsely closing a finding, falsely presenting an artifact and substituting another row's or another requirement's evidence",
+      "testFile": "test/rebalancer/overflow-budget-derived-truth.test.js"
+    },
+    {
+      "id": "the-three-round-3-attacks-no-longer-work",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the three round-3 attacks no longer work$\" test/rebalancer/overflow-budget-derived-truth.test.js",
+      "detail": "the verifier's own three attacks, literally: item 8 (and items 6 and 7) demonstrated by metadata; a flipped dependency citing an unrelated test and a producerReachable yes citing a file that only declares itself real-chain; and the D3 combination itself",
+      "testFile": "test/rebalancer/overflow-budget-derived-truth.test.js"
+    },
+    {
+      "id": "inherited-audit-receipts-still-green",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the twelve inherited audit receipts are re-run and green$\" test/rebalancer/overflow-budget-inherited-receipts.test.js",
+      "detail": "the closed audit's own receipt record is read, and each of its twelve recorded proof commands is re-run against this worktree; the closed record itself is never rewritten",
+      "testFile": "test/rebalancer/overflow-budget-inherited-receipts.test.js"
+    },
+    {
+      "id": "no-production-file-changed",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^no production file changed in this quest's worktree$\" test/rebalancer/overflow-budget-round3-pin.test.js",
+      "detail": "the worktree carries no change under src, examples, .github or .githooks, committed or uncommitted",
+      "testFile": "test/rebalancer/overflow-budget-round3-pin.test.js"
+    },
+    {
+      "id": "freeze-manifest-names-an-approving-verification-and-matches-the-frozen-bytes",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the freeze manifest names an approving verification and matches the frozen bytes$\" test/rebalancer/overflow-budget-audit-freeze.test.js",
+      "detail": "the manifest digests the matrix, the gate document, the evidence bindings and the epoch inventory, names the approving verification in this quest's log, and is refused while that verification is absent or followed by a rejection",
+      "failure": "1 test(s) failed",
+      "testFile": "test/rebalancer/overflow-budget-audit-freeze.test.js"
+    }
+  ]
+}

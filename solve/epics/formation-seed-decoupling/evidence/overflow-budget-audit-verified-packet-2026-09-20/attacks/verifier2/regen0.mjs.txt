@@ -1,0 +1,3 @@
+import {regenerate,WITNESSES} from './emit.mjs';
+console.log(WITNESSES);
+regenerate('regen-baseline',()=>{});

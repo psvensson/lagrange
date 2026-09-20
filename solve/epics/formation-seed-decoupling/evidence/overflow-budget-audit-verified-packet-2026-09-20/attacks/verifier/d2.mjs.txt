@@ -1,0 +1,24 @@
+import {attack,run} from './h.mjs';
+const BIND='test/rebalancer/overflow-budget-evidence-binding.test.js';
+const R=(d,id)=>d.store.receipts.find(r=>r.id===id), ROW=(d,id)=>d.matrix.rows.find(r=>r.id===id);
+const UNREL='test/rebalancer/overflow-budget-partition-sets.test.js:';
+const A={
+ // round-3 literal 1: depends -> does_not_depend citing an unrelated existing test
+ r3_flip_depends_cite_unrelated:d=>{const r=ROW(d,'five-under-representation-add');r.currentBudgetDependency='does_not_depend';r.budgetDifferentialWitness=null;r.budgetIndependenceMeasurement={test:'test/rebalancer/overflow-budget-carried-forward-details.test.js:the',statesInWhichItHolds:'all'};if(r.sixAnswers)r.sixAnswers.budgetRemovalChangesTheDecision=false;},
+ r3_flip_and_borrow_handoff_receipt:d=>{const r=ROW(d,'five-under-representation-add');r.currentBudgetDependency='does_not_depend';r.budgetDifferentialWitness=null;r.budgetIndependenceMeasurement=structuredClone(ROW(d,'five-relocation-handoff-overlap').budgetIndependenceMeasurement);r.receipts=['budget-independence-differential/five-relocation-handoff-overlap'];},
+ r3_flip_and_forge_store_receipt:d=>{const r=ROW(d,'five-under-representation-add');r.currentBudgetDependency='does_not_depend';r.budgetDifferentialWitness=null;r.budgetIndependenceMeasurement=structuredClone(ROW(d,'five-relocation-handoff-overlap').budgetIndependenceMeasurement);const f=structuredClone(R(d,'budget-independence-differential/five-relocation-handoff-overlap'));f.id='budget-independence-differential/five-under-representation-add';f.rowId=r.id;d.store.receipts.push(f);r.receipts=[f.id];},
+ // round-3 literal 2: claim producerReachable yes citing a self-declared real-chain file
+ r3_producer_yes_cite_realchain:d=>{const r=ROW(d,'five-under-representation-add');r.producerReachable={value:'yes',witness:'test/rebalancer/overflow-budget-mintable-five-routes.test.js:every alternate route to the five carries the mint or is a matrix row'};},
+ r3_producer_yes_borrow_receipt:d=>{const r=ROW(d,'five-under-representation-add');r.producerReachable={value:'yes',witness:'test/rebalancer/overflow-budget-mintable-five-routes.test.js:every alternate route to the five carries the mint or is a matrix row'};r.receipts.push('producer-reachability/five-minted-spread-cure-add');},
+ two_rows_one_receipt:d=>{ROW(d,'ledger-under-representation-add').receipts=['budget-dependence/five-under-representation-add'];},
+ delete_receipt:d=>{d.store.receipts=d.store.receipts.filter(r=>r.id!=='budget-dependence/five-row-rematerialization');},
+ store_numbers_edited_consistently:d=>{for(const r of d.store.receipts)if(r.result.statesEnumerated===7200){r.result.statesEnumerated=r.result.evaluationsWithActualBudget=r.result.evaluationsWithBudgetForcedToZero=7000;}},
+ store_add_unemitted_receipt:d=>{const f=structuredClone(R(d,'budget-dependence/five-row-rematerialization'));f.id='budget-dependence/ghost';f.rowId='ghost';d.store.receipts.push(f);},
+ store_producer_changed:d=>{R(d,'producer-reachability/five-relocation-handoff-overlap').producerId='planner-owned-spread-cure-add';},
+ store_facts_edited:d=>{R(d,'producer-reachability/five-relocation-handoff-overlap').producerFacts.moveType='ADD';},
+ store_domain_swapped_registered:d=>{R(d,'budget-independence-differential/five-relocation-handoff-overlap').domainId='whole-stated-grid-v1';},
+ store_domain_swapped_both:d=>{R(d,'budget-independence-differential/five-relocation-handoff-overlap').domainId='whole-stated-grid-v1';ROW(d,'five-relocation-handoff-overlap').domainQualification.domainId='whole-stated-grid-v1';},
+ domains_registry_edited:d=>{d.store.domains.push({id:'anything-i-like',statement:'x',test:null});R(d,'budget-independence-differential/five-relocation-handoff-overlap').domainId='anything-i-like';ROW(d,'five-relocation-handoff-overlap').domainQualification.domainId='anything-i-like';},
+};
+const pick=process.argv[2]?process.argv[2].split(','):Object.keys(A);
+for(const k of pick){const {dir,r}=attack('d2-'+k,A[k]); if(r.pass){const e=run(dir,BIND,'^the committed receipts are the ones the measuring tests emit$');console.log('   emission check:',e.pass?'GREEN':'RED :: '+e.err);}}

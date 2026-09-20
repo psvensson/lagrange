@@ -1,0 +1,7 @@
+import {attack,run} from './h.mjs'; import {toHandoff,declareVacuous} from './a2.mjs'; import {BIND,PIN} from './emit.mjs';
+const {dir}=attack('A4-item4',d=>{
+  for(const id of ['five-paired-relocation-replace','ledger-paired-relocation-replace','five-under-representation-add','ledger-under-representation-add']){ toHandoff(d,id); d.matrix.rows.find(r=>r.id===id).producerOperationTypes=['REPLACE']; }
+  for(const r of d.matrix.rows) if(r.id.endsWith('-relocation-census-disagreement-overlap')) r.producerOperationTypes=['ADD','REPLACE'];
+  declareVacuous(d);});
+const e=run(dir,BIND,'^the committed receipts are the ones the measuring tests emit$'); console.log('  EMISSION CHECK:',e.pass?'GREEN (not refused)':'RED :: '+e.err);
+const p=run(dir,PIN,'^every inherited round-3 value is pinned'); console.log('  (pin):',p.pass?'GREEN':'RED :: '+p.err);

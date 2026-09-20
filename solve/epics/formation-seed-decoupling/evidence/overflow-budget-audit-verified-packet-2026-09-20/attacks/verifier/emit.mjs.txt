@@ -1,0 +1,24 @@
+import {fixture,run,readM,readS,S,V,VAL,VALP,MJ,SJ} from './h.mjs'; import fs from 'node:fs'; import path from 'node:path';
+const em=await import(S+'/test/rebalancer/overflow-budget-receipt-emission.js');
+export const WITNESSES=[
+ ['test/partition/overflow-budget-unmintable-partitions.test.js','every unmintable admitted partition is audited on the real guard'],
+ ['test/rebalancer/overflow-budget-mintable-five-routes.test.js','every alternate route to the five carries the mint or is a matrix row'],
+ ['test/rebalancer/overflow-budget-unhealthy-source-replace.test.js','the priority-recovery relocation REPLACE is traced end to end and classified'],
+ ['test/rebalancer/overflow-budget-add-like-producer-census.test.js','every production producer of an add-like operation is in the matrix']];
+const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+// An attacker who REGENERATES the store from the measuring tests after editing the matrix.
+export function regenerate(name,mut){
+  const d={matrix:readM(),store:readS(),extra:{}}; mut(d);
+  let dir=fixture(name,d.matrix,d.store,d.extra);
+  const ed=path.join(V,'fx',name+'-emit'); fs.rmSync(ed,{recursive:true,force:true});
+  const runs={};
+  for(const [f,t] of WITNESSES){const r=run(dir,f,'^'+esc(t)+'$',{LAGRANGE_AUDIT_RECEIPT_EMIT_DIR:ed}); runs[f.split('/').pop()]=r.pass?'pass':'FAIL :: '+r.err;}
+  const emitted=[]; if(fs.existsSync(ed)) for(const n of fs.readdirSync(ed)) emitted.push(...JSON.parse(fs.readFileSync(path.join(ed,n),'utf8')));
+  const store=em.buildReceiptStore(emitted);
+  fs.writeFileSync(path.join(dir,SJ),JSON.stringify(store,null,2)+'\n');
+  console.log(`\n[${name}] emission runs:`,JSON.stringify(runs,null,1));
+  console.log('  emitted',emitted.length,'receipts; new vs committed:',emitted.map(r=>r.id).filter(i=>!readS().receipts.some(r=>r.id===i)));
+  const v=run(dir,VAL,VALP); console.log('  validator on regenerated store:',v.pass?'GREEN':'RED :: '+v.err);
+  const st=JSON.parse(fs.readFileSync(path.join(dir,MJ),'utf8')).gate.map(g=>g.item+':'+g.status).join(' '); console.log('  gate:',st);
+  return {dir,store};
+}

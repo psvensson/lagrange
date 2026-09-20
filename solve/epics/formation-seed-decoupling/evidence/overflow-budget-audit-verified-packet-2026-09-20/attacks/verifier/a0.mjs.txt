@@ -1,0 +1,2 @@
+import {attack} from './h.mjs';
+attack('baseline',()=>{});

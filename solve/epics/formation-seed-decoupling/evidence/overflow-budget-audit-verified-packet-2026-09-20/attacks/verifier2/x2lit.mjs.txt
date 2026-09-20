@@ -1,0 +1,3 @@
+import {attack} from './h.mjs'; import {toHandoff,declareVacuous} from './a2.mjs';
+attack('X2-literal-one-row-no-producer-edit',d=>{toHandoff(d,'five-establishing-window-unminted-cure-add',{addProducer:false});declareVacuous(d);});
+attack('X2-types-only',d=>{toHandoff(d,'five-establishing-window-unminted-cure-add',{addProducer:false});d.matrix.rows.find(r=>r.id==='five-establishing-window-unminted-cure-add').producerOperationTypes=['ADD','REPLACE'];declareVacuous(d);});

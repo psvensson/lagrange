@@ -1,0 +1,29 @@
+import {attack,run} from './h.mjs'; import {toHandoff,declareVacuous} from './a2.mjs'; import {BIND,PIN} from './emit.mjs';
+const row=(d,id)=>d.matrix.rows.find(r=>r.id===id); const RP='follow-up-unhealthy-source-replace', LED_H='ledger-relocation-handoff-overlap';
+const CHEAP=['test/rebalancer/overflow-budget-partition-sets.test.js','test/rebalancer/overflow-budget-add-like-producer-census.test.js','test/partition/overflow-budget-admitted-case-grid.test.js','test/rebalancer/overflow-budget-mintable-five-routes.test.js','test/rebalancer/overflow-budget-unhealthy-source-replace.test.js','test/rebalancer/overflow-budget-d3-correction.test.js','test/rebalancer/overflow-budget-carried-forward-details.test.js','test/rebalancer/overflow-budget-derived-truth.test.js','test/partition/overflow-budget-unmintable-partitions.test.js'];
+const A={
+ // ledger hand-off row claims the five's class too, then claims producerReachable yes through the drive on sql_transactions-p1
+ p1_ledger_claims_five:d=>{const r=row(d,LED_H); const five=row(d,'five-relocation-handoff-overlap').partitionClass; r.partitionClass=['replica_operations-p1',...five];
+   r.producerReachable={value:'yes',witness:r.guardReachable.witness};
+   r.receipts=[...new Set([...r.receipts,...row(d,'five-relocation-handoff-overlap').receipts])].sort();
+   d.matrix.correctionToRound3.witnessDiscrepancies=d.matrix.correctionToRound3.witnessDiscrepancies.filter(e=>e.row!==LED_H);},
+ // a depends row drops a partition so its coverage is smaller
+ p2_drop_partition:d=>{const r=row(d,'five-minted-spread-cure-add'); r.partitionClass=r.partitionClass.filter(p=>p!=='sql_write_operations-p1'); r.receipts=r.receipts.filter(i=>!i.endsWith('/sql_write_operations-p1'));},
+ // drop to one partition on every row of one producer except one
+ p2b_drop_everywhere:d=>{for(const r of d.matrix.rows){ if(r.partitionClass.includes('sql_write_operations-p1')&&r.partitionClass.length===5&&r.id!=='five-row-rematerialization'&&r.id!=='five-operation-not-visible-to-the-guard'){r.partitionClass=r.partitionClass.filter(p=>p!=='sql_write_operations-p1'); r.receipts=r.receipts.filter(i=>!i.endsWith('/sql_write_operations-p1'));}}
+   const rm=row(d,'five-row-rematerialization'); rm.producers=[...new Set([...rm.producers,...d.matrix.producers.map(p=>p.id)])];},
+ // a still-unclassified depends row moved to proved-unreachable under the OLD subject by re-pointing its partition class at an unreachable partition
+ p3_old_subject:d=>{const src=row(d,'owner-partition-services'); const r=row(d,'five-initial-provisioning-add'); const sib=row(d,'five-row-rematerialization'); sib.producers=[...sib.producers,'provisioning-create-operation'];
+   r.partitionClass=['services-p1']; r.currentBudgetDependency='unreachable_in_stated_domain'; r.budgetDifferentialWitness=null; r.enforcementDisposition='proved-unreachable'; r.unreachableSubject='guard-admission-state';
+   r.provedUnreachableDomain=structuredClone(src.provedUnreachableDomain); r.guardReachable={value:'no',witness:'none'}; r.producerReachable={value:'no',witness:'none'}; r.admissionClasses=[]; r.proposedAuthorizationKind='none';
+   r.formationEvidence=structuredClone(src.formationEvidence); delete r.stillUnclassifiedBecause; delete r.requirementToClassify; r.receipts=[...src.receipts];},
+ // depends row claims does_not_depend by adding REPLACE + follow-up producer, keeping everything else (no disposition change): still-unclassified does_not_depend
+ p4_dep_flip_only:d=>{const r=row(d,'five-initial-provisioning-add'); r.currentBudgetDependency='does_not_depend'; r.budgetDifferentialWitness=null; r.budgetIndependenceMeasurement=structuredClone(row(d,'five-relocation-handoff-overlap').budgetIndependenceMeasurement);
+   r.producers=[...r.producers,RP]; r.producerOperationTypes=['ADD','REPLACE']; r.receipts=[...r.receipts.filter(i=>!i.startsWith('budget-dependence/')),...r.partitionClass.map(p=>'budget-independence-differential/relocation-handoff/'+p),'slice-provenance/relocation-handoff/'+RP].sort();},
+ // producers REPLACED (not extended): census coverage should object
+ p5_replace_producers:d=>{toHandoff(d,'five-paired-relocation-replace'); row(d,'five-paired-relocation-replace').producers=[RP]; declareVacuous(d);},
+};
+for(const k of process.argv[2].split(',')){ const {dir,r}=attack('A5-'+k,A[k]);
+  if(r.pass){ for(const f of CHEAP){const x=run(dir,f,null); if(!x.pass) console.log('   REFUSED BY',f.split('/').pop(),'::',x.err);} 
+    const e=run(dir,BIND,'^the committed receipts are the ones the measuring tests emit$'); console.log('   EMISSION CHECK:',e.pass?'GREEN (not refused)':'RED :: '+e.err); }
+  const p=run(dir,PIN,'^every inherited round-3 value is pinned'); console.log('   (pin):',p.pass?'GREEN':'RED :: '+(p.err||'').slice(0,120)); }

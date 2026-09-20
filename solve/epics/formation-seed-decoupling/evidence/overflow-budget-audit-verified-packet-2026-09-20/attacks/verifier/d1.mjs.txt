@@ -1,0 +1,21 @@
+import {attack,S} from './h.mjs'; import fs from 'node:fs';
+const F='honoured-does-not-include-the-bound';
+const RES=(id,o={})=>JSON.stringify({schema:'overflow-budget-finding-resolution/1',findingId:id,kind:'owner-repair-quest-result',result:{resolved:true},...o});
+const which=process.argv[2];
+const A={
+ r3literal:d=>{for(const f of d.matrix.findings){if([F,'membership-ceiling-may-undercount-the-union','row-type-is-not-part-of-authority-identity','partition-identity-is-not-on-the-record'].includes(f.id)){f.open=false;f.gateItems=[];}}
+   d.matrix.gate.find(g=>g.item===8).requiredExternalArtifacts[0].exists=true;},
+ r3literal_no_open_key:d=>{for(const f of d.matrix.findings){f.gateItems=[];delete f.resolution;} },
+ delete_findings_and_artifacts:d=>{d.matrix.findings=d.matrix.findings.filter(f=>!f.resolution);for(const g of d.matrix.gate)g.requiredExternalArtifacts=[];},
+ fake_resolution_file:d=>{d.extra['solve/epics/formation-seed-decoupling/resolutions/'+F+'.json']=RES(F);},
+ fake_resolution_all_item6:d=>{const id='membership-ceiling-may-undercount-the-union';d.extra['solve/epics/formation-seed-decoupling/resolutions/'+id+'.json']=RES(id);},
+ incompatible_result:d=>{d.extra['solve/epics/formation-seed-decoupling/resolutions/'+F+'.json']=RES(F,{result:{resolved:false}});},
+ other_findings_artifact:d=>{d.extra['solve/epics/formation-seed-decoupling/resolutions/'+F+'.json']=RES('future-epoch-is-honoured');},
+ repoint_to_other_artifact:d=>{const id='membership-ceiling-may-undercount-the-union';d.extra['solve/epics/formation-seed-decoupling/resolutions/x.json']=RES('future-epoch-is-honoured');d.matrix.findings.find(f=>f.id===id).resolution.artifact='solve/epics/formation-seed-decoupling/resolutions/x.json';},
+ wrong_kind:d=>{d.extra['solve/epics/formation-seed-decoupling/resolutions/'+F+'.json']=RES(F,{kind:'note'});},
+ kind_edited_both:d=>{const id='membership-ceiling-may-undercount-the-union';d.extra['solve/epics/formation-seed-decoupling/resolutions/'+id+'.json']=RES(id,{kind:'a-note-i-wrote'});d.matrix.findings.find(f=>f.id===id).resolution.kind='a-note-i-wrote';},
+ ext_path_to_this_quest:d=>{d.matrix.gate.find(g=>g.item===8).requiredExternalArtifacts[0].path='solve/quests/overflow-budget-audit-evidence-binding';d.extra['solve/quests/overflow-budget-audit-evidence-binding/quest.json']=fs.readFileSync(S+'/solve/quests/overflow-budget-audit-evidence-binding/quest.json','utf8');d.extra['solve/quests/overflow-budget-audit-evidence-binding/log.ndjson']=fs.readFileSync(S+'/solve/quests/overflow-budget-audit-evidence-binding/log.ndjson','utf8');},
+ ext_forged_quest:d=>{const p='solve/quests/authorization-identity-and-evaluation';d.extra[p+'/quest.json']=JSON.stringify({id:'x',note:'authorization-identity-and-evaluation-quest'});d.extra[p+'/log.ndjson']=[{ts:'1',type:'finding',kind:'decision',seal:{}},{ts:'2',type:'verification',verdict:'approve',verifier:'me'},{ts:'3',type:'terminal',status:'solved'}].map(x=>JSON.stringify(x)).join('\n');d.extra['solve/epics/formation-seed-decoupling/resolutions/'+F+'.json']=RES(F);},
+ ext_kind_changed:d=>{const a=d.matrix.gate.find(g=>g.item===8).requiredExternalArtifacts[0];a.kind='document';a.path='solve/epics/formation-seed-decoupling/design.md';d.extra['solve/epics/formation-seed-decoupling/design.md']='x';d.extra['solve/epics/formation-seed-decoupling/resolutions/'+F+'.json']=RES(F);},
+};
+for(const k of (which?which.split(','):Object.keys(A))) attack('d1-'+k,A[k]);

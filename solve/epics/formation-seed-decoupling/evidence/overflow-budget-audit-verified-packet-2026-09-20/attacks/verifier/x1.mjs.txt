@@ -1,0 +1,24 @@
+import {regenerate} from './emit.mjs'; import {run} from './h.mjs';
+const PIN='test/rebalancer/overflow-budget-round3-pin.test.js', BIND='test/rebalancer/overflow-budget-evidence-binding.test.js';
+const UNM='test/partition/overflow-budget-unmintable-partitions.test.js:every unmintable admitted partition is audited on the real guard';
+const CHAIN='test/rebalancer/overflow-budget-unhealthy-source-replace.test.js:the priority-recovery relocation REPLACE is traced end to end and classified';
+function follow(name,dir){
+  const e=run(dir,BIND,'^the committed receipts are the ones the measuring tests emit$'); console.log('  emission check:',e.pass?'GREEN':'RED :: '+e.err);
+  const p=run(dir,PIN,'^every inherited round-3 value is pinned'); console.log('  round-3 pin:',p.pass?'GREEN':'RED :: '+p.err);
+}
+const which=process.argv[2];
+if(which==='ledgerprod'){ // claim producerReachable yes for the ledger hand-off row: the drive is on sql_transactions-p1
+ const {dir}=regenerate('x1-ledger-producer-yes',d=>{const r=d.matrix.rows.find(r=>r.id==='ledger-relocation-handoff-overlap');r.producerReachable.value='yes';r.receipts.push('producer-reachability/ledger-relocation-handoff-overlap');});
+ follow('x1',dir);}
+if(which==='escape'){ // a depends/still-unclassified row escapes through the new subject
+ const {dir}=regenerate('x2-escape-hatch',d=>{const src=d.matrix.rows.find(r=>r.id==='five-relocation-handoff-overlap');
+  for(const r of d.matrix.rows){ if(!(process.argv[3]||'').split(',').includes(r.id))continue;
+   r.currentBudgetDependency='does_not_depend';r.budgetDifferentialWitness=null;r.budgetIndependenceMeasurement={test:UNM,statesInWhichItHolds:'x'};r.censusMovementCondition=null;r.dependencyUnknownBecause=null;
+   r.enforcementDisposition='proved-unreachable';r.unreachableSubject='budget-dependent-authority-requirement';r.domainQualification=structuredClone(src.domainQualification);
+   r.guardReachable={value:'yes',witness:CHAIN};r.admissionClasses=[];r.proposedAuthorizationKind='none';r.formationEvidence={text:'none_recorded',producerAttributed:false,attributionForm:null};
+   if(r.sixAnswers)r.sixAnswers.budgetRemovalChangesTheDecision=false;
+   if(r.producerReachable.value==='no')r.producerReachable={value:'unproven',witness:CHAIN};
+   r.receipts=['budget-independence-differential/'+r.id,'guard-reachability/'+r.id,...r.receipts.filter(i=>i.startsWith('producer-reachability/'))];}
+ }); follow('x2',dir);}
+if(which==='rename'){ const o='five-relocation-handoff-overlap',n=o+'-renamed-by-a-mutant';
+ const {dir}=regenerate('x3-consistent-rename',d=>{const r=d.matrix.rows.find(r=>r.id===o);r.id=n;r.receipts=r.receipts.map(i=>i.replace(o,n));d.matrix.correctionToRound3.rows=d.matrix.correctionToRound3.rows.map(i=>i===o?n:i);}); }

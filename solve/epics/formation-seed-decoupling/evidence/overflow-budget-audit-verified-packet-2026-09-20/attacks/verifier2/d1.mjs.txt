@@ -1,0 +1,28 @@
+import {attack,S} from './h.mjs'; import fs from 'node:fs';
+const M='/mnt/data/peter/projects/lagrange';
+const F8='honoured-does-not-include-the-bound', F6='membership-ceiling-may-undercount-the-union';
+const item=(d,i)=>d.matrix.gate.find(g=>g.item===i); const fnd=(d,id)=>d.matrix.findings.find(f=>f.id===id);
+const forgedLog=(extra=[])=>[{ts:'2026-01-01T00:00:00Z',type:'finding',kind:'decision',text:'sealed',seal:{sealedAt:'x'}},{ts:'2026-01-02T00:00:00Z',type:'verification',verdict:'approve',verifier:'subagent:me'},...extra,{ts:'2026-01-03T00:00:00Z',type:'terminal',status:'solved'}].map(x=>JSON.stringify(x)).join('\n')+'\n';
+const copyQuest=(d,from,to)=>{for(const f of ['quest.json','log.ndjson']) d.extra[to+'/'+f]=fs.readFileSync(M+'/solve/quests/'+from+'/'+f,'utf8');};
+const A={
+ r3_literal:d=>{for(const id of [F8,F6,'row-type-is-not-part-of-authority-identity','partition-identity-is-not-on-the-record']){const f=fnd(d,id);f.open=false;f.gateItems=[];} item(d,8).requiredExternalArtifacts[0].exists=true;},
+ r3_literal_strip_resolution:d=>{for(const f of d.matrix.findings){f.gateItems=[];delete f.resolution;} item(d,8).requiredExternalArtifacts=[];},
+ delete_blocking_findings:d=>{d.matrix.findings=d.matrix.findings.filter(f=>!f.resolution);},
+ declared_fields_in_matrix:d=>{const f=fnd(d,F6); f.resolvesFindings=[F6]; f.resolution.resolved=true; f.resolution.sealed=true; f.resolution.approved=true; f.resolution.closed=true; const a=item(d,8).requiredExternalArtifacts[0]; a.satisfied=true; a.satisfiesGateRequirements=[a.id];},
+ path_to_existing_solved_quest:d=>{copyQuest(d,'action-authority-owner','solve/quests/action-authority-owner'); fnd(d,F6).resolution.path='solve/quests/action-authority-owner'; item(d,8).requiredExternalArtifacts[0].path='solve/quests/action-authority-owner'; fnd(d,F8).resolution.path='solve/quests/action-authority-owner';},
+ path_to_this_quest:d=>{copyQuest(d,'../../.claude/worktrees/audit-evidence-binding/solve/quests/overflow-budget-audit-evidence-binding','solve/quests/overflow-budget-audit-evidence-binding'); fnd(d,F6).resolution.path='solve/quests/overflow-budget-audit-evidence-binding';},
+ path_to_epic_dir:d=>{fnd(d,F6).resolution.path='solve/epics/formation-seed-decoupling';},
+ path_traversal_to_real_repo:d=>{fnd(d,F6).resolution.path='../../../../../../../../mnt/data/peter/projects/lagrange/solve/quests/action-authority-owner';},
+ kind_changed:d=>{fnd(d,F6).resolution.kind='document'; d.extra['solve/epics/formation-seed-decoupling/res.json']=JSON.stringify({resolvesFindings:[F6]}); fnd(d,F6).resolution.path='solve/epics/formation-seed-decoupling/res.json';},
+ FORGED_quest_for_item6:d=>{const p=fnd(d,F6).resolution.path; d.extra[p+'/quest.json']=JSON.stringify({id:'x',resolvesFindings:[F6]}); d.extra[p+'/log.ndjson']=forgedLog();},
+ forged_quest_names_other_finding:d=>{const p=fnd(d,F6).resolution.path; d.extra[p+'/quest.json']=JSON.stringify({id:'x',resolvesFindings:['future-epoch-is-honoured']}); d.extra[p+'/log.ndjson']=forgedLog();},
+ forged_quest_substring_only:d=>{const p=fnd(d,F6).resolution.path; d.extra[p+'/quest.json']=JSON.stringify({id:'x',statement:'resolves '+F6,resolvesFindings:F6+'-not'}); d.extra[p+'/log.ndjson']=forgedLog();},
+ forged_quest_not_closed:d=>{const p=fnd(d,F6).resolution.path; d.extra[p+'/quest.json']=JSON.stringify({resolvesFindings:[F6]}); d.extra[p+'/log.ndjson']=forgedLog().split('\n').slice(0,2).join('\n')+'\n';},
+ forged_quest_rejected_after:d=>{const p=fnd(d,F6).resolution.path; d.extra[p+'/quest.json']=JSON.stringify({resolvesFindings:[F6]}); d.extra[p+'/log.ndjson']=forgedLog([{ts:'2026-01-02T12:00:00Z',type:'verification',verdict:'reject',verifier:'subagent:v'}]);},
+ forged_quest_rejected_after_by_file_order_earlier_ts:d=>{const p=fnd(d,F6).resolution.path; d.extra[p+'/quest.json']=JSON.stringify({resolvesFindings:[F6]}); d.extra[p+'/log.ndjson']=forgedLog([{ts:'2025-01-01T00:00:00Z',type:'verification',verdict:'reject',verifier:'subagent:v'}]);},
+ forged_quest_corrupt_log:d=>{const p=fnd(d,F6).resolution.path; d.extra[p+'/quest.json']=JSON.stringify({resolvesFindings:[F6]}); d.extra[p+'/log.ndjson']='not json\n';},
+ FORGED_item8_everything:d=>{const p=fnd(d,F8).resolution.path; d.extra[p+'/quest.json']=JSON.stringify({resolvesFindings:[F8]}); d.extra[p+'/log.ndjson']=forgedLog(); const a=item(d,8).requiredExternalArtifacts[0]; d.extra[a.path+'/quest.json']=JSON.stringify({satisfiesGateRequirements:[a.id]}); d.extra[a.path+'/log.ndjson']=forgedLog();},
+ item8_one_forged_quest_for_both:d=>{const a=item(d,8).requiredExternalArtifacts[0]; fnd(d,F8).resolution.path=a.path; d.extra[a.path+'/quest.json']=JSON.stringify({satisfiesGateRequirements:[a.id],resolvesFindings:[F8]}); d.extra[a.path+'/log.ndjson']=forgedLog();},
+ item8_artifact_id_renamed_to_match_other_quest:d=>{const a=item(d,8).requiredExternalArtifacts[0]; a.id='x';},
+};
+for(const k of (process.argv[2]?process.argv[2].split(','):Object.keys(A))) attack('D1-'+k,A[k]);

@@ -1,0 +1,6 @@
+import {fixture,run,readM,readS} from './h.mjs';
+const dir=fixture('suite',readM(),readS(),{}); 
+import fs from 'node:fs'; import path from 'node:path'; import {S} from './h.mjs';
+// the inherited-receipts and freeze tests read quest records: link the quests dir read-only
+fs.symlinkSync(path.join(S,'solve/quests'),path.join(dir,'solve/quests'));
+for(const f of process.argv.slice(2)){const t=Date.now();const r=run(dir,f,null);const sum=(r.out.match(/^# (tests|pass|fail) \d+$/gm)||[]).join(' ');console.log(f.split('/').pop(),'::',sum,((Date.now()-t)/1000).toFixed(0)+'s');for(const m of r.out.matchAll(/^not ok \d+ - (.+)$/gm))console.log('    NOT OK:',m[1]); if(!r.pass&&r.err)console.log('    ',r.err);}

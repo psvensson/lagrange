@@ -1,0 +1,20 @@
+import {attack,readM} from './h.mjs';
+const m=readM(); const lc=m.rows.find(r=>r.id==='ledger-relocation-census-disagreement-overlap'); console.log('ledger census row differential witness:',JSON.stringify(lc.budgetDifferentialWitness).slice(0,200));
+const W=d=>d.matrix.correctionToRound3.witnessDiscrepancies; const row=(d,id)=>d.matrix.rows.find(r=>r.id===id);
+const GRIDW='test/partition/overflow-budget-unmintable-partitions.test.js:every unmintable admitted partition is audited on the real guard';
+const A={
+ c1_drop_ledger_census_discrepancy:d=>{d.matrix.correctionToRound3.witnessDiscrepancies=W(d).filter(e=>e.row!=='ledger-relocation-census-disagreement-overlap');},
+ c2_add_discrepancy_five_census:d=>{W(d).push({...W(d)[0],row:'five-relocation-census-disagreement-overlap',rowPartitionClass:[...row(d,'five-relocation-census-disagreement-overlap').partitionClass]});},
+ c3_wrong_driven_partition:d=>{W(d)[0].pinnedWitnessDrivenPartition='replica_operations-p1';},
+ c4_wrong_measuredBy:d=>{W(d)[0].measuredBy='test/rebalancer/overflow-budget-unhealthy-source-replace.test.js';},
+ c5_discrepancy_for_grid_witnessed_row:d=>{W(d).push({...W(d)[0],row:'ledger-operation-not-visible-to-the-guard'});},
+ c6_discrepancy_for_gr_no_row:d=>{W(d).push({...W(d)[0],row:'owner-partition-services',rowPartitionClass:['services-p1']});},
+ c7_discrepancy_for_unknown_row:d=>{W(d).push({...W(d)[0],row:'no-such-row'});},
+ c8_repoint_witness_to_grid_and_drop_discrepancy:d=>{row(d,'ledger-relocation-handoff-overlap').guardReachable.witness=GRIDW; d.matrix.correctionToRound3.witnessDiscrepancies=W(d).filter(e=>e.row!=='ledger-relocation-handoff-overlap');},
+ c9_ledger_cites_drive:d=>{const r=row(d,'ledger-relocation-handoff-overlap'); r.receipts=[...r.receipts,'guard-state-drive/follow-up-unhealthy-source-replace/sql_transactions-p1'].sort();},
+ c10_five_handoff_drops_drive:d=>{const r=row(d,'five-relocation-handoff-overlap'); r.receipts=r.receipts.filter(i=>!i.startsWith('guard-state-drive/'));},
+ c11_delete_weakness_1:d=>{d.matrix.correctionToRound3.inheritedWeaknesses=d.matrix.correctionToRound3.inheritedWeaknesses.filter(w=>w.id!=='blocking-findings-are-listed-but-not-required');},
+ c12_delete_weakness_2:d=>{d.matrix.correctionToRound3.inheritedWeaknesses=d.matrix.correctionToRound3.inheritedWeaknesses.filter(w=>w.id!=='ledger-rows-are-witnessed-by-a-five-partition-drive');},
+ c13_duplicate_discrepancy_entries:d=>{W(d).unshift({...W(d)[0],pinnedWitnessDrivenPartition:'bogus'});},
+};
+for(const k of Object.keys(A)) attack('C-'+k,A[k]);

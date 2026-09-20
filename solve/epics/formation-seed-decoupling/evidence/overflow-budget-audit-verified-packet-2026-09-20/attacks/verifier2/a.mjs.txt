@@ -1,0 +1,35 @@
+import {regenerate} from './emit.mjs';
+const FIVE_H='five-relocation-handoff-overlap', LED_H='ledger-relocation-handoff-overlap';
+const row=(d,id)=>d.matrix.rows.find(r=>r.id===id);
+const RP='follow-up-unhealthy-source-replace';
+function declareVacuous(d){ // keep the derived vacuous-arithmetic record exact, as an attacker would
+  const st=d.store.receipts; const e=d.matrix.correctionToRound3.inheritedWeaknesses.find(w=>w.id==='arithmetic-witness-measures-nothing-row-specific');
+  e.rows=d.matrix.rows.filter(r=>r.guardReachable.value==='yes'&&r.admissionClasses.length===0&&st.some(x=>x.witness.file===r.guardReachable.witness.split(':')[0]&&x.dimension==='arithmetic')).map(r=>r.id);
+}
+function toHandoff(d,id,srcId,{addProducer=true}={}){ const src=row(d,srcId), r=row(d,id);
+  r.currentBudgetDependency='does_not_depend'; r.budgetDifferentialWitness=null; r.budgetIndependenceMeasurement=structuredClone(src.budgetIndependenceMeasurement);
+  r.censusMovementCondition=null; r.dependencyUnknownBecause=null; r.enforcementDisposition='proved-unreachable'; r.unreachableSubject=src.unreachableSubject;
+  r.domainQualification=structuredClone(src.domainQualification); r.admissionClasses=[]; r.proposedAuthorizationKind='none'; r.formationEvidence=structuredClone(src.formationEvidence);
+  r.stillUnclassifiedBecause=null; r.requirementToClassify=null; if(r.sixAnswers) r.sixAnswers.budgetRemovalChangesTheDecision=false;
+  if(addProducer){ if(!r.producers.includes(RP)) r.producers=[...r.producers,RP]; if(!r.producerOperationTypes.includes('REPLACE')) r.producerOperationTypes=[...r.producerOperationTypes,'REPLACE']; }
+  // receipts: independence over handoff slice for own partitions + provenance + whatever guard evidence it had (minus arithmetic, since no classes) + own producer-reachability
+  const keep=r.receipts.filter(i=>i.startsWith('guard-reachability/')||i.startsWith('producer-reachability/')||i.startsWith('guard-state-drive/'));
+  r.receipts=[...r.partitionClass.map(p=>'budget-independence-differential/relocation-handoff/'+p),'slice-provenance/relocation-handoff/'+RP,...keep].sort();
+}
+const A={
+ // X1 literal (round 1): ledger hand-off claims producerReachable yes, takes the drive receipt on sql_transactions-p1
+ x1:d=>{const r=row(d,LED_H); r.producerReachable={value:'yes',witness:r.guardReachable.witness}; r.receipts=[...r.receipts,'producer-reachability/'+RP+'/sql_transactions-p1'].sort();},
+ // X1b next generation: ledger row ALSO claims the driven partition in its own partitionClass
+ x1b:d=>{const r=row(d,LED_H); r.producerReachable={value:'yes',witness:r.guardReachable.witness}; r.partitionClass=['replica_operations-p1','sql_transactions-p1'];
+   r.receipts=[...r.receipts,'producer-reachability/'+RP+'/sql_transactions-p1','budget-independence-differential/relocation-handoff/sql_transactions-p1','guard-reachability/sql_transactions-p1','guard-state-drive/'+RP+'/sql_transactions-p1'].sort();
+   d.matrix.correctionToRound3.witnessDiscrepancies=d.matrix.correctionToRound3.witnessDiscrepancies.filter(e=>e.row!==LED_H);},
+ // X2 literal (round 1): three still-unclassified ADD depends rows -> hand-off subject, WITHOUT touching producers
+ x2:d=>{for(const id of ['five-establishing-window-unminted-cure-add','five-undeclared-partition-row-unminted-cure-add','five-under-representation-add']) toHandoff(d,id,FIVE_H,{addProducer:false}); declareVacuous(d);},
+ // X2b next generation: same, but the rows also edit their OWN producers/producerOperationTypes
+ x2b:d=>{for(const id of ['five-establishing-window-unminted-cure-add','five-undeclared-partition-row-unminted-cure-add','five-under-representation-add']) toHandoff(d,id,FIVE_H); declareVacuous(d);},
+ // X2c: REPLACE-only rows of the same producer (census-disagreement) and paired-relocation rows -> hand-off subject; aims at gate item 4
+ x2c:d=>{toHandoff(d,'five-relocation-census-disagreement-overlap',FIVE_H); toHandoff(d,'ledger-relocation-census-disagreement-overlap',LED_H);
+   toHandoff(d,'five-paired-relocation-replace',FIVE_H); toHandoff(d,'ledger-paired-relocation-replace',LED_H);
+   d.matrix.correctionToRound3.witnessDiscrepancies=d.matrix.correctionToRound3.witnessDiscrepancies; declareVacuous(d);},
+};
+for(const k of process.argv[2].split(',')) regenerate('A-'+k,A[k]);

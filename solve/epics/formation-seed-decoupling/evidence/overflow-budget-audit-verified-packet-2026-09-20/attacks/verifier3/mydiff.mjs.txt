@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+const a=JSON.parse(fs.readFileSync('inh/matrix.json','utf8')), b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+const flat=(v,p,o)=>{ if(v&&typeof v==='object'){ const keyed=Array.isArray(v)&&v.length&&v.every(x=>x&&typeof x==='object'&&(x.id??x.item)!==undefined); for(const [k,x] of Object.entries(v)) flat(x,p+'/'+(keyed?(x.id??x.item):k),o); if(Object.keys(v).length===0) o.set(p,Array.isArray(v)?'[]':'{}'); } else o.set(p,JSON.stringify(v)); return o; };
+const A=flat(a,'',new Map()), B=flat(b,'',new Map()); const ch=[],rm=[],ad=[];
+for(const [k,v] of A){ if(!B.has(k)) rm.push(k); else if(B.get(k)!==v) ch.push(k); } for(const k of B.keys()) if(!A.has(k)) ad.push(k);
+console.log('CHANGED',ch.length); for(const k of ch) console.log('  ',k,'::',A.get(k).slice(0,120),'=>',B.get(k).slice(0,120));
+const grp=l=>{const g={};for(const k of l){const s=k.replace(/\/rows\/[^/]+/,'/rows/*').replace(/\/(findings|gate)\/[^/]+/,'/$1/*').replace(/\/\d+(\/|$)/g,'/#$1');g[s]=(g[s]||0)+1;}return g;};
+console.log('REMOVED',rm.length,grp(rm)); console.log('ADDED',ad.length,grp(ad));
+// new fields on inherited (non-D3) rows
+const D3=['five-relocation-handoff-overlap','ledger-relocation-handoff-overlap'];
+const nf={}; for(const k of ad){const m=k.match(/^\/rows\/([^/]+)\/([^/]+)/); if(m&&!D3.includes(m[1])) nf[m[2]]=(nf[m[2]]||0)+1;} console.log('fields added on the 25 inherited rows:',nf);
+const rf={}; for(const k of [...rm,...ch]){const m=k.match(/^\/rows\/([^/]+)\/([^/]+)/); if(m&&!D3.includes(m[1])) rf[m[2]]=(rf[m[2]]||0)+1;} console.log('fields removed/changed on the 25 inherited rows:',rf);

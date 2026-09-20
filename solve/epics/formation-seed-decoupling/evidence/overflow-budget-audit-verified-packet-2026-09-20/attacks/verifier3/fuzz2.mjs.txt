@@ -1,0 +1,24 @@
+import {readM,ren,V} from './h.mjs';
+const root=V+'/fx/baseline'; const base=readM(); const rank={'blocked-on-owner-decision':0,'not-yet':1,'demonstrated':2};
+const before=new Map(base.gate.map(g=>[g.item,ren.deriveGateStatus(base,g,root)]));
+const prods=base.producers; const typesOf=ps=>[...new Set(ps.flatMap(p=>prods.find(x=>x.id===p).addLikeTypes))].sort();
+const sets=base.partitionSets; const named=[sets.mintable,sets.budgetEvaluated,...sets.ownerNamedSeven.map(p=>[p]),sets.remainder];
+const ops=[]; base.rows.forEach((r,i)=>{
+  for(const p of prods) ops.push(m=>{m.rows[i].producers=[p.id];m.rows[i].producerOperationTypes=typesOf([p.id]);});
+  for(const p of prods) ops.push(m=>{const ps=[...new Set([...m.rows[i].producers,p.id])];m.rows[i].producers=ps;m.rows[i].producerOperationTypes=typesOf(ps);});
+  for(const v of ['explicit-authority-required','proved-unreachable','proved-obsolete','still-unclassified']) ops.push(m=>{m.rows[i].enforcementDisposition=v;});
+  for(const v of ['depends','depends_only_when_census_moved','does_not_depend','unknown_producer_not_driven','unreachable_in_stated_domain']) ops.push(m=>{m.rows[i].currentBudgetDependency=v;});
+  for(const v of ['yes','no','unproven']) ops.push(m=>{m.rows[i].guardReachable.value=v;});
+  ops.push(m=>{m.rows[i].semanticOwner='src/x.js';}); ops.push(m=>{m.rows[i].admissionClasses=[];}); ops.push(m=>{m.rows[i].repairGroup='close-topology-publication-version-identity';}); ops.push(m=>{m.rows[i].repairGroup=null;});
+  for(const s of named) ops.push(m=>{m.rows[i].partitionClass=[...s];});
+  ops.push(m=>{m.rows.splice(i,1);});
+});
+console.log('single structured edits:',ops.length);
+let n=0,demo=0,better=0,thrown=0; const N=Number(process.argv[2]||200000); let seed=12345; const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;};
+const kinds={};
+function trial(a,b){ const m=structuredClone(base); try{ops[a](m); if(b!==undefined)ops[b](m);}catch{thrown++;return;} n++;
+  for(const g of m.gate){ let s; try{s=ren.deriveGateStatus(m,g,root);}catch{thrown++;continue;} const bf=before.get(g.item); if(rank[s]>rank[bf]){better++; if(s==='demonstrated')demo++; const k='item '+g.item+' '+bf+'->'+s; kinds[k]=(kinds[k]||0)+1;} } }
+for(let a=0;a<ops.length;a++) trial(a);
+console.log('singles:',{n,demo,better,thrown,kinds:JSON.stringify(kinds)});
+for(let t=0;t<N;t++) trial(Math.floor(rnd()*ops.length),Math.floor(rnd()*ops.length));
+console.log('singles+random pairs:',{n,demo,better,thrown,kinds:JSON.stringify(kinds)});

@@ -1,0 +1,14 @@
+import {attack,run} from './h.mjs'; import {BIND,PIN} from './emit.mjs';
+const CENSUS='test/rebalancer/overflow-budget-add-like-producer-census.test.js', PSETS='test/rebalancer/overflow-budget-partition-sets.test.js';
+export function after(dir,r){ if(!r.pass) return;
+  for(const f of [CENSUS,PSETS]){const x=run(dir,f,null); console.log('   ',f.split('/').pop(),x.pass?'GREEN':'RED :: '+x.err);}
+  const e=run(dir,BIND,'^the committed receipts are the ones the measuring tests emit$'); console.log('    EMISSION CHECK:',e.pass?'GREEN (not refused)':'RED :: '+e.err);
+  const p=run(dir,PIN,'^every inherited round-3 value is pinned'); console.log('    (pin, out of the picture):',p.pass?'GREEN':'RED :: '+(p.err||'').slice(0,160)); }
+const A={
+ // R3-A: no anchor edit at all. The seven guard-admission-state rows re-declare their OWN producers as the single REPLACE-only censused producer;
+ // the four still-unclassified REPLACE-only rows add one ADD producer so they leave item 4's selection.
+ rowProducers:d=>{ for(const r of d.matrix.rows){
+    if(r.unreachableSubject==='guard-admission-state') r.producers=['planner-paired-relocation-replace'], r.producerOperationTypes=['REPLACE'];
+    if(r.enforcementDisposition==='still-unclassified'&&r.producerOperationTypes.join()==='REPLACE'){ r.producers=[...r.producers,'follow-up-deficit-add']; r.producerOperationTypes=['ADD','REPLACE']; } } },
+};
+if(process.argv[1].endsWith('r3a.mjs')&&process.argv[2]) for(const k of process.argv[2].split(',')){ const {dir,r}=attack('R3-'+k,A[k]); after(dir,r); }

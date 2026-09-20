@@ -1,0 +1,33 @@
+import {attack,readM,readS} from './h.mjs';
+const FIVE='five-relocation-handoff-overlap', LED='ledger-relocation-handoff-overlap'; const row=(d,id)=>d.matrix.rows.find(r=>r.id===id);
+const m=readM(), s=readS();
+for(const id of [FIVE,LED]){const r=m.rows.find(x=>x.id===id); const rs=r.receipts.map(i=>s.receipts.find(x=>x.id===i));
+  console.log(id,'| disp',r.enforcementDisposition,'| subject',r.unreachableSubject,'| dep',r.currentBudgetDependency,'| gR',r.guardReachable.value,'| pR',r.producerReachable.value,'| kind',r.proposedAuthorizationKind,'| classes',r.admissionClasses.length,'| q.unreachable',r.domainQualification.unreachable,'| remains',r.domainQualification.remainsReachable.join('+'),'| slice',r.domainQualification.sliceId);
+  for(const x of rs.filter(x=>x.kind==='budget-independence-differential')) console.log('    ',x.id,'states',x.result.statesEnumerated,'actual',x.result.evaluationsWithActualBudget,'zero',x.result.evaluationsWithBudgetForcedToZero,'diffs',x.result.admissionDifferences,'consulted',x.result.statesWhereTheCompletionOwnerWasConsulted,'nonZeroBudget',x.result.statesWithANonZeroBudget);}
+console.log('ledger authority anywhere:',JSON.stringify(m).match(/ledger[-_ ]?(local )?(overflow )?authorit[a-z]*/gi)?.slice(0,8), '| kinds proposed:',[...new Set(m.rows.map(r=>r.proposedAuthorizationKind))], '| repairQuests:',m.repairQuests.map(q=>q.group).join(','));
+const f=m.findings.find(x=>x.id==='spread-recovery-decision-has-two-owners'); console.log('finding:',JSON.stringify({gateItems:f.gateItems,doesNotImply:f.doesNotImply,justification:f.justification}));
+const GRIDDOM=d=>structuredClone(row(d,'owner-partition-services').provedUnreachableDomain);
+const A={
+ o1_inherited_row_to_new_subject:d=>{row(d,'owner-partition-services').unreachableSubject='budget-dependent-authority-requirement';},
+ o2_handoff_to_old_subject:d=>{row(d,FIVE).unreachableSubject='guard-admission-state';},
+ o2b_handoff_to_old_subject_consistently:d=>{const r=row(d,FIVE); r.unreachableSubject='guard-admission-state'; delete r.domainQualification; r.provedUnreachableDomain={...GRIDDOM(d),partitionIds:[...r.partitionClass]};},
+ o3_guard_unreach_receipt_on_authority_row:d=>{const r=row(d,LED); r.receipts=r.receipts.map(i=>i.startsWith('budget-independence')?'guard-unreachability/whole-stated-grid/services-p1':i);},
+ o4_independence_receipt_on_guard_row:d=>{row(d,'owner-partition-services').receipts=['budget-independence-differential/relocation-handoff/replica_operations-p1'];},
+ o4b_guard_row_cites_its_own_handoff_slice_receipt:d=>{row(d,'owner-partition-services').receipts=['guard-unreachability/relocation-handoff/services-p1'];},
+ o5_gr_yes_under_old_subject:d=>{const r=row(d,'owner-partition-services'); r.guardReachable={value:'yes',witness:row(d,'ledger-operation-not-visible-to-the-guard').guardReachable.witness};},
+ o6_gr_no_under_new_subject:d=>{const r=row(d,FIVE); r.guardReachable={value:'no',witness:'none'}; r.receipts=r.receipts.filter(i=>!i.startsWith('guard-'));},
+ o7_ledger_authority_required_while_does_not_depend:d=>{const r=row(d,LED); r.enforcementDisposition='explicit-authority-required'; delete r.unreachableSubject; delete r.domainQualification; r.proposedAuthorizationKind='ledger_overflow';},
+ o7b_revert_to_round3:d=>{for(const id of [FIVE,LED]){const r=row(d,id); r.enforcementDisposition='explicit-authority-required'; delete r.unreachableSubject; delete r.domainQualification;}},
+ m1_subject_missing:d=>{delete row(d,FIVE).unreachableSubject;},
+ m2_third_subject:d=>{row(d,FIVE).unreachableSubject='operation'; row(d,FIVE).domainQualification.unreachable='operation';},
+ m3_qualification_disagrees:d=>{row(d,FIVE).domainQualification.unreachable='guard-admission-state';},
+ m4_says_operation_unreachable:d=>{row(d,FIVE).domainQualification.statement='The relocation is unreachable in this domain.';},
+ m4b_says_it_in_other_words:d=>{row(d,FIVE).domainQualification.statement='This relocation can never happen.';},
+ m5_remains_reachable_dropped:d=>{row(d,FIVE).domainQualification.remainsReachable=['guard-state'];},
+ m6_other_slice:d=>{row(d,FIVE).domainQualification.sliceId='whole-stated-grid';},
+ m7_authority_subject_with_kind:d=>{row(d,FIVE).proposedAuthorizationKind='critical_spread_cure';},
+ m8_authority_subject_pR_no:d=>{const r=row(d,LED); r.producerReachable={value:'no',witness:'none'};},
+ m9_obsolete_with_subject:d=>{row(d,'owner-partition-services').enforcementDisposition='proved-obsolete';},
+ m10_subject_on_unclassified:d=>{row(d,'five-initial-provisioning-add').unreachableSubject='budget-dependent-authority-requirement';},
+};
+for(const k of Object.keys(A)) attack('D3-'+k,A[k]);

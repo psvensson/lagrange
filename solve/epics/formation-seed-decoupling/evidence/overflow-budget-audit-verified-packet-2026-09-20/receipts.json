@@ -1,0 +1,5236 @@
+{
+  "schema": "overflow-budget-evidence-receipts/2",
+  "quest": "overflow-budget-audit-evidence-binding",
+  "slices": [
+    {
+      "id": "whole-stated-grid",
+      "statement": "every state of the exhaustive promotion-guard grid",
+      "predicate": {
+        "voterCensus": "any",
+        "ownedAddLikeOperation": null,
+        "operationType": null
+      },
+      "createdBy": null
+    },
+    {
+      "id": "relocation-handoff",
+      "statement": "the states a single promote-then-remove RELOCATION hand-off creates: the voter census equals the target and this learner owns the REPLACE that put it there",
+      "predicate": {
+        "voterCensus": "equals-target",
+        "ownedAddLikeOperation": true,
+        "operationType": "REPLACE"
+      },
+      "createdBy": "a producer that emits a relocation REPLACE"
+    },
+    {
+      "id": "census-moved",
+      "statement": "the states in which the voter census already stands above the declared target",
+      "predicate": {
+        "voterCensus": "above-target",
+        "ownedAddLikeOperation": null,
+        "operationType": null
+      },
+      "createdBy": null
+    },
+    {
+      "id": "producer-add-at-target",
+      "statement": "the states an ADD producer itself creates: the voter census equals the target and this learner owns the ADD that put it there",
+      "predicate": {
+        "voterCensus": "equals-target",
+        "ownedAddLikeOperation": true,
+        "operationType": "ADD"
+      },
+      "createdBy": null
+    }
+  ],
+  "receipts": [
+    {
+      "id": "arithmetic-admission-class/allowance__over_by_1__no_owned_operation__joining__counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "allowance__over_by_1__no_owned_operation__joining__counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 20
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/allowance__over_by_1__no_owned_operation__joining__no_counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "allowance__over_by_1__no_owned_operation__joining__no_counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 5
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/allowance__over_by_1__owned_operation_visible__joining__counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "allowance__over_by_1__owned_operation_visible__joining__counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 60
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/allowance__over_by_1__owned_operation_visible__joining__no_counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "allowance__over_by_1__owned_operation_visible__joining__no_counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 15
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/allowance__over_by_1__owned_operation_visible__not_joining__counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "allowance__over_by_1__owned_operation_visible__not_joining__counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 60
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/allowance__over_by_1__owned_operation_visible__not_joining__no_counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "allowance__over_by_1__owned_operation_visible__not_joining__no_counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 15
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/allowance__over_by_2__no_owned_operation__joining__counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "allowance__over_by_2__no_owned_operation__joining__counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 20
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/allowance__over_by_2__no_owned_operation__joining__no_counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "allowance__over_by_2__no_owned_operation__joining__no_counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 5
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/allowance__over_by_2__owned_operation_visible__joining__counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "allowance__over_by_2__owned_operation_visible__joining__counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 60
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/allowance__over_by_2__owned_operation_visible__joining__no_counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "allowance__over_by_2__owned_operation_visible__joining__no_counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 15
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/allowance__over_by_2__owned_operation_visible__not_joining__counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "allowance__over_by_2__owned_operation_visible__not_joining__counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 60
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/allowance__over_by_2__owned_operation_visible__not_joining__no_counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "allowance__over_by_2__owned_operation_visible__not_joining__no_counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 15
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/no_allowance__over_by_1__no_owned_operation__joining__counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "no_allowance__over_by_1__no_owned_operation__joining__counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 40
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/no_allowance__over_by_1__no_owned_operation__joining__no_counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "no_allowance__over_by_1__no_owned_operation__joining__no_counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 10
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/no_allowance__over_by_1__no_owned_operation__not_joining__counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "no_allowance__over_by_1__no_owned_operation__not_joining__counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 60
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/no_allowance__over_by_1__no_owned_operation__not_joining__no_counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "no_allowance__over_by_1__no_owned_operation__not_joining__no_counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 15
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/no_allowance__over_by_2__no_owned_operation__joining__counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "no_allowance__over_by_2__no_owned_operation__joining__counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 40
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/no_allowance__over_by_2__no_owned_operation__joining__no_counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "no_allowance__over_by_2__no_owned_operation__joining__no_counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 10
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/no_allowance__over_by_2__no_owned_operation__not_joining__counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "no_allowance__over_by_2__no_owned_operation__not_joining__counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 60
+      }
+    },
+    {
+      "id": "arithmetic-admission-class/no_allowance__over_by_2__no_owned_operation__not_joining__no_counted_operation",
+      "kind": "arithmetic-admission-class",
+      "dimension": "arithmetic",
+      "admissionClassId": "no_allowance__over_by_2__no_owned_operation__not_joining__no_counted_operation",
+      "measuredPartitions": null,
+      "witness": {
+        "file": "test/partition/overflow-budget-admitted-case-grid.test.js",
+        "test": "every budget-admitted state grid row maps to exactly one admission class"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 18432,
+        "statesWithANonZeroBudget": 3000,
+        "admittedStates": 15
+      }
+    },
+    {
+      "id": "budget-dependence/census-moved/control_plane_publications-p1",
+      "kind": "budget-dependence",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "depends",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "control_plane_publications-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 3540,
+        "statesWhereTheCompletionOwnerWasConsulted": 17280,
+        "statesWithANonZeroBudget": 8640,
+        "budgetAdmittedStates": 3540
+      }
+    },
+    {
+      "id": "budget-dependence/census-moved/replica_operations-p1",
+      "kind": "budget-dependence",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "depends",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "replica_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 3540,
+        "statesWhereTheCompletionOwnerWasConsulted": 17280,
+        "statesWithANonZeroBudget": 8640,
+        "budgetAdmittedStates": 3540
+      }
+    },
+    {
+      "id": "budget-dependence/census-moved/schema_operations-p1",
+      "kind": "budget-dependence",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "depends",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "schema_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 3820,
+        "statesWhereTheCompletionOwnerWasConsulted": 17280,
+        "statesWithANonZeroBudget": 9600,
+        "budgetAdmittedStates": 3820
+      }
+    },
+    {
+      "id": "budget-dependence/census-moved/sql_transaction_participants-p1",
+      "kind": "budget-dependence",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "depends",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "sql_transaction_participants-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 3540,
+        "statesWhereTheCompletionOwnerWasConsulted": 17280,
+        "statesWithANonZeroBudget": 8640,
+        "budgetAdmittedStates": 3540
+      }
+    },
+    {
+      "id": "budget-dependence/census-moved/sql_transactions-p1",
+      "kind": "budget-dependence",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "depends",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "sql_transactions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 3540,
+        "statesWhereTheCompletionOwnerWasConsulted": 17280,
+        "statesWithANonZeroBudget": 8640,
+        "budgetAdmittedStates": 3540
+      }
+    },
+    {
+      "id": "budget-dependence/census-moved/sql_write_operations-p1",
+      "kind": "budget-dependence",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "depends",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "sql_write_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 3540,
+        "statesWhereTheCompletionOwnerWasConsulted": 17280,
+        "statesWithANonZeroBudget": 8640,
+        "budgetAdmittedStates": 3540
+      }
+    },
+    {
+      "id": "budget-dependence/whole-stated-grid/control_plane_publications-p1",
+      "kind": "budget-dependence",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "depends",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "control_plane_publications-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 4320,
+        "statesWhereTheCompletionOwnerWasConsulted": 30240,
+        "statesWithANonZeroBudget": 10800,
+        "budgetAdmittedStates": 4320
+      }
+    },
+    {
+      "id": "budget-dependence/whole-stated-grid/replica_operations-p1",
+      "kind": "budget-dependence",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "depends",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "replica_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 4320,
+        "statesWhereTheCompletionOwnerWasConsulted": 30240,
+        "statesWithANonZeroBudget": 10800,
+        "budgetAdmittedStates": 4320
+      }
+    },
+    {
+      "id": "budget-dependence/whole-stated-grid/schema_operations-p1",
+      "kind": "budget-dependence",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "depends",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "schema_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 4800,
+        "statesWhereTheCompletionOwnerWasConsulted": 30240,
+        "statesWithANonZeroBudget": 12000,
+        "budgetAdmittedStates": 4800
+      }
+    },
+    {
+      "id": "budget-dependence/whole-stated-grid/sql_transaction_participants-p1",
+      "kind": "budget-dependence",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "depends",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "sql_transaction_participants-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 4320,
+        "statesWhereTheCompletionOwnerWasConsulted": 30240,
+        "statesWithANonZeroBudget": 10800,
+        "budgetAdmittedStates": 4320
+      }
+    },
+    {
+      "id": "budget-dependence/whole-stated-grid/sql_transactions-p1",
+      "kind": "budget-dependence",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "depends",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "sql_transactions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 4320,
+        "statesWhereTheCompletionOwnerWasConsulted": 30240,
+        "statesWithANonZeroBudget": 10800,
+        "budgetAdmittedStates": 4320
+      }
+    },
+    {
+      "id": "budget-dependence/whole-stated-grid/sql_write_operations-p1",
+      "kind": "budget-dependence",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "depends",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "sql_write_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 4320,
+        "statesWhereTheCompletionOwnerWasConsulted": 30240,
+        "statesWithANonZeroBudget": 10800,
+        "budgetAdmittedStates": 4320
+      }
+    },
+    {
+      "id": "budget-independence-differential/producer-add-at-target/control_plane_publications-p1",
+      "kind": "budget-independence-differential",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "does_not_depend",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "control_plane_publications-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 720,
+        "statesWithANonZeroBudget": 540,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "budget-independence-differential/producer-add-at-target/replica_operations-p1",
+      "kind": "budget-independence-differential",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "does_not_depend",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "replica_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 720,
+        "statesWithANonZeroBudget": 540,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "budget-independence-differential/producer-add-at-target/schema_operations-p1",
+      "kind": "budget-independence-differential",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "does_not_depend",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "schema_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 720,
+        "statesWithANonZeroBudget": 540,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "budget-independence-differential/producer-add-at-target/sql_transaction_participants-p1",
+      "kind": "budget-independence-differential",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "does_not_depend",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "sql_transaction_participants-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 720,
+        "statesWithANonZeroBudget": 540,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "budget-independence-differential/producer-add-at-target/sql_transactions-p1",
+      "kind": "budget-independence-differential",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "does_not_depend",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "sql_transactions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 720,
+        "statesWithANonZeroBudget": 540,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "budget-independence-differential/producer-add-at-target/sql_write_operations-p1",
+      "kind": "budget-independence-differential",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "does_not_depend",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "sql_write_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 720,
+        "statesWithANonZeroBudget": 540,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "budget-independence-differential/relocation-handoff/control_plane_publications-p1",
+      "kind": "budget-independence-differential",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "does_not_depend",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "control_plane_publications-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 720,
+        "statesWithANonZeroBudget": 540,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "budget-independence-differential/relocation-handoff/replica_operations-p1",
+      "kind": "budget-independence-differential",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "does_not_depend",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "replica_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 720,
+        "statesWithANonZeroBudget": 540,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "budget-independence-differential/relocation-handoff/schema_operations-p1",
+      "kind": "budget-independence-differential",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "does_not_depend",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "schema_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 720,
+        "statesWithANonZeroBudget": 540,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "budget-independence-differential/relocation-handoff/sql_transaction_participants-p1",
+      "kind": "budget-independence-differential",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "does_not_depend",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "sql_transaction_participants-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 720,
+        "statesWithANonZeroBudget": 540,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "budget-independence-differential/relocation-handoff/sql_transactions-p1",
+      "kind": "budget-independence-differential",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "does_not_depend",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "sql_transactions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 720,
+        "statesWithANonZeroBudget": 540,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "budget-independence-differential/relocation-handoff/sql_write_operations-p1",
+      "kind": "budget-independence-differential",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "does_not_depend",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "sql_write_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 720,
+        "statesWithANonZeroBudget": 540,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-reachability/control_plane_publications-p1",
+      "kind": "guard-reachability",
+      "dimension": "partition",
+      "field": "guardReachable",
+      "expected": "yes",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "control_plane_publications-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 4320,
+        "statesWhereTheCompletionOwnerWasConsulted": 30240,
+        "statesWithANonZeroBudget": 10800,
+        "budgetAdmittedStates": 4320
+      }
+    },
+    {
+      "id": "guard-reachability/replica_operations-p1",
+      "kind": "guard-reachability",
+      "dimension": "partition",
+      "field": "guardReachable",
+      "expected": "yes",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "replica_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 4320,
+        "statesWhereTheCompletionOwnerWasConsulted": 30240,
+        "statesWithANonZeroBudget": 10800,
+        "budgetAdmittedStates": 4320
+      }
+    },
+    {
+      "id": "guard-reachability/schema_operations-p1",
+      "kind": "guard-reachability",
+      "dimension": "partition",
+      "field": "guardReachable",
+      "expected": "yes",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "schema_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 4800,
+        "statesWhereTheCompletionOwnerWasConsulted": 30240,
+        "statesWithANonZeroBudget": 12000,
+        "budgetAdmittedStates": 4800
+      }
+    },
+    {
+      "id": "guard-reachability/sql_transaction_participants-p1",
+      "kind": "guard-reachability",
+      "dimension": "partition",
+      "field": "guardReachable",
+      "expected": "yes",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "sql_transaction_participants-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 4320,
+        "statesWhereTheCompletionOwnerWasConsulted": 30240,
+        "statesWithANonZeroBudget": 10800,
+        "budgetAdmittedStates": 4320
+      }
+    },
+    {
+      "id": "guard-reachability/sql_transactions-p1",
+      "kind": "guard-reachability",
+      "dimension": "partition",
+      "field": "guardReachable",
+      "expected": "yes",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "sql_transactions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 4320,
+        "statesWhereTheCompletionOwnerWasConsulted": 30240,
+        "statesWithANonZeroBudget": 10800,
+        "budgetAdmittedStates": 4320
+      }
+    },
+    {
+      "id": "guard-reachability/sql_write_operations-p1",
+      "kind": "guard-reachability",
+      "dimension": "partition",
+      "field": "guardReachable",
+      "expected": "yes",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "sql_write_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 4320,
+        "statesWhereTheCompletionOwnerWasConsulted": 30240,
+        "statesWithANonZeroBudget": 10800,
+        "budgetAdmittedStates": 4320
+      }
+    },
+    {
+      "id": "guard-state-drive/follow-up-unhealthy-source-replace/sql_transactions-p1",
+      "kind": "guard-state-drive",
+      "dimension": "drive",
+      "field": "guardReachable",
+      "expected": "yes",
+      "producerId": "follow-up-unhealthy-source-replace",
+      "measuredPartitions": [
+        "sql_transactions-p1"
+      ],
+      "witness": {
+        "file": "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js",
+        "test": "the priority-recovery relocation REPLACE is traced end to end and classified"
+      },
+      "guardFacts": {
+        "activeVoterCountAtTheGuard": 4,
+        "budgetAtTheGuard": 2,
+        "decidedWithBudget": true,
+        "decidedWithBudgetForcedToZero": false
+      },
+      "result": {
+        "holds": true
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/artifact_payload_chunks-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "artifact_payload_chunks-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/artifact_payloads-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "artifact_payloads-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/call_activation_leases-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "call_activation_leases-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/call_cell_reduce_results-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "call_cell_reduce_results-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/call_cell_reduce_slots-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "call_cell_reduce_slots-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/code-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "code-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/config-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "config-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/contexts-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "contexts-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/debug_breakpoints-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "debug_breakpoints-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/debug_sessions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "debug_sessions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/debug_snapshots-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "debug_snapshots-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/indices-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "indices-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/inter_group_latencies-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "inter_group_latencies-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/latency_groups-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "latency_groups-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/live_queries-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "live_queries-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/logs-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "logs-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/message_groups-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "message_groups-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/module_dependency_locks-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "module_dependency_locks-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/module_manifests-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "module_manifests-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/node_endpoints-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "node_endpoints-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/nodes-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "nodes-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/package_registry_mappings-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "package_registry_mappings-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/package_registry_overrides-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "package_registry_overrides-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/partitions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "partitions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/schema_migration_partitions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "schema_migration_partitions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/schema_migrations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "schema_migrations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/service_bindings-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "service_bindings-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/service_definitions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "service_definitions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/service_endpoints-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "service_endpoints-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/service_install_failures-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "service_install_failures-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/service_installations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "service_installations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/service_packages-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "service_packages-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/service_partition_access-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "service_partition_access-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/service_revisions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "service_revisions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/service_timers-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "service_timers-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/services-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "services-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/storage_reservations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "storage_reservations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/tables-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "tables-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/census-moved/wasm_operations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "census-moved",
+      "measuredPartitions": [
+        "wasm_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 17280,
+        "evaluationsWithActualBudget": 17280,
+        "evaluationsWithBudgetForcedToZero": 17280,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/artifact_payload_chunks-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "artifact_payload_chunks-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/artifact_payloads-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "artifact_payloads-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/call_activation_leases-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "call_activation_leases-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/call_cell_reduce_results-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "call_cell_reduce_results-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/call_cell_reduce_slots-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "call_cell_reduce_slots-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/code-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "code-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/config-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "config-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/contexts-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "contexts-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/debug_breakpoints-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "debug_breakpoints-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/debug_sessions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "debug_sessions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/debug_snapshots-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "debug_snapshots-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/indices-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "indices-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/inter_group_latencies-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "inter_group_latencies-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/latency_groups-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "latency_groups-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/live_queries-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "live_queries-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/logs-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "logs-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/message_groups-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "message_groups-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/module_dependency_locks-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "module_dependency_locks-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/module_manifests-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "module_manifests-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/node_endpoints-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "node_endpoints-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/nodes-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "nodes-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/package_registry_mappings-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "package_registry_mappings-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/package_registry_overrides-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "package_registry_overrides-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/partitions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "partitions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/schema_migration_partitions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "schema_migration_partitions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/schema_migrations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "schema_migrations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/service_bindings-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "service_bindings-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/service_definitions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "service_definitions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/service_endpoints-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "service_endpoints-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/service_install_failures-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "service_install_failures-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/service_installations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "service_installations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/service_packages-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "service_packages-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/service_partition_access-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "service_partition_access-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/service_revisions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "service_revisions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/service_timers-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "service_timers-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/services-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "services-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/storage_reservations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "storage_reservations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/tables-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "tables-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/producer-add-at-target/wasm_operations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "producer-add-at-target",
+      "measuredPartitions": [
+        "wasm_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/artifact_payload_chunks-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "artifact_payload_chunks-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/artifact_payloads-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "artifact_payloads-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/call_activation_leases-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "call_activation_leases-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/call_cell_reduce_results-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "call_cell_reduce_results-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/call_cell_reduce_slots-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "call_cell_reduce_slots-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/code-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "code-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/config-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "config-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/contexts-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "contexts-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/debug_breakpoints-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "debug_breakpoints-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/debug_sessions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "debug_sessions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/debug_snapshots-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "debug_snapshots-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/indices-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "indices-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/inter_group_latencies-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "inter_group_latencies-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/latency_groups-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "latency_groups-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/live_queries-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "live_queries-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/logs-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "logs-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/message_groups-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "message_groups-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/module_dependency_locks-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "module_dependency_locks-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/module_manifests-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "module_manifests-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/node_endpoints-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "node_endpoints-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/nodes-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "nodes-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/package_registry_mappings-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "package_registry_mappings-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/package_registry_overrides-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "package_registry_overrides-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/partitions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "partitions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/schema_migration_partitions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "schema_migration_partitions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/schema_migrations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "schema_migrations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/service_bindings-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "service_bindings-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/service_definitions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "service_definitions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/service_endpoints-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "service_endpoints-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/service_install_failures-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "service_install_failures-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/service_installations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "service_installations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/service_packages-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "service_packages-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/service_partition_access-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "service_partition_access-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/service_revisions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "service_revisions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/service_timers-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "service_timers-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/services-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "services-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/storage_reservations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "storage_reservations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/tables-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "tables-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/relocation-handoff/wasm_operations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "relocation-handoff",
+      "measuredPartitions": [
+        "wasm_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 720,
+        "evaluationsWithActualBudget": 720,
+        "evaluationsWithBudgetForcedToZero": 720,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/artifact_payload_chunks-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "artifact_payload_chunks-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/artifact_payloads-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "artifact_payloads-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/call_activation_leases-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "call_activation_leases-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/call_cell_reduce_results-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "call_cell_reduce_results-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/call_cell_reduce_slots-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "call_cell_reduce_slots-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/code-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "code-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/config-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "config-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/contexts-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "contexts-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/debug_breakpoints-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "debug_breakpoints-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/debug_sessions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "debug_sessions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/debug_snapshots-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "debug_snapshots-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/indices-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "indices-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/inter_group_latencies-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "inter_group_latencies-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/latency_groups-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "latency_groups-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/live_queries-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "live_queries-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/logs-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "logs-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/message_groups-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "message_groups-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/module_dependency_locks-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "module_dependency_locks-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/module_manifests-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "module_manifests-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/node_endpoints-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "node_endpoints-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/nodes-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "nodes-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/package_registry_mappings-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "package_registry_mappings-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/package_registry_overrides-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "package_registry_overrides-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/partitions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "partitions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/schema_migration_partitions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "schema_migration_partitions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/schema_migrations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "schema_migrations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/service_bindings-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "service_bindings-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/service_definitions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "service_definitions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/service_endpoints-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "service_endpoints-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/service_install_failures-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "service_install_failures-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/service_installations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "service_installations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/service_packages-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "service_packages-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/service_partition_access-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "service_partition_access-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/service_revisions-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "service_revisions-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/service_timers-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "service_timers-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/services-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "services-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/storage_reservations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "storage_reservations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/tables-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "tables-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "guard-unreachability/whole-stated-grid/wasm_operations-p1",
+      "kind": "guard-unreachability",
+      "dimension": "partition",
+      "field": "currentBudgetDependency",
+      "expected": "unreachable_in_stated_domain",
+      "sliceId": "whole-stated-grid",
+      "measuredPartitions": [
+        "wasm_operations-p1"
+      ],
+      "witness": {
+        "file": "test/partition/overflow-budget-unmintable-partitions.test.js",
+        "test": "every unmintable admitted partition is audited on the real guard"
+      },
+      "result": {
+        "holds": true,
+        "statesEnumerated": 30240,
+        "evaluationsWithActualBudget": 30240,
+        "evaluationsWithBudgetForcedToZero": 30240,
+        "admissionDifferences": 0,
+        "statesWhereTheCompletionOwnerWasConsulted": 0,
+        "statesWithANonZeroBudget": 0,
+        "budgetAdmittedStates": 0
+      }
+    },
+    {
+      "id": "producer-not-driven/planner-paired-relocation-replace",
+      "kind": "producer-not-driven",
+      "dimension": "census",
+      "measuredPartitionsSource": "producer-census",
+      "field": "currentBudgetDependency",
+      "expected": "unknown_producer_not_driven",
+      "sliceId": null,
+      "producerId": "planner-paired-relocation-replace",
+      "measuredPartitions": [
+        "tables-p1",
+        "partitions-p1",
+        "indices-p1",
+        "message_groups-p1",
+        "nodes-p1",
+        "services-p1",
+        "logs-p1",
+        "config-p1",
+        "live_queries-p1",
+        "contexts-p1",
+        "code-p1",
+        "control_plane_publications-p1",
+        "replica_operations-p1",
+        "node_endpoints-p1",
+        "service_definitions-p1",
+        "service_bindings-p1",
+        "service_endpoints-p1",
+        "service_timers-p1",
+        "service_packages-p1",
+        "service_revisions-p1",
+        "service_installations-p1",
+        "service_install_failures-p1",
+        "module_manifests-p1",
+        "package_registry_mappings-p1",
+        "package_registry_overrides-p1",
+        "module_dependency_locks-p1",
+        "wasm_operations-p1",
+        "sql_transactions-p1",
+        "sql_transaction_participants-p1",
+        "sql_write_operations-p1",
+        "schema_operations-p1",
+        "schema_migrations-p1",
+        "schema_migration_partitions-p1",
+        "debug_sessions-p1",
+        "debug_breakpoints-p1",
+        "debug_snapshots-p1",
+        "storage_reservations-p1",
+        "latency_groups-p1",
+        "inter_group_latencies-p1",
+        "service_partition_access-p1",
+        "call_cell_reduce_slots-p1",
+        "call_cell_reduce_results-p1",
+        "call_activation_leases-p1",
+        "artifact_payloads-p1",
+        "artifact_payload_chunks-p1"
+      ],
+      "witness": {
+        "file": "test/rebalancer/overflow-budget-add-like-producer-census.test.js",
+        "test": "every production producer of an add-like operation is in the matrix"
+      },
+      "result": {
+        "holds": true,
+        "producerDriven": false,
+        "statesEnumerated": 0,
+        "censusedSink": "resolvePlacementCure"
+      }
+    },
+    {
+      "id": "producer-reachability/follow-up-unhealthy-source-replace/sql_transactions-p1",
+      "kind": "producer-reachability",
+      "dimension": "drive",
+      "field": "producerReachable",
+      "expected": "yes",
+      "producerId": "follow-up-unhealthy-source-replace",
+      "observedOperationType": "REPLACE",
+      "measuredPartitions": [
+        "sql_transactions-p1"
+      ],
+      "witness": {
+        "file": "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js",
+        "test": "the priority-recovery relocation REPLACE is traced end to end and classified"
+      },
+      "producerFacts": {
+        "moveReason": "replace_replica",
+        "sourceNodeId": "node-a",
+        "operationReplicaId": "replace-replica-cd8f9e4fa15df4e3b6c26a896a91d22f",
+        "operationSourceNodeId": "node-a",
+        "chainedFollowUpMoveState": "move_created",
+        "priorTargetActiveSuppresses": true,
+        "activeVoterCountAtTheGuard": 4,
+        "grantedWithBudget": true,
+        "grantedWithBudgetForcedToZero": false
+      },
+      "result": {
+        "holds": true
+      }
+    },
+    {
+      "id": "producer-reachability/planner-over-target-spread-cure-add/sql_transactions-p1",
+      "kind": "producer-reachability",
+      "dimension": "drive",
+      "field": "producerReachable",
+      "expected": "yes",
+      "producerId": "planner-over-target-spread-cure-add",
+      "observedOperationType": "ADD",
+      "measuredPartitions": [
+        "sql_transactions-p1"
+      ],
+      "witness": {
+        "file": "test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+        "test": "every alternate route to the five carries the mint or is a matrix row"
+      },
+      "producerFacts": {
+        "retainedSpreadCureAddCount": 1,
+        "authorizationIntent": "critical_spread_cure",
+        "observedVoterCount": 4,
+        "authorizedResultingVoterCount": 5,
+        "activeVoterCountAtTheGuard": 4,
+        "grantedWithBudget": true,
+        "grantedWithBudgetForcedToZero": false
+      },
+      "result": {
+        "holds": true
+      }
+    },
+    {
+      "id": "producer-reachability/planner-priority-expand-for-spread-add/sql_transactions-p1",
+      "kind": "producer-reachability",
+      "dimension": "drive",
+      "field": "producerReachable",
+      "expected": "yes",
+      "producerId": "planner-priority-expand-for-spread-add",
+      "observedOperationType": "ADD",
+      "measuredPartitions": [
+        "sql_transactions-p1"
+      ],
+      "witness": {
+        "file": "test/rebalancer/overflow-budget-mintable-five-routes.test.js",
+        "test": "every alternate route to the five carries the mint or is a matrix row"
+      },
+      "producerFacts": {
+        "moveReason": "spread_replicas",
+        "carriesAuthorizationField": false,
+        "activeVoterCountAtTheGuard": 3,
+        "grantedWithBudget": true,
+        "grantedWithBudgetForcedToZero": true
+      },
+      "result": {
+        "holds": true
+      }
+    },
+    {
+      "id": "slice-provenance/relocation-handoff/follow-up-unhealthy-source-replace",
+      "kind": "slice-provenance",
+      "dimension": "drive",
+      "sliceId": "relocation-handoff",
+      "producerId": "follow-up-unhealthy-source-replace",
+      "observedOperationType": "REPLACE",
+      "measuredPartitions": [
+        "sql_transactions-p1"
+      ],
+      "witness": {
+        "file": "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js",
+        "test": "the priority-recovery relocation REPLACE is traced end to end and classified"
+      },
+      "producerFacts": {
+        "voterCensusEqualsTarget": true,
+        "learnerOwnsTheOperation": true,
+        "admittedWithBudgetForcedToZero": true
+      },
+      "result": {
+        "holds": true
+      }
+    }
+  ]
+}

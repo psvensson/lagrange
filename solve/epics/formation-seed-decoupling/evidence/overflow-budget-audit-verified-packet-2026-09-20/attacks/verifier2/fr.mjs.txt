@@ -1,0 +1,40 @@
+import {fixture,readM,readS,S,V} from './h.mjs'; import fs from 'node:fs'; import path from 'node:path';
+const dir=fixture('freeze',readM(),readS(),{}); process.chdir(dir);
+const sup=await import(S+'/test/rebalancer/overflow-budget-evidence-support.js');
+const DIG=sup.freezeDigest().digest; console.log('digest in fixture:',DIG,'(equals subject digest:',DIG==='723b090294d357500dda48b12923d25c74d5ab4a93a14ac21ff1e3176485aaa1',')');
+const log=path.join(V,'fx','freeze-log.ndjson'), out=path.join(V,'fx','freeze-manifest.json');
+const w=(es)=>fs.writeFileSync(log,es.map(e=>JSON.stringify(e)).join('\n')+'\n');
+const TOK='audit-freeze-digest:'+DIG;
+const ver=(ts,verdict,text='x',verifier='subagent:v2')=>({ts,type:'verification',verifier,verdict,text});
+let real=0;
+const tryW=(label,opts={})=>{fs.rmSync(out,{force:true});const t=Date.now();try{sup.writeFreezeManifest({logPath:log,outPath:out,...opts});console.log(label,'=> WRITTEN',((Date.now()-t)/1000|0)+'s');return JSON.parse(fs.readFileSync(out,'utf8'));}catch(e){console.log(label,'=> refused:',e.message,((Date.now()-t)/1000|0)+'s');return null;}};
+w([{ts:'1',type:'finding'}]); tryW('1 no approval');
+w([ver('2026-09-20T10:00:00Z','approve','looks fine')]); tryW('2 approval without token');
+w([ver('2026-09-20T10:00:00Z','approve','audit-freeze-digest:'+'0'.repeat(64))]); tryW('3 token for other bytes');
+w([ver('2026-09-20T10:00:00Z','approve',TOK),ver('2026-09-20T11:00:00Z','reject')]); tryW('4 approve then later reject (later ts)');
+w([ver('2026-09-20T10:00:00Z','approve',TOK),ver('2026-09-20T09:00:00Z','reject','x','subagent:v3')]); const m5=tryW('5 approve, then a reject LATER IN THE FILE carrying an EARLIER ts');
+w([ver('2026-09-20T10:00:00Z','approve',TOK),{type:'verification',verdict:'reject',verifier:'subagent:v3',text:'no ts'}]); tryW('6 approve, then reject with NO ts');
+w([ver('2026-09-20T10:00:00Z','approve',TOK),ver('2026-09-20T10:00:00Z','reject','same ts','subagent:v3')]); tryW('6b approve, then reject with the SAME ts');
+w([ver('2026-09-20T10:00:00Z','reject','rejecting; the implementer said the digest would be '+TOK)]); tryW('7 a REJECTION that quotes the token');
+w([ver('2026-09-20T09:00:00Z','approve','quoting an old token '+'audit-freeze-digest:'+'1'.repeat(64)+' and then the right one '+TOK)]); tryW('8 approval text with two tokens, first wrong');
+w([ver('2026-09-20T10:00:00Z','approve',TOK)]);
+console.log('-- does the writer re-run the three gates? (genuine approval, timing shows child runs)');
+const m=tryW('9 genuine approval + token');
+console.log('manifest:',m&&JSON.stringify({schema:m.schema,quest:m.quest,verification:m.verification,nfiles:Object.keys(m.files).length}));
+console.log('check genuine:',JSON.stringify(sup.checkFreezeManifest(m,{logPath:log})));
+// manifest edited after writing
+const m2=structuredClone(m); const k=Object.keys(m2.files)[0]; m2.files[k]='0'.repeat(64); console.log('check manifest digest edited:',JSON.stringify(sup.checkFreezeManifest(m2,{logPath:log})));
+const m3=structuredClone(m); delete m3.files[Object.keys(m3.files)[15]]; console.log('check manifest file dropped:',JSON.stringify(sup.checkFreezeManifest(m3,{logPath:log})));
+const m4=structuredClone(m); m4.verification.verifier='subagent:nobody'; console.log('check unknown verifier:',JSON.stringify(sup.checkFreezeManifest(m4,{logPath:log})));
+// log changed after writing: later rejection by file order with earlier ts
+w([ver('2026-09-20T10:00:00Z','approve',TOK),ver('2026-09-20T09:59:00Z','reject','x','subagent:v3')]); console.log('check after a rejection is APPENDED with an earlier ts:',JSON.stringify(sup.checkFreezeManifest(m,{logPath:log})));
+w([ver('2026-09-20T10:00:00Z','approve',TOK),ver('2026-09-20T12:00:00Z','reject','x','subagent:v3')]); console.log('check after a rejection is appended with a later ts:',JSON.stringify(sup.checkFreezeManifest(m,{logPath:log})));
+w([ver('2026-09-20T10:00:00Z','approve',TOK)]);
+// bytes changed after approval
+const mj='solve/epics/formation-seed-decoupling/overflow-budget-decision-matrix.json'; const orig=fs.readFileSync(mj);
+fs.appendFileSync(mj,' '); console.log('check after one byte appended to matrix json:',JSON.stringify(sup.checkFreezeManifest(m,{logPath:log}))); tryW('10 writer after bytes changed (token no longer matches)');
+fs.writeFileSync(mj,orig);
+// gates: pin red but validator green, with a token recomputed by the attacker for the new bytes (i.e. approval names THESE bytes): does the writer run the pin?
+const mm=readM(); mm.rows[0].triggeringState+=' edited'; const d2=fixture('freeze2',mm,readS(),{}); process.chdir(d2);
+const DIG2=sup.freezeDigest().digest; w([ver('2026-09-20T10:00:00Z','approve','audit-freeze-digest:'+DIG2)]); tryW('11 approval names pin-violating bytes (validator green, pin red)');
+tryW('12 same, caller passes gatesHold:true',{gatesHold:true});

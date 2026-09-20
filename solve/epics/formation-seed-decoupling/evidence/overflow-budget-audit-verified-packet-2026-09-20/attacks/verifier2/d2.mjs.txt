@@ -1,0 +1,21 @@
+import {attack,run} from './h.mjs'; import {BIND} from './emit.mjs';
+const row=(d,id)=>d.matrix.rows.find(r=>r.id===id); const rc=(d,id)=>d.store.receipts.find(r=>r.id===id);
+const RP='follow-up-unhealthy-source-replace';
+const A={
+ // literal round-3: flip a depends row to does_not_depend citing an unrelated existing test
+ r3_flip_cite_unrelated:d=>{const r=row(d,'five-initial-provisioning-add'); r.currentBudgetDependency='does_not_depend'; r.budgetDifferentialWitness=null; r.budgetIndependenceMeasurement={test:'test/rebalancer/overflow-budget-partition-sets.test.js:the partition sets',statesInWhichItHolds:'all'};},
+ // literal round-3: claim producerReachable yes citing a self-declared real-chain file
+ r3_claim_producer_yes:d=>{const r=row(d,'five-initial-provisioning-add'); r.producerReachable={value:'yes',witness:'test/rebalancer/overflow-budget-unhealthy-source-replace.test.js:the priority-recovery relocation REPLACE is traced end to end and classified'};},
+ r3_claim_producer_yes_with_receipt:d=>{const r=row(d,'five-initial-provisioning-add'); r.producerReachable={value:'yes',witness:'test/rebalancer/overflow-budget-unhealthy-source-replace.test.js:the priority-recovery relocation REPLACE is traced end to end and classified'}; r.receipts=[...r.receipts,'producer-reachability/'+RP+'/sql_transactions-p1'].sort();},
+ s1_edit_numbers:d=>{const x=rc(d,'budget-dependence/whole-stated-grid/replica_operations-p1'); x.result.admissionDifferences=0; x.result.budgetAdmittedStates=0;},
+ s1b_turn_dependence_into_independence:d=>{const x=rc(d,'budget-dependence/whole-stated-grid/replica_operations-p1'); x.kind='budget-independence-differential'; x.sliceId='relocation-handoff'; x.expected='does_not_depend'; x.result.admissionDifferences=0;},
+ s2_add_fake_drive_for_ledger:d=>{const src=rc(d,'producer-reachability/'+RP+'/sql_transactions-p1'); d.store.receipts.push({...structuredClone(src),id:'producer-reachability/'+RP+'/replica_operations-p1',measuredPartitions:['replica_operations-p1']}); const r=row(d,'ledger-relocation-handoff-overlap'); r.producerReachable={value:'yes',witness:r.guardReachable.witness}; r.receipts=[...r.receipts,'producer-reachability/'+RP+'/replica_operations-p1'].sort();},
+ s3_delete_uncited_receipt:d=>{d.store.receipts=d.store.receipts.filter(x=>x.id!=='guard-unreachability/census-moved/tables-p1');},
+ s4_delete_a_whole_witness:d=>{d.store.receipts=d.store.receipts.filter(x=>!x.witness.file.includes('mintable-five-routes')); for(const r of d.matrix.rows){ if(r.receipts.some(i=>i.startsWith('producer-reachability/planner-'))){r.receipts=r.receipts.filter(i=>!i.startsWith('producer-reachability/planner-')); r.producerReachable.value='unproven';}}},
+ s5_edit_slice_registry_copy:d=>{d.store.slices.find(s=>s.id==='relocation-handoff').predicate.operationType=null;},
+ s6_edit_producer_facts:d=>{rc(d,'producer-reachability/'+RP+'/sql_transactions-p1').producerFacts.grantedWithBudgetForcedToZero=true;},
+ s7_provenance_facts_false:d=>{const x=rc(d,'slice-provenance/relocation-handoff/'+RP); x.producerFacts={voterCensusEqualsTarget:false,learnerOwnsTheOperation:false,admittedWithBudgetForcedToZero:false};},
+ s8_witness_pointing_elsewhere:d=>{rc(d,'slice-provenance/relocation-handoff/'+RP).witness={file:'test/rebalancer/overflow-budget-partition-sets.test.js',test:'partition'};},
+};
+for(const k of (process.argv[2]?process.argv[2].split(','):Object.keys(A))){ const {dir,r}=attack('D2-'+k,A[k]);
+  if(r.pass){const e=run(dir,BIND,'^the committed receipts are the ones the measuring tests emit$'); console.log('   EMISSION CHECK:',e.pass?'GREEN (not refused)':'RED :: '+(e.err||'').slice(0,200));} }

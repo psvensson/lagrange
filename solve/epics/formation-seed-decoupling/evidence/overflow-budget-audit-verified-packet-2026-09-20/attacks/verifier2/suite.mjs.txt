@@ -1,0 +1,4 @@
+import {run,V,S} from './h.mjs'; import path from 'node:path'; import {execSync} from 'node:child_process';
+const dir=path.join(V,'fx',process.argv[2]);
+const files=execSync('git -C '+S+' diff --cached --name-only main',{encoding:'utf8'}).split('\n').filter(f=>f.endsWith('.test.js'));
+for(const f of files){ if(process.argv[3]&&!f.includes(process.argv[3]))continue; const t=Date.now(); const r=run(dir,f,null); console.log(f.split('/').pop(),r.pass?'PASS':'FAIL :: '+r.err,((Date.now()-t)/1000|0)+'s');}

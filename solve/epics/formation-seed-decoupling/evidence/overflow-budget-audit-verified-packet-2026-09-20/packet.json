@@ -1,0 +1,628 @@
+{
+  "schema": "verified-evidence-packet/1",
+  "id": "overflow-budget-audit-verified-evidence-2026-09-20",
+  "epic": "formation-seed-decoupling",
+  "status": "sealed historical evidence",
+  "statement": "This packet preserves independently verified propositions from the superseded audit. It is not a structurally complete classification of all admission states and is not an authority specification.",
+  "isNot": [
+    "the frozen audit matrix - the 27-row matrix was never frozen and no freeze manifest exists",
+    "a structurally complete classification of admission states",
+    "an authority specification or a gate contract for a future enforcement design",
+    "a source of canonical semantic identities: no matrix row id is one"
+  ],
+  "provenance": {
+    "supersededAudit": "critical-spread-overflow-budget-audit (superseded, main 88f0ce083)",
+    "stoppedSuccessor": "overflow-budget-audit-evidence-binding (exhausted: rejected-by-architecture)",
+    "verifiedTree": "24370784febda5c40e3a8484aae9205c43707369",
+    "verifiedTreeCommit": "966231c6ef678a97db8c4aa21e57627fba419f8c",
+    "verifiedTreeLocalTag": "audit-evidence-binding/round-3-verified-tree",
+    "questBranch": "quest/audit-evidence-binding (52b5ef5f7 then 62f647437; differs from the verified tree only in two hook-regenerated files: the owner-debt inventory and the import-graph seal)",
+    "measuredAtHead": "902714be831a8dea3963b0e6cc098932e6b5457b",
+    "verificationRounds": [
+      {
+        "round": 1,
+        "verifier": "subagent:a2cec543087d69ef1",
+        "verdict": "reject",
+        "tree": "4d353db0c4e4c9ea7a088cbd9abcad36afc4d404",
+        "report": "verification/round-1.md"
+      },
+      {
+        "round": 2,
+        "verifier": "subagent:ab5c2ec7451848b3a",
+        "verdict": "reject",
+        "tree": "e1dfc98e831117b87421fe8bf8f4c31a03097e4b",
+        "report": "verification/round-2.md"
+      },
+      {
+        "round": 3,
+        "verifier": "subagent:a4d25719814ced4b6",
+        "verdict": "reject",
+        "tree": "2502030f06d7228b697ea0db40577d2f5c9543bf",
+        "report": "verification/round-3.md"
+      }
+    ],
+    "noProductionFileChanged": "upheld by all three rounds: nothing under src, examples, .github, .githooks"
+  },
+  "architecturalResult": {
+    "statement": "The current audit matrix does not have a mechanically authoritative definition of what makes a row represent a particular producer/state condition. For the seventeen still-unclassified rows, that identity ultimately lives in prose.",
+    "establishedBy": [
+      "round-1",
+      "round-2",
+      "round-3"
+    ],
+    "history": [
+      "round 1: receipts echoed row id, kind, domain and producer from the matrix; a regenerating attacker re-pointed receipts with validator and emission check green",
+      "round 2: receipts honest, but the row fields they are matched against (producers, producerOperationTypes, partitionClass, admissionClasses, witness pointers) were self-declared; re-pointing four rows demonstrated gate item 4",
+      "round 3: the census anchors matrix.producers[].addLikeTypes and partitionScope.partitionIds are read by no measuring test, and row.producers is self-declared; eight producer re-declarations demonstrate gate item 4 with validator, producer-census test, partition-sets test and emission check green and a regenerated store identical to the committed one; only the round-3 pin refuses"
+    ],
+    "attacks": "attacks/ holds the three verifiers' scripts as text; the round-3 item-4 attack is attacks/verifier3/r3a.mjs.txt (rowProducers) and r3c.mjs.txt",
+    "carriedForward": "The old matrix could measure many useful properties, but it could not mechanically establish the identity of the semantic state being measured. The next model must obtain that identity from production-owned transition state rather than from audit-authored row declarations."
+  },
+  "proseIdentifiedRows": {
+    "limitation": "These rows distinguish triggering conditions in prose. Their dependencies may have been measured over broader structural domains, but their individual row identities are not mechanically derived from production state.",
+    "rules": [
+      "future tooling must not treat these row ids as canonical semantic identities",
+      "they carry no authoritative gate weight in a future enforcement design until re-established under the new structural model"
+    ],
+    "rowIds": [
+      "five-establishing-window-unminted-cure-add",
+      "five-undeclared-partition-row-unminted-cure-add",
+      "five-minted-authorization-stale-at-promotion",
+      "five-expand-for-spread-add",
+      "five-under-representation-add",
+      "five-relocation-census-disagreement-overlap",
+      "five-paired-relocation-replace",
+      "five-operation-not-visible-to-the-guard",
+      "five-row-rematerialization",
+      "five-initial-provisioning-add",
+      "ledger-expand-for-spread-add",
+      "ledger-under-representation-add",
+      "ledger-relocation-census-disagreement-overlap",
+      "ledger-paired-relocation-replace",
+      "ledger-operation-not-visible-to-the-guard",
+      "ledger-row-rematerialization",
+      "ledger-initial-provisioning-add"
+    ],
+    "whatWasMeasuredForThem": "whole-stated-grid budget dependence per partition (run-produced receipts of kind budget-dependence, slice whole-stated-grid) and, for two expand rows, the census-moved and producer-add-at-target slices; these are measurements of partitions and state slices, not of a row"
+  },
+  "propositions": [
+    {
+      "id": "ordinary-relocation-handoff-needs-no-budget-replacement-authority",
+      "structuralSubject": "budget-dependent-authority-requirement",
+      "unreachable": "budget-dependent-authority-requirement",
+      "remainsReachable": [
+        "operation",
+        "guard-state"
+      ],
+      "statement": "Within the complete ordinary hand-off domain, the operation/admission class is reachable, but no state exists in which compatibility-budget removal changes its admission. Therefore no authority requirement exists whose purpose is to replace that budget dependency for this class.",
+      "facts": [
+        {
+          "fact": "the relocation itself is reachable",
+          "evidence": "producer-reachability/follow-up-unhealthy-source-replace/sql_transactions-p1",
+          "producerId": "follow-up-unhealthy-source-replace",
+          "observedOperationType": "REPLACE",
+          "drivenPartition": [
+            "sql_transactions-p1"
+          ],
+          "note": "one unstitched real-chain drive; producer reachability for the ledger partition stays UNPROVEN, as round 3 of the audit held"
+        },
+        {
+          "fact": "the guard-visible hand-off state is reachable",
+          "evidence": [
+            "guard-state-drive/follow-up-unhealthy-source-replace/sql_transactions-p1",
+            "slice-provenance/relocation-handoff/follow-up-unhealthy-source-replace"
+          ],
+          "provenanceFacts": {
+            "voterCensusEqualsTarget": true,
+            "learnerOwnsTheOperation": true,
+            "admittedWithBudgetForcedToZero": true
+          }
+        },
+        {
+          "fact": "the complete measured hand-off domain: REPLACE hand-off states per partition on all six budget-evaluated partitions, each evaluated under the actual budget and under a budget forced to zero",
+          "slice": {
+            "id": "relocation-handoff",
+            "statement": "the states a single promote-then-remove RELOCATION hand-off creates: the voter census equals the target and this learner owns the REPLACE that put it there",
+            "predicate": {
+              "voterCensus": "equals-target",
+              "ownedAddLikeOperation": true,
+              "operationType": "REPLACE"
+            },
+            "createdBy": "a producer that emits a relocation REPLACE"
+          },
+          "perPartition": [
+            {
+              "partition": "control_plane_publications-p1",
+              "receipt": "budget-independence-differential/relocation-handoff/control_plane_publications-p1",
+              "holds": true,
+              "statesEnumerated": 720,
+              "evaluationsWithActualBudget": 720,
+              "evaluationsWithBudgetForcedToZero": 720,
+              "admissionDifferences": 0,
+              "statesWhereTheCompletionOwnerWasConsulted": 720,
+              "statesWithANonZeroBudget": 540,
+              "budgetAdmittedStates": 0
+            },
+            {
+              "partition": "replica_operations-p1",
+              "receipt": "budget-independence-differential/relocation-handoff/replica_operations-p1",
+              "holds": true,
+              "statesEnumerated": 720,
+              "evaluationsWithActualBudget": 720,
+              "evaluationsWithBudgetForcedToZero": 720,
+              "admissionDifferences": 0,
+              "statesWhereTheCompletionOwnerWasConsulted": 720,
+              "statesWithANonZeroBudget": 540,
+              "budgetAdmittedStates": 0
+            },
+            {
+              "partition": "sql_transactions-p1",
+              "receipt": "budget-independence-differential/relocation-handoff/sql_transactions-p1",
+              "holds": true,
+              "statesEnumerated": 720,
+              "evaluationsWithActualBudget": 720,
+              "evaluationsWithBudgetForcedToZero": 720,
+              "admissionDifferences": 0,
+              "statesWhereTheCompletionOwnerWasConsulted": 720,
+              "statesWithANonZeroBudget": 540,
+              "budgetAdmittedStates": 0
+            },
+            {
+              "partition": "sql_transaction_participants-p1",
+              "receipt": "budget-independence-differential/relocation-handoff/sql_transaction_participants-p1",
+              "holds": true,
+              "statesEnumerated": 720,
+              "evaluationsWithActualBudget": 720,
+              "evaluationsWithBudgetForcedToZero": 720,
+              "admissionDifferences": 0,
+              "statesWhereTheCompletionOwnerWasConsulted": 720,
+              "statesWithANonZeroBudget": 540,
+              "budgetAdmittedStates": 0
+            },
+            {
+              "partition": "sql_write_operations-p1",
+              "receipt": "budget-independence-differential/relocation-handoff/sql_write_operations-p1",
+              "holds": true,
+              "statesEnumerated": 720,
+              "evaluationsWithActualBudget": 720,
+              "evaluationsWithBudgetForcedToZero": 720,
+              "admissionDifferences": 0,
+              "statesWhereTheCompletionOwnerWasConsulted": 720,
+              "statesWithANonZeroBudget": 540,
+              "budgetAdmittedStates": 0
+            },
+            {
+              "partition": "schema_operations-p1",
+              "receipt": "budget-independence-differential/relocation-handoff/schema_operations-p1",
+              "holds": true,
+              "statesEnumerated": 720,
+              "evaluationsWithActualBudget": 720,
+              "evaluationsWithBudgetForcedToZero": 720,
+              "admissionDifferences": 0,
+              "statesWhereTheCompletionOwnerWasConsulted": 720,
+              "statesWithANonZeroBudget": 540,
+              "budgetAdmittedStates": 0
+            }
+          ]
+        },
+        {
+          "fact": "zero decision differences",
+          "admissionDifferencesTotal": 0
+        },
+        {
+          "fact": "non-vacuous: the budget was non-zero in 540 of the 720 states on every one of the six partitions",
+          "statesWithANonZeroBudget": [
+            [
+              "control_plane_publications-p1",
+              540
+            ],
+            [
+              "replica_operations-p1",
+              540
+            ],
+            [
+              "sql_transactions-p1",
+              540
+            ],
+            [
+              "sql_transaction_participants-p1",
+              540
+            ],
+            [
+              "sql_write_operations-p1",
+              540
+            ],
+            [
+              "schema_operations-p1",
+              540
+            ]
+          ]
+        },
+        {
+          "fact": "the measuring test additionally still asserts zero differences over the full 1440-state superset (REPLACE- and ADD-typed) per partition, so restricting the slice to REPLACE sharpened the claim",
+          "source": "verification/round-2.md section B; verification/round-3.md report 3"
+        }
+      ],
+      "conclusion": "No budget-replacement authority is required for the ordinary hand-off class.",
+      "ledger": "ordinary +1 relocation is covered by the normal replacement allowance; no ledger-local reason for additional overflow authority has been demonstrated.",
+      "noLedgerAuthority": "no ledger-local overflow authority has been demonstrated and none is proposed anywhere; proposed authorization kinds in the whole audit are only: critical_spread_cure, none",
+      "historicalRowIds": [
+        "five-relocation-handoff-overlap",
+        "ledger-relocation-handoff-overlap"
+      ],
+      "establishedBy": [
+        "round-1",
+        "round-2",
+        "round-3"
+      ],
+      "independentlyReMeasured": "round 1 (patched scratch copy of the grid), round 2 and round 3 (own regenerated receipts)"
+    },
+    {
+      "id": "chained-replace-is-a-membership-view-disagreement",
+      "statement": "On the real chain (real builder, real coordinator, durable replica_operations row, real guard): an ACTIVE prior target suppresses the second REPLACE; a SYNCING prior target permits it; with the budget present the resulting second promotion is admitted and with the budget at zero it is refused. This is associated with disagreement in membership views. It is NOT established as a legitimate concurrent-replacement authority class.",
+      "evidence": [
+        "producer-reachability/follow-up-unhealthy-source-replace/sql_transactions-p1",
+        "guard-state-drive/follow-up-unhealthy-source-replace/sql_transactions-p1"
+      ],
+      "producerFacts": {
+        "moveReason": "replace_replica",
+        "sourceNodeId": "node-a",
+        "operationReplicaId": "replace-replica-cd8f9e4fa15df4e3b6c26a896a91d22f",
+        "operationSourceNodeId": "node-a",
+        "chainedFollowUpMoveState": "move_created",
+        "priorTargetActiveSuppresses": true,
+        "activeVoterCountAtTheGuard": 4,
+        "grantedWithBudget": true,
+        "grantedWithBudgetForcedToZero": false
+      },
+      "guardFacts": {
+        "activeVoterCountAtTheGuard": 4,
+        "budgetAtTheGuard": 2,
+        "decidedWithBudget": true,
+        "decidedWithBudgetForcedToZero": false
+      },
+      "classification": "serialization-defect",
+      "rule": "Authorization never legalizes a state created by inconsistent observations. Where an extra overlap traces to two views disagreeing, the repair belongs on the owner/census boundary and the row stays still-unclassified.",
+      "witness": {
+        "file": "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js",
+        "test": "the priority-recovery relocation REPLACE is traced end to end and classified"
+      },
+      "witnessUntouched": "all three rounds diffed the measuring test against the inherited version: imports, constants, counters and appended emission only; no drive, state or assertion altered",
+      "establishedBy": [
+        "audit round 3",
+        "round-1",
+        "round-2",
+        "round-3"
+      ]
+    },
+    {
+      "id": "guard-admission-state-unreachable-partitions",
+      "structuralSubject": "guard-admission-state",
+      "statement": "For the partitions below the over-target guard admission state is unreachable over the stated exhaustive grid on the real guard. These are the results whose proposition really is structurally defined: subject, structured grid domain, partition, run-produced receipt.",
+      "partitions": [
+        "services-p1",
+        "nodes-p1",
+        "partitions-p1",
+        "message_groups-p1",
+        "tables-p1",
+        "config-p1",
+        "indices-p1",
+        "logs-p1",
+        "live_queries-p1",
+        "contexts-p1",
+        "code-p1",
+        "node_endpoints-p1",
+        "service_definitions-p1",
+        "service_bindings-p1",
+        "service_endpoints-p1",
+        "service_timers-p1",
+        "service_packages-p1",
+        "service_revisions-p1",
+        "service_installations-p1",
+        "service_install_failures-p1",
+        "module_manifests-p1",
+        "package_registry_mappings-p1",
+        "package_registry_overrides-p1",
+        "module_dependency_locks-p1",
+        "wasm_operations-p1",
+        "schema_migrations-p1",
+        "schema_migration_partitions-p1",
+        "debug_sessions-p1",
+        "debug_breakpoints-p1",
+        "debug_snapshots-p1",
+        "storage_reservations-p1",
+        "latency_groups-p1",
+        "inter_group_latencies-p1",
+        "service_partition_access-p1",
+        "call_cell_reduce_slots-p1",
+        "call_cell_reduce_results-p1",
+        "call_activation_leases-p1",
+        "artifact_payloads-p1",
+        "artifact_payload_chunks-p1"
+      ],
+      "partitionCount": 39,
+      "receiptKind": "guard-unreachability",
+      "receiptCount": 156,
+      "historicalRowIds": [
+        "owner-partition-services",
+        "owner-partition-nodes",
+        "owner-partition-partitions",
+        "owner-partition-message_groups",
+        "owner-partition-tables",
+        "owner-partition-config",
+        "remainder-non-priority-critical-partitions"
+      ],
+      "caveat": "round 3 showed that which PRODUCERS these rows declare is self-declared and was the lever of the item-4 attack; the proposition preserved here is about partitions and guard state only, not about producers",
+      "establishedBy": [
+        "round-1",
+        "round-2",
+        "round-3"
+      ]
+    },
+    {
+      "id": "minted-spread-cure-drive",
+      "statement": "The real over-target spread-cure ADD, driven from the real planner to the real guard on a mintable partition, carries the minted critical_spread_cure authorization and its promotion is granted with the budget and refused with the budget forced to zero. The expand-for-spread ADD carries no authorization field and is granted at target either way.",
+      "evidence": [
+        "producer-reachability/planner-over-target-spread-cure-add/sql_transactions-p1",
+        "producer-reachability/planner-priority-expand-for-spread-add/sql_transactions-p1"
+      ],
+      "mintedDriveFacts": {
+        "retainedSpreadCureAddCount": 1,
+        "authorizationIntent": "critical_spread_cure",
+        "observedVoterCount": 4,
+        "authorizedResultingVoterCount": 5,
+        "activeVoterCountAtTheGuard": 4,
+        "grantedWithBudget": true,
+        "grantedWithBudgetForcedToZero": false
+      },
+      "expandDriveFacts": {
+        "moveReason": "spread_replicas",
+        "carriesAuthorizationField": false,
+        "activeVoterCountAtTheGuard": 3,
+        "grantedWithBudget": true,
+        "grantedWithBudgetForcedToZero": true
+      },
+      "establishedBy": [
+        "round-1",
+        "round-2",
+        "round-3"
+      ]
+    },
+    {
+      "id": "run-produced-receipts",
+      "statement": "All receipts in receipts.json are produced by the measuring runs: counters incremented at the evaluation sites, producer and operation type taken at the drive call site, no matrix row id emitted; a fresh emission was byte/canonically identical to the store in every round; hand edits of the store fail the emission comparison.",
+      "receiptCount": 212,
+      "kinds": {
+        "arithmetic-admission-class": 20,
+        "budget-dependence": 12,
+        "budget-independence-differential": 12,
+        "guard-reachability": 6,
+        "guard-state-drive": 1,
+        "guard-unreachability": 156,
+        "producer-not-driven": 1,
+        "producer-reachability": 3,
+        "slice-provenance": 1
+      },
+      "limits": [
+        "real-chain receipts cover the one driven partition sql_transactions-p1",
+        "the producer-not-driven receipt is a census echo by nature and says so (dimension census)",
+        "receipts are measurements of partitions, slices and drives; nothing in them says which audit row they are about - that join was the unresolved defect"
+      ],
+      "establishedBy": [
+        "round-2",
+        "round-3"
+      ]
+    },
+    {
+      "id": "epoch-version-inventory-is-incomplete",
+      "statement": "This inventory does NOT close the epoch domain and claims no completeness. Its entries are grouped three ways, and the third group is open by construction.",
+      "accounting": {
+        "handRead": 44,
+        "ruleTemplate": 74,
+        "unknownNotTraced": 32,
+        "note": "The owner's decision 5 closes these traces BEFORE a canonical reader is selected. This quest only reports them truthfully; it does not close them, and gate item 5 says so."
+      },
+      "architecturalResult": {
+        "id": "the-epoch-domain-cannot-be-closed-by-a-spelling-census",
+        "result": "A census seeded on spelling and followed through data flow reaches a fixed point that still contains version-like values whose semantic relationship to the publication epoch is unknown. Closing them requires reading each owner, which is a separate quest and not a wider census.",
+        "consequence": "The inventory groups its entries three ways and claims no completeness; gate item 5 stays blocked.",
+        "evidence": [
+          "test/rebalancer/overflow-budget-add-like-producer-census.test.js:every production producer of an add-like operation is in the matrix",
+          "test/control-plane/membership-epoch-reader-divergence.test.js:the two epoch readers diverge on real owners over the stated row sets"
+        ]
+      },
+      "historicalFiles": [
+        "historical/membership-epoch-domain-inventory.json",
+        "historical/membership-epoch-domain-inventory.md"
+      ],
+      "establishedBy": [
+        "audit round 3",
+        "byte-identical to the inherited version in rounds 1-3"
+      ]
+    },
+    {
+      "id": "spread-recovery-semantic-has-split-ownership",
+      "statement": "ADD and REPLACE currently contain split ownership of the same spread-recovery semantic. The later owner-unification repair is justified because two modules decide the same semantic - not because the hand-off rows need replacement overflow authority.",
+      "finding": {
+        "id": "spread-recovery-decision-has-two-owners",
+        "label": "MEASURED",
+        "text": "The distinct-node spread condition is decided in TWO modules: the cure policy classifies it for ADD, and the priority-recovery follow-up decides it again for REPLACE. One semantic, two decision owners, and only the ADD path mints an authorization. The repair is one spread-recovery decision owner whose bounded authorization both mechanisms consume - not a second authority kind for the REPLACE."
+      },
+      "doesNotImply": "no-row-requires-authority",
+      "establishedBy": [
+        "audit round 3",
+        "round-1",
+        "round-2",
+        "round-3"
+      ]
+    },
+    {
+      "id": "no-second-replace-authority-kind-and-no-ledger-authority",
+      "statement": "No second authority kind for REPLACE and no ledger authority exist or are proposed.",
+      "proposedAuthorizationKindsInTheAudit": [
+        "critical_spread_cure",
+        "none"
+      ],
+      "repairGroups": [
+        "unify-spread-recovery-authority",
+        "resolve-membership-census-disagreement",
+        "establishing-publication-semantics",
+        "undeclared-row-cache-disagreement-semantics",
+        "initial-provisioning-semantics",
+        "guard-invisible-operation-state",
+        "operation-row-rematerialization",
+        "close-topology-publication-version-identity",
+        "authorization-identity-and-membership-ceiling"
+      ],
+      "establishedBy": [
+        "round-1",
+        "round-2",
+        "round-3"
+      ]
+    },
+    {
+      "id": "unminted-establishing-and-undeclared-row-cases-unresolved",
+      "statement": "The unminted cure cases in the ESTABLISHING window and with an undeclared partition row remain unresolved (still-unclassified). They are prose-identified rows; see proseIdentifiedRows.",
+      "historicalRowIds": [
+        "five-establishing-window-unminted-cure-add",
+        "five-undeclared-partition-row-unminted-cure-add"
+      ],
+      "establishedBy": [
+        "audit round 3"
+      ]
+    },
+    {
+      "id": "nine-gate-statuses-observed",
+      "statement": "The nine enforcement-entry-gate statuses as OBSERVATIONS of this audit version. They are not a frozen future gate contract: round 3 showed the contract selects on self-declared row fields and that items 2-4 list blocking findings without requiring them resolved.",
+      "statuses": [
+        {
+          "item": 1,
+          "text": "every current budget admission path is classified",
+          "status": "not-yet"
+        },
+        {
+          "item": 2,
+          "text": "every legitimate reachable path has an identified semantic owner",
+          "status": "not-yet"
+        },
+        {
+          "item": 3,
+          "text": "every such owner either already mints the required authority or has a precisely scoped repair quest to do so",
+          "status": "blocked-on-owner-decision"
+        },
+        {
+          "item": 4,
+          "text": "REPLACE semantics are classified",
+          "status": "not-yet"
+        },
+        {
+          "item": 5,
+          "text": "the complete epoch domain, including observedMembershipEpoch, is inventoried and has one canonical predicate",
+          "status": "blocked-on-owner-decision"
+        },
+        {
+          "item": 6,
+          "text": "the meaning of the authorized count is defined",
+          "status": "not-yet"
+        },
+        {
+          "item": 7,
+          "text": "authorization identity and type binding is settled",
+          "status": "not-yet"
+        },
+        {
+          "item": 8,
+          "text": "only honoured can grant",
+          "status": "not-yet"
+        },
+        {
+          "item": 9,
+          "text": "there is a falsifier for each authority boundary, not merely happy-path formation evidence",
+          "status": "not-yet"
+        }
+      ],
+      "derivationVerified": "each round re-derived all nine and found them equal to audit round 3; 71,213 and 76,041 single-path fuzz mutants produced 0 improvements; multi-field producer re-declaration DID improve item 4 (the architectural result)",
+      "inheritedWeaknesses": [
+        {
+          "id": "blocking-findings-are-listed-but-not-required",
+          "observation": "Gate items 2, 3 and 4 list blockingFindings in the contract but do not carry namedFindingsResolved in their requires, so those findings do not gate their items. Items 5 to 9 do carry it.",
+          "measuredBy": "verification round 1 (subagent:a2cec543087d69ef1)",
+          "status": "recorded, NOT repaired by this quest: the gate contract is inherited round-3 content and changing which requirements an item carries would change gate semantics this quest is not authorized to touch. It goes to the re-audit."
+        },
+        {
+          "id": "ledger-rows-are-witnessed-by-a-five-partition-drive",
+          "observation": "Two ledger rows pin a round-3 guard-reachability witness that drove sql_transactions-p1, a partition neither covers: ledger-relocation-handoff-overlap and ledger-relocation-census-disagreement-overlap. Both are declared in witnessDiscrepancies above. One of them, ledger-relocation-census-disagreement-overlap, also pins that same drive as its round-3 budgetDifferentialWitness, so its DEPENDENCE evidence was real-chain on another partition too; it now rests on the exhaustive grid measurement of replica_operations-p1. Three further ledger rows (ledger-expand-for-spread-add, ledger-relocation-handoff-overlap, ledger-relocation-census-disagreement-overlap) pin that drive as their producerReachable witness, but all three carry producerReachable=unproven, so nothing rests on it.",
+          "measuredBy": "verification round 1 (subagent:a2cec543087d69ef1)",
+          "status": "recorded, NOT repaired: adding a ledger real-chain drive could change the inherited producerReachable=unproven and is out of scope. Every inherited value is supported by the grid measurement of replica_operations-p1 on the real guard."
+        },
+        {
+          "id": "arithmetic-witness-measures-nothing-row-specific",
+          "rows": [
+            "five-paired-relocation-replace",
+            "ledger-paired-relocation-replace"
+          ],
+          "observation": "These rows pin a round-3 guard-reachability witness that measures the ARITHMETIC dimension (admission classes, no partition dimension), while the row itself claims no admission class. That witness therefore measures nothing specific to the row: it states nothing false, so it is not a witness discrepancy, but the arithmetic half of the evidence is vacuous for them and guardReachable=yes rests on the partition-dimension grid measurement of their partitions alone. Both rows are unknown_producer_not_driven.",
+          "measuredBy": "derived by the validator from the receipt dimensions and the rows admission classes; recorded after verification round 1",
+          "status": "recorded, NOT repaired by this quest: the pinned pointer is inherited round-3 content and the inherited value is supported by the grid. It goes to the re-audit."
+        }
+      ],
+      "establishedBy": [
+        "round-1",
+        "round-2",
+        "round-3"
+      ]
+    },
+    {
+      "id": "finding-resolution-and-external-artifacts-are-observed",
+      "statement": "No audit-metadata edit resolves a finding, makes an external artifact present, or demonstrates item 8: resolution and artifact satisfaction derive from observed sealed, approved, solved quest records; item 8 stayed not-yet under every edit tried.",
+      "establishedBy": [
+        "round-1",
+        "round-2",
+        "round-3"
+      ]
+    },
+    {
+      "id": "producer-identity-is-not-guard-visible",
+      "architecturalResult": {
+        "id": "producer-identity-is-not-guard-visible",
+        "result": "Which producer created an operation cannot be established from guard-visible state. The guard reads the membership, the partition row and the operation rows it owns; no producer identity is carried on any of them, and for the operation-not-visible class the guard's only input about the operation is its ABSENCE. A producer-backed reachability proof for such a row is therefore impossible from the guard and must come from the production owner instead.",
+        "consequence": "Those rows carry producerReachable unproven and stay still-unclassified. The distinction is NOT encoded into the matrix as a producer-differentiated admission class, because the guard cannot see it.",
+        "evidence": [
+          "test/partition/overflow-budget-unmintable-partitions.test.js:every unmintable admitted partition is audited on the real guard",
+          "test/rebalancer/overflow-budget-add-like-producer-census.test.js:every production producer of an add-like operation is in the matrix"
+        ]
+      },
+      "establishedBy": [
+        "audit round 3",
+        "round-1",
+        "round-2",
+        "round-3"
+      ]
+    },
+    {
+      "id": "lab-attribution-is-unrecoverable",
+      "statement": "Existing lab logs cannot recover producer attribution for the ledger and operation-less cases.",
+      "architecturalResult": {
+        "id": "lab-attribution-is-unrecoverable-for-the-released-nodes",
+        "result": "The 2026-09-19 lab lines cannot be attributed to a producer. The logs carry no operation or producer id correlation, no uniquely attributable payload and no owner-naming trace, two producers can emit the observed transition, and the nodes have been released. No amount of re-reading those files can close it.",
+        "consequence": "Every lab entry in this matrix reads the unattributed sentence and upgrades nothing. A future lab run that logs the producing owner would settle it.",
+        "evidence": [
+          "test/rebalancer/overflow-budget-unhealthy-source-replace.test.js:the priority-recovery relocation REPLACE is traced end to end and classified"
+        ]
+      },
+      "establishedBy": [
+        "audit round 3",
+        "round-1",
+        "round-2",
+        "round-3"
+      ]
+    }
+  ],
+  "knownUnrepairedDefectsInTheHistoricalMaterial": [
+    "historical/overflow-budget-decision-matrix.md prints a literal null twice in the slice-predicate lines (it means unrestricted); the renderer placeholder guard is opt-in",
+    "item 3's inherited note \"Every other authority-required row carries a repair GROUP\" is vacuous after D3 (one such row)",
+    "the two D3 rows still sit in repair group unify-spread-recovery-authority, whose proposal text speaks of the follow-up REPLACE consuming an authorization",
+    "measuring tests carry row-id-keyed snapshot assertions acting as an unacknowledged second pin",
+    "left unrepaired by owner decision so the rejected tree stays unchanged"
+  ]
+}

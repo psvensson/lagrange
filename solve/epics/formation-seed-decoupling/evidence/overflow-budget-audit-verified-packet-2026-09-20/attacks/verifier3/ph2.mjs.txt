@@ -1,0 +1,2 @@
+import {attack} from './h.mjs';
+attack('PH-correction-field-deleted',d=>{delete d.matrix.correctionToRound3.selectionMinimumBefore; delete d.matrix.correctionToRound3.witnessDiscrepancies[0].because; delete d.matrix.correctionToRound3.inheritedWeaknesses[0].status;});

@@ -1,0 +1,50 @@
+// verifier harness: fixture trees under scratch; subject is only read.
+import fs from 'node:fs'; import path from 'node:path'; import {execFileSync} from 'node:child_process';
+export const S='/mnt/data/peter/projects/lagrange/.claude/worktrees/audit-evidence-binding';
+export const V='/tmp/claude-1000/-mnt-data-peter-projects-lagrange/eec76931-4041-4700-81cb-660d8de0790d/scratchpad/verifier';
+process.chdir(S);
+const sup=await import(S+'/test/rebalancer/overflow-budget-evidence-support.js');
+const ren=await import(S+'/test/rebalancer/overflow-budget-audit-render.js');
+export {sup,ren};
+const EPIC='solve/epics/formation-seed-decoupling';
+export const MJ=EPIC+'/overflow-budget-decision-matrix.json', SJ=EPIC+'/overflow-budget-evidence-receipts.json';
+export const readM=()=>JSON.parse(fs.readFileSync(path.join(S,MJ),'utf8'));
+export const readS=()=>JSON.parse(fs.readFileSync(path.join(S,SJ),'utf8'));
+export function fixture(name,matrix,store,extra={},{rederive=true,links=['src','test','node_modules','package.json']}={}){
+  const dir=path.join(V,'fx',name); fs.rmSync(dir,{recursive:true,force:true}); fs.mkdirSync(path.join(dir,EPIC),{recursive:true});
+  for(const l of links) fs.symlinkSync(path.join(S,l),path.join(dir,l));
+  if(rederive){ const cwd=process.cwd(); process.chdir(dir);
+    // write extras first so derivation observes fixture root
+    for(const [r,c] of Object.entries(extra)){const t=path.join(dir,r);fs.mkdirSync(path.dirname(t),{recursive:true});fs.writeFileSync(t,c);}
+    for(const e of matrix.gate){e.rows=ren.selectGateRows(matrix,e.item).map(r=>r.id);e.openFindings=ren.openGateFindings(matrix,e.item);e.whatIsMissing=ren.unmetGateRequirements(matrix,e);e.status=ren.deriveGateStatus(matrix,e);}
+    fs.writeFileSync(path.join(dir,EPIC,'overflow-budget-decision-matrix.md'),ren.renderDecisionMatrixMarkdown(matrix));
+    fs.writeFileSync(path.join(dir,EPIC,'enforcement-entry-gate.md'),ren.renderEnforcementGateMarkdown(matrix));
+    process.chdir(cwd);
+  } else {
+    for(const [r,c] of Object.entries(extra)){const t=path.join(dir,r);fs.mkdirSync(path.dirname(t),{recursive:true});fs.writeFileSync(t,c);}
+    for(const f of ['overflow-budget-decision-matrix.md','enforcement-entry-gate.md']) fs.copyFileSync(path.join(S,EPIC,f),path.join(dir,EPIC,f));
+  }
+  fs.writeFileSync(path.join(dir,MJ),JSON.stringify(matrix,null,2)+'\n');
+  fs.writeFileSync(path.join(dir,SJ),JSON.stringify(store,null,2)+'\n');
+  for(const f of ['membership-epoch-domain-inventory.json','membership-epoch-domain-inventory.md']) fs.copyFileSync(path.join(S,EPIC,f),path.join(dir,EPIC,f));
+  return dir;
+}
+export function run(dir,file,pattern,env={}){
+  const e={...process.env,...env}; delete e.NODE_TEST_CONTEXT;
+  const args=['--test-reporter=tap']; if(pattern) args.push('--test-name-pattern='+pattern); args.push(path.join(dir,file));
+  let out; try{ out=execFileSync(process.execPath,args,{cwd:dir,encoding:'utf8',env:e,timeout:280000,maxBuffer:64*1024*1024}); }catch(err){ out=String(err.stdout||'')+String(err.stderr||''); }
+  const pass=/^# fail 0$/m.test(out)&&!/^# pass 0$/m.test(out);
+  const msgs=[...out.matchAll(/^\s+(?:error|message): [|>-]*\s*\n?\s*['"]?(.+)$/gm)].map(m=>m[1]).slice(0,3);
+  const err=(out.match(/error: \|-\n\s+(.+(?:\n\s+.+){0,3})/)||out.match(/error: '?(.+)/)||[])[1];
+  return {pass,err:err?err.replace(/\s+/g,' ').slice(0,420):null,out};
+}
+export const VAL='test/rebalancer/overflow-budget-matrix-validator.test.js';
+export const VALP='^the matrix, the inventory and the gate are complete and in sync$';
+export function attack(name,mut,opts={}){
+  const d={matrix:readM(),store:readS(),extra:{}}; mut(d);
+  const dir=fixture(name,d.matrix,d.store,d.extra,opts);
+  const r=run(dir,VAL,VALP);
+  const st=JSON.parse(fs.readFileSync(path.join(dir,MJ),'utf8')).gate.map(g=>g.item+':'+g.status).join(' ');
+  console.log(`\n[${name}] validator ${r.pass?'GREEN (attack not refused)':'RED'}${r.err?' :: '+r.err:''}\n   gate: ${st}`);
+  return {dir,r};
+}
