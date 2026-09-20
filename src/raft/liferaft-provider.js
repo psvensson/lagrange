@@ -1,5 +1,8 @@
 import LifeRaft from './liferaft.js';
 import {
+  RAFT_COMMIT_APPLY_ROLLBACK_EVENT,
+} from './liferaft-commit-scheduler.js';
+import {
   RAFT_PARTITION_NODE_REQUEST,
 } from './raft-provider-contract-constants.js';
 
@@ -205,7 +208,7 @@ class LiferaftProvider {
       }
     }
 
-    return new PartitionGroupRaftNode(
+    const node = new PartitionGroupRaftNode(
       request[RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS],
       {
         [LIFERAFT_NODE_OPTION.HEARTBEAT]: timing.heartbeatMs,
@@ -218,6 +221,14 @@ class LiferaftProvider {
         ...request[RAFT_PARTITION_NODE_REQUEST.SUBSTRATE],
       },
     );
+    // liferaft says an apply transaction rolled back with an event of its
+    // own. The group is told the fact, not the name: the event stays inside
+    // the backend that emits it.
+    node.on(
+      RAFT_COMMIT_APPLY_ROLLBACK_EVENT,
+      request[RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
+    );
+    return node;
   }
 
   /**

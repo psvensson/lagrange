@@ -447,6 +447,11 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
           this.applyCommittedEntry(command, effects);
           this.storage.recordAppliedAdvance();
         },
+      // The apply transaction did not commit, so the cached applied
+      // watermark may be ahead of the store. Re-read it from the store.
+      [RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK]: () => {
+        this.storage.refreshAppliedWatermarkCacheFromStore();
+      },
       [RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: (decision) => {
         if (typeof this.onSnapshotCatchupNeeded ===
             PARTITION_SERVICE_TYPE.FUNCTION) {

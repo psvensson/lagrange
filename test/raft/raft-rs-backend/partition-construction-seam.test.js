@@ -14,7 +14,10 @@
 // agree with.
 
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {test} from 'node:test';
+import {fileURLToPath} from 'node:url';
 
 import {
   PartitionService,
@@ -30,6 +33,12 @@ import {
   RAFT_PARTITION_NODE_REQUEST,
   RAFT_PROVIDER_CONTRACT_METHOD,
 } from '../../../src/raft/raft-provider-contract-constants.js';
+import {
+  RAFT_COMMIT_APPLY_ROLLBACK_EVENT,
+} from '../../../src/raft/liferaft-commit-scheduler.js';
+
+const REPOSITORY_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 const PARTITION_ID = 'seam-partition';
 const TABLE_ID = 'seam-table';
@@ -37,6 +46,40 @@ const TABLE_NAME = 'seam_table';
 const REPLICA_ID = 'replica-seam-1';
 const NODE_ID = 'node-seam-1';
 const MEMORY_DB = ':memory:';
+
+// Timers long enough that nothing campaigns inside a unit test.
+const STANDALONE_TIMING = Object.freeze({
+  heartbeatMs: 30000,
+  electionMinMs: 30000,
+  electionMaxMs: 60000,
+});
+
+// One group's request, with only the field under test varied. The durable log
+// answers what liferaft asks of a log while a node is built and closed; no
+// expectation is read from it.
+function minimalPartitionRequest(overrides) {
+  return {
+    [RAFT_PARTITION_NODE_REQUEST.GROUP_ID]: PARTITION_ID,
+    [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: REPLICA_ID,
+    [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: REPLICA_ID,
+    [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: [REPLICA_ID],
+    [RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG]: {
+      end() {
+        return undefined;
+      },
+    },
+    [RAFT_PARTITION_NODE_REQUEST.TIMING]: STANDALONE_TIMING,
+    [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]: {},
+    [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: true,
+    [RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER]: () => Promise.resolve(),
+    [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: (address) => address,
+    [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
+    [RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
+    [RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK]: () =>
+      undefined,
+    ...overrides,
+  };
+}
 
 // A provider that is the real liferaft provider in every respect, and also
 // records what the partition service asked it for. It is not a double: every
@@ -163,6 +206,71 @@ test('with the default backend the node is the liferaft node it was before',
       await service.shutdown();
     }
   });
+
+// Addendum §2: the liferaft-internal commit-rollback event is not emulated to
+// make raft-rs look compatible. The semantic fact the partition consumes from
+// it is "the apply transaction did not commit, so cached applied progress is
+// unreliable and must be re-read from the durable store" - a real partition
+// requirement under any backend. What crosses the boundary is that fact; the
+// event name stays inside the backend that emits it.
+test('the apply-rollback contract is a semantic fact, not a liferaft event ' +
+  'name, and the partition service never names the event',
+async () => {
+  const wiring = fs.readFileSync(path.join(
+    REPOSITORY_ROOT,
+    'src/partition/partition-service-raft-lifecycle-wiring.js'), 'utf8');
+  // The event's own producer is the oracle for its name.
+  assert.ok(RAFT_COMMIT_APPLY_ROLLBACK_EVENT.length > 0);
+  assert.ok(!wiring.includes(RAFT_COMMIT_APPLY_ROLLBACK_EVENT),
+    'the partition lifecycle wiring must not name a liferaft-internal event');
+  assert.ok(!wiring.includes('liferaft-commit-scheduler'),
+    'nor import the module that emits it');
+  // A control on the search: the liferaft backend, which does own the event,
+  // still names it.
+  assert.ok(fs.readFileSync(path.join(
+    REPOSITORY_ROOT, 'src/raft/liferaft-provider.js'), 'utf8')
+    .includes('liferaft-commit-scheduler'),
+  'the backend that emits the event is the one that knows its name');
+  // Behavioural: the backend turns its own event into the neutral fact.
+  const observed = [];
+  const node = new LiferaftProvider().createPartitionNode(
+    minimalPartitionRequest({
+      [RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK]: () =>
+        observed.push(true),
+    }));
+  try {
+    node.emit(RAFT_COMMIT_APPLY_ROLLBACK_EVENT, new Error('apply failed'));
+    assert.deepEqual(observed, [true],
+      'the group learns its apply transaction rolled back without learning ' +
+      'how this backend said so');
+  } finally {
+    node.end();
+  }
+});
+
+test('a partition service re-reads its applied watermark when the backend ' +
+  'reports a rolled-back apply transaction',
+async () => {
+  const provider = new RecordingLiferaftProvider();
+  const service = buildPartition(provider);
+  try {
+    await service.initialize();
+    const refreshed = [];
+    const original =
+      service.storage.refreshAppliedWatermarkCacheFromStore.bind(
+        service.storage);
+    service.storage.refreshAppliedWatermarkCacheFromStore = () => {
+      refreshed.push(true);
+      return original();
+    };
+    service.raft.emit(
+      RAFT_COMMIT_APPLY_ROLLBACK_EVENT, new Error('apply failed'));
+    assert.deepEqual(refreshed, [true],
+      'the cached applied watermark is re-read from the durable store');
+  } finally {
+    await service.shutdown();
+  }
+});
 
 test('the experimental backend refuses partition construction by name rather ' +
   'than building a liferaft node',

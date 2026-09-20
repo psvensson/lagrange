@@ -32,6 +32,13 @@ const RAFT_PARTITION_NODE_REQUEST = Object.freeze({
   RESOLVE_PEER_ADDRESS: 'resolvePeerAddress',
   APPLY_COMMITTED_ENTRY: 'applyCommittedEntry',
   SNAPSHOT_CATCHUP_NEEDED: 'snapshotCatchupNeeded',
+  // The semantic fact behind liferaft's own commit-rollback event: a durable
+  // apply transaction did NOT commit, so any cached applied progress is
+  // unreliable and must be re-read from the durable store. Every backend can
+  // fail an apply transaction, so this is a partition requirement rather
+  // than a liferaft detail - and it is the fact that crosses, never the
+  // event name.
+  APPLY_TRANSACTION_ROLLED_BACK: 'applyTransactionRolledBack',
 });
 
 const RAFT_PROVIDER_CONTRACT = Object.freeze({
