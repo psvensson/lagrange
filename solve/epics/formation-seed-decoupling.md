@@ -83,6 +83,7 @@ authorizes:
   - scripts/check-complexity.js
   - scripts/quest-evidence/critical-spread-overflow-budget-audit.js
   - scripts/quest-evidence/overflow-budget-audit-evidence-binding.js
+  - scripts/quest-evidence/replica-membership-model-reduction.js
   - scripts/quest-evidence/readiness-admission-transitions-observed.js
   - scripts/quest-evidence/readiness-routing-denial-cause-carried.js
   - test/rebalancer
@@ -988,6 +989,37 @@ The guard never reconstructs why an operation ought to be legal.
   author enforcement; (10) certification.
 - Owner repairs and enforcement stay closed. The membership ceiling is a
   hypothesis to test against explicit identities and roles, not a goal.
+
+## Binding direction: replica-membership model reduction (owner, 2026-09-20)
+
+[binding-direction-replica-membership-model-reduction-2026-09-20.md](formation-seed-decoupling/binding-direction-replica-membership-model-reduction-2026-09-20.md).
+**Binding, and it supersedes every earlier order of work in this epic** - the
+step list and the transition-identity candidate in the section above included.
+- The objective is complexity reduction: fewer semantic concepts and fewer
+  decision owners, not reorganized ones. Before any new durable concept, try
+  the existing partition policy, committed Raft membership, placement
+  observations and durable replica-operation machinery.
+- The minimal model (Model A): `PartitionPolicy` + `PlacementObservations` +
+  `CommittedMembership` + zero-or-one unresolved `ReplicaOperation` per
+  partition, the operation itself carrying the control-plane authority, fenced
+  by the committed-membership generation it was planned against.
+- Not presumed: a separate MembershipTransition abstraction; a membership
+  ceiling; separate ADD/REPLACE authority kinds; a permanent authorization
+  object. One owner of partition replica-membership changes. Placement
+  observations are inputs, never membership authority. Committed consensus
+  membership stays distinct from planner intent. The existing audit is forensic
+  evidence, not the future semantic model; its 27-row matrix is not frozen.
+- Implementation first attempts to FALSIFY the minimal model: the read-only
+  quest `replica-membership-model-reduction` (four buckets - KEEP, DERIVE, FOLD
+  INTO EXISTING OWNER, DELETE CANDIDATE; eighteen production-shaped hard cases;
+  the one-operation invariant against the chained-REPLACE case). Model B only on
+  a recorded falsifier.
+- Then, if Model A survives: A ownership, B operation serialization, C
+  membership generation, D operation fence, E remove compatibility authority
+  (deletion is an acceptance criterion), F generated protocol tests. Every
+  implementation quest carries a complexity ledger.
+- Stop conditions are listed in the document; on any of them, bring back the
+  falsifier and the smallest additional concept, never Model B directly.
 
 ## Simulator frozen (2026-09-19)
 
