@@ -1,0 +1,9 @@
+import * as S from './core-scenarios.js';
+const skip=new Set(['runDeterminismProof','runMultiRaftCost']);
+for (const [name,fn] of Object.entries(S)) { if(typeof fn!=='function'||skip.has(name))continue; globalThis.__scen=name;
+  const args = name==='runJointReplacement'? [[2],[0]] : name==='runJointReplacementWithFailure'? [['incoming'],['outgoing']] : [[]];
+  for(const a of args){ try{ fn(...a);}catch(e){console.log('THREW',name,String(e.message).slice(0,150));} } }
+const r=globalThis.__refusals||[], s=globalThis.__steprej||[];
+const agg=(xs,k)=>{const m={};for(const x of xs){const key=k(x);m[key]=(m[key]||0)+1;}return m;};
+console.log('REFUSALS',r.length, JSON.stringify(agg(r,x=>x.scen+' | '+x.error),null,1));
+console.log('STEPREJ',s.length, JSON.stringify(agg(s,x=>x.scen+' | t'+x.t+' | '+x.reason),null,1));

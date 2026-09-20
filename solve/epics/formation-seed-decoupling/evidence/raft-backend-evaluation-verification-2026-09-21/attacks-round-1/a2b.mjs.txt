@@ -1,0 +1,15 @@
+import {RESTART_BOUNDARY, createDeterministicCluster, confChangeV2, CONF_CHANGE_TYPE} from './forked-core-harness.js';
+const enc=(s)=>new TextEncoder().encode(s);
+for (const b of [RESTART_BOUNDARY.COMMITTED_NOT_APPLIED, RESTART_BOUNDARY.CONF_STATE_RECORDED_NOT_ADVANCED]) {
+  const c = createDeterministicCluster({voters:['1','2','3'],learners:['4']});
+  c.core.campaign(c.handleOf('1')); c.settle(400);
+  c.stopAt('2',b);
+  c.core.propose(c.handleOf('1'), enc('n1'));
+  c.core.propose_conf_change_v2(c.handleOf('1'), confChangeV2([{type:CONF_CHANGE_TYPE.ADD_NODE,nodeId:'4'}]));
+  c.settle(400);
+  const rec=c.durableRecordOf('2');
+  console.log(b,'durable applied',rec.appliedIndex,'durable commit',rec.hardState.commit,'last',rec.entries.at(-1).index);
+  c.crash('2');
+  try { c.restart('2'); console.log('  restart OK; status', JSON.stringify(c.core.status(c.handleOf('2')))); }
+  catch(e){ console.log('  RESTART FAILED:', String(e.message||e).slice(0,300)); }
+}

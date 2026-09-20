@@ -1,0 +1,20 @@
+import {createDeterministicCluster, loadForkedCore} from './forked-core-harness.js';
+const core = loadForkedCore();
+const other = createDeterministicCluster({voters:['1','2','3']});
+other.core.campaign(other.handleOf('1')); other.settle(400);
+console.log('other group leader before panic:', other.leaderId(), 'handles', core.handle_count());
+// provoke a core panic in an unrelated handle: applied ahead of commit
+try {
+  core.create_node({id:'9',peers:['9'],learners:[],electionTick:10,heartbeatTick:3,applied:'5',
+    bootstrap:{hardState:{term:'1',vote:'0',commit:'1'},entries:[],confState:{voters:['9'],learners:[],votersOutgoing:[],learnersNext:[],autoLeave:false}}});
+  console.log('no panic');
+} catch(e){ console.log('panic surfaced as:', String(e.message||e)); }
+// is the shared runtime still usable for the other group?
+try {
+  other.core.propose(other.handleOf('1'), new TextEncoder().encode('after'));
+  other.settle(400); other.tick(3); other.settle(400);
+  console.log('other group after panic: commit', other.core.status(other.handleOf('1')).commit, 'handles', core.handle_count());
+  const again = createDeterministicCluster({voters:['1','2','3']});
+  again.core.campaign(again.handleOf('1')); again.settle(400);
+  console.log('new group after panic leader:', again.leaderId());
+} catch(e){ console.log('RUNTIME UNUSABLE AFTER PANIC:', String(e.message||e).slice(0,200)); }

@@ -1,0 +1,39 @@
+import {createDeterministicCluster, confChangeV2, CONF_CHANGE_TYPE as T, loadForkedCore} from './forked-core-harness.js';
+const J=JSON.stringify;
+const cs=(c,id)=>{const s=c.core.conf_state(c.handleOf(id));return J({v:s.voters,l:s.learners,o:s.votersOutgoing});};
+function mk(){const c=createDeterministicCluster({voters:['1','2','3'],learners:['4']});c.core.campaign(c.handleOf('1'));c.settle(400);return c;}
+const tryp=(c,id,ch)=>{try{c.core.propose_conf_change_v2(c.handleOf(id),ch);return 'ok';}catch(e){return 'threw: '+String(e.message||e);}};
+// 9a: second while first pending
+{ const c=mk(); const r1=tryp(c,'1',confChangeV2([{type:T.ADD_NODE,nodeId:'4'}])); const r2=tryp(c,'1',confChangeV2([{type:T.REMOVE_NODE,nodeId:'2'}]));
+  const ap=c.settle(400).filter(e=>e.peerId==='1'); console.log('9a first',r1,'second',r2,'leader committed types',J(ap.map(e=>[e.index,Number(e.entryType),e.data?'data':'empty'])),'conf',cs(c,'1'),'pendingConfIndex',c.core.status(c.handleOf('1')).pendingConfIndex);
+  c.tick(40); c.settle(400); console.log('   after 40 more ticks conf',cs(c,'1')); }
+// 9b: second AFTER the first is applied on the leader but before pendingConfIndex "clears"
+{ const c=mk(); tryp(c,'1',confChangeV2([{type:T.ADD_NODE,nodeId:'4'}])); c.settle(400);
+  const st=c.core.status(c.handleOf('1')); console.log('9b after first applied: applied',st.applied,'pendingConfIndex',st.pendingConfIndex);
+  const r2=tryp(c,'1',confChangeV2([{type:T.REMOVE_NODE,nodeId:'2'}])); const ap=c.settle(400).filter(e=>e.peerId==='1');
+  console.log('   second',r2,'types',J(ap.map(e=>[e.index,Number(e.entryType)])),'conf',cs(c,'1')); }
+// 9c: proposed on a FOLLOWER
+{ const c=mk(); const r=tryp(c,'2',confChangeV2([{type:T.ADD_NODE,nodeId:'4'}])); const ap=c.settle(400);
+  console.log('9c follower proposal returned',r,'-> applied entries',J(ap.filter(e=>e.peerId==='1').map(e=>[e.index,Number(e.entryType)])),'conf on leader',cs(c,'1'),'on follower',cs(c,'2'));
+  // follower proposes a second while the forwarded first is pending
+  const c2=mk(); tryp(c2,'2',confChangeV2([{type:T.ADD_NODE,nodeId:'4'}])); const r2=tryp(c2,'3',confChangeV2([{type:T.REMOVE_NODE,nodeId:'2'}])); const ap2=c2.settle(400).filter(e=>e.peerId==='1');
+  console.log('   two followers each forward one: second returned',r2,'leader types',J(ap2.map(e=>[e.index,Number(e.entryType),e.data?'data':'empty'])),'conf',cs(c2,'1')); }
+// 9d: follower proposal with no leader known
+{ const c=createDeterministicCluster({voters:['1','2','3']}); console.log('9d no leader:', tryp(c,'2',confChangeV2([{type:T.ADD_NODE,nodeId:'4'}]))); }
+// 7: reuse a removed id at the core
+{ const c=mk(); tryp(c,'1',confChangeV2([{type:T.REMOVE_NODE,nodeId:'3'}])); c.settle(400); console.log('7 after remove 3:',cs(c,'1'));
+  // the old peer 3 is still alive with its old log; now "add id 3" meaning a DIFFERENT replica: a fresh empty node also called 3
+  const r=tryp(c,'1',confChangeV2([{type:T.ADD_NODE,nodeId:'3'}])); c.settle(400); c.tick(10); c.settle(400);
+  console.log('  re-add id 3 returned',r,'conf',cs(c,'1'),'-> the core accepted the same id again; old replica 3 (old log) is now a voter again: conf on 3',cs(c,'3'),'stepRejections',c.stepRejections.length);
+  // Replace the process behind id 3 by a brand new empty replica (different identity, same id)
+  c.crash('3'); const core=c.core; const p=c.peers.get('3'); p.record={hardState:null,confState:{voters:['1','2','3'],learners:['4'],votersOutgoing:[],learnersNext:[],autoLeave:false},entries:[],snapshot:null,appliedIndex:'0',writeLog:[]};
+  try { c.restart('3'); core.propose(c.handleOf('1'), new TextEncoder().encode('x')); c.settle(400); c.tick(10); c.settle(400);
+    const s1=core.status(c.handleOf('1')); console.log('  impostor with empty log under id 3: leader progress', J(s1.progress), 'impostor status', J(core.status(c.handleOf('3'))).slice(0,120)); }
+  catch(e){ console.log('  impostor result:', String(e.message||e)); } }
+// G: ids above 2^53 through a conf change
+{ const big=['18446744073709551615','9007199254740993','9007199254740992']; const c=createDeterministicCluster({voters:big}); c.core.campaign(c.handleOf(big[0])); c.settle(400);
+  const D='18446744073709551614'; console.log('G leader',c.leaderId(), tryp(c,c.leaderId(),confChangeV2([{type:T.ADD_LEARNER_NODE,nodeId:D}]))); const ap=c.settle(400);
+  const st=c.core.status(c.handleOf(c.leaderId())); console.log('  conf',cs(c,big[1]),'progress ids',J(st.progress.map(p=>p.id)),'vote',st.vote,'lead',st.lead,'typeof pendingConfIndex',typeof st.pendingConfIndex);
+  const e=ap.find(x=>x.confState); console.log('  decoded change',J(e.change)); 
+  const hs=c.durableRecordOf(big[1]).hardState; console.log('  durable hardState',J(hs)); 
+  try { c.core.propose_conf_change_v2(c.handleOf(c.leaderId()),{transition:0,changes:[{changeType:0,nodeId:9007199254740993}]}); console.log('  JS number id ACCEPTED'); } catch(e){ console.log('  JS number id refused:',String(e.message||e).slice(0,100)); } }

@@ -1,0 +1,22 @@
+import {RESTART_BOUNDARY, createDeterministicCluster, confChangeV2, CONF_CHANGE_TYPE} from './forked-core-harness.js';
+const enc=(s)=>new TextEncoder().encode(s);
+for (const role of ['follower','leader']) for (const b of Object.values(RESTART_BOUNDARY).slice(0,6)) {
+  const c = createDeterministicCluster({voters:['1','2','3'],learners:['4']});
+  c.core.campaign(c.handleOf('1')); c.settle(400);
+  const leader=c.leaderId(); const victim = role==='leader'?leader:'2';
+  c.stopAt(victim,b);
+  // normal, conf, normal in one batch
+  c.core.propose(c.handleOf(leader), enc('n1'));
+  c.core.propose_conf_change_v2(c.handleOf(leader), confChangeV2([{type:CONF_CHANGE_TYPE.ADD_NODE,nodeId:'4'}]));
+  c.core.propose(c.handleOf(leader), enc('n2'));
+  c.settle(400);
+  const rec=c.durableRecordOf(victim);
+  console.log(role,b,'stoppedAt',c.stoppedAt(victim),'entry',c.stoppedAtEntryIndex(victim),'durable idx',rec.entries.map(e=>e.index+':'+e.entryType).join(' '),'applied',rec.appliedIndex,'commit',rec.hardState?.commit,'voters',rec.confState.voters.join());
+  // armed stop with a Ready lacking the entry: arm, propose only normal
+  c.free();
+}
+const c = createDeterministicCluster({voters:['1','2','3']});
+c.core.campaign(c.handleOf('1')); c.settle(400);
+c.stopAt('2', RESTART_BOUNDARY.PERSISTED_NOT_COMMITTED);
+for (let i=0;i<5;i++){ c.core.propose(c.handleOf('1'), enc('x'+i)); c.settle(400); c.tick(3); c.settle(400);}
+console.log('armed, normal-only traffic: stoppedAt =', c.stoppedAt('2'), 'durable last', c.durableRecordOf('2').entries.at(-1).index);

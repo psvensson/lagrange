@@ -1,0 +1,17 @@
+import {runRestartBoundary, boundaryMatrixSpecs} from './core-scenarios.js';
+const C={
+ 'add-voter':(r)=>{r.confState={...r.confState,voters:[...r.confState.voters,'9']};},
+ 'drop-voter':(r)=>{r.confState={...r.confState,voters:r.confState.voters.slice(1)};},
+ 'learner->voter':(r)=>{const l=[...(r.confState.learners||[])]; if(!l.length)return; r.confState={...r.confState,voters:[...r.confState.voters,l[0]],learners:l.slice(1)};},
+};
+const MISSED=/^(joint-entered|joint-leave-entry-durable-not-applied|lightready-phase-apply)/;
+for(const [name,fn] of Object.entries(C)) for(const spec of boundaryMatrixSpecs().filter(s=>s.batch==='mixed'&&MISSED.test(s.boundary))){
+  globalThis.__corrupt=null; const honest=runRestartBoundary(spec.boundary,spec.role,spec.batch,spec.options);
+  globalThis.__corrupt=fn; const rec=runRestartBoundary(spec.boundary,spec.role,spec.batch,spec.options);
+  const full=(c)=>`${c.voters}|${c.votersOutgoing}|${c.learners}`;
+  const restored=full(rec.localRestoreCorrectness.restoredConfState), honestRestored=full(honest.localRestoreCorrectness.restoredConfState);
+  const pre=full(rec.facts.inMemoryConfStateFull);
+  const surv=String(rec.survivorVotersAfterCrash);
+  console.log(name.padEnd(15),(spec.boundary+'/'+spec.role+(spec.options.label?'/'+spec.options.label:'')).padEnd(62),'restored',restored.padEnd(22),'honest',honestRestored.padEnd(20),'preCrashCore',pre.padEnd(20),'survivors',surv.padEnd(8),
+   '| preCrashOracle:', restored!==pre?'CATCHES':'-', ' honestPre==honestRestored:',honestRestored===full(honest.facts.inMemoryConfStateFull), ' survivorOracle(ungated):', rec.localRestoreCorrectness.restoredConfState.voters.join()!==surv?'CATCHES':'-', 'honest-surv-equal:', honest.localRestoreCorrectness.restoredConfState.voters.join()===String(honest.survivorVotersAfterCrash));
+}

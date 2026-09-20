@@ -1,0 +1,5 @@
+import {createDeterministicCluster} from './forked-core-harness.js';
+// give every peer a different cache and mutate mid-scenario; with the leak, membership follows the cache on restart
+const c=createDeterministicCluster({voters:['1','2','3']}); c.core.campaign(c.handleOf('1')); c.settle(400);
+globalThis.__rows={'2':['1','2','9']}; c.crash('2'); c.restart('2');
+console.log('leaky harness: restarted peer 2 reports', JSON.stringify(c.core.conf_state(c.handleOf('2')).voters), '(cache-driven) while invariants test stayed green above');

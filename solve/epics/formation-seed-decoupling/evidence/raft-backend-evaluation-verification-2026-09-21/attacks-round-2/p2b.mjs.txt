@@ -1,0 +1,41 @@
+import {createDeterministicCluster, confChangeV2} from './forked-core-harness.js';
+const enc=(s)=>Buffer.from(s,'utf8');
+function group(){ const c=createDeterministicCluster({voters:['1','2','3'],learners:['4']}); c.core.campaign(c.handleOf('1')); c.settle(400); const h=c.handleOf('1'); for(const x of 'abc'){c.core.propose(h,enc(x));} c.settle(400); return c; }
+const ent=(i,t,ty=0)=>({term:String(t),index:String(i),entryType:ty,data:Buffer.from('x').toString('base64')});
+const cs=(v)=>({voters:v,learners:[],votersOutgoing:[],learnersNext:[],autoLeave:false});
+const M={
+ 'heartbeat commit beyond last (known)':['2',{from:'1',to:'2',term:'1',msgType:8,commit:'99'}],
+ 'heartbeat commit beyond last from NON-leader peer 3':['2',{from:'3',to:'2',term:'1',msgType:8,commit:'99'}],
+ 'heartbeat commit beyond last, higher term, from unknown peer 77':['2',{from:'77',to:'2',term:'9',msgType:8,commit:'99'}],
+ 'heartbeat commit beyond last, to != self':['2',{from:'1',to:'3',term:'1',msgType:8,commit:'99'}],
+ 'append with a gap (index 50)':['2',{from:'1',to:'2',term:'1',logTerm:'1',index:'50',msgType:3,entries:[ent(51,1)],commit:'4'}],
+ 'append conflicting with a COMMITTED entry (term 5 at index 2)':['2',{from:'1',to:'2',term:'5',logTerm:'1',index:'1',msgType:3,entries:[ent(2,5)],commit:'1'}],
+ 'append commit beyond the entries it carries':['2',{from:'1',to:'2',term:'1',logTerm:'1',index:'4',msgType:3,entries:[],commit:'99'}],
+ 'append with term regression (term 0)':['2',{from:'1',to:'2',term:'0',logTerm:'0',index:'0',msgType:3,entries:[],commit:'0'}],
+ 'append entries non-contiguous':['2',{from:'1',to:'2',term:'1',logTerm:'1',index:'4',msgType:3,entries:[ent(5,1),ent(9,1)],commit:'4'}],
+ 'snapshot with index 0 metadata':['2',{from:'1',to:'2',term:'1',msgType:7,snapshot:{metadata:{index:'0',term:'0',confState:cs(['1','2','3'])}}}],
+ 'snapshot ahead (index 100) with EMPTY conf state':['2',{from:'1',to:'2',term:'1',msgType:7,snapshot:{metadata:{index:'100',term:'1',confState:cs([])}}}],
+ 'snapshot ahead (index 100) conf state excluding the receiver':['2',{from:'1',to:'2',term:'1',msgType:7,snapshot:{metadata:{index:'100',term:'1',confState:cs(['1','3'])}}}],
+ 'snapshot ahead without metadata':['2',{from:'1',to:'2',term:'1',msgType:7,snapshot:{}}],
+ 'snapshot behind commit (index 2)':['2',{from:'1',to:'2',term:'1',msgType:7,snapshot:{metadata:{index:'2',term:'1',confState:cs(['1','2','9'])}}}],
+ 'appendResponse to leader from unknown peer':['1',{from:'77',to:'1',term:'1',msgType:4,index:'99'}],
+ 'appendResponse to leader claiming index beyond last':['1',{from:'2',to:'1',term:'1',msgType:4,index:'99'}],
+ 'appendResponse reject with hint beyond':['1',{from:'2',to:'1',term:'1',msgType:4,index:'4',reject:true,rejectHint:'99'}],
+ 'heartbeatResponse to leader from peer 2 higher commit':['1',{from:'2',to:'1',term:'1',msgType:9,commit:'99'}],
+ 'vote request higher term from unknown peer':['2',{from:'77',to:'2',term:'9',logTerm:'9',index:'99',msgType:5}],
+ 'timeoutNow to follower from unknown':['2',{from:'77',to:'2',term:'1',msgType:14}],
+ 'transferLeader to leader naming unknown':['1',{from:'77',to:'1',term:'1',msgType:13}],
+ 'readIndex to leader empty':['1',{from:'2',to:'1',term:'1',msgType:15,entries:[]}],
+ 'snapStatus to leader from unknown':['1',{from:'77',to:'1',term:'1',msgType:11,reject:true}],
+ 'unknown msgType 99':['2',{from:'1',to:'2',term:'1',msgType:99}],
+ 'local MsgHup via step':['2',{from:'2',to:'2',term:'0',msgType:0}],
+ 'huge term 2^64-1 heartbeat':['2',{from:'1',to:'2',term:'18446744073709551615',msgType:8,commit:'0'}],
+};
+for(const [name,[target,msg]] of Object.entries(M)){
+  const c=group(); let out;
+  try{ c.core.step(c.handleOf(target),msg); out='accepted'; }catch(e){ out=/unreachable/.test(String(e?.message||e))?'FATAL (unreachable)':'refused: '+String(e?.message||e); }
+  let after='';
+  if(!out.startsWith('FATAL')){ try{ c.settle(400); c.core.propose(c.handleOf('1'),enc('z')); c.tickPeer('1',5); c.settle(400); const st=c.statuses(); after=' | then: '+[...st].map(([id,s])=>`${id}:t${s.term}c${s.commit}`).join(' ')+' conf2='+c.coreConfStateOf(target).voters; }catch(e){ after=' | LATER FAILURE: '+String(e?.message||e).slice(0,160); } }
+  console.log(name.padEnd(68),'->',out,after);
+  try{c.free();}catch(e){}
+}

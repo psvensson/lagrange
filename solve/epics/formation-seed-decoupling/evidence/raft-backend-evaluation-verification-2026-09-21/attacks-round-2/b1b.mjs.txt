@@ -1,0 +1,18 @@
+import {createDeterministicCluster, confChangeV2, CONF_CHANGE_TYPE, CONF_CHANGE_TRANSITION} from './forked-core-harness.js';
+const enc=(s)=>Buffer.from(s,'utf8');
+let viol=0, checked=0, light=0;
+for (const voters of [['1','2','3'],['1']]) for (const tr of [0,2]) {
+  const c=createDeterministicCluster({voters,learners:['4']});
+  c.core.campaign(c.handleOf('1')); c.settle(400); const h=c.handleOf('1');
+  const chg = voters.length>1? confChangeV2([{type:1,nodeId:'2'},{type:0,nodeId:'4'}],tr) : confChangeV2([{type:0,nodeId:'4'}]);
+  c.core.propose(h,enc('a')); c.core.propose(h,enc('b')); c.core.propose_conf_change_v2(h,chg); c.core.propose(h,enc('c')); c.settle(400);
+  for(let i=0;i<6;i++){c.tickPeer('1',5);c.settle(400);}
+  if(tr===2 && voters.length>1){ c.core.propose(h,enc('d')); c.core.propose_conf_change_v2(h,confChangeV2([])); c.settle(400);}
+  for(const [id,p] of c.peers){ const wl=p.record.writeLog; let commit=0, through=0;
+    wl.forEach((w,i)=>{ if(w.write==='entries')through=Math.max(through,+w.through); if(w.write==='hardState'&&w.commit!==undefined)commit=Math.max(commit,+w.commit); if(w.write==='commitIndex'){commit=Math.max(commit,+w.commit);light++;}
+      if(w.write==='confStateAndApplied'){checked++; if(!(commit>=+w.atIndex && through>=+w.atIndex)){viol++;console.log('VIOLATION',id,JSON.stringify(w),commit,through);} } });
+    console.log(voters.length,tr,id,'final',`L${p.record.entries.at(-1)?.index} C${p.record.hardState?.commit} A${p.record.appliedIndex}`, 'errs',JSON.stringify(p.applyConfChangeErrors));
+  }
+  c.free();
+}
+console.log({checked,viol,lightCommitWrites:light});

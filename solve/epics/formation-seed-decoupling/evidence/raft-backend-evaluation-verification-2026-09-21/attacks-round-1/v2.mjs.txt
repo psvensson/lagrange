@@ -1,0 +1,6 @@
+import {RESTART_BOUNDARY} from './forked-core-harness.js';
+import {runRestartBoundary} from './core-scenarios.js';
+for (const role of ['follower','leader']) for (const b of Object.values(RESTART_BOUNDARY)) {
+  const r = runRestartBoundary(b, role);
+  console.log(role,b,JSON.stringify(r.vAfterConvergence));
+}

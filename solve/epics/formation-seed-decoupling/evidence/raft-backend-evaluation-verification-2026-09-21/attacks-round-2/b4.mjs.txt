@@ -1,0 +1,24 @@
+import {createDeterministicCluster} from './forked-core-harness.js';
+import {driveToBoundary, distinguishingFacts, definingFactsOf, chooseVictim, electLeader, boundaryMatrixSpecs, BOUNDARY_PLAN} from './core-scenarios.js';
+function drive(spec, shift){
+  const cluster=createDeterministicCluster({voters:spec.options.voters||['1','2','3'],learners:spec.options.learners||['4']});
+  try{ const leader=electLeader(cluster); const victim=chooseVictim(cluster,spec.role,leader,spec.options.victimChoice);
+    if(shift){globalThis.__shift={...shift,victim};} else {globalThis.__shift={mode:'record',victim};}
+    const {baseline,plan}=driveToBoundary(cluster,spec.boundary,victim,leader,spec.batch);
+    const ci=cluster.stoppedAtEntryIndex(victim); const rec=globalThis.__shift;
+    if(!ci) return {driven:false,rec};
+    const facts=distinguishingFacts(cluster,victim,ci,baseline,plan.phase); const d=definingFactsOf(spec.boundary,facts);
+    return {driven:true,hold:d.hold,mism:d.mismatches.map(m=>m.fact).join(','),rec,dur:`L${facts.durableLastIndex} C${facts.durableCommit} A${facts.durableApplied}`};
+  } finally { globalThis.__shift=null; cluster.free(); }
+}
+let total=0, green=[];
+for(const spec of boundaryMatrixSpecs()){
+  const base=drive(spec,null); if(!base.driven||!base.hold){console.log('BASE PROBLEM',spec.boundary,spec.role,spec.batch,JSON.stringify(base));continue;}
+  for(const d of [-2,-1,1,2]){ total++;
+    const r=drive(spec,{mode:'fire',cycle:base.rec.cycle+d,ci:base.rec.ci});
+    const tag=`${spec.boundary}/${spec.role}/${spec.batch}${spec.options.label?'/'+spec.options.label:''} ${d>0?'+':''}${d}`;
+    if(r.driven&&r.hold){green.push(tag+' '+r.dur+' (base '+base.dur+')');}
+    else if (process.env.VERBOSE) console.log(tag, r.driven?('red: '+r.mism):'not driven');
+  }
+}
+console.log('total',total,'STAYED GREEN',green.length); for(const g of green)console.log('  ',g);

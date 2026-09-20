@@ -1,0 +1,12 @@
+import {createDeterministicCluster, confChangeV2} from './forked-core-harness.js';
+const c=createDeterministicCluster({voters:['1','2','3'],learners:['4']}); c.core.campaign(c.handleOf('1')); c.settle(400);
+c.core.propose_conf_change_v2(c.handleOf('1'),confChangeV2([{type:1,nodeId:'3'}])); c.settle(400); c.tickPeer('1',5); c.settle(400);
+console.log('peer 3 own conf',JSON.stringify(c.coreConfStateOf('3')));
+try{ c.core.campaign(c.handleOf('3')); console.log('campaign returned; state',c.core.status(c.handleOf('3')).raftState);}catch(e){console.log('campaign on removed peer ->',String(e?.message||e));}
+// MsgTimeoutNow to the removed peer
+const c2=createDeterministicCluster({voters:['1','2','3'],learners:['4']}); c2.core.campaign(c2.handleOf('1')); c2.settle(400);
+c2.core.propose_conf_change_v2(c2.handleOf('1'),confChangeV2([{type:1,nodeId:'3'}])); c2.settle(400); c2.tickPeer('1',5); c2.settle(400);
+try{ c2.core.step(c2.handleOf('3'),{from:'1',to:'3',term:'1',msgType:14}); c2.settle(400); console.log('MsgTimeoutNow to removed peer: no panic; state',c2.core.status(c2.handleOf('3')).raftState);}catch(e){console.log('MsgTimeoutNow ->',String(e?.message||e));}
+// learner campaign: who leads afterwards?
+try{ c2.core.campaign(c2.handleOf('4')); c2.settle(400); console.log('after host campaign() on LEARNER 4:',[...c2.statuses()].map(([id,s])=>`${id}:state${s.raftState}/term${s.term}/lead${s.lead}`).join(' '),'| conf on 1:',JSON.stringify(c2.coreConfStateOf('1')));
+  c2.core.propose(c2.handleOf('4'),Buffer.from('w')); c2.settle(400); console.log('  learner-leader commits:',[...c2.statuses()].map(([id,s])=>`${id}:c${s.commit}`).join(' ')); }catch(e){console.log('learner campaign ->',String(e?.message||e));}

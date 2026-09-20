@@ -1,0 +1,11 @@
+import {createDeterministicCluster} from './forked-core-harness.js';
+const enc=(s)=>Buffer.from(s,'utf8');
+const c=createDeterministicCluster({voters:['1','2','3'],learners:['4']}); c.core.campaign(c.handleOf('1')); c.setIsolated('4',true); c.settle(400);
+for(const x of 'abcd'){c.core.propose(c.handleOf('1'),enc(x));} c.settle(400);
+const st=c.core.status(c.handleOf('1')); console.log('leader commit',String(st.commit),'term',String(st.term),'| learner 4 last',c.persistedStateOf('4').lastIndex);
+// a well-formed snapshot message, as a leader that had compacted would send
+c.core.step(c.handleOf('4'),{from:'1',to:'4',term:String(st.term),msgType:7,snapshot:{data:Buffer.from('app-state').toString('base64'),metadata:{index:String(st.commit),term:String(st.term),confState:{voters:['1','2','3'],learners:['4'],votersOutgoing:[],learnersNext:[],autoLeave:false}}}});
+console.log('has_ready on 4:',c.core.has_ready(c.handleOf('4')));
+try{ c.settle(400); }catch(e){ console.log('settle threw',String(e?.message||e)); }
+const r=c.durableRecordOf('4'); console.log('durable record of 4: snapshot',JSON.stringify(r.snapshot?.metadata),'entries',r.entries.length,'applied',r.appliedIndex,'hardState',JSON.stringify(r.hardState),'writes',r.writeLog.map(w=>w.write).join(','));
+try{ c.crash('4'); c.restart('4'); c.settle(400); const p=c.persistedStateOf('4'); console.log('restart from the snapshot-bearing record: ok; first',p.firstIndex,'last',p.lastIndex,'status applied',String(c.core.status(c.handleOf('4')).applied),'commit',String(c.core.status(c.handleOf('4')).commit)); }catch(e){ console.log('RESTART FAILED:',String(e?.message||e)); }

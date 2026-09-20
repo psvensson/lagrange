@@ -1,0 +1,30 @@
+import {runRestartBoundary, boundaryMatrixSpecs} from './core-scenarios.js';
+import {assertOneBoundaryRow} from './row-assert.mjs';
+const last=(r)=>r.entries.length?Number(r.entries.at(-1).index):0;
+const C={
+ 'add-voter':(r)=>{r.confState={...r.confState,voters:[...r.confState.voters,'9']};},
+ 'drop-voter':(r)=>{r.confState={...r.confState,voters:r.confState.voters.slice(1)};},
+ 'learner->voter':(r)=>{const l=[...(r.confState.learners||[])]; if(!l.length)return; r.confState={...r.confState,voters:[...r.confState.voters,l[0]],learners:l.slice(1)};},
+ 'drop-outgoing':(r)=>{r.confState={...r.confState,votersOutgoing:[]};},
+ 'applied-behind':(r)=>{r.appliedIndex='0';},
+ 'applied-ahead-log':(r)=>{r.appliedIndex=String(last(r)+5);},
+ 'applied-ahead-commit':(r)=>{r.appliedIndex=String(last(r)); r.hardState={...r.hardState,commit:'0'};},
+ 'vote-dropped':(r)=>{r.hardState={...r.hardState,vote:'0'};},
+ 'term-zero':(r)=>{r.hardState={...r.hardState,term:'0'};},
+ 'commit-rewound':(r)=>{r.hardState={...r.hardState,commit:'1'};},
+ 'drop-last-entry':(r)=>{r.entries=r.entries.slice(0,-1);},
+};
+const specs=boundaryMatrixSpecs().filter(s=>s.batch==='mixed');
+const summary={};
+for(const [name,fn] of Object.entries(C)){
+  const res={local:0,convergenceOnly:0,green:0,threw:0,greenAt:[],convAt:[]};
+  for(const spec of specs){
+    globalThis.__corrupt=(r)=>{const b=JSON.stringify([r.confState,r.appliedIndex,r.hardState,r.entries.length]); fn(r); globalThis.__changed = b!==JSON.stringify([r.confState,r.appliedIndex,r.hardState,r.entries.length]);};
+    let rec; const tag=`${spec.boundary}/${spec.role}${spec.options.label?'/'+spec.options.label:''}`;
+    try{ rec=runRestartBoundary(spec.boundary,spec.role,spec.batch,spec.options);}catch(e){res.threw++; res.local++; continue;}
+    if(!globalThis.__changed){continue;}
+    try{ assertOneBoundaryRow(rec,rec.boundary,rec.role); if(rec.definingFacts.hold!==true) throw new Error('defining'); res.green++; res.greenAt.push(tag);}catch(e){ const m=String(e.message); if(/once the network is restored|every live peer/.test(m)){res.convergenceOnly++;res.convAt.push(tag);} else {res.local++; (res.msgs ||= new Set()).add(m.replace(/^restart-\S+: /,'').slice(0,90));} }
+  }
+  if(res.msgs)res.msgs=[...res.msgs]; summary[name]=res;
+  console.log(name, JSON.stringify(res));
+}
