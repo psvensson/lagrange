@@ -1,0 +1,78 @@
+{
+  "artifact": "interface-reduction-table",
+  "quest": "raft-rs-experimental-partition-backend",
+  "authority": "solve/epics/formation-seed-decoupling/binding-direction-raft-rs-experimental-backend-2026-09-21.md addendum §3, §9 and §11",
+  "why here": [
+    "The table was measured in phase 4 and existed only in a report and in the quest log, which is append-only prose: nothing can read it back.",
+    "Receipt 22 (complexity-ledger-recorded-and-deletion-candidates-named) is witnessed by test/raft/raft-rs-backend/complexity-ledger.test.js, which does not exist yet and whose job is to DERIVE the ledger from src and compare it against what was recorded. A comparison needs a structured record, so this is JSON rather than prose.",
+    "It lives under the quest's own evidence directory beside receipt.json because it is this quest's evidence for an acceptance criterion of this quest (§19), not a durable statement about the epic: after a migration decision the numbers here are history."
+  ],
+  "measuredAt": "ac075aa5ac5bc023ceab8ebd312aab8b88c49627",
+  "derivedFrom": "the thirteen members src/partition reads off its raft node, parsed out of src rather than taken from any report",
+  "members": [
+    {"member": "nodes", "classification": "true-requirement", "note": "who is in the group; under this backend it must be a projection of the committed configuration, not a mutable local array"},
+    {"member": "state", "classification": "true-requirement", "note": "role observation; its vocabulary must stop being LifeRaft's enum"},
+    {"member": "leader", "classification": "true-requirement", "note": "leadership observation"},
+    {"member": "term", "classification": "true-requirement", "note": "term observation"},
+    {"member": "on", "classification": "generic-requirement", "note": "lifecycle event subscription"},
+    {"member": "emit", "classification": "generic-requirement", "note": "lifecycle events and inbound ingress"},
+    {"member": "setTickInterval", "classification": "generic-requirement", "note": "tick control"},
+    {"member": "configureTickInterval", "classification": "generic-requirement", "note": "tick control, configured form"},
+    {"member": "tickIntervalMs", "classification": "generic-requirement", "note": "tick control, observation"},
+    {"member": "command", "classification": "remove-from-node-surface", "note": "proposing is already a provider method; the node need not carry it"},
+    {"member": "change", "classification": "liferaft-implementation-detail", "note": "forces leadership on a single replica; a one-voter configuration elects itself, so the need is liferaft's, not a partition's"},
+    {"member": "deferCandidacy", "classification": "liferaft-implementation-detail", "note": "the liferaft-shaped version of retirement as scheduling eligibility (addendum §5)"},
+    {"member": "leave", "classification": "liferaft-implementation-detail", "note": "a local membership mutation; under a committed-membership backend it is a proposed configuration change"}
+  ],
+  "surfaceSize": {
+    "before": {
+      "shape": "a backend running a partition group had to BE a LifeRaft subclass",
+      "nodeMembers": 80,
+      "providerMethods": 9,
+      "total": 89
+    },
+    "after": {
+      "shape": "the group states its requirements and the provider builds the node",
+      "providerMethods": 10,
+      "requestFields": 13,
+      "nodeMembers": 13,
+      "total": 36,
+      "ofWhichNamedForRemoval": 3
+    },
+    "caveat": "For the liferaft backend the returned node still IS a LifeRaft. What shrank is the surface a backend is REQUIRED to provide, not liferaft's own surface."
+  },
+  "ownerStopCondition": {
+    "clause": "addendum §11: a facade about as large as LifeRaft itself is evidence the seam is at the wrong level, and work stops",
+    "fired": false,
+    "measurement": "36 required names against 89"
+  },
+  "remainingConcreteLiferaftDependenciesInSrc": {
+    "note": "re-measured by grep over src at the phase-5 head; the sites below are file:line facts, not a recollection",
+    "enumReadsInPartition": [
+      "src/partition/partition-service-learner-promotion-proof-methods.js:105",
+      "src/partition/partition-service-raft-init-base.js:582",
+      "src/partition/partition-service-transaction-base.js:922",
+      "src/partition/partition-service-transaction-base.js:956",
+      "src/partition/partition-service-transaction-base.js:988",
+      "src/partition/partition-service-write-metrics-base.js:673"
+    ],
+    "enumReadsOutsidePartition": [
+      "src/message-group/message-group-service-leadership-state-runtime-methods.js:32",
+      "src/raft/raft-timing-utils.js:85",
+      "src/raft/tracked-leader-demotion.js:36"
+    ],
+    "liferaftOnlyCallSites": {
+      "change": [
+        "src/partition/partition-service-raft-init-base.js:582",
+        "src/raft/raft-group.js:452",
+        "src/raft/tracked-leader-demotion.js:35"
+      ],
+      "deferCandidacy": ["src/raft/tracked-leader-demotion.js:33"],
+      "leave": [
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js:164",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js:294"
+      ]
+    },
+    "reExport": "src/partition/partition-service-shared.js"
+  }
+}
