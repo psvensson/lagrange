@@ -1,0 +1,358 @@
+{
+  "schema": "overflow-budget-round3-pin/1",
+  "inheritedFromHead": "88f0ce083a851a795db75eb5295679de65295578",
+  "statement": "The round-3 content of everything this quest inherits, digested over the round-3 artifacts as they were staged into this worktree, with the two authorized D3 dispositions substituted back. Anything but the authorized correction turns this receipt red.",
+  "exclusions": {
+    "rows": [
+      "unreachableSubject",
+      "domainQualification",
+      "receipts",
+      "ledgerAuthorityResult"
+    ],
+    "gate": [
+      "status",
+      "rows",
+      "whatIsMissing",
+      "openFindings",
+      "rowSelection"
+    ],
+    "gateArtifacts": [
+      "exists",
+      "kind",
+      "path"
+    ],
+    "findings": [
+      "open",
+      "resolution",
+      "justification",
+      "doesNotImply"
+    ],
+    "sections": [
+      "correctionToRound3"
+    ]
+  },
+  "exclusionReasons": {
+    "unreachableSubject": "A NEW field, and the ONLY difference on the seven inherited proved-unreachable rows: it states explicitly the proposition those rows already proved (guard-admission-state), which round 3 left implicit in the disposition. It has no round-3 value. Which value each row carries is asserted structurally by the validator and by guardAdmissionStateSubjectAdded below.",
+    "domainQualification": "A NEW field on the two corrected rows only. It carries the D3 correction the owner authorized and exists on no round-3 row. Its content is checked structurally by the subject discipline, not by this pin.",
+    "receipts": "A NEW field. It is the row-to-receipt binding that replaces round 3 pointer citation. The round-3 pointer fields it supersedes (budgetDifferentialWitness, budgetIndependenceMeasurement, the guard and producer reachability witnesses) are NOT excluded and stay pinned byte-identically, and the validator requires each receipt witness to be the file its pointer names.",
+    "ledgerAuthorityResult": "A NEW field on the ledger hand-off row carrying the owner replacement-allowance sentence verbatim. It has no round-3 value; it is pinned by value in ledgerAuthorityResult below.",
+    "status": "DERIVED, never stored as truth. Pinned by VALUE instead: roundThreeGate records every item round-3 status and the test asserts the derivation reproduces it.",
+    "rows": "DERIVED by selection. Pinned by value in roundThreeGate; item 3 selection is the single declared difference.",
+    "whatIsMissing": "DERIVED from the contract. Pinned by value in roundThreeGate.",
+    "openFindings": "DERIVED from the contract and the resolution artifacts. Pinned by value in roundThreeGate.",
+    "exists": "REMOVED: a hand-written boolean is exactly the D1 defect. Pinned by value instead - roundThreeExternalArtifactSatisfied records what round 3 declared and the test asserts the observation reproduces it.",
+    "kind": "A NEW field naming what the repository object must be, so the observation can check it. No round-3 value exists.",
+    "path": "A NEW field naming where the repository would hold the artifact, so the observation can look. No round-3 value exists.",
+    "open": "REMOVED: a hand-written boolean is the D1 defect. Pinned by value instead - roundThreeFindingOpen records every finding round-3 flag and the test asserts the DERIVED open state reproduces all seventeen.",
+    "resolution": "A NEW field naming the artifact that would resolve a gate-blocking finding. No round-3 value exists; that no such artifact is on disk is asserted by the finding-resolution receipt.",
+    "justification": "A NEW field on the spread-recovery finding, stating the reason that finding stands (two modules decide the same spread-recovery semantic). No round-3 value exists.",
+    "doesNotImply": "A NEW field on the same finding, stating structurally that it does not make any row authority-required. No round-3 value exists.",
+    "correctionToRound3": "A NEW top-level section recording the authorized correction and its derived consequence. It has no round-3 value by construction.",
+    "rowSelection": "DERIVED from GATE_CONTRACT (the selector and its minimum). Round 1 found the stored copy of item 3 still saying \"at least 3\" over one selected row, so the document now renders it from the contract. Pinned by VALUE in roundThreeGate, with item 3 the declared difference."
+  },
+  "d3": {
+    "five-relocation-handoff-overlap": {
+      "roundThreeDisposition": "explicit-authority-required",
+      "correctedDisposition": "proved-unreachable",
+      "unreachableSubject": "budget-dependent-authority-requirement"
+    },
+    "ledger-relocation-handoff-overlap": {
+      "roundThreeDisposition": "explicit-authority-required",
+      "correctedDisposition": "proved-unreachable",
+      "unreachableSubject": "budget-dependent-authority-requirement"
+    }
+  },
+  "guardAdmissionStateSubjectAdded": {
+    "field": "unreachableSubject",
+    "value": "guard-admission-state",
+    "rows": [
+      "owner-partition-config",
+      "owner-partition-message_groups",
+      "owner-partition-nodes",
+      "owner-partition-partitions",
+      "owner-partition-services",
+      "owner-partition-tables",
+      "remainder-non-priority-critical-partitions"
+    ],
+    "because": "The seven inherited proved-unreachable rows already proved exactly this proposition; the owner required it to be explicit rather than implied by the disposition. It is the ONLY field added to these rows, and their digests below are taken over every other field they carry."
+  },
+  "ledgerAuthorityResult": {
+    "row": "ledger-relocation-handoff-overlap",
+    "text": "ordinary +1 relocation is covered by the normal replacement allowance; no ledger-local reason for additional overflow authority has been demonstrated."
+  },
+  "rows": {
+    "five-minted-spread-cure-add": "747ffdd638c5fd161db7e9bf7b2b04ea6126ac98e942c1dcabbed04cd8a453d7",
+    "five-establishing-window-unminted-cure-add": "08a52a1c23958b13f44efea78f720cf27db1edb2b69125d1b30056e7caf99460",
+    "five-undeclared-partition-row-unminted-cure-add": "b55e4d8b3466a97ecacf142663a7e1f36405875b6fdb2f0e76d4a6a545058e2f",
+    "five-minted-authorization-stale-at-promotion": "7008812c94aafb10283422dfac26aa7f899851e3b44857df7578747f9c1b5812",
+    "five-expand-for-spread-add": "da23ce6cd0fa9557efac346a6d56131feedfb17d889d0a3443af988f420c2cef",
+    "five-under-representation-add": "15190a22823a2884b1bd2c289393a89c1423518786447088b54a03e8d952211f",
+    "five-relocation-handoff-overlap": "97cce988235377c80ae3b9ac37e8ebaa4456e945328df0792dbc5a679a524a17",
+    "five-relocation-census-disagreement-overlap": "1e2a6996666b7c66f3f3e187b3b05d2d9d09958635d5a2223ef28182f4d8b9f2",
+    "five-paired-relocation-replace": "a92c5cd989d35b308d9564801ee7ab96027129e9f4b3814d3271432269232dbb",
+    "five-operation-not-visible-to-the-guard": "d7d3bde609393ba026ff722634dbabaa85b87beae0d9fe340a2209bb59e9decd",
+    "five-row-rematerialization": "499d8702ab6182d9d0bf60ea26867793484443540908ae70555c68054fbd3413",
+    "five-initial-provisioning-add": "5a41948f8ea84b69a2a2750261604c44fd3118eb259074032229c0a7b0ad5af3",
+    "ledger-expand-for-spread-add": "5de8f7b2f9824ca2db88d952537bce2f682e91a003b5102b1aed6687024cb9f5",
+    "ledger-under-representation-add": "1465deab75add6f7e54c1040c4c648b7cdb1c267e3f3439acbec6bd8495832e7",
+    "ledger-relocation-handoff-overlap": "deed34cd91386a9b779fb4ffd3ed56aa218fe14fb149ec2ab257ff04e8a5c5cc",
+    "ledger-relocation-census-disagreement-overlap": "fb4449954e0265b277d7df5adb089f847d03195adef7f929aec785b178e3eefb",
+    "ledger-paired-relocation-replace": "3f0b9c12e0b749ce7e4c44a996bcc27b09232f28a2e6eef7b7459d04dcce343b",
+    "ledger-operation-not-visible-to-the-guard": "d53df8cc39fb4d0018f4c541c16dd035f0fce00571ee2ac3df22ce277b4ff3a3",
+    "ledger-row-rematerialization": "f85e5d3c8e1f5adc35d697819cfce64797df268b0311e9089f07beeeb30090a8",
+    "ledger-initial-provisioning-add": "9b0bede98c16583c030b559f011740d22d8570724852f1e987a4e0e8d0e5a032",
+    "owner-partition-services": "57f128a6d6057298c2ddf64eead5824d497c7848f7f3802937118d6d86e97681",
+    "owner-partition-nodes": "817003df752220904a3c9806de10b9a1f28b5ef306f0e58fad92c76f29ec6a35",
+    "owner-partition-partitions": "48c851c976f13dd93ff1e9ace22f97e8e16b25d782d64f25eca26a61acb629b7",
+    "owner-partition-message_groups": "5357a15ba4c79ce1ef4a09dedfa14565794326553be30374d9d6d5b092d3dc17",
+    "owner-partition-tables": "154acd1e78c9003557b9eca57e5ea01020c61812b37b87c9bcf5b49353490ed7",
+    "owner-partition-config": "e0a6c7d2dabdb54cd81d364d9500fbfa3971339a67063799ee77e40c70a7ec15",
+    "remainder-non-priority-critical-partitions": "8fd622ae84d97f71140609fdf2160e95cd7bdca79968dd825ffe6d7c0380a544"
+  },
+  "sections": {
+    "schema": "1ed47538b13d46bb035d5aff7e288741062d0e01711cf85bf4f438cad482b9d4",
+    "quest": "03db6f6f573c9259e4abba6803ea00fab155008616e1d3cfa5e5453ad962be31",
+    "epic": "b46b67b20b576d3574fd356f6f653fdb6a16037b703b9a49b82b62a0bc205ad5",
+    "measuredAtHead": "f2ab1bce1bd1ff55ff2b692148e24eddca776b0d46be4a1d2f56d86b021ffcbe",
+    "purpose": "05a23b4eb0d5c4a43246e2d12f8908d669daed863d09b581aa151d10fb839f05",
+    "method": "1be62bfed34a539b70329c68af81c995af63f648100d903c665f892204b5eec4",
+    "limits": "054c505a4effc3d42f6944daf5b9e44d04c87b53384d8ebf56a7ce8695375eba",
+    "partitionSets": "4752d145e5bbfc284e6976ad4864970a19fc03b65db340b80ec2c19e2bc12bc3",
+    "admissionClasses": "b0c93106ae1cfa263abb3f616e93415a4ecdb3c725acde74a151a7ca58c79946",
+    "producers": "144f03e3baeb5a291db26402ccbac4c3b85422eec78947f659cbd0ef3ea9082d",
+    "replaceClassification": "480779d3aaa932da2d88afbbc4f49276ad89d9f9a926515b3d0d607196f3d163",
+    "attributionForms": "6a1aa8dc85758f415c60eab9a715ad571541180199707ead235ab419fac3b629",
+    "carriedForwardFindings": "1957222dfb838a889384df32401a194b9ba47ee26c55f036eb1ecad47cc23be7",
+    "membershipCeiling": "6b2729be4ac49d66f47d761c37ae2f4f1884e15f4a2a5397f7ca02318bd5cc72",
+    "futureTransition": "6ad4c4273f87b4a66abfc0e7d382021d0917cc2cd96a1ceff822eef1a90191b1",
+    "grantRuleTarget": "c24155858fc0b8c32f0112d3114e0572a953b8dd2d0bc52aa361588343a05e6f",
+    "findings": "7a8a0cad8853844c85c93ded00dbf68fff5331344b9285715c140f8b9df85a28",
+    "repairQuests": "afd58646e1bbea77f978360f7c119de4f69d01ccc3ae2192d53e8c470ef88aa7",
+    "architecturalResults": "347b02a5f51f8b61f06b4c616b6cecef89813dc626d47e0726c4be98615715c7",
+    "gate": "dd06df99b55c365da10488e2543b94ed92a455fd9a42697871791abc6f4d67ea"
+  },
+  "files": {
+    "solve/epics/formation-seed-decoupling/membership-epoch-domain-inventory.json": "d6865886a9e05c83bebf77bd48566d9b2f1eabd8d7c8fff1cc3a2ce38609b563",
+    "solve/epics/formation-seed-decoupling/membership-epoch-domain-inventory.md": "37b8ad2b0b9045b166e806318a2b9794c2f9c61c884d0bf1726ad73444bcb7d4"
+  },
+  "roundThreeFindingOpen": {
+    "budget-domain-is-six-not-forty-five": false,
+    "even-voter-gate-is-never-the-budget": false,
+    "allow-temporary-overflow-is-a-disjunction": false,
+    "cross-partition-coupling-is-legacy": true,
+    "unhealthy-source-is-a-misnomer": false,
+    "spread-recovery-decision-has-two-owners": true,
+    "chained-relocation-is-a-serialization-defect": true,
+    "honoured-does-not-include-the-bound": true,
+    "intent-unknown-is-unreachable-from-a-row": true,
+    "future-epoch-is-honoured": true,
+    "invalid-supplied-epoch-is-not-evaluated": true,
+    "row-type-is-not-part-of-authority-identity": true,
+    "partition-identity-is-not-on-the-record": true,
+    "membership-ceiling-may-undercount-the-union": true,
+    "no-separate-raft-membership-epoch": false,
+    "epoch-readers-diverge-and-the-domain-is-not-closed": true,
+    "replica-recovery-service-is-unwired": false
+  },
+  "roundThreeGate": {
+    "1": {
+      "status": "not-yet",
+      "rows": [
+        "five-minted-spread-cure-add",
+        "five-establishing-window-unminted-cure-add",
+        "five-undeclared-partition-row-unminted-cure-add",
+        "five-minted-authorization-stale-at-promotion",
+        "five-expand-for-spread-add",
+        "five-under-representation-add",
+        "five-relocation-handoff-overlap",
+        "five-relocation-census-disagreement-overlap",
+        "five-paired-relocation-replace",
+        "five-operation-not-visible-to-the-guard",
+        "five-row-rematerialization",
+        "five-initial-provisioning-add",
+        "ledger-expand-for-spread-add",
+        "ledger-under-representation-add",
+        "ledger-relocation-handoff-overlap",
+        "ledger-relocation-census-disagreement-overlap",
+        "ledger-paired-relocation-replace",
+        "ledger-operation-not-visible-to-the-guard",
+        "ledger-row-rematerialization",
+        "ledger-initial-provisioning-add",
+        "owner-partition-services",
+        "owner-partition-nodes",
+        "owner-partition-partitions",
+        "owner-partition-message_groups",
+        "owner-partition-tables",
+        "owner-partition-config",
+        "remainder-non-priority-critical-partitions"
+      ],
+      "whatIsMissing": [
+        "noSupportingRowUnclassified"
+      ],
+      "openFindings": [],
+      "rowSelection": "all (at least 27 row(s))"
+    },
+    "2": {
+      "status": "not-yet",
+      "rows": [
+        "five-minted-spread-cure-add",
+        "five-establishing-window-unminted-cure-add",
+        "five-undeclared-partition-row-unminted-cure-add",
+        "five-minted-authorization-stale-at-promotion",
+        "five-expand-for-spread-add",
+        "five-under-representation-add",
+        "five-relocation-handoff-overlap",
+        "five-relocation-census-disagreement-overlap",
+        "five-paired-relocation-replace",
+        "five-operation-not-visible-to-the-guard",
+        "five-row-rematerialization",
+        "five-initial-provisioning-add",
+        "ledger-expand-for-spread-add",
+        "ledger-under-representation-add",
+        "ledger-relocation-handoff-overlap",
+        "ledger-relocation-census-disagreement-overlap",
+        "ledger-paired-relocation-replace",
+        "ledger-operation-not-visible-to-the-guard",
+        "ledger-row-rematerialization",
+        "ledger-initial-provisioning-add"
+      ],
+      "whatIsMissing": [
+        "noSupportingRowUnclassified",
+        "everySupportingRowHasAnOwner"
+      ],
+      "openFindings": [
+        "spread-recovery-decision-has-two-owners"
+      ],
+      "rowSelection": "guardReachable (at least 20 row(s))"
+    },
+    "3": {
+      "status": "blocked-on-owner-decision",
+      "rows": [
+        "five-minted-spread-cure-add",
+        "five-relocation-handoff-overlap",
+        "ledger-relocation-handoff-overlap"
+      ],
+      "whatIsMissing": [],
+      "openFindings": [
+        "spread-recovery-decision-has-two-owners",
+        "cross-partition-coupling-is-legacy"
+      ],
+      "rowSelection": "byDisposition: explicit-authority-required (at least 3 row(s))"
+    },
+    "4": {
+      "status": "not-yet",
+      "rows": [
+        "five-relocation-handoff-overlap",
+        "five-relocation-census-disagreement-overlap",
+        "five-paired-relocation-replace",
+        "ledger-relocation-handoff-overlap",
+        "ledger-relocation-census-disagreement-overlap",
+        "ledger-paired-relocation-replace"
+      ],
+      "whatIsMissing": [
+        "noSupportingRowUnclassified"
+      ],
+      "openFindings": [
+        "chained-relocation-is-a-serialization-defect",
+        "spread-recovery-decision-has-two-owners"
+      ],
+      "rowSelection": "byOperationTypeOnly: REPLACE (at least 6 row(s))"
+    },
+    "5": {
+      "status": "blocked-on-owner-decision",
+      "rows": [
+        "five-establishing-window-unminted-cure-add",
+        "five-minted-authorization-stale-at-promotion"
+      ],
+      "whatIsMissing": [
+        "noSupportingRowUnclassified",
+        "namedFindingsResolved"
+      ],
+      "openFindings": [
+        "epoch-readers-diverge-and-the-domain-is-not-closed"
+      ],
+      "rowSelection": "byRepairGroup: close-topology-publication-version-identity, establishing-publication-semantics (at least 2 row(s))"
+    },
+    "6": {
+      "status": "not-yet",
+      "rows": [],
+      "whatIsMissing": [
+        "namedFindingsResolved"
+      ],
+      "openFindings": [
+        "membership-ceiling-may-undercount-the-union"
+      ],
+      "rowSelection": "none (at least 0 row(s))"
+    },
+    "7": {
+      "status": "not-yet",
+      "rows": [],
+      "whatIsMissing": [
+        "namedFindingsResolved"
+      ],
+      "openFindings": [
+        "row-type-is-not-part-of-authority-identity",
+        "partition-identity-is-not-on-the-record",
+        "membership-ceiling-may-undercount-the-union"
+      ],
+      "rowSelection": "none (at least 0 row(s))"
+    },
+    "8": {
+      "status": "not-yet",
+      "rows": [],
+      "whatIsMissing": [
+        "namedFindingsResolved",
+        "requiredExternalArtifactsExist"
+      ],
+      "openFindings": [
+        "honoured-does-not-include-the-bound"
+      ],
+      "rowSelection": "none (at least 0 row(s))"
+    },
+    "9": {
+      "status": "not-yet",
+      "rows": [
+        "five-minted-authorization-stale-at-promotion"
+      ],
+      "whatIsMissing": [
+        "noSupportingRowUnclassified",
+        "namedFindingsResolved"
+      ],
+      "openFindings": [
+        "future-epoch-is-honoured",
+        "invalid-supplied-epoch-is-not-evaluated",
+        "intent-unknown-is-unreachable-from-a-row",
+        "honoured-does-not-include-the-bound"
+      ],
+      "rowSelection": "byId: five-minted-authorization-stale-at-promotion (at least 1 row(s))"
+    }
+  },
+  "roundThreeExternalArtifactSatisfied": {
+    "authorization-identity-and-evaluation-quest": false
+  },
+  "declaredGateDifferences": {
+    "3": {
+      "differences": [
+        {
+          "field": "rows",
+          "roundThree": [
+            "five-minted-spread-cure-add",
+            "five-relocation-handoff-overlap",
+            "ledger-relocation-handoff-overlap"
+          ],
+          "corrected": [
+            "five-minted-spread-cure-add"
+          ]
+        },
+        {
+          "field": "rowSelection",
+          "roundThree": "byDisposition: explicit-authority-required (at least 3 row(s))",
+          "corrected": "byDisposition: explicit-authority-required (at least 1 row(s))"
+        }
+      ],
+      "selectionMinimumBefore": 3,
+      "selectionMinimumAfter": 1,
+      "because": "gate item 3 selects by disposition, so the two corrected rows leave its support by SELECTION; its selection minimum is a pin of that set and moves with it. Its status is unchanged."
+    }
+  }
+}
