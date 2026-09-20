@@ -1,0 +1,3 @@
+import {runDurableRecordCorruptions} from './core-scenarios.js';
+const t = runDurableRecordCorruptions();
+for (const s of t.summaries) console.log(s.corruption.padEnd(28), 'rows',s.rowsDriven,'inert',s.inertRows,'caught',s.caughtLocally,'missed',s.notCaughtAt.length, JSON.stringify(s.caughtBy), s.verdict, JSON.stringify(s.notCaughtAt));

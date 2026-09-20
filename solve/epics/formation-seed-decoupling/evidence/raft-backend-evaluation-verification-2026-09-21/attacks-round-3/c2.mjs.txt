@@ -1,0 +1,28 @@
+import {createDeterministicCluster, envelopeRefusal, confChangeV2} from './forked-core-harness.js';
+const quiet = (f) => { const e = console.error; console.error = () => {}; try { return f(); } finally { console.error = e; } };
+const lastOf=(r)=>r.entries.length?Number(r.entries.at(-1).index):0;
+function run(name, to, msg, setup){ return quiet(()=>{ const c=createDeterministicCluster({voters:['1','2','3'],learners:['4']}); try{ c.campaignOn('1'); c.settle(400); c.core.propose(c.handleOf('1'),Buffer.from('x')); c.settle(400); if(setup) setup(c);
+  const before=c.core.status(c.handleOf(to)); const v=envelopeRefusal({message:msg,selfId:to,groupId:'group-1',confState:c.core.conf_state(c.handleOf(to)),durableLastIndex:lastOf(c.durableRecordOf(to))});
+  let core; try{ c.core.step(c.handleOf(to),msg); core='accepted'; }catch(e){ core=/unreachable/.test(e.message)?'FATAL':'refused by core: '+e.message; }
+  let after=''; if(core==='accepted'){ try{ c.settle(400); const s=c.core.status(c.handleOf(to)); after=` term ${before.term}->${s.term} state ${before.raftState}->${s.raftState} commit ${before.commit}->${s.commit} lead ${before.lead}->${s.lead}`; }catch(e){ after=' LATER '+(/unreachable/.test(e.message)?'FATAL':e.message); } }
+  return `${name.padEnd(64)} validator: ${(v||'passed').padEnd(62)} core: ${core}${after}`; } finally { try{c.free();}catch(e){} } }); }
+const joint=(c)=>{ c.proposeConfChangeV2('1', confChangeV2([{type:0,nodeId:'4'},{type:1,nodeId:'2'}],2)); c.settle(400); };
+const rows=[
+ ['cross-group heartbeat, plausible term/commit, NO groupId on envelope','2',{from:'1',to:'2',term:'1',msgType:8,commit:'2'}],
+ ['cross-group heartbeat, plausible, groupId=group-2 on envelope','2',{groupId:'group-2',from:'1',to:'2',term:'1',msgType:8,commit:'2'}],
+ ['cross-group heartbeat at a higher term from a member id','2',{from:'3',to:'2',term:'7',msgType:8,commit:'0'}],
+ ['cross-group APPEND from member id 3 at higher term, conflicting entry','2',{from:'3',to:'2',term:'7',logTerm:'1',index:'1',msgType:3,commit:'1',entries:[{term:'7',index:'2',entryType:0,data:''}]}],
+ ['RequestVote from a learner (4) at higher term','2',{from:'4',to:'2',term:'5',logTerm:'1',index:'9',msgType:5}],
+ ['heartbeat from self','2',{from:'2',to:'2',term:'1',msgType:8,commit:'0'}],
+ ['RequestVote from a peer only in votersOutgoing (2, while joint)','3',{from:'2',to:'3',term:'5',logTerm:'1',index:'99',msgType:5},joint],
+ ['MsgSnapshot hand-built, index 50, conf {7,8,9}','2',{from:'1',to:'2',term:'1',msgType:7,snapshot:{data:'',metadata:{index:'50',term:'1',confState:{voters:['7','8','9'],learners:[],votersOutgoing:[],learnersNext:[],autoLeave:false}}}}],
+ ['MsgTimeoutNow from a non-leader (3)','2',{from:'3',to:'2',term:'1',msgType:14}],
+ ['MsgTransferLeader to the leader from follower 3','1',{from:'3',to:'1',term:'1',msgType:13}],
+ ['MsgTransferLeader to the leader naming learner 4','1',{from:'4',to:'1',term:'1',msgType:13}],
+ ['MsgReadIndex with empty entries to the leader','1',{from:'2',to:'1',term:'1',msgType:15,entries:[]}],
+ ['MsgReadIndex with empty entries to a FOLLOWER','2',{from:'3',to:'2',term:'1',msgType:15,entries:[]}],
+ ['append non-contiguous','2',{from:'1',to:'2',term:'1',logTerm:'1',index:'2',msgType:3,commit:'2',entries:[{term:'1',index:'3',entryType:0,data:''},{term:'1',index:'9',entryType:0,data:''}]}],
+ ['appendResponse index 99 to leader','1',{from:'2',to:'1',term:'1',msgType:4,index:'99'}],
+ ['heartbeatResponse from learner with commit 99','1',{from:'4',to:'1',term:'1',msgType:9,commit:'99'}],
+];
+for(const r of rows) console.log(run(...r));

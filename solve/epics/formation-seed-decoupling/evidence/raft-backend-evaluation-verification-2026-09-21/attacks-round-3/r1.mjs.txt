@@ -1,0 +1,44 @@
+import {createDeterministicCluster, instantiateFreshForkedCore, loadForkedCore, confChangeV2} from './forked-core-harness.js';
+const quiet = (f) => { const e = console.error; console.error = () => {}; try { return f(); } finally { console.error = e; } };
+// 1. real durable records from a real group that has a log, a hard state and a changed configuration
+const src = createDeterministicCluster({voters:['1','2','3'],learners:['4']});
+src.campaignOn('1'); src.settle(400);
+for (let i=0;i<5;i++){ src.core.propose(src.handleOf('1'), Buffer.from('x'+i)); src.settle(400);} 
+src.proposeConfChangeV2('1', confChangeV2([{type:0,nodeId:'4'}])); src.settle(400);
+src.core.propose(src.handleOf('1'), Buffer.from('y')); src.settle(400);
+const RECORDS = {}; for (const id of ['1','2','3','4']) RECORDS[id] = JSON.parse(JSON.stringify(src.durableSnapshotOf(id)));
+console.log('source record peer1:', JSON.stringify({hs:RECORDS['1'].hardState, last:RECORDS['1'].entries.at(-1).index, applied:RECORDS['1'].appliedIndex, conf:RECORDS['1'].confState}));
+const opts = (id, rec) => ({id, peers:[...rec.confState.voters], learners:[...(rec.confState.learners||[])], electionTick:10, heartbeatTick:3, applied:String(rec.appliedIndex), bootstrap:{hardState:rec.hardState||undefined, snapshot:rec.snapshot||undefined, entries:rec.entries, confState:rec.confState}});
+// 2. kill a runtime
+const fatalMsg={from:'2',to:'2',term:'1',logTerm:'0',index:'0',msgType:8,entries:[],commit:'99',reject:false,rejectHint:'0'};
+function kill(rt){ return quiet(()=>{ const by=rt.create_node({id:'1',peers:['1','2','3'],learners:[],electionTick:10,heartbeatTick:3}); const vs=[]; for(let i=0;i<600;i++) vs.push(rt.create_node({id:'2',peers:['1','2','3'],learners:[],electionTick:10,heartbeatTick:3})); let n=0; for(const h of vs){ try{rt.step(h,fatalMsg);}catch(e){ if(/unreachable/.test(e.message)) n++; else return {n, died:e.message}; } try{rt.conf_state(by);}catch(e){return {n, died:e.message};} } return {n, died:null}; }); }
+const R0 = instantiateFreshForkedCore();
+const k = kill(R0); console.log('R0 fatal budget:', JSON.stringify(k));
+let r0calls={}; for (const [n,f] of [['handle_count',()=>R0.handle_count()],['create_node',()=>R0.create_node({id:'1',peers:['1'],learners:[],electionTick:10,heartbeatTick:3})],['wasm_memory_bytes',()=>R0.wasm_memory_bytes()]]) { try { r0calls[n]=quiet(f);} catch(e){ r0calls[n]='THREW '+e.message; } } console.log('R0 after death:', JSON.stringify(r0calls), 'R0 memory buffer bytes', R0.__wasm.memory.buffer.byteLength);
+// 3. fresh instance
+const R1 = instantiateFreshForkedCore();
+console.log('fresh: R1!==R0', R1!==R0, 'distinct wasm exports', R1.__wasm!==R0.__wasm, 'distinct Memory', R1.__wasm.memory!==R0.__wasm.memory, 'handle_count', R1.handle_count(), 'memory', R1.wasm_memory_bytes(), 'loadForkedCore()===R1', loadForkedCore()===R1);
+// 4. restore N groups of 4 peers from the durable records, some damaged
+function pump(rt, nodes, max=2000){ const inbox=new Map([...nodes.keys()].map(i=>[i,[]])); const out=(m)=>{ const q=inbox.get(String(m.to)); if(q) q.push(m); }; const applyAll=(n,h,ents)=>{ for(const e of ents||[]){ if(Number(e.entryType)!==0){ const ch=rt.decode_conf_change_entry(Number(e.entryType), e.data); const cs=rt.apply_conf_change(h,ch); rt.set_conf_state(h,cs);} n.applied=String(e.index);} };
+  for(let r=0;r<max;r++){ let busy=false; for(const [id,n] of nodes){ const q=inbox.get(id); while(q.length){ busy=true; try{ rt.step(n.h,q.shift()); }catch(e){ if(/unreachable/.test(e.message)) throw e; } } if(rt.has_ready(n.h)){ busy=true; const rd=rt.take_ready(n.h); (rd.messages||[]).forEach(out); rt.persist_ready(n.h); applyAll(n,n.h,rd.committedEntries); (rd.persistedMessages||[]).forEach(out); const l=rt.advance_append(n.h); if(l.commitIndex) rt.persist_commit_index(n.h,l.commitIndex); (l.messages||[]).forEach(out); applyAll(n,n.h,l.committedEntries); rt.advance_apply(n.h);} } if(!busy) return r; } return -1; }
+function restoreGroups(rt, N, damagedAt){ const groups=[]; const reported=[]; const t0=process.hrtime.bigint(); const m0=rt.wasm_memory_bytes();
+  for(let g=0; g<N; g++){ const nodes=new Map(); let bad=null; const dmg=damagedAt[g];
+    for(const id of ['1','2','3','4']){ let rec=RECORDS[id]; if(dmg && id==='2'){ rec=JSON.parse(JSON.stringify(rec)); dmg(rec);} try{ nodes.set(id,{h:quiet(()=>rt.create_node(opts(id,rec))), applied:rec.appliedIndex}); }catch(e){ bad={peer:id, error:String(e.message)}; } }
+    if(bad) reported.push({group:g, ...bad}); groups.push({nodes, bad}); }
+  return {groups, reported, ms:Number(process.hrtime.bigint()-t0)/1e6, mem:rt.wasm_memory_bytes()-m0, handles:rt.handle_count()}; }
+function functional(rt, grp){ const nodes=new Map([...grp.nodes]); const lead=[...nodes.keys()].find(id=>id!=='2')||'1'; rt.campaign(nodes.get(lead).h); pump(rt,nodes); const st=Object.fromEntries([...nodes].map(([id,n])=>[id,rt.status(n.h)])); const leader=[...nodes.keys()].find(id=>Number(st[id].raftState)===2); if(!leader) return {ok:false, why:'no leader', st:Object.fromEntries(Object.entries(st).map(([k,v])=>[k,v.raftState]))};
+  rt.propose(nodes.get(leader).h, Buffer.from('after-recovery')); pump(rt,nodes); rt.propose_conf_change_v2(nodes.get(leader).h, confChangeV2([{type:1,nodeId:'3'}])); pump(rt,nodes); for(let i=0;i<3;i++){ rt.tick(nodes.get(leader).h); pump(rt,nodes);} 
+  const cs=[...nodes].filter(([id])=>id!=='3').map(([id,n])=>rt.conf_state(n.h).voters.join()); const ap=[...nodes].filter(([id])=>id!=='3').map(([id,n])=>rt.status(n.h).applied); return {ok:new Set(cs).size===1 && !cs[0].split(',').includes('3'), leader, term:rt.status(nodes.get(leader).h).term, voters:cs[0], applied:ap.join('/')}; }
+for (const N of [100, 1000]) { const rt = N===100 ? R1 : instantiateFreshForkedCore();
+  const damagedAt = {5:(r)=>{r.appliedIndex='99';}, 37:(r)=>{r.appliedIndex='99';}, 60:(r)=>{r.hardState={...r.hardState,commit:'99'};},
+    70:(r)=>{r.confState={...r.confState,voters:['1','2','9']};}, /* inconsistent but maybe accepted */ 71:(r)=>{r.hardState={...r.hardState,vote:'77'};}, 72:(r)=>{r.entries=r.entries.slice(0,-2);} };
+  const res = restoreGroups(rt, N, damagedAt);
+  console.log(`N=${N}: ${N*4} nodes attempted, handles=${res.handles}, ${res.ms.toFixed(1)} ms, memory +${res.mem} bytes; reported:`, JSON.stringify(res.reported));
+  const sample=[0,1,36,38,59,61,70,71,72,N-1]; const t1=process.hrtime.bigint(); for(const g of sample){ const grp=res.groups[g]; let f; try{ f=quiet(()=>functional(rt,grp)); }catch(e){ f={ok:false, threw:String(e.message)}; } console.log('   group',g, grp.bad?'(DAMAGED member '+grp.bad.peer+')':'', JSON.stringify(f)); }
+  // healthy groups still fine after damaged ones were refused and after the inconsistent group ran?
+  console.log('   runtime still healthy:', (()=>{try{return rt.handle_count();}catch(e){return 'DEAD '+e.message;}})()); }
+// 5. single-node-per-group comparison with their figure, but from a REAL record
+for (const N of [100,1000]) { const rt=instantiateFreshForkedCore(); const m0=rt.wasm_memory_bytes(); const t0=process.hrtime.bigint(); for(let g=0;g<N;g++) rt.create_node(opts('1',RECORDS['1'])); console.log(`one node per group from a real record, N=${N}: ${(Number(process.hrtime.bigint()-t0)/1e6).toFixed(1)} ms, +${rt.wasm_memory_bytes()-m0} bytes`);
+  const rt2=instantiateFreshForkedCore(); const m1=rt2.wasm_memory_bytes(); const t1=process.hrtime.bigint(); for(let g=0;g<N;g++) rt2.create_node({id:'1',peers:['1','2','3'],learners:[],electionTick:10,heartbeatTick:3,applied:'0'}); console.log(`   the artifact's shape (no durable record at all), N=${N}: ${(Number(process.hrtime.bigint()-t1)/1e6).toFixed(1)} ms, +${rt2.wasm_memory_bytes()-m1} bytes`); }
+// 6. does the dead instance leak?
+if (global.gc) { const base=()=>{global.gc(); return process.memoryUsage();}; const b0=base(); for(let i=0;i<8;i++){ const d=instantiateFreshForkedCore(); kill(d);} const b1=base(); console.log('8 kill/replace cycles: rss', ((b1.rss-b0.rss)/1048576).toFixed(1),'MiB, arrayBuffers', ((b1.arrayBuffers-b0.arrayBuffers)/1048576).toFixed(1),'MiB, external', ((b1.external-b0.external)/1048576).toFixed(1),'MiB'); }

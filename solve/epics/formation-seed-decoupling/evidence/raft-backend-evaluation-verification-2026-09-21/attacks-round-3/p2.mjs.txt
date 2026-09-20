@@ -1,0 +1,12 @@
+// only names a subject TEST file may import (no evidence-minting accessor)
+import {createDeterministicCluster, assertMembershipEqual, auditAgainstLedger} from './forked-core-harness.js';
+import {evidenceAccessorImportCensus, rawMembershipAssertions} from './membership-assertion-census.js';
+import fs from 'node:fs';
+const k=createDeterministicCluster({voters:['1'],learners:[]});
+k.corruptDurableRecord('1','nothing',(rec)=>{rec.confState={voters:['1'],votersOutgoing:[],learners:['7','8','9'],learnersNext:[]};});
+k.crash('1'); const created=k.restart('1');
+console.log('minted in a test without any minting import:', created.learners, 'audit:', JSON.stringify(auditAgainstLedger({learners:created.learners}).violations));
+assertMembershipEqual(created.learners, created.learners, 'x'); console.log('assert helper accepted');
+const src = fs.readFileSync(new URL(import.meta.url),'utf8');
+console.log('census on this file text:', rawMembershipAssertions(src,'p2').length, 'refusals');
+console.log(JSON.stringify(evidenceAccessorImportCensus().imported));

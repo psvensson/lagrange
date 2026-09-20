@@ -1,0 +1,10 @@
+import {runRestartBoundary, boundaryMatrixSpecs} from './core-scenarios.js';
+import {setRestoreFaultForNegativeControl} from './forked-core-harness.js';
+import {localRestoreViolations} from './restore-oracle.js';
+for (const b of ['joint-left','ready-advanced','joint-committed']) {
+const spec = boundaryMatrixSpecs().find(s=>s.boundary===b&&s.role==='follower'&&s.batch==='mixed');
+setRestoreFaultForNegativeControl({why:'ab', corruptRecord:(r)=>{r.appliedIndex='0';}});
+let row; try { row = runRestartBoundary(spec.boundary, spec.role, spec.batch, spec.options);} catch(e){console.log(b,'threw',e.message.slice(0,200)); continue;} finally {setRestoreFaultForNegativeControl(null);}
+const l=row.localRestoreCorrectness;
+console.log(b, JSON.stringify({calls:l.applyConfChangeCalls, refusals: row.applyRefusalsWholeRun, restored:l.restoredConfState, viol: localRestoreViolations(row).map(v=>v.check), conv: row.eventualClusterConvergence.converged}));
+}

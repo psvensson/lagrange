@@ -1,0 +1,20 @@
+import {runRestartBoundary, boundaryMatrixSpecs} from './core-scenarios.js';
+import {localRestoreViolations, restoreOutcomeFingerprint} from './restore-oracle.js';
+const specs = boundaryMatrixSpecs();
+console.log('specs', specs.length);
+for (const atk of ['cacheLearner','learners','outgoing1','learnerToVoter']) {
+  const res = {local:0, inert:0, convOnly:0, green:0, threw:0, greenAt:[], convAt:[], checks:{}};
+  for (const spec of specs) {
+    delete process.env.ATK;
+    const honest = runRestartBoundary(spec.boundary, spec.role, spec.batch, spec.options);
+    process.env.ATK = atk; process.env.LAGRANGE_SERVICE_ROWS='9';
+    let rec;
+    try { rec = runRestartBoundary(spec.boundary, spec.role, spec.batch, spec.options); } catch (e) { res.threw++; res.threwMsg=String(e.message).slice(0,120); continue; }
+    const v = localRestoreViolations(rec);
+    if (v.length) { res.local++; for (const x of v) res.checks[x.check]=(res.checks[x.check]||0)+1; continue; }
+    if (restoreOutcomeFingerprint(rec) === restoreOutcomeFingerprint(honest)) { res.inert++; continue; }
+    if (rec.eventualClusterConvergence.converged !== true) { res.convOnly++; res.convAt.push(rec.id); continue; }
+    res.green++; res.greenAt.push(rec.id);
+  }
+  console.log(atk, JSON.stringify(res));
+}

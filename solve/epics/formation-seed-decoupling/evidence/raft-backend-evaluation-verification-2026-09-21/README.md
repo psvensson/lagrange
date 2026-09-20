@@ -1,6 +1,6 @@
 # Independent verification of raft-backend-evaluation (2026-09-21)
 
-Two independent adversarial verification rounds of the quest
+Three independent adversarial verification rounds of the quest
 `raft-backend-evaluation`, in full, with the verifiers' attack scripts stored as
 text (they ran against fixture copies and are not runnable from here). Both
 rounds REJECTED the evaluation's receipts; both judged, from their own
@@ -24,3 +24,24 @@ decisive incompatibility exists.
 The quest's work is staged and uncommitted in the worktree
 `.claude/worktrees/raft-backend-evaluation`; the quest log carries both
 verdicts. Record only.
+- `round-3.md` - staged tree 1e7a3e2da. The final round, under the owner's
+  approved last repair. CLOSED: the restore oracle is independent of
+  `create_node` and every injection and binding-bug fault is caught locally in
+  the real receipt; the mutant classifier can fail, with an honest control and
+  all eleven mutants differentiated. Two of the same four remain, so the quest
+  stops: membership evidence is still forgeable (the `durable-record` source
+  kind is unchecked and its snapshot unfrozen; the proposal ledger is
+  process-global and never value-compared; `witness.tag` brands a literal), and
+  owner attack 11 succeeds with a false voter set surviving regeneration; and
+  the hosting record still asserts the withdrawn single-group blast radius in
+  the JSON while its recovery measurement restores nothing from durable state.
+  It also found a substantive defect in a recorded obligation - the ingress
+  validator's sender rule drops legitimate Raft traffic - and further core
+  behaviours a backend must know.
+
+The evaluation's own tree is preserved as the tagged object
+`raft-backend-evaluation/round-3-rejected-tree` (`fcc67091e`, tree
+`18be4ede3`); it is not on a branch, because three of its files exceed the test
+file-size ratchet and the hook was not bypassed. **Nothing in the evaluation may
+be cited as certified evidence.** What the three verifiers measured for
+themselves may be.

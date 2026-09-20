@@ -1,0 +1,5 @@
+import {runTriggerShifts} from './core-scenarios.js';
+const E=console.error; console.error=()=>{}; const s=runTriggerShifts(); console.error=E;
+const by={}; for(const r of s.rows) by[r.outcome]=(by[r.outcome]||0)+1;
+console.log(JSON.stringify({total:s.total, red:s.red, survived:s.survived, by}));
+console.log(JSON.stringify(s.rows.filter(r=>r.outcome==='facts-do-not-hold').slice(0,3)).slice(0,900));

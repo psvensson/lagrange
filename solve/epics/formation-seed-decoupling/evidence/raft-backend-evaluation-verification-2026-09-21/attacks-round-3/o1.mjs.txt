@@ -1,0 +1,7 @@
+import {runRestartBoundary, boundaryMatrixSpecs} from './core-scenarios.js';
+const sh=(c)=>c?`${c.voters}|${c.votersOutgoing}|${c.learners}|${c.learnersNext}|${c.autoLeave}`:'null';
+for (const spec of boundaryMatrixSpecs()) {
+  const r = runRestartBoundary(spec.boundary, spec.role, spec.batch, spec.options);
+  const f=r.facts; const re = Number(f.durableCommit)>=Number(f.confIndex) && Number(f.durableApplied)<Number(f.confIndex);
+  console.log(r.id.padEnd(70), re?'REAPPLY':'noreapp', 'dur',sh(f.durableConfStateFull),'pre',sh(f.inMemoryConfStateFull),'surv',sh(r.survivorConfStateAfterCrash),'rest',sh(r.localRestoreCorrectness.restoredConfState), 'newLeader', r.newLeaderAfterCrash, 'tv', JSON.stringify(r.localRestoreCorrectness.termAndVote.afterRestore), f.coreTermBeforeCrash, f.coreVoteBeforeCrash, 'dc/da/ci',f.durableCommit,f.durableApplied,f.confIndex);
+}

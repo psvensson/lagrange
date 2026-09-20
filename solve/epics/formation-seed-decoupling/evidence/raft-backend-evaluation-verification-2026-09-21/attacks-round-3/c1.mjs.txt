@@ -1,0 +1,23 @@
+import {instantiateFreshForkedCore, envelopeRefusal, confChangeV2} from './forked-core-harness.js';
+const quiet = (f) => { const e = console.error; console.error = () => {}; try { return f(); } finally { console.error = e; } };
+function world(validate){ const rt=instantiateFreshForkedCore(); const nodes=new Map(); const mk=(id,peers,learners=[])=>nodes.set(id,{h:rt.create_node({id,peers,learners,electionTick:10,heartbeatTick:3}), last:0, down:false, cut:false, refused:[]});
+  mk('1',['1','2','3']); mk('2',['1','2','3']); mk('3',['1','2','3']); mk('5',['1','2','3']);
+  const inbox=new Map([...nodes.keys()].map(i=>[i,[]]));
+  const out=(from)=>(m)=>{ const t=nodes.get(String(m.to)); if(!t||t.down||t.cut||nodes.get(from).cut) return; inbox.get(String(m.to)).push(m); };
+  const applyAll=(n,ents)=>{ for(const e of ents||[]){ if(Number(e.entryType)!==0){ const cs=rt.apply_conf_change(n.h, rt.decode_conf_change_entry(Number(e.entryType), e.data)); rt.set_conf_state(n.h,cs);} } };
+  const pump=()=>{ for(let r=0;r<3000;r++){ let busy=false; for(const [id,n] of nodes){ if(n.down) {inbox.get(id).length=0; continue;} const q=inbox.get(id); while(q.length){ busy=true; const m=q.shift(); if(validate){ const why=envelopeRefusal({message:m,selfId:id,groupId:'g',confState:rt.conf_state(n.h),durableLastIndex:n.last}); if(why){ n.refused.push(`${m.msgType} from ${m.from}: ${why}`); continue; } } try{ rt.step(n.h,m);}catch(e){ if(/unreachable/.test(e.message)) throw e; } }
+      if(rt.has_ready(n.h)){ busy=true; const rd=rt.take_ready(n.h); (rd.messages||[]).forEach(out(id)); for(const e of rd.entries||[]) n.last=Math.max(n.last,Number(e.index)); if(rd.snapshot?.metadata) n.last=Math.max(n.last,Number(rd.snapshot.metadata.index||0)); rt.persist_ready(n.h); applyAll(n,rd.committedEntries); (rd.persistedMessages||[]).forEach(out(id)); const l=rt.advance_append(n.h); if(l.commitIndex) rt.persist_commit_index(n.h,l.commitIndex); (l.messages||[]).forEach(out(id)); applyAll(n,l.committedEntries); rt.advance_apply(n.h);} } if(!busy) return; } };
+  return {rt,nodes,pump}; }
+for (const validate of [false,true]) { quiet(()=>{}); const {rt,nodes,pump}=world(validate); const H=(id)=>nodes.get(id).h; const st=(id)=>rt.status(H(id));
+  rt.campaign(H('1')); pump(); rt.propose(H('1'),Buffer.from('a')); pump();
+  nodes.get('3').cut=true;                                   // 3 lags: partitioned
+  rt.propose_conf_change_v2(H('1'), confChangeV2([{type:0,nodeId:'5'}])); pump(); for(let i=0;i<6;i++){rt.tick(H('1')); pump();}
+  rt.propose(H('1'),Buffer.from('b')); pump();
+  const conf5=rt.conf_state(H('5')).voters.join(), conf3=rt.conf_state(H('3')).voters.join();
+  rt.campaign(H('5')); pump();                                // 5 becomes leader with 1,2
+  const lead=['1','2','3','5'].filter(id=>Number(st(id).raftState)===2).join();
+  nodes.get('1').down=true;                                   // old leader dies
+  nodes.get('3').cut=false;                                   // 3 is reachable again: 2,3,5 alive = 3 of 4 voters
+  for(let i=0;i<12;i++){ rt.tick(H('5')); pump(); }
+  rt.propose(H('5'),Buffer.from('c')); pump(); for(let i=0;i<12;i++){ rt.tick(H('5')); pump(); }
+  console.log(`validator=${validate}: conf on 5=[${conf5}] on lagging 3=[${conf3}] leader=${lead}; after heal: commit 5=${st('5').commit} 2=${st('2').commit} 3=${st('3').commit}; 3 conf=[${rt.conf_state(H('3')).voters.join()}]; leader last index=${nodes.get('5').last}; refusals on 3: ${nodes.get('3').refused.length} e.g. ${JSON.stringify([...new Set(nodes.get('3').refused)].slice(0,3))}; refusals elsewhere: ${['2','5'].map(i=>nodes.get(i).refused.length)}`); }
