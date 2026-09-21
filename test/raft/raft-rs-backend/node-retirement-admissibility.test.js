@@ -171,16 +171,30 @@ function admittedCount(outcomes) {
 }
 
 /**
- * What the live cluster looks like from outside the replica under test.
+ * What the live cluster looks like, read off the leading replica's own core.
+ *
+ * Deliberately not the driver's cluster-wide leader question: that one asks
+ * every replica including the retired one, whose opinion is exactly what
+ * this quest stops mattering. The leader's own term and the peer it believes
+ * leads are the core's answer about the live cluster.
  * @param {PartitionNodeCluster} cluster - The partition.
  * @param {string} leader - The replica measured as leading.
- * @return {Object} {term, leader}.
+ * @return {Object} {term, lead}.
  */
 function liveClusterState(cluster, leader) {
-  return {
-    term: cluster.coreStatus(leader).term,
-    leader: cluster.leaderReplicaId(),
-  };
+  const status = cluster.coreStatus(leader);
+  return {term: status.term, lead: status.lead};
+}
+
+/**
+ * Drop everything the transport is holding, so what appears afterwards can
+ * only have been originated by the replica under drive.
+ * @param {PartitionNodeCluster} cluster - The partition.
+ */
+function emptyTheTransport(cluster) {
+  for (const replicaId of FOUNDING) {
+    cluster.replica(replicaId).inbox.length = 0;
+  }
 }
 
 test('retirement is refused at the node, before the core is touched',
@@ -222,6 +236,7 @@ test('a retired replica neither ticks, campaigns, proposes nor admits ' +
     retire(cluster);
     const node = cluster.node(CUT_OFF);
     cluster.heal(CUT_OFF);
+    emptyTheTransport(cluster);
     const before = liveClusterState(cluster, leader);
     const ownTermBefore = cluster.coreStatus(CUT_OFF).term;
 
@@ -399,8 +414,9 @@ test('bypassing the retirement check restores the disruptive behaviour',
       assert.ok(BigInt(after.term) > BigInt(before.term),
         'bypassing the check must raise the live cluster\'s term again; it ' +
         `went ${before.term} -> ${after.term}`);
-      assert.notEqual(after.leader, before.leader,
-        'and the cluster must lose the leader it had');
+      assert.notEqual(after.lead, before.lead,
+        'and the replica that was leading must lose the leader it had; it ' +
+        `still believes ${after.lead} leads`);
     } finally {
       cluster.dispose();
     }

@@ -179,11 +179,10 @@ class RaftRsWasmProvider {
    */
   retireFromScheduling(node, retiredAt) {
     const control = this.partitionControlOf(node);
-    const recorded = control.store.putRetirement(
-      control.groupId, control.peerId, retiredAt);
-    control.retirement = control.store.readRetirement(
-      control.groupId, control.peerId);
-    control.driver.retired = true;
+    // One owner records it, and every caller that may refuse - the node
+    // before an active call, the driver before scheduling, the election
+    // guard before campaigning - reads that same owner afterwards.
+    const recorded = control.lifecycle.retire(retiredAt);
     control.driver.stop();
     control.driver.state = RAFT_RS_TICK_SCHEDULING.REFUSED_RETIRED;
     return Object.freeze({

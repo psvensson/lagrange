@@ -24,6 +24,7 @@
 
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {RaftRsPeerIdentityRegistry} from './raft-rs-peer-identity.js';
+import {RaftRsReplicaLifecycle} from './raft-rs-replica-lifecycle.js';
 import {RaftRsRuntimeHost} from './raft-rs-runtime-health.js';
 import {campaignRaftRsPeer} from './raft-rs-election-safety.js';
 import {createRaftRsNodeClass} from './raft-rs-node.js';
@@ -38,9 +39,6 @@ import {
 import {
   RAFT_RS_NODE_EVENT,
 } from './raft-rs-node-constants.js';
-import {
-  RAFT_RS_SCHEDULING_ELIGIBILITY,
-} from './raft-rs-durable-store-constants.js';
 import {
   RAFT_RS_ENTRY_DATA_ENCODING,
   RAFT_RS_PARTITION_ERROR_MSG,
@@ -106,18 +104,24 @@ class RaftRsPartitionTickDriver {
    * @param {Object} parts - The driver's inputs.
    * @param {Object} parts.timers - The substrate's clock.
    * @param {number} parts.intervalMs - The derived tick period.
-   * @param {boolean} parts.retired - Whether the durable record retired this
-   *   replica.
+   * @param {RaftRsReplicaLifecycle} parts.lifecycle - Whether this local
+   *   replica may participate at all. The driver holds no retirement flag of
+   *   its own: one owner answers that question for every caller.
    */
-  constructor({timers, intervalMs, retired}) {
+  constructor({timers, intervalMs, lifecycle}) {
     this.timers = timers;
     this.intervalMs = intervalMs;
-    this.retired = retired;
+    this.lifecycle = lifecycle;
     this.handle = null;
-    this.state = retired ?
+    this.state = lifecycle.retired ?
       RAFT_RS_TICK_SCHEDULING.REFUSED_RETIRED :
       RAFT_RS_TICK_SCHEDULING.STOPPED;
     this.ticksDriven = 0;
+  }
+
+  /** @return {boolean} Whether this replica is retired, per its owner. */
+  get retired() {
+    return this.lifecycle.retired;
   }
 
   /**
@@ -171,20 +175,19 @@ class RaftRsPartitionControl {
   /**
    * @param {Object} parts - The control's parts.
    */
-  constructor({node, store, registry, groupId, peerId, driver, retirement}) {
+  constructor({node, store, registry, groupId, peerId, driver, lifecycle}) {
     this.node = node;
     this.store = store;
     this.registry = registry;
     this.groupId = groupId;
     this.peerId = peerId;
     this.driver = driver;
-    this.retirement = retirement;
+    this.lifecycle = lifecycle;
   }
 
   /** @return {boolean} Whether the durable record retired this replica. */
   get retired() {
-    return this.retirement.eligibility ===
-      RAFT_RS_SCHEDULING_ELIGIBILITY.RETIRED;
+    return this.lifecycle.retired;
   }
 
   /** @return {string} The named scheduling state. */
@@ -236,15 +239,15 @@ function buildRaftRsPartitionNode(request) {
   const voters = bootstrapReplicaIds.map(
     (identity) => registry.registerReplica(identity));
 
-  // Read BEFORE the node exists, so nothing can tick between construction and
-  // the answer.
-  const retirement = store.readRetirement(groupId, peerId);
+  // Read BEFORE the node exists, so nothing can tick or be delivered between
+  // construction and the answer - and so a restart has the answer before it
+  // has anything else.
+  const lifecycle = new RaftRsReplicaLifecycle({store, groupId, peerId});
   const driver = new RaftRsPartitionTickDriver({
     timers: resolveTimeSource(
       request[RAFT_PARTITION_NODE_REQUEST.SUBSTRATE] || {}),
     intervalMs: tickIntervalMsOf(timing),
-    retired:
-      retirement.eligibility === RAFT_RS_SCHEDULING_ELIGIBILITY.RETIRED,
+    lifecycle,
   });
 
   const NodeClass = createRaftRsNodeClass({
@@ -254,6 +257,7 @@ function buildRaftRsPartitionNode(request) {
     peerId,
     voters,
     learners: [],
+    lifecycle,
     resolvePeerAddress: (raftPeerId) => {
       const identity = registry.replicaIdentityOf(raftPeerId);
       if (identity === null) {
@@ -274,7 +278,7 @@ function buildRaftRsPartitionNode(request) {
   node.on(RAFT_RS_NODE_EVENT.COMMIT, (data) =>
     applyCommittedEntry(Buffer.from(data, RAFT_RS_ENTRY_DATA_ENCODING)));
   const control = new RaftRsPartitionControl({
-    node, store, registry, groupId, peerId, driver, retirement});
+    node, store, registry, groupId, peerId, driver, lifecycle});
   if (request[RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION] === true) {
     driver.state = driver.retired ?
       RAFT_RS_TICK_SCHEDULING.REFUSED_RETIRED :

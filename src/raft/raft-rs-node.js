@@ -174,18 +174,48 @@ function createRaftRsNodeClass(context) {
     }
 
     /**
+     * Every active call passes through here FIRST.
+     *
+     * Active means anything that would take part in the group: a tick, a
+     * step, a proposal. The lifecycle owner is asked before the work runs,
+     * so a retired replica's refusal cannot depend on what the core would
+     * have said - the core is not reached at all (addendum §6). Reads are
+     * not active calls: a retired replica may still be inspected.
+     * @param {Function} work - What to do if this replica may.
+     * @return {Object} The work's outcome, or the typed refusal.
+     * @private
+     */
+    ifAdmitted(work) {
+      const admission = context.lifecycle.admit();
+      if (!admission.admitted) {
+        return Object.freeze({
+          admitted: false,
+          outcome: admission.outcome,
+          detail: admission.detail,
+          origin: null,
+          diagnosis: null,
+          trapped: false,
+          runtimeUnhealthy: false,
+        });
+      }
+      return work();
+    }
+
+    /**
      * Propose one command into the core, inside the trap boundary, and drain
      * what it made ready.
      * @param {*} command - The command's bytes.
      * @return {Object} The named dispatch outcome.
      */
     proposeCommand(command) {
-      const ran = this.host.run(this.key, (core, handle) =>
-        core.propose(handle, command));
-      if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
-        return this.outcomeOf(ran, null);
-      }
-      return this.drain();
+      return this.ifAdmitted(() => {
+        const ran = this.host.run(this.key, (core, handle) =>
+          core.propose(handle, command));
+        if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
+          return this.outcomeOf(ran, null);
+        }
+        return this.drain();
+      });
     }
 
     /** @return {string} The runtime's health, by name. */
@@ -314,11 +344,14 @@ function createRaftRsNodeClass(context) {
      * @return {Object} The dispatch outcome.
      */
     tickOnce() {
-      const ran = this.host.run(this.key, (core, handle) => core.tick(handle));
-      if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
-        return this.outcomeOf(ran, null);
-      }
-      return this.drain();
+      return this.ifAdmitted(() => {
+        const ran = this.host.run(this.key,
+          (core, handle) => core.tick(handle));
+        if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
+          return this.outcomeOf(ran, null);
+        }
+        return this.drain();
+      });
     }
 
     /**
@@ -402,22 +435,28 @@ function createRaftRsNodeClass(context) {
      * @private
      */
     ingest(envelope) {
-      const ran = this.host.run(this.key, (core, handle) =>
-        dispatchRaftRsMessage({
-          core,
-          handle,
-          envelope,
-          localGroupId: this.groupId,
-          localPeerId: this.peerId,
-        }));
-      if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
-        return this.outcomeOf(ran, null);
-      }
-      if (!ran.value.admitted) {
-        return this.outcomeOf(ran, ran.value);
-      }
-      const drained = this.drain();
-      return drained.trapped ? drained : this.outcomeOf(ran, ran.value);
+      // Before the envelope boundary and therefore before `step`: a retired
+      // replica's admissibility is a property of THIS replica's lifecycle,
+      // never of who sent the envelope, so nothing about the sender is
+      // looked at here.
+      return this.ifAdmitted(() => {
+        const ran = this.host.run(this.key, (core, handle) =>
+          dispatchRaftRsMessage({
+            core,
+            handle,
+            envelope,
+            localGroupId: this.groupId,
+            localPeerId: this.peerId,
+          }));
+        if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
+          return this.outcomeOf(ran, null);
+        }
+        if (!ran.value.admitted) {
+          return this.outcomeOf(ran, ran.value);
+        }
+        const drained = this.drain();
+        return drained.trapped ? drained : this.outcomeOf(ran, ran.value);
+      });
     }
 
     /**

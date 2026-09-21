@@ -327,6 +327,18 @@ const RAFT_RS_NODE_CONTEXT_FIELD = Object.freeze({
   RESOLVE_PEER_ADDRESS: 'resolvePeerAddress',
   DELIVER_PACKET: 'deliverPacket',
   SCHEDULE_TICK: 'scheduleTick',
+  // Whether this local replica may participate at all. Required, so a caller
+  // cannot build a node that has never asked the question: the node answers
+  // every active call with it BEFORE the core is touched (addendum §6).
+  LIFECYCLE: 'lifecycle',
+});
+
+// Whether an active call on this node is admitted, by name. A retired
+// replica's refusal is a typed result, not an exception and not a quiet
+// no-op: the caller is told which of the two it got.
+const RAFT_RS_NODE_ADMISSION = Object.freeze({
+  ADMITTED: 'admitted',
+  REPLICA_RETIRED: 'replica-retired',
 });
 
 const RAFT_RS_NODE_REQUIRED_CONTEXT = Object.freeze(
@@ -350,10 +362,16 @@ const RAFT_RS_NODE_ERROR_MSG = Object.freeze({
   unknownRole: (role) =>
     `the core reported raft_state ${JSON.stringify(role)}, which this ` +
     'backend has no seam state for; it refuses rather than guess a role',
+  replicaRetired: (groupId, peerId, retiredAt) =>
+    `replica ${peerId} of ${groupId} was retired at ${retiredAt} in this ` +
+    'replica\'s own durable record, so it takes no active part in the ' +
+    'group: the configuration it last knew may still list it, and that is ' +
+    'what the configuration is for, not permission to run',
 });
 
 export {
   RAFT_RS_CORE_ROLE_STATE,
+  RAFT_RS_NODE_ADMISSION,
   RAFT_RS_NODE_ERROR_MSG,
   RAFT_RS_NODE_EVENT,
   RAFT_RS_NODE_EVENT_VALUES,

@@ -25,6 +25,9 @@ import {
   RAFT_RS_NODE_EVENT,
 } from '../../../src/raft/raft-rs-node-constants.js';
 import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
+import {
+  RaftRsReplicaLifecycle,
+} from '../../../src/raft/raft-rs-replica-lifecycle.js';
 import {RaftRsRuntimeHost} from '../../../src/raft/raft-rs-runtime-health.js';
 
 const TEMP_PREFIX = 'raft-rs-node-surface-';
@@ -105,6 +108,11 @@ class NodeBackedCluster {
       groupId: this.groupId,
       peerId,
       voters: this.voters,
+      // The production owner of "may this local replica participate at all",
+      // reading this peer's own durable record - which holds no retirement,
+      // so it answers admitted.
+      lifecycle: new RaftRsReplicaLifecycle({
+        store, groupId: this.groupId, peerId}),
       resolvePeerAddress: (raftPeerId) => this.addressOf(raftPeerId),
       deliverPacket: (address, envelope) => this.queue(address, envelope),
       scheduleTick: () => undefined,

@@ -48,6 +48,9 @@ import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
 import {createRaftRsNodeClass} from '../../../src/raft/raft-rs-node.js';
 import {drainReady} from '../../../src/raft/raft-rs-ready-loop.js';
 import {
+  RaftRsReplicaLifecycle,
+} from '../../../src/raft/raft-rs-replica-lifecycle.js';
+import {
   instantiateRaftRsCore,
   raftRsBindingPaths,
 } from '../../../src/raft/raft-rs-core.js';
@@ -608,6 +611,11 @@ function nodeWithAThrowingResolver(fixture) {
     peerId: SOLE_VOTER,
     voters: [SOLE_VOTER, ABSENT_PEER],
     learners: [],
+    lifecycle: new RaftRsReplicaLifecycle({
+      store: fixture.group(PAIRED_GROUP).store,
+      groupId: PAIRED_GROUP,
+      peerId: SOLE_VOTER,
+    }),
     resolvePeerAddress: () => {
       throw new Error(HOST_ERROR.RESOLVE);
     },
