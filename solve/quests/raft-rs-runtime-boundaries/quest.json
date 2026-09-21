@@ -66,5 +66,6 @@
       "id": "checkpointed",
       "statement": "Every coherent step commits on the quest branch through the real pre-commit hook, never bypassed and never accommodated by raising a ratchet; landing, merging and pushing remain separate decisions."
     }
-  ]
+  ],
+  "sealedAt": "a41990bb57289ab2a56711a756faaa8ff4264aed"
 }
