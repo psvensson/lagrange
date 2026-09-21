@@ -49,6 +49,11 @@ const STUB_COMMITTED_INDEX = 9;
 const STUB_COMMAND = 'a-command';
 const STUB_ADDRESS = 'an-address';
 const STUB_TIMER = 'heartbeat';
+const TIMER_CLEAR = 'timers.clear';
+const TIMEOUT_CALL = 'timeout';
+// What the liferaft provider calls on a node, by name.
+const LIFERAFT_NODE_CALL = Object.freeze([
+  'command', 'join', 'heartbeat', TIMEOUT_CALL, 'end']);
 
 /**
  * Every JavaScript file under src.
@@ -84,28 +89,26 @@ function importedFileNames(file) {
 
 /**
  * A liferaft node that records what was done to it, so two drives can be
- * compared rather than described.
+ * compared rather than described. Its methods are built from the list of
+ * names the provider calls, so a method added to that surface appears here
+ * as an absent recording rather than as a silently missing member.
  * @return {Object} The recording node.
  */
 function recordingLiferaftNode() {
   const effects = [];
-  return {
+  const node = {
     effects,
     term: STUB_TERM,
     log: {committedIndex: STUB_COMMITTED_INDEX},
-    timers: {clear: (name) => effects.push(['timers.clear', name])},
-    command: (value) => {
-      effects.push(['command', value]);
-      return Promise.resolve();
-    },
-    join: (address) => effects.push(['join', address]),
-    heartbeat: (value) => effects.push(['heartbeat', value]),
-    timeout: () => {
-      effects.push(['timeout']);
-      return STUB_TIMEOUT_MS;
-    },
-    end: () => effects.push(['end']),
+    timers: {clear: (name) => effects.push([TIMER_CLEAR, name])},
   };
+  for (const name of LIFERAFT_NODE_CALL) {
+    node[name] = (...args) => {
+      effects.push([name, ...args]);
+      return name === TIMEOUT_CALL ? STUB_TIMEOUT_MS : Promise.resolve();
+    };
+  }
+  return node;
 }
 
 /**
