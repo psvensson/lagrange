@@ -30,6 +30,12 @@ import * as nodeConstants from '../../../src/raft/raft-rs-node-constants.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {drainReady} from '../../../src/raft/raft-rs-ready-loop.js';
 import {
+  CENSUS_CLEAN,
+  ENTRY_CLASS,
+  censusFindings,
+  censusOfCoreEntrySites,
+} from './core-entry-census.js';
+import {
   RAFT_PARTITION_NODE_REQUEST,
 } from '../../../src/raft/raft-provider-contract-constants.js';
 import {
@@ -61,6 +67,79 @@ const REMOVE_NODE = 1;
 const AUTO_TRANSITION = 0;
 const MSG_HEARTBEAT = 8;
 const ZERO_POSITION = '0';
+
+// What the node and the group are declared to expose, and what each entry
+// is. An entry the census finds and this table does not name is red until
+// someone decides which of the four it is; an entry named ACTIVE is driven
+// on a retired replica and must be refused.
+const NODE_ENTRIES = Object.freeze({
+  raftRsGroupParts: {entryClass: ENTRY_CLASS.INERT},
+  tickOnce: {entryClass: ENTRY_CLASS.ACTIVE, drive: (node) => node.tickOnce()},
+  proposeCommand: {
+    entryClass: ENTRY_CLASS.ACTIVE,
+    drive: (node, context) => node.proposeCommand(context.bytes),
+  },
+  emit: {
+    entryClass: ENTRY_CLASS.ACTIVE,
+    drive: (node, context) =>
+      node.emit(RAFT_RS_NODE_EVENT.DATA, context.envelope),
+  },
+  drain: {entryClass: ENTRY_CLASS.ACTIVE, drive: (node) => node.drain()},
+  ingest: {
+    entryClass: ENTRY_CLASS.ACTIVE,
+    drive: (node, context) => node.ingest(context.envelope),
+  },
+  send: {
+    entryClass: ENTRY_CLASS.ACTIVE,
+    drive: (node) => node.send([]) ?? {outcome: undefined},
+  },
+  end: {entryClass: ENTRY_CLASS.TEARDOWN},
+  setTickInterval: {entryClass: ENTRY_CLASS.INERT},
+  configureTickInterval: {entryClass: ENTRY_CLASS.INERT},
+  on: {entryClass: ENTRY_CLASS.INERT},
+  listeners: {entryClass: ENTRY_CLASS.INERT},
+  removeListener: {entryClass: ENTRY_CLASS.INERT},
+  notify: {entryClass: ENTRY_CLASS.INERT},
+  announce: {entryClass: ENTRY_CLASS.READ},
+  observe: {entryClass: ENTRY_CLASS.READ},
+  coreStatus: {entryClass: ENTRY_CLASS.READ},
+  stateOf: {entryClass: ENTRY_CLASS.INERT},
+  outcomeOf: {entryClass: ENTRY_CLASS.INERT},
+  ifAdmitted: {entryClass: ENTRY_CLASS.INERT},
+});
+
+const GROUP_ENTRIES = Object.freeze({
+  read: {entryClass: ENTRY_CLASS.READ},
+  tick: {entryClass: ENTRY_CLASS.ACTIVE, drive: (group) => group.tick()},
+  step: {
+    entryClass: ENTRY_CLASS.ACTIVE,
+    drive: (group, context) => group.step(context.envelope),
+  },
+  propose: {
+    entryClass: ENTRY_CLASS.ACTIVE,
+    drive: (group, context) => group.propose(context.bytes),
+  },
+  campaign: {
+    entryClass: ENTRY_CLASS.ACTIVE, drive: (group) => group.campaign()},
+  proposeConfigurationChange: {
+    entryClass: ENTRY_CLASS.ACTIVE,
+    drive: (group) => group.proposeConfigurationChange(
+      {transition: AUTO_TRANSITION, changes: []}),
+  },
+  drain: {
+    entryClass: ENTRY_CLASS.ACTIVE, drive: (group) => group.drain({})},
+  free: {entryClass: ENTRY_CLASS.TEARDOWN},
+});
+
+/**
+ * The declared table as the census reads it: name to class.
+ * @param {Object} entries - The declared entries.
+ * @return {Object} name to class.
+ */
+function declaredClasses(entries) {
+  return Object.fromEntries(Object.entries(entries)
+    .map(([name, entry]) => [name, entry.entryClass]));
+}
 
 /**
  * A clock that records what it was asked to schedule and schedules nothing.
@@ -194,11 +273,45 @@ function admittedCount(outcomes) {
  */
 async function seamAttacksAreRefused(cluster, node, refusal) {
   const parts = node.raftRsGroupParts();
-  assert.equal(parts.core, undefined,
-    'the seam must not be handed the unguarded runtime: every path ' +
-    'production uses has to be inside both boundaries');
-  assert.equal(parts.handle, undefined,
-    'nor a raw handle to call it with');
+
+  // THE CENSUS. Not two property names at depth one - everything reachable
+  // from what the seam hands out, at any depth, plus every entry method
+  // those objects expose against a declared table, plus the modules in src
+  // that can obtain a facade at all.
+  const census = censusOfCoreEntrySites({
+    node,
+    group: parts,
+    declaredNodeEntries: declaredClasses(NODE_ENTRIES),
+    declaredGroupEntries: declaredClasses(GROUP_ENTRIES),
+  });
+  assert.equal(censusFindings(census), CENSUS_CLEAN,
+    'the census of RawNode entry sites must be clean');
+
+  // And every entry the table calls ACTIVE is refused, because that IS the
+  // invariant: every production path that can invoke this RawNode first
+  // passes the same local lifecycle eligibility owner.
+  const context = {
+    envelope: {groupId: node.groupId, to: node.peerId, message: {
+      from: node.peerId, to: node.peerId, msgType: MSG_HEARTBEAT,
+      term: ZERO_POSITION, logTerm: ZERO_POSITION, index: ZERO_POSITION,
+      commit: ZERO_POSITION,
+    }},
+    bytes: new TextEncoder().encode(COMMAND),
+  };
+  for (const [name, entry] of Object.entries(GROUP_ENTRIES)) {
+    if (entry.entryClass !== ENTRY_CLASS.ACTIVE) {
+      continue;
+    }
+    assert.equal(entry.drive(parts, context).outcome, refusal,
+      `the group's ${name} reached the core on a retired replica`);
+  }
+  for (const [name, entry] of Object.entries(NODE_ENTRIES)) {
+    if (entry.entryClass !== ENTRY_CLASS.ACTIVE) {
+      continue;
+    }
+    assert.equal(entry.drive(node, context).outcome, refusal,
+      `the node's ${name} reached the core on a retired replica`);
+  }
 
   // A raw tick, a campaign and a step, through whatever the seam resolves.
   const readyBefore = parts.classified((core, handle) =>

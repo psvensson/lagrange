@@ -1,13 +1,13 @@
 {
   "schema": "test-receipt/1",
   "quest": "raft-rs-runtime-boundaries",
-  "status": "pass",
+  "status": "fail",
   "testFileDigests": {
     "test/raft/raft-rs-backend/failure-origin-domains.test.js": "0a4f1eeff74de3287fc2125335f365175120eaa472f952c563145dd4e05cb17f",
-    "test/raft/raft-rs-backend/node-retirement-admissibility.test.js": "fcb11d54d0d286e13bf8f4f5208c6a3e4d906a45e2279b6ee83f84759a8f3ab9",
+    "test/raft/raft-rs-backend/node-retirement-admissibility.test.js": "cbd6f1c2114159017e3bc0150815bf8aab06d4e092f456f1ff161cf4607cafb2",
     "test/raft/raft-rs-backend/two-boundary-scope.test.js": "ef0182bc632498478c0acce319e591fc7c8ec0f57070354534c0dbd9f1efd299"
   },
-  "generatedAt": "2026-09-21T06:39:17.415Z",
+  "generatedAt": "2026-09-21T15:14:10.594Z",
   "receipts": [
     {
       "id": "three-failure-domains-are-structurally-distinguished-not-inferred-from-error-type",
@@ -60,9 +60,10 @@
     },
     {
       "id": "a-retired-replica-neither-ticks-campaigns-proposes-nor-admits-envelopes",
-      "passed": true,
+      "passed": false,
       "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a retired replica neither ticks, campaigns, proposes nor admits envelopes$\" test/raft/raft-rs-backend/node-retirement-admissibility.test.js",
       "detail": "every active call refused by name, no outbound Raft traffic, its own core term unmoved and the live cluster's term and leader untouched",
+      "failure": "1 test(s) failed",
       "testFile": "test/raft/raft-rs-backend/node-retirement-admissibility.test.js"
     },
     {
