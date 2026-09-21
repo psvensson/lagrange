@@ -37,6 +37,26 @@ const RAFT_RS_CALL_OUTCOME = Object.freeze({
   RUNTIME_UNHEALTHY: 'runtime-unhealthy',
 });
 
+// What ONE INVOCATION of a core primitive reported. Three, and no more: the
+// binding returned normally, the binding returned its own refusal, or the
+// call trapped. Anything else that comes out of an invocation is not the
+// core's and is never given one of these names.
+const RAFT_RS_INVOCATION_RESULT = Object.freeze({
+  CORE_OK: 'core-ok',
+  CORE_REFUSED: 'core-refused',
+  CORE_FATAL: 'core-fatal',
+});
+
+// What KIND of operation an entry into the core is. The gate owns the
+// difference and nothing else does: an active entry takes part in the group
+// and a retired replica is refused one; a read inspects this replica's own
+// state; a teardown releases its handle.
+const RAFT_RS_CORE_ENTRY = Object.freeze({
+  ACTIVE: 'active',
+  READ: 'read',
+  TEARDOWN: 'teardown',
+});
+
 // WHERE a failure came from. Three domains, and the outcome above is the
 // consequence of one of them (prerequisite addendum §1).
 const RAFT_RS_FAILURE_ORIGIN = Object.freeze({
@@ -104,7 +124,9 @@ const RAFT_RS_RUNTIME_ERROR_MSG = Object.freeze({
 
 export {
   RAFT_RS_CALL_OUTCOME,
+  RAFT_RS_CORE_ENTRY,
   RAFT_RS_CORE_REFUSAL_TYPE,
+  RAFT_RS_INVOCATION_RESULT,
   RAFT_RS_FAILURE_ORIGIN,
   RAFT_RS_GROUP_ORIGIN,
   RAFT_RS_ORIGIN_OUTCOME,

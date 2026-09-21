@@ -31,6 +31,9 @@ import {
   RAFT_RS_ELECTION_REFUSAL,
 } from '../../../src/raft/raft-rs-election-safety-constants.js';
 import {
+  RAFT_RS_GROUP_READ,
+} from '../../../src/raft/raft-rs-group-access-constants.js';
+import {
   RAFT_RS_SCHEDULING_ELIGIBILITY,
 } from '../../../src/raft/raft-rs-durable-store-constants.js';
 import {
@@ -39,6 +42,25 @@ import {
 import {
   raftRsElectionAdmissibility,
 } from '../../../src/raft/raft-rs-election-safety.js';
+
+/**
+ * §11's three configuration rules, asked of this replica's own core state
+ * through the group's named reads.
+ * @param {Object} parts - The group's named operations.
+ * @return {Object} What the election owner answers for it.
+ */
+function admissibilityFromReads(parts) {
+  const status = parts.read(RAFT_RS_GROUP_READ.STATUS).value;
+  const confState = parts.read(RAFT_RS_GROUP_READ.CONF_STATE).value;
+  return raftRsElectionAdmissibility({
+    core: {
+      status: () => status,
+      conf_state: () => confState,
+    },
+    handle: 0,
+    peerId: status.id,
+  });
+}
 
 const FOUNDING = Object.freeze(['replica-a', 'replica-b', 'replica-c']);
 const CUT_OFF = 'replica-c';
@@ -122,9 +144,11 @@ test('the configuration rules alone admit a peer removed behind its back, ' +
     const {voters} = durableFactsOf(cluster, CUT_OFF);
     assert.ok(voters.includes(cutOffPeerId),
       'the cut-off replica still holds a configuration listing itself');
-    const admissibility = cluster.node(CUT_OFF).raftRsGroupParts()
-      .classified((core, handle) =>
-        raftRsElectionAdmissibility({core, handle})).value;
+    // The configuration rules alone, asked of the core's own state: the
+    // group's named reads are the only way to it, so the question is put to
+    // the same facts the election owner would read.
+    const parts = cluster.node(CUT_OFF).raftRsGroupParts();
+    const admissibility = admissibilityFromReads(parts);
     assert.equal(admissibility.admitted, true,
       'the configuration rules alone admit it; the detail said ' +
       `${admissibility.detail}`);

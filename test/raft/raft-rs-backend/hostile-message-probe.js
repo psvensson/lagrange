@@ -17,8 +17,12 @@ import process from 'node:process';
 import {
   RAFT_RS_CALL_OUTCOME,
   RAFT_RS_RUNTIME_HEALTH,
+  RAFT_RS_CORE_ENTRY,
   RaftRsRuntimeHost,
 } from '../../../src/raft/raft-rs-runtime-health.js';
+import {
+  RaftRsReplicaLifecycle,
+} from '../../../src/raft/raft-rs-replica-lifecycle.js';
 import {
   RAFT_RS_INGRESS_OUTCOME,
   admitRaftRsMessage,
@@ -143,13 +147,36 @@ function buildShape(shapeId, cluster) {
   }
 }
 
+/**
+ * A host that ADOPTS a runtime already in use, and instantiates a fresh one
+ * only when it replaces it.
+ *
+ * The host hands out no core, so a driver that already holds one gives it to
+ * the host instead of asking for it back.
+ * @param {Object} core - The runtime the driver is using.
+ * @return {RaftRsRuntimeHost} A host holding that runtime.
+ */
+function hostAdopting(core) {
+  let adopted = false;
+  return new RaftRsRuntimeHost({
+    instantiate: () => {
+      if (adopted) {
+        return instantiateRaftRsCore();
+      }
+      adopted = true;
+      return core;
+    },
+  });
+}
+
 function main() {
   const shapeId = process.argv[2];
   if (!Object.values(HOSTILE_SHAPE).some((shape) => shape.id === shapeId)) {
     usage();
   }
-  const host = new RaftRsRuntimeHost({instantiate: instantiateRaftRsCore});
-  const cluster = settledCluster(host.core);
+  const core = instantiateRaftRsCore();
+  const host = hostAdopting(core);
+  const cluster = settledCluster(core);
   const shape = buildShape(shapeId, cluster);
   const peer = cluster.peer(shape.to);
   // Who the recipient was and whether it was leading itself, so the
@@ -159,6 +186,8 @@ function main() {
   host.adoptGroup({
     groupId: GROUP_ID, peerId: peer.peerId, store: peer.store,
     handle: peer.handle,
+    lifecycle: new RaftRsReplicaLifecycle({
+      store: peer.store, groupId: GROUP_ID, peerId: peer.peerId}),
   });
   const verdict = admitRaftRsMessage({
     envelope: shape.envelope,
@@ -179,12 +208,13 @@ function main() {
     }, null, JSON_INDENT));
     return;
   }
-  const ran = host.run(GROUP_ID, (core, handle) => {
-    core.step(handle, shape.envelope.message);
-    if (shape.drain) {
-      cluster.settle(() => false, {rounds: 4, ticking: false});
-    }
-  });
+  const ran = host.enter(GROUP_ID, RAFT_RS_CORE_ENTRY.ACTIVE,
+    (guardedCore, handle) => {
+      guardedCore.step(handle, shape.envelope.message);
+      if (shape.drain) {
+        cluster.settle(() => false, {rounds: 4, ticking: false});
+      }
+    });
   process.stdout.write(JSON.stringify({
     shape: shapeId,
     admitted: true,

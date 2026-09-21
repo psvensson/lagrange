@@ -41,6 +41,7 @@ import * as runtimeHealthConstants
   from '../../../src/raft/raft-rs-runtime-health-constants.js';
 import {
   RAFT_RS_CALL_OUTCOME,
+  RAFT_RS_CORE_ENTRY,
   RAFT_RS_RUNTIME_HEALTH,
   RaftRsRuntimeHost,
 } from '../../../src/raft/raft-rs-runtime-health.js';
@@ -190,6 +191,8 @@ function runtimeWithGroups(declarations) {
     const store = new RaftRsDurableStore(db);
     host.openGroup({
       key: groupId, groupId, peerId: SOLE_VOTER, store,
+      lifecycle: new RaftRsReplicaLifecycle({
+        store, groupId, peerId: SOLE_VOTER}),
       voters: voters ?? [SOLE_VOTER], learners: [],
     });
     groups.set(groupId, {groupId, dbFile, db, store});
@@ -200,7 +203,7 @@ function runtimeWithGroups(declarations) {
     group: (groupId) => groups.get(groupId),
     cycle(groupId, {send, applyEntry} = {}) {
       const group = groups.get(groupId);
-      return host.run(groupId, (core, handle) => drainReady({
+      return enterActive(host, groupId, (core, handle) => drainReady({
         core, handle, store: group.store, groupId,
         send, applyEntry,
         maxCycles: DRAIN_CYCLES_FOR_ONE_STEP,
@@ -220,12 +223,23 @@ function runtimeWithGroups(declarations) {
 }
 
 /**
+ * Enter one group's core for an active operation, the way production does.
+ * @param {Object} host - The runtime host.
+ * @param {string} key - The hosted group.
+ * @param {Function} work - Called with (guarded core, handle).
+ * @return {Object} The named call outcome.
+ */
+function enterActive(host, key, work) {
+  return host.enter(key, RAFT_RS_CORE_ENTRY.ACTIVE, work);
+}
+
+/**
  * Elect the sole voter of a group, so the shapes that need a leader have one.
  * @param {Object} fixture - The runtime fixture.
  * @param {string} groupId - The group.
  */
 function electSoleVoter(fixture, groupId) {
-  const campaigned = fixture.host.run(groupId,
+  const campaigned = enterActive(fixture.host, groupId,
     (core, handle) => core.campaign(handle));
   assert.equal(campaigned.outcome, RAFT_RS_CALL_OUTCOME.COMPLETED,
     'the sole voter must be able to campaign');
@@ -243,11 +257,11 @@ function electSoleVoter(fixture, groupId) {
  */
 function readyWithWorkToDo(fixture, groupId) {
   electSoleVoter(fixture, groupId);
-  const proposed = fixture.host.run(groupId,
+  const proposed = enterActive(fixture.host, groupId,
     (core, handle) => core.propose(handle, commandBytes()));
   assert.equal(proposed.outcome, RAFT_RS_CALL_OUTCOME.COMPLETED,
     'the leader must be able to carry this proposal');
-  const ready = fixture.host.run(groupId,
+  const ready = enterActive(fixture.host, groupId,
     (core, handle) => core.has_ready(handle));
   assert.equal(ready.value, true,
     'the core itself must say it has work for the host to do, or the shape ' +
@@ -263,9 +277,9 @@ function readyWithWorkToDo(fixture, groupId) {
 function consequencesOf(fixture, groupId) {
   return {
     health: fixture.host.health,
-    groupOutcome: fixture.host.run(groupId,
+    groupOutcome: enterActive(fixture.host, groupId,
       (core, handle) => core.status(handle)).outcome,
-    unrelatedOutcome: fixture.host.run(UNRELATED_GROUP,
+    unrelatedOutcome: enterActive(fixture.host, UNRELATED_GROUP,
       (core, handle) => core.status(handle)).outcome,
   };
 }
@@ -290,38 +304,34 @@ function originOf(ran) {
  * @return {Object|null} The first non-completed outcome, or null.
  */
 function stackExhaustedInsideAnInvocation(fixture) {
-  // Recurse until the engine refuses another frame, then try the invocation
-  // at every depth on the way back out. At the deepest levels there is not
-  // even room to ENTER one, and those failures are host by construction; one
-  // level further out there is room to enter it and not to finish it, and
-  // that is the trap this receipt is about. Which level that is belongs to
-  // the engine, so it is searched for rather than declared.
-  let trapped = null;
+  // Recurse until the engine refuses another frame, then attempt the call at
+  // every depth on the way back out. The depth at which a call can no longer
+  // be made belongs to the engine, so it is searched for rather than
+  // declared; what matters is what production says about the first attempt
+  // that could not be completed.
+  let measured = null;
   const seen = new Map();
   const descend = () => {
     try {
       descend();
     } catch {
-      // Exhausted here; the attempt below enters the invocation from this
-      // depth as the stack unwinds.
+      // Exhausted here; the attempt below is made from this depth.
     }
-    if (trapped !== null) {
+    if (measured !== null) {
       return;
     }
-    // Several primitives, because how much JavaScript the generated glue
-    // runs inside one invocation differs per call, and the wider that is the
-    // wider the band where the call can be entered but not finished.
     for (const invoke of STACK_PROBE_CALLS) {
-      const ran = fixture.host.run(GROUP_UNDER_TEST, invoke);
+      const ran = fixture.host.enter(
+        GROUP_UNDER_TEST, RAFT_RS_CORE_ENTRY.READ, invoke);
       seen.set(ran.outcome, (seen.get(ran.outcome) ?? 0) + 1);
-      if (ran.outcome === RAFT_RS_CALL_OUTCOME.TRAPPED) {
-        trapped = ran;
+      if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
+        measured = ran;
         return;
       }
     }
   };
   descend();
-  return {trapped, seen: [...seen.entries()]};
+  return {measured, seen: [...seen.entries()]};
 }
 
 /** @return {Uint8Array} A command's bytes. */
@@ -338,7 +348,7 @@ test('the three failure domains are structurally distinguished, not ' +
   try {
     // 1. The core declines a normal operation. The binding returns its Err,
     // which is not a JavaScript Error at all.
-    const refused = fixture.host.run(GROUP_UNDER_TEST,
+    const refused = enterActive(fixture.host, GROUP_UNDER_TEST,
       (core, handle) => core.propose(handle, commandBytes()));
     assert.equal(originOf(refused), origin.CORE_REFUSAL,
       'a raft-rs refusal must be named a core refusal; it said ' +
@@ -357,7 +367,7 @@ test('the three failure domains are structurally distinguished, not ' +
     // 3. The core panics. It is an Error too - and a different domain. It
     // has to be a group that will really accept the heartbeat, so it is the
     // untouched follower rather than the leader elected above.
-    const trapped = fixture.host.run(PAIRED_GROUP, (core, handle) => {
+    const trapped = enterActive(fixture.host, PAIRED_GROUP, (core, handle) => {
       core.step(handle, {
         from: ABSENT_PEER, to: SOLE_VOTER, msgType: MSG_HEARTBEAT,
         term: FOLLOWER_TERM, logTerm: ZERO_POSITION, index: ZERO_POSITION,
@@ -406,7 +416,7 @@ test('the fatal classification boundary encloses only the WASM invocation',
       {groupId: GROUP_UNDER_TEST}, {groupId: UNRELATED_GROUP}]);
     try {
       electSoleVoter(fixture, GROUP_UNDER_TEST);
-      fixture.host.run(GROUP_UNDER_TEST,
+      enterActive(fixture.host, GROUP_UNDER_TEST,
         (core, handle) => core.propose(handle, commandBytes()));
       // The verifier's own reproduction: the replica's SQLite handle is
       // closed, so the Ready loop's durable write - host JavaScript, after a
@@ -439,7 +449,7 @@ test('an ordinary core refusal leaves the runtime and its groups usable',
     try {
       // A follower with no leader cannot carry a proposal: raft-rs declines
       // and returns, so nothing unwound.
-      const refused = fixture.host.run(GROUP_UNDER_TEST,
+      const refused = enterActive(fixture.host, GROUP_UNDER_TEST,
         (core, handle) => core.propose(handle, commandBytes()));
       assert.equal(refused.outcome, RAFT_RS_CALL_OUTCOME.CORE_REFUSED);
       const consequences = consequencesOf(fixture, GROUP_UNDER_TEST);
@@ -474,7 +484,7 @@ test('an ordinary core refusal leaves the runtime and its groups usable',
       // And the refusal is retryable in the sense that matters: when the
       // precondition the core named is met, the same call completes.
       electSoleVoter(fixture, GROUP_UNDER_TEST);
-      const retried = fixture.host.run(GROUP_UNDER_TEST,
+      const retried = enterActive(fixture.host, GROUP_UNDER_TEST,
         (core, handle) => core.propose(handle, commandBytes()));
       assert.equal(retried.outcome, RAFT_RS_CALL_OUTCOME.COMPLETED,
         'the same proposal must succeed once the core can carry it');
@@ -489,7 +499,7 @@ test('a host failure is never upgraded to a WASM fatal', async () => {
     {groupId: PAIRED_GROUP, voters: [SOLE_VOTER, ABSENT_PEER]}]);
   try {
     electSoleVoter(fixture, GROUP_UNDER_TEST);
-    fixture.host.run(GROUP_UNDER_TEST,
+    enterActive(fixture.host, GROUP_UNDER_TEST,
       (core, handle) => core.propose(handle, commandBytes()));
 
     // The application's own committed-entry callback throws.
@@ -503,7 +513,7 @@ test('a host failure is never upgraded to a WASM fatal', async () => {
       `it went to ${fixture.host.health}`);
 
     // The transport's send hook throws, with real messages in hand.
-    const sendFailed = fixture.host.run(PAIRED_GROUP, (core, handle) => {
+    const sendFailed = enterActive(fixture.host, PAIRED_GROUP, (core, handle) => {
       core.campaign(handle);
       return drainReady({
         core, handle, store: fixture.group(PAIRED_GROUP).store,
@@ -538,7 +548,7 @@ test('a genuine Rust trap is never downgraded to a host failure', async () => {
   const fixture = runtimeWithGroups([
     {groupId: GROUP_UNDER_TEST}, {groupId: UNRELATED_GROUP}]);
   try {
-    const trapped = fixture.host.run(GROUP_UNDER_TEST, (core, handle) => {
+    const trapped = enterActive(fixture.host, GROUP_UNDER_TEST, (core, handle) => {
       core.step(handle, {
         from: ABSENT_PEER, to: SOLE_VOTER, msgType: MSG_HEARTBEAT,
         term: FOLLOWER_TERM, logTerm: ZERO_POSITION, index: ZERO_POSITION,
@@ -579,7 +589,7 @@ test('a genuine Rust trap is never downgraded to a host failure', async () => {
     // shape of work - a core call, then host code that throws - which the
     // old broad boundary classified a fatal, is now a host failure, in the
     // same runtime, immediately after a genuine trap was classified a fatal.
-    const hostFailed = fixture.host.run(GROUP_UNDER_TEST, (core, handle) => {
+    const hostFailed = enterActive(fixture.host, GROUP_UNDER_TEST, (core, handle) => {
       core.status(handle);
       throw new Error(HOST_ERROR.APPLY);
     });
@@ -588,33 +598,29 @@ test('a genuine Rust trap is never downgraded to a host failure', async () => {
       'the broad boundary would have retired the runtime for this; only the ' +
       'invocation may do that now');
 
-    // A fatal that does not announce itself as one. An invocation that runs
-    // out of stack traps, and THAT trap reaches JavaScript as a RangeError
-    // rather than a WebAssembly.RuntimeError: classifying it host would mark
-    // a runtime whose instance aborted mid-call healthy, which is the
-    // downgrade §4 forbids, and transport's call depths are what make it
-    // reachable.
-    const swept = stackExhaustedInsideAnInvocation(fixture);
-    const exhausted = swept.trapped;
-    assert.notEqual(exhausted, null,
-      'the drive must really exhaust the stack inside an invocation; it ' +
-      `saw ${JSON.stringify(swept.seen)}`);
-    assert.equal(exhausted.outcome, RAFT_RS_CALL_OUTCOME.TRAPPED,
-      `it was classified ${String(exhausted.outcome)} (${exhausted.error})`);
-    assert.equal(originOf(exhausted), origin.WASM_INVOCATION);
-    assert.equal(fixture.host.health,
-      RAFT_RS_RUNTIME_HEALTH.UNHEALTHY_AFTER_TRAP,
-      'a runtime whose invocation aborted mid-call is not healthy');
+    // A stack exhaustion is NOT a core fatal, and the classifier is never
+    // asked to judge it. Host preparation happens before the invocation and
+    // the invocation reports only what the BINDING did, so a call that ran
+    // out of JavaScript stack comes back as host failure with the shared
+    // runtime untouched - the reciprocal upgrade §4 forbids cannot happen,
+    // because host code does not reach the core classifier at all.
+    const exhausted = stackExhaustedInsideAnInvocation(fixture);
+    assert.notEqual(exhausted.measured, null,
+      'the drive must really exhaust the stack around an invocation; it ' +
+      `saw ${JSON.stringify(exhausted.seen)}`);
+    assert.equal(originOf(exhausted.measured), origin.HOST,
+      'running out of stack is JavaScript failing, not the core');
+    assert.equal(fixture.host.health, RAFT_RS_RUNTIME_HEALTH.HEALTHY,
+      'and it must not retire the runtime every other group shares');
 
     // And the direction that must not move with it: host JavaScript running
-    // out of stack OUTSIDE an invocation is still host.
-    fixture.host.replaceRuntime();
-    const hostRecursion = fixture.host.run(GROUP_UNDER_TEST, () => {
+    // out of stack in the work is still host.
+    const hostRecursion = enterActive(fixture.host, GROUP_UNDER_TEST, () => {
       const forever = () => forever();
       return forever();
     });
     assert.equal(originOf(hostRecursion), origin.HOST,
-      'only an invocation may raise a fatal, whatever it threw');
+      'only an invocation may report a core outcome, whatever was thrown');
     assert.equal(fixture.host.health, RAFT_RS_RUNTIME_HEALTH.HEALTHY);
   } finally {
     fixture.dispose();
@@ -631,21 +637,21 @@ const SHAPE = Object.freeze([
     name: 'an ordinary raft-rs refusal',
     origin: (origins) => origins.CORE_REFUSAL,
     fatal: false,
-    drive: (fixture) => fixture.host.run(GROUP_UNDER_TEST,
+    drive: (fixture) => enterActive(fixture.host, GROUP_UNDER_TEST,
       (core, handle) => core.propose(handle, commandBytes())),
   },
   {
     name: 'a malformed argument the binding rejects before Rust runs',
     origin: (origins) => origins.CORE_REFUSAL,
     fatal: false,
-    drive: (fixture) => fixture.host.run(GROUP_UNDER_TEST,
+    drive: (fixture) => enterActive(fixture.host, GROUP_UNDER_TEST,
       (core, handle) => core.step(handle, MALFORMED_MESSAGE)),
   },
   {
     name: 'an argument fault thrown by the generated glue itself',
     origin: (origins) => origins.HOST,
     fatal: false,
-    drive: (fixture) => fixture.host.run(GROUP_UNDER_TEST,
+    drive: (fixture) => enterActive(fixture.host, GROUP_UNDER_TEST,
       (core, handle) => core.propose(handle, NO_BYTES_AT_ALL)),
   },
   {
@@ -694,7 +700,7 @@ const SHAPE = Object.freeze([
     name: 'a genuine Rust panic',
     origin: (origins) => origins.WASM_INVOCATION,
     fatal: true,
-    drive: (fixture) => fixture.host.run(GROUP_UNDER_TEST,
+    drive: (fixture) => enterActive(fixture.host, GROUP_UNDER_TEST,
       (core, handle) => core.step(handle, {
         from: ABSENT_PEER, to: SOLE_VOTER, msgType: MSG_HEARTBEAT,
         term: FOLLOWER_TERM, logTerm: ZERO_POSITION, index: ZERO_POSITION,
@@ -755,8 +761,9 @@ function nodeWithAThrowingResolver(fixture) {
     scheduleTick: () => undefined,
   });
   const node = new NodeClass(NODE_ADDRESS);
-  const campaigned = fixture.host.run(node.key,
-    (core, handle) => core.campaign(handle));
+  // The node has no key to reach the runtime by any more; its own group's
+  // named operation is the way in.
+  const campaigned = node.raftRsGroupParts().campaign();
   assert.equal(campaigned.outcome, RAFT_RS_CALL_OUTCOME.COMPLETED,
     'this shape needs a node with messages to address');
   return node;
@@ -801,7 +808,7 @@ function measureObjectProposal() {
     {groupId: GROUP_UNDER_TEST}, {groupId: UNRELATED_GROUP}]);
   try {
     electSoleVoter(fixture, GROUP_UNDER_TEST);
-    const proposed = fixture.host.run(GROUP_UNDER_TEST,
+    const proposed = enterActive(fixture.host, GROUP_UNDER_TEST,
       (core, handle) => core.propose(handle, NOT_BYTES_AT_ALL));
     const delivered = [];
     const cycles = fixture.cycle(GROUP_UNDER_TEST,

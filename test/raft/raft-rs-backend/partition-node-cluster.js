@@ -26,6 +26,9 @@ import {
   RAFT_PARTITION_NODE_REQUEST,
 } from '../../../src/raft/raft-provider-contract-constants.js';
 import {
+  RAFT_RS_GROUP_READ,
+} from '../../../src/raft/raft-rs-group-access-constants.js';
+import {
   RAFT_RS_NODE_EVENT,
 } from '../../../src/raft/raft-rs-node-constants.js';
 
@@ -281,10 +284,11 @@ class PartitionNodeCluster {
    * @return {Object} The core's own status.
    */
   coreStatus(replicaId) {
-    // Through the group the node hands out: there is no unguarded core to
-    // read any more, and a read is a read - it asks no admission.
+    // Through the group's own named read: there is no core to reach any
+    // other way, and a read takes no part in the group, so a retired
+    // replica can still be inspected.
     return this.node(replicaId).raftRsGroupParts()
-      .classified((core, handle) => core.status(handle)).value;
+      .read(RAFT_RS_GROUP_READ.STATUS).value;
   }
 
   /**
@@ -294,7 +298,7 @@ class PartitionNodeCluster {
    */
   coreConfState(replicaId) {
     return this.node(replicaId).raftRsGroupParts()
-      .classified((core, handle) => core.conf_state(handle)).value;
+      .read(RAFT_RS_GROUP_READ.CONF_STATE).value;
   }
 
   /**
@@ -305,8 +309,8 @@ class PartitionNodeCluster {
    * @param {string} leader - The replica the caller measured as leading.
    */
   proposeConfigurationChange(changes, transition, leader) {
-    this.node(leader).raftRsGroupParts().admitted((core, handle) =>
-      core.propose_conf_change_v2(handle, {transition, changes}));
+    this.node(leader).raftRsGroupParts()
+      .proposeConfigurationChange({transition, changes});
     this.node(leader).tickOnce();
   }
 

@@ -16,13 +16,14 @@
 //   runtime host that holds one: reaching either is reaching the RawNode
 //   without passing the gate, whatever the property is called.
 //
-//   ENTRY METHODS - enumerate every method those objects expose, classify
-//   each against a declared table, and refuse to pass on a method the table
-//   does not mention. A future entry method is red until someone declares it,
-//   and a method declared ACTIVE must be refused by the lifecycle gate when
-//   the replica is retired - which is the invariant itself: every production
-//   path that can invoke this RawNode first passes the same local lifecycle
-//   eligibility owner.
+//   ENTRY METHODS - DISCOVER every callable member of those objects and call
+//   each one, with every argument shape a caller could plausibly have,
+//   against a RETIRED replica, watching production's own count of active
+//   entries into that group's core. Nothing here knows what the methods are
+//   for or what they are called: a member that takes part in the group moves
+//   the counter, and on a retired replica that is the defect - however
+//   deeply it delegates, and whether or not anyone remembered to declare it.
+//   A future entry added without the gate is red the moment it exists.
 //
 //   SOURCE - the modules in src that obtain a core facade at all. Only the
 //   loader that builds one and the runtime host that holds it may.
@@ -45,27 +46,26 @@ const FACADE_HOLDERS = Object.freeze([
   'raft-rs-provider.js',
 ]);
 const FACADE_SOURCES = /\b(instantiateRaftRsCore|loadRaftRsCore)\s*\(/u;
-// A value is a core facade when it answers to the core's own primitives.
+// A value is a core facade when it answers to the BINDING's own primitive
+// names - the ones only the generated glue has, so that an object offering
+// semantic operations of its own is not mistaken for the thing it hides.
 const CORE_PRIMITIVE_SAMPLE = Object.freeze([
-  'tick', 'step', 'propose', 'status', 'campaign', 'has_ready']);
+  'has_ready', 'take_ready', 'persist_ready', 'advance_append',
+  'advance_apply', 'conf_state', 'propose_conf_change_v2', 'create_node',
+  'set_conf_state', 'export_persisted_state', 'decode_conf_change_entry',
+]);
 const CORE_PRIMITIVES_THAT_MAKE_IT_A_CORE = 3;
 // A value is the runtime host when it answers to the host's own surface: it
 // holds a facade, so reaching it is reaching the core one call later.
-const RUNTIME_HOST_SURFACE = Object.freeze(['run', 'openGroup']);
+const RUNTIME_HOST_SURFACE = Object.freeze(['enter', 'openGroup']);
 const WALK_DEPTH = 8;
 const CENSUS_CLEAN = 'clean';
 
-const ENTRY_CLASS = Object.freeze({
-  // Takes part in the group: must be refused when this replica is retired.
-  ACTIVE: 'active',
-  // Reads the core without taking part: answers whatever the lifecycle says.
-  READ: 'read',
-  // Releases the handle: admitted by name even when retired, because
-  // refusing would leak what retirement tells the host to release.
-  TEARDOWN: 'teardown',
-  // Cannot reach the core at all.
-  INERT: 'inert',
-});
+// The only names the census is told about: teardown is the one thing a
+// retired replica is still allowed to do to its core, so calling it would
+// move the counter for a reason that is not a defect. Everything else is
+// discovered and driven.
+const TEARDOWN_MEMBERS = Object.freeze(['free', 'end']);
 
 /**
  * Whether a value answers to enough of the core's primitives to BE one.
@@ -167,13 +167,12 @@ function reachableCoreEntries(roots) {
 }
 
 /**
- * Every method one object exposes, against what the declaration says it is.
+ * Every callable member one object exposes, DISCOVERED rather than listed.
  * @param {Object} subject - The object.
- * @param {Object} declared - name to ENTRY_CLASS.
- * @return {Array<string>} One line per method the declaration does not cover.
+ * @return {Array<string>} The method names.
  */
-function undeclaredEntryMethods(subject, declared) {
-  const undeclared = [];
+function callableMembers(subject) {
+  const names = [];
   for (const name of propertyNames(subject)) {
     if (name === 'constructor') {
       continue;
@@ -185,14 +184,52 @@ function undeclaredEntryMethods(subject, declared) {
       // A member that refuses to be read cannot be called either.
       continue;
     }
-    if (typeof member !== 'function') {
-      continue;
-    }
-    if (!Object.hasOwn(declared, name)) {
-      undeclared.push(name);
+    if (typeof member === 'function') {
+      names.push(name);
     }
   }
-  return undeclared;
+  return names;
+}
+
+/**
+ * Call every discovered member of a subject with each argument shape a
+ * caller could plausibly have, and report which of them entered the core.
+ *
+ * Nothing here knows what the methods are FOR. It knows only what production
+ * counts: an active entry into this group's core. A method that refuses,
+ * throws, or does something harmless moves nothing; a method that takes part
+ * in the group moves the counter, and on a retired replica that is the
+ * defect - whatever the method is called, whoever added it, however deeply
+ * it delegates.
+ * @param {Object} options - The drive.
+ * @param {Object} options.subject - The object whose members to call.
+ * @param {string} options.label - What to call it in a finding.
+ * @param {Object} options.group - The group, for its entry counter.
+ * @param {Array<Array>} options.argumentShapes - Argument tuples to try.
+ * @param {Array<string>} options.exceptNames - Members not to call.
+ * @return {Array<string>} One line per member that entered the core.
+ */
+function membersThatEnterTheCore({
+  subject, label, group, argumentShapes, exceptNames}) {
+  const entered = [];
+  for (const name of callableMembers(subject)) {
+    if (exceptNames.includes(name)) {
+      continue;
+    }
+    for (const args of argumentShapes) {
+      const before = group.activeCoreEntries;
+      try {
+        subject[name](...args);
+      } catch {
+        // A call that cannot be made with these arguments made no entry.
+      }
+      if (group.activeCoreEntries !== before) {
+        entered.push(`${label}.${name} entered the core`);
+        break;
+      }
+    }
+  }
+  return entered;
 }
 
 /**
@@ -224,11 +261,21 @@ function modulesThatObtainAFacade() {
  * @return {Object} {reachable, undeclaredNode, undeclaredGroup, sources}.
  */
 function censusOfCoreEntrySites({
-  node, group, declaredNodeEntries, declaredGroupEntries}) {
+  node, group, argumentShapes, teardownNames}) {
   return {
     reachable: reachableCoreEntries({node, group}),
-    undeclaredNode: undeclaredEntryMethods(node, declaredNodeEntries),
-    undeclaredGroup: undeclaredEntryMethods(group, declaredGroupEntries),
+    entered: [
+      ...membersThatEnterTheCore({
+        subject: group, label: 'group', group, argumentShapes,
+        exceptNames: teardownNames}),
+      ...membersThatEnterTheCore({
+        subject: node, label: 'node', group, argumentShapes,
+        exceptNames: teardownNames}),
+    ],
+    discovered: {
+      group: callableMembers(group),
+      node: callableMembers(node),
+    },
     sources: modulesThatObtainAFacade(),
   };
 }
@@ -241,8 +288,7 @@ function censusOfCoreEntrySites({
 function censusFindings(census) {
   const findings = [
     ...census.reachable.map((line) => `reachable: ${line}`),
-    ...census.undeclaredNode.map((name) => `undeclared node entry: ${name}`),
-    ...census.undeclaredGroup.map((name) => `undeclared group entry: ${name}`),
+    ...census.entered.map((line) => `on a retired replica, ${line}`),
     ...census.sources.map((file) => `module obtains a facade: ${file}`),
   ];
   return findings.length === 0 ? CENSUS_CLEAN : findings.join('\n');
@@ -250,7 +296,7 @@ function censusFindings(census) {
 
 export {
   CENSUS_CLEAN,
-  ENTRY_CLASS,
+  TEARDOWN_MEMBERS,
   censusFindings,
   censusOfCoreEntrySites,
 };

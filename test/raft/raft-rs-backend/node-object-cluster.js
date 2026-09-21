@@ -26,6 +26,9 @@ import {
 } from '../../../src/raft/raft-rs-node-constants.js';
 import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
 import {
+  RAFT_RS_GROUP_READ,
+} from '../../../src/raft/raft-rs-group-access-constants.js';
+import {
   RaftRsReplicaLifecycle,
 } from '../../../src/raft/raft-rs-replica-lifecycle.js';
 import {RaftRsRuntimeHost} from '../../../src/raft/raft-rs-runtime-health.js';
@@ -209,8 +212,8 @@ class NodeBackedCluster {
    * @return {Object} The core's status.
    */
   coreStatus(peerId) {
-    return this.host.core.status(
-      this.host.handleOf(`${this.groupId}/${peerId}`));
+    return this.node(peerId).raftRsGroupParts()
+      .read(RAFT_RS_GROUP_READ.STATUS).value;
   }
 
   /**
@@ -218,8 +221,8 @@ class NodeBackedCluster {
    * @return {Object} The configuration the core holds.
    */
   coreConfState(peerId) {
-    return this.host.core.conf_state(
-      this.host.handleOf(`${this.groupId}/${peerId}`));
+    return this.node(peerId).raftRsGroupParts()
+      .read(RAFT_RS_GROUP_READ.CONF_STATE).value;
   }
 
   /**

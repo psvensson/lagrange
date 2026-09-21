@@ -22,9 +22,16 @@ import Database from 'better-sqlite3';
 
 import {
   RAFT_RS_CALL_OUTCOME,
+  RAFT_RS_CORE_ENTRY,
   RAFT_RS_RUNTIME_HEALTH,
   RaftRsRuntimeHost,
 } from '../../../src/raft/raft-rs-runtime-health.js';
+import {
+  RaftRsReplicaLifecycle,
+} from '../../../src/raft/raft-rs-replica-lifecycle.js';
+import {
+  RAFT_RS_CORE_PRIMITIVES,
+} from '../../../src/raft/raft-rs-core-constants.js';
 import {instantiateRaftRsCore} from '../../../src/raft/raft-rs-core.js';
 import {
   consensusMembership,
@@ -45,6 +52,61 @@ const MSG_HEARTBEAT = 8;
 // The commit position that makes raft-rs refuse to go on: far past anything
 // the victim's log holds.
 const IMPOSSIBLE_COMMIT = '999999';
+// The binding's primitives that address no hosted group.
+const HANDLELESS_PRIMITIVES = Object.freeze([
+  'create_node', 'decode_conf_change_entry', 'wasm_memory_bytes',
+  'handle_count']);
+
+/**
+ * The primitives, reached only through the host's own entry.
+ *
+ * The host hands out no core, so a driver that wants one builds it from the
+ * entry: each primitive is a call the host makes, keyed by the hosted group,
+ * and the driver passes that key where it used to pass a handle.
+ * @param {RaftRsRuntimeHost} host - The runtime host.
+ * @return {Object} A driver-shaped core.
+ */
+function coreThroughTheHost(host, ownCore) {
+  const driverCore = {};
+  for (const name of RAFT_RS_CORE_PRIMITIVES) {
+    if (HANDLELESS_PRIMITIVES.includes(name)) {
+      // Nothing to key on: these do not address a hosted group at all.
+      driverCore[name] = (...args) => ownCore[name](...args);
+      continue;
+    }
+    driverCore[name] = (key, ...args) => {
+      const ran = host.enter(key, RAFT_RS_CORE_ENTRY.ACTIVE,
+        (core, handle) => core[name](handle, ...args));
+      if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
+        throw new Error(String(ran.error));
+      }
+      return ran.value;
+    };
+  }
+  return driverCore;
+}
+
+/**
+ * A host that ADOPTS a runtime already in use, and instantiates a fresh one
+ * only when it replaces it.
+ *
+ * The host hands out no core, so a driver that already holds one gives it to
+ * the host instead of asking for it back.
+ * @param {Object} core - The runtime the driver is using.
+ * @return {RaftRsRuntimeHost} A host holding that runtime.
+ */
+function hostAdopting(core) {
+  let adopted = false;
+  return new RaftRsRuntimeHost({
+    instantiate: () => {
+      if (adopted) {
+        return instantiateRaftRsCore();
+      }
+      adopted = true;
+      return core;
+    },
+  });
+}
 
 function settledCluster(core) {
   const cluster = new DeterministicRaftRsCluster({
@@ -86,9 +148,9 @@ function durableRecordOf(dbFile) {
 }
 
 test('a trap marks the runtime unhealthy and its groups restore', async () => {
-  const host = new RaftRsRuntimeHost({instantiate: instantiateRaftRsCore});
-  const firstRuntime = host.core;
-  const cluster = settledCluster(firstRuntime);
+  const core = instantiateRaftRsCore();
+  const host = hostAdopting(core);
+  const cluster = settledCluster(core);
   try {
     for (const peerId of VOTERS) {
       const peer = cluster.peer(peerId);
@@ -97,6 +159,8 @@ test('a trap marks the runtime unhealthy and its groups restore', async () => {
       host.adoptGroup({
         key: peerId, groupId: GROUP_ID, peerId,
         store: peer.store, handle: peer.handle,
+        lifecycle: new RaftRsReplicaLifecycle({
+          store: peer.store, groupId: GROUP_ID, peerId}),
       });
     }
     // The durable records, read before the trap, on independent connections.
@@ -109,13 +173,14 @@ test('a trap marks the runtime unhealthy and its groups restore', async () => {
 
     // A heartbeat whose commit position the victim's log cannot hold. The
     // host's boundary is what sees the fatal.
-    const trapped = host.run(VICTIM, (core, handle) => {
-      core.step(handle, {
-        from: LEADER, to: VICTIM, msgType: MSG_HEARTBEAT,
-        term: cluster.status(VICTIM).term, logTerm: '0', index: '0',
-        commit: IMPOSSIBLE_COMMIT,
+    const trapped = host.enter(VICTIM, RAFT_RS_CORE_ENTRY.ACTIVE,
+      (core, handle) => {
+        core.step(handle, {
+          from: LEADER, to: VICTIM, msgType: MSG_HEARTBEAT,
+          term: cluster.status(VICTIM).term, logTerm: '0', index: '0',
+          commit: IMPOSSIBLE_COMMIT,
+        });
       });
-    });
     assert.equal(trapped.outcome, RAFT_RS_CALL_OUTCOME.TRAPPED,
       'the hostile heartbeat must have trapped the runtime');
     assert.equal(host.health, RAFT_RS_RUNTIME_HEALTH.UNHEALTHY_AFTER_TRAP);
@@ -131,7 +196,7 @@ test('a trap marks the runtime unhealthy and its groups restore', async () => {
     // Dispatch into an unhealthy runtime stops, by name, for every group -
     // not only for the one that trapped.
     for (const peerId of VOTERS) {
-      const refused = host.run(peerId, () => {
+      const refused = host.enter(peerId, RAFT_RS_CORE_ENTRY.ACTIVE, () => {
         throw new Error('work must not run in an unhealthy runtime');
       });
       assert.equal(refused.outcome, RAFT_RS_CALL_OUTCOME.RUNTIME_UNHEALTHY,
@@ -140,28 +205,30 @@ test('a trap marks the runtime unhealthy and its groups restore', async () => {
 
     // Replace the runtime and restore every group from its own SQLite record.
     const replacement = host.replaceRuntime();
-    assert.notEqual(host.core, firstRuntime, 'a fresh runtime is a new one');
+
     assert.equal(host.health, RAFT_RS_RUNTIME_HEALTH.HEALTHY);
     assert.deepEqual(replacement.restored.slice().sort(),
       [...VOTERS].sort(), 'every registered group must come back');
 
     // What came back is what the durable bytes hold.
     for (const peerId of VOTERS) {
-      const handle = host.handleOf(peerId);
-      const status = host.core.status(handle);
+      const status = host.enter(peerId, RAFT_RS_CORE_ENTRY.READ,
+        (core, handle) => core.status(handle)).value;
       const durable = durableBefore[peerId];
       assert.equal(status.term, durable.term, `${peerId} term`);
       assert.equal(status.vote, durable.vote, `${peerId} vote`);
       assert.equal(status.commit, durable.commit, `${peerId} commit`);
       assert.equal(status.applied, durable.appliedIndex, `${peerId} applied`);
       assert.deepEqual(
-        consensusMembership({core: host.core, handle}).voters, durable.voters,
+        host.enter(peerId, RAFT_RS_CORE_ENTRY.READ, (core, handle) =>
+          consensusMembership({core, handle})).value.voters, durable.voters,
         `${peerId} restored a configuration the record does not hold`);
     }
 
     // FUNCTIONAL, not merely created: the restored groups elect, propose and
     // commit a configuration change in the new runtime.
-    cluster.adoptRuntime(host.core, (peerId) => host.handleOf(peerId));
+    cluster.adoptRuntime(coreThroughTheHost(host, cluster.core),
+      (peerId) => peerId);
     cluster.campaign(LEADER);
     const elected = cluster.settle(
       (current) => current.leaderId() === LEADER,

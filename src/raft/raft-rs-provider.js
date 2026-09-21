@@ -13,13 +13,13 @@ import {
   RAFT_RS_PROVIDER_SERVED,
   RAFT_RS_PROVIDER_STATUS_FIELD,
 } from './raft-rs-provider-constants.js';
-import {
-  RaftRsGroupHandle,
-  createRaftRsNodeClass,
-} from './raft-rs-node.js';
+import {createRaftRsNodeClass} from './raft-rs-node.js';
 import {
   RAFT_RS_CALL_OUTCOME,
 } from './raft-rs-runtime-health-constants.js';
+import {
+  RAFT_RS_GROUP_READ,
+} from './raft-rs-group-access-constants.js';
 import {loadRaftRsCore} from './raft-rs-core.js';
 import {
   RAFT_RS_TICK_SCHEDULING,
@@ -74,11 +74,13 @@ function valueOrRefusal(ran) {
  * @return {RaftRsGroupHandle} The group.
  */
 function raftRsGroupOf(value) {
-  if (value instanceof RaftRsGroupHandle) {
-    return value;
-  }
   if (typeof value?.raftRsGroupParts === 'function') {
     return value.raftRsGroupParts();
+  }
+  if (typeof value?.propose === 'function' && typeof value?.read ===
+    'function') {
+    // Already the group's own named operations.
+    return value;
   }
   throw new Error(RAFT_RS_PROVIDER_ERROR_MSG.notARaftRsGroup(value));
 }
@@ -90,8 +92,7 @@ function raftRsGroupOf(value) {
  * @return {number} The value.
  */
 function exactStatusNumber(group, field) {
-  const value = valueOrRefusal(
-    group.classified((core, handle) => core.status(handle)))[field];
+  const value = valueOrRefusal(group.read(RAFT_RS_GROUP_READ.STATUS))[field];
   const asNumber = Number(value);
   if (!Number.isSafeInteger(asNumber)) {
     throw new Error(
@@ -263,8 +264,7 @@ class RaftRsWasmProvider {
     // The literal production write. It takes part in the group, so it is
     // inside the admission boundary, and it reaches the core through the
     // classifying boundary like everything else.
-    const ran = raftRsGroupOf(node).admitted(
-      (core, handle) => core.propose(handle, command));
+    const ran = raftRsGroupOf(node).propose(command);
     if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
       const refusal = new RaftRsSeamRefusal(ran);
       if (typeof callback === 'function') {
@@ -297,8 +297,7 @@ class RaftRsWasmProvider {
    * @param {*} node - The node, or the group behind it.
    */
   shutdownNode(node) {
-    valueOrRefusal(raftRsGroupOf(node).teardown(
-      (core, handle) => core.free(handle)));
+    valueOrRefusal(raftRsGroupOf(node).free());
   }
 
   /**
