@@ -22,7 +22,6 @@ import Database from 'better-sqlite3';
 
 import {
   RAFT_RS_CALL_OUTCOME,
-  RAFT_RS_CORE_ENTRY,
   RAFT_RS_RUNTIME_HEALTH,
   RaftRsRuntimeHost,
 } from '../../../src/raft/raft-rs-runtime-health.js';
@@ -32,6 +31,9 @@ import {
 import {
   RAFT_RS_CORE_PRIMITIVES,
 } from '../../../src/raft/raft-rs-core-constants.js';
+import {
+  RAFT_RS_GROUP_READ,
+} from '../../../src/raft/raft-rs-group-access-constants.js';
 import {instantiateRaftRsCore} from '../../../src/raft/raft-rs-core.js';
 import {
   consensusMembership,
@@ -75,7 +77,7 @@ function coreThroughTheHost(host, ownCore) {
       continue;
     }
     driverCore[name] = (key, ...args) => {
-      const ran = host.enter(key, RAFT_RS_CORE_ENTRY.ACTIVE,
+      const ran = host.enterActive(key,
         (core, handle) => core[name](handle, ...args));
       if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
         throw new Error(String(ran.error));
@@ -106,6 +108,19 @@ function hostAdopting(core) {
       return core;
     },
   });
+}
+
+/**
+ * The committed membership one hosted group holds, through the host's own
+ * named read and the projection owner that interprets it.
+ * @param {RaftRsRuntimeHost} host - The runtime host.
+ * @param {string} key - The hosted group.
+ * @return {Object} {voters, learners}.
+ */
+function membershipFromHost(host, key) {
+  const confState = host.enterRead(key, RAFT_RS_GROUP_READ.CONF_STATE).value;
+  return consensusMembership({
+    core: {conf_state: () => confState}, handle: 0});
 }
 
 function settledCluster(core) {
@@ -173,14 +188,13 @@ test('a trap marks the runtime unhealthy and its groups restore', async () => {
 
     // A heartbeat whose commit position the victim's log cannot hold. The
     // host's boundary is what sees the fatal.
-    const trapped = host.enter(VICTIM, RAFT_RS_CORE_ENTRY.ACTIVE,
-      (core, handle) => {
-        core.step(handle, {
-          from: LEADER, to: VICTIM, msgType: MSG_HEARTBEAT,
-          term: cluster.status(VICTIM).term, logTerm: '0', index: '0',
-          commit: IMPOSSIBLE_COMMIT,
-        });
+    const trapped = host.enterActive(VICTIM, (core, handle) => {
+      core.step(handle, {
+        from: LEADER, to: VICTIM, msgType: MSG_HEARTBEAT,
+        term: cluster.status(VICTIM).term, logTerm: '0', index: '0',
+        commit: IMPOSSIBLE_COMMIT,
       });
+    });
     assert.equal(trapped.outcome, RAFT_RS_CALL_OUTCOME.TRAPPED,
       'the hostile heartbeat must have trapped the runtime');
     assert.equal(host.health, RAFT_RS_RUNTIME_HEALTH.UNHEALTHY_AFTER_TRAP);
@@ -196,7 +210,7 @@ test('a trap marks the runtime unhealthy and its groups restore', async () => {
     // Dispatch into an unhealthy runtime stops, by name, for every group -
     // not only for the one that trapped.
     for (const peerId of VOTERS) {
-      const refused = host.enter(peerId, RAFT_RS_CORE_ENTRY.ACTIVE, () => {
+      const refused = host.enterActive(peerId, () => {
         throw new Error('work must not run in an unhealthy runtime');
       });
       assert.equal(refused.outcome, RAFT_RS_CALL_OUTCOME.RUNTIME_UNHEALTHY,
@@ -212,16 +226,15 @@ test('a trap marks the runtime unhealthy and its groups restore', async () => {
 
     // What came back is what the durable bytes hold.
     for (const peerId of VOTERS) {
-      const status = host.enter(peerId, RAFT_RS_CORE_ENTRY.READ,
-        (core, handle) => core.status(handle)).value;
+      const status = host.enterRead(peerId, RAFT_RS_GROUP_READ.STATUS)
+        .value;
       const durable = durableBefore[peerId];
       assert.equal(status.term, durable.term, `${peerId} term`);
       assert.equal(status.vote, durable.vote, `${peerId} vote`);
       assert.equal(status.commit, durable.commit, `${peerId} commit`);
       assert.equal(status.applied, durable.appliedIndex, `${peerId} applied`);
       assert.deepEqual(
-        host.enter(peerId, RAFT_RS_CORE_ENTRY.READ, (core, handle) =>
-          consensusMembership({core, handle})).value.voters, durable.voters,
+        membershipFromHost(host, peerId).voters, durable.voters,
         `${peerId} restored a configuration the record does not hold`);
     }
 

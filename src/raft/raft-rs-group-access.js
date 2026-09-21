@@ -15,9 +15,6 @@
 // same hole wearing a read's name.
 
 import {
-  RAFT_RS_CORE_ENTRY,
-} from './raft-rs-runtime-health-constants.js';
-import {
   RAFT_RS_GROUP_ACCESS_ERROR_MSG,
   RAFT_RS_GROUP_READS,
 } from './raft-rs-group-access-constants.js';
@@ -39,7 +36,7 @@ import {drainReady} from './raft-rs-ready-loop.js';
  * @return {Object} A frozen object of named operations.
  */
 function createRaftRsGroupAccess({host, key, store, groupId, peerId}) {
-  const active = (work) => host.enter(key, RAFT_RS_CORE_ENTRY.ACTIVE, work);
+  const active = (work) => host.enterActive(key, work);
 
   return Object.freeze({
     store,
@@ -66,8 +63,7 @@ function createRaftRsGroupAccess({host, key, store, groupId, peerId}) {
         throw new Error(RAFT_RS_GROUP_ACCESS_ERROR_MSG.notARead(
           name, RAFT_RS_GROUP_READS));
       }
-      return host.enter(key, RAFT_RS_CORE_ENTRY.READ,
-        (core, handle) => core[name](handle));
+      return host.enterRead(key, name);
     },
 
     /**
@@ -144,8 +140,7 @@ function createRaftRsGroupAccess({host, key, store, groupId, peerId}) {
      * @return {Object} The named call outcome.
      */
     free() {
-      return host.enter(key, RAFT_RS_CORE_ENTRY.TEARDOWN,
-        (core, handle) => core.free(handle));
+      return host.enterTeardown(key);
     },
   });
 }

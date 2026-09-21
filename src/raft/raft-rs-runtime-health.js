@@ -7,11 +7,13 @@
 // a named entry, because two rejections proved that a boundary which hands
 // out the core - under any property name, at any depth - is not a boundary.
 //
-// EVERY entry crosses one gate. `enter` takes the kind of operation it is,
-// asks the hosted group's own lifecycle owner whether an operation of that
-// kind is allowed, and only then invokes. There is no second check copied
-// into a caller and no path that skips this one: a caller that holds this
-// host still cannot tick a retired replica.
+// EVERY entry crosses one gate. There are exactly three ways in -
+// `enterActive`, which is gated and is the only one that takes work;
+// `enterRead`, which takes the NAME of a read; and `enterTeardown`, which
+// takes nothing - so a caller that holds this host still cannot tick a
+// retired replica, and cannot smuggle work past the gate under a read's
+// name. There is no second check copied into a caller and no path that
+// skips this one.
 //
 // PROVENANCE, NOT CLASSIFICATION. Host preparation happens before the
 // invocation and host persistence, sending and applying happen after it, so
@@ -28,6 +30,9 @@
 // failing; it never retires a logical replica, which is a different state
 // with a different owner.
 
+import {
+  RAFT_RS_GROUP_READS,
+} from './raft-rs-group-access-constants.js';
 import {
   RAFT_RS_CALL_OUTCOME,
   RAFT_RS_CORE_ENTRY,
@@ -383,19 +388,58 @@ class RaftRsRuntimeHost {
   }
 
   /**
-   * Enter the core for one hosted group, for one named kind of operation.
+   * Enter the core to TAKE PART in a group: the gate runs first.
    *
-   * The work receives the guarded facade and this group's handle; both are
+   * This is the only entry that takes work, and it is the gated one. The
+   * work receives the guarded facade and this group's handle; both are
    * arguments of a call this host makes, never values it returns, so neither
    * survives the entry. Host code inside the work - persistence, sending,
-   * applying - produces host failure by construction, because the only thing
-   * that can report a core outcome is an invocation.
+   * applying - produces host failure by construction, because the only
+   * thing that can report a core outcome is an invocation.
    * @param {string} key - The hosted node to enter.
-   * @param {string} entryKind - A RAFT_RS_CORE_ENTRY value.
    * @param {Function} work - Called with (guarded core, handle).
    * @return {Object} {outcome, origin, value, error, diagnosis}.
    */
-  enter(key, entryKind, work) {
+  enterActive(key, work) {
+    return this.#enter(key, RAFT_RS_CORE_ENTRY.ACTIVE, work);
+  }
+
+  /**
+   * Read one named thing from a group's core.
+   *
+   * It takes the NAME of a read, never work: an entry that is not gated may
+   * not be handed a function, or the gate is decoration.
+   * @param {string} key - The hosted node to read.
+   * @param {string} readName - A RAFT_RS_GROUP_READS value.
+   * @return {Object} {outcome, origin, value, error, diagnosis}.
+   */
+  enterRead(key, readName) {
+    if (!RAFT_RS_GROUP_READS.includes(readName)) {
+      throw new Error(RAFT_RS_RUNTIME_ERROR_MSG.notARead(
+        readName, RAFT_RS_GROUP_READS));
+    }
+    return this.#enter(key, RAFT_RS_CORE_ENTRY.READ,
+      (core, handle) => core[readName](handle));
+  }
+
+  /**
+   * Release a group's handle. It takes no work either, and there is exactly
+   * one thing it does.
+   * @param {string} key - The hosted node to release.
+   * @return {Object} {outcome, origin, value, error, diagnosis}.
+   */
+  enterTeardown(key) {
+    return this.#enter(key, RAFT_RS_CORE_ENTRY.TEARDOWN,
+      (core, handle) => core.free(handle));
+  }
+
+  /**
+   * @param {string} key - The hosted node to enter.
+   * @param {string} entryKind - A RAFT_RS_CORE_ENTRY value.
+   * @param {Function} work - Called with (guarded core, handle).
+   * @return {Object} The named call outcome.
+   */
+  #enter(key, entryKind, work) {
     const hosted = this.#hostedGroup(key);
     const refused = this.#assertCoreEntryAllowed(hosted, entryKind);
     if (refused !== null) {
@@ -479,7 +523,6 @@ class RaftRsRuntimeHost {
 
 export {
   RAFT_RS_CALL_OUTCOME,
-  RAFT_RS_CORE_ENTRY,
   RAFT_RS_RUNTIME_HEALTH,
   RaftRsRuntimeHost,
 };

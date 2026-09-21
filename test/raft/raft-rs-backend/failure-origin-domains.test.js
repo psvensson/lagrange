@@ -41,11 +41,13 @@ import * as runtimeHealthConstants
   from '../../../src/raft/raft-rs-runtime-health-constants.js';
 import {
   RAFT_RS_CALL_OUTCOME,
-  RAFT_RS_CORE_ENTRY,
   RAFT_RS_RUNTIME_HEALTH,
   RaftRsRuntimeHost,
 } from '../../../src/raft/raft-rs-runtime-health.js';
 import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
+import {
+  RAFT_RS_GROUP_READ,
+} from '../../../src/raft/raft-rs-group-access-constants.js';
 import {createRaftRsNodeClass} from '../../../src/raft/raft-rs-node.js';
 import {drainReady} from '../../../src/raft/raft-rs-ready-loop.js';
 import {
@@ -88,10 +90,10 @@ const DRAIN_CYCLES_FOR_ONE_STEP = 8;
 // the invocation, so the sweep below has more than one width of band to land
 // in.
 const STACK_PROBE_CALLS = Object.freeze([
-  (core, handle) => core.status(handle),
-  (core, handle) => core.export_persisted_state(handle),
-  (core, handle) => core.conf_state(handle),
-  (core, handle) => core.take_ready(handle),
+  RAFT_RS_GROUP_READ.STATUS,
+  RAFT_RS_GROUP_READ.PERSISTED_STATE,
+  RAFT_RS_GROUP_READ.CONF_STATE,
+  RAFT_RS_GROUP_READ.HAS_READY,
 ]);
 
 const HOST_ERROR = Object.freeze({
@@ -230,7 +232,7 @@ function runtimeWithGroups(declarations) {
  * @return {Object} The named call outcome.
  */
 function enterActive(host, key, work) {
-  return host.enter(key, RAFT_RS_CORE_ENTRY.ACTIVE, work);
+  return host.enterActive(key, work);
 }
 
 /**
@@ -321,8 +323,7 @@ function stackExhaustedInsideAnInvocation(fixture) {
       return;
     }
     for (const invoke of STACK_PROBE_CALLS) {
-      const ran = fixture.host.enter(
-        GROUP_UNDER_TEST, RAFT_RS_CORE_ENTRY.READ, invoke);
+      const ran = fixture.host.enterRead(GROUP_UNDER_TEST, invoke);
       seen.set(ran.outcome, (seen.get(ran.outcome) ?? 0) + 1);
       if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
         measured = ran;
@@ -641,8 +642,8 @@ test('a genuine Rust trap is never downgraded to a host failure', async () => {
     const rebuilt = fixture.host.replaceRuntime();
     assert.ok(rebuilt.restored.includes(GROUP_UNDER_TEST),
       'the group must come back from its own durable record');
-    const resumed = fixture.host.enter(GROUP_UNDER_TEST,
-      RAFT_RS_CORE_ENTRY.READ, (core, handle) => core.status(handle));
+    const resumed = fixture.host.enterRead(
+      GROUP_UNDER_TEST, RAFT_RS_GROUP_READ.STATUS);
     assert.equal(resumed.outcome, RAFT_RS_CALL_OUTCOME.COMPLETED);
     assert.equal(resumed.value.id, SOLE_VOTER,
       'and it is the same logical replica, not a new identity minted ' +

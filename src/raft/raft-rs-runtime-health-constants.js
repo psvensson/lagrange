@@ -117,6 +117,10 @@ const RAFT_RS_RUNTIME_ERROR_MSG = Object.freeze({
   unknownGroup: (groupId) =>
     `no group ${JSON.stringify(groupId)} is registered with this runtime; a ` +
     'runtime restores the groups it was told to hold',
+  notARead: (name, reads) =>
+    `${JSON.stringify(String(name))} is not one of this backend's named ` +
+    `reads (${reads.join(', ')}); an entry that is not gated is never ` +
+    'handed a function to run',
   stillUnhealthy: () =>
     'this runtime trapped and has not been replaced; replaceRuntime() ' +
     'instantiates a fresh one and restores its groups from durable state',

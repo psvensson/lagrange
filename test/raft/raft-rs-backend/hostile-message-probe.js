@@ -17,7 +17,6 @@ import process from 'node:process';
 import {
   RAFT_RS_CALL_OUTCOME,
   RAFT_RS_RUNTIME_HEALTH,
-  RAFT_RS_CORE_ENTRY,
   RaftRsRuntimeHost,
 } from '../../../src/raft/raft-rs-runtime-health.js';
 import {
@@ -208,13 +207,12 @@ function main() {
     }, null, JSON_INDENT));
     return;
   }
-  const ran = host.enter(GROUP_ID, RAFT_RS_CORE_ENTRY.ACTIVE,
-    (guardedCore, handle) => {
-      guardedCore.step(handle, shape.envelope.message);
-      if (shape.drain) {
-        cluster.settle(() => false, {rounds: 4, ticking: false});
-      }
-    });
+  const ran = host.enterActive(GROUP_ID, (guardedCore, handle) => {
+    guardedCore.step(handle, shape.envelope.message);
+    if (shape.drain) {
+      cluster.settle(() => false, {rounds: 4, ticking: false});
+    }
+  });
   process.stdout.write(JSON.stringify({
     shape: shapeId,
     admitted: true,
