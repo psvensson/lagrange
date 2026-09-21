@@ -88,8 +88,12 @@ function retiredElectionRefusal(peerId) {
 }
 
 /**
- * Campaign, if this peer may. The core's primitive is reached only from
- * here, so the three rules cannot be walked around by calling it directly.
+ * Campaign, if this peer may.
+ *
+ * This is the host's half of §11 and the only place that applies it. It is
+ * NOT a claim that the core's own campaign primitive is unreachable - the
+ * group that owns the handle decides who may enter the core, and this
+ * function decides whether a peer that may enter should campaign at all.
  * @param {Object} options - The same inputs as the admissibility.
  * @return {Object} {campaigned, refusal, detail}.
  */

@@ -538,6 +538,24 @@ test('a host failure is never upgraded to a WASM fatal', async () => {
     const origin = failureOrigins();
     assert.equal(originOf(applyFailed), origin.HOST);
     assert.equal(originOf(sendFailed), origin.HOST);
+
+    // THREE INDEPENDENT STATES, and a host failure moves none of them. The
+    // four host owners the addendum names each fail in turn, and after each
+    // one: the logical replica is still not retired in its own durable
+    // record, the runtime every group shares is still healthy, and an
+    // unrelated group still answers. Recovery belongs to the host owner
+    // that failed, not to this boundary.
+    for (const [name, drive] of hostFailureDrives(fixture)) {
+      const ran = drive();
+      assert.equal(originOf(ran), origin.HOST, `${name}: its domain`);
+      assert.equal(durableRetirementRows(fixture, GROUP_UNDER_TEST).length, 0,
+        `${name}: a host failure must not retire the logical replica`);
+      assert.equal(fixture.host.health, RAFT_RS_RUNTIME_HEALTH.HEALTHY,
+        `${name}: nor mark the runtime unhealthy`);
+      assert.equal(consequencesOf(fixture, GROUP_UNDER_TEST).unrelatedOutcome,
+        RAFT_RS_CALL_OUTCOME.COMPLETED,
+        `${name}: nor touch another group in it`);
+    }
   } finally {
     fixture.dispose();
   }
@@ -612,6 +630,25 @@ test('a genuine Rust trap is never downgraded to a host failure', async () => {
       'running out of stack is JavaScript failing, not the core');
     assert.equal(fixture.host.health, RAFT_RS_RUNTIME_HEALTH.HEALTHY,
       'and it must not retire the runtime every other group shares');
+
+    // A FATAL KILLS AN EXECUTION CONTAINER, IT DOES NOT REMOVE A REPLICA.
+    // The trap above made the runtime unhealthy; the logical replica's own
+    // durable record must be untouched by it, the runtime must rebuild from
+    // durable state, and the SAME logical replica must come back - same
+    // group, same peer id - and answer.
+    assert.equal(durableRetirementRows(fixture, GROUP_UNDER_TEST).length, 0,
+      'a trap must not durably retire the replica that was running');
+    const rebuilt = fixture.host.replaceRuntime();
+    assert.ok(rebuilt.restored.includes(GROUP_UNDER_TEST),
+      'the group must come back from its own durable record');
+    const resumed = fixture.host.enter(GROUP_UNDER_TEST,
+      RAFT_RS_CORE_ENTRY.READ, (core, handle) => core.status(handle));
+    assert.equal(resumed.outcome, RAFT_RS_CALL_OUTCOME.COMPLETED);
+    assert.equal(resumed.value.id, SOLE_VOTER,
+      'and it is the same logical replica, not a new identity minted ' +
+      'because the container failed');
+    assert.equal(durableRetirementRows(fixture, GROUP_UNDER_TEST).length, 0,
+      'and the rebuild did not retire it either');
 
     // And the direction that must not move with it: host JavaScript running
     // out of stack in the work is still host.
@@ -767,6 +804,58 @@ function nodeWithAThrowingResolver(fixture) {
   assert.equal(campaigned.outcome, RAFT_RS_CALL_OUTCOME.COMPLETED,
     'this shape needs a node with messages to address');
   return node;
+}
+
+/**
+ * What this replica's own database says about its retirement, read on a
+ * connection of this test's own - so a closed handle in the drive above
+ * cannot be mistaken for an answer.
+ * @param {Object} fixture - The runtime fixture.
+ * @param {string} groupId - The group.
+ * @return {Array<Object>} The retirement rows, which an eligible replica
+ *   has none of.
+ */
+function durableRetirementRows(fixture, groupId) {
+  const independent = new Database(fixture.group(groupId).dbFile,
+    {readonly: true});
+  const rows = independent.prepare(
+    'SELECT peer_id FROM _raft_rs_retirement WHERE group_id = ?').all(groupId);
+  independent.close();
+  return rows;
+}
+
+/**
+ * The four host owners the addendum names, each failing in turn on a group
+ * that is ready to do work.
+ * @param {Object} fixture - The runtime fixture.
+ * @return {Array<Array>} [name, drive] pairs.
+ */
+function hostFailureDrives(fixture) {
+  return [
+    ['an application callback', () => {
+      readyWithWorkToDo(fixture, GROUP_UNDER_TEST);
+      return fixture.cycle(GROUP_UNDER_TEST, {
+        applyEntry: () => {
+          throw new Error(HOST_ERROR.APPLY);
+        },
+      });
+    }],
+    ['an outbound send', () => {
+      readyWithWorkToDo(fixture, GROUP_UNDER_TEST);
+      return fixture.cycle(GROUP_UNDER_TEST, {
+        send: () => {
+          throw new Error(HOST_ERROR.SEND);
+        },
+      });
+    }],
+    ['an address resolver', () =>
+      nodeWithAThrowingResolver(fixture).tickOnce()],
+    ['a SQLite write', () => {
+      readyWithWorkToDo(fixture, GROUP_UNDER_TEST);
+      fixture.group(GROUP_UNDER_TEST).db.close();
+      return fixture.cycle(GROUP_UNDER_TEST);
+    }],
+  ];
 }
 
 /**

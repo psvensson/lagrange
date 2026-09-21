@@ -50,6 +50,9 @@ import {
   RAFT_RS_GROUP_READ,
 } from '../../../src/raft/raft-rs-group-access-constants.js';
 import {
+  RAFT_RS_FAILURE_ORIGIN,
+} from '../../../src/raft/raft-rs-runtime-health-constants.js';
+import {
   RAFT_PARTITION_NODE_REQUEST,
 } from '../../../src/raft/raft-provider-contract-constants.js';
 import {
@@ -580,7 +583,7 @@ test('retirement survives a restart with no scheduler running', async () => {
 
 test('retirement does not rewrite ConfState and never reactivates an ' +
   'identity', async () => {
-  const {cluster, cutOffPeerId, captured} =
+  const {cluster, leader, cutOffPeerId, captured} =
     removedBehindItsBack('retirement-is-not-membership');
   try {
     const votersBefore = durableFactsOf(cluster, CUT_OFF).voters;
@@ -618,10 +621,61 @@ test('retirement does not rewrite ConfState and never reactivates an ' +
     for (const outcome of ingested) {
       assert.equal(outcome.outcome, refusal);
     }
+
+    // AND THE CONVERSE, which is what keeps retirement from becoming a
+    // generic do-not-touch-Raft state: a replica whose HOST SUBSTRATE is
+    // temporarily unavailable is not retired by that, and comes back as the
+    // same logical replica.
+    temporaryUnavailabilityIsNotRetirement(cluster, leader);
   } finally {
     cluster.dispose();
   }
 });
+
+/**
+ * Take a live, non-retired replica's substrate away three ways and give it
+ * back, asserting each time that nothing durable was decided about the
+ * replica and that the identity that resumes is the one that left.
+ * @param {PartitionNodeCluster} cluster - The partition.
+ * @param {string} available - The replica to take away and give back; the
+ *   one leading, so that a proposal really reaches its durable store.
+ */
+function temporaryUnavailabilityIsNotRetirement(cluster, available) {
+  const identityBefore = cluster.raftPeerIdOf(available);
+
+  // The transport goes away and comes back.
+  cluster.isolate(available);
+  cluster.node(available).tickOnce();
+  cluster.heal(available);
+  assert.deepEqual(durableFactsOf(cluster, available).retirementRows, [],
+    'losing the transport must not retire a replica');
+
+  // Its SQLite handle goes away: every active call fails as HOST failure
+  // while it is gone, and nothing durable is decided by that.
+  cluster.replica(available).db.close();
+  const whileUnavailable = cluster.node(available)
+    .proposeCommand(new TextEncoder().encode(COMMAND));
+  assert.equal(whileUnavailable.origin, RAFT_RS_FAILURE_ORIGIN.HOST,
+    'a substrate that is not there is a host failure, not a retirement ' +
+    `and not a trap; it said ${String(whileUnavailable.origin)}`);
+  assert.equal(cluster.provider.partitionScheduling(
+    cluster.node(available)).retired, false,
+  'and the replica is still not retired while its store is away');
+
+  // And it comes back, through the same restart production would do, as the
+  // same logical replica.
+  const resumed = cluster.restart(available);
+  assert.equal(resumed.node.peerId, identityBefore,
+    'the replica that came back must be the one that left, not a new ' +
+    'identity minted because its container failed');
+  assert.equal(
+    cluster.provider.partitionScheduling(resumed.node).retired, false,
+    'and it is still not retired');
+  assert.deepEqual(durableFactsOf(cluster, available).retirementRows, [],
+    'nothing about any of it wrote a retirement');
+  assert.equal(resumed.node.tickOnce().admitted, true,
+    'and it takes part again, which a retired replica never would');
+}
 
 test('bypassing the retirement check restores the disruptive behaviour',
   async () => {
