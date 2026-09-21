@@ -574,3 +574,124 @@ The full historical liferaft corpus is not assumed to be the right certification
 vehicle - the target is confidence in the raft-rs backend, not behavioural
 equivalence with a backend whose membership behaviour is already known to be
 defective.
+
+## Prerequisite addendum (owner, 2026-09-21): `raft-rs-runtime-boundaries` before transport
+
+The verification of phases 1-5 approved with recorded defects and falsified none
+of the five stop conditions, but its two blocking defects are split out as a
+narrowly scoped prerequisite. **Real transport routing does not begin until this
+prerequisite is independently approved**, because the transport quest introduces
+exactly the caller paths that expose both: transport invokes node ingress, which
+makes scheduler-only retirement insufficient, and transport and persistence
+callbacks execute around WASM calls, which makes failure-origin classification
+load-bearing. Proving transport first would make its result ambiguous.
+
+Scope, exactly: distinguish core refusal, WASM fatal and host failure; make
+retirement an invariant of the node itself rather than of the current scheduler;
+verify both adversarially; then resume transport. Not general runtime
+reliability work.
+
+**1. Three failure domains, structurally distinguished.** `error instanceof
+Error => WASM fatal` is invalid because the boundary encloses host code.
+*Core refusal*: a normal raft-rs operation returns a typed refusal - a stale or
+invalid operation, a configuration-change refusal, a normal step refusal - and
+does **not** retire the runtime. *WASM fatal*: the call itself traps or panics,
+or the binding gives its explicit fatal indication, and the trap policy already
+recorded applies. *Host failure*: JavaScript outside Rust fails - a SQLite
+write, address resolution, a packet send, a committed-entry callback,
+serialization of a host object, other adapter code - which is neither a core
+refusal nor proof of a fatal and classifies as a host error with its own
+recovery semantics. Origin is never inferred from JavaScript's base `Error`
+type.
+
+**2. Narrow the trap boundary** to as close as practical around the actual WASM
+invocation: host preparation, then the invocation boundary, then host
+persistence, send and apply work. Only an exception originating from the
+invocation may be classified a WASM fatal. SQLite, send hooks, address
+resolution and application callbacks do not sit inside a catch that converts
+arbitrary failures into a Raft-runtime fatal. If wasm-bindgen returns a JS
+exception for both Rust errors and real traps, derive a structural discriminator
+from the binding or change the binding to expose one. Message-string matching
+only if the binding offers nothing stronger and a falsifier proves it adequate.
+
+**3. Make the binding result explicit if needed.** If the current surface leaves
+refusal and fatal ambiguous, modify the experimental binding minimally toward an
+explicit shape - `Ok(value)`, `Err(core-refusal)`, `Trap`, or equivalent
+structured tagging. No Rust convenience policy is exposed; the binding's job is
+only to make the execution outcome unambiguous. This is preferable to
+increasingly clever JavaScript exception classification.
+
+**4. Required D1 falsifiers**, each driven: an ordinary raft-rs refusal; a
+malformed argument rejected by the binding before Rust runs; a SQLite failure
+after a successful core call; a send hook throwing; an address resolver
+throwing; an application or committed-entry callback throwing; a genuine
+Rust/WASM panic. For each, assert the classification, whether the group remains
+usable, whether the runtime remains usable, whether unrelated groups remain
+usable, and whether retry or recovery is appropriate. **A host error is never
+upgraded to a WASM fatal merely because it is an `Error`; a genuine fatal is
+never downgraded to an ordinary host refusal.**
+
+**5. Retirement belongs to node admissibility.** Gating only the existing
+scheduler is insufficient. After durable retirement and across restart a retired
+logical replica must not tick, campaign, accept ordinary inbound Raft envelopes
+for active participation, originate Raft traffic, accept application proposals,
+or rejoin merely because stale local `ConfState` still includes itself. This is
+a Lagrange runtime-lifecycle invariant above raft-rs, and it does not rely on
+the current scheduler being the sole caller - the transport quest is
+specifically about adding another caller.
+
+**6. The retired check happens before the core is touched** - before `tick`,
+`step`, `campaign`, `propose`, configuration-change proposals and other active
+RawNode calls. A message is never fed to raft-rs and judged retired afterwards.
+The node fails closed with a typed `replica-retired` result.
+
+**7. Retirement is separate from committed `ConfState`.** A peer may legitimately
+hold stale durable or core state listing itself while Lagrange has durably
+retired the local runtime, so both facts are preserved: `ConfState` is what this
+RawNode last knew about consensus membership; local durable retirement is
+whether this local logical replica may participate at all. Retirement does not
+rewrite `ConfState`; it gates local execution until a valid lifecycle explicitly
+creates a new logical replica with a new stable identity. **A retired identity is
+never reactivated because a later message arrives.**
+
+**8. The required D2 reproducer** is the verifier's exact failure: the peer is
+partitioned; the cluster removes it; local stale `ConfState` still includes
+itself; durable retirement is recorded; the process restarts; the scheduler is
+never run; the test directly calls node tick and feeds real envelopes. Expected:
+tick refused as retired, campaign refused, envelopes refused before `step`, no
+outbound Raft message, and the live cluster's term and leader unchanged because
+of this node. Then the retirement check is deliberately bypassed and the old
+disruptive behaviour must reappear - a load-bearing permanent falsifier.
+
+**9. Do not over-filter non-retired nodes.** D2 must not resurrect the incorrect
+sender-membership rule. For a non-retired local replica inbound transport still
+follows the corrected ingress semantics - valid group, valid recipient, valid
+envelope, and the sender need not already appear in local applied `ConfState`.
+Retirement is a property of the local receiving replica's lifecycle, never a
+sender-membership filter.
+
+**10. Independent verification before transport starts**, by a fresh adversarial
+verifier attempting at least: a host SQLite error presented as a WASM fatal; a
+send-hook failure presented as fatal; a wasm-bindgen argument error presented as
+fatal; a true Rust panic presented as a host error; `step`, `tick` and
+`campaign` called directly on a retired node; a retired node restarted with
+stale self-containing `ConfState`; the scheduler bypassed entirely; and
+legitimate membership-race traffic delivered to a non-retired node. It must
+affirm both that failure origin is correctly classified and that retirement
+holds regardless of caller path. If either fails, transport does not start.
+
+**11. The other newly found gaps stay parked but explicit**, recorded as
+required inputs to `raft-rs-partition-transport-demux` rather than absorbed
+here: the apply-rollback invariant, where no fake LifeRaft event is invented and
+the backend-neutral semantic requirement for a failed application transaction is
+established during transport integration; outbound proposal encoding, which is
+part of transport; the committed-entry callback shape; the module-level shared
+runtime host, not redesigned here unless D1 cannot be fixed without it; and the
+unregistered-peer workflow rule. The transport quest confronts each where it
+becomes real.
+
+**12. Transport resumes only after approval**, with its previously approved
+scope: actual Lagrange transport; no driver wire carrying Raft messages; a
+semantic raft-rs envelope rather than a fake LifeRaft packet; the corrected
+ingress rule; the ten-step scenario; the hostile-cache repeat. Then stop and
+report before any broader corpus.
