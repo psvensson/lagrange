@@ -76,6 +76,19 @@ class RaftRsReplicaLifecycle {
   }
 
   /**
+   * Whether tearing this replica down is admitted.
+   *
+   * It always is, and that is a decision rather than an omission: freeing a
+   * retired replica's handle is how the host stops using it, and refusing
+   * would leak the very resource retirement is telling it to release.
+   * Teardown takes no part in the group - it can originate nothing.
+   * @return {Object} {admitted, outcome, detail}.
+   */
+  admitTeardown() {
+    return ADMITTED;
+  }
+
+  /**
    * Whether an active call on this replica is admitted.
    *
    * A frozen named result either way: a caller can never read admission out

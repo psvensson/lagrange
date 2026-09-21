@@ -40,13 +40,18 @@ function refused(refusal, detail) {
  * @param {boolean} [options.retiredByHost] - Lagrange's own durable answer.
  * @return {Object} A frozen named admission or refusal.
  */
-function raftRsElectionAdmissibility({core, handle, retiredByHost = false}) {
-  const status = core.status(handle);
-  const peerId = status.id;
+function raftRsElectionAdmissibility({core, handle, peerId: localPeerId,
+  retiredByHost = false}) {
+  // FIRST, and before the core is touched at all: a retired replica's answer
+  // cannot depend on anything the core would have said, and the core may not
+  // even hold this group any more. Its own id is the caller's, because the
+  // caller is the replica.
   if (retiredByHost === true) {
     return refused(RAFT_RS_ELECTION_REFUSAL.RETIRED_BY_HOST,
-      RAFT_RS_ELECTION_ERROR_MSG.retiredByHost(peerId));
+      RAFT_RS_ELECTION_ERROR_MSG.retiredByHost(localPeerId));
   }
+  const status = core.status(handle);
+  const peerId = status.id;
   const confState = core.conf_state(handle);
   if (confState.learners.includes(peerId)) {
     return refused(RAFT_RS_ELECTION_REFUSAL.LEARNER,
@@ -68,14 +73,29 @@ function raftRsElectionAdmissibility({core, handle, retiredByHost = false}) {
 }
 
 /**
+ * The refusal a retired replica's campaign is answered with, in the election
+ * owner's own vocabulary - so a caller that was refused at the admission
+ * boundary reads the same name as one refused here.
+ * @param {string} peerId - This replica's raft peer id.
+ * @return {Object} {campaigned, refusal, detail}.
+ */
+function retiredElectionRefusal(peerId) {
+  return Object.freeze({
+    campaigned: false,
+    refusal: RAFT_RS_ELECTION_REFUSAL.RETIRED_BY_HOST,
+    detail: RAFT_RS_ELECTION_ERROR_MSG.retiredByHost(peerId),
+  });
+}
+
+/**
  * Campaign, if this peer may. The core's primitive is reached only from
  * here, so the three rules cannot be walked around by calling it directly.
  * @param {Object} options - The same inputs as the admissibility.
  * @return {Object} {campaigned, refusal, detail}.
  */
-function campaignRaftRsPeer({core, handle, retiredByHost = false}) {
+function campaignRaftRsPeer({core, handle, peerId, retiredByHost = false}) {
   const admissibility = raftRsElectionAdmissibility({
-    core, handle, retiredByHost});
+    core, handle, peerId, retiredByHost});
   if (!admissibility.admitted) {
     return Object.freeze({
       campaigned: false,
@@ -183,5 +203,6 @@ function reasonFor(setting, helps) {
 export {
   campaignRaftRsPeer,
   raftRsElectionAdmissibility,
+  retiredElectionRefusal,
   recommendedElectionSettings,
 };

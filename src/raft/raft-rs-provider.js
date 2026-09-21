@@ -13,7 +13,13 @@ import {
   RAFT_RS_PROVIDER_SERVED,
   RAFT_RS_PROVIDER_STATUS_FIELD,
 } from './raft-rs-provider-constants.js';
-import {createRaftRsNodeClass} from './raft-rs-node.js';
+import {
+  RaftRsGroupHandle,
+  createRaftRsNodeClass,
+} from './raft-rs-node.js';
+import {
+  RAFT_RS_CALL_OUTCOME,
+} from './raft-rs-runtime-health-constants.js';
 import {loadRaftRsCore} from './raft-rs-core.js';
 import {
   RAFT_RS_TICK_SCHEDULING,
@@ -24,23 +30,37 @@ import {
 } from './raft-rs-partition-node-constants.js';
 
 /**
- * One group of this backend: a handle inside the shared WASM runtime, its
- * durable record, and the group it belongs to.
+ * What a caller of this seam is handed when the group would not do it.
+ *
+ * The seam's contract is liferaft's: a failed call throws. A raft-rs refusal
+ * is a NAME, not an exception, and the binding's own refusals are not even
+ * Errors - a bare string has no `message`, and every catch in the partition
+ * service reads one. So the seam converts the named outcome into an Error
+ * whose message a caller can log, carrying the name and the origin so a
+ * caller that wants to branch does not have to read the message.
  */
-class RaftRsGroupHandle {
+class RaftRsSeamRefusal extends Error {
   /**
-   * @param {Object} parts - The group's parts.
-   * @param {Object} parts.core - The raft-rs primitive facade.
-   * @param {number} parts.handle - The core handle.
-   * @param {Object} parts.store - The durable Raft record.
-   * @param {string} parts.groupId - The group id.
+   * @param {Object} ran - The named call outcome.
    */
-  constructor({core, handle, store, groupId}) {
-    this.core = core;
-    this.handle = handle;
-    this.store = store;
-    this.groupId = groupId;
+  constructor(ran) {
+    super(RAFT_RS_PROVIDER_ERROR_MSG.callRefused(ran.outcome, ran.error));
+    this.outcome = ran.outcome;
+    this.origin = ran.origin;
+    this.diagnosis = ran.diagnosis;
   }
+}
+
+/**
+ * What the group answered, or the refusal a seam caller is thrown.
+ * @param {Object} ran - The named call outcome.
+ * @return {*} The value the core returned.
+ */
+function valueOrRefusal(ran) {
+  if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
+    throw new RaftRsSeamRefusal(ran);
+  }
+  return ran.value;
 }
 
 /**
@@ -58,7 +78,7 @@ function raftRsGroupOf(value) {
     return value;
   }
   if (typeof value?.raftRsGroupParts === 'function') {
-    return new RaftRsGroupHandle(value.raftRsGroupParts());
+    return value.raftRsGroupParts();
   }
   throw new Error(RAFT_RS_PROVIDER_ERROR_MSG.notARaftRsGroup(value));
 }
@@ -70,7 +90,8 @@ function raftRsGroupOf(value) {
  * @return {number} The value.
  */
 function exactStatusNumber(group, field) {
-  const value = group.core.status(group.handle)[field];
+  const value = valueOrRefusal(
+    group.classified((core, handle) => core.status(handle)))[field];
   const asNumber = Number(value);
   if (!Number.isSafeInteger(asNumber)) {
     throw new Error(
@@ -239,14 +260,17 @@ class RaftRsWasmProvider {
    * @return {Promise<void>} Resolved when the core accepted the proposal.
    */
   propose(node, command, callback) {
-    const group = raftRsGroupOf(node);
-    try {
-      group.core.propose(group.handle, command);
-    } catch (error) {
+    // The literal production write. It takes part in the group, so it is
+    // inside the admission boundary, and it reaches the core through the
+    // classifying boundary like everything else.
+    const ran = raftRsGroupOf(node).admitted(
+      (core, handle) => core.propose(handle, command));
+    if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
+      const refusal = new RaftRsSeamRefusal(ran);
       if (typeof callback === 'function') {
-        callback(error);
+        callback(refusal);
       }
-      throw error;
+      return Promise.reject(refusal);
     }
     if (typeof callback === 'function') {
       callback(null);
@@ -273,8 +297,8 @@ class RaftRsWasmProvider {
    * @param {*} node - The node, or the group behind it.
    */
   shutdownNode(node) {
-    const group = raftRsGroupOf(node);
-    group.core.free(group.handle);
+    valueOrRefusal(raftRsGroupOf(node).teardown(
+      (core, handle) => core.free(handle)));
   }
 
   /**

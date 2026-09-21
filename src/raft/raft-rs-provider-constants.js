@@ -67,6 +67,8 @@ const RAFT_RS_PROVIDER_ERROR_MSG = Object.freeze({
   deferred: (name) =>
     `the raft-rs-wasm backend does not serve ${name}() yet: ` +
     `${RAFT_RS_PROVIDER_DEFERRED[name]}`,
+  callRefused: (outcome, detail) =>
+    `the raft-rs group refused this call: ${outcome}${detail ? ` - ${detail}` : ''}`,
   notARaftRsGroup: (value) =>
     'the raft-rs-wasm provider was handed something that is not one of its ' +
     `groups: ${JSON.stringify(typeof value)}`,

@@ -122,8 +122,9 @@ test('the configuration rules alone admit a peer removed behind its back, ' +
     const {voters} = durableFactsOf(cluster, CUT_OFF);
     assert.ok(voters.includes(cutOffPeerId),
       'the cut-off replica still holds a configuration listing itself');
-    const {core, handle} = cluster.node(CUT_OFF).raftRsGroupParts();
-    const admissibility = raftRsElectionAdmissibility({core, handle});
+    const admissibility = cluster.node(CUT_OFF).raftRsGroupParts()
+      .classified((core, handle) =>
+        raftRsElectionAdmissibility({core, handle})).value;
     assert.equal(admissibility.admitted, true,
       'the configuration rules alone admit it; the detail said ' +
       `${admissibility.detail}`);

@@ -36,6 +36,92 @@ const PEER_PROJECTION_FIELDS = Object.freeze([
   'address', 'raftPeerId', 'learner']);
 
 /**
+ * A retirement refusal in the runtime host's own call-outcome shape, so a
+ * caller that reached the core through this group reads one shape whether
+ * the core refused, the host failed, or this replica may not run at all.
+ * @param {Object} admission - What the lifecycle owner answered.
+ * @return {Object} The frozen call outcome.
+ */
+function refusedCall(admission) {
+  return Object.freeze({
+    outcome: admission.outcome,
+    origin: null,
+    value: undefined,
+    error: admission.detail,
+    diagnosis: null,
+  });
+}
+
+/**
+ * One group of this backend, as everything outside the node reaches it.
+ *
+ * It hands out NO core and NO handle. The provider seam resolves a node
+ * through this object, so what it offers is the whole of what production can
+ * do to the core - and both ways of doing it are inside the classifying
+ * boundary, with the one that takes part in the group also inside the
+ * admission boundary. That is the difference between a guard and a guard
+ * something can walk round.
+ */
+class RaftRsGroupHandle {
+  /**
+   * @param {Object} parts - The group's parts.
+   * @param {Object} parts.host - The runtime that holds it.
+   * @param {string} parts.key - The host's key for this hosted node.
+   * @param {Object} parts.lifecycle - Whether this replica may participate.
+   * @param {Object} parts.store - Its durable Raft record.
+   * @param {string} parts.groupId - The group.
+   * @param {string} parts.peerId - This replica's raft peer id.
+   */
+  constructor({host, key, lifecycle, store, groupId, peerId}) {
+    this.host = host;
+    this.key = key;
+    this.lifecycle = lifecycle;
+    this.store = store;
+    this.groupId = groupId;
+    this.peerId = peerId;
+  }
+
+  /**
+   * Reach the core inside the classifying boundary, without asking whether
+   * this replica may take part: reads, and the teardown that frees it.
+   * @param {Function} work - Called with (guarded core, handle).
+   * @return {Object} The named call outcome.
+   */
+  classified(work) {
+    return this.host.run(this.key, work);
+  }
+
+  /**
+   * Take part in the group: the lifecycle owner is asked FIRST, and the core
+   * is reached only if this replica may.
+   * @param {Function} work - Called with (guarded core, handle).
+   * @return {Object} The named call outcome, or the typed refusal.
+   */
+  admitted(work) {
+    const admission = this.lifecycle.admit();
+    if (!admission.admitted) {
+      return refusedCall(admission);
+    }
+    return this.classified(work);
+  }
+
+  /**
+   * Free this group's handle, whatever this replica's lifecycle says.
+   *
+   * A recorded decision, not an omission: stopping is how a retired replica
+   * is cleaned up, and a host that refused to free it would leak the handle
+   * it was told to stop using. Freeing takes no part in the group - it can
+   * originate nothing - so it is admitted by name.
+   * @param {Function} work - Called with (guarded core, handle).
+   * @return {Object} The named call outcome.
+   */
+  teardown(work) {
+    this.lifecycle.admitTeardown();
+    return this.classified(work);
+  }
+}
+
+/**
  * Every census member this node does not serve, with the reason it does not.
  * A name appearing as both a method and a property is one member.
  * @return {Map<string, string>} Name to reason.
@@ -165,12 +251,14 @@ function createRaftRsNodeClass(context) {
      * @return {Object} {core, handle, store, groupId}.
      */
     raftRsGroupParts() {
-      return {
-        core: this.host.core,
-        handle: this.host.handleOf(this.key),
+      return new RaftRsGroupHandle({
+        host: this.host,
+        key: this.key,
+        lifecycle: context.lifecycle,
         store: this.store,
         groupId: this.groupId,
-      };
+        peerId: this.peerId,
+      });
     }
 
     /**
@@ -202,6 +290,28 @@ function createRaftRsNodeClass(context) {
     }
 
     /**
+     * Hand every Ready message to the transport.
+     *
+     * Guarded like every other active call: sending IS taking part in the
+     * group - it is how a replica originates traffic - so a retired replica
+     * reaches it through the same one answer as everything else.
+     * @param {Array<Object>} messages - Messages from the core.
+     * @private
+     */
+    send(messages) {
+      this.ifAdmitted(() => {
+        for (const message of messages) {
+          context.deliverPacket(context.resolvePeerAddress(message.to), {
+            groupId: this.groupId,
+            to: message.to,
+            message,
+          });
+        }
+        return messages;
+      });
+    }
+
+    /**
      * Propose one command into the core, inside the trap boundary, and drain
      * what it made ready.
      * @param {*} command - The command's bytes.
@@ -214,7 +324,7 @@ function createRaftRsNodeClass(context) {
         if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
           return this.outcomeOf(ran, null);
         }
-        return this.drainAdmitted();
+        return this.drain();
       });
     }
 
@@ -350,7 +460,7 @@ function createRaftRsNodeClass(context) {
         if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
           return this.outcomeOf(ran, null);
         }
-        return this.drainAdmitted();
+        return this.drain();
       });
     }
 
@@ -454,7 +564,7 @@ function createRaftRsNodeClass(context) {
         if (!ran.value.admitted) {
           return this.outcomeOf(ran, ran.value);
         }
-        const drained = this.drainAdmitted();
+        const drained = this.drain();
         return drained.trapped ? drained : this.outcomeOf(ran, ran.value);
       });
     }
@@ -465,29 +575,22 @@ function createRaftRsNodeClass(context) {
      * @private
      */
     drain() {
-      return this.ifAdmitted(() => this.drainAdmitted());
-    }
-
-    /**
-     * Run the core's Ready cycles and turn what they did into events.
-     * @return {Object} The named dispatch outcome.
-     * @private
-     */
-    drainAdmitted() {
-      const committed = [];
-      const ran = this.host.run(this.key, (core, handle) => drainReady({
-        core,
-        handle,
-        store: this.store,
-        groupId: this.groupId,
-        send: (messages) => this.send(messages),
-        applyEntry: (entry) => committed.push(entry),
-      }));
-      if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
+      return this.ifAdmitted(() => {
+        const committed = [];
+        const ran = this.host.run(this.key, (core, handle) => drainReady({
+          core,
+          handle,
+          store: this.store,
+          groupId: this.groupId,
+          send: (messages) => this.send(messages),
+          applyEntry: (entry) => committed.push(entry),
+        }));
+        if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
+          return this.outcomeOf(ran, null);
+        }
+        this.announce(committed);
         return this.outcomeOf(ran, null);
-      }
-      this.announce(committed);
-      return this.outcomeOf(ran, null);
+      });
     }
 
     /**
@@ -518,22 +621,6 @@ function createRaftRsNodeClass(context) {
     }
 
     /**
-     * Hand every Ready message to the transport, addressed by the address the
-     * host resolves for the peer id the core chose.
-     * @param {Array<Object>} messages - Messages from the core.
-     * @private
-     */
-    send(messages) {
-      for (const message of messages) {
-        context.deliverPacket(context.resolvePeerAddress(message.to), {
-          groupId: this.groupId,
-          to: message.to,
-          message,
-        });
-      }
-    }
-
-    /**
      * One named outcome for every dispatch, so a caller never reads success
      * out of an absent error.
      * @param {Object} ran - What the trap boundary returned.
@@ -560,17 +647,24 @@ function createRaftRsNodeClass(context) {
       });
     }
 
-    /** Stop this node: the handle goes, the durable record stays. */
+    /**
+     * Stop this node: the handle goes, the durable record stays.
+     *
+     * Teardown asks the lifecycle owner too, and the owner admits it by name
+     * - refusing to free a retired replica's handle would leak the very
+     * thing retirement is telling the host to stop using, and freeing takes
+     * no part in the group.
+     */
     end() {
       if (this.stopped) {
         return;
       }
       this.stopped = true;
-      this.host.run(this.key, (core, handle) => core.free(handle));
+      this.raftRsGroupParts().teardown((core, handle) => core.free(handle));
     }
   }
 
   return RaftRsNode;
 }
 
-export {createRaftRsNodeClass};
+export {RaftRsGroupHandle, createRaftRsNodeClass};

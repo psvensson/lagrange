@@ -281,8 +281,10 @@ class PartitionNodeCluster {
    * @return {Object} The core's own status.
    */
   coreStatus(replicaId) {
-    const {core, handle} = this.node(replicaId).raftRsGroupParts();
-    return core.status(handle);
+    // Through the group the node hands out: there is no unguarded core to
+    // read any more, and a read is a read - it asks no admission.
+    return this.node(replicaId).raftRsGroupParts()
+      .classified((core, handle) => core.status(handle)).value;
   }
 
   /**
@@ -291,8 +293,8 @@ class PartitionNodeCluster {
    * @return {Object} The ConfState.
    */
   coreConfState(replicaId) {
-    const {core, handle} = this.node(replicaId).raftRsGroupParts();
-    return core.conf_state(handle);
+    return this.node(replicaId).raftRsGroupParts()
+      .classified((core, handle) => core.conf_state(handle)).value;
   }
 
   /**
@@ -303,8 +305,8 @@ class PartitionNodeCluster {
    * @param {string} leader - The replica the caller measured as leading.
    */
   proposeConfigurationChange(changes, transition, leader) {
-    const {core, handle} = this.node(leader).raftRsGroupParts();
-    core.propose_conf_change_v2(handle, {transition, changes});
+    this.node(leader).raftRsGroupParts().admitted((core, handle) =>
+      core.propose_conf_change_v2(handle, {transition, changes}));
     this.node(leader).tickOnce();
   }
 

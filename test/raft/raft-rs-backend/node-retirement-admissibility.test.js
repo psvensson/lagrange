@@ -30,6 +30,9 @@ import * as nodeConstants from '../../../src/raft/raft-rs-node-constants.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {drainReady} from '../../../src/raft/raft-rs-ready-loop.js';
 import {
+  RAFT_PARTITION_NODE_REQUEST,
+} from '../../../src/raft/raft-provider-contract-constants.js';
+import {
   RAFT_RS_ELECTION_REFUSAL,
 } from '../../../src/raft/raft-rs-election-safety-constants.js';
 import {
@@ -53,6 +56,8 @@ const COMMAND = 'a-command-from-a-retired-replica';
 // binding's own match arms.
 const REMOVE_NODE = 1;
 const AUTO_TRANSITION = 0;
+const MSG_HEARTBEAT = 8;
+const ZERO_POSITION = '0';
 
 /**
  * A clock that records what it was asked to schedule and schedules nothing.
@@ -172,6 +177,86 @@ function admittedCount(outcomes) {
 }
 
 /**
+ * The four calls production really makes on a group, driven on a retired
+ * replica through the seam that resolves it.
+ *
+ * The seam is the provider: it takes the node the group holds in `this.raft`
+ * and resolves it with `raftRsGroupParts()`. Whatever that hands back is the
+ * whole of what production can reach, so it may not hand back an unguarded
+ * core, and everything reached through it must be refused for a retired
+ * replica exactly as the node's own methods are.
+ * @param {PartitionNodeCluster} cluster - The partition.
+ * @param {Object} node - The retired replica's node.
+ * @param {string} refusal - The typed retirement refusal name.
+ */
+async function seamAttacksAreRefused(cluster, node, refusal) {
+  const parts = node.raftRsGroupParts();
+  assert.equal(parts.core, undefined,
+    'the seam must not be handed the unguarded runtime: every path ' +
+    'production uses has to be inside both boundaries');
+  assert.equal(parts.handle, undefined,
+    'nor a raw handle to call it with');
+
+  // A raw tick, a campaign and a step, through whatever the seam resolves.
+  const readyBefore = parts.classified((core, handle) =>
+    core.has_ready(handle));
+  const termBefore = cluster.coreStatus(CUT_OFF).term;
+  for (const attack of [
+    (core, handle) => core.tick(handle),
+    (core, handle) => core.campaign(handle),
+    (core, handle) => core.step(handle, {
+      from: '1', to: node.peerId, msgType: MSG_HEARTBEAT, term: termBefore,
+      logTerm: ZERO_POSITION, index: ZERO_POSITION, commit: ZERO_POSITION,
+    }),
+  ]) {
+    assert.equal(parts.admitted(attack).outcome, refusal,
+      'a retired replica must refuse this call through the seam too');
+  }
+
+  // And the literal production write: the partition service proposes through
+  // the provider, with the node it holds in this.raft.
+  await assert.rejects(
+    () => cluster.provider.propose(node, new TextEncoder().encode(COMMAND)),
+    (error) => error.outcome === refusal &&
+      typeof error.message === 'string' && error.message.length > 0,
+    'the provider must refuse a proposal from a retired replica, with a ' +
+    'refusal a caller can read');
+
+  // Nothing of it reached the core: the core would have had work to do.
+  assert.equal(parts.classified((core, handle) =>
+    core.has_ready(handle)).value, readyBefore.value,
+  'the core must have been given nothing at all');
+  assert.equal(cluster.coreStatus(CUT_OFF).term, termBefore,
+    'and its own term must not have moved');
+}
+
+/**
+ * The partition's own transport hook for one replica, addressed the way the
+ * partition addresses it: the request's resolver turns a peer into an
+ * address and the request's sender puts the envelope on the wire. No node
+ * member is involved, which is what makes the bypass control a bypass.
+ * @param {PartitionNodeCluster} cluster - The partition.
+ * @param {string} replicaId - Whose transport.
+ * @return {Function} A send hook for the Ready loop.
+ */
+function sendHookOf(cluster, replicaId) {
+  const request = cluster.replica(replicaId).request;
+  const replicaOfPeerId = new Map(FOUNDING.map((peer) =>
+    [cluster.raftPeerIdOf(peer), peer]));
+  return (messages) => {
+    for (const message of messages) {
+      const target = replicaOfPeerId.get(message.to);
+      if (target === undefined) {
+        continue;
+      }
+      request[RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER](
+        request[RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS](target),
+        {groupId: cluster.partitionId, to: message.to, message});
+    }
+  };
+}
+
+/**
  * What the live cluster looks like, read off the leading replica's own core.
  *
  * Deliberately not the driver's cluster-wide leader question: that one asks
@@ -210,11 +295,11 @@ test('retirement is refused at the node, before the core is touched',
         `${String(ticked.outcome)}`);
 
       // The sharp instrument for BEFORE: take this group's handle out of the
-      // runtime with the core's own primitive. Any call that reaches the core
-      // now answers the core's own "invalid handle" refusal instead, so a
-      // check made after touching the core cannot answer the retirement one.
-      const {core, handle} = node.raftRsGroupParts();
-      core.free(handle);
+      // runtime, through the production teardown the provider performs. Any
+      // call that reaches the core now answers the core's own "invalid
+      // handle" refusal instead, so a check made after touching the core
+      // cannot answer the retirement one.
+      cluster.provider.shutdownNode(node);
       const afterFree = node.tickOnce();
       const refusal = retiredRefusalName();
       assert.equal(ticked.outcome, refusal,
@@ -273,6 +358,13 @@ test('a retired replica neither ticks, campaigns, proposes nor admits ' +
     for (const outcome of [...ticks, proposed, ...ingested]) {
       assert.equal(outcome.outcome, refusal);
     }
+
+    // THE PRODUCTION SEAM. Everything above goes through the node's own
+    // methods; production reaches this group through the provider, which
+    // resolves it with raftRsGroupParts. A guard the seam walks round is not
+    // a guard, so the four calls the verifier drove through it are driven
+    // here every time.
+    await seamAttacksAreRefused(cluster, node, refusal);
   } finally {
     cluster.dispose();
   }
@@ -401,19 +493,22 @@ test('bypassing the retirement check restores the disruptive behaviour',
         assert.equal(outcome.outcome, refusal);
       }
 
-      // Bypassed: the same work, minus the check. The node has no unguarded
-      // active path any more, so the bypass goes round the node entirely -
-      // the core is ticked through the runtime host and the Ready loop is
-      // run with this replica's own store and its own transport hook, which
-      // is exactly what the node does once it has admitted a call. The old
-      // behaviour must come back, or the check is not what is protecting
-      // the cluster.
+      // Bypassed: the SAME work, reaching the core through the group's
+      // classifying path - which asks no admission, because reads and
+      // teardown go that way - instead of the admitted path every active
+      // call uses. Nothing else differs: the Ready loop runs on this
+      // replica's own store and its packets go out through the partition's
+      // own send hook, the one the request carries, not through any node
+      // member. If the old behaviour does not come back, the admission check
+      // is not what is protecting the cluster.
+      const group = node.raftRsGroupParts();
+      const sendRoundTheNode = sendHookOf(cluster, CUT_OFF);
       for (let round = 0; round < DISTURBANCE_TICKS; round += 1) {
-        node.host.run(node.key, (core, handle) => {
+        group.classified((core, handle) => {
           core.tick(handle);
           return drainReady({
-            core, handle, store: node.store, groupId: node.groupId,
-            send: (messages) => node.send(messages),
+            core, handle, store: group.store, groupId: group.groupId,
+            send: sendRoundTheNode,
           });
         });
         cluster.deliverAll();

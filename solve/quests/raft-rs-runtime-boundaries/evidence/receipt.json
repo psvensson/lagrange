@@ -4,10 +4,10 @@
   "status": "pass",
   "testFileDigests": {
     "test/raft/raft-rs-backend/failure-origin-domains.test.js": "ed8d8a3d630682bebb4829d76996a8726b96c30350cc94fca11f5eb406764a5c",
-    "test/raft/raft-rs-backend/node-retirement-admissibility.test.js": "0fbab2aea3600fe221f0f75870f8e1eb8765a88c94c9cc304ba62038674c5718",
+    "test/raft/raft-rs-backend/node-retirement-admissibility.test.js": "267a61e3742bfdf0e086ef69e0eedcab3bd666dcdf2a1f843f96e4173e8ab88b",
     "test/raft/raft-rs-backend/two-boundary-scope.test.js": "ef0182bc632498478c0acce319e591fc7c8ec0f57070354534c0dbd9f1efd299"
   },
-  "generatedAt": "2026-09-21T05:57:12.520Z",
+  "generatedAt": "2026-09-21T06:29:54.337Z",
   "receipts": [
     {
       "id": "three-failure-domains-are-structurally-distinguished-not-inferred-from-error-type",

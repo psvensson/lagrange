@@ -26,7 +26,13 @@ import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {RaftRsPeerIdentityRegistry} from './raft-rs-peer-identity.js';
 import {RaftRsReplicaLifecycle} from './raft-rs-replica-lifecycle.js';
 import {RaftRsRuntimeHost} from './raft-rs-runtime-health.js';
-import {campaignRaftRsPeer} from './raft-rs-election-safety.js';
+import {
+  campaignRaftRsPeer,
+  retiredElectionRefusal,
+} from './raft-rs-election-safety.js';
+import {
+  RAFT_RS_CALL_OUTCOME,
+} from './raft-rs-runtime-health-constants.js';
 import {createRaftRsNodeClass} from './raft-rs-node.js';
 import {instantiateRaftRsCore} from './raft-rs-core.js';
 import {resolveTimeSource} from '../time/time-source.js';
@@ -206,8 +212,14 @@ class RaftRsPartitionControl {
    * @return {Object} {campaigned, refusal, detail}.
    */
   campaign() {
-    const {core, handle} = this.node.raftRsGroupParts();
-    return campaignRaftRsPeer({core, handle, retiredByHost: this.retired});
+    const ran = this.node.raftRsGroupParts().admitted((core, handle) =>
+      campaignRaftRsPeer({core, handle, peerId: this.peerId}));
+    if (ran.outcome === RAFT_RS_CALL_OUTCOME.COMPLETED) {
+      return ran.value;
+    }
+    // The admission boundary refused before the core was touched. The
+    // election owner names that refusal in its own vocabulary.
+    return retiredElectionRefusal(this.peerId);
   }
 }
 
