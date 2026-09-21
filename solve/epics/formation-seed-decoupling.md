@@ -1070,6 +1070,15 @@ step list and the transition-identity candidate in the section above included.
   (a complexity ledger; adding a mechanism while leaving the local membership
   machinery active is not success), and a migration decision from a closed set.
 
+## HANDOVER: the raft-rs line of work (2026-09-21)
+
+[HANDOVER-raft-rs-2026-09-21.md](formation-seed-decoupling/HANDOVER-raft-rs-2026-09-21.md)
+is the entry point for whoever continues this, agent or human. It carries the
+one blocking decision, the branch and tag map, what is measured and true, the
+recurring failure pattern across eight adversarial verification rounds, the
+practical traps, what is parked, and what an authorised seam redesign would
+cover. Read it before the directions it points at.
+
 ## Simulator frozen (2026-09-19)
 
 The owner decided to freeze the simulator as a bounded instrument and not to
