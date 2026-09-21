@@ -50,6 +50,9 @@ const CUT_OFF = 'replica-c';
 const SETTLE_ROUNDS = 400;
 const DISTURBANCE_TICKS = 60;
 const CAPTURE_ROUNDS = 20;
+// A removed replica has to time out before it campaigns, and only then does
+// it originate anything of its own.
+const MEMBERSHIP_RACE_TICKS = 500;
 const RETIRED_AT = '2026-09-21T00:00:00.000Z';
 const COMMAND = 'a-command-from-a-retired-replica';
 // ConfChangeType::RemoveNode and ConfChangeTransition::Auto, from the
@@ -294,6 +297,26 @@ test('retirement is refused at the node, before the core is touched',
         'a retired replica must not tick; the node answered ' +
         `${String(ticked.outcome)}`);
 
+      // BEFORE, not after-and-overridden. A guard that ran after the work
+      // and then replaced its answer would leave the core holding what the
+      // work gave it, so the core itself is asked what it was given: enough
+      // ticks to time an election out, and a proposal, must leave it with
+      // nothing to do and the term it had.
+      const group = node.raftRsGroupParts();
+      const readyBefore = group.classified((core, handle) =>
+        core.has_ready(handle)).value;
+      const termBefore = cluster.coreStatus(CUT_OFF).term;
+      for (let round = 0; round < DISTURBANCE_TICKS; round += 1) {
+        node.tickOnce();
+      }
+      node.proposeCommand(new TextEncoder().encode(COMMAND));
+      assert.equal(group.classified((core, handle) =>
+        core.has_ready(handle)).value, readyBefore,
+      'the core was fed after all: it has work it did not have before, so ' +
+      'the check ran after the work rather than before it');
+      assert.equal(cluster.coreStatus(CUT_OFF).term, termBefore,
+        'and its term moved, which only a tick it was given could do');
+
       // The sharp instrument for BEFORE: take this group's handle out of the
       // runtime, through the production teardown the provider performs. Any
       // call that reaches the core now answers the core's own "invalid
@@ -531,23 +554,40 @@ test('a non-retired replica still admits a sender absent from its ConfState',
       removedBehindItsBack('membership-race-ingress');
     try {
       // The membership race, driven: the removed replica is NOT retired, it
-      // can hear again, and it sends real traffic to a leader whose applied
-      // configuration no longer holds it.
+      // can hear again, and it is ticked until IT originates traffic of its
+      // own - an election it starts, addressed to a leader whose applied
+      // configuration no longer holds it. Envelopes the leader produced
+      // earlier would prove nothing about a sender, so the one fed back is
+      // required to carry this replica's own peer id as its sender.
       cluster.heal(CUT_OFF);
-      cluster.node(CUT_OFF).tickOnce();
-      const inbox = cluster.replica(leader).inbox;
-      const envelopes = inbox.splice(0, inbox.length);
-      assert.ok(envelopes.length > 0,
-        'the non-retired replica must really have sent something');
-      assert.ok(!cluster.coreConfState(leader).voters.includes(cutOffPeerId),
-        'and the receiver\'s applied configuration must not list the sender');
-      for (const envelope of envelopes) {
-        const admitted = cluster.node(leader)
-          .emit(RAFT_RS_NODE_EVENT.DATA, envelope);
-        assert.equal(admitted.admitted, true,
-          'a sender absent from the applied configuration is still ' +
-          `admitted; it answered ${String(admitted.outcome)}`);
+      emptyTheTransport(cluster);
+      let fromTheAbsentSender = null;
+      for (let round = 0;
+        round < MEMBERSHIP_RACE_TICKS && fromTheAbsentSender === null;
+        round += 1) {
+        cluster.node(CUT_OFF).tickOnce();
+        const inbox = cluster.replica(leader).inbox;
+        const pending = inbox.splice(0, inbox.length);
+        fromTheAbsentSender = pending.find(
+          (envelope) => envelope.message.from === cutOffPeerId) ?? null;
       }
+      assert.notEqual(fromTheAbsentSender, null,
+        'the drive must make the removed replica really originate traffic ' +
+        'of its own; nothing else proves anything about a SENDER');
+      assert.equal(fromTheAbsentSender.message.from, cutOffPeerId,
+        'and the envelope fed back must be the one it sent');
+
+      const applied = cluster.coreConfState(leader);
+      assert.ok(!applied.voters.includes(cutOffPeerId) &&
+        !applied.learners.includes(cutOffPeerId),
+      'the receiver\'s applied configuration must not list the sender, or ' +
+      'there is no membership race to admit');
+
+      const admitted = cluster.node(leader)
+        .emit(RAFT_RS_NODE_EVENT.DATA, fromTheAbsentSender);
+      assert.equal(admitted.admitted, true,
+        'a sender absent from the applied configuration is still admitted; ' +
+        `it answered ${String(admitted.outcome)} (${String(admitted.detail)})`);
     } finally {
       cluster.dispose();
     }

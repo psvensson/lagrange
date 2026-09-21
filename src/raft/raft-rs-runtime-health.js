@@ -39,7 +39,14 @@ function originOfThrownValue(thrown) {
   if (typeof thrown === RAFT_RS_CORE_REFUSAL_TYPE) {
     return RAFT_RS_FAILURE_ORIGIN.CORE_REFUSAL;
   }
-  if (thrown instanceof globalThis.WebAssembly.RuntimeError) {
+  // A trap announces itself as a RuntimeError; an invocation that ran out of
+  // stack traps too, and THAT one arrives as a RangeError. Both abort the
+  // call inside the instance, so both are fatal. This test is only ever
+  // applied to a value an invocation threw - host code that recurses away
+  // its own stack never reaches here - so widening it cannot make host
+  // JavaScript fatal.
+  if (thrown instanceof globalThis.WebAssembly.RuntimeError ||
+    thrown instanceof RangeError) {
     return RAFT_RS_FAILURE_ORIGIN.WASM_INVOCATION;
   }
   return RAFT_RS_FAILURE_ORIGIN.HOST;

@@ -50,6 +50,7 @@ import {drainReady} from '../../../src/raft/raft-rs-ready-loop.js';
 import {
   RaftRsReplicaLifecycle,
 } from '../../../src/raft/raft-rs-replica-lifecycle.js';
+import {RaftRsWasmProvider} from '../../../src/raft/raft-rs-provider.js';
 import {
   instantiateRaftRsCore,
   raftRsBindingPaths,
@@ -82,6 +83,15 @@ const MALFORMED_MESSAGE = 7;
 // where the core needs bytes.
 const NOT_BYTES_AT_ALL = Object.freeze({entryId: 'an-entry', command: 'write'});
 const DRAIN_CYCLES_FOR_ONE_STEP = 8;
+// Calls whose generated glue runs a different amount of JavaScript inside
+// the invocation, so the sweep below has more than one width of band to land
+// in.
+const STACK_PROBE_CALLS = Object.freeze([
+  (core, handle) => core.status(handle),
+  (core, handle) => core.export_persisted_state(handle),
+  (core, handle) => core.conf_state(handle),
+  (core, handle) => core.take_ready(handle),
+]);
 
 const HOST_ERROR = Object.freeze({
   SEND: 'the transport refused this packet',
@@ -269,6 +279,51 @@ function originOf(ran) {
   return ran.origin;
 }
 
+/**
+ * Exhaust the JavaScript stack and then call the core from the bottom of it,
+ * so the trap happens INSIDE an invocation rather than in host code.
+ *
+ * The recursion is unwound one frame at a time, trying the call at each
+ * level, because the depth at which an invocation can no longer be entered
+ * is the engine's business and not a number to hard-code.
+ * @param {Object} fixture - The runtime fixture.
+ * @return {Object|null} The first non-completed outcome, or null.
+ */
+function stackExhaustedInsideAnInvocation(fixture) {
+  // Recurse until the engine refuses another frame, then try the invocation
+  // at every depth on the way back out. At the deepest levels there is not
+  // even room to ENTER one, and those failures are host by construction; one
+  // level further out there is room to enter it and not to finish it, and
+  // that is the trap this receipt is about. Which level that is belongs to
+  // the engine, so it is searched for rather than declared.
+  let trapped = null;
+  const seen = new Map();
+  const descend = () => {
+    try {
+      descend();
+    } catch {
+      // Exhausted here; the attempt below enters the invocation from this
+      // depth as the stack unwinds.
+    }
+    if (trapped !== null) {
+      return;
+    }
+    // Several primitives, because how much JavaScript the generated glue
+    // runs inside one invocation differs per call, and the wider that is the
+    // wider the band where the call can be entered but not finished.
+    for (const invoke of STACK_PROBE_CALLS) {
+      const ran = fixture.host.run(GROUP_UNDER_TEST, invoke);
+      seen.set(ran.outcome, (seen.get(ran.outcome) ?? 0) + 1);
+      if (ran.outcome === RAFT_RS_CALL_OUTCOME.TRAPPED) {
+        trapped = ran;
+        return;
+      }
+    }
+  };
+  descend();
+  return {trapped, seen: [...seen.entries()]};
+}
+
 /** @return {Uint8Array} A command's bytes. */
 function commandBytes() {
   return new TextEncoder().encode(COMMAND);
@@ -379,7 +434,8 @@ test('an ordinary core refusal leaves the runtime and its groups usable',
   async () => {
     const origin = failureOrigins();
     const fixture = runtimeWithGroups([
-      {groupId: GROUP_UNDER_TEST}, {groupId: UNRELATED_GROUP}]);
+      {groupId: GROUP_UNDER_TEST}, {groupId: UNRELATED_GROUP},
+      {groupId: PAIRED_GROUP, voters: [SOLE_VOTER, ABSENT_PEER]}]);
     try {
       // A follower with no leader cannot carry a proposal: raft-rs declines
       // and returns, so nothing unwound.
@@ -392,6 +448,28 @@ test('an ordinary core refusal leaves the runtime and its groups usable',
       assert.equal(consequences.unrelatedOutcome,
         RAFT_RS_CALL_OUTCOME.COMPLETED);
       assert.equal(originOf(refused), origin.CORE_REFUSAL);
+
+      // What a refusal LOOKS LIKE where production meets it. The seam's
+      // contract is liferaft's - a failed call throws - and the binding's
+      // refusals are not even Errors, so a bare string would reach the
+      // partition service's catch with no message to log. The seam converts
+      // the named outcome into an Error that carries both.
+      const provider = new RaftRsWasmProvider();
+      const node = followerNodeOn(fixture, PAIRED_GROUP);
+      await assert.rejects(
+        () => provider.propose(node, commandBytes()),
+        (error) => {
+          assert.ok(error instanceof Error,
+            'a refusal must reach a caller as an Error it can log');
+          assert.equal(typeof error.message, 'string');
+          assert.ok(error.message.length > 0,
+            'and with a message, which a bare string refusal has not');
+          assert.equal(error.outcome, RAFT_RS_CALL_OUTCOME.CORE_REFUSED);
+          assert.equal(error.origin, failureOrigins().CORE_REFUSAL,
+            'carrying the domain, so a caller branches on the origin ' +
+            'rather than on the text');
+          return true;
+        });
 
       // And the refusal is retryable in the sense that matters: when the
       // precondition the core named is met, the same call completes.
@@ -509,6 +587,35 @@ test('a genuine Rust trap is never downgraded to a host failure', async () => {
     assert.equal(fixture.host.health, RAFT_RS_RUNTIME_HEALTH.HEALTHY,
       'the broad boundary would have retired the runtime for this; only the ' +
       'invocation may do that now');
+
+    // A fatal that does not announce itself as one. An invocation that runs
+    // out of stack traps, and THAT trap reaches JavaScript as a RangeError
+    // rather than a WebAssembly.RuntimeError: classifying it host would mark
+    // a runtime whose instance aborted mid-call healthy, which is the
+    // downgrade §4 forbids, and transport's call depths are what make it
+    // reachable.
+    const swept = stackExhaustedInsideAnInvocation(fixture);
+    const exhausted = swept.trapped;
+    assert.notEqual(exhausted, null,
+      'the drive must really exhaust the stack inside an invocation; it ' +
+      `saw ${JSON.stringify(swept.seen)}`);
+    assert.equal(exhausted.outcome, RAFT_RS_CALL_OUTCOME.TRAPPED,
+      `it was classified ${String(exhausted.outcome)} (${exhausted.error})`);
+    assert.equal(originOf(exhausted), origin.WASM_INVOCATION);
+    assert.equal(fixture.host.health,
+      RAFT_RS_RUNTIME_HEALTH.UNHEALTHY_AFTER_TRAP,
+      'a runtime whose invocation aborted mid-call is not healthy');
+
+    // And the direction that must not move with it: host JavaScript running
+    // out of stack OUTSIDE an invocation is still host.
+    fixture.host.replaceRuntime();
+    const hostRecursion = fixture.host.run(GROUP_UNDER_TEST, () => {
+      const forever = () => forever();
+      return forever();
+    });
+    assert.equal(originOf(hostRecursion), origin.HOST,
+      'only an invocation may raise a fatal, whatever it threw');
+    assert.equal(fixture.host.health, RAFT_RS_RUNTIME_HEALTH.HEALTHY);
   } finally {
     fixture.dispose();
   }
@@ -595,6 +702,31 @@ const SHAPE = Object.freeze([
       })),
   },
 ]);
+
+/**
+ * The production node class on a group already in the runtime, with a
+ * working resolver: a follower, so the core refuses a proposal it cannot
+ * carry.
+ * @param {Object} fixture - The runtime fixture.
+ * @param {string} groupId - The group.
+ * @return {Object} The node.
+ */
+function followerNodeOn(fixture, groupId) {
+  const NodeClass = createRaftRsNodeClass({
+    runtimeHost: fixture.host,
+    store: fixture.group(groupId).store,
+    groupId,
+    peerId: SOLE_VOTER,
+    voters: [SOLE_VOTER, ABSENT_PEER],
+    learners: [],
+    lifecycle: new RaftRsReplicaLifecycle({
+      store: fixture.group(groupId).store, groupId, peerId: SOLE_VOTER}),
+    resolvePeerAddress: (raftPeerId) => `${NODE_ADDRESS}/${raftPeerId}`,
+    deliverPacket: () => undefined,
+    scheduleTick: () => undefined,
+  });
+  return new NodeClass(NODE_ADDRESS);
+}
 
 /**
  * The production node class, built on a group already in the runtime, whose

@@ -3,11 +3,11 @@
   "quest": "raft-rs-runtime-boundaries",
   "status": "pass",
   "testFileDigests": {
-    "test/raft/raft-rs-backend/failure-origin-domains.test.js": "ed8d8a3d630682bebb4829d76996a8726b96c30350cc94fca11f5eb406764a5c",
-    "test/raft/raft-rs-backend/node-retirement-admissibility.test.js": "267a61e3742bfdf0e086ef69e0eedcab3bd666dcdf2a1f843f96e4173e8ab88b",
+    "test/raft/raft-rs-backend/failure-origin-domains.test.js": "0a4f1eeff74de3287fc2125335f365175120eaa472f952c563145dd4e05cb17f",
+    "test/raft/raft-rs-backend/node-retirement-admissibility.test.js": "fcb11d54d0d286e13bf8f4f5208c6a3e4d906a45e2279b6ee83f84759a8f3ab9",
     "test/raft/raft-rs-backend/two-boundary-scope.test.js": "ef0182bc632498478c0acce319e591fc7c8ec0f57070354534c0dbd9f1efd299"
   },
-  "generatedAt": "2026-09-21T06:29:54.337Z",
+  "generatedAt": "2026-09-21T06:39:17.415Z",
   "receipts": [
     {
       "id": "three-failure-domains-are-structurally-distinguished-not-inferred-from-error-type",
