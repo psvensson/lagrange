@@ -414,3 +414,163 @@ owner's decisions:
     that way. The verifier is asked specifically to attack whether the default
     liferaft partition construction and behaviour remained unchanged while the
     raft-rs path became reachable.
+
+## Phase-5 addendum (owner, 2026-09-21): the proof answers the question; spend narrowly from here
+
+Measured through the real partition and provider seam: a raft-rs partition
+survives restart; term, vote, commit and committed membership restore from real
+SQLite state; `ConfState` stays authoritative while real service-table caches
+are actively poisoned and disagree across replicas; service and cache lifecycle
+state no longer defines consensus membership; learner addition, catch-up,
+promotion and removal work through the real partition path; and the backend
+abstraction is substantially smaller than the LifeRaft-shaped requirement it
+replaced. The principal architectural question is answered sufficiently to
+change the remaining work order, so spending does not continue by the old phase
+numbering.
+
+1. **The liferaft service-row membership authority is NOT repaired now.** No
+   behavioural repair quest to remove `service row change -> raft.leave()` from
+   the current backend: liferaft has no replicated committed-membership
+   mechanism to replace it, its local peer set is derived from those rows, and
+   removing one direction in isolation risks stale voters indefinitely and makes
+   the old backend less coherent without making it safe. The finding stands and
+   is recorded as a known architectural defect and a cutover deletion target:
+
+   > On the liferaft backend, service metadata is consensus-membership
+   > authority.
+
+   No other membership mechanism is built above liferaft to repair it during
+   migration. What is added or preserved instead is a structural regression test
+   proving the raft-rs backend never changes `ConfState` because of service-row
+   peer reconciliation. The liferaft `join`/`leave`/`joinPeer` machinery is a
+   cutover deletion candidate. If a separate, currently reachable liferaft bug
+   is found that causes immediate formation failure or a data-safety regression
+   beyond the known architecture, that specific falsifier comes back before any
+   behaviour changes.
+2. **Receipt 17's witness correction is authorised, narrowly**: only because the
+   semantic requirement is unchanged, phase 5 genuinely drove the sealed
+   substance, and only the witness location and name moved with the proof onto
+   the real partition path. The quest log records the old and the new witness
+   and why they mean the same thing. This authorisation never alters acceptance
+   criteria; the probe then truthfully reflects what phases 1-5 proved.
+3. **Phases 1-5 are independently verified now**, before any transport code -
+   higher value than expanding the corpus. The verifier attacks at least:
+   backend selection and liferaft parity (default explicitly liferaft, unknown
+   refused, no production code silently selecting raft-rs, existing partition
+   behaviour unchanged by the construction seam); real partition construction
+   (the partition really receives the provider's node, no remaining direct
+   subclass or equivalent bypass creates the load-bearing runtime, the
+   backend-neutral requirements are genuine partition requirements rather than
+   LifeRaft emulation); durable restart (restore from the real SQLite records,
+   stale bootstrap membership unable to overwrite committed membership,
+   term/vote/commit surviving, no service-table cache in the restore path);
+   ConfState authority, repeating the hostile-cache test while mutating
+   SYNCING/ACTIVE status, invented replica rows, a removed replica still shown
+   live, and deleted legitimate rows; sequential membership change verified from
+   the core and the durable ConfState rather than test-declared sets; the
+   refusal-versus-fatal convention, so an ordinary stale or removed-peer refusal
+   does not retire the runtime and a genuine trap does; retirement scheduling,
+   reproducing the removed-but-stale peer so durable retirement prevents ticking
+   and election participation before stale local state destabilises the group;
+   and the lifecycle semantic hook - `applyTransactionRolledBack` is inspected
+   to answer whether the raft-rs Ready/apply/trap path preserves the actual
+   partition invariant the hook exists to protect, recorded as a real
+   integration gap if it does not, with no imitation event created merely for
+   interface completeness.
+4. **If verification materially invalidates the proof, stop** - if durable
+   restart, ConfState authority under hostile caches, sequential membership
+   change, real provider construction or retirement safety is shown false,
+   return the falsifier rather than proceeding to transport to keep moving.
+   Ordinary test or receipt defects are repaired narrowly.
+5. **If verification holds, one transport quest is authorised**:
+   `raft-rs-partition-transport-demux`. Its only architectural question:
+
+   > Can a real raft-rs partition communicate through Lagrange's actual
+   > transport without forcing raft-rs messages into LifeRaft's packet
+   > vocabulary or reintroducing cache-derived membership?
+
+   The broad side-by-side corpus does not begin.
+6. **The demux extends semantically, not by imitation.** raft-rs messages are
+   not wrapped in fake LifeRaft packets to satisfy `isRaftPacket`. The smallest
+   transport-level distinction necessary identifies the Raft backend or protocol
+   kind if required, the partition/group id, the sender peer id, the recipient
+   peer id and the encoded Raft payload. Transport decides **where the message
+   belongs**; raft-rs decides **what it means**; transport never decides quorum
+   or membership.
+7. **The corrected ingress rule is preserved.** A message is never rejected
+   solely because its sender is absent from the receiver's applied `ConfState` -
+   the earlier evaluation proved that breaks legitimate membership-change
+   traffic. Ingress may validate authoritative envelope facts: group id present,
+   recipient resolving to this local group, no cross-group delivery, valid
+   encoding, a recognised backend discriminator. It may never infer
+   "unknown-to-my-current-ConfState sender implies invalid message" for all
+   message types; a stronger sender rule needs a concrete raft-rs semantic
+   justification and a race test.
+8. **The first real-transport acceptance test is not formation.** The smallest
+   meaningful three-peer partition: create three raft-rs replicas through the
+   real provider; communicate exclusively through real Lagrange transport; elect
+   a leader; propose and commit an ordinary state-machine entry; restart one
+   peer; confirm it catches up over real transport; add one learner through a
+   committed configuration change; partition an existing peer while membership
+   changes; heal it; confirm all surviving and applied peers converge on the
+   committed configuration. **No driver wire carries Raft messages.** The
+   driver's only role is environmental: partition, heal, crash, restart, submit
+   an application proposal.
+9. **The hostile-cache test is repeated over real transport**, each replica's
+   service-table view mutated differently and continuously, the caches left
+   visibly divergent so the test cannot pass because reconciliation happened to
+   make them identical, and committed membership converging independently of
+   them. This closes the last meaningful gap between the phase-5 proof and the
+   real deployment path.
+10. **The full side-by-side corpus is not run yet.** After the smoke test, stop
+    and report: whether real transport works; any further LifeRaft-specific
+    assumptions found in the demux; the transport and API surface added; whether
+    hostile caches remain harmless; whether restart works over the actual
+    network path; whether membership change works over actual transport; new
+    deletion candidates; remaining blockers to a cutover; and the estimated cost
+    of the smallest useful next corpus. Then the full corpus or a much smaller
+    migration-certification set is chosen.
+11. **`pre_vote` and `check_quorum` stay unchanged.** The evidence continues to
+    suggest both true is desirable, but changing election policy now would
+    confound the transport proof. After real transport works, a small
+    election-policy experiment on the actual backend and transport tests all
+    four combinations against the same failure scenarios, and then chooses.
+12. **Whole-runtime trap containment is not solved now.** Recorded:
+
+    > A fatal in one partition currently retires the WASM runtime containing
+    > every group on that node.
+
+    A production-readiness blocker, not a blocker to proving viability. No
+    runtime sharding yet; the integration must keep distinguishing ordinary core
+    refusals from actual traps. After real transport, the next reliability work
+    measures actual trap reachability through validly routed production
+    messages, whole-runtime restoration from real SQLite state, and 100 and
+    1,000-group recovery cost through the real backend - and only then is
+    sharding decided.
+13. **The complexity-reduction direction continues**, tracking required backend
+    methods, concrete LifeRaft references, LifeRaft-only events, membership
+    authorities, membership census functions and compatibility shims. **If the
+    transport step introduces a large LifeRaft compatibility layer, stop.** The
+    direction remains less LifeRaft vocabulary, less locally inferred
+    membership, one Raft membership authority, a smaller backend-neutral
+    contract.
+14. **Checkpointing.** Every coherent step commits on the quest branch, through
+    the real pre-commit hook, never bypassed, never accommodating this work by
+    raising a ratchet. WIP checkpoints are allowed; landing, merging and pushing
+    remain separate decisions. Another seventy-file uncommitted working set is
+    not allowed to accumulate.
+15. **Authorised spend**, replacing the phase-5-plus-three-phases plan:
+    independent verification of phases 1-5; if it holds, one narrow real
+    transport and demux implementation and proof; independent verification of
+    that proof. Then stop and report before any broad corpus expansion. The
+    migration hypothesis is already strongly supported; the remaining
+    high-value uncertainty is whether the real transport path preserves the
+    semantics phase 5 proved with a driver wire.
+
+**Target decision after the transport proof**: proceed toward cutover with a
+reduced certification corpus; continue experimental work on named blockers; or
+stop the migration because real transport exposes a substantive incompatibility.
+The full historical liferaft corpus is not assumed to be the right certification
+vehicle - the target is confidence in the raft-rs backend, not behavioural
+equivalence with a backend whose membership behaviour is already known to be
+defective.
