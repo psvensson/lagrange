@@ -1,0 +1,115 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "raft-rs-runtime-boundaries",
+  "status": "fail",
+  "testFileDigests": {
+    "test/raft/raft-rs-backend/failure-origin-domains.test.js": "7a54cff03eda244901e4e76c5621813dcd97a5e6f130c748ad8ccb12cf3c94c8",
+    "test/raft/raft-rs-backend/node-retirement-admissibility.test.js": "713667d8b66746fb9d018132f13916edb0c7c787271f2fdea09d8b76fa72f316",
+    "test/raft/raft-rs-backend/two-boundary-scope.test.js": "337f403bb1e1aef185b08bfdb721712c2573373b8c62cc1a980a9578b80f7c52"
+  },
+  "generatedAt": "2026-09-21T05:21:43.820Z",
+  "receipts": [
+    {
+      "id": "three-failure-domains-are-structurally-distinguished-not-inferred-from-error-type",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the three failure domains are structurally distinguished, not inferred from the JavaScript error type$\" test/raft/raft-rs-backend/failure-origin-domains.test.js",
+      "detail": "a core refusal, a host failure and a genuine panic are driven on the real core and land in three named domains, although two of the three arrive as a JavaScript Error",
+      "failure": "1 test(s) failed",
+      "testFile": "test/raft/raft-rs-backend/failure-origin-domains.test.js"
+    },
+    {
+      "id": "the-fatal-classification-boundary-encloses-only-the-wasm-invocation",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the fatal classification boundary encloses only the WASM invocation$\" test/raft/raft-rs-backend/failure-origin-domains.test.js",
+      "detail": "the verifier's own reproduction: the replica's SQLite handle is closed and the Ready loop's durable write fails, and the runtime stays healthy while an unrelated group in it still dispatches",
+      "failure": "1 test(s) failed",
+      "testFile": "test/raft/raft-rs-backend/failure-origin-domains.test.js"
+    },
+    {
+      "id": "an-ordinary-core-refusal-leaves-the-runtime-and-its-groups-usable",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an ordinary core refusal leaves the runtime and its groups usable$\" test/raft/raft-rs-backend/failure-origin-domains.test.js",
+      "detail": "raft-rs declines a proposal a follower cannot carry, nothing unwound, and the same call completes once the precondition the core named holds",
+      "failure": "1 test(s) failed",
+      "testFile": "test/raft/raft-rs-backend/failure-origin-domains.test.js"
+    },
+    {
+      "id": "a-host-failure-is-never-upgraded-to-a-wasm-fatal",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a host failure is never upgraded to a WASM fatal$\" test/raft/raft-rs-backend/failure-origin-domains.test.js",
+      "detail": "an application callback and a send hook throw real Errors with real messages in hand, and neither retires the WASM runtime",
+      "failure": "1 test(s) failed",
+      "testFile": "test/raft/raft-rs-backend/failure-origin-domains.test.js"
+    },
+    {
+      "id": "a-genuine-rust-trap-is-never-downgraded-to-a-host-failure",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a genuine Rust trap is never downgraded to a host failure$\" test/raft/raft-rs-backend/failure-origin-domains.test.js",
+      "detail": "the panic still marks the runtime unhealthy under the recorded policy, carries the panic hook's diagnosis, and is recovered by replacement",
+      "failure": "1 test(s) failed",
+      "testFile": "test/raft/raft-rs-backend/failure-origin-domains.test.js"
+    },
+    {
+      "id": "every-named-failure-shape-is-driven-and-its-consequences-asserted",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every named failure shape is driven and its consequences asserted$\" test/raft/raft-rs-backend/failure-origin-domains.test.js",
+      "detail": "the seven shapes the owner named, plus the argument fault the generated glue itself throws, each with its classification, whether its group, its runtime and unrelated groups stayed usable, and its recovery",
+      "failure": "1 test(s) failed",
+      "testFile": "test/raft/raft-rs-backend/failure-origin-domains.test.js"
+    },
+    {
+      "id": "retirement-is-refused-at-the-node-before-the-core-is-touched",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^retirement is refused at the node, before the core is touched$\" test/raft/raft-rs-backend/node-retirement-admissibility.test.js",
+      "detail": "the group's handle is taken out of the runtime with the core's own primitive, so a check made after touching the core could only answer the core's refusal; the node still answers the typed retirement one",
+      "failure": "1 test(s) failed",
+      "testFile": "test/raft/raft-rs-backend/node-retirement-admissibility.test.js"
+    },
+    {
+      "id": "a-retired-replica-neither-ticks-campaigns-proposes-nor-admits-envelopes",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a retired replica neither ticks, campaigns, proposes nor admits envelopes$\" test/raft/raft-rs-backend/node-retirement-admissibility.test.js",
+      "detail": "every active call refused by name, no outbound Raft traffic, its own core term unmoved and the live cluster's term and leader untouched",
+      "failure": "1 test(s) failed",
+      "testFile": "test/raft/raft-rs-backend/node-retirement-admissibility.test.js"
+    },
+    {
+      "id": "retirement-survives-restart-with-no-scheduler-running",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^retirement survives a restart with no scheduler running$\" test/raft/raft-rs-backend/node-retirement-admissibility.test.js",
+      "detail": "the verifier's exact reproducer: restarted through the real seam, the clock never asked to schedule anything, and tick called directly",
+      "failure": "1 test(s) failed",
+      "testFile": "test/raft/raft-rs-backend/node-retirement-admissibility.test.js"
+    },
+    {
+      "id": "retirement-does-not-rewrite-conf-state-and-never-reactivates-an-identity",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^retirement does not rewrite ConfState and never reactivates an identity$\" test/raft/raft-rs-backend/node-retirement-admissibility.test.js",
+      "detail": "the stale configuration that still lists the replica is preserved exactly, and real envelopes arriving later change neither the durable retirement record nor the refusal",
+      "failure": "1 test(s) failed",
+      "testFile": "test/raft/raft-rs-backend/node-retirement-admissibility.test.js"
+    },
+    {
+      "id": "bypassing-the-retirement-check-restores-the-disruptive-behaviour",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^bypassing the retirement check restores the disruptive behaviour$\" test/raft/raft-rs-backend/node-retirement-admissibility.test.js",
+      "detail": "the permanent control: the same ticks driven past the check raise the live cluster's term and cost it its leader",
+      "failure": "1 test(s) failed",
+      "testFile": "test/raft/raft-rs-backend/node-retirement-admissibility.test.js"
+    },
+    {
+      "id": "a-non-retired-replica-still-admits-a-sender-absent-from-its-conf-state",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a non-retired replica still admits a sender absent from its ConfState$\" test/raft/raft-rs-backend/node-retirement-admissibility.test.js",
+      "detail": "the falsified sender-membership rule stays falsified: a membership race is driven and the receiver admits the traffic",
+      "testFile": "test/raft/raft-rs-backend/node-retirement-admissibility.test.js"
+    },
+    {
+      "id": "no-production-behaviour-outside-these-two-boundaries-changed",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^no production behaviour outside these two boundaries changed$\" test/raft/raft-rs-backend/two-boundary-scope.test.js",
+      "detail": "nothing outside the experimental backend's own family imports it, and liferaft is still the default and does the same to a node through the seam as it does directly",
+      "testFile": "test/raft/raft-rs-backend/two-boundary-scope.test.js"
+    }
+  ]
+}

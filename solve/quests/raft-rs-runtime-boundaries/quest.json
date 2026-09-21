@@ -1,0 +1,70 @@
+{
+  "schema": "solve-quest/2",
+  "id": "raft-rs-runtime-boundaries",
+  "class": "product",
+  "epic": "formation-seed-decoupling",
+  "statement": "Independent adversarial verification of the experimental raft-rs partition backend approved it with recorded defects and falsified none of the owner's five stop conditions, but it measured two that sit directly on the path the transport quest will take, and the owner has split them out as a prerequisite that must be independently approved before any real transport routing begins - because transport is precisely what introduces the caller paths that expose them, and proving transport first would leave its result ambiguous. The first is that the backend decides whether a failure was a WebAssembly fatal by asking whether the thrown value is an Error instance, while the boundary that asks encloses host JavaScript: every durable-store write in the Ready loop, the transport send hook, the address resolver that throws for a peer identity the local registry has not registered, and the application's own committed-entry callback. Measured twice by the verifier - closing a replica's SQLite handle retired the runtime and an unrelated group in it then refused dispatch, and a binding argument fault was called a fatal although no Rust ran - and reachable on the first real production write, which hands the core a JavaScript object where it needs bytes; the refusal branch of the repair this replaces has no test anywhere in the corpus. The second is that durable retirement gates the tick scheduler rather than the node, so a retired replica whose stale configuration still lists itself was driven directly through its own tick and raised the live cluster's term and cost it its leader, and admitted real envelopes besides; the property holds today only because the scheduler is the sole caller, which transport is about to stop being true. This quest fixes both and nothing else. It replaces the instance test with three structurally distinguished failure domains - a core refusal, which is a typed outcome of a normal raft-rs operation and never retires a runtime; a WebAssembly fatal, which is a trap or panic originating in the invocation itself or the binding's own explicit indication, and which marks its runtime unhealthy under the policy already recorded; and a host failure, which is JavaScript outside Rust and is neither of the others and carries its own recovery semantics - and it narrows the boundary that can classify a fatal to as close as practical around the invocation, so that persistence, sending, address resolution and application callbacks cannot be converted into a Raft-runtime fatal by throwing. Where the current surface leaves refusal and fatal ambiguous it changes the experimental binding minimally toward an unambiguous result rather than classifying exceptions more cleverly, and it resorts to matching a message only if the binding offers nothing stronger and a falsifier shows that adequate. It makes retirement an invariant of the node itself: a retired logical replica, after a restart and with no scheduler running, does not tick, campaign, accept inbound envelopes for active participation, originate traffic, accept proposals, or rejoin because stale local state still lists it, and the check happens before the core is touched rather than after, failing closed with a typed refusal. Retirement stays separate from the committed configuration, which continues to record what the node last knew about consensus membership while retirement records whether this local replica may participate at all, so retirement never rewrites the configuration and a retired identity is never reactivated by a later message. It does not resurrect the sender-membership rule an earlier evaluation falsified: for a replica that is not retired, inbound traffic still follows the corrected ingress semantics and a sender absent from the local applied configuration is still admitted. Its falsifiers are driven, not argued - each of the seven failure shapes the owner named, asserting the classification and whether the group, the runtime and unrelated groups remain usable; and the verifier's exact retirement reproducer, with the check then deliberately bypassed so the old disruptive behaviour reappears as a permanent load-bearing control. The apply-rollback invariant, outbound encoding, the committed-entry callback shape, the shared runtime singleton and the unregistered-peer workflow rule are recorded as inputs to the transport quest and are not absorbed here.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/raft-rs-runtime-boundaries/evidence/receipt.json",
+      "requiredReceipts": [
+        "three-failure-domains-are-structurally-distinguished-not-inferred-from-error-type",
+        "the-fatal-classification-boundary-encloses-only-the-wasm-invocation",
+        "an-ordinary-core-refusal-leaves-the-runtime-and-its-groups-usable",
+        "a-host-failure-is-never-upgraded-to-a-wasm-fatal",
+        "a-genuine-rust-trap-is-never-downgraded-to-a-host-failure",
+        "every-named-failure-shape-is-driven-and-its-consequences-asserted",
+        "retirement-is-refused-at-the-node-before-the-core-is-touched",
+        "a-retired-replica-neither-ticks-campaigns-proposes-nor-admits-envelopes",
+        "retirement-survives-restart-with-no-scheduler-running",
+        "retirement-does-not-rewrite-conf-state-and-never-reactivates-an-identity",
+        "bypassing-the-retirement-check-restores-the-disruptive-behaviour",
+        "a-non-retired-replica-still-admits-a-sender-absent-from-its-conf-state",
+        "no-production-behaviour-outside-these-two-boundaries-changed"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "exactly-two-boundaries",
+      "statement": "Failure-origin classification and retirement admissibility are the whole scope. No general runtime reliability work, no hosting redesign, no transport routing, and no broadening into the gaps parked for the transport quest: the apply-rollback invariant, outbound proposal encoding, the committed-entry callback shape, the shared runtime singleton and the unregistered-peer workflow rule."
+    },
+    {
+      "id": "origin-not-type",
+      "statement": "Failure origin is never inferred from JavaScript's base Error type. A structural discriminator is derived from the binding, or the binding is changed minimally to expose one; matching a message is used only if the binding offers nothing stronger and a falsifier shows it adequate."
+    },
+    {
+      "id": "narrow-trap-boundary",
+      "statement": "Only an exception originating in the WASM invocation may be classified a fatal. Persistence, send hooks, address resolution and application callbacks do not sit inside a catch that converts a throw into a Raft-runtime fatal."
+    },
+    {
+      "id": "binding-stays-primitive",
+      "statement": "Any binding change makes the execution outcome unambiguous and nothing else; it exposes no Rust convenience policy and no membership or lifecycle semantics."
+    },
+    {
+      "id": "retirement-before-the-core",
+      "statement": "The retired check runs before tick, step, campaign, propose and every other active call, failing closed with a typed refusal; a message is never given to the core and judged retired afterwards."
+    },
+    {
+      "id": "retirement-is-not-membership",
+      "statement": "Retirement never rewrites the committed configuration, is not a sender-membership filter, and never reactivates a retired identity because a later message arrives; a non-retired replica still admits a sender absent from its applied configuration."
+    },
+    {
+      "id": "falsifiers-are-driven",
+      "statement": "Every failure shape and the retirement reproducer are driven on production owners and the real core, not argued; the bypass control is permanent, and a shape that cannot be driven is recorded undriven and unanswered rather than assumed."
+    },
+    {
+      "id": "identity-from-production",
+      "statement": "Every fact a receipt rests on is emitted by production state or by the core itself, never declared by a test, and an expectation never comes from the code path under test."
+    },
+    {
+      "id": "liferaft-untouched",
+      "statement": "Liferaft remains the default and its behaviour is unchanged; the partition and raft suites stay green."
+    },
+    {
+      "id": "checkpointed",
+      "statement": "Every coherent step commits on the quest branch through the real pre-commit hook, never bypassed and never accommodated by raising a ratchet; landing, merging and pushing remain separate decisions."
+    }
+  ]
+}

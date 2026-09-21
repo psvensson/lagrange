@@ -19,16 +19,16 @@
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 146,
-    "storage-raft": 91,
+    "storage-raft": 96,
     "test-infrastructure": 133,
     "transactions": 14,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2149,
-  "digest": "fnv1a32-7486a451",
+  "censusSize": 2154,
+  "digest": "fnv1a32-5f254ee5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-fa1a256b",
+  "observationDigest": "fnv1a32-e2822c69",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1423,13 +1423,18 @@
     "test/raft/raft-rs-backend/conf-state-authority.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-ready-loop.test.js": "storage-raft",
     "test/raft/raft-rs-backend/election-safety.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/failure-origin-domains.test.js": "storage-raft",
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
     "test/raft/raft-rs-backend/ingress-safety-boundary.test.js": "storage-raft",
     "test/raft/raft-rs-backend/node-object-surface.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/node-retirement-admissibility.test.js": "storage-raft",
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": "storage-raft",
     "test/raft/raft-rs-backend/peer-identity.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/retirement-scheduling-eligibility.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/two-boundary-scope.test.js": "storage-raft",
     "test/raft/raft-timing-utils.test.js": "storage-raft",
     "test/raft/raft-transport-backpressure-mute.test.js": "storage-raft",
     "test/raft/remote-peer-representation.test.js": "storage-raft",
@@ -6509,6 +6514,11 @@
         "src/raft/raft-rs-membership-projection.js"
       ]
     },
+    "test/raft/raft-rs-backend/failure-origin-domains.test.js": {
+      "files": [
+        "src/raft/raft-rs-runtime-health-constants.js"
+      ]
+    },
     "test/raft/raft-rs-backend/host-contract-citations.test.js": {
       "files": [
         "package.json"
@@ -6542,11 +6552,21 @@
         "src/raft/raft-rs-provider.js"
       ]
     },
+    "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": {
+      "files": [
+        "src/raft/raft-rs-partition-node.js"
+      ]
+    },
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": {
       "files": [
         "src/partition/partition-raft-storage.js",
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-group.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/two-boundary-scope.test.js": {
+      "directories": [
+        "src"
       ]
     },
     "test/raft/snapshot-catchup-dispatch.test.js": {
