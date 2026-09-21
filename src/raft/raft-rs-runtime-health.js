@@ -14,8 +14,10 @@
 
 import {
   RAFT_RS_CALL_OUTCOME,
-  RAFT_RS_FATAL_IS_AN_ERROR_INSTANCE,
+  RAFT_RS_CORE_REFUSAL_TYPE,
+  RAFT_RS_FAILURE_ORIGIN,
   RAFT_RS_GROUP_ORIGIN,
+  RAFT_RS_ORIGIN_OUTCOME,
   RAFT_RS_PANIC_CHANNEL,
   RAFT_RS_PANIC_JOINER,
   RAFT_RS_RUNTIME_ERROR_MSG,
@@ -24,37 +26,110 @@ import {
 import {createRaftRsGroup, restoreRaftRsGroup} from './raft-rs-group.js';
 
 /**
- * Run one piece of work with the crate's panic channel captured.
+ * Which domain a value thrown BY AN INVOCATION came from.
  *
- * A raft-rs fatal reaches JavaScript as a trap carrying no reason; the reason
- * is what the panic hook wrote to console.error while the trap was unwinding.
- * Capturing it is the only way a host learns what happened.
- * @param {Function} work - The work to run.
- * @return {Object} {threw, fatal, error, diagnosis}.
+ * Structural, and derived from the binding: a refusal is the binding's own
+ * `jserr` string, a fatal is the abort's `WebAssembly.RuntimeError`, and
+ * anything else is JavaScript that is neither - the generated glue failing to
+ * convert an argument, most often. Nothing reads a message.
+ * @param {*} thrown - What the invocation threw.
+ * @return {string} A RAFT_RS_FAILURE_ORIGIN value.
  */
-function runCapturingThePanicChannel(work) {
+function originOfThrownValue(thrown) {
+  if (typeof thrown === RAFT_RS_CORE_REFUSAL_TYPE) {
+    return RAFT_RS_FAILURE_ORIGIN.CORE_REFUSAL;
+  }
+  if (thrown instanceof globalThis.WebAssembly.RuntimeError) {
+    return RAFT_RS_FAILURE_ORIGIN.WASM_INVOCATION;
+  }
+  return RAFT_RS_FAILURE_ORIGIN.HOST;
+}
+
+/**
+ * What one invocation of one core primitive did, carried out of the call so
+ * the host code around it cannot be mistaken for it.
+ *
+ * It is not an Error: host code that catches Errors must not be able to
+ * swallow this, and the boundary recognises it by identity rather than by
+ * type.
+ */
+class RaftRsInvocationFailure {
+  /**
+   * @param {Object} parts - {origin, error, diagnosis}.
+   */
+  constructor({origin, error, diagnosis}) {
+    this.origin = origin;
+    this.error = error;
+    this.diagnosis = diagnosis;
+  }
+}
+
+/**
+ * Call one core primitive with the crate's panic channel captured, and
+ * classify anything it throws.
+ *
+ * This is THE classifying boundary, and it is exactly one WASM call wide:
+ * host preparation happens before it, host persistence, sending and applying
+ * happen after it, and neither can reach this catch. A raft-rs fatal reaches
+ * JavaScript as a trap carrying no reason - the reason is what the panic hook
+ * wrote to console.error while the process was aborting - so the channel is
+ * captured for the duration of this call and no longer.
+ * @param {Function} primitive - The binding's own function.
+ * @param {Array} args - Its arguments.
+ * @return {*} What the core returned.
+ */
+function invokeCorePrimitive(primitive, args) {
   const captured = [];
   const original = console[RAFT_RS_PANIC_CHANNEL];
-  console[RAFT_RS_PANIC_CHANNEL] = (...args) => {
+  console[RAFT_RS_PANIC_CHANNEL] = (...parts) => {
     captured.push(
-      args.map((arg) => String(arg)).join(RAFT_RS_PANIC_JOINER.ARGUMENTS));
+      parts.map((part) => String(part)).join(RAFT_RS_PANIC_JOINER.ARGUMENTS));
   };
   try {
-    const value = work();
-    return {threw: false, fatal: false, value, error: null, diagnosis: null};
-  } catch (error) {
-    return {
-      threw: true,
-      // The binding returns its Errs as strings and a fatal arrives as a
-      // WebAssembly.RuntimeError, so what was thrown says which happened.
-      fatal: (error instanceof Error) === RAFT_RS_FATAL_IS_AN_ERROR_INSTANCE,
-      value: undefined,
-      error: String(error?.message || error),
+    return primitive(...args);
+  } catch (thrown) {
+    throw new RaftRsInvocationFailure({
+      origin: originOfThrownValue(thrown),
+      error: String(thrown?.message || thrown),
       diagnosis: captured.join(RAFT_RS_PANIC_JOINER.LINES),
-    };
+    });
   } finally {
     console[RAFT_RS_PANIC_CHANNEL] = original;
   }
+}
+
+/**
+ * The same primitives, each one its own classified invocation.
+ *
+ * Work given to `run` is handed this rather than the bare facade, so the only
+ * code inside the classifying boundary is the call itself.
+ * @param {Object} core - The raft-rs primitive facade.
+ * @return {Object} A frozen facade of guarded primitives.
+ */
+function guardedCore(core) {
+  const guarded = {};
+  for (const [name, primitive] of Object.entries(core)) {
+    guarded[name] = (...args) => invokeCorePrimitive(primitive, args);
+  }
+  return Object.freeze(guarded);
+}
+
+/**
+ * What a failure that escaped the work means, whichever domain raised it.
+ * @param {*} thrown - What the work threw.
+ * @return {RaftRsInvocationFailure} Its classification.
+ */
+function classifyEscapedFailure(thrown) {
+  if (thrown instanceof RaftRsInvocationFailure) {
+    return thrown;
+  }
+  // Nothing tagged it, so it was not raised by an invocation at all: it is
+  // host JavaScript, and it says nothing about the runtime.
+  return new RaftRsInvocationFailure({
+    origin: RAFT_RS_FAILURE_ORIGIN.HOST,
+    error: String(thrown?.message || thrown),
+    diagnosis: null,
+  });
 }
 
 /**
@@ -96,6 +171,7 @@ class RaftRsRuntimeHost {
   constructor({instantiate}) {
     this.instantiate = instantiate;
     this.runtime = instantiate();
+    this.guarded = guardedCore(this.runtime);
     this.groupsById = new Map();
     this.healthState = RAFT_RS_RUNTIME_HEALTH.HEALTHY;
     this.trap = null;
@@ -197,48 +273,72 @@ class RaftRsRuntimeHost {
   }
 
   /**
-   * Run work against one group inside the trap boundary.
+   * Run work against one group, with every core call inside it classified.
+   *
+   * The work is host code: it prepares, it calls the core through the guarded
+   * facade, it persists, sends and applies. Only the calls can produce a
+   * fatal, because only the calls are inside the classifying boundary - a
+   * SQLite write, a send hook, an address resolver or an application callback
+   * that throws here reaches this catch untagged and is host failure by
+   * construction.
    *
    * Nothing runs in an unhealthy runtime: the refusal is a named outcome, not
    * an exception the caller might swallow.
    * @param {string} key - The hosted node to run against.
-   * @param {Function} work - Called with (core, handle).
-   * @return {Object} {outcome, value, error, diagnosis}.
+   * @param {Function} work - Called with (guarded core, handle).
+   * @return {Object} {outcome, origin, value, error, diagnosis}.
    */
   run(key, work) {
     if (this.healthState !== RAFT_RS_RUNTIME_HEALTH.HEALTHY) {
       return Object.freeze({
         outcome: RAFT_RS_CALL_OUTCOME.RUNTIME_UNHEALTHY,
+        origin: null,
         value: undefined,
         error: RAFT_RS_RUNTIME_ERROR_MSG.stillUnhealthy(),
         diagnosis: this.trap === null ? null : this.trap.diagnosis,
       });
     }
     const hosted = this.hostedGroup(key);
-    const ran = runCapturingThePanicChannel(
-      () => work(this.runtime, hosted.handle));
-    if (!ran.threw) {
+    try {
       return Object.freeze({
         outcome: RAFT_RS_CALL_OUTCOME.COMPLETED,
-        value: ran.value, error: null, diagnosis: null,
+        origin: null,
+        value: work(this.guarded, hosted.handle),
+        error: null,
+        diagnosis: null,
+      });
+    } catch (thrown) {
+      return this.failed(key, hosted, classifyEscapedFailure(thrown));
+    }
+  }
+
+  /**
+   * One failure, answered by the domain it came from.
+   *
+   * A core refusal and a host failure leave the runtime exactly as it was; a
+   * fatal retires it under §8's recorded policy. The mapping is the owner's
+   * one table, so no caller has to decide what an origin costs.
+   * @param {string} key - The hosted node the call was for.
+   * @param {RaftRsHostedGroup} hosted - Its group.
+   * @param {RaftRsInvocationFailure} failure - What happened, classified.
+   * @return {Object} The frozen outcome.
+   * @private
+   */
+  failed(key, hosted, failure) {
+    const fatal = failure.origin === RAFT_RS_FAILURE_ORIGIN.WASM_INVOCATION;
+    if (fatal) {
+      this.healthState = RAFT_RS_RUNTIME_HEALTH.UNHEALTHY_AFTER_TRAP;
+      this.trap = Object.freeze({
+        key, groupId: hosted.groupId, error: failure.error,
+        diagnosis: failure.diagnosis,
       });
     }
-    if (!ran.fatal) {
-      // raft-rs declined the call and returned. Nothing unwound, so the
-      // runtime is exactly as it was and every other group in it is fine.
-      return Object.freeze({
-        outcome: RAFT_RS_CALL_OUTCOME.CORE_REFUSED,
-        value: undefined, error: ran.error, diagnosis: null,
-      });
-    }
-    this.healthState = RAFT_RS_RUNTIME_HEALTH.UNHEALTHY_AFTER_TRAP;
-    this.trap = Object.freeze({
-      key, groupId: hosted.groupId, error: ran.error,
-      diagnosis: ran.diagnosis,
-    });
     return Object.freeze({
-      outcome: RAFT_RS_CALL_OUTCOME.TRAPPED,
-      value: undefined, error: ran.error, diagnosis: ran.diagnosis,
+      outcome: RAFT_RS_ORIGIN_OUTCOME[failure.origin],
+      origin: failure.origin,
+      value: undefined,
+      error: failure.error,
+      diagnosis: fatal ? failure.diagnosis : null,
     });
   }
 
@@ -249,6 +349,7 @@ class RaftRsRuntimeHost {
    */
   replaceRuntime() {
     this.runtime = this.instantiate();
+    this.guarded = guardedCore(this.runtime);
     const restored = [];
     for (const hosted of this.groupsById.values()) {
       hosted.handle = restoreRaftRsGroup({

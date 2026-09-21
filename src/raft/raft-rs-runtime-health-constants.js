@@ -30,25 +30,54 @@ const RAFT_RS_CALL_OUTCOME = Object.freeze({
   // did not happen; the runtime is untouched and stays healthy.
   CORE_REFUSED: 'core-refused',
   TRAPPED: 'trapped',
+  // JavaScript outside Rust failed: a durable write, a send hook, an address
+  // resolver, an application callback, a value the generated glue could not
+  // convert. It says nothing about the runtime, which stays healthy.
+  HOST_FAILED: 'host-failed',
   RUNTIME_UNHEALTHY: 'runtime-unhealthy',
 });
 
-// How the boundary tells a raft-rs Err from a raft-rs fatal.
+// WHERE a failure came from. Three domains, and the outcome above is the
+// consequence of one of them (prerequisite addendum §1).
+const RAFT_RS_FAILURE_ORIGIN = Object.freeze({
+  // The core itself declined a normal operation and returned. Nothing
+  // unwound, so the runtime and every group in it are exactly as they were.
+  CORE_REFUSAL: 'core-refusal',
+  // The invocation trapped or panicked. §8's policy applies to this and to
+  // nothing else.
+  WASM_INVOCATION: 'wasm-invocation',
+  // JavaScript outside Rust. It has its own recovery semantics and is never
+  // evidence about the runtime.
+  HOST: 'host',
+});
+
+// What each origin means for the call that met it: one mapping, used for a
+// failure raised inside an invocation and for one raised in host code alike,
+// so the two can never be answered differently by accident.
+const RAFT_RS_ORIGIN_OUTCOME = Object.freeze({
+  [RAFT_RS_FAILURE_ORIGIN.CORE_REFUSAL]: RAFT_RS_CALL_OUTCOME.CORE_REFUSED,
+  [RAFT_RS_FAILURE_ORIGIN.WASM_INVOCATION]: RAFT_RS_CALL_OUTCOME.TRAPPED,
+  [RAFT_RS_FAILURE_ORIGIN.HOST]: RAFT_RS_CALL_OUTCOME.HOST_FAILED,
+});
+
+// How the boundary tells the three apart, derived from the binding rather
+// than from what a failure says.
 //
-// The binding builds every returned error with `jserr`, which is
-// `JsValue::from_str`, so wasm-bindgen throws a JavaScript STRING. A fatal
-// unwinds the WASM instance and reaches JavaScript as a
-// `WebAssembly.RuntimeError`, which is an `Error`. The discriminator is
-// therefore the binding's own error convention rather than a guess about a
-// message: anything that is not an Error is the core declining a call, and
-// §8's rule - a trap invalidates the runtime - applies to the other kind.
+// The fork builds every returned error with `jserr`, which is
+// `JsValue::from_str` and is the only `Err` constructor in the whole crate,
+// so wasm-bindgen throws a JavaScript STRING for a refusal - including for
+// the arguments the binding itself rejects. A raft-rs fatal aborts on
+// wasm32, and the abort reaches JavaScript as a `WebAssembly.RuntimeError`.
+// Anything else thrown is JavaScript that is not the binding's refusal and
+// not the core's trap: host code, or a value the generated glue could not
+// convert. Nothing here depends on what a failure says, only on what it is.
 //
 // This matters because §6 forbids refusing a sender absent from the
 // receiver's configuration, so `step` legitimately meets messages from peers
 // raft-rs no longer knows and answers `StepPeerNotFound`. Treating that as a
 // fatal would let one removed replica's stale heartbeat retire a runtime
 // holding every group on the node.
-const RAFT_RS_FATAL_IS_AN_ERROR_INSTANCE = true;
+const RAFT_RS_CORE_REFUSAL_TYPE = 'string';
 
 // A raft-rs fatal arrives in JavaScript as a bare trap with no diagnosis on
 // it; the reason is written by the crate's panic hook to console.error. The
@@ -75,8 +104,10 @@ const RAFT_RS_RUNTIME_ERROR_MSG = Object.freeze({
 
 export {
   RAFT_RS_CALL_OUTCOME,
-  RAFT_RS_FATAL_IS_AN_ERROR_INSTANCE,
+  RAFT_RS_CORE_REFUSAL_TYPE,
+  RAFT_RS_FAILURE_ORIGIN,
   RAFT_RS_GROUP_ORIGIN,
+  RAFT_RS_ORIGIN_OUTCOME,
   RAFT_RS_PANIC_CHANNEL,
   RAFT_RS_PANIC_JOINER,
   RAFT_RS_RUNTIME_ERROR_MSG,

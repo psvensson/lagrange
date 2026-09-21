@@ -47,7 +47,10 @@ import {
 import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
 import {createRaftRsNodeClass} from '../../../src/raft/raft-rs-node.js';
 import {drainReady} from '../../../src/raft/raft-rs-ready-loop.js';
-import {instantiateRaftRsCore} from '../../../src/raft/raft-rs-core.js';
+import {
+  instantiateRaftRsCore,
+  raftRsBindingPaths,
+} from '../../../src/raft/raft-rs-core.js';
 
 const TEMP_PREFIX = 'raft-rs-failure-origin-';
 const DB_SUFFIX = '.sqlite';
@@ -72,6 +75,9 @@ const NO_BYTES_AT_ALL = null;
 // A message the binding itself rejects, by shape, before any raft-rs code
 // runs: serde cannot read a number as a Message.
 const MALFORMED_MESSAGE = 7;
+// What production's first real write hands the provider: a JavaScript object
+// where the core needs bytes.
+const NOT_BYTES_AT_ALL = Object.freeze({entryId: 'an-entry', command: 'write'});
 const DRAIN_CYCLES_FOR_ONE_STEP = 8;
 
 const HOST_ERROR = Object.freeze({
@@ -79,6 +85,59 @@ const HOST_ERROR = Object.freeze({
   RESOLVE: 'no address is registered for this peer identity',
   APPLY: 'the application refused this committed entry',
 });
+
+// The discriminator is DERIVED from the binding, so the derivation is checked
+// against the binding's own source and breaks loudly if the binding ever
+// stops holding to it. Three facts, all of them structural:
+//   jserr is JsValue::from_str, so a refusal is a string;
+//   every Err the crate constructs goes through jserr;
+//   no other JavaScript error value is built anywhere in it.
+const TEXT_ENCODING = 'utf8';
+const JSERR_BODY =
+  /fn\s+jserr\s*\(\s*msg\s*:\s*&str\s*\)\s*->\s*JsValue\s*\{\s*JsValue::from_str\(\s*msg\s*\)\s*\}/u;
+const ERR_CONSTRUCTION = /\bErr\s*\(\s*([A-Za-z_:][\w:]*)/gu;
+const JSERR_NAME = 'jserr';
+const OTHER_ERROR_VALUES = Object.freeze([
+  /\bJsError\b/u,
+  /\bjs_sys::Error\b/u,
+  /\bJsValue::from\s*\(/u,
+]);
+// JsValue::from_str belongs to jserr alone; anywhere else it is a second
+// refusal convention the discriminator does not know about.
+const FROM_STR = /JsValue::from_str/gu;
+const FROM_STR_OCCURRENCES_IN_JSERR = 1;
+const CONVENTION_HELD = 'held';
+
+/**
+ * Whether the binding still builds every refusal the one way the
+ * discriminator derives from.
+ * @param {string} source - The crate source text.
+ * @return {string} CONVENTION_HELD, or the reason it no longer does.
+ */
+function bindingRefusalConvention(source) {
+  if (!JSERR_BODY.test(source)) {
+    return 'jserr is no longer JsValue::from_str, so a refusal may not be ' +
+      'a string at all';
+  }
+  for (const pattern of OTHER_ERROR_VALUES) {
+    if (pattern.test(source)) {
+      return `the crate builds a JavaScript error value with ${pattern}, ` +
+        'which would reach the boundary as a host failure rather than as a ' +
+        'refusal';
+    }
+  }
+  const fromStr = source.match(FROM_STR) || [];
+  if (fromStr.length !== FROM_STR_OCCURRENCES_IN_JSERR) {
+    return `JsValue::from_str appears ${fromStr.length} times; only jserr ` +
+      'may build a refusal';
+  }
+  for (const [, constructor] of source.matchAll(ERR_CONSTRUCTION)) {
+    if (constructor !== JSERR_NAME) {
+      return `an Err is constructed from ${constructor}, not jserr`;
+    }
+  }
+  return CONVENTION_HELD;
+}
 
 /**
  * The failure-origin names the runtime-health owner publishes.
@@ -163,6 +222,26 @@ function electSoleVoter(fixture, groupId) {
 }
 
 /**
+ * Elect the sole voter and leave a proposal the core has not yet made
+ * durable, so the host work that follows really has something to persist,
+ * send and apply. The core itself is asked whether it does.
+ * @param {Object} fixture - The runtime fixture.
+ * @param {string} groupId - The group.
+ */
+function readyWithWorkToDo(fixture, groupId) {
+  electSoleVoter(fixture, groupId);
+  const proposed = fixture.host.run(groupId,
+    (core, handle) => core.propose(handle, commandBytes()));
+  assert.equal(proposed.outcome, RAFT_RS_CALL_OUTCOME.COMPLETED,
+    'the leader must be able to carry this proposal');
+  const ready = fixture.host.run(groupId,
+    (core, handle) => core.has_ready(handle));
+  assert.equal(ready.value, true,
+    'the core itself must say it has work for the host to do, or the shape ' +
+    'below would measure a cycle that never ran');
+}
+
+/**
  * What the runtime and its groups can still do, measured after a failure.
  * @param {Object} fixture - The runtime fixture.
  * @param {string} groupId - The group the failure happened in.
@@ -196,7 +275,8 @@ test('the three failure domains are structurally distinguished, not ' +
   'inferred from the JavaScript error type', async () => {
   const origin = failureOrigins();
   const fixture = runtimeWithGroups([
-    {groupId: GROUP_UNDER_TEST}, {groupId: UNRELATED_GROUP}]);
+    {groupId: GROUP_UNDER_TEST}, {groupId: UNRELATED_GROUP},
+    {groupId: PAIRED_GROUP, voters: [SOLE_VOTER, ABSENT_PEER]}]);
   try {
     // 1. The core declines a normal operation. The binding returns its Err,
     // which is not a JavaScript Error at all.
@@ -207,7 +287,7 @@ test('the three failure domains are structurally distinguished, not ' +
       `${String(originOf(refused))} (${refused.error})`);
 
     // 2. Host JavaScript fails. It IS an Error, and it is not the core's.
-    electSoleVoter(fixture, GROUP_UNDER_TEST);
+    readyWithWorkToDo(fixture, GROUP_UNDER_TEST);
     const hostFailed = fixture.cycle(GROUP_UNDER_TEST, {
       send: () => {
         throw new Error(HOST_ERROR.SEND);
@@ -216,8 +296,10 @@ test('the three failure domains are structurally distinguished, not ' +
     assert.equal(originOf(hostFailed), origin.HOST,
       'a host send hook that throws is host JavaScript, not the core');
 
-    // 3. The core panics. It is an Error too - and a different domain.
-    const trapped = fixture.host.run(GROUP_UNDER_TEST, (core, handle) => {
+    // 3. The core panics. It is an Error too - and a different domain. It
+    // has to be a group that will really accept the heartbeat, so it is the
+    // untouched follower rather than the leader elected above.
+    const trapped = fixture.host.run(PAIRED_GROUP, (core, handle) => {
       core.step(handle, {
         from: ABSENT_PEER, to: SOLE_VOTER, msgType: MSG_HEARTBEAT,
         term: FOLLOWER_TERM, logTerm: ZERO_POSITION, index: ZERO_POSITION,
@@ -233,6 +315,28 @@ test('the three failure domains are structurally distinguished, not ' +
     assert.equal(new Set([originOf(refused), originOf(hostFailed),
       originOf(trapped)]).size, [refused, hostFailed, trapped].length,
     'the three failures must land in three domains');
+
+    // And the distinction is DERIVED from the binding, not assumed of it:
+    // the crate's own source still builds every refusal through jserr, and
+    // jserr is still JsValue::from_str.
+    const source = fs.readFileSync(
+      raftRsBindingPaths().forkSource, TEXT_ENCODING);
+    assert.equal(bindingRefusalConvention(source), CONVENTION_HELD,
+      'the discriminator is derived from this convention, so the receipt ' +
+      'fails here rather than misclassifying silently');
+    // Load-bearing, not decorative: the same check refuses a copy of the
+    // binding that breaks the convention in each of the ways that would
+    // reclassify a refusal.
+    for (const broken of [
+      source.replace('JsValue::from_str(msg)', 'js_sys::Error::new(msg).into()'),
+      `${source}\nfn extra() -> Result<(), JsValue> { Err(JsValue::from(1)) }`,
+      source.replace('.ok_or_else(|| jserr("invalid handle"))?',
+        '.ok_or_else(|| JsValue::from_str("invalid handle"))?'),
+    ]) {
+      assert.notEqual(broken, source, 'each falsifier must really mutate it');
+      assert.notEqual(bindingRefusalConvention(broken), CONVENTION_HELD,
+        'a binding that broke the convention must be refused by this check');
+    }
   } finally {
     fixture.dispose();
   }
@@ -366,6 +470,14 @@ test('a genuine Rust trap is never downgraded to a host failure', async () => {
     assert.ok(typeof trapped.diagnosis === 'string' &&
       trapped.diagnosis.length > 0,
     'the panic hook\'s reason is the only diagnosis a trap carries');
+    // And it is the INVOCATION's own capture window that holds it: the panic
+    // channel is listened to for the duration of one core call and no
+    // longer, so a diagnosis naming what the core itself refused can only
+    // have been recorded there. This is what proves the narrowing did not
+    // move the trap's capture somewhere broader.
+    assert.ok(trapped.diagnosis.includes(IMPOSSIBLE_COMMIT),
+      'the diagnosis must be the panic this call produced, not a later ' +
+      `one: ${trapped.diagnosis}`);
     // The policy already recorded applies, unweakened by the narrowing:
     // the runtime is unhealthy and nothing dispatches into it.
     const consequences = consequencesOf(fixture, GROUP_UNDER_TEST);
@@ -380,6 +492,20 @@ test('a genuine Rust trap is never downgraded to a host failure', async () => {
     assert.equal(replaced.health, RAFT_RS_RUNTIME_HEALTH.HEALTHY);
     assert.equal(consequencesOf(fixture, GROUP_UNDER_TEST).groupOutcome,
       RAFT_RS_CALL_OUTCOME.COMPLETED);
+
+    // The control that says the boundary really moved, rather than the trap
+    // merely surviving a boundary that still catches everything: the SAME
+    // shape of work - a core call, then host code that throws - which the
+    // old broad boundary classified a fatal, is now a host failure, in the
+    // same runtime, immediately after a genuine trap was classified a fatal.
+    const hostFailed = fixture.host.run(GROUP_UNDER_TEST, (core, handle) => {
+      core.status(handle);
+      throw new Error(HOST_ERROR.APPLY);
+    });
+    assert.equal(originOf(hostFailed), origin.HOST);
+    assert.equal(fixture.host.health, RAFT_RS_RUNTIME_HEALTH.HEALTHY,
+      'the broad boundary would have retired the runtime for this; only the ' +
+      'invocation may do that now');
   } finally {
     fixture.dispose();
   }
@@ -417,7 +543,7 @@ const SHAPE = Object.freeze([
     origin: (origins) => origins.HOST,
     fatal: false,
     drive: (fixture) => {
-      electSoleVoter(fixture, GROUP_UNDER_TEST);
+      readyWithWorkToDo(fixture, GROUP_UNDER_TEST);
       fixture.group(GROUP_UNDER_TEST).db.close();
       return fixture.cycle(GROUP_UNDER_TEST);
     },
@@ -427,7 +553,7 @@ const SHAPE = Object.freeze([
     origin: (origins) => origins.HOST,
     fatal: false,
     drive: (fixture) => {
-      electSoleVoter(fixture, GROUP_UNDER_TEST);
+      readyWithWorkToDo(fixture, GROUP_UNDER_TEST);
       return fixture.cycle(GROUP_UNDER_TEST, {
         send: () => {
           throw new Error(HOST_ERROR.SEND);
@@ -446,9 +572,7 @@ const SHAPE = Object.freeze([
     origin: (origins) => origins.HOST,
     fatal: false,
     drive: (fixture) => {
-      electSoleVoter(fixture, GROUP_UNDER_TEST);
-      fixture.host.run(GROUP_UNDER_TEST,
-        (core, handle) => core.propose(handle, commandBytes()));
+      readyWithWorkToDo(fixture, GROUP_UNDER_TEST);
       return fixture.cycle(GROUP_UNDER_TEST, {
         applyEntry: () => {
           throw new Error(HOST_ERROR.APPLY);
@@ -527,6 +651,32 @@ function measureShape(shape) {
   }
 }
 
+/**
+ * Propose a JavaScript object where the core needs bytes, on a leader, and
+ * measure what the core and the application actually got.
+ * @return {Object} What was measured.
+ */
+function measureObjectProposal() {
+  const fixture = runtimeWithGroups([
+    {groupId: GROUP_UNDER_TEST}, {groupId: UNRELATED_GROUP}]);
+  try {
+    electSoleVoter(fixture, GROUP_UNDER_TEST);
+    const proposed = fixture.host.run(GROUP_UNDER_TEST,
+      (core, handle) => core.propose(handle, NOT_BYTES_AT_ALL));
+    const delivered = [];
+    const cycles = fixture.cycle(GROUP_UNDER_TEST,
+      {applyEntry: (entry) => delivered.push(entry)});
+    return {
+      proposed,
+      committed: (cycles.value || [])
+        .reduce((total, cycle) => total + cycle.applied.length, 0),
+      deliveredToTheApplication: delivered.length,
+    };
+  } finally {
+    fixture.dispose();
+  }
+}
+
 test('every named failure shape is driven and its consequences asserted',
   async () => {
     // Every shape is driven FIRST, so what one shape's consequence asserts
@@ -557,4 +707,24 @@ test('every named failure shape is driven and its consequences asserted',
         `${result.shape.name}: classified ${String(result.origin)} ` +
         `(${result.error})`);
     }
+
+    // RECORDED, NOT REPAIRED. The owner's shape list calls this one "a
+    // malformed argument the binding rejects before Rust runs". For a
+    // JavaScript object - which is what production's first real write hands
+    // the provider - the binding does NOT reject it: the generated glue
+    // reads a length of undefined, uint8_to_vec produces no bytes, and the
+    // core accepts an EMPTY command. There is no failure to classify at all,
+    // which is worse than the misclassification this shape was found behind.
+    // Outbound encoding is the transport quest's, so this receipt records
+    // what happens rather than changing it.
+    const silent = measureObjectProposal();
+    assert.equal(silent.proposed.outcome, RAFT_RS_CALL_OUTCOME.COMPLETED,
+      'measured: the binding does not reject an object proposal');
+    assert.equal(silent.proposed.origin, null,
+      'so no domain is entered and nothing is classified');
+    assert.ok(silent.committed > 0,
+      'and the core really committed the entry it was given');
+    assert.equal(silent.deliveredToTheApplication, 0,
+      'while the application was handed nothing, because the entry it ' +
+      'committed carries no data at all');
   });

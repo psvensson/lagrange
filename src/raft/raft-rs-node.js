@@ -502,6 +502,10 @@ function createRaftRsNodeClass(context) {
           admission.admitted,
         outcome: admission === null ? ran.outcome : admission.outcome,
         detail: admission === null ? ran.error : admission.detail,
+        // Which domain the failure came from, carried out unchanged: a caller
+        // of this node decides what to do about a failure by its origin, and
+        // must not have to infer one from the outcome's name.
+        origin: ran.origin ?? null,
         diagnosis: ran.diagnosis ?? null,
         trapped,
         runtimeUnhealthy: unhealthy,
