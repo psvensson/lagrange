@@ -28,6 +28,7 @@ import Database from 'better-sqlite3';
 
 import * as nodeConstants from '../../../src/raft/raft-rs-node-constants.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {drainReady} from '../../../src/raft/raft-rs-ready-loop.js';
 import {
   RAFT_RS_ELECTION_REFUSAL,
 } from '../../../src/raft/raft-rs-election-safety-constants.js';
@@ -400,14 +401,21 @@ test('bypassing the retirement check restores the disruptive behaviour',
         assert.equal(outcome.outcome, refusal);
       }
 
-      // Bypassed: the same work, minus the check - the core is ticked
-      // through the runtime host and what it made ready is drained, which is
-      // exactly what the node does once it admits the call. The old
+      // Bypassed: the same work, minus the check. The node has no unguarded
+      // active path any more, so the bypass goes round the node entirely -
+      // the core is ticked through the runtime host and the Ready loop is
+      // run with this replica's own store and its own transport hook, which
+      // is exactly what the node does once it has admitted a call. The old
       // behaviour must come back, or the check is not what is protecting
       // the cluster.
       for (let round = 0; round < DISTURBANCE_TICKS; round += 1) {
-        node.host.run(node.key, (core, handle) => core.tick(handle));
-        node.drain();
+        node.host.run(node.key, (core, handle) => {
+          core.tick(handle);
+          return drainReady({
+            core, handle, store: node.store, groupId: node.groupId,
+            send: (messages) => node.send(messages),
+          });
+        });
         cluster.deliverAll();
       }
       const after = liveClusterState(cluster, leader);

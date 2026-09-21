@@ -214,7 +214,7 @@ function createRaftRsNodeClass(context) {
         if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
           return this.outcomeOf(ran, null);
         }
-        return this.drain();
+        return this.drainAdmitted();
       });
     }
 
@@ -350,7 +350,7 @@ function createRaftRsNodeClass(context) {
         if (ran.outcome !== RAFT_RS_CALL_OUTCOME.COMPLETED) {
           return this.outcomeOf(ran, null);
         }
-        return this.drain();
+        return this.drainAdmitted();
       });
     }
 
@@ -454,7 +454,7 @@ function createRaftRsNodeClass(context) {
         if (!ran.value.admitted) {
           return this.outcomeOf(ran, ran.value);
         }
-        const drained = this.drain();
+        const drained = this.drainAdmitted();
         return drained.trapped ? drained : this.outcomeOf(ran, ran.value);
       });
     }
@@ -465,6 +465,15 @@ function createRaftRsNodeClass(context) {
      * @private
      */
     drain() {
+      return this.ifAdmitted(() => this.drainAdmitted());
+    }
+
+    /**
+     * Run the core's Ready cycles and turn what they did into events.
+     * @return {Object} The named dispatch outcome.
+     * @private
+     */
+    drainAdmitted() {
       const committed = [];
       const ran = this.host.run(this.key, (core, handle) => drainReady({
         core,
