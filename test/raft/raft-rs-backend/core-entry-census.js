@@ -43,7 +43,7 @@ const TEXT_ENCODING = 'utf8';
 const FACADE_HOLDERS = Object.freeze([
   'raft-rs-core.js',
   'raft-rs-runtime-health.js',
-  'raft-rs-provider.js',
+  'raft-rs-partition-node.js',
 ]);
 const FACADE_SOURCES = /\b(instantiateRaftRsCore|loadRaftRsCore)\s*\(/u;
 // A value is a core facade when it answers to the BINDING's own primitive

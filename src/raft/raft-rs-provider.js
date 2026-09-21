@@ -20,7 +20,6 @@ import {
 import {
   RAFT_RS_GROUP_READ,
 } from './raft-rs-group-access-constants.js';
-import {loadRaftRsCore} from './raft-rs-core.js';
 import {
   RAFT_RS_TICK_SCHEDULING,
   buildRaftRsPartitionNode,
@@ -118,7 +117,10 @@ class RaftRsWasmProvider {
    */
   constructor(options = {}) {
     this.options = options;
-    this.core = options.core || loadRaftRsCore();
+    // No core here. The provider holds nothing it could enter a RawNode
+    // with: it resolves a node to that group's own named operations and
+    // uses those, so a caller holding the provider holds no capability
+    // either - not even the ability to guess a handle.
     // What this backend holds about each partition node IT built: the tick
     // driver, the peer registry and the durable retirement record. It is a
     // WeakMap so the node stays the only handle, and so the seam's node

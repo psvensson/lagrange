@@ -7,7 +7,7 @@
     "test/raft/raft-rs-backend/node-retirement-admissibility.test.js": "9dec270a8c60668809666fea39f26bd167562e3644521aa912241a0e58df5ee8",
     "test/raft/raft-rs-backend/two-boundary-scope.test.js": "ef0182bc632498478c0acce319e591fc7c8ec0f57070354534c0dbd9f1efd299"
   },
-  "generatedAt": "2026-09-21T15:38:42.044Z",
+  "generatedAt": "2026-09-21T15:45:21.549Z",
   "receipts": [
     {
       "id": "three-failure-domains-are-structurally-distinguished-not-inferred-from-error-type",
