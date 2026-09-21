@@ -26,6 +26,7 @@ const RUNTIME_HEALTH_TEST = `${SUITE}runtime-trap-and-restore.test.js`;
 const SCALE_TEST = `${SUITE}multi-raft-scale.test.js`;
 const IDENTITY_TEST = `${SUITE}peer-identity.test.js`;
 const ELECTION_TEST = `${SUITE}election-safety.test.js`;
+const REAL_PARTITION_TEST = `${SUITE}real-partition-on-raft-rs.test.js`;
 const WORKFLOW_TEST = `${SUITE}sequential-membership-workflow.test.js`;
 const SNAPSHOT_TEST = `${SUITE}snapshot-and-compaction.test.js`;
 const COMPARISON_TEST = `${SUITE}side-by-side-scenarios.test.js`;
@@ -137,10 +138,18 @@ const RECEIPT = Object.freeze([
     WORKFLOW_TEST,
     '^promotion is gated on the core\'s own progress$',
     'Lagrange decides when promotion is safe; the core commits it'],
+  // Repointed by the lead after phase 5. The sealed contract is the receipt id
+  // list in quest.json, which is unchanged; this scaffolding's witness moved.
+  // The id names a substance - the sequential workflow completing through
+  // formation and recovery - and phase 5 drove exactly that on a real partition
+  // through the real seam, on real durable storage, under hostile caches. The
+  // witness it was originally declared against was named before that test
+  // existed and does not drive it.
   ['sequential-membership-workflow-completes-through-formation-and-recovery',
-    WORKFLOW_TEST,
-    '^add learner, catch up, promote and remove completes through recovery$',
-    'with joint support kept available and tested'],
+    REAL_PARTITION_TEST,
+    '^one real partition: elect, commit, restart, add a learner, catch up, ' +
+      'promote and remove, under hostile caches throughout$',
+    'joint support stays available and is tested by the deterministic driver'],
   ['membership-change-in-progress-is-an-explicit-provider-result',
     WORKFLOW_TEST,
     '^a second configuration change is an explicit membership-change-in-progress result$',

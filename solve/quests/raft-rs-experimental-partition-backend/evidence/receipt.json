@@ -13,11 +13,12 @@
     "test/raft/raft-rs-backend/peer-identity.test.js": "1646f07c9a69fefc0c73030e08a46e44654f83498e1c61a60239b98f324bc035",
     "test/raft/raft-rs-backend/election-safety.test.js": "059a5186a748d204bf7505789e077c666734dee2718b832222333564f5b17e0b",
     "test/raft/raft-rs-backend/sequential-membership-workflow.test.js": null,
+    "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "dc7b16853ebee8df4ef82da6978589856f39a9c3234cef1d36867b00191b0cba",
     "test/raft/raft-rs-backend/snapshot-and-compaction.test.js": null,
     "test/raft/raft-rs-backend/side-by-side-scenarios.test.js": null,
     "test/raft/raft-rs-backend/complexity-ledger.test.js": null
   },
-  "generatedAt": "2026-09-20T19:54:02.567Z",
+  "generatedAt": "2026-09-21T04:20:43.029Z",
   "receipts": [
     {
       "id": "backend-seam-selects-explicitly-and-liferaft-behaviour-is-unchanged",
@@ -135,11 +136,10 @@
     },
     {
       "id": "sequential-membership-workflow-completes-through-formation-and-recovery",
-      "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^add learner, catch up, promote and remove completes through recovery$\" test/raft/raft-rs-backend/sequential-membership-workflow.test.js",
-      "detail": "with joint support kept available and tested",
-      "failure": "the pattern selected zero tests",
-      "testFile": "test/raft/raft-rs-backend/sequential-membership-workflow.test.js"
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^one real partition: elect, commit, restart, add a learner, catch up, promote and remove, under hostile caches throughout$\" test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js",
+      "detail": "joint support stays available and is tested by the deterministic driver",
+      "testFile": "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js"
     },
     {
       "id": "membership-change-in-progress-is-an-explicit-provider-result",
