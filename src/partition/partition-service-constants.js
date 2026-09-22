@@ -535,7 +535,7 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   RAFT_COMMAND_FAILED: 'Raft command failed',
   TRANSACTION_COMMIT_RAFT_FAILED: 'Raft command failed for transaction commit',
   SINGLE_REPLICA_RAFT_OWNER_REQUIRED:
-    'PartitionService single-replica leadership requires raft.change(...)',
+    'PartitionService single-replica leadership requires raft.campaign(...)',
   QUERY_FAILED: 'Query execution failed',
   CDC_UNKNOWN_OPERATION: 'Unknown operation type, skipping CDC',
   CDC_PARSE_INSERT_FAILED: 'Could not parse INSERT SQL for CDC',
