@@ -321,6 +321,8 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
     assert.ok(caughtUp,
       'the learner must reach the leader\'s committed position');
     const leaderStatus = cluster.node(leader).readStatus();
+    assert.equal(leaderStatus.leaderAddress, cluster.addressOf(leader),
+      'semantic status keeps leader identity and network address distinct');
     const learnerAddress = cluster.addressOf(JOINER);
     assert.ok(
       Number.isFinite(leaderStatus.followerProgress?.[learnerAddress]),
