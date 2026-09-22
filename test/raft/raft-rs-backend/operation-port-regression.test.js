@@ -20,11 +20,21 @@ test('the verified integration remains green while transport has no raft-rs node
       'real-partition-on-raft-rs.test.js',
     ].map((name) => path.join(
       ROOT, 'test', 'raft', 'raft-rs-backend', name));
-    assert.doesNotThrow(() => execFileSync(
-      process.execPath,
-      ['--test', ...phaseTests],
-      {cwd: ROOT, encoding: 'utf8', stdio: 'pipe'},
-    ), 'the migrated phases-1-through-5 behavioral evidence must stay green');
+    try {
+      execFileSync(
+        process.execPath,
+        ['--test', ...phaseTests],
+        {cwd: ROOT, encoding: 'utf8', stdio: 'pipe'},
+      );
+    } catch (error) {
+      const stdout = String(error?.stdout || '');
+      const stderr = String(error?.stderr || '');
+      assert.fail(
+        'the migrated phases-1-through-5 behavioral evidence must stay green' +
+        `\n--- child stdout ---\n${stdout}` +
+        `\n--- child stderr ---\n${stderr}`,
+      );
+    }
     const provider = fs.readFileSync(
       path.join(ROOT, 'src', 'raft', 'raft-rs-provider.js'), 'utf8');
     const transportQuest = path.join(ROOT, 'solve', 'quests',
