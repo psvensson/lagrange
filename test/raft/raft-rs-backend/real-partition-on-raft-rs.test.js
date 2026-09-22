@@ -474,3 +474,41 @@ test('the partition request names the durable storage the group runs on, ' +
     cluster.dispose();
   }
 });
+
+
+test('raft-rs runtime emits one semantic transport envelope before any transport imitation',
+  async () => {
+    const sent = [];
+    const replicaIds = ['transport-a', 'transport-b', 'transport-c'];
+    const cluster = new PartitionNodeCluster({
+      partitionId: 'runtime-semantic-transport-envelope',
+      replicaIds,
+      sendFor: (fromReplicaId, peerAddress, packet) => {
+        sent.push({fromReplicaId, peerAddress, packet});
+        return {acknowledged: true};
+      },
+    });
+    try {
+      for (let turn = 0; turn < 40 && sent.length === 0; turn += 1) {
+        await Promise.resolve(cluster.tick(replicaIds[0]));
+      }
+      assert.ok(sent.length > 0,
+        'a real raft-rs participant emits transport traffic');
+      const first = sent[0];
+      assert.equal(first.packet.protocol, 'raft-rs',
+        'runtime output carries the semantic protocol discriminator');
+      assert.equal(first.packet.groupId,
+        'runtime-semantic-transport-envelope',
+        'runtime output carries the owning group id');
+      assert.equal(first.packet.from, first.packet.message?.from,
+        'transport sender identity is the core message sender, not a host guess');
+      assert.equal(first.packet.to, first.packet.message?.to,
+        'transport recipient identity is the core message recipient');
+      assert.equal(typeof first.packet.message?.msgType, 'number',
+        'the raft-rs message remains the semantic payload');
+      assert.equal(typeof first.packet.type, 'undefined',
+        'no fake Liferaft packet type is introduced');
+    } finally {
+      cluster.dispose();
+    }
+  });
