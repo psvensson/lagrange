@@ -12,7 +12,9 @@ import {ConfigurationManager} from
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
-import LifeRaft from '../../src/raft/liferaft.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {ControllablePartitionRaftProvider} from
+  './partition-service-test-support.js';
 import {
   INITIAL_PARTITION_IDS,
   SERVICES_SCHEMA,
@@ -140,6 +142,7 @@ function createServicesPartition() {
     ),
     schema: SERVICES_SCHEMA,
     dbPath: ':memory:',
+    raftProvider: new ControllablePartitionRaftProvider(),
   });
 }
 
@@ -171,10 +174,7 @@ test('zero-change Raft apply cannot overwrite completed priority placement',
     const cache = buildPriorityPlacementCache();
     const partition = createServicesPartition();
     await partition.initialize();
-    partition.role = 'leader';
-    partition.isLeader = true;
-    partition.leaderId = partition.replicaId;
-    partition.raft.state = LifeRaft.LEADER;
+    partition.raftProvider.setRole(RAFT_ROLE.LEADER);
     await partition.subscribeToCDCWithHandshake((event) => {
       cache.applySystemTableChange(
         event.tableName,
@@ -182,9 +182,9 @@ test('zero-change Raft apply cannot overwrite completed priority placement',
         event.data,
       );
     });
-    partition.raftProvider.propose = async (_raft, entry) => {
+    partition.raftProvider.setProposeHandler(async (entry) => {
       partition.applyCommittedEntry(entry);
-    };
+    });
 
     const targetReplicaId =
       `${INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS]}-r3`;
