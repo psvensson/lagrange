@@ -91,5 +91,6 @@
       "command": "npm test",
       "status": "bound"
     }
-  ]
+  ],
+  "generatedBy": "verifying-agent/q0-certification-census"
 }
