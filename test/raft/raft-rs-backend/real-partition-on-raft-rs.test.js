@@ -231,7 +231,19 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
         poisonEveryCache(cluster, round)});
     assert.ok(elected, 'the partition must elect a leader');
     const leader = cluster.leaderReplicaId();
-    // The leader is the one the CORE says leads, on every peer.
+    const leadershipObserved = cluster.settle(
+      () => FOUNDING.every((replicaId) =>
+        cluster.coreStatus(replicaId).lead === cluster.raftPeerIdOf(leader) &&
+        leaderChanges.get(replicaId).at(-1) === leader),
+      {rounds: SETTLE_ROUNDS, between: (round) =>
+        poisonEveryCache(cluster, round)},
+    );
+    assert.ok(
+      leadershipObserved,
+      'every founding peer eventually observes the elected replica identity',
+    );
+    // The leader is the one the CORE says leads, on every peer, and the
+    // lifecycle event exposes the replica identity rather than raft-rs's u64.
     for (const replicaId of FOUNDING) {
       assert.equal(cluster.coreStatus(replicaId).lead,
         cluster.raftPeerIdOf(leader));
