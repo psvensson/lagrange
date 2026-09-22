@@ -1,8 +1,8 @@
 {
   "note": "The artifact the raft-rs-wasm backend loads, how it was built, and the raft-rs 0.7 sources the host contract is cited against. Integrity is required; reproducibility is measured and reported as found.",
-  "wasmSha256": "ae5b180354f7e7aaf4c7e5c49c2c45d3f8fbb11479c7e32d405a501563e4d33b",
+  "wasmSha256": "b285c5eca45ddb6c44301abc0e35c561cd74b24f3e1670b8c49882820aa9e5ad",
   "glueSha256": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81",
-  "wasmBytes": 680192,
+  "wasmBytes": 680702,
   "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
   "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
   "wasmPack": "wasm-pack 0.13.1",
@@ -56,6 +56,10 @@
     {
       "fix": "pending_conf_index crosses as a decimal string",
       "why": "it was the one u64 crossing as a JS number"
+    },
+    {
+      "fix": "every recoverable binding refusal crosses as a tagged object",
+      "why": "the private invocation owner must distinguish CORE_REFUSED from a WASM trap by construction, without inspecting a generic JavaScript exception class or message"
     }
   ],
   "vendoredAt": "vendor/raft-rs-wasm — generated and vendored infrastructure for the experimental raft-rs-wasm backend the provider seam selects. It lives outside src/ because wasm-pack output is nobody's source: keeping it out of the source tree is what lets every repository checker stay on its own default walk with no exclusion for it. Moved here from the exhausted raft-backend-evaluation test tree (tag raft-backend-evaluation/round-3-rejected-tree); the .wasm and the glue are byte-identical to the tagged tree, which the two digests above prove.",

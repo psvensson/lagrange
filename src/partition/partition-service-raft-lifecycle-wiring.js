@@ -35,8 +35,7 @@ function wirePartitionRaftLifecycleEvents(
       TERM_CHANGE: PARTITION_SERVICE_REASON.TERM_CHANGE,
     },
     roles: RaftRole,
-    getCurrentTerm: () =>
-      service.raftProvider.getCurrentTerm(service.raft),
+    getCurrentTerm: () => service.raft.readStatus().term,
     normalizeLeaderId: (candidate) =>
       service.normalizeLeaderReplicaId(candidate),
     shouldIgnoreDemotionEvent,

@@ -5,6 +5,12 @@ import {
 import {
   RAFT_PARTITION_NODE_REQUEST,
 } from './raft-provider-contract-constants.js';
+import {createRaftOperationPort, deepFreeze} from './raft-operation-port.js';
+import {
+  RAFT_MEMBERSHIP_OPERATION,
+  RAFT_OPERATION_OUTCOME,
+} from './raft-operation-port-constants.js';
+import {RAFT_EVENT} from './constants.js';
 
 // The liferaft option keys a partition group's node is constructed with. They
 // are liferaft's own names; the request the provider receives uses none of
@@ -33,6 +39,8 @@ const LIFERAFT_ROUTE_MODE = Object.freeze({
 
 const LIFERAFT_PROPOSE_TIMEOUT_DEFAULT_MS = 1200;
 const LIFERAFT_IMMEDIATE_ELECTION_TIMEOUT_MS = 1;
+const UNSUPPORTED_CONFIGURATION_CHANGE_ERROR =
+  'unsupported liferaft configuration change';
 
 function resolveProposeTimeoutMs(options = {}) {
   const timeoutMs = Number.isFinite(options.proposeTimeoutMs) &&
@@ -62,7 +70,8 @@ function resolveRetryDelayMs(options = {}, attempt, error = null) {
 function hasCommandApi(raftNode) {
   return Boolean(
     raftNode &&
-    typeof raftNode.command === 'function',
+    (typeof raftNode.propose === 'function' ||
+      typeof raftNode.command === 'function'),
   );
 }
 
@@ -73,7 +82,7 @@ function shouldProposeLocally(raftNode, options = {}) {
   }
   return Boolean(
     raftNode &&
-    raftNode.state === LifeRaft.LEADER &&
+    (raftNode.readStatus?.().role || raftNode.state) === LifeRaft.LEADER &&
     hasCommandApi(raftNode),
   );
 }
@@ -161,7 +170,7 @@ class LiferaftProvider {
    * @param {Object} request - The partition group's requirements.
    * @return {Object} A liferaft node for this group.
    */
-  createPartitionNode(request) {
+  createPartitionPort(request) {
     const durableLog = request[RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG];
     const sendToPeer = request[RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER];
     const resolvePeerAddress =
@@ -228,7 +237,100 @@ class LiferaftProvider {
       RAFT_COMMIT_APPLY_ROLLBACK_EVENT,
       request[RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
     );
-    return node;
+    const initialTerm = request[RAFT_PARTITION_NODE_REQUEST.INITIAL_TERM];
+    if (Number.isSafeInteger(initialTerm) && initialTerm > 0) {
+      node.term = initialTerm;
+    }
+    const subscribe = (eventName, listener) => {
+      node.on(eventName, listener);
+      return Object.freeze(() => node.removeListener(eventName, listener));
+    };
+    const status = () => deepFreeze({
+      term: Number.isSafeInteger(node.term) ? node.term : 0,
+      commitIndex: Number.isSafeInteger(node.log?.committedIndex) ?
+        node.log.committedIndex : 0,
+      role: node.state || null,
+      leaderId: node.leader || null,
+      peerCount: Array.isArray(node.nodes) ? node.nodes.length : 0,
+      peers: Array.isArray(node.nodes) ? node.nodes.map((peer) => ({
+        address: peer?.address || null,
+      })) : [],
+      followerProgress: node._followerMatchIndexByAddress instanceof Map ?
+        Object.fromEntries(node._followerMatchIndexByAddress) : {},
+    });
+    return createRaftOperationPort({
+      subscribe,
+      step: (envelope) => node.emit(
+        RAFT_EVENT.DATA,
+        envelope?.payload ?? envelope,
+        envelope?.reply,
+      ),
+      propose: (command) => Promise.resolve(node.command(command)),
+      proposeConfChange: (change) => {
+        if (change?.type === RAFT_MEMBERSHIP_OPERATION.ADD_PEER &&
+            typeof change.peerAddress === 'string') {
+          node.join(change.peerAddress);
+          return deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK});
+        }
+        if (change?.type === RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER &&
+            typeof change.peerAddress === 'string') {
+          node.leave(change.peerAddress);
+          return deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK});
+        }
+        throw new Error(UNSUPPORTED_CONFIGURATION_CHANGE_ERROR);
+      },
+      tick: () => {
+        if (typeof node.tick === 'function') {
+          node.tick();
+        }
+        return deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK});
+      },
+      campaign: () => {
+        node.change({state: LifeRaft.LEADER});
+        node.leader = request[RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS];
+        return deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK});
+      },
+      readStatus: status,
+      configureTick: (timing = {}) => {
+        if (Number.isFinite(timing.heartbeatMs)) {
+          node.beat = timing.heartbeatMs;
+        }
+        if (!node.election || typeof node.election !== 'object') {
+          node.election = {};
+        }
+        if (Number.isFinite(timing.electionMinMs)) {
+          node.election.min = timing.electionMinMs;
+        }
+        if (Number.isFinite(timing.electionMaxMs)) {
+          node.election.max = timing.electionMaxMs;
+        }
+        if (Number.isFinite(timing.tickIntervalMs)) {
+          node.tickIntervalMs = timing.tickIntervalMs;
+        }
+        if (timing.rearmTimer === true) {
+          node.heartbeat(node.state === LifeRaft.LEADER ?
+            node.beat : node.timeout());
+        }
+        return true;
+      },
+      startScheduling: () => {
+        node.heartbeat(node.timeout());
+        return deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK});
+      },
+      stopScheduling: (timerName) => {
+        if (typeof timerName === 'string') {
+          node.timers.clear(timerName);
+        } else {
+          node.timers.clear();
+        }
+        return deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK});
+      },
+      close: () => {
+        node.timers.clear();
+        node.end();
+        return deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK});
+      },
+    });
   }
 
   /**
@@ -238,11 +340,14 @@ class LiferaftProvider {
    * @param {Function} callback
    */
   propose(raftNode, command, callback) {
-    if (!raftNode || typeof raftNode.command !== 'function') {
+    if (!hasCommandApi(raftNode)) {
       throw new Error(LIFERAFT_PROVIDER_ERROR_MSG.MISSING_COMMAND_API);
     }
     try {
-      const proposalPromise = Promise.resolve(raftNode.command(command));
+      const proposalPromise = Promise.resolve(
+        typeof raftNode.propose === 'function' ?
+          raftNode.propose(command) : raftNode.command(command),
+      );
       if (typeof callback === 'function') {
         proposalPromise
           .then(() => callback(null))
@@ -353,10 +458,16 @@ class LiferaftProvider {
    * @param {string} peerAddress
    */
   joinPeer(raftNode, peerAddress) {
+    if (typeof raftNode?.proposeConfChange === 'function') {
+      return raftNode.proposeConfChange({
+        type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
+        peerAddress,
+      });
+    }
     if (!raftNode || typeof raftNode.join !== 'function') {
       return;
     }
-    raftNode.join(peerAddress);
+    return raftNode.join(peerAddress);
   }
 
   /**
@@ -364,12 +475,13 @@ class LiferaftProvider {
    * @param {Object} raftNode
    */
   startElectionTimer(raftNode) {
-    if (!raftNode ||
-      typeof raftNode.heartbeat !== 'function' ||
-      typeof raftNode.timeout !== 'function') {
-      return;
+    if (typeof raftNode?.startScheduling === 'function') {
+      return raftNode.startScheduling();
     }
-    raftNode.heartbeat(raftNode.timeout());
+    if (typeof raftNode?.heartbeat === 'function' &&
+        typeof raftNode?.timeout === 'function') {
+      return raftNode.heartbeat(raftNode.timeout());
+    }
   }
 
   /**
@@ -379,10 +491,12 @@ class LiferaftProvider {
    * @param {Object} raftNode
    */
   requestElectionNow(raftNode) {
-    if (!raftNode || typeof raftNode.heartbeat !== 'function') {
-      return;
+    if (typeof raftNode?.campaign === 'function') {
+      return raftNode.campaign({timeoutMs: LIFERAFT_IMMEDIATE_ELECTION_TIMEOUT_MS});
     }
-    raftNode.heartbeat(LIFERAFT_IMMEDIATE_ELECTION_TIMEOUT_MS);
+    if (typeof raftNode?.heartbeat === 'function') {
+      return raftNode.heartbeat(LIFERAFT_IMMEDIATE_ELECTION_TIMEOUT_MS);
+    }
   }
 
   /**
@@ -391,16 +505,13 @@ class LiferaftProvider {
    * @param {string} [timerName]
    */
   clearTimers(raftNode, timerName) {
-    if (!raftNode ||
-      !raftNode.timers ||
-      typeof raftNode.timers.clear !== 'function') {
-      return;
+    if (typeof raftNode?.stopScheduling === 'function') {
+      return raftNode.stopScheduling(timerName);
     }
-    if (typeof timerName === 'string') {
-      raftNode.timers.clear(timerName);
-      return;
+    if (typeof raftNode?.timers?.clear === 'function') {
+      return typeof timerName === 'string' ?
+        raftNode.timers.clear(timerName) : raftNode.timers.clear();
     }
-    raftNode.timers.clear();
   }
 
   /**
@@ -408,10 +519,11 @@ class LiferaftProvider {
    * @param {Object} raftNode
    */
   shutdownNode(raftNode) {
-    this.clearTimers(raftNode);
-    if (raftNode && typeof raftNode.end === 'function') {
-      raftNode.end();
+    if (raftNode && typeof raftNode.close === 'function') {
+      return raftNode.close();
     }
+    this.clearTimers(raftNode);
+    return raftNode?.end?.();
   }
 
   /**
@@ -420,7 +532,7 @@ class LiferaftProvider {
    * @return {number}
    */
   getCurrentTerm(raftNode) {
-    const term = raftNode ? raftNode.term : null;
+    const term = raftNode?.readStatus?.().term ?? raftNode?.term;
     return Number.isFinite(term) ? term : 0;
   }
 
@@ -430,7 +542,8 @@ class LiferaftProvider {
    * @return {number}
    */
   getCommittedIndex(raftNode) {
-    const committedIndex = raftNode?.log?.committedIndex;
+    const committedIndex = raftNode?.readStatus?.().commitIndex ??
+      raftNode?.log?.committedIndex;
     return Number.isFinite(committedIndex) ? committedIndex : 0;
   }
 }

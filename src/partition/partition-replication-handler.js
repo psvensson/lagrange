@@ -27,6 +27,7 @@ import {
   PARTITION_REPLICATION_HANDLER_DEFAULT,
 } from './partition-replication-handler-constants.js';
 import {ProposalQueue} from './proposal-queue.js';
+import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
 
 
 /**
@@ -417,16 +418,18 @@ class PartitionReplicationHandler {
       });
 
       // Propose to Raft — liferaft replicates to followers
-      this.raft.command(entry).catch((err) => {
-        this.proposalQueue.reject(entryId, err);
-        this.logger.error(
-          PARTITION_REPLICATION_HANDLER_ERROR_MSG.RAFT_COMMAND_FAILED,
-          {
-            partitionId: this.partitionId,
-            error: err.message,
-          },
-        );
-      });
+      Promise.resolve(this.raft.propose(entry))
+        .then(assertRaftOperationSucceeded)
+        .catch((err) => {
+          this.proposalQueue.reject(entryId, err);
+          this.logger.error(
+            PARTITION_REPLICATION_HANDLER_ERROR_MSG.RAFT_COMMAND_FAILED,
+            {
+              partitionId: this.partitionId,
+              error: err.message,
+            },
+          );
+        });
     });
   }
 

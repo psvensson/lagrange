@@ -5,6 +5,8 @@ import {
 } from '../control-plane/control-plane-error-classification.js';
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {raftRsLifecycleAdministration} from
+  '../raft/raft-rs-lifecycle-administration.js';
 import {
   REPLICA_HANDLER_EVENT,
   REPLICA_HANDLER_LOG_MSG,
@@ -196,6 +198,12 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
       try {
         this.throwIfShuttingDown();
         await this.waitForReplicaServingDrain(service);
+        await raftRsLifecycleAdministration.retireReplica(
+          replicaId,
+          reason || REPLICA_REMOVE_EXECUTION_REASON
+            .DURABLE_REMOVE_CLEANUP_COMPLETE,
+          {groupId: partitionId},
+        );
         if (!skipRemovingStatusWrite) {
           try {
             await this.persistReplicaStatusWithRetry(

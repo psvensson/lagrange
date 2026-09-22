@@ -179,7 +179,7 @@ test('two peers whose caches disagree observe the committed configuration',
         assert.ok(BigInt(durable.appliedIndex) >= BigInt(pendingConfIndex),
           `${peerId} must have applied the committed configuration entry`);
         const membership = consensusMembership({
-          core: cluster.core, handle: peer.handle,
+          confState: cluster.core.conf_state(peer.handle),
         });
         observed[peerId] = membership;
         assert.deepEqual(membership.voters, durable.voters,
@@ -218,7 +218,7 @@ test('no cache mutation alters quorum membership', async () => {
       const rows = caches.get(peerId);
       rows.setLifecycle(PEER_D, LIFECYCLE.SYNCING);
       projectMembershipOntoRows({
-        core: cluster.core, handle: peer.handle, rows,
+        confState: cluster.core.conf_state(peer.handle), rows,
       });
       const durable = durableMembershipOf(peer.dbFile);
       const projected = rows.read();
@@ -228,7 +228,7 @@ test('no cache mutation alters quorum membership', async () => {
         projected.map((row) => ({
           peerId: row.peerId, membership: row.membership})),
         membershipRowsFromConfState({
-          core: cluster.core, handle: peer.handle,
+          confState: cluster.core.conf_state(peer.handle),
         }).map((row) => ({peerId: row.peerId, membership: row.membership})));
       const projectedVoters = projected
         .filter((row) => row.membership === LAGRANGE_MEMBERSHIP.VOTER)
@@ -277,7 +277,7 @@ test('no cache mutation alters quorum membership', async () => {
       const peer = cluster.peer(peerId);
       const rows = caches.get(peerId);
       projectMembershipOntoRows({
-        core: cluster.core, handle: peer.handle, rows,
+        confState: cluster.core.conf_state(peer.handle), rows,
       });
       assert.deepEqual(
         rows.read().filter((row) =>

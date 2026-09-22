@@ -30,8 +30,7 @@ const MEMBERSHIP_VALUES = Object.freeze(Object.values(LAGRANGE_MEMBERSHIP));
  * @param {number} options.handle - This group's core handle.
  * @return {Object} The frozen ConfState the core returned.
  */
-function readCommittedConfiguration({core, handle}) {
-  const confState = core.conf_state(handle);
+function readCommittedConfiguration({confState}) {
   return Object.freeze({
     voters: Object.freeze([...confState.voters]),
     learners: Object.freeze([...confState.learners]),
@@ -50,8 +49,8 @@ function readCommittedConfiguration({core, handle}) {
  * @param {number} options.handle - This group's core handle.
  * @return {Object} {voters, votersOutgoing}, frozen.
  */
-function consensusMembership({core, handle}) {
-  const committed = readCommittedConfiguration({core, handle});
+function consensusMembership({confState}) {
+  const committed = readCommittedConfiguration({confState});
   return Object.freeze({
     voters: committed.voters,
     votersOutgoing: committed.votersOutgoing,
@@ -67,8 +66,8 @@ function consensusMembership({core, handle}) {
  * @param {number} options.handle - This group's core handle.
  * @return {Array<Object>} Frozen {peerId, membership} rows.
  */
-function membershipRowsFromConfState({core, handle}) {
-  const committed = readCommittedConfiguration({core, handle});
+function membershipRowsFromConfState({confState}) {
+  const committed = readCommittedConfiguration({confState});
   const projected = [];
   for (const source of LAGRANGE_MEMBERSHIP_SOURCE) {
     for (const peerId of committed[source.confStateField]) {
@@ -179,8 +178,8 @@ class LagrangeMembershipRows {
  * @param {LagrangeMembershipRows} options.rows - The sink.
  * @return {Array<Object>} The rows that were written.
  */
-function projectMembershipOntoRows({core, handle, rows}) {
-  const projected = membershipRowsFromConfState({core, handle});
+function projectMembershipOntoRows({confState, rows}) {
+  const projected = membershipRowsFromConfState({confState});
   rows.replaceMembership(projected);
   return projected;
 }

@@ -82,52 +82,36 @@ function reconcileReplicaLeaderChange(
   return shouldDemote;
 }
 
+function optionFunction(options, name, fallback = () => {}) {
+  return typeof options[name] === 'function' ? options[name] : fallback;
+}
+
+function eventSubscriber(raft) {
+  return typeof raft?.subscribe === 'function' ?
+    raft.subscribe : raft.on.bind(raft);
+}
+
 function wireReplicaLifecycleEvents(replica, options = {}) {
   const raft = options.raft || replica.raft;
+  const subscribe = eventSubscriber(raft);
   const events = options.events || {};
   const roles = options.roles || {};
-  const shouldIgnoreLeaderEvent =
-    typeof options.shouldIgnoreLeaderEvent === 'function' ?
-      options.shouldIgnoreLeaderEvent :
-      () => false;
-  const shouldIgnoreDemotionEvent =
-    typeof options.shouldIgnoreDemotionEvent === 'function' ?
-      options.shouldIgnoreDemotionEvent :
-      () => false;
-  const getCurrentTerm =
-    typeof options.getCurrentTerm === 'function' ?
-      options.getCurrentTerm :
-      (() => null);
-  const onLeader =
-    typeof options.onLeader === 'function' ?
-      options.onLeader :
-      (() => {});
-  const onFollower =
-    typeof options.onFollower === 'function' ?
-      options.onFollower :
-      (() => {});
-  const onCandidate =
-    typeof options.onCandidate === 'function' ?
-      options.onCandidate :
-      (() => {});
-  const onCommit =
-    typeof options.onCommit === 'function' ?
-      options.onCommit :
-      (() => {});
-  const onLeaderChange =
-    typeof options.onLeaderChange === 'function' ?
-      options.onLeaderChange :
-      (() => {});
-  const onTermChange =
-    typeof options.onTermChange === 'function' ?
-      options.onTermChange :
-      (() => {});
-  const normalizeLeaderId =
-    typeof options.normalizeLeaderId === 'function' ?
-      options.normalizeLeaderId :
-      null;
+  const shouldIgnoreLeaderEvent = optionFunction(
+    options, 'shouldIgnoreLeaderEvent', () => false);
+  const shouldIgnoreDemotionEvent = optionFunction(
+    options, 'shouldIgnoreDemotionEvent', () => false);
+  const getCurrentTerm = optionFunction(
+    options, 'getCurrentTerm', () => null);
+  const onLeader = optionFunction(options, 'onLeader');
+  const onFollower = optionFunction(options, 'onFollower');
+  const onCandidate = optionFunction(options, 'onCandidate');
+  const onCommit = optionFunction(options, 'onCommit');
+  const onLeaderChange = optionFunction(options, 'onLeaderChange');
+  const onTermChange = optionFunction(options, 'onTermChange');
+  const normalizeLeaderId = optionFunction(
+    options, 'normalizeLeaderId', null);
 
-  raft.on(events.LEADER, () => {
+  subscribe(events.LEADER, () => {
     if (shouldIgnoreLeaderEvent(events.LEADER)) {
       return;
     }
@@ -135,7 +119,7 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
     onLeader({term: getCurrentTerm()});
   });
 
-  raft.on(events.FOLLOWER, () => {
+  subscribe(events.FOLLOWER, () => {
     if (shouldIgnoreDemotionEvent(events.FOLLOWER)) {
       return;
     }
@@ -146,7 +130,7 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
     });
   });
 
-  raft.on(events.CANDIDATE, () => {
+  subscribe(events.CANDIDATE, () => {
     if (shouldIgnoreDemotionEvent(events.CANDIDATE)) {
       return;
     }
@@ -154,11 +138,11 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
     onCandidate({term: getCurrentTerm()});
   });
 
-  raft.on(events.COMMIT, (command) => {
+  subscribe(events.COMMIT, (command) => {
     onCommit(command);
   });
 
-  raft.on(events.LEADER_CHANGE, (nextLeaderId) => {
+  subscribe(events.LEADER_CHANGE, (nextLeaderId) => {
     const previousLeaderId = replica.leaderId;
     const demoted = reconcileReplicaLeaderChange(
       replica,
@@ -181,7 +165,7 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
     });
   });
 
-  raft.on(events.TERM_CHANGE, (term) => {
+  subscribe(events.TERM_CHANGE, (term) => {
     onTermChange({term});
   });
 }
@@ -190,7 +174,6 @@ export {
   applyReplicaLeadership,
   applyReplicaDemotion,
   clearReplicaLeaderUpdateState,
-  normalizeReplicaLeaderId,
   reconcileReplicaLeaderChange,
   wireReplicaLifecycleEvents,
 };

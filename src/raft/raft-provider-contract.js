@@ -8,11 +8,19 @@ import {
  * @param {*} raftProvider
  */
 function assertRaftProviderContract(raftProvider) {
+  assertMethods(raftProvider, RAFT_PROVIDER_CONTRACT.REQUIRED_METHODS);
+}
+
+function assertPartitionRaftProviderContract(raftProvider) {
+  assertMethods(raftProvider, RAFT_PROVIDER_CONTRACT.REQUIRED_PARTITION_METHODS);
+}
+
+function assertMethods(raftProvider, methods) {
   if (!raftProvider) {
     throw new Error(RAFT_PROVIDER_CONTRACT_ERROR_MSG.MISSING_PROVIDER);
   }
 
-  for (const methodName of RAFT_PROVIDER_CONTRACT.REQUIRED_METHODS) {
+  for (const methodName of methods) {
     if (typeof raftProvider[methodName] !== 'function') {
       throw new Error(
         RAFT_PROVIDER_CONTRACT_ERROR_MSG.invalidProviderMethod(methodName),
@@ -21,4 +29,4 @@ function assertRaftProviderContract(raftProvider) {
   }
 }
 
-export {assertRaftProviderContract};
+export {assertPartitionRaftProviderContract, assertRaftProviderContract};

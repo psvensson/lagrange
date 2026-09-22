@@ -15,12 +15,12 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
-import {loadRaftRsCore} from '../../../src/raft/raft-rs-core.js';
 import {
   createRaftRsGroup,
+  loadRaftRsCore,
   restoreRaftRsGroup,
-} from '../../../src/raft/raft-rs-group.js';
-import {drainReady} from '../../../src/raft/raft-rs-ready-loop.js';
+} from './raw-raft-rs-test-core.js';
+import {drainReady} from './raw-raft-rs-test-ready.js';
 
 const DB_FILE_PREFIX = 'peer-';
 const DB_FILE_SUFFIX = '.sqlite';

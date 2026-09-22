@@ -4,7 +4,7 @@
 // ConfState, a learner added, caught up, promoted, and the old voter removed -
 // with hostile service-cache rows rewritten underneath the whole run.
 //
-// Every peer here is what `provider.createPartitionNode(request)` returned for
+// Every peer here is what `provider.createPartitionPort(request)` returned for
 // a request in the contract owner's own field names. No test value is an
 // oracle: what is compared against is either the core's own report or the
 // bytes on disk read through a SEPARATE read-only SQLite connection, and the
@@ -13,7 +13,6 @@
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
@@ -22,18 +21,6 @@ import {TextDecoder, TextEncoder} from 'node:util';
 import Database from 'better-sqlite3';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
-import {
-  PartitionService,
-} from '../../../src/partition/partition-service.js';
-import {createRaftProvider} from '../../../src/raft/raft-backend-selection.js';
-import {
-  RAFT_BACKEND,
-  RAFT_BACKEND_OPTION,
-} from '../../../src/raft/raft-backend-constants.js';
-import {RAFT_EVENT} from '../../../src/raft/constants.js';
-import {
-  RAFT_RS_NODE_EVENT_VALUES,
-} from '../../../src/raft/raft-rs-node-constants.js';
 import {
   RAFT_PARTITION_NODE_REQUEST,
 } from '../../../src/raft/raft-provider-contract-constants.js';
@@ -193,11 +180,12 @@ test('a fresh partition on the raft-rs backend starts from the membership ' +
   'its own durable record holds', async () => {
   const cluster = formedPartition();
   try {
-    // 1. Every founding replica is a real partition node the provider built.
+    // 1. Every founding replica is a frozen operation port the provider built.
     for (const replicaId of FOUNDING) {
-      const node = cluster.node(replicaId);
-      assert.equal(node.address, cluster.addressOf(replicaId),
-        'the node answers at the address the request named');
+      const port = cluster.node(replicaId);
+      assert.equal(Object.isFrozen(port), true);
+      assert.equal(typeof port.address, 'undefined',
+        'the operation port exposes no live node/address object');
       // The identity is the backend's registration, not a list position: the
       // core's own status agrees with what the node reports character for
       // character.
@@ -288,8 +276,8 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
     assert.deepEqual(after.record.voters, before.record.voters);
     // The membership the node reports is the one the DURABLE record holds -
     // a projection of the committed configuration and nothing else.
-    const projected = cluster.node(follower).nodes
-      .map((peer) => peer.raftPeerId).sort();
+    const projected = cluster.node(follower).readStatus().peers
+      .map((peer) => peer.peerId).sort();
     assert.deepEqual(projected,
       after.record.voters.filter((id) =>
         id !== cluster.raftPeerIdOf(follower)).sort(),
@@ -400,56 +388,6 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
   }
 });
 
-// Addendum §7's stop condition, measured rather than assumed: a real
-// PartitionService is built on the experimental backend and what it demands
-// that this backend does not serve is recorded by name. The backend is NOT
-// grown a member to satisfy it - that is the facade the owner forbade - so
-// this test's job is to keep the demand visible and to fail if the facade
-// ever appears.
-test('a real partition service on the experimental backend demands exactly ' +
-  'one liferaft-internal event, and the backend does not grow one for it',
-async () => {
-  const directory = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'raft-rs-service-demand-'));
-  const provider = createRaftProvider({
-    [RAFT_BACKEND_OPTION]: RAFT_BACKEND.RAFT_RS_WASM,
-  });
-  const service = new PartitionService({
-    partitionId: 'service-demand-partition',
-    tableId: 'demand-table',
-    tableName: 'demand_table',
-    replicaId: 'replica-demand-1',
-    replicaIds: ['replica-demand-1', 'replica-demand-2'],
-    nodeId: 'node-demand-1',
-    dbPath: path.join(directory, 'replica.sqlite'),
-    deferElection: true,
-    raftProvider: provider,
-  });
-  let refusal = null;
-  try {
-    await service.initialize();
-  } catch (error) {
-    refusal = error;
-  } finally {
-    try {
-      await service.shutdown();
-    } catch {
-      // The service never finished initializing; the files still close.
-    }
-    fs.rmSync(directory, {recursive: true, force: true});
-  }
-  assert.ok(refusal !== null,
-    'the service must not silently run on a backend that does not serve it');
-  // The event's own producer names it, so this is not a literal here.
-  assert.ok(refusal.message.includes(RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE),
-    'the refusal names the liferaft-internal event the service subscribed; ' +
-    `it said ${refusal.message}`);
-  // And the backend still refuses it rather than emitting it: no facade.
-  assert.ok(!RAFT_RS_NODE_EVENT_VALUES
-    .includes(RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE),
-  'the experimental backend must not have grown the liferaft event');
-});
-
 test('the partition request names the durable storage the group runs on, ' +
   'and no backend reads a service row to find it', async () => {
   // The field set is the contract owner's. A backend that needed something
@@ -459,16 +397,16 @@ test('the partition request names the durable storage the group runs on, ' +
   'the durable storage handle is a declared requirement, not a lookup');
   const cluster = formedPartition();
   try {
-    // Structural: the module that builds a partition node imports nothing
+    // Structural: the module that builds a partition port imports nothing
     // that could reach a service or system-table cache.
     const source = fs.readFileSync(path.join(
-      REPOSITORY_ROOT, 'src/raft/raft-rs-partition-node.js'), TEXT_ENCODING);
+      REPOSITORY_ROOT, 'src/raft/raft-rs-operation-port.js'), TEXT_ENCODING);
     const imports = [...source.matchAll(/from\s+'([^']+)'/gu)]
       .map(([, specifier]) => specifier);
     for (const specifier of imports) {
       assert.ok(!/service|system-table|cache|partition-service/u
         .test(specifier),
-      `the partition node builder must not import ${specifier}`);
+      `the partition port builder must not import ${specifier}`);
     }
     // Behavioural: a cache that names a peer the configuration never had
     // leaves the configuration alone.

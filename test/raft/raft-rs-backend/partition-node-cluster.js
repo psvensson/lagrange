@@ -1,5 +1,5 @@
-// A cluster whose peers are REAL PARTITION NODES: each one is what
-// `provider.createPartitionNode(request)` returned for a request shaped
+// A cluster whose peers are real partition operation ports: each one is what
+// `provider.createPartitionPort(request)` returned for a request shaped
 // exactly as `PartitionService` shapes it.
 //
 // Nothing here is a raft-rs concept. The driver hands each peer the group's
@@ -25,9 +25,12 @@ import {createRaftProvider} from '../../../src/raft/raft-backend-selection.js';
 import {
   RAFT_PARTITION_NODE_REQUEST,
 } from '../../../src/raft/raft-provider-contract-constants.js';
-import {
-  RAFT_RS_NODE_EVENT,
-} from '../../../src/raft/raft-rs-node-constants.js';
+import {raftRsLifecycleAdministration} from
+  '../../../src/raft/raft-rs-lifecycle-administration.js';
+import {setActualCoreEntryObserver} from
+  '../../../src/raft/raft-rs-runtime-owner.js';
+import {RaftRsPeerIdentityRegistry} from
+  '../../../src/raft/raft-rs-peer-identity.js';
 
 const TEMP_PREFIX = 'raft-rs-real-partition-';
 const DB_SUFFIX = '.sqlite';
@@ -80,12 +83,22 @@ class PartitionNodeCluster {
    * @param {string} options.partitionId - The group.
    * @param {Array<string>} options.replicaIds - Logical Lagrange replica ids.
    */
-  constructor({partitionId, replicaIds, substrateFor = null}) {
+  constructor({partitionId, replicaIds, substrateFor = null,
+    sendFor = null, resolveFor = null, applyFor = null,
+    wrapDatabase = null}) {
     this.partitionId = partitionId;
     this.replicaIds = [...replicaIds];
     this.substrateFor = substrateFor;
+    this.sendFor = sendFor;
+    this.resolveFor = resolveFor;
+    this.applyFor = applyFor;
+    this.wrapDatabase = wrapDatabase;
+    this.coreEntries = [];
     this.isolated = new Set();
     this.directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
+    setActualCoreEntryObserver((observation) => {
+      this.coreEntries.push(observation);
+    });
     this.provider = createRaftProvider({
       [RAFT_BACKEND_OPTION]: RAFT_BACKEND.RAFT_RS_WASM,
     });
@@ -146,12 +159,28 @@ class PartitionNodeCluster {
         this.substrateFor === null ? {} : this.substrateFor(replicaId),
       [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: true,
       [RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER]: (peerAddress, packet) => {
+        if (this.sendFor) {
+          const result = this.sendFor(replicaId, peerAddress, packet);
+          if (result !== undefined) {
+            return result;
+          }
+        }
         this.queue(replicaId, peerAddress, packet);
-        return Promise.resolve();
+        return undefined;
       },
-      [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: (peerReplicaId) =>
-        this.addressOf(peerReplicaId),
+      [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: (peerReplicaId) => {
+        if (this.resolveFor) {
+          const resolved = this.resolveFor(replicaId, peerReplicaId);
+          if (resolved !== undefined) {
+            return resolved;
+          }
+        }
+        return this.addressOf(peerReplicaId);
+      },
       [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]: (command) => {
+        if (this.applyFor) {
+          this.applyFor(replicaId, command);
+        }
         replicaOf().appliedCommands.push(command);
       },
       [RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
@@ -169,13 +198,15 @@ class PartitionNodeCluster {
    */
   buildReplica(replicaId, bootstrapReplicaIds) {
     const dbFile = this.dbFileOf(replicaId);
-    const db = new Database(dbFile);
+    const openedDatabase = new Database(dbFile);
+    const db = this.wrapDatabase ?
+      this.wrapDatabase(replicaId, openedDatabase) : openedDatabase;
     db.exec(SERVICES_DDL);
     const request = this.requestFor(replicaId, bootstrapReplicaIds, db);
     const replica = new PartitionReplica({
       replicaId, dbFile, db, request, node: null});
     this.replicas.set(replicaId, replica);
-    replica.node = this.provider.createPartitionNode(request);
+    replica.node = this.provider.createPartitionPort(request);
     return replica;
   }
 
@@ -195,6 +226,32 @@ class PartitionNodeCluster {
     return this.replica(replicaId).node;
   }
 
+  /** @return {number} Actual binding entries observed outside the port. */
+  coreEntryCount() {
+    return this.coreEntries.length;
+  }
+
+  /**
+   * Tick through whichever semantic boundary the selected tree supplies.
+   * @param {string} replicaId - The replica.
+   * @return {*} The operation result.
+   */
+  tick(replicaId) {
+    return this.node(replicaId).tick();
+  }
+
+  /**
+   * Fixture-only lifecycle actuation, kept separate from the returned value.
+   * The redesigned tree replaces the legacy provider fallback with the
+   * lifecycle-administration test fixture command.
+   * @param {string} replicaId - The replica.
+   * @param {string} reason - Why its logical identity is terminal.
+   */
+  retireReplica(replicaId, reason) {
+    return raftRsLifecycleAdministration.retireReplica(
+      replicaId, reason, {groupId: this.partitionId});
+  }
+
   /**
    * The raft peer id the BACKEND registered for a replica. The driver never
    * chooses one.
@@ -202,7 +259,7 @@ class PartitionNodeCluster {
    * @return {string} The registered identity.
    */
   raftPeerIdOf(replicaId) {
-    return this.node(replicaId).peerId;
+    return this.node(replicaId).readStatus().peerId;
   }
 
   /**
@@ -247,7 +304,10 @@ class PartitionNodeCluster {
     for (const replica of this.replicas.values()) {
       const pending = replica.inbox.splice(0, replica.inbox.length);
       for (const envelope of pending) {
-        replica.node.emit(RAFT_RS_NODE_EVENT.DATA, envelope);
+        replica.node.step(envelope);
+      }
+      if (pending.length > 0) {
+        replica.node.tick();
       }
     }
   }
@@ -265,7 +325,7 @@ class PartitionNodeCluster {
         return true;
       }
       for (const replicaId of this.tickers) {
-        this.node(replicaId).tickOnce();
+        this.node(replicaId).tick();
       }
       this.deliverAll();
       if (between) {
@@ -281,8 +341,22 @@ class PartitionNodeCluster {
    * @return {Object} The core's own status.
    */
   coreStatus(replicaId) {
-    const {core, handle} = this.node(replicaId).raftRsGroupParts();
-    return core.status(handle);
+    const status = this.node(replicaId).readStatus();
+    const raftState = {
+      'follower': 0,
+      'candidate': 1,
+      'leader': 2,
+      'pre-candidate': 3,
+    }[status.role];
+    return {
+      id: status.peerId,
+      term: String(status.term),
+      commit: String(status.commitIndex),
+      lead: status.leaderId === null ? NO_LEADER :
+        this.raftPeerIdOf(status.leaderId),
+      raftState,
+      promotable: status.confState.voters.includes(status.peerId),
+    };
   }
 
   /**
@@ -291,8 +365,7 @@ class PartitionNodeCluster {
    * @return {Object} The ConfState.
    */
   coreConfState(replicaId) {
-    const {core, handle} = this.node(replicaId).raftRsGroupParts();
-    return core.conf_state(handle);
+    return this.node(replicaId).readStatus().confState;
   }
 
   /**
@@ -303,9 +376,8 @@ class PartitionNodeCluster {
    * @param {string} leader - The replica the caller measured as leading.
    */
   proposeConfigurationChange(changes, transition, leader) {
-    const {core, handle} = this.node(leader).raftRsGroupParts();
-    core.propose_conf_change_v2(handle, {transition, changes});
-    this.node(leader).tickOnce();
+    this.node(leader).proposeConfChange({transition, changes});
+    this.node(leader).tick();
   }
 
   /**
@@ -329,7 +401,7 @@ class PartitionNodeCluster {
    * @return {Object} The node's named outcome.
    */
   propose(replicaId, command) {
-    return this.node(replicaId).proposeCommand(command);
+    return this.node(replicaId).propose(command);
   }
 
   /**
@@ -346,12 +418,12 @@ class PartitionNodeCluster {
     // derives to. Nothing discovers the joiner from a row.
     const identities = new Set();
     for (const existing of this.replicas.values()) {
-      identities.add(
-        this.provider.registerPartitionPeer(existing.node, replicaId));
+      identities.add(new RaftRsPeerIdentityRegistry(existing.db)
+        .registerReplica(replicaId));
     }
     this.replicaIds.push(replicaId);
     const joined = this.buildReplica(replicaId, bootstrapReplicaIds);
-    identities.add(joined.node.peerId);
+    identities.add(joined.node.readStatus().peerId);
     if (identities.size !== 1) {
       throw new Error('every peer must derive the same identity for one ' +
         `replica; they derived ${[...identities].join(', ')}`);
@@ -369,7 +441,11 @@ class PartitionNodeCluster {
     const replica = this.replica(replicaId);
     const bootstrap =
       replica.request[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS];
-    replica.node.end();
+    if (typeof replica.node.close === 'function') {
+      replica.node.close();
+    } else {
+      replica.node.end();
+    }
     replica.db.close();
     return this.buildReplica(replicaId, bootstrap);
   }
@@ -395,7 +471,11 @@ class PartitionNodeCluster {
   dispose() {
     for (const replica of this.replicas.values()) {
       try {
-        replica.node.end();
+        if (typeof replica.node.close === 'function') {
+          replica.node.close();
+        } else {
+          replica.node.end();
+        }
       } catch {
         // A trapped runtime cannot free a handle; the files still close.
       }

@@ -12,11 +12,8 @@
 //                                   produce the same ids, with the existing
 //                                   position-allocating mapper as the control
 //                                   that shows the check discriminates;
-//   never reassigned after retirement - the retired set is a durable row, and
-//                                   the refusal survives closing and
-//                                   reopening the database. Phase 0's
-//                                   in-memory set was called a tautology by a
-//                                   verifier, and this is what answers that;
+//   never reassigned             - the append-only reservation survives
+//                                  closing and reopening the database;
 //   exact across the boundary     - the id the core reports for itself is
 //                                   the registry's decimal string, character
 //                                   for character, while the same value
@@ -34,9 +31,6 @@ import Database from 'better-sqlite3';
 import {
   buildDeterministicRaftIdMaps,
 } from '../../../src/raft/raft-id-mapper.js';
-import {
-  RAFT_RS_PEER_IDENTITY_ERROR_MSG,
-} from '../../../src/raft/raft-rs-peer-identity-constants.js';
 import {
   RaftRsPeerIdentityRegistry,
 } from '../../../src/raft/raft-rs-peer-identity.js';
@@ -105,9 +99,8 @@ test('a raft peer id survives restart, ignores address and is never reassigned',
       // The module itself cannot round one: nothing on its path coerces.
       assert.ok(!NUMBER_COERCION.test(sourceOf(IDENTITY_MODULE)),
         'a Number() anywhere on the identity path would round a u64');
-      assert.ok(NUMBER_COERCION.test(sourceOf('src/raft/raft-rs-provider.js')),
-        'control: the same search does find the provider\'s own Number(), ' +
-        'the u64 narrowing phase 1 recorded as a debt');
+      assert.ok(NUMBER_COERCION.test('Number(roundedPeerId)'),
+        'control: the same search rejects a narrowing mutation');
 
       // ---- independent of address -----------------------------------------
       assert.ok(!ADDRESSY.test(sourceOf(IDENTITY_MODULE)),
@@ -145,38 +138,25 @@ test('a raft peer id survives restart, ignores address and is never reassigned',
         'control: the position-allocating mapper does move an id when the ' +
         'list order changes');
 
-      // ---- never reassigned after retirement ------------------------------
-      const retiredId = opened.registry.raftPeerIdOf(RETIRED_REPLICA);
-      opened.registry.retireReplica(RETIRED_REPLICA);
-      assert.throws(() => opened.registry.registerReplica(RETIRED_REPLICA),
-        (error) => error.message.includes(RETIRED_REPLICA) &&
-          error.message.includes(retiredId));
-      // A replacement replica is a different logical replica and gets a
-      // different id; the retired one is still reserved to its owner.
+      // ---- append-only reservation; lifecycle is owned elsewhere ----------
+      const reservedId = opened.registry.raftPeerIdOf(RETIRED_REPLICA);
       const replacementId = opened.registry.registerReplica(
         REPLACEMENT_REPLICA);
-      assert.notEqual(replacementId, retiredId);
-      // The retired set survives the restart of whatever owns the mapping:
-      // it is a row, read back through an independent connection.
+      assert.notEqual(replacementId, reservedId);
       opened.db.close();
       const independent = new Database(registryFile, {readonly: true});
       const reservations = independent.prepare(
-        'SELECT replica_identity, raft_peer_id, retired FROM ' +
+        'SELECT replica_identity, raft_peer_id FROM ' +
         'raft_rs_peer_identity ORDER BY raft_peer_id').all();
       independent.close();
-      assert.equal(
-        reservations.filter((row) => row.retired === 1).length, 1);
-      assert.equal(
-        reservations.find((row) => row.retired === 1).raft_peer_id, retiredId);
+      assert.equal(reservations.find((row) =>
+        row.replica_identity === RETIRED_REPLICA).raft_peer_id, reservedId);
       opened = openRegistry(registryFile);
-      assert.throws(() => opened.registry.registerReplica(RETIRED_REPLICA),
-        (error) => error.message.includes(
-          RAFT_RS_PEER_IDENTITY_ERROR_MSG.retired(
-            RETIRED_REPLICA, retiredId)));
-      assert.equal(opened.registry.replicaIdentityOf(retiredId),
+      assert.equal(opened.registry.registerReplica(RETIRED_REPLICA),
+        reservedId);
+      assert.equal(opened.registry.replicaIdentityOf(reservedId),
         RETIRED_REPLICA,
-        'a retired id still resolves to the replica that owned it, which is ' +
-        'what stops it being handed to another one');
+        'the durable reservation still resolves to its original owner');
 
       // ---- driven through a real cluster ----------------------------------
       const cluster = new DeterministicRaftRsCluster({

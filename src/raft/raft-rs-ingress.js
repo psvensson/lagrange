@@ -182,28 +182,6 @@ function admitRaftRsMessage({envelope, localGroupId, localPeerId}) {
   });
 }
 
-/**
- * Admit an envelope and, only then, step it into the core.
- * @param {Object} options - The dispatch.
- * @param {Object} options.core - The raft-rs primitive facade.
- * @param {number} options.handle - This group's core handle.
- * @param {Object} options.envelope - The transport envelope.
- * @param {string} options.localGroupId - The group this host serves here.
- * @param {string} options.localPeerId - The peer this host serves here.
- * @return {Object} The admission result.
- */
-function dispatchRaftRsMessage(
-  {core, handle, envelope, localGroupId, localPeerId}) {
-  const admission = admitRaftRsMessage({envelope, localGroupId, localPeerId});
-  if (admission.admitted) {
-    core.step(handle, envelope.message);
-  }
-  return admission;
-}
-
 export {
-  RAFT_RS_INGRESS_OUTCOME,
-  RAFT_RS_INGRESS_REFUSAL,
   admitRaftRsMessage,
-  dispatchRaftRsMessage,
 };

@@ -21,7 +21,7 @@ import {
   fileDigest,
   raftRsBindingPaths,
   readArtifactDigest,
-} from '../../../src/raft/raft-rs-core.js';
+} from './raw-raft-rs-test-core.js';
 
 const LINE_SEPARATOR = '\n';
 const TEXT_ENCODING = 'utf8';

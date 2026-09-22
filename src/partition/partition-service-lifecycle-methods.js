@@ -9,6 +9,53 @@ const {
   PARTITION_SERVICE_TYPE,
 } = PARTITION_SERVICE_SHARED;
 
+function closePartitionConsensusResources(service) {
+  if (service.learnerPromotionTimer) {
+    clearTimeout(service.learnerPromotionTimer);
+    service.learnerPromotionTimer = null;
+  }
+  service.peerReconciliationScheduled = false;
+  if (service.systemTableCache &&
+      typeof service.systemTableCache.offCacheChange ===
+        PARTITION_SERVICE_TYPE.FUNCTION &&
+      service.systemTableCacheChangeListener) {
+    service.systemTableCache.offCacheChange(
+      service.systemTableCacheChangeListener);
+  }
+  if (service.raft) {
+    service.raft.close();
+    service.raft = null;
+  }
+  if (service.logAdapter) {
+    service.logAdapter.close();
+  }
+}
+
+function clearPartitionLifecycleListeners(service) {
+  if (typeof service.releaseMetadataPublicationReadinessListener ===
+      PARTITION_SERVICE_TYPE.FUNCTION) {
+    service.releaseMetadataPublicationReadinessListener();
+  }
+  if (service.cdcBufferReplayTimer) {
+    clearTimeout(service.cdcBufferReplayTimer);
+    service.cdcBufferReplayTimer = null;
+  }
+  service.cdcBufferReplayInFlight = false;
+  if (service.pendingRequestTracker) {
+    service.pendingRequestTracker.clear();
+  }
+}
+
+function closePartitionPersistenceResources(service) {
+  if (service.transport) {
+    service.transport.unregister(service.unifiedAddress);
+  }
+  if (service.db) {
+    service.db.close();
+    service.db = null;
+  }
+}
+
 class PartitionServiceLifecycleMethods {
   /**
    * Stop all rebalancing activity for this partition.
@@ -92,46 +139,14 @@ class PartitionServiceLifecycleMethods {
     // A tenure claim must not outlive its replica (see
     // clearLocalCanonicalLeaderClaimOnTeardown).
     this.clearLocalCanonicalLeaderClaimOnTeardown?.();
-    if (this.learnerPromotionTimer) {
-      clearTimeout(this.learnerPromotionTimer);
-      this.learnerPromotionTimer = null;
-    }
-    this.peerReconciliationScheduled = false;
-    if (
-      this.systemTableCache &&
-      typeof this.systemTableCache.offCacheChange ===
-        PARTITION_SERVICE_TYPE.FUNCTION &&
-      this.systemTableCacheChangeListener
-    ) {
-      this.systemTableCache.offCacheChange(this.systemTableCacheChangeListener);
-    }
-    if (this.logAdapter) {
-      this.logAdapter.close();
-    }
-    if (this.raft) {
-      this.raftProvider.shutdownNode(this.raft);
-      this.raft = null;
-    }
+    closePartitionConsensusResources(this);
     this.stopPeriodicSizeUpdates();
     this.stopPreparedStateHoldTimeoutSweep();
-    if (
-      typeof this.releaseMetadataPublicationReadinessListener ===
-      PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
-      this.releaseMetadataPublicationReadinessListener();
-    }
-    this.releaseMetadataPublicationReadinessListener = null;
-    this._metadataPublicationReadinessState = null;
     this.roleMutationHelper.shutdown();
     this.leaderNodeMutationHelper.shutdown();
-    if (this.cdcBufferReplayTimer) {
-      clearTimeout(this.cdcBufferReplayTimer);
-      this.cdcBufferReplayTimer = null;
-    }
-    this.cdcBufferReplayInFlight = false;
-    if (this.pendingRequestTracker) {
-      this.pendingRequestTracker.clear();
-    }
+    clearPartitionLifecycleListeners(this);
+    this.releaseMetadataPublicationReadinessListener = null;
+    this._metadataPublicationReadinessState = null;
     this.clearPendingCommittedWrites(
       PARTITION_SERVICE_LITERAL.PARTITION_SERVICE_SHUTDOWN,
     );
@@ -140,13 +155,7 @@ class PartitionServiceLifecycleMethods {
       await Promise.allSettled([...this.pendingCDCEventDeliveries]);
       this.pendingCDCEventDeliveries.clear();
     }
-    if (this.transport) {
-      this.transport.unregister(this.unifiedAddress);
-    }
-    if (this.db) {
-      this.db.close();
-      this.db = null;
-    }
+    closePartitionPersistenceResources(this);
     this.closeLeaderDurabilityFitnessWitness?.();
     this.initialized = false;
     this.cdcSubscribers.clear();

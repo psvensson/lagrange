@@ -39,9 +39,9 @@ const LEARNER_ID = '4';
 const CONF_CHANGE_AUTO_TRANSITION = 0;
 const REPOSITORY_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const RESTORE_MODULE = 'src/raft/raft-rs-group.js';
+const RESTORE_MODULE = 'src/raft/raft-rs-runtime-owner.js';
 const STORE_MODULE = 'src/raft/raft-rs-durable-store.js';
-const RESTORE_FUNCTION = 'restoreRaftRsGroup';
+const RESTORE_FUNCTION = 'createNodeArguments';
 const FORBIDDEN_SOURCE = /cache|service|system[-_]?table|registry|metadata/iu;
 const TEXT_ENCODING = 'utf8';
 const RELATIVE_PREFIX = '.';
@@ -112,8 +112,11 @@ function restoreParameterNames() {
     for (const parameter of node.params) {
       const pattern = parameter.type === 'AssignmentPattern' ?
         parameter.left : parameter;
-      assert.equal(pattern.type, 'ObjectPattern',
-        'the restore path takes one named bag of inputs');
+      if (pattern.type === 'Identifier') {
+        names.push(pattern.name);
+        continue;
+      }
+      assert.equal(pattern.type, 'ObjectPattern');
       for (const property of pattern.properties) {
         names.push(property.key?.name ?? property.argument?.name);
       }

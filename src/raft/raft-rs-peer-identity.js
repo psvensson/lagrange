@@ -19,13 +19,9 @@
 //                                  order over an array and keeps the result
 //                                  in memory only; that is exactly what is
 //                                  NOT reused here;
-//   never reassigned after retirement
-//                                  the retired replica's row stays. A retired
-//                                  identity still resolves to the replica
-//                                  that owned it, so it can never be handed
-//                                  to another one, and the refusal is read
-//                                  from the record rather than from a set a
-//                                  process happens to be holding;
+//   never reassigned              reservation rows are append-only. Lifecycle
+//                                  retirement is owned by the separate replica
+//                                  lifecycle module and never mutates this map;
 //   exact across the JavaScript boundary
 //                                  the identity is a BigInt from the digest's
 //                                  bytes and leaves as a decimal string. No
@@ -41,7 +37,6 @@ import {createHash} from 'node:crypto';
 
 import {
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
-  RAFT_RS_PEER_IDENTITY_RETIRED,
   RAFT_RS_PEER_IDENTITY_SQL,
 } from './raft-rs-peer-identity-constants.js';
 
@@ -107,8 +102,8 @@ class RaftRsPeerIdentityRegistry {
   /**
    * Reserve, or read back, this replica's raft-rs peer identity.
    *
-   * Registration is idempotent for a live replica and refused by name for a
-   * retired one: a replica that comes back is a new logical replica.
+   * Registration is idempotent. Lifecycle eligibility is deliberately not
+   * represented here: this module owns only the append-only identity map.
    * @param {string} replicaIdentity - The replica's own logical name.
    * @return {string} Its identity, as an exact decimal string.
    */
@@ -116,10 +111,6 @@ class RaftRsPeerIdentityRegistry {
     const derived = deriveRaftRsPeerId(replicaIdentity);
     const existing = this.reservationFor(replicaIdentity);
     if (existing !== undefined) {
-      if (existing.retired === RAFT_RS_PEER_IDENTITY_RETIRED.YES) {
-        throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.retired(
-          replicaIdentity, existing.raft_peer_id));
-      }
       return existing.raft_peer_id;
     }
     const holder = this.reservationOfPeerId(derived);
@@ -142,29 +133,13 @@ class RaftRsPeerIdentityRegistry {
   }
 
   /**
-   * The replica a raft peer identity belongs to, retired or not. A retired
-   * identity still resolves, which is what keeps it out of circulation.
+   * The replica a raft peer identity belongs to.
    * @param {string} raftPeerId - The identity.
    * @return {string|null} The replica, or null.
    */
   replicaIdentityOf(raftPeerId) {
     const reservation = this.reservationOfPeerId(raftPeerId);
     return reservation === undefined ? null : reservation.replica_identity;
-  }
-
-  /**
-   * Retire a replica. Its row stays, so its identity is reserved forever.
-   * @param {string} replicaIdentity - The replica.
-   * @return {string} The identity now retired.
-   */
-  retireReplica(replicaIdentity) {
-    const reservation = this.reservationFor(replicaIdentity);
-    if (reservation === undefined) {
-      throw new Error(
-        RAFT_RS_PEER_IDENTITY_ERROR_MSG.unknownReplica(replicaIdentity));
-    }
-    this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.RETIRE).run(replicaIdentity);
-    return reservation.raft_peer_id;
   }
 }
 

@@ -1,5 +1,4 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {readFollowerMatchIndex} from '../raft/liferaft.js';
 import {
   LEARNER_PROMOTION_PROOF_REASON,
   LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
@@ -96,15 +95,18 @@ class PartitionServiceLearnerPromotionProofMethods {
         {error: addressError.message},
       );
     }
-    const matchObservation = readFollowerMatchIndex(
-      this.raft,
-      learnerAddress,
-    );
+    const followerMatchIndex =
+      this.raft?.readStatus?.().followerProgress?.[learnerAddress];
+    const matchObservation = Object.freeze({
+      state: Number.isFinite(followerMatchIndex) ? 'available' : 'unavailable',
+      matchIndex: Number.isFinite(followerMatchIndex) ? followerMatchIndex : 0,
+    });
     const proof = evaluateLearnerPromotionProof({
       raftIsLeader:
-        this.isLeader === true && this.raft?.state === LifeRaft.LEADER,
+        this.isLeader === true &&
+          this.raft?.readStatus?.().role === LifeRaft.LEADER,
       currentTerm: this.resolveCurrentTermSafe(),
-      committedIndex: this.raftProvider.getCommittedIndex(this.raft),
+      committedIndex: this.raft.readStatus().commitIndex,
       learnerMatchIndex: matchObservation.matchIndex,
       leaderMembershipEpoch: this.resolveLearnerPromotionMembershipEpoch(),
       learnerMembershipEpoch: payload?.membershipEpoch,

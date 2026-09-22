@@ -24,8 +24,8 @@ import {
   RAFT_RS_CALL_OUTCOME,
   RAFT_RS_RUNTIME_HEALTH,
   RaftRsRuntimeHost,
-} from '../../../src/raft/raft-rs-runtime-health.js';
-import {instantiateRaftRsCore} from '../../../src/raft/raft-rs-core.js';
+} from './raw-raft-rs-test-runtime.js';
+import {instantiateRaftRsCore} from './raw-raft-rs-test-core.js';
 import {
   consensusMembership,
 } from '../../../src/raft/raft-rs-membership-projection.js';
@@ -155,7 +155,9 @@ test('a trap marks the runtime unhealthy and its groups restore', async () => {
       assert.equal(status.commit, durable.commit, `${peerId} commit`);
       assert.equal(status.applied, durable.appliedIndex, `${peerId} applied`);
       assert.deepEqual(
-        consensusMembership({core: host.core, handle}).voters, durable.voters,
+        consensusMembership({
+          confState: host.core.conf_state(handle),
+        }).voters, durable.voters,
         `${peerId} restored a configuration the record does not hold`);
     }
 

@@ -1261,6 +1261,16 @@ fn num_to_entry_type(n: u32) -> Result<EntryType, JsValue> {
     Ok(et)
 }
 
+#[derive(Serialize)]
+struct JsRefusal<'a> {
+    kind: &'static str,
+    message: &'a str,
+}
+
 fn jserr(msg: &str) -> JsValue {
-    JsValue::from_str(msg)
+    swb::to_value(&JsRefusal {
+        kind: "raft-rs-refusal",
+        message: msg,
+    })
+    .unwrap_or_else(|_| JsValue::from_str(msg))
 }

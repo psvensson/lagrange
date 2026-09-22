@@ -140,3 +140,7 @@ Each was found by driving the binding and is measured before and after:
    which is a valid request to LEAVE a joint configuration.
 3. **`pending_conf_index` crosses as a decimal string**, like every other
    sixty-four-bit value.
+4. **Recoverable binding errors cross as `{kind: "raft-rs-refusal", message}`.**
+   The runtime owner can therefore distinguish a returned raft-rs refusal
+   from a WASM trap at the invocation boundary without classifying a generic
+   JavaScript exception by type or message.

@@ -28,11 +28,6 @@ import {
 import {LiferaftProvider} from '../../../src/raft/liferaft-provider.js';
 import {RaftRsWasmProvider} from '../../../src/raft/raft-rs-provider.js';
 import {
-  RAFT_RS_PROVIDER_DEFERRED,
-  RAFT_RS_PROVIDER_METHOD,
-  RAFT_RS_PROVIDER_SERVED,
-} from '../../../src/raft/raft-rs-provider-constants.js';
-import {
   censusNames,
   deriveProductionRaftCallCensus,
 } from './production-raft-call-census.js';
@@ -158,36 +153,23 @@ test('the seam interface is the census of what production calls', async () => {
     assert.equal(typeof liferaft[name], 'function',
       `liferaft must serve ${name}, which production calls on the seam`);
   }
-  const served = new Set(RAFT_RS_PROVIDER_SERVED);
-  const deferred = new Set(Object.keys(RAFT_RS_PROVIDER_DEFERRED));
-  assert.deepEqual(
-    [...served].filter((name) => deferred.has(name)), [],
-    'a seam name is served or deferred, never both');
-  assert.deepEqual(
-    [...new Set([...served, ...deferred])].sort(),
-    census.providerMethods.slice().sort(),
-    'served and deferred must partition the census exactly: a seam name ' +
-    'that is in neither is a name the backend silently does not answer');
-  assert.deepEqual(
-    Object.values(RAFT_RS_PROVIDER_METHOD).slice().sort(),
-    census.providerMethods.slice().sort());
+  const raftRs = new RaftRsWasmProvider();
+  assert.equal(typeof raftRs.createPartitionPort, 'function');
+  assert.deepEqual(Reflect.ownKeys(raftRs), [],
+    'the experimental provider retains no implementation or group state');
 });
 
-test('every seam name the experimental backend defers refuses by name',
+test('the experimental partition seam does not recreate the legacy node facade',
   async () => {
     const provider = createRaftProvider({
       [RAFT_BACKEND_OPTION]: RAFT_BACKEND.RAFT_RS_WASM,
     });
-    for (const [name, reason] of Object.entries(RAFT_RS_PROVIDER_DEFERRED)) {
-      assert.equal(typeof provider[name], 'function',
-        `${name} must exist at the seam so a caller gets a typed refusal`);
-      assert.throws(() => provider[name](), (error) =>
-        error.message.includes(name) && error.message.includes(reason),
-      `${name} must refuse with the reason it is deferred`);
+    for (const name of censusNames(deriveProductionRaftCallCensus())
+      .providerMethods.filter((method) => method !== 'createPartitionPort')) {
+      assert.equal(typeof provider[name], 'undefined',
+        `${name} must not recreate a node/control facade on raft-rs`);
     }
-    for (const name of RAFT_RS_PROVIDER_SERVED) {
-      assert.equal(typeof provider[name], 'function');
-    }
+    assert.equal(typeof provider.createPartitionPort, 'function');
   });
 
 test('routing liferaft through the seam changes nothing liferaft does',

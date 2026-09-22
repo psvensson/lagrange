@@ -58,7 +58,8 @@ import {isRaftPacket} from '../raft/raft-packet-utils.js';
 import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
 import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
-import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';
+import {assertPartitionRaftProviderContract} from
+  '../raft/raft-provider-contract.js';
 import {LiferaftProvider} from '../raft/liferaft-provider.js';
 import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
 import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
@@ -360,7 +361,7 @@ export const PARTITION_SERVICE_SHARED = {
   WRITE_PHASE_FIELD_TOTAL_MS,
   applyRuntimeRaftTiming,
   assertCritical,
-  assertRaftProviderContract,
+  assertPartitionRaftProviderContract,
   attachTrafficReadinessListener,
   buildDurableCommitWitness,
   buildPartitionWriteEntry,

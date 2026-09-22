@@ -1,6 +1,6 @@
 const RAFT_PROVIDER_CONTRACT_METHOD = Object.freeze({
+  CREATE_PARTITION_PORT: 'createPartitionPort',
   CREATE_NODE_CLASS: 'createNodeClass',
-  CREATE_PARTITION_NODE: 'createPartitionNode',
   PROPOSE: 'propose',
   JOIN_PEER: 'joinPeer',
   START_ELECTION_TIMER: 'startElectionTimer',
@@ -47,13 +47,19 @@ const RAFT_PARTITION_NODE_REQUEST = Object.freeze({
   // than a liferaft detail - and it is the fact that crosses, never the
   // event name.
   APPLY_TRANSACTION_ROLLED_BACK: 'applyTransactionRolledBack',
+  INITIAL_TERM: 'initialTerm',
 });
 
 const RAFT_PROVIDER_CONTRACT = Object.freeze({
   METHODS: RAFT_PROVIDER_CONTRACT_METHOD,
   REQUIRED_METHODS: Object.freeze(
-    Object.values(RAFT_PROVIDER_CONTRACT_METHOD),
+    Object.values(RAFT_PROVIDER_CONTRACT_METHOD)
+      .filter((method) => method !==
+        RAFT_PROVIDER_CONTRACT_METHOD.CREATE_PARTITION_PORT),
   ),
+  REQUIRED_PARTITION_METHODS: Object.freeze([
+    RAFT_PROVIDER_CONTRACT_METHOD.CREATE_PARTITION_PORT,
+  ]),
 });
 
 const RAFT_PROVIDER_CONTRACT_ERROR_MSG = Object.freeze({

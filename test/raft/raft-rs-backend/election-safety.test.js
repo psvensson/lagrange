@@ -22,7 +22,7 @@ import {test} from 'node:test';
 import {
   instantiateRaftRsCore,
   raftRsBindingPaths,
-} from '../../../src/raft/raft-rs-core.js';
+} from './raw-raft-rs-test-core.js';
 import {
   RAFT_RS_CORE_PRIMITIVES,
 } from '../../../src/raft/raft-rs-core-constants.js';
@@ -30,15 +30,14 @@ import {
   RAFT_RS_ELECTION_REFUSAL,
   RAFT_RS_ELECTION_SETTING,
 } from '../../../src/raft/raft-rs-election-safety-constants.js';
+import LifeRaft from '../../../src/raft/liferaft.js';
 import {
-  campaignRaftRsPeer,
-  raftRsElectionAdmissibility,
   recommendedElectionSettings,
 } from '../../../src/raft/raft-rs-election-safety.js';
 import {
-  RAFT_RS_CORE_ROLE_STATE,
-  RAFT_RS_NODE_STATE,
-} from '../../../src/raft/raft-rs-node-constants.js';
+  campaignRaftRsPeer,
+  raftRsElectionAdmissibility,
+} from './raw-raft-rs-test-election.js';
 import {
   DeterministicRaftRsCluster,
 } from './deterministic-raft-rs-cluster.js';
@@ -46,6 +45,18 @@ import {
 // Where the binding is comes from the loader, which owns it; this file
 // never restates the vendored path.
 const BINDING_SOURCE = raftRsBindingPaths().forkSource;
+const RAFT_RS_NODE_STATE = Object.freeze({
+  LEADER: LifeRaft.LEADER,
+  CANDIDATE: LifeRaft.CANDIDATE,
+  FOLLOWER: LifeRaft.FOLLOWER,
+  PRE_CANDIDATE: 'raft-rs-pre-candidate',
+});
+const RAFT_RS_CORE_ROLE_STATE = Object.freeze({
+  0: RAFT_RS_NODE_STATE.FOLLOWER,
+  1: RAFT_RS_NODE_STATE.CANDIDATE,
+  2: RAFT_RS_NODE_STATE.LEADER,
+  3: RAFT_RS_NODE_STATE.PRE_CANDIDATE,
+});
 const CONF_CHANGE_ARMS =
   /fn num_to_conf_change_type[\s\S]*?match n \{([\s\S]*?)\n {4}\}/u;
 const ARM = /(\d+)\s*=>\s*Ok\(ConfChangeType::(\w+)\)/gu;

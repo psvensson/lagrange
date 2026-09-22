@@ -42,7 +42,7 @@ const {
   SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
   TABLES,
   TIMEOUT_BUDGET_DEFAULT,
-  assertRaftProviderContract,
+  assertPartitionRaftProviderContract,
   attachTrafficReadinessListener,
   createControlPlaneRuntimeBundle,
   getTrafficReadinessSnapshot,
@@ -100,7 +100,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     // backend (src/raft/raft-backend-selection.js). An absent selection is
     // the default, never a fallback.
     this.raftProvider = options.raftProvider || createRaftProvider(options);
-    assertRaftProviderContract(this.raftProvider);
+    assertPartitionRaftProviderContract(this.raftProvider);
     this.dbPath = options.dbPath || PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH;
     this.leaderAddressHint =
       typeof options.leaderAddress === 'string' &&
