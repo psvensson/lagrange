@@ -28,7 +28,7 @@
   "censusSize": 2154,
   "digest": "fnv1a32-aec6c8b0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4812a20b",
+  "observationDigest": "fnv1a32-ec3d851a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -6155,6 +6155,11 @@
       "files": [
         "examples/service-data-affinity/lagrange-loader.js",
         "src/partition/partition-split-merge-manager.js"
+      ]
+    },
+    "test/partition/raft-rs-transport-demux.test.js": {
+      "files": [
+        "test/partition/partition-service-test-support.js"
       ]
     },
     "test/partition/replica-operations-schema-migration.test.js": {
