@@ -8,7 +8,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import LifeRaft from '@markwylde/liferaft';
 import {
   PartitionService,
   PartitionState,
@@ -27,6 +26,9 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
 } from '../../src/raft/constants.js';
+import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
+import {RAFT_PARTITION_NODE_REQUEST} from
+  '../../src/raft/raft-provider-contract-constants.js';
 import {
   COLUMN,
   SERVICE_TYPE,
@@ -65,6 +67,44 @@ afterEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
+
+
+class RecordingOutboundLiferaftProvider extends LiferaftProvider {
+  constructor() {
+    super();
+    this.partitionRequest = null;
+  }
+
+  createPartitionPort(request) {
+    this.partitionRequest = request;
+    return super.createPartitionPort(request);
+  }
+
+  sendToPeer(peerAddress, packet) {
+    return this.partitionRequest[
+      RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER
+    ](peerAddress, packet);
+  }
+}
+
+class MissingCampaignLiferaftProvider extends LiferaftProvider {
+  createPartitionPort(request) {
+    const port = super.createPartitionPort(request);
+    const incomplete = Object.create(null);
+    for (const key of Reflect.ownKeys(port)) {
+      if (key === 'campaign') {
+        continue;
+      }
+      Object.defineProperty(incomplete, key, {
+        enumerable: true,
+        configurable: false,
+        writable: false,
+        value: port[key],
+      });
+    }
+    return Object.freeze(incomplete);
+  }
+}
 
 
 test('PartitionService - leader applyCommittedEntry must not raise unhandled rejection when CDC fails',
@@ -723,7 +763,7 @@ test('PartitionService - single replica becomes leader', async (t) => {
   t.equal(partition.isLeaderReplica(), true);
   t.equal(partition.getRole(), RaftRole.LEADER);
   t.equal(partition.getLeaderId(), 'replica-1');
-  t.equal(partition.raft.state, LifeRaft.LEADER);
+  t.equal(partition.raft.readStatus().role, RaftRole.LEADER);
 
   await partition.shutdown();
 });
@@ -831,6 +871,7 @@ test('PartitionService - non-critical Raft peer writes use background delivery',
       },
     };
 
+    const raftProvider = new RecordingOutboundLiferaftProvider();
     const partition = new PartitionService({
       partitionId: 'sql_transaction_participants-p1',
       tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
@@ -842,13 +883,15 @@ test('PartitionService - non-critical Raft peer writes use background delivery',
       peerAddresses: ['node-2/partition/sql_transaction_participants-p1-r4'],
       transport: mockTransport,
       dbPath: ':memory:',
+      raftProvider,
     });
 
     await partition.initialize();
 
     try {
-      await new Promise((resolve, reject) => {
-        partition.raft.nodes[0].write({
+      await raftProvider.sendToPeer(
+        'node-2/partition/sql_transaction_participants-p1-r4',
+        {
           type: 'append',
           term: 1,
           address: 'node-1/partition/sql_transaction_participants-p1-r1',
@@ -856,8 +899,8 @@ test('PartitionService - non-critical Raft peer writes use background delivery',
           state: 1,
           last: {term: 1, index: 1},
           data: [{index: 2, term: 1, command: 'noop'}],
-        }, (error) => error ? reject(error) : resolve());
-      });
+        },
+      );
 
       t.same(
         deliveries,
@@ -885,6 +928,7 @@ test('PartitionService - append-fail peer writes prefer target priority over ' +
     },
   };
 
+  const raftProvider = new RecordingOutboundLiferaftProvider();
   const partition = new PartitionService({
     partitionId: 'tbl-bench-p1',
     tableId: 'tbl-bench',
@@ -893,13 +937,15 @@ test('PartitionService - append-fail peer writes prefer target priority over ' +
     peerAddresses: ['node-2/partition/tbl-bench-p1-r2'],
     transport: mockTransport,
     dbPath: ':memory:',
+    raftProvider,
   });
 
   await partition.initialize();
 
   try {
-    await new Promise((resolve, reject) => {
-      partition.raft.nodes[0].write({
+    await raftProvider.sendToPeer(
+      'node-2/partition/tbl-bench-p1-r2',
+      {
         type: 'append fail',
         term: 1,
         address: 'node-1/partition/control_plane_publications-p1-r1',
@@ -907,8 +953,8 @@ test('PartitionService - append-fail peer writes prefer target priority over ' +
         state: 1,
         last: {term: 1, index: 1},
         data: {index: 2, term: 1},
-      }, (error) => error ? reject(error) : resolve());
-    });
+      },
+    );
 
     t.same(
       deliveries,
@@ -1256,7 +1302,7 @@ test('PartitionService - emits leaderElected event for single replica', async (t
   await partition.shutdown();
 });
 
-test('PartitionService - single-replica initialization fails closed without raft change()', async (t) => {
+test('PartitionService - single-replica initialization fails closed without raft campaign()', async (t) => {
   const partition = new PartitionService({
     partitionId: 'test-partition-20-missing-change',
     tableId: 'leader_event_test',
@@ -1264,22 +1310,14 @@ test('PartitionService - single-replica initialization fails closed without raft
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
+    raftProvider: new MissingCampaignLiferaftProvider(),
   });
-  const originalMaybeInitializeRebalancer =
-    partition.maybeInitializeRebalancer.bind(partition);
-  partition.maybeInitializeRebalancer = function(...args) {
-    const result = originalMaybeInitializeRebalancer(...args);
-    if (this.raft) {
-      this.raft.change = undefined;
-    }
-    return result;
-  };
 
   try {
     await t.rejects(
       partition.initialize(),
-      /single-replica leadership requires raft\.change/,
-      'single-replica initialization should fail instead of mutating local leader state without raft ownership',
+      /single-replica leadership requires raft\.campaign/,
+      'single-replica initialization should fail when the semantic campaign capability is absent',
     );
   } finally {
     await partition.shutdown().catch(() => {});
