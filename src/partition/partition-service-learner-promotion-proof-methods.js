@@ -22,8 +22,6 @@ const {
   STRING,
 } = PARTITION_SERVICE_SHARED;
 
-// An empty raft log reports no last index; the probe has nothing to re-send.
-const LEARNER_PROMOTION_PROBE_EMPTY_LOG_INDEX = 0;
 const PROTOTYPE_CONSTRUCTOR_NAME = 'constructor';
 
 /**
@@ -161,24 +159,11 @@ class PartitionServiceLearnerPromotionProofMethods {
    * @private
    */
   async probeLearnerReplicationProgress(learnerAddress) {
-    const raft = this.raft;
-    if (!raft?.log) {
+    if (typeof this.raft?.probePeerProgress !== PARTITION_SERVICE_LITERAL.FUNCTION) {
       return;
     }
     try {
-      const lastInfo = await raft.log.getLastInfo();
-      const lastIndex = Number.isInteger(lastInfo?.index) ?
-        lastInfo.index :
-        LEARNER_PROMOTION_PROBE_EMPTY_LOG_INDEX;
-      if (lastIndex <= LEARNER_PROMOTION_PROBE_EMPTY_LOG_INDEX) {
-        return;
-      }
-      const lastEntry = await raft.log.get(lastIndex);
-      if (!lastEntry) {
-        return;
-      }
-      const probePacket = await raft.appendPacket(lastEntry);
-      raft.message(learnerAddress, probePacket);
+      await Promise.resolve(this.raft.probePeerProgress(learnerAddress));
     } catch (probeError) {
       this.logger.debug(
         PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_PROGRESS_PROBE_FAILED,
@@ -191,6 +176,7 @@ class PartitionServiceLearnerPromotionProofMethods {
       );
     }
   }
+
   /**
    * Learner-side proof request to the discovered leader. Any transport or
    * response-shape failure returns a typed refused proof with a typed
