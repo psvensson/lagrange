@@ -659,17 +659,15 @@ test('PartitionService rejects multi-replica leader writes when Raft is not lead
       proposeCalled = true;
     });
 
-    const result = await partition.insertData('test_table', {
-      id: 'row-2',
-      value: 'value-2',
-    });
-
-    t.equal(result.success, false, 'write should fail until raft leadership is active');
-    t.equal(
-      result.error,
-      'No leader available for write operation',
-      'failure should surface the canonical leader-unavailable error',
+    await t.rejects(
+      partition.insertData('test_table', {
+        id: 'row-2',
+        value: 'value-2',
+      }),
+      /No leader available for write operation/,
+      'write should reject until raft leadership is active',
     );
+
     t.equal(
       proposeCalled,
       false,
