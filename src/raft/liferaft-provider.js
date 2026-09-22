@@ -91,11 +91,10 @@ function shouldProposeLocally(raftNode, options = {}) {
     return options.shouldProposeLocally() === true &&
       hasCommandApi(raftNode);
   }
-  return Boolean(
-    raftNode &&
-    (raftNode.readStatus?.().role || raftNode.state) === LifeRaft.LEADER &&
-    hasCommandApi(raftNode),
-  );
+  const semanticRole = raftNode?.readStatus?.().role;
+  const leader = semanticRole === RAFT_ROLE.LEADER ||
+    raftNode?.state === LifeRaft.LEADER;
+  return Boolean(raftNode && leader && hasCommandApi(raftNode));
 }
 
 function resolveRouteMode(raftNode, options = {}) {
