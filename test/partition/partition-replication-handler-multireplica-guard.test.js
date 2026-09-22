@@ -19,7 +19,9 @@ function createHandler({replicaIds, raftNodes}) {
     logger: {info() {}, warn() {}, error() {}, debug() {}},
   });
   handler.replicaIds = replicaIds;
-  handler.raft = raftNodes === null ? null : {nodes: raftNodes};
+  handler.raft = raftNodes === null ? null : {
+    readStatus: () => ({peerCount: raftNodes.length}),
+  };
   return handler;
 }
 
