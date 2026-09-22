@@ -39,6 +39,8 @@ const LANDING_MARKER_ENV = 'LAGRANGE_SOLVER_LANDING';
 const LANDING_MARKER_VALUE = '1';
 const NPM = 'npm';
 const NPM_TEST_ARGUMENTS = Object.freeze(['test']);
+const TEST_METADATA_REFRESH_ARGUMENTS =
+  Object.freeze(['run', '-s', 'test:metadata:refresh']);
 // The change proof's base. Landing proves the tree that will be committed,
 // and that tree differs from HEAD by exactly the staged quest scope, so HEAD
 // is the base that names the quest delta. The publication merge-base is the
@@ -56,6 +58,9 @@ const PRIORITY_INVENTORY_PRODUCER = 'scripts/generate-priority-recovery-owner-in
 const GENERATED_INVENTORY_PATHS = Object.freeze([
   'solve/changes/global-owner-debt-inventory/inventory.json',
   'solve/changes/priority-recovery-owner-inventory/inventory.json',
+  'test/shards/primary-classes.json',
+  'test/shards/resource-classes.json',
+  'test/shards/subsystem-classes.json',
   'test/shards/impact-graph-seal.json',
 ]);
 const SPAWN_MAX_BUFFER = 64 * 1024 * 1024;
@@ -319,6 +324,11 @@ function refreshInventories(root) {
   const priority = spawnSync(process.execPath, [PRIORITY_INVENTORY_PRODUCER],
     {cwd: root, encoding: TEXT_ENCODING, maxBuffer: SPAWN_MAX_BUFFER});
   if (priority.status !== 0) refuse(`priority inventory failed: ${priority.stderr}`);
+  const testMetadata = spawnSync(NPM, TEST_METADATA_REFRESH_ARGUMENTS,
+    {cwd: root, encoding: TEXT_ENCODING, maxBuffer: SPAWN_MAX_BUFFER});
+  if (testMetadata.status !== 0) {
+    refuse(`test metadata refresh failed: ${testMetadata.stderr}`);
+  }
 }
 
 // The environment the landing proof runs under: the caller's, with the
