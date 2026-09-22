@@ -1,102 +1,91 @@
 {
   "schema": "test-receipt/1",
   "quest": "raft-rs-operation-port-boundary",
-  "status": "fail",
+  "status": "pass",
   "testFileDigests": {
-    "test/raft/raft-rs-backend/operation-port-boundary.test.js": "b3a4e7d7e1a303da195ef3808d84b8605216cd8e9b3d31977aeaee8315b3df43",
-    "test/raft/raft-rs-backend/operation-port-lifecycle.test.js": null,
-    "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js": null,
-    "test/raft/raft-rs-backend/operation-port-provenance.test.js": null,
-    "test/raft/raft-rs-backend/operation-port-regression.test.js": null
+    "test/raft/raft-rs-backend/operation-port-boundary.test.js": "f13595bbf9556955a491606eb293e2ac0c9939230f39921357cd212e3e0617ad",
+    "test/raft/raft-rs-backend/operation-port-lifecycle.test.js": "5465cc2f45fdc035d58ba3f2aded9270d953e28efbdaaa4e53ce2a53a51d7513",
+    "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js": "bda5c43ee719183a985d054d48818166adc9370041433a0f70fbbfd4895e22d1",
+    "test/raft/raft-rs-backend/operation-port-provenance.test.js": "60db38ea7fb81b9bdaeaea6be06145932d699e4b60d328ee1531d7c31d5efcc6",
+    "test/raft/raft-rs-backend/operation-port-regression.test.js": "938bee03e5f776d36410d961c6fc82b76fcff16e5a91318d946374da3aa0f21a"
   },
-  "generatedAt": "2026-09-21T16:34:35.373Z",
+  "generatedAt": "2026-09-22T10:57:04.615Z",
   "receipts": [
     {
       "id": "partition-receives-frozen-operation-port-only",
-      "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the partition receives only a frozen operation port and immutable snapshots$\" test/raft/raft-rs-backend/operation-port-boundary.test.js",
+      "passed": true,
+      "command": "/opt/hostedtoolcache/node/22.23.2/x64/bin/node --test-reporter=tap --test-name-pattern=\"^the partition receives only a frozen operation port and immutable snapshots$\" test/raft/raft-rs-backend/operation-port-boundary.test.js",
       "detail": "Measured by ^the partition receives only a frozen operation port and immutable snapshots$",
-      "failure": "1 test(s) failed",
       "testFile": "test/raft/raft-rs-backend/operation-port-boundary.test.js"
     },
     {
       "id": "one-private-runtime-owner-controls-all-binding-entry",
-      "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^one private runtime owner is the only production binding importer$\" test/raft/raft-rs-backend/operation-port-boundary.test.js",
+      "passed": true,
+      "command": "/opt/hostedtoolcache/node/22.23.2/x64/bin/node --test-reporter=tap --test-name-pattern=\"^one private runtime owner is the only production binding importer$\" test/raft/raft-rs-backend/operation-port-boundary.test.js",
       "detail": "Measured by ^one private runtime owner is the only production binding importer$",
-      "failure": "1 test(s) failed",
       "testFile": "test/raft/raft-rs-backend/operation-port-boundary.test.js"
     },
     {
       "id": "one-lifecycle-owner-controls-retirement-writes",
-      "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^retirement has one production writer and no provider control accessor$\" test/raft/raft-rs-backend/operation-port-boundary.test.js",
+      "passed": true,
+      "command": "/opt/hostedtoolcache/node/22.23.2/x64/bin/node --test-reporter=tap --test-name-pattern=\"^retirement has one production writer and no provider control accessor$\" test/raft/raft-rs-backend/operation-port-boundary.test.js",
       "detail": "Measured by ^retirement has one production writer and no provider control accessor$",
-      "failure": "1 test(s) failed",
       "testFile": "test/raft/raft-rs-backend/operation-port-boundary.test.js"
     },
     {
       "id": "actual-core-entry-counter-catches-ungated-entry",
-      "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the core-entry instrument counts every binding call and catches an ungated mutant$\" test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+      "passed": true,
+      "command": "/opt/hostedtoolcache/node/22.23.2/x64/bin/node --test-reporter=tap --test-name-pattern=\"^the core-entry instrument counts every binding call and catches an ungated mutant$\" test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
       "detail": "Measured by ^the core-entry instrument counts every binding call and catches an ungated mutant$",
-      "failure": "the pattern selected zero tests",
       "testFile": "test/raft/raft-rs-backend/operation-port-lifecycle.test.js"
     },
     {
       "id": "retirement-is-terminal-before-core-entry-after-restart",
-      "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^durable retirement refuses every active operation before core entry after restart$\" test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+      "passed": true,
+      "command": "/opt/hostedtoolcache/node/22.23.2/x64/bin/node --test-reporter=tap --test-name-pattern=\"^durable retirement refuses every active operation before core entry after restart$\" test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
       "detail": "Measured by ^durable retirement refuses every active operation before core entry after restart$",
-      "failure": "the pattern selected zero tests",
       "testFile": "test/raft/raft-rs-backend/operation-port-lifecycle.test.js"
     },
     {
       "id": "ready-host-failures-reconstruct-before-next-core-entry",
-      "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every Ready host failure reconstructs the group before another core operation$\" test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "passed": true,
+      "command": "/opt/hostedtoolcache/node/22.23.2/x64/bin/node --test-reporter=tap --test-name-pattern=\"^every Ready host failure reconstructs the group before another core operation$\" test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
       "detail": "Measured by ^every Ready host failure reconstructs the group before another core operation$",
-      "failure": "the pattern selected zero tests",
       "testFile": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js"
     },
     {
       "id": "application-effects-and-applied-progress-are-atomic",
-      "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^application effects and durable applied progress commit atomically$\" test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "passed": true,
+      "command": "/opt/hostedtoolcache/node/22.23.2/x64/bin/node --test-reporter=tap --test-name-pattern=\"^application effects and durable applied progress commit atomically$\" test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
       "detail": "Measured by ^application effects and durable applied progress commit atomically$",
-      "failure": "the pattern selected zero tests",
       "testFile": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js"
     },
     {
       "id": "trap-and-temporary-unavailability-preserve-identity",
-      "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^runtime traps and temporary host unavailability preserve logical identity$\" test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "passed": true,
+      "command": "/opt/hostedtoolcache/node/22.23.2/x64/bin/node --test-reporter=tap --test-name-pattern=\"^runtime traps and temporary host unavailability preserve logical identity$\" test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
       "detail": "Measured by ^runtime traps and temporary host unavailability preserve logical identity$",
-      "failure": "the pattern selected zero tests",
       "testFile": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js"
     },
     {
       "id": "failure-origin-is-provenance-by-construction",
-      "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^core and host outcomes are separated by execution provenance$\" test/raft/raft-rs-backend/operation-port-provenance.test.js",
+      "passed": true,
+      "command": "/opt/hostedtoolcache/node/22.23.2/x64/bin/node --test-reporter=tap --test-name-pattern=\"^core and host outcomes are separated by execution provenance$\" test/raft/raft-rs-backend/operation-port-provenance.test.js",
       "detail": "Measured by ^core and host outcomes are separated by execution provenance$",
-      "failure": "the pattern selected zero tests",
       "testFile": "test/raft/raft-rs-backend/operation-port-provenance.test.js"
     },
     {
       "id": "public-capability-inventory-decreases",
-      "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the operation boundary removes public capability instead of renaming it$\" test/raft/raft-rs-backend/operation-port-boundary.test.js",
+      "passed": true,
+      "command": "/opt/hostedtoolcache/node/22.23.2/x64/bin/node --test-reporter=tap --test-name-pattern=\"^the operation boundary removes public capability instead of renaming it$\" test/raft/raft-rs-backend/operation-port-boundary.test.js",
       "detail": "Measured by ^the operation boundary removes public capability instead of renaming it$",
-      "failure": "1 test(s) failed",
       "testFile": "test/raft/raft-rs-backend/operation-port-boundary.test.js"
     },
     {
       "id": "phases-one-through-five-remain-green-and-transport-stays-blocked",
-      "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the verified integration remains green while transport has no raft-rs node access$\" test/raft/raft-rs-backend/operation-port-regression.test.js",
+      "passed": true,
+      "command": "/opt/hostedtoolcache/node/22.23.2/x64/bin/node --test-reporter=tap --test-name-pattern=\"^the verified integration remains green while transport has no raft-rs node access$\" test/raft/raft-rs-backend/operation-port-regression.test.js",
       "detail": "Measured by ^the verified integration remains green while transport has no raft-rs node access$",
-      "failure": "the pattern selected zero tests",
       "testFile": "test/raft/raft-rs-backend/operation-port-regression.test.js"
     }
   ]
