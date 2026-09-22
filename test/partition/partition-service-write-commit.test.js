@@ -6,12 +6,8 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {
-  createRaftOperationPort,
-  deepFreeze,
-} from '../../src/raft/raft-operation-port.js';
-import {RAFT_OPERATION_OUTCOME} from
-  '../../src/raft/raft-operation-port-constants.js';
+import {ControllablePartitionRaftProvider} from
+  './partition-service-test-support.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {
   PARTITION_SERVICE_EVENT,
@@ -21,74 +17,6 @@ import {
 const RAFT_COMMIT_APPLY_EFFECT_FAILURE_EVENT =
   'commit apply effect failure';
 
-
-function coreOk(fields = {}) {
-  return deepFreeze({
-    outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
-    ...fields,
-  });
-}
-
-class ControllablePartitionRaftProvider {
-  constructor() {
-    this.role = RAFT_ROLE.FOLLOWER;
-    this.term = 1;
-    this.leaderId = null;
-    this.request = null;
-    this.proposeHandler = null;
-    this.listeners = new Map();
-  }
-
-  createPartitionPort(request) {
-    this.request = request;
-    const subscribe = (eventName, listener) => {
-      const listeners = this.listeners.get(eventName) || new Set();
-      listeners.add(listener);
-      this.listeners.set(eventName, listeners);
-      return Object.freeze(() => listeners.delete(listener));
-    };
-    return createRaftOperationPort({
-      subscribe,
-      step: () => coreOk(),
-      propose: async (entry) => {
-        const result = this.proposeHandler ?
-          await this.proposeHandler(entry) :
-          null;
-        return result?.outcome ? result : coreOk();
-      },
-      proposeConfChange: () => coreOk(),
-      tick: () => coreOk(),
-      campaign: () => {
-        this.setRole(RAFT_ROLE.LEADER);
-        return coreOk();
-      },
-      readStatus: () => deepFreeze({
-        term: this.term,
-        commitIndex: 0,
-        role: this.role,
-        leaderId: this.leaderId,
-        peerCount: Math.max(0, (request.bootstrapPeerIds?.length || 1) - 1),
-        peers: [],
-      }),
-      configureTick: () => coreOk(),
-      startScheduling: () => coreOk(),
-      stopScheduling: () => coreOk(),
-      close: () => coreOk(),
-    });
-  }
-
-  setRole(role) {
-    this.role = role;
-    this.leaderId = role === RAFT_ROLE.LEADER ? this.request?.peerId || null : null;
-    for (const listener of this.listeners.get(role) || []) {
-      listener();
-    }
-  }
-
-  setProposeHandler(handler) {
-    this.proposeHandler = handler;
-  }
-}
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
