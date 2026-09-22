@@ -70,6 +70,9 @@ done
 # helper edits must refresh the subsystem observation census too.
 for f in "${STAGED_METADATA[@]}"; do
   case "$f" in
+    src/*|scripts/*|test/*) REGEN_INVENTORIES=1 ;;
+  esac
+  case "$f" in
     test/*|scripts/*) REGEN_TEST_METADATA=1 ;;
   esac
 done
