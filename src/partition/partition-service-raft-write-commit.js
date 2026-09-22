@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
 
 const {
   PARTITION_SERVICE_ERROR_MSG,
@@ -34,7 +35,7 @@ async function executePartitionRaftWriteCommit(service, options) {
   commitPromise.catch(() => {});
   const raftCommandDispatchStartMs = service.timeSource.now();
   try {
-    await service.raftProvider.propose(service.raft, entry);
+    assertRaftOperationSucceeded(await service.raft.propose(entry));
   } catch (error) {
     service.rejectCommittedWrite(entry.entryId, error);
     service.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {

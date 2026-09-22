@@ -1,4 +1,10 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {
+  RAFT_MEMBERSHIP_OPERATION,
+  RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
+} from '../raft/raft-operation-port-constants.js';
+import {reservePartitionRaftPeerIdentity} from
+  './partition-service-raft-membership-administration.js';
 
 const {
   AddressManager,
@@ -12,7 +18,7 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 function resolveLiveRaftLeaderAddressForPeer(partitionService, peerId) {
-  const leaderAddress = partitionService.raft?.leader;
+  const leaderAddress = partitionService.raft?.readStatus?.().leaderAddress;
   if (
     typeof peerId !== 'string' ||
     peerId.length === 0 ||
@@ -151,17 +157,20 @@ function retireMatchingRaftAddresses(
   if (!addressMatchesReplica(addressManager, serviceAddress, replicaId)) {
     return null;
   }
-  const raftNodes = Array.isArray(partitionService.raft.nodes) ?
-    [...partitionService.raft.nodes] :
-    [];
+  const raftNodes = partitionService.raft?.readStatus?.().peers || [];
   const retiredAddresses = new Set(
     raftNodes
       .map((node) => node?.address)
       .filter((address) => address === serviceAddress),
   );
-  if (typeof partitionService.raft.leave === PARTITION_SERVICE_TYPE.FUNCTION) {
+  if (typeof partitionService.raft?.proposeConfChange ===
+      PARTITION_SERVICE_TYPE.FUNCTION) {
     for (const address of retiredAddresses) {
-      partitionService.raft.leave(address);
+      partitionService.raft.proposeConfChange({
+        type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
+        peerAddress: address,
+        replicaIdentity: replicaId,
+      });
     }
   }
   return retiredAddresses;
@@ -228,6 +237,49 @@ function retireRaftPeerFromAuthoritativeServiceChange(
   return true;
 }
 
+function reconcileExpectedRaftPeer({
+  partitionService,
+  addressManager,
+  currentNodes,
+  currentAddresses,
+  replicaId,
+  expectedAddress,
+}) {
+  const staleAddresses = findStaleAddressesForReplica(
+    addressManager,
+    currentNodes,
+    replicaId,
+    expectedAddress,
+  );
+  if (typeof partitionService.raft?.proposeConfChange ===
+      PARTITION_SERVICE_TYPE.FUNCTION) {
+    for (const staleAddress of staleAddresses) {
+      partitionService.raft.proposeConfChange({
+        type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
+        peerAddress: staleAddress,
+      });
+      currentAddresses.delete(staleAddress);
+    }
+  }
+  if (currentAddresses.has(expectedAddress)) {
+    return;
+  }
+  const reservation = reservePartitionRaftPeerIdentity(
+    partitionService, replicaId);
+  if (reservation.outcome !==
+      RAFT_MEMBERSHIP_RESERVATION_OUTCOME.RESERVED &&
+      reservation.outcome !==
+      RAFT_MEMBERSHIP_RESERVATION_OUTCOME.NOT_MANAGED) {
+    return;
+  }
+  partitionService.raft.proposeConfChange({
+    type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
+    peerAddress: expectedAddress,
+    replicaIdentity: replicaId,
+  });
+  currentAddresses.add(expectedAddress);
+}
+
 function reconcileRaftPeersFromCacheForService(partitionService) {
   if (
     !partitionService.raft ||
@@ -269,9 +321,7 @@ function reconcileRaftPeersFromCacheForService(partitionService) {
       partitionService.replicaIds.push(replicaId);
     }
   }
-  const currentNodes = Array.isArray(partitionService.raft.nodes) ?
-    [...partitionService.raft.nodes] :
-    [];
+  const currentNodes = partitionService.raft?.readStatus?.().peers || [];
   const currentAddresses = new Set(
     currentNodes
       .map((node) => node?.address)
@@ -283,25 +333,14 @@ function reconcileRaftPeersFromCacheForService(partitionService) {
     replicaId,
     expectedAddress,
   ] of expectedAddressesByReplicaId.entries()) {
-    const staleAddresses = findStaleAddressesForReplica(
+    reconcileExpectedRaftPeer({
+      partitionService,
       addressManager,
       currentNodes,
+      currentAddresses,
       replicaId,
       expectedAddress,
-    );
-    if (typeof partitionService.raft.leave === PARTITION_SERVICE_TYPE.FUNCTION) {
-      for (const staleAddress of staleAddresses) {
-        partitionService.raft.leave(staleAddress);
-        currentAddresses.delete(staleAddress);
-      }
-    }
-    if (!currentAddresses.has(expectedAddress)) {
-      partitionService.raftProvider.joinPeer(
-        partitionService.raft,
-        expectedAddress,
-      );
-      currentAddresses.add(expectedAddress);
-    }
+    });
   }
 }
 

@@ -5,7 +5,6 @@
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import LifeRaft from '@markwylde/liferaft';
 import {
   checkLearnerPromotionWithGrantedProof,
   createLoopbackTransport,
@@ -133,8 +132,8 @@ test(
       await joiner.initialize();
 
       t.equal(
-        leader.raft.state,
-        LifeRaft.LEADER,
+        leader.raft.readStatus().role,
+        RaftRole.LEADER,
         'single-replica owner should become a real raft leader before expansion',
       );
 
@@ -148,8 +147,8 @@ test(
       });
 
       const peerJoined = await waitForCondition(
-        () => leader.raft.nodes.some(
-          (node) => node?.address === 'node-2/partition/replica-2',
+        () => leader.raft.readStatus().peers.some(
+          (peer) => peer?.address === 'node-2/partition/replica-2',
         ),
         1000,
         10,
@@ -171,8 +170,8 @@ test(
         'joiner should remain follower after promotion when leader heartbeats are active',
       );
       t.equal(
-        joiner.raft.state,
-        LifeRaft.FOLLOWER,
+        joiner.raft.readStatus().role,
+        RaftRole.FOLLOWER,
         'joiner raft state should stay follower instead of drifting to candidate',
       );
       t.equal(

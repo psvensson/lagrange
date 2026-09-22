@@ -1,0 +1,83 @@
+{
+  "schema": "solve-quest/2",
+  "id": "raft-rs-operation-port-boundary",
+  "class": "product",
+  "epic": "formation-seed-decoupling",
+  "statement": "Starting from the independently verified phases-1-through-5 raft-rs integration at fe6e04c3d, replace the rejected public Raft/node/control object boundary with an operation-only partition port. Callers may invoke measured semantic operations and read immutable snapshots by value, but cannot obtain or traverse a RawNode, raft-rs facade, handle, runtime host, group object, lifecycle decision input, durable lifecycle record, SQLite connection, mutable lifecycle state, or provider control. One private runtime owner is the sole production importer and invoker of the raft-rs binding; every actual core entry is counted at that lowest common invocation boundary and follows the private durable lifecycle eligibility owner. One lifecycle owner is the sole production writer of durable replica retirement, lifecycle administration is a separate command surface, and partitionControlOf or any replacement control accessor is absent. Logical retirement, group/runtime health, and host-operation failure remain independent; provenance is constructed as host preparation, private core result, then host persistence/send/apply. A host failure during an in-progress Ready cycle marks only that group recovery-required, and no subsequent operation enters its stale RawNode before reconstruction from coherent durable state. Persistence, send, address-resolution, and application failures each prove reconstruction under the same logical replica and peer identity without retirement or shared-runtime poisoning; a genuine core fatal likewise preserves logical identity across runtime reconstruction. Retirement remains terminal across restart even when stale ConfState contains self: every public active operation refuses before core entry, the core-entry count stays zero, no messages or term disturbance occur, and a deliberate lifecycle-owner bypass restores the old disruptive behavior. The real SQLite transaction boundary proves application effects and durable applied progress cannot split. A mechanical before/after inventory must show that the redesign removes more public capability than it adds, and transport remains blocked until an independent verifier approves the structural boundary.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/raft-rs-operation-port-boundary/evidence/receipt.json",
+      "requiredReceipts": [
+        "partition-receives-frozen-operation-port-only",
+        "one-private-runtime-owner-controls-all-binding-entry",
+        "one-lifecycle-owner-controls-retirement-writes",
+        "actual-core-entry-counter-catches-ungated-entry",
+        "retirement-is-terminal-before-core-entry-after-restart",
+        "ready-host-failures-reconstruct-before-next-core-entry",
+        "application-effects-and-applied-progress-are-atomic",
+        "trap-and-temporary-unavailability-preserve-identity",
+        "failure-origin-is-provenance-by-construction",
+        "public-capability-inventory-decreases",
+        "phases-one-through-five-remain-green-and-transport-stays-blocked"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "verified-base-not-rejected-design",
+      "statement": "The architectural base is the independently verified phases-1-through-5 integration at fe6e04c3d. The rejected runtime-boundaries branch is an implementation/evidence donor only and is never an architectural dependency."
+    },
+    {
+      "id": "no-public-implementation-graph",
+      "statement": "The partition data-plane receives frozen bound operations and immutable snapshots by value. No public/importable production result exposes a RawNode, facade, handle, runtime host, group/control object, SQLite connection, lifecycle record, mutable lifecycle state, or callback accepting arbitrary core work."
+    },
+    {
+      "id": "one-private-core-owner",
+      "statement": "Exactly one private production runtime-owner module imports or invokes the raft-rs binding. Every actual core call increments one method-agnostic counter immediately around the binding call and passes the private lifecycle eligibility owner first."
+    },
+    {
+      "id": "one-private-lifecycle-owner",
+      "statement": "Exactly one production module writes durable Raft replica retirement. Retirement is a semantic administrative command imported only by its approved lifecycle owner; partitionControlOf and equivalent live-record or mutable-control accessors do not exist."
+    },
+    {
+      "id": "three-independent-failure-domains",
+      "statement": "Logical lifecycle active|retired, group/runtime health, and host-operation outcomes are independent. Host failures never retire a logical replica or poison the shared runtime; core fatals never durably retire or mint a replacement identity."
+    },
+    {
+      "id": "provenance-not-exception-classification",
+      "statement": "Host preparation precedes a private binding invocation returning CORE_OK, CORE_REFUSED, or CORE_FATAL; host persistence, send, address resolution, and application follow it and produce HOST_FAILURE. Generic exception type is never used to infer host-versus-core origin."
+    },
+    {
+      "id": "ready-failure-reconstructs",
+      "statement": "Any host failure after Ready is taken invalidates only that group execution instance. Before a later operation invokes the core for that group, it reconstructs from its own coherent durable state; it never calls advance merely to clear a failed cycle and never re-enters the stale RawNode."
+    },
+    {
+      "id": "atomic-application-progress",
+      "statement": "Raft commit persistence, ConfState/applied progress coherence, and application effects/applied progress atomicity are proved on the real SQLite transaction boundary so replay cannot unsafely duplicate application effects."
+    },
+    {
+      "id": "retirement-terminal-zero-entry",
+      "statement": "After durable retirement and reconstruction with stale self-containing ConfState, every publicly reachable active operation refuses before core entry; the actual-core-entry counter remains zero, no packet is emitted, and no term changes. A lifecycle-owner bypass mutant must restore disruption."
+    },
+    {
+      "id": "no-transport",
+      "statement": "raft-rs-partition-transport-demux remains blocked. This quest changes no transport routing; future transport may receive only step(validatedEnvelope), and scheduling only tick()."
+    },
+    {
+      "id": "complexity-decreases",
+      "statement": "A mechanical before/after inventory counts public methods, data properties, mutable values, core-access paths, lifecycle mutation paths, SQLite handles, provider/control accessors, and runtime object types. The redesign removes more public capability than it adds and does not recreate a large facade."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "Source changes require category-complete independent adversarial verification of admission-gating, recovery-replay, harness-fidelity, and owner-interaction boundaries before landing."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "recovery-replay",
+    "harness-fidelity",
+    "owner-interaction"
+  ],
+  "sealedAt": "fe6e04c3d2aa74d2402484daed3b2f1536331786"
+}

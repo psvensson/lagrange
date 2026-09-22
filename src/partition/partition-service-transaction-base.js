@@ -3,10 +3,10 @@ import {PartitionServiceEntryApplyBase} from './partition-service-entry-apply-ba
 import {
   trackStuckTransactionHeal,
 } from '../diagnostics/raft-churn-sync-sections.js';
+import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
 
 
 const {
-  LifeRaft,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
@@ -465,9 +465,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
    * @private
    */
   isSoloReplicaGroup() {
-    const peerCount = Array.isArray(this.raft?.nodes) ?
-      this.raft.nodes.length :
-      0;
+    const peerCount = this.raft?.readStatus?.().peerCount || 0;
     return (
       (!Array.isArray(this.replicaIds) || this.replicaIds.length <= 1) &&
       peerCount === 0
@@ -919,16 +917,18 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       proposedAt: Date.now(),
     };
     const logEntry = this.storage.appendEntry(entry);
-    const isLiferaftLeader = this.raft && this.raft.state === LifeRaft.LEADER;
+    const isLiferaftLeader = this.raft?.readStatus?.().role === RaftRole.LEADER;
     if (isLiferaftLeader) {
-      this.raftProvider.propose(this.raft, entry, (err) => {
-        if (err) {
-          this.logger.debug(
-            PARTITION_SERVICE_ERROR_MSG.TRANSACTION_COMMIT_RAFT_FAILED,
-            {partitionId: this.partitionId, error: err.message},
-          );
-        }
-      });
+      Promise.resolve(this.raft.propose(entry))
+        .then(assertRaftOperationSucceeded)
+        .catch((err) => {
+          if (err) {
+            this.logger.debug(
+              PARTITION_SERVICE_ERROR_MSG.TRANSACTION_COMMIT_RAFT_FAILED,
+              {partitionId: this.partitionId, error: err.message},
+            );
+          }
+        });
     }
     return logEntry;
   }
@@ -953,16 +953,18 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       proposedAt: Date.now(),
     };
     const logEntry = this.storage.appendEntry(entry);
-    const isLiferaftLeader = this.raft && this.raft.state === LifeRaft.LEADER;
+    const isLiferaftLeader = this.raft?.readStatus?.().role === RaftRole.LEADER;
     if (isLiferaftLeader) {
-      this.raftProvider.propose(this.raft, entry, (err) => {
-        if (err) {
-          this.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
-            partitionId: this.partitionId,
-            error: err.message,
-          });
-        }
-      });
+      Promise.resolve(this.raft.propose(entry))
+        .then(assertRaftOperationSucceeded)
+        .catch((err) => {
+          if (err) {
+            this.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
+              partitionId: this.partitionId,
+              error: err.message,
+            });
+          }
+        });
     }
     return logEntry;
   }
@@ -985,16 +987,18 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       proposedAt: Date.now(),
     };
     const logEntry = this.storage.appendEntry(entry);
-    const isLiferaftLeader = this.raft && this.raft.state === LifeRaft.LEADER;
+    const isLiferaftLeader = this.raft?.readStatus?.().role === RaftRole.LEADER;
     if (isLiferaftLeader) {
-      this.raftProvider.propose(this.raft, entry, (err) => {
-        if (err) {
-          this.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
-            partitionId: this.partitionId,
-            error: err.message,
-          });
-        }
-      });
+      Promise.resolve(this.raft.propose(entry))
+        .then(assertRaftOperationSucceeded)
+        .catch((err) => {
+          if (err) {
+            this.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
+              partitionId: this.partitionId,
+              error: err.message,
+            });
+          }
+        });
     }
     return logEntry;
   }

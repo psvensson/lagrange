@@ -2,11 +2,12 @@
  * Property test for Raft Packet Round-Trip Preservation.
  *
  * Property: For any valid Raft packet with fields (type, term, address,
- * state, leader, last, data), delivering through PartitionRaftNode.write()
- * and receiving on the other end SHALL preserve all packet fields exactly.
+ * state, leader, last, data), delivering through the node's write() and
+ * receiving on the other end SHALL preserve all packet fields exactly.
  *
- * Tests through PartitionRaftNode (the sole Raft transport mechanism)
- * instead of the removed RaftTransportAdapter.
+ * The node comes from the backend seam - the provider builds the node a
+ * partition group runs on - so this exercises the packet path production
+ * actually uses rather than a second class beside it.
  *
  * **Validates: Requirements 5.3**
  *
@@ -16,16 +17,69 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
+import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
 import {
-  createPartitionRaftNodeClass,
-} from '../../src/partition/partition-raft-node.js';
+  RAFT_PARTITION_NODE_REQUEST,
+} from '../../src/raft/raft-provider-contract-constants.js';
+import {
+  deliverRaftPacketWithBackpressureMute,
+} from '../../src/raft/raft-peer-backpressure-mute.js';
 import {
   RAFT_PACKET_TYPE,
   resolveRaftTransportDeliveryOptions,
 } from '../../src/raft/constants.js';
 import {ENTITY_TYPE} from '../../src/constants/index.js';
 
+// The durable log a group hands its backend. This property is about the
+// packet path, so the stand-in answers only what liferaft asks of a log
+// while a node is built and closed; no expectation is read from it.
+function packetPathLog() {
+  return {
+    end() {
+      return undefined;
+    },
+  };
+}
+
+// Timers long enough that no election runs during a property case.
+const SEAM_TIMING = Object.freeze({
+  heartbeatMs: 30000,
+  electionMinMs: 30000,
+  electionMaxMs: 60000,
+});
+
 // Valid Raft packet types from liferaft
+// One partition group's node, built the way production builds it: the
+// backend seam receives the group's requirements and returns the node. The
+// send capability is the one the packet path under test uses, handed over
+// explicitly instead of reached for inside the node.
+function buildSeamNode({
+  groupId, peerId, peerAddress, transport, buildPeerAddress, logger,
+}) {
+  logger.debug('building the group node through the backend seam',
+    {groupId, peerId});
+  return new LiferaftProvider().createPartitionNode({
+    [RAFT_PARTITION_NODE_REQUEST.GROUP_ID]: groupId,
+    [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: peerId,
+    [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: peerAddress,
+    [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: [peerId],
+    [RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG]: packetPathLog(),
+    [RAFT_PARTITION_NODE_REQUEST.TIMING]: SEAM_TIMING,
+    [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]: {},
+    [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: true,
+    [RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER]: (address, packet) =>
+      deliverRaftPacketWithBackpressureMute(transport, address, packet),
+    [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: buildPeerAddress,
+    [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
+    [RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
+    // Declared requirements are all required: the backend subscribes this
+    // one on the node it builds, so a request that omits it never produces a
+    // node at all. The packet path under test never rolls an apply back.
+    [RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK]: () =>
+      undefined,
+  });
+}
+
 const VALID_RAFT_PACKET_TYPES = [
   RAFT_PACKET_TYPE.VOTE,
   RAFT_PACKET_TYPE.VOTED,
@@ -145,22 +199,15 @@ test('Property: Raft packet round-trip preserves all fields via PartitionRaftNod
             error: () => {},
           };
 
-          // Create the PartitionRaftNode class via factory
-          const PartitionRaftNode = createPartitionRaftNodeClass({
+          // liferaft calls write() on the peer node, where this.address is
+          // the destination, so the node is built AT the destination.
+          const peerNode = buildSeamNode({
+            groupId: 'test-partition',
+            peerId: packetData.senderEntityId,
+            peerAddress: destAddress,
             transport: mockTransport,
             buildPeerAddress,
             logger,
-            deferElection: true,
-            replicaId: packetData.senderEntityId,
-            partitionId: 'test-partition',
-          });
-
-          // Create a peer node instance — liferaft calls write() on
-          // the peer node, where this.address is the destination
-          const peerNode = new PartitionRaftNode(destAddress, {
-            'heartbeat': 30000,
-            'election min': 30000,
-            'election max': 60000,
           });
 
           // Build the original packet as liferaft would
@@ -270,20 +317,14 @@ test('Property: PartitionRaftNode.write() preserves packet type unchanged',
           const buildPeerAddress = (peerId) => peerId;
           const logger = {debug: () => {}, info: () => {}, error: () => {}};
 
-          const PartitionRaftNode = createPartitionRaftNodeClass({
+          const destAddress = 'node-2/partition/replica-2';
+          const peerNode = buildSeamNode({
+            groupId: 'test-partition',
+            peerId: 'sender-replica',
+            peerAddress: destAddress,
             transport: mockTransport,
             buildPeerAddress,
             logger,
-            deferElection: true,
-            replicaId: 'sender-replica',
-            partitionId: 'test-partition',
-          });
-
-          const destAddress = 'node-2/partition/replica-2';
-          const peerNode = new PartitionRaftNode(destAddress, {
-            'heartbeat': 30000,
-            'election min': 30000,
-            'election max': 60000,
           });
 
           const packet = {

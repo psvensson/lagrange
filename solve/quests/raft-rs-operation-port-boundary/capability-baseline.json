@@ -1,0 +1,39 @@
+{
+  "baseCommit": "fe6e04c3d2aa74d2402484daed3b2f1536331786",
+  "generator": "scripts/quest-evidence/raft-rs-operation-capability-ledger.js",
+  "boundary": "raft-rs partition value plus provider",
+  "publicMethods": 1219,
+  "publicDataProperties": 1223,
+  "mutablePublicValues": 220,
+  "coreAccessPaths": 2,
+  "lifecycleStateMutationPaths": 3,
+  "sqliteHandlesExposed": 2,
+  "providerControlAccessors": 7,
+  "runtimeObjectTypesExposed": 5,
+  "evidence": {
+    "coreAccessPaths": [
+      "partitionValue.host.runtime",
+      "provider.core"
+    ],
+    "sqliteHandlesExposed": [
+      "partitionValue.store.db",
+      "partitionValue.store.db.Symbol()"
+    ],
+    "providerControlAccessors": [
+      "partitionValue.host::<prototype>.handleOf",
+      "partitionValue.store::<prototype>.putRetirement",
+      "partitionValue.store::<prototype>.readRetirement",
+      "partitionValue::<prototype>.raftRsGroupParts",
+      "provider::<prototype>.partitionControlOf",
+      "provider::<prototype>.partitionScheduling",
+      "provider::<prototype>.retireFromScheduling"
+    ],
+    "runtimeObjectTypesExposed": [
+      "Database",
+      "RaftRsDurableStore",
+      "RaftRsNode",
+      "RaftRsRuntimeHost",
+      "RaftRsWasmProvider"
+    ]
+  }
+}

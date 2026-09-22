@@ -9,6 +9,7 @@ import {
   retireRaftPeerFromAuthoritativeServiceChange,
   resolveLiveRaftLeaderAddressForPeer,
 } from './partition-service-raft-peer-cache-reconciliation.js';
+import {createRaftProvider} from '../raft/raft-backend-selection.js';
 import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
 const {
@@ -22,7 +23,6 @@ const {
   HLCClockService,
   LeaderActivationGate,
   LeaderActivationScheduler,
-  LiferaftProvider,
   LoggingService,
   PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_DEFAULT,
@@ -42,7 +42,7 @@ const {
   SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
   TABLES,
   TIMEOUT_BUDGET_DEFAULT,
-  assertRaftProviderContract,
+  assertPartitionRaftProviderContract,
   attachTrafficReadinessListener,
   createControlPlaneRuntimeBundle,
   getTrafficReadinessSnapshot,
@@ -96,8 +96,11 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.replicaIds = copyPeerList(options.replicaIds, this.replicaId);
     this.nodeId = options.nodeId || PARTITION_SERVICE_DEFAULT.NODE_ID;
     this.transport = options.transport || null;
-    this.raftProvider = options.raftProvider || new LiferaftProvider();
-    assertRaftProviderContract(this.raftProvider);
+    // The backend seam: liferaft unless a configuration names another
+    // backend (src/raft/raft-backend-selection.js). An absent selection is
+    // the default, never a fallback.
+    this.raftProvider = options.raftProvider || createRaftProvider(options);
+    assertPartitionRaftProviderContract(this.raftProvider);
     this.dbPath = options.dbPath || PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH;
     this.leaderAddressHint =
       typeof options.leaderAddress === 'string' &&

@@ -8,7 +8,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import LifeRaft from '@markwylde/liferaft';
 import {
   PartitionService,
   PartitionState,
@@ -27,6 +26,13 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
 } from '../../src/raft/constants.js';
+import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
+import {RAFT_PARTITION_NODE_REQUEST} from
+  '../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_MEMBERSHIP_OPERATION} from
+  '../../src/raft/raft-operation-port-constants.js';
+import {ControllablePartitionRaftProvider} from
+  './partition-service-test-support.js';
 import {
   COLUMN,
   SERVICE_TYPE,
@@ -65,6 +71,44 @@ afterEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
+
+
+class RecordingOutboundLiferaftProvider extends LiferaftProvider {
+  constructor() {
+    super();
+    this.partitionRequest = null;
+  }
+
+  createPartitionPort(request) {
+    this.partitionRequest = request;
+    return super.createPartitionPort(request);
+  }
+
+  sendToPeer(peerAddress, packet) {
+    return this.partitionRequest[
+      RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER
+    ](peerAddress, packet);
+  }
+}
+
+class MissingCampaignLiferaftProvider extends LiferaftProvider {
+  createPartitionPort(request) {
+    const port = super.createPartitionPort(request);
+    const incomplete = Object.create(null);
+    for (const key of Reflect.ownKeys(port)) {
+      if (key === 'campaign') {
+        continue;
+      }
+      Object.defineProperty(incomplete, key, {
+        enumerable: true,
+        configurable: false,
+        writable: false,
+        value: port[key],
+      });
+    }
+    return Object.freeze(incomplete);
+  }
+}
 
 
 test('PartitionService - leader applyCommittedEntry must not raise unhandled rejection when CDC fails',
@@ -723,7 +767,7 @@ test('PartitionService - single replica becomes leader', async (t) => {
   t.equal(partition.isLeaderReplica(), true);
   t.equal(partition.getRole(), RaftRole.LEADER);
   t.equal(partition.getLeaderId(), 'replica-1');
-  t.equal(partition.raft.state, LifeRaft.LEADER);
+  t.equal(partition.raft.readStatus().role, RaftRole.LEADER);
 
   await partition.shutdown();
 });
@@ -765,59 +809,47 @@ test('PartitionService - unsubscribe from CDC', async (t) => {
 
 // Tests for liferaft-based architecture (Requirements 14.1, 14.2, 14.3, 14.4)
 
-test('PartitionService - handleTransportMessage routes Raft packets to liferaft', async (t) => {
-  // Mock transport to avoid null reference errors when liferaft tries to respond
-  const mockTransport = {
-    register: () => {},
-    unregister: () => {},
-    deliver: () => Promise.resolve({acknowledged: true}),
-  };
+test('PartitionService - handleTransportMessage routes Raft packets to the semantic port',
+  async (t) => {
+    const mockTransport = {
+      register: () => {},
+      unregister: () => {},
+      deliver: () => Promise.resolve({acknowledged: true}),
+    };
 
-  const partition = new PartitionService({
-    partitionId: 'test-partition-15',
-    tableId: 'raft_test',
-    replicaId: 'replica-1',
-    replicaIds: ['replica-1'],
-    transport: mockTransport,
-    dbPath: ':memory:',
+    const partition = new PartitionService({
+      partitionId: 'test-partition-15',
+      tableId: 'raft_test',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      transport: mockTransport,
+      dbPath: ':memory:',
+      raftProvider: new ControllablePartitionRaftProvider(),
+    });
+
+    await partition.initialize();
+
+    // Send a Raft packet (vote request)
+    const raftPacket = {
+      type: 'vote',
+      term: 1,
+      address: 'node2/partition/replica-2',
+      state: 1,
+      leader: '',
+      last: {term: 0, index: 0},
+    };
+
+    const result = await partition.handleTransportMessage({payload: raftPacket});
+
+    t.equal(result.acknowledged, true, 'Raft packet should be acknowledged');
+    t.equal(partition.raftProvider.steps.length, 1,
+      'one semantic step should cross the port');
+    const [stepEnvelope] = partition.raftProvider.steps;
+    t.equal(stepEnvelope.payload.type, 'vote', 'Packet type should be preserved');
+    t.equal(stepEnvelope.payload.term, 1, 'Packet term should be preserved');
+
+    await partition.shutdown();
   });
-
-  await partition.initialize();
-
-  // Track if raft.emit was called with the packet
-  let emittedData = null;
-  let emittedEvent = null;
-
-  // Replace raft.emit to track calls without triggering liferaft's state machine
-  partition.raft.emit = (event, data, _write) => {
-    if (event === 'data') {
-      emittedEvent = event;
-      emittedData = data;
-    }
-    // Don't call original emit to avoid triggering liferaft's state machine
-    return true;
-  };
-
-  // Send a Raft packet (vote request)
-  const raftPacket = {
-    type: 'vote',
-    term: 1,
-    address: 'node2/partition/replica-2',
-    state: 1,
-    leader: '',
-    last: {term: 0, index: 0},
-  };
-
-  const result = await partition.handleTransportMessage({payload: raftPacket});
-
-  t.equal(result.acknowledged, true, 'Raft packet should be acknowledged');
-  t.equal(emittedEvent, 'data', 'Should emit data event to liferaft');
-  t.ok(emittedData, 'Raft packet should be emitted to liferaft');
-  t.equal(emittedData.type, 'vote', 'Packet type should be preserved');
-  t.equal(emittedData.term, 1, 'Packet term should be preserved');
-
-  await partition.shutdown();
-});
 
 test('PartitionService - non-critical Raft peer writes use background delivery',
   async (t) => {
@@ -831,6 +863,7 @@ test('PartitionService - non-critical Raft peer writes use background delivery',
       },
     };
 
+    const raftProvider = new RecordingOutboundLiferaftProvider();
     const partition = new PartitionService({
       partitionId: 'sql_transaction_participants-p1',
       tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
@@ -842,13 +875,15 @@ test('PartitionService - non-critical Raft peer writes use background delivery',
       peerAddresses: ['node-2/partition/sql_transaction_participants-p1-r4'],
       transport: mockTransport,
       dbPath: ':memory:',
+      raftProvider,
     });
 
     await partition.initialize();
 
     try {
-      await new Promise((resolve, reject) => {
-        partition.raft.nodes[0].write({
+      await raftProvider.sendToPeer(
+        'node-2/partition/sql_transaction_participants-p1-r4',
+        {
           type: 'append',
           term: 1,
           address: 'node-1/partition/sql_transaction_participants-p1-r1',
@@ -856,8 +891,8 @@ test('PartitionService - non-critical Raft peer writes use background delivery',
           state: 1,
           last: {term: 1, index: 1},
           data: [{index: 2, term: 1, command: 'noop'}],
-        }, (error) => error ? reject(error) : resolve());
-      });
+        },
+      );
 
       t.same(
         deliveries,
@@ -885,6 +920,7 @@ test('PartitionService - append-fail peer writes prefer target priority over ' +
     },
   };
 
+  const raftProvider = new RecordingOutboundLiferaftProvider();
   const partition = new PartitionService({
     partitionId: 'tbl-bench-p1',
     tableId: 'tbl-bench',
@@ -893,13 +929,15 @@ test('PartitionService - append-fail peer writes prefer target priority over ' +
     peerAddresses: ['node-2/partition/tbl-bench-p1-r2'],
     transport: mockTransport,
     dbPath: ':memory:',
+    raftProvider,
   });
 
   await partition.initialize();
 
   try {
-    await new Promise((resolve, reject) => {
-      partition.raft.nodes[0].write({
+    await raftProvider.sendToPeer(
+      'node-2/partition/tbl-bench-p1-r2',
+      {
         type: 'append fail',
         term: 1,
         address: 'node-1/partition/control_plane_publications-p1-r1',
@@ -907,8 +945,8 @@ test('PartitionService - append-fail peer writes prefer target priority over ' +
         state: 1,
         last: {term: 1, index: 1},
         data: {index: 2, term: 1},
-      }, (error) => error ? reject(error) : resolve());
-    });
+      },
+    );
 
     t.same(
       deliveries,
@@ -932,6 +970,7 @@ test('PartitionService - non-critical Raft responses use background delivery',
       },
     };
 
+    const raftProvider = new ControllablePartitionRaftProvider();
     const partition = new PartitionService({
       partitionId: 'sql_transaction_participants-p1',
       tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
@@ -939,15 +978,15 @@ test('PartitionService - non-critical Raft responses use background delivery',
       replicaIds: ['sql_transaction_participants-p1-r1'],
       transport: mockTransport,
       dbPath: ':memory:',
+      raftProvider,
     });
 
     await partition.initialize();
 
     try {
-      const originalEmit = partition.raft.emit.bind(partition.raft);
-      partition.raft.emit = (event, data, write) => {
-        if (event === 'data' && typeof write === 'function') {
-          write({
+      raftProvider.setStepHandler((envelope) => {
+        if (typeof envelope.reply === 'function') {
+          envelope.reply({
             type: 'append',
             term: 1,
             address: 'node-1/partition/sql_transaction_participants-p1-r1',
@@ -956,10 +995,8 @@ test('PartitionService - non-critical Raft responses use background delivery',
             last: {term: 1, index: 1},
             data: [{index: 2, term: 1, command: 'noop'}],
           });
-          return true;
         }
-        return originalEmit(event, data, write);
-      };
+      });
 
       await partition.handleTransportMessage({
         payload: {
@@ -1177,8 +1214,12 @@ test('PartitionService - cache reconciliation refreshes moved peers and joins ne
       raft_role: RaftRole.FOLLOWER,
     });
 
-    const joinedAddresses = [];
-    const leftAddresses = [];
+    const raftProvider = new ControllablePartitionRaftProvider({
+      peers: [{
+        address: 'node-old/partition/replica-2',
+        replicaIdentity: 'replica-2',
+      }],
+    });
     const partition = new PartitionService({
       partitionId: 'test-partition-19b',
       tableId: 'peer_refresh_test',
@@ -1187,48 +1228,53 @@ test('PartitionService - cache reconciliation refreshes moved peers and joins ne
       nodeId: 'node-1',
       peerAddresses: ['node-old/partition/replica-2'],
       dbPath: ':memory:',
+      deferElection: true,
+      raftProvider,
     });
 
-    partition.raft = {
-      nodes: [{address: 'node-old/partition/replica-2'}],
-      leave(address) {
-        leftAddresses.push(address);
-      },
-    };
-    partition.raftProvider = {
-      joinPeer(_raft, address) {
-        joinedAddresses.push(address);
-      },
-    };
+    await partition.initialize();
+    try {
+      raftProvider.confChanges.length = 0;
+      partition.systemTableCache = systemTableCache;
 
-    partition.systemTableCache = systemTableCache;
+      const refreshedAddress = partition.buildPeerAddress('replica-2');
+      await new Promise((resolve) => setImmediate(resolve));
 
-    const refreshedAddress = partition.buildPeerAddress('replica-2');
-    await new Promise((resolve) => setImmediate(resolve));
+      const removedAddresses = raftProvider.confChanges
+        .filter((change) =>
+          change.type === RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER)
+        .map((change) => change.peerAddress);
+      const joinedAddresses = raftProvider.confChanges
+        .filter((change) =>
+          change.type === RAFT_MEMBERSHIP_OPERATION.ADD_PEER)
+        .map((change) => change.peerAddress);
 
-    t.equal(
-      refreshedAddress,
-      'node-new/partition/replica-2',
-      'cache-backed ownership should override stale bootstrap peer hints',
-    );
-    t.same(
-      leftAddresses,
-      ['node-old/partition/replica-2'],
-      'stale raft peer address should be replaced when ownership moves',
-    );
-    t.same(
-      joinedAddresses,
-      [
+      t.equal(
+        refreshedAddress,
         'node-new/partition/replica-2',
-        'node-3/partition/replica-3',
-      ],
-      'newly visible peers should be joined from authoritative cache rows',
-    );
-    t.ok(
-      partition.replicaIds.includes('replica-2') &&
-      partition.replicaIds.includes('replica-3'),
-      'replicaIds should expand to include cache-discovered peers',
-    );
+        'cache-backed ownership should override stale bootstrap peer hints',
+      );
+      t.same(
+        removedAddresses,
+        ['node-old/partition/replica-2'],
+        'stale raft peer address should be replaced when ownership moves',
+      );
+      t.same(
+        joinedAddresses,
+        [
+          'node-new/partition/replica-2',
+          'node-3/partition/replica-3',
+        ],
+        'newly visible peers should be proposed through the semantic port',
+      );
+      t.ok(
+        partition.replicaIds.includes('replica-2') &&
+        partition.replicaIds.includes('replica-3'),
+        'replicaIds should expand to include cache-discovered peers',
+      );
+    } finally {
+      await partition.shutdown();
+    }
   });
 
 test('PartitionService - emits leaderElected event for single replica', async (t) => {
@@ -1256,7 +1302,7 @@ test('PartitionService - emits leaderElected event for single replica', async (t
   await partition.shutdown();
 });
 
-test('PartitionService - single-replica initialization fails closed without raft change()', async (t) => {
+test('PartitionService - single-replica initialization fails closed without raft campaign()', async (t) => {
   const partition = new PartitionService({
     partitionId: 'test-partition-20-missing-change',
     tableId: 'leader_event_test',
@@ -1264,22 +1310,14 @@ test('PartitionService - single-replica initialization fails closed without raft
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
+    raftProvider: new MissingCampaignLiferaftProvider(),
   });
-  const originalMaybeInitializeRebalancer =
-    partition.maybeInitializeRebalancer.bind(partition);
-  partition.maybeInitializeRebalancer = function(...args) {
-    const result = originalMaybeInitializeRebalancer(...args);
-    if (this.raft) {
-      this.raft.change = undefined;
-    }
-    return result;
-  };
 
   try {
     await t.rejects(
       partition.initialize(),
-      /single-replica leadership requires raft\.change/,
-      'single-replica initialization should fail instead of mutating local leader state without raft ownership',
+      /single-replica leadership requires raft\.campaign/,
+      'single-replica initialization should fail when the semantic campaign capability is absent',
     );
   } finally {
     await partition.shutdown().catch(() => {});

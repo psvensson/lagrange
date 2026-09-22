@@ -1,0 +1,17 @@
+{
+  "name": "raft_wasm",
+  "description": "Lagrange test-side FORK of the raft-logic WASM wrapper around tikv/raft-rs, extended with the raft-rs configuration-change primitives. Evaluation only; never published.",
+  "version": "0.1.0",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://codeberg.org/psvensson/raft-logic"
+  },
+  "files": [
+    "raft_wasm_bg.wasm",
+    "raft_wasm.js",
+    "raft_wasm.d.ts"
+  ],
+  "main": "raft_wasm.js",
+  "types": "raft_wasm.d.ts"
+}

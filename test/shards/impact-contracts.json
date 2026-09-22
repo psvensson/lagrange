@@ -459,6 +459,48 @@
         "test/rebalancer/rolling-restart-rebalancer-handoff-witness.test.js"
       ]
     },
+    "raft-rs-runtime-lifecycle-entry": {
+      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal.",
+      "owners": [
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js"
+      ]
+    },
+    "raft-rs-runtime-application-transaction": {
+      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress and ConfState coherent across host failure and reconstruction.",
+      "owners": [
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/partition/partition-service-raft-init-base.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js"
+      ]
+    },
+    "partition-raft-operation-port": {
+      "description": "Both providers return the same operation-only partition capability while PartitionService consumes semantic operations and immutable snapshots without a live node/control graph.",
+      "owners": [
+        "src/raft/raft-operation-port.js",
+        "src/raft/raft-provider-contract.js",
+        "src/raft/liferaft-provider.js",
+        "src/raft/raft-rs-provider.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/partition/partition-service-raft-init-base.js",
+        "src/partition/partition-service-raft-lifecycle-wiring.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-backend/partition-construction-seam.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "test/raft/raft-provider-contract.test.js"
+      ]
+    },
     "spread-cure-transition-authorization": {
       "description": "The cure policy owner mints one exact-transition spread-cure authorization; the receiving learner decodes and states exactly that record.",
       "owners": [
@@ -789,6 +831,81 @@
         "conformanceTest": "test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js",
         "realTest": "test/integration/message-group-multi-join-formation.integration.test.js"
       }
+    },
+    "raft-rs-runtime-lifecycle-entry": {
+      "description": "Lifecycle admission and core entry must remain one boundary: retirement cannot race an admitted operation, and queued ingress must recheck lifecycle before worker-side core entry.",
+      "endpoints": [
+        {
+          "id": "durable-lifecycle-admission",
+          "owners": [
+            "src/raft/raft-rs-replica-lifecycle-owner.js",
+            "src/raft/raft-rs-lifecycle-administration.js"
+          ]
+        },
+        {
+          "id": "runtime-core-entry",
+          "owners": [
+            "src/raft/raft-rs-operation-port.js",
+            "src/raft/raft-rs-runtime-owner.js"
+          ]
+        }
+      ],
+      "contract": "raft-rs-runtime-lifecycle-entry",
+      "witnessTests": [
+        "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js"
+      ]
+    },
+    "raft-rs-runtime-application-transaction": {
+      "description": "The Ready owner and application transaction owner must agree on the durable point from which recovery may replay without duplicating application effects or splitting applied progress from ConfState.",
+      "endpoints": [
+        {
+          "id": "ready-persistence-and-reconstruction",
+          "owners": [
+            "src/raft/raft-rs-runtime-owner.js",
+            "src/raft/raft-rs-durable-store.js"
+          ]
+        },
+        {
+          "id": "application-and-progress-transaction",
+          "owners": [
+            "src/raft/raft-rs-application-transaction-owner.js",
+            "src/partition/partition-service-raft-init-base.js"
+          ]
+        }
+      ],
+      "contract": "raft-rs-runtime-application-transaction",
+      "witnessTests": [
+        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js"
+      ]
+    },
+    "partition-raft-operation-port": {
+      "description": "The provider boundary and PartitionService consumer must agree on the exact frozen semantic port, with no node/control fallback on either side.",
+      "endpoints": [
+        {
+          "id": "provider-port-construction",
+          "owners": [
+            "src/raft/raft-operation-port.js",
+            "src/raft/raft-provider-contract.js",
+            "src/raft/liferaft-provider.js",
+            "src/raft/raft-rs-provider.js",
+            "src/raft/raft-rs-operation-port.js"
+          ]
+        },
+        {
+          "id": "partition-port-consumer",
+          "owners": [
+            "src/partition/partition-service-raft-init-base.js",
+            "src/partition/partition-service-raft-lifecycle-wiring.js"
+          ]
+        }
+      ],
+      "contract": "partition-raft-operation-port",
+      "witnessTests": [
+        "test/raft/raft-rs-backend/partition-construction-seam.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "test/raft/raft-provider-contract.test.js"
+      ]
     },
     "spread-cure-transition-authorization": {
       "description": "The mint and the receiving guard must agree on one authorization record: what the policy owner states, the learner decodes, evaluates and logs.",

@@ -1,0 +1,45 @@
+[package]
+name = "raft_wasm"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Lagrange test-side FORK of the raft-logic WASM wrapper around tikv/raft-rs, extended with the raft-rs configuration-change primitives. Evaluation only; never published."
+repository = "https://codeberg.org/psvensson/raft-logic"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# WASM interop
+wasm-bindgen = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde-wasm-bindgen = "0.6"
+js-sys = "0.3"
+# Required for RNG in wasm
+getrandom = { version = "0.2", features = ["js"] }
+# Raft core
+raft = "0.7"
+raft-proto = "0.7"
+# FORK: needed to decode a committed configuration entry in Rust rather than
+# in JavaScript (raft-rs 0.7 uses rust-protobuf 2.x); already in the lock as a
+# transitive dependency of raft.
+protobuf = "2"
+# Logging backend used by raft-rs
+slog = "2"
+# Utilities
+base64 = "0.22"
+thiserror = "1"
+console_error_panic_hook = "0.1"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "z"
+strip = "symbols"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

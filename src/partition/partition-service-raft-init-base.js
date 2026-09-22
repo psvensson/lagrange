@@ -1,5 +1,11 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
+import {applyPartitionApplicationAndProgress} from
+  '../raft/raft-rs-application-transaction-owner.js';
+import {
+  RAFT_MEMBERSHIP_OPERATION,
+  RAFT_OPERATION_OUTCOME,
+} from '../raft/raft-operation-port-constants.js';
 
 // Watchdog sync-section site for the closed-handle partition replica boot
 // block (round-10 bootstrap-batch stall attribution).
@@ -21,6 +27,9 @@ import {
   resolveReplicaCheckpointsRoot,
 } from '../raft/snapshot-install.js';
 import {RAFT_EVENT} from '../raft/constants.js';
+import {
+  RAFT_PARTITION_NODE_REQUEST,
+} from '../raft/raft-provider-contract-constants.js';
 import {RAFT_SNAPSHOT_INSTALL_OUTCOME} from '../raft/snapshot-install-constants.js';
 import {
   cleanupStaleTransferStaging,
@@ -37,7 +46,6 @@ const {
   ConfigurationManager,
   Database,
   ENTITY_TYPE,
-  LifeRaft,
   PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_DB,
   PARTITION_SERVICE_DEFAULT,
@@ -46,7 +54,6 @@ const {
   PARTITION_SERVICE_INIT_STAGE,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LIFERAFT_TIMER,
-  PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_ROLE,
   PARTITION_SERVICE_TYPE,
@@ -57,7 +64,6 @@ const {
   SERVICE_TYPE,
   SQLiteLogAdapter,
   TABLES,
-  applyRuntimeRaftTiming,
   assertCritical,
   computeReplicaElectionTimeouts,
   fs,
@@ -109,7 +115,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       return null;
     }
     try {
-      const term = Number(this.raftProvider.getCurrentTerm(this.raft));
+      const term = Number(this.raft.readStatus().term);
       return Number.isFinite(term) ? term : null;
     } catch {
       return null;
@@ -403,84 +409,63 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       electionMaxMs,
       tickIntervalMs: Number.isFinite(tickIntervalMs) ? tickIntervalMs : null,
     };
-    const self = this;
-    const deferElection = this.deferElection;
-    class RaftNode extends LifeRaft {
-      /**
-       * Override initialize to support deferred election start.
-       * When deferElection is true, we don't start the heartbeat timer.
-       * Call startElection() later to begin the election process.
-       * @param {Object} options - Initialization options.
-       * @param {Function} callback - Completion callback.
-       */
-      initialize(options, callback) {
-        if (deferElection) {
-          self.logger.debug(
-            PARTITION_SERVICE_LOG_MSG.DEFERRING_ELECTION_START,
-            {replicaId: self.replicaId, partitionId: self.partitionId},
-          );
-          if (callback) callback();
-        } else {
-          if (callback) callback();
-        }
-      }
-      prepareCommitApply(command, effects) {
-        self.applyCommittedEntry(command, effects);
-        self.storage.recordAppliedAdvance();
-      }
-      /**
-       * Write method for sending Raft messages to peers.
-       * Called by liferaft when it needs to communicate with other nodes.
-       * Sends packets directly to transport without type conversion.
-       * Note: When liferaft calls node.write(), 'this' is the cloned node
-       * representing the peer, so 'this.address' is the destination address.
-       * Requirements: 10.2, 10.3, 10.4
-       * @param {Object} packet - Raft protocol packet (packet.address is sender)
-       * @param {Function} callback - Completion callback
-       */
-      write(packet, callback) {
-        const peerAddress = self.buildPeerAddress(this.address);
-        self.transport
-          .deliver(
-            peerAddress,
-            packet,
-            resolveRaftTransportDeliveryOptions({
-              ...packet,
-              targetAddress: peerAddress,
-            }),
-          )
-          .then((result) => callback(null, result))
-          .catch((err) => callback(err));
-      }
+    if (this.deferElection) {
+      this.logger.debug(
+        PARTITION_SERVICE_LOG_MSG.DEFERRING_ELECTION_START,
+        {replicaId: this.replicaId, partitionId: this.partitionId},
+      );
     }
     // Restart recovery reloads committed state from the durable DB without
     // re-applying entries through applyCommittedEntry, so a fresh HLC clock would
     // not witness already-committed HLCs and could regress below a value this node
     // previously committed. Warm the clock from the max committed HLC on the log.
     this.warmHlcFromCommittedLog();
-    const logAdapter = this.logAdapter;
-    this.raft = new RaftNode(this.unifiedAddress, {
-      [PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT]: heartbeatMs,
-      [PARTITION_SERVICE_LIFERAFT_TIMER.ELECTION_MIN]: electionMinMs,
-      [PARTITION_SERVICE_LIFERAFT_TIMER.ELECTION_MAX]: electionMaxMs,
-      [PARTITION_SERVICE_LIFERAFT_TIMER.LOG]: function() {
-        return logAdapter;
+    // The backend boundary (binding direction addendum §1): the group states
+    // its own requirements and the selected backend builds the node. Nothing
+    // liferaft-shaped is named here, and nothing is read from a global - a
+    // backend that needs something absent from this request changes the
+    // boundary rather than reaching around it.
+    this.raft = this.raftProvider.createPartitionPort({
+      [RAFT_PARTITION_NODE_REQUEST.GROUP_ID]: this.partitionId,
+      [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: this.replicaId,
+      [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: this.unifiedAddress,
+      [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: this.replicaIds,
+      [RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG]: this.logAdapter,
+      [RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE]: this.db,
+      [RAFT_PARTITION_NODE_REQUEST.TIMING]: this.raftTimingConfig,
+      [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]: hostedConsensusSubstrate(this),
+      [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: this.deferElection,
+      [RAFT_PARTITION_NODE_REQUEST.INITIAL_TERM]:
+        Number.isSafeInteger(this.storage?.currentTerm) ?
+          this.storage.currentTerm : 0,
+      [RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER]: (peerAddress, packet) =>
+        this.transport.deliver(
+          peerAddress,
+          packet,
+          resolveRaftTransportDeliveryOptions({
+            ...packet,
+            targetAddress: peerAddress,
+          }),
+        ),
+      [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: (address) =>
+        this.buildPeerAddress(address),
+      [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]:
+        (command, effects) => {
+          applyPartitionApplicationAndProgress({
+            service: this, command, effects,
+          });
+        },
+      // The apply transaction did not commit, so the cached applied
+      // watermark may be ahead of the store. Re-read it from the store.
+      [RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK]: () => {
+        this.storage.refreshAppliedWatermarkCacheFromStore();
       },
-      // S4 snapshot catch-up decision seam: forwarded to the service's
-      // settable onSnapshotCatchupNeeded (dispatch ownership is S6
-      // production wiring; guards inject their own seam).
-      onSnapshotCatchupNeeded: (decision) => {
+      [RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: (decision) => {
         if (typeof this.onSnapshotCatchupNeeded ===
             PARTITION_SERVICE_TYPE.FUNCTION) {
           this.onSnapshotCatchupNeeded(decision);
         }
       },
-      // Consensus timers belong to the node hosting this replica whenever
-      // that node owns a clock. Without one the key is absent and liferaft
-      // keeps its own tick-tock, so production is byte-identical.
-      // Consensus runs on the hosting node's substrate when that node owns
-      // one, and on liferaft's own otherwise.
-      ...hostedConsensusSubstrate(this),
     });
     // Recorded-gap closure (S4, pre-existing defect): base liferaft always
     // boots at term 0, but an INSTALLED replica carries a durable
@@ -488,37 +473,35 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     // radius is exactly installed replicas). Seed the live term before any
     // lifecycle wiring observes it so vote/append term checks start from
     // durable truth.
-    if (Number.isSafeInteger(this.storage?.currentTerm) &&
-        this.storage.currentTerm > 0) {
-      this.raft.term = this.storage.currentTerm;
-    }
     // Committed-prefix divergence witness (quest raft-committed-prefix-
     // conflict-livelock): the follower-side liferaft surfaces a poisoned
     // committed prefix exactly once per conflict identity instead of
     // retrying an impossible truncation every heartbeat. Log it as the
     // durable operator-visible signal; repair itself rides the existing
     // typed append-fail -> leader catch-up/install route.
-    this.raft.on(RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE, (observation) => {
-      this.logger.error(PARTITION_SERVICE_LOG_MSG.COMMITTED_PREFIX_DIVERGENCE, {
-        replicaId: this.replicaId,
-        partitionId: this.partitionId,
-        ...observation,
-      });
-    });
+    this.raft.subscribe(
+      RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE,
+      (observation) => {
+        this.logger.error(
+          PARTITION_SERVICE_LOG_MSG.COMMITTED_PREFIX_DIVERGENCE,
+          {
+            replicaId: this.replicaId,
+            partitionId: this.partitionId,
+            ...observation,
+          },
+        );
+      },
+    );
     if (this.deferElection && this.raft) {
-      this.raftProvider.clearTimers(
-        this.raft,
-        PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT_ELECTION,
-      );
+      this.raft.stopScheduling(
+        PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT_ELECTION);
       this.logger.debug(PARTITION_SERVICE_LOG_MSG.CLEARED_LIFERAFT_TIMERS, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
       });
     }
     const isSingleReplica = () => {
-      const peerCount = Array.isArray(this.raft?.nodes) ?
-        this.raft.nodes.length :
-        0;
+      const peerCount = this.raft?.readStatus?.().peerCount || 0;
       return this.replicaIds.length === 1 && peerCount === 0;
     };
     const shouldIgnoreDemotionEvent = (eventName) => {
@@ -538,10 +521,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         return false;
       }
       if (this.raft) {
-        this.raftProvider.clearTimers(
-          this.raft,
-          PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT_ELECTION,
-        );
+        this.raft.stopScheduling(
+          PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT_ELECTION);
       }
       return true;
     };
@@ -580,7 +561,11 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
               PARTITION_SERVICE_ADDRESS.FORMAT_SIMPLE,
           });
         }
-        this.raftProvider.joinPeer(this.raft, peerAddress);
+        this.raft.proposeConfChange({
+          type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
+          peerAddress,
+          peerId,
+        });
         joinedPeerCount += 1;
         this.reportInitializationStage(
           PARTITION_SERVICE_INIT_STAGE.JOINED_PEER,
@@ -598,12 +583,11 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     if (this.replicaIds.length === 1) {
       assertCritical(
         this.raft &&
-          typeof this.raft.change === PARTITION_SERVICE_TYPE.FUNCTION,
+          typeof this.raft.campaign === PARTITION_SERVICE_TYPE.FUNCTION,
         PARTITION_SERVICE_ERROR_MSG.SINGLE_REPLICA_RAFT_OWNER_REQUIRED,
         {partitionId: this.partitionId, replicaId: this.replicaId},
       );
-      this.raft.change({state: LifeRaft.LEADER});
-      this.raft.leader = this.unifiedAddress;
+      this.raft.campaign();
       this.logger.info(PARTITION_SERVICE_LOG_MSG.SINGLE_REPLICA_LEADER, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
@@ -653,7 +637,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         partitionId: this.partitionId,
         peerCount: this.replicaIds.length - 1,
       });
-      this.raftProvider.startElectionTimer(this.raft);
+      this.raft.startScheduling();
     }
   }
   /**
@@ -708,8 +692,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     const shouldRearmTimer =
       this.replicaIds.length > 1 &&
       (!this.deferElection || this.electionStarted);
-    const applied = applyRuntimeRaftTiming({
-      raft: this.raft,
+    const applied = this.raft?.configureTick?.({
       heartbeatMs,
       electionMinMs,
       electionMaxMs,
@@ -748,26 +731,9 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     ) {
       return false;
     }
-    if (typeof this.raft.setTickInterval === PARTITION_SERVICE_TYPE.FUNCTION) {
-      this.raft.setTickInterval(tickIntervalMs);
-      return true;
-    }
-    if (
-      typeof this.raft.configureTickInterval === PARTITION_SERVICE_TYPE.FUNCTION
-    ) {
-      this.raft.configureTickInterval(tickIntervalMs);
-      return true;
-    }
-    if (
-      Object.prototype.hasOwnProperty.call(
-        this.raft,
-        PARTITION_SERVICE_LITERAL.TICKINTERVALMS,
-      )
-    ) {
-      this.raft.tickIntervalMs = tickIntervalMs;
-      return true;
-    }
-    return false;
+    const result = this.raft.configureTick({tickIntervalMs});
+    return result === true ||
+      result?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK;
   }
   /**
    * Create the table based on schema (DDL owner:

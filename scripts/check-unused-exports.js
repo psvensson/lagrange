@@ -27,7 +27,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-09-02: tightened 1439 -> 1438 per checker hint after landing
 // critical-placement-authoritative-evidence (isConvergedPlacementCount
 // removed; every new evidence/observer export has a consumer).
-const BASELINE_UNUSED_EXPORT_COUNT = 1438;
+// 2026-09-21: tightened 1438 -> 1437 while replacing the raft-rs public
+// object graph with its operation-only port and de-exporting dead internals.
+const BASELINE_UNUSED_EXPORT_COUNT = 1437;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

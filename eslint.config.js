@@ -8,6 +8,13 @@ export default [
       'test/**/*-part-*.js',
       'test/**/*-tail-*.js',
       'test/**/*-segment-*.js',
+      // The vendor root, like node_modules, holds generated and third-party
+      // material nobody here maintains. Every other checker excludes it by
+      // walking its own source roots (src, scripts, test) and never reaching
+      // it; eslint is reached with explicit staged paths by the pre-commit
+      // hook, so the root is declared non-source here once rather than as a
+      // carve-out per artifact. Hand-written code belongs in src/.
+      'vendor/**',
     ],
   },
   {

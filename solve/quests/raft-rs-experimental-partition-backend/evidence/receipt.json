@@ -1,0 +1,201 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "raft-rs-experimental-partition-backend",
+  "status": "fail",
+  "testFileDigests": {
+    "test/raft/raft-rs-backend/backend-seam.test.js": "04be6eeb8543ec6cc0621ab4db107f24245894adc4f8ff42e40b6370b04c0f27",
+    "test/raft/raft-rs-backend/durable-ready-loop.test.js": "e90174335f51252bcf72f2f70f27e7ffd19b81385feaf1e5dc571582d3dbe345",
+    "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "b8389f4731538e57f63d28f26529116f76c8271be6050056ac36ea05303374f5",
+    "test/raft/raft-rs-backend/conf-state-authority.test.js": "893409e416f6cac5f86b2fe2292e79fea7e901975f5af1ecdf412e394f728f64",
+    "test/raft/raft-rs-backend/ingress-safety-boundary.test.js": "4376502a47cf4ff5f9446ff34e7cc36c64b0efcc3feeee7b1c28e39b6851b77f",
+    "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "c1d4fe37e2dbd7d972a17ff0387749ab839710efde152bc432292e5b321b1b2e",
+    "test/raft/raft-rs-backend/multi-raft-scale.test.js": null,
+    "test/raft/raft-rs-backend/peer-identity.test.js": "1646f07c9a69fefc0c73030e08a46e44654f83498e1c61a60239b98f324bc035",
+    "test/raft/raft-rs-backend/election-safety.test.js": "059a5186a748d204bf7505789e077c666734dee2718b832222333564f5b17e0b",
+    "test/raft/raft-rs-backend/sequential-membership-workflow.test.js": null,
+    "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "dc7b16853ebee8df4ef82da6978589856f39a9c3234cef1d36867b00191b0cba",
+    "test/raft/raft-rs-backend/snapshot-and-compaction.test.js": null,
+    "test/raft/raft-rs-backend/side-by-side-scenarios.test.js": null,
+    "test/raft/raft-rs-backend/complexity-ledger.test.js": null
+  },
+  "generatedAt": "2026-09-21T04:20:43.029Z",
+  "receipts": [
+    {
+      "id": "backend-seam-selects-explicitly-and-liferaft-behaviour-is-unchanged",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^(an absent backend selection is liferaft, and it says so by name|the experimental backend is reached only by naming it|a backend name the seam does not know is refused, never defaulted|no production module configures the experimental backend|the seam interface is the census of what production calls|every seam name the experimental backend defers refuses by name|routing liferaft through the seam changes nothing liferaft does)$\" test/raft/raft-rs-backend/backend-seam.test.js",
+      "detail": "the seam resolves an absent selection to liferaft by name rather than by fallback, refuses an unknown backend, reaches raft-rs-wasm only when a configuration says so, serves exactly the provider census derived from src, and leaves what liferaft does to a node unchanged",
+      "testFile": "test/raft/raft-rs-backend/backend-seam.test.js"
+    },
+    {
+      "id": "ready-and-apply-loop-order-derives-from-the-raft-rs-host-contract",
+      "passed": true,
+      "command": "npm run -s test:file -- test/raft/raft-rs-backend/host-contract-citations.test.js test/raft/raft-rs-backend/durable-ready-loop.test.js",
+      "detail": "every ordering constraint cites a line of raft 0.7.0 vendored beside the binding with its digest recorded, the cited line is read and its text checked, and the loop runs the contract's steps in the contract's order because it iterates the contract itself",
+      "testFile": null
+    },
+    {
+      "id": "commit-index-is-durable-with-or-before-applying-committed-entries",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^(the durable commit index is at or past every entry before it is applied|a restart refuses a record whose applied index ran past its commit)$\" test/raft/raft-rs-backend/durable-ready-loop.test.js",
+      "detail": "the journal shows a durable commit index at or past every entry at the moment it was applied, and a host that withholds the commit index produces a record raft-rs itself refuses on restart, naming the applied index the durable record holds",
+      "testFile": "test/raft/raft-rs-backend/durable-ready-loop.test.js"
+    },
+    {
+      "id": "conf-state-and-its-applied-progress-are-written-atomically",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^(the configuration and its applied index are one write, so a restart re-delivers nothing it already applied|a fault inside the apply transaction leaves the pair agreeing)$\" test/raft/raft-rs-backend/durable-ready-loop.test.js",
+      "detail": "the configuration and the applied index are columns of one row written by one statement: a restart re-delivers nothing the record accounts for, a host that splits the write makes the core re-deliver, and a transaction that does not commit leaves neither half",
+      "testFile": "test/raft/raft-rs-backend/durable-ready-loop.test.js"
+    },
+    {
+      "id": "restart-reconstructs-raft-state-from-its-own-durable-record-on-real-storage",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^(a restart reconstructs what the core itself held before the crash|what a restart reconstructs is exactly what the durable bytes hold)$\" test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+      "detail": "term, vote, commit, applied and the configuration come back as the live core reported them before the crash and as an independent reader finds them in the SQLite file",
+      "testFile": "test/raft/raft-rs-backend/restart-from-durable-record.test.js"
+    },
+    {
+      "id": "no-recovery-state-is-inferred-from-a-service-or-system-table-cache",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^(the restore path cannot reach a cache, a service or a system table|poisoning every cache in the same database changes nothing)$\" test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+      "detail": "the restore path's parameters and its whole import closure are parsed out of src and neither can reach a cache, and poisoning the liferaft state, the liferaft log and a service row in the same database moves nothing the restored core reports",
+      "testFile": "test/raft/raft-rs-backend/restart-from-durable-record.test.js"
+    },
+    {
+      "id": "conf-state-is-the-membership-authority-under-divergent-hostile-caches",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^two peers whose caches disagree observe the committed configuration$\" test/raft/raft-rs-backend/conf-state-authority.test.js",
+      "detail": "the liferaft part A case under this backend: divergent caches, one holding a still-syncing replica the other has never seen",
+      "testFile": "test/raft/raft-rs-backend/conf-state-authority.test.js"
+    },
+    {
+      "id": "lagrange-rows-project-membership-and-never-alter-the-configuration",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^no cache mutation alters quorum membership$\" test/raft/raft-rs-backend/conf-state-authority.test.js",
+      "detail": "rows project the committed configuration outward and never modify it",
+      "testFile": "test/raft/raft-rs-backend/conf-state-authority.test.js"
+    },
+    {
+      "id": "ingress-validation-refuses-routing-faults-and-admits-transition-traffic",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the envelope boundary refuses routing faults and admits a membership transition$\" test/raft/raft-rs-backend/ingress-safety-boundary.test.js",
+      "detail": "envelope and routing invariants only; a sender absent from the receiver's applied configuration is never refused for that reason",
+      "testFile": "test/raft/raft-rs-backend/ingress-safety-boundary.test.js"
+    },
+    {
+      "id": "hostile-messages-that-still-reach-a-trap-are-enumerated",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every hostile message that still reaches a trap is enumerated$\" test/raft/raft-rs-backend/ingress-safety-boundary.test.js",
+      "detail": "which hostile messages still trap despite correct routing validation",
+      "testFile": "test/raft/raft-rs-backend/ingress-safety-boundary.test.js"
+    },
+    {
+      "id": "a-trap-marks-the-runtime-unhealthy-and-its-groups-restore-from-durable-state",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a trap marks the runtime unhealthy and its groups restore$\" test/raft/raft-rs-backend/runtime-trap-and-restore.test.js",
+      "detail": "dispatch stops, a fresh runtime is instantiated, groups restore",
+      "testFile": "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js"
+    },
+    {
+      "id": "multi-raft-host-and-runtime-replacement-measured-at-real-scales",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^runtime replacement is measured at one, one hundred and one thousand groups$\" test/raft/raft-rs-backend/multi-raft-scale.test.js",
+      "detail": "measured on real storage at this quest's own scales",
+      "failure": "the pattern selected zero tests",
+      "testFile": "test/raft/raft-rs-backend/multi-raft-scale.test.js"
+    },
+    {
+      "id": "peer-identity-is-stable-address-independent-unreused-and-exact",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a raft peer id survives restart, ignores address and is never reassigned$\" test/raft/raft-rs-backend/peer-identity.test.js",
+      "detail": "and crosses the JavaScript boundary exactly, never through a Number",
+      "testFile": "test/raft/raft-rs-backend/peer-identity.test.js"
+    },
+    {
+      "id": "a-peer-that-is-no-longer-a-voter-cannot-participate-as-one",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a peer that is no longer a voter cannot participate in an election$\" test/raft/raft-rs-backend/election-safety.test.js",
+      "detail": "the removed peer that kept ticking, under the real backend",
+      "testFile": "test/raft/raft-rs-backend/election-safety.test.js"
+    },
+    {
+      "id": "pre-vote-and-check-quorum-settled-by-failure-scenarios-not-assumption",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^pre-vote and check-quorum are settled by driven failure scenarios$\" test/raft/raft-rs-backend/election-safety.test.js",
+      "detail": "settings chosen from measurement, not from assumption",
+      "testFile": "test/raft/raft-rs-backend/election-safety.test.js"
+    },
+    {
+      "id": "learner-promotion-is-gated-by-lagrange-on-the-cores-own-progress",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^promotion is gated on the core's own progress$\" test/raft/raft-rs-backend/sequential-membership-workflow.test.js",
+      "detail": "Lagrange decides when promotion is safe; the core commits it",
+      "failure": "the pattern selected zero tests",
+      "testFile": "test/raft/raft-rs-backend/sequential-membership-workflow.test.js"
+    },
+    {
+      "id": "sequential-membership-workflow-completes-through-formation-and-recovery",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^one real partition: elect, commit, restart, add a learner, catch up, promote and remove, under hostile caches throughout$\" test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js",
+      "detail": "joint support stays available and is tested by the deterministic driver",
+      "testFile": "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js"
+    },
+    {
+      "id": "membership-change-in-progress-is-an-explicit-provider-result",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a second configuration change is an explicit membership-change-in-progress result$\" test/raft/raft-rs-backend/sequential-membership-workflow.test.js",
+      "detail": "the core stays the authority on whether another change can take effect",
+      "failure": "the pattern selected zero tests",
+      "testFile": "test/raft/raft-rs-backend/sequential-membership-workflow.test.js"
+    },
+    {
+      "id": "snapshot-and-compaction-contract-holds-and-state-does-not-diverge",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^configuration and applied state do not diverge across a snapshot restore$\" test/raft/raft-rs-backend/snapshot-and-compaction.test.js",
+      "detail": "snapshot with membership, applied index, restore, compaction, restart",
+      "failure": "the pattern selected zero tests",
+      "testFile": "test/raft/raft-rs-backend/snapshot-and-compaction.test.js"
+    },
+    {
+      "id": "replica-operation-gained-only-fields-a-falsifier-required",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every field added to the replica operation was required by a falsifier$\" test/raft/raft-rs-backend/sequential-membership-workflow.test.js",
+      "detail": "no speculative reason, generation or transition fields",
+      "failure": "the pattern selected zero tests",
+      "testFile": "test/raft/raft-rs-backend/sequential-membership-workflow.test.js"
+    },
+    {
+      "id": "every-scenario-runs-on-both-backends-and-outcomes-are-compared",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every scenario runs on both backends and the outcomes are compared$\" test/raft/raft-rs-backend/side-by-side-scenarios.test.js",
+      "detail": "application-level outcomes and safety properties, not internals",
+      "failure": "the pattern selected zero tests",
+      "testFile": "test/raft/raft-rs-backend/side-by-side-scenarios.test.js"
+    },
+    {
+      "id": "complexity-ledger-recorded-and-deletion-candidates-named",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the complexity ledger is derived from src and names the deletion candidates$\" test/raft/raft-rs-backend/complexity-ledger.test.js",
+      "detail": "added against removed, and what a cutover would delete",
+      "failure": "the pattern selected zero tests",
+      "testFile": "test/raft/raft-rs-backend/complexity-ledger.test.js"
+    },
+    {
+      "id": "migration-decision-follows-from-the-scenarios-by-derivation",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the migration decision is derived from what the scenarios measured$\" test/raft/raft-rs-backend/side-by-side-scenarios.test.js",
+      "detail": "one of recommend cutover, continue experimental, or reject",
+      "failure": "the pattern selected zero tests",
+      "testFile": "test/raft/raft-rs-backend/side-by-side-scenarios.test.js"
+    },
+    {
+      "id": "liferaft-is-untouched-its-logs-unmigrated-and-it-remains-the-default",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^liferaft is untouched, its logs unmigrated, and it remains the default$\" test/raft/raft-rs-backend/side-by-side-scenarios.test.js",
+      "detail": "proved against the liferaft suite and the durable liferaft tables",
+      "failure": "the pattern selected zero tests",
+      "testFile": "test/raft/raft-rs-backend/side-by-side-scenarios.test.js"
+    }
+  ]
+}

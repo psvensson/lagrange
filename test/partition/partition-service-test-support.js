@@ -7,6 +7,13 @@
  */
 
 import {EventEmitter} from 'node:events';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {
+  createRaftOperationPort,
+  deepFreeze,
+} from '../../src/raft/raft-operation-port.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
 import {LIFECYCLE_PHASE} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {
   evaluateLearnerPromotionProof,
@@ -15,6 +22,107 @@ import {
 const PROOF_STUB_TERM = 1;
 const PROOF_STUB_COMMITTED_INDEX = 0;
 const PROOF_STUB_MATCH_INDEX = 0;
+
+function testCoreOk(fields = {}) {
+  return deepFreeze({
+    outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+    ...fields,
+  });
+}
+
+export class ControllablePartitionRaftProvider {
+  constructor(options = {}) {
+    this.role = options.role || RAFT_ROLE.FOLLOWER;
+    this.term = options.term || 1;
+    this.leaderId = options.leaderId || null;
+    this.peers = Array.isArray(options.peers) ?
+      options.peers.map((peer) => ({...peer})) :
+      [];
+    this.confChanges = [];
+    this.request = null;
+    this.proposeHandler = null;
+    this.stepHandler = null;
+    this.listeners = new Map();
+    this.steps = [];
+  }
+
+  createPartitionPort(request) {
+    this.request = request;
+    const subscribe = (eventName, listener) => {
+      const listeners = this.listeners.get(eventName) || new Set();
+      listeners.add(listener);
+      this.listeners.set(eventName, listeners);
+      return Object.freeze(() => listeners.delete(listener));
+    };
+    return createRaftOperationPort({
+      subscribe,
+      step: (envelope) => {
+        this.steps.push(envelope);
+        const result = this.stepHandler ? this.stepHandler(envelope) : null;
+        return result?.outcome ? result : testCoreOk();
+      },
+      propose: async (entry) => {
+        const result = this.proposeHandler ?
+          await this.proposeHandler(entry) :
+          null;
+        return result?.outcome ? result : testCoreOk();
+      },
+      proposeConfChange: (change) => {
+        this.confChanges.push({...change});
+        if (change?.type === 'remove-peer') {
+          this.peers = this.peers.filter(
+            (peer) => peer?.address !== change.peerAddress,
+          );
+        } else if (change?.type === 'add-peer') {
+          this.peers = [
+            ...this.peers,
+            {
+              address: change.peerAddress,
+              replicaIdentity: change.replicaIdentity || null,
+            },
+          ];
+        }
+        return testCoreOk();
+      },
+      probePeerProgress: () => testCoreOk(),
+      tick: () => testCoreOk(),
+      campaign: () => {
+        this.setRole(RAFT_ROLE.LEADER);
+        return testCoreOk();
+      },
+      readStatus: () => deepFreeze({
+        term: this.term,
+        commitIndex: 0,
+        role: this.role,
+        leaderId: this.leaderId,
+        peerCount: this.peers.length,
+        peers: this.peers.map((peer) => deepFreeze({...peer})),
+      }),
+      configureTick: () => testCoreOk(),
+      startScheduling: () => testCoreOk(),
+      stopScheduling: () => testCoreOk(),
+      close: () => testCoreOk(),
+    });
+  }
+
+  setRole(role) {
+    this.role = role;
+    this.leaderId = role === RAFT_ROLE.LEADER ?
+      this.request?.peerId || null :
+      null;
+    for (const listener of this.listeners.get(role) || []) {
+      listener();
+    }
+  }
+
+  setProposeHandler(handler) {
+    this.proposeHandler = handler;
+  }
+
+  setStepHandler(handler) {
+    this.stepHandler = handler;
+  }
+}
 
 /**
  * Stub ONLY the transport hop of the learner-promotion proof: the

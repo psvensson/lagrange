@@ -219,7 +219,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
               });
           }
         };
-        this.raft.emit(PARTITION_SERVICE_EVENT.DATA, payload, write);
+        this.raft.step({payload, reply: write});
       }
       return {acknowledged: true};
     }

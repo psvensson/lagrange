@@ -1,5 +1,4 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {readFollowerMatchIndex} from '../raft/liferaft.js';
 import {
   LEARNER_PROMOTION_PROOF_REASON,
   LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
@@ -16,15 +15,13 @@ import {
 
 const {
   ConfigurationManager,
-  LifeRaft,
+  RaftRole,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
   STRING,
 } = PARTITION_SERVICE_SHARED;
 
-// An empty raft log reports no last index; the probe has nothing to re-send.
-const LEARNER_PROMOTION_PROBE_EMPTY_LOG_INDEX = 0;
 const PROTOTYPE_CONSTRUCTOR_NAME = 'constructor';
 
 /**
@@ -96,15 +93,18 @@ class PartitionServiceLearnerPromotionProofMethods {
         {error: addressError.message},
       );
     }
-    const matchObservation = readFollowerMatchIndex(
-      this.raft,
-      learnerAddress,
-    );
+    const followerMatchIndex =
+      this.raft?.readStatus?.().followerProgress?.[learnerAddress];
+    const matchObservation = Object.freeze({
+      state: Number.isFinite(followerMatchIndex) ? 'available' : 'unavailable',
+      matchIndex: Number.isFinite(followerMatchIndex) ? followerMatchIndex : 0,
+    });
     const proof = evaluateLearnerPromotionProof({
       raftIsLeader:
-        this.isLeader === true && this.raft?.state === LifeRaft.LEADER,
+        this.isLeader === true &&
+          this.raft?.readStatus?.().role === RaftRole.LEADER,
       currentTerm: this.resolveCurrentTermSafe(),
-      committedIndex: this.raftProvider.getCommittedIndex(this.raft),
+      committedIndex: this.raft.readStatus().commitIndex,
       learnerMatchIndex: matchObservation.matchIndex,
       leaderMembershipEpoch: this.resolveLearnerPromotionMembershipEpoch(),
       learnerMembershipEpoch: payload?.membershipEpoch,
@@ -159,24 +159,11 @@ class PartitionServiceLearnerPromotionProofMethods {
    * @private
    */
   async probeLearnerReplicationProgress(learnerAddress) {
-    const raft = this.raft;
-    if (!raft?.log) {
+    if (typeof this.raft?.probePeerProgress !== PARTITION_SERVICE_LITERAL.FUNCTION) {
       return;
     }
     try {
-      const lastInfo = await raft.log.getLastInfo();
-      const lastIndex = Number.isInteger(lastInfo?.index) ?
-        lastInfo.index :
-        LEARNER_PROMOTION_PROBE_EMPTY_LOG_INDEX;
-      if (lastIndex <= LEARNER_PROMOTION_PROBE_EMPTY_LOG_INDEX) {
-        return;
-      }
-      const lastEntry = await raft.log.get(lastIndex);
-      if (!lastEntry) {
-        return;
-      }
-      const probePacket = await raft.appendPacket(lastEntry);
-      raft.message(learnerAddress, probePacket);
+      await Promise.resolve(this.raft.probePeerProgress(learnerAddress));
     } catch (probeError) {
       this.logger.debug(
         PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_PROGRESS_PROBE_FAILED,
@@ -189,6 +176,7 @@ class PartitionServiceLearnerPromotionProofMethods {
       );
     }
   }
+
   /**
    * Learner-side proof request to the discovered leader. Any transport or
    * response-shape failure returns a typed refused proof with a typed
