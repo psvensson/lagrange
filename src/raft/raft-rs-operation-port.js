@@ -210,6 +210,22 @@ function createRaftRsOperationPort(request) {
         type: 'propose-conf-change', change: normalized,
       });
     }),
+    probePeerProgress: (peerAddress) => lifecycle.execute(async () => {
+      if (closed || dispatcher === null) {
+        return deepFreeze({outcome: CORE_REFUSED, reason: 'closed'});
+      }
+      const status = await Promise.resolve(
+        dispatcher.execute({type: 'read-status'}),
+      );
+      if (status?.outcome !== CORE_OK) {
+        return status;
+      }
+      const matchIndex = status?.followerProgress?.[peerAddress];
+      if (Number.isFinite(matchIndex)) {
+        return coreOk('progress-observed', {matchIndex});
+      }
+      return dispatcher.execute({type: 'tick'});
+    }),
     tick: () => execute({type: 'tick'}),
     campaign: () => execute({type: 'campaign'}),
     readStatus: () => execute({type: 'read-status'}),
