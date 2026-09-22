@@ -7,7 +7,6 @@ import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
 
 
 const {
-  LifeRaft,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
@@ -918,7 +917,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       proposedAt: Date.now(),
     };
     const logEntry = this.storage.appendEntry(entry);
-    const isLiferaftLeader = this.raft?.readStatus?.().role === LifeRaft.LEADER;
+    const isLiferaftLeader = this.raft?.readStatus?.().role === RaftRole.LEADER;
     if (isLiferaftLeader) {
       Promise.resolve(this.raft.propose(entry))
         .then(assertRaftOperationSucceeded)
@@ -954,7 +953,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       proposedAt: Date.now(),
     };
     const logEntry = this.storage.appendEntry(entry);
-    const isLiferaftLeader = this.raft?.readStatus?.().role === LifeRaft.LEADER;
+    const isLiferaftLeader = this.raft?.readStatus?.().role === RaftRole.LEADER;
     if (isLiferaftLeader) {
       Promise.resolve(this.raft.propose(entry))
         .then(assertRaftOperationSucceeded)
@@ -988,7 +987,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       proposedAt: Date.now(),
     };
     const logEntry = this.storage.appendEntry(entry);
-    const isLiferaftLeader = this.raft?.readStatus?.().role === LifeRaft.LEADER;
+    const isLiferaftLeader = this.raft?.readStatus?.().role === RaftRole.LEADER;
     if (isLiferaftLeader) {
       Promise.resolve(this.raft.propose(entry))
         .then(assertRaftOperationSucceeded)
