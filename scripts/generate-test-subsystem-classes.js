@@ -112,14 +112,6 @@ function explain(argv) {
   if (!verdict.subsystem) process.exitCode = 1;
 }
 
-function safeReadJsonForDiagnostic(value) {
-  try {
-    return JSON.parse(value);
-  } catch (_error) {
-    return null;
-  }
-}
-
 function main() {
   const argv = process.argv.slice(2);
   if (args.has(MODE_EXPLAIN)) {
@@ -139,36 +131,6 @@ function main() {
     const committed = fs.existsSync(manifestFile) ?
       fs.readFileSync(manifestFile, UTF8_ENCODING) : '';
     if (committed !== serialized) {
-      const committedManifest = safeReadJsonForDiagnostic(committed);
-      if (committedManifest) {
-        const changedClasses = Object.keys({
-          ...committedManifest.classes,
-          ...manifest.classes,
-        }).filter((testPath) =>
-          committedManifest.classes?.[testPath] !== manifest.classes?.[testPath]);
-        const changedObservations = Object.keys({
-          ...committedManifest.observations,
-          ...manifest.observations,
-        }).filter((testPath) =>
-          JSON.stringify(committedManifest.observations?.[testPath] ?? null) !==
-          JSON.stringify(manifest.observations?.[testPath] ?? null));
-        process.stderr.write(
-          `DIAGNOSTIC digest expected=${manifest.digest} committed=${committedManifest.digest}\n`);
-        process.stderr.write(
-          `DIAGNOSTIC observationDigest expected=${manifest.observationDigest} committed=${committedManifest.observationDigest}\n`);
-        for (const testPath of changedClasses) {
-          process.stderr.write(
-            `DIAGNOSTIC changedClass ${testPath} committed=${JSON.stringify(committedManifest.classes?.[testPath] ?? null)} expected=${JSON.stringify(manifest.classes?.[testPath] ?? null)}\n`);
-        }
-        for (const testPath of changedObservations) {
-          process.stderr.write(
-            `DIAGNOSTIC changedObservation ${testPath}\n`);
-          process.stderr.write(
-            `DIAGNOSTIC committedObservation ${JSON.stringify(committedManifest.observations?.[testPath] ?? null)}\n`);
-          process.stderr.write(
-            `DIAGNOSTIC expectedObservation ${JSON.stringify(manifest.observations?.[testPath] ?? null)}\n`);
-        }
-      }
       reportProblems([BYTE_DRIFT_PROBLEM]);
       return;
     }
