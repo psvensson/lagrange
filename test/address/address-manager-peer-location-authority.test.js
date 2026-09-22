@@ -145,6 +145,22 @@ function authoritativePartitionCache() {
   ]);
 }
 
+function seedPartitionProgressProbe(partition) {
+  const status = partition.raft.readStatus();
+  const term = Number.isSafeInteger(status.term) && status.term > 0 ?
+    status.term : ONE;
+  partition.logAdapter.saveCommand(
+    {type: 'address-authority-progress-probe'},
+    term,
+  );
+}
+
+async function probePartitionPeerDestination(partition, peerAddress, sent) {
+  const at = sent.length;
+  await partition.raft.probePeerProgress(peerAddress);
+  return sent.slice(at);
+}
+
 test('a poisoned process registry cannot move a partition peer destination',
   async (t) => {
     initializeProcess();
@@ -161,21 +177,23 @@ test('a poisoned process registry cannot move a partition peer destination',
     t.equal(partition.buildPeerAddress(PARTITION_A), PARTITION_A,
       'an already-unified address is returned as given');
 
-    // Joined with the registry poisoned, and poisoned AGAIN before the write,
-    // because the destination is resolved a second time at send time.
+    // The partition boundary is operation-only after the rs-raft migration.
+    // Observe the frozen peer projection, then drive the semantic progress
+    // probe which sends one real Raft packet without exposing a peer object.
     await partition.initialize();
+    seedPartitionProgressProbe(partition);
     poisonTowardB(PARTITION_B);
-    const peer = partition.raft.nodes[ZERO];
-    t.ok(peer instanceof RemotePeerRepresentation,
-      'the peer slot holds a representation, as the sealed topology requires');
-    t.equal(peer.address, PARTITION_A, 'joined at the authoritative address');
+    const status = await partition.raft.readStatus();
+    t.equal(status.peers.length, ONE,
+      'the operation-port snapshot exposes exactly the one remote peer');
+    t.equal(status.peers[ZERO].address, PARTITION_A,
+      'the peer projection carries the authoritative address');
 
-    const before = sent.length;
-    await new Promise((resolve) => {
-      peer.write({type: 'append', address: partition.unifiedAddress}, resolve);
-    });
-    t.same(sent.slice(before), [PARTITION_A],
-      'and the packet the production write actually sent went there');
+    t.same(
+      await probePartitionPeerDestination(partition, PARTITION_A, sent),
+      [PARTITION_A],
+      'and the operation-port progress probe actually sent there',
+    );
 
     t.same([...AddressManager.getInstance().serviceAddresses], [PARTITION_B],
       'resolution neither consulted nor mutated the registry');
@@ -221,17 +239,15 @@ test('one node mutating the shared registry cannot move another node destination
         serviceRow(peerId, peerAddress, SERVICE_TYPE.PARTITION),
       ]);
       await partition.initialize();
+      seedPartitionProgressProbe(partition);
       hosts.push({partition, peerAddress});
     }
 
-    const write = async (host) => {
-      const at = sent.length;
-      await new Promise((resolve) => {
-        host.partition.raft.nodes[ZERO].write(
-          {type: 'append', address: host.partition.unifiedAddress}, resolve);
-      });
-      return sent.slice(at);
-    };
+    const write = (host) => probePartitionPeerDestination(
+      host.partition,
+      host.peerAddress,
+      sent,
+    );
 
     const beforeA = await write(hosts[ZERO]);
     const beforeB = await write(hosts[ONE]);
