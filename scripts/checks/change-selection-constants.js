@@ -139,6 +139,13 @@ export const RELEASE_SURFACE_PATHS = Object.freeze([
   '.npmignore',
   '.dockerignore',
 ]);
+// Entire shipped trees whose bytes are executed or distributed to consumers.
+// The raft-rs WASM binding is listed in package.json "files"; a change to any
+// byte beneath it changes the runtime artifact even when package.json itself
+// is unchanged, so subsystem-only proof is insufficient.
+export const RELEASE_SURFACE_PREFIXES = Object.freeze([
+  'vendor/raft-rs-wasm/',
+]);
 export const RELEASE_SURFACE_PROBLEM =
   'change alters the published/shipped surface';
 
@@ -157,6 +164,7 @@ export const NEVER_INERT_PREFIXES = Object.freeze([
   'charts/',
   'models/',
   'examples/',
+  'vendor/',
   '.github/',
   '.githooks/',
   'package.json',
