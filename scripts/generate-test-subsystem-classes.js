@@ -131,6 +131,33 @@ function main() {
     const committed = fs.existsSync(manifestFile) ?
       fs.readFileSync(manifestFile, UTF8_ENCODING) : '';
     if (committed !== serialized) {
+      let committedManifest = null;
+      try {
+        committedManifest = JSON.parse(committed);
+      } catch (_error) {
+        committedManifest = null;
+      }
+      if (committedManifest) {
+        const allObservationTests = new Set([
+          ...Object.keys(committedManifest.observations || {}),
+          ...Object.keys(manifest.observations || {}),
+        ]);
+        process.stderr.write(
+          `DIAGNOSTIC observationDigest expected=${manifest.observationDigest} committed=${committedManifest.observationDigest}\n`,
+        );
+        for (const testPath of [...allObservationTests].sort()) {
+          const before = committedManifest.observations?.[testPath] ?? null;
+          const after = manifest.observations?.[testPath] ?? null;
+          if (JSON.stringify(before) === JSON.stringify(after)) continue;
+          process.stderr.write(`DIAGNOSTIC changedObservation ${testPath}\n`);
+          process.stderr.write(
+            `DIAGNOSTIC committedObservation ${JSON.stringify(before)}\n`,
+          );
+          process.stderr.write(
+            `DIAGNOSTIC expectedObservation ${JSON.stringify(after)}\n`,
+          );
+        }
+      }
       reportProblems([BYTE_DRIFT_PROBLEM]);
       return;
     }
