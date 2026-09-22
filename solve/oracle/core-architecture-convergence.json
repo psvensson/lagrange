@@ -1,0 +1,9 @@
+{
+  "schema": "core-architecture-convergence-epic/2",
+  "metric": 1,
+  "target": 0,
+  "status": "blocked_on_partition_raft_cutover_and_exact_main_certification",
+  "foundationCommit": "f4f5b5a6e9c27d139b3ada85e0aabe38eb526480",
+  "statement": "The rs-raft operation-port foundation is merged, but this epic remains incomplete until Q0 proves partition cutover readiness, the owner-convergence phases land, compatibility deletion is bounded by subsystem ownership, and integrated exact-main certification passes.",
+  "terminalEvidence": null
+}
