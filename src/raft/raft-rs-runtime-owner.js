@@ -25,9 +25,11 @@ import {
 } from './raft-rs-group-constants.js';
 import {applyCommittedEntryTransaction} from
   './raft-rs-application-transaction-owner.js';
-import {RAFT_EVENT} from './constants.js';
 import {deepFreeze} from './raft-operation-port.js';
-import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
+import {
+  RAFT_EVENT,
+  RAFT_OPERATION_OUTCOME,
+} from './raft-operation-port-constants.js';
 
 const {
   CORE_OK,
