@@ -9,6 +9,7 @@ import {
   checkLearnerPromotionWithGrantedProof,
   createLoopbackTransport,
   createTrafficReadinessState,
+  ControllablePartitionRaftProvider,
 } from './partition-service-test-support.js';
 import {
   PartitionService,
@@ -1233,6 +1234,7 @@ test(
 test(
   'PartitionService - joining learner ignores candidate and follower demotion events before promotion',
   async (t) => {
+    const raftProvider = new ControllablePartitionRaftProvider();
     const partition = new PartitionService({
       partitionId: 'joiner-partition',
       tableId: 'joiner-table',
@@ -1243,6 +1245,7 @@ test(
       transport: createLoopbackTransport(),
       dbPath: ':memory:',
       isJoiningExistingGroup: true,
+      raftProvider,
     });
 
     try {
@@ -1255,8 +1258,8 @@ test(
         'joining replica should start as learner',
       );
 
-      partition.raft.emit('candidate');
-      partition.raft.emit('follower');
+      raftProvider.setRole(RaftRole.CANDIDATE);
+      raftProvider.setRole(RaftRole.FOLLOWER);
 
       t.equal(
         partition.role,
