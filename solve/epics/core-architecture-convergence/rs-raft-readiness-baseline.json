@@ -89,13 +89,14 @@
       ]
     },
     "documentation": {
-      "state": "DRIFT_RECORDED",
+      "state": "DRIFT_REPAIRED_IN_Q0",
       "blocker": false,
-      "known": [
-        "src/partition/README.md still names PartitionRaftNode as a primary owner",
-        "architecture/overview.md still says every partition Raft group uses liferaft",
-        "architecture/runtime-components.md still describes PartitionService as liferaft-backed"
-      ]
+      "changed": [
+        "src/partition/README.md",
+        "architecture/overview.md",
+        "architecture/runtime-components.md"
+      ],
+      "detail": "Current-state docs now describe the provider/operation-port boundary, Liferaft production default, rs-raft/WASM integrated-but-not-cut-over status, and ConfState-versus-policy ownership distinction."
     }
   },
   "adversarialChecks": [
@@ -139,5 +140,14 @@
       "outcome": "BLOCKS",
       "detail": "No exact-SHA durable release-full-v1 receipt was present for the measured main commit."
     }
+  ],
+  "generatedBy": "verifying-agent/q0-source-census",
+  "entries": [
+    "foundation",
+    "operationBoundary",
+    "consensusMembership",
+    "transport",
+    "messageGroups",
+    "documentation"
   ]
 }
