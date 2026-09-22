@@ -7,6 +7,7 @@ const RAFT_OPERATION_PORT_METHODS = Object.freeze([
   'step',
   'propose',
   'proposeConfChange',
+  'probePeerProgress',
   'tick',
   'campaign',
   'readStatus',
