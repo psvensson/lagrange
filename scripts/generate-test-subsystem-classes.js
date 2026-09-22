@@ -112,6 +112,14 @@ function explain(argv) {
   if (!verdict.subsystem) process.exitCode = 1;
 }
 
+function safeReadJsonForDiagnostic(value) {
+  try {
+    return JSON.parse(value);
+  } catch (_error) {
+    return null;
+  }
+}
+
 function main() {
   const argv = process.argv.slice(2);
   if (args.has(MODE_EXPLAIN)) {
@@ -131,6 +139,32 @@ function main() {
     const committed = fs.existsSync(manifestFile) ?
       fs.readFileSync(manifestFile, UTF8_ENCODING) : '';
     if (committed !== serialized) {
+      const committedManifest = safeReadJsonForDiagnostic(committed);
+      if (committedManifest) {
+        const changedClasses = Object.keys({
+          ...committedManifest.classes,
+          ...manifest.classes,
+        }).filter((testPath) =>
+          committedManifest.classes?.[testPath] !== manifest.classes?.[testPath]);
+        const changedObservations = Object.keys({
+          ...committedManifest.observations,
+          ...manifest.observations,
+        }).filter((testPath) =>
+          JSON.stringify(committedManifest.observations?.[testPath] ?? null) !==
+          JSON.stringify(manifest.observations?.[testPath] ?? null));
+        process.stderr.write(`${JSON.stringify({
+          expectedDigest: manifest.digest,
+          committedDigest: committedManifest.digest,
+          expectedObservationDigest: manifest.observationDigest,
+          committedObservationDigest: committedManifest.observationDigest,
+          changedClasses,
+          changedObservations: changedObservations.map((testPath) => ({
+            testPath,
+            committed: committedManifest.observations?.[testPath] ?? null,
+            expected: manifest.observations?.[testPath] ?? null,
+          })),
+        })}\n`);
+      }
       reportProblems([BYTE_DRIFT_PROBLEM]);
       return;
     }
