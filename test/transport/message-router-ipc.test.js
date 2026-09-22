@@ -191,5 +191,4 @@ describe('MessageRouter IPC Handler Registration', () => {
           'MessageRouter does not fabricate a Liferaft packet type');
       });
   });
-
 });
