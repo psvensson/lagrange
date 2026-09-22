@@ -12,6 +12,9 @@ import {
 import {createRaftProvider} from
   '../../../src/raft/raft-backend-selection.js';
 import {LiferaftProvider} from '../../../src/raft/liferaft-provider.js';
+import {RAFT_ROLE} from '../../../src/raft/constants.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_OPERATION_PORT_METHODS} from
   '../../../src/raft/raft-operation-port.js';
 import {
@@ -128,6 +131,40 @@ test('the default backend returns the same frozen semantic port contract',
     } finally {
       port.close();
       request.durableStorage.close();
+    }
+  });
+
+test('the default liferaft port reports leadership as a semantic role', () => {
+  const request = minimalPartitionRequest();
+  const port = new LiferaftProvider().createPartitionPort(request);
+  const observedRoles = [];
+  const unsubscribe = port.subscribe(RAFT_ROLE.LEADER, () => {
+    observedRoles.push(port.readStatus().role);
+  });
+  try {
+    assert.equal(port.readStatus().role, RAFT_ROLE.FOLLOWER);
+    const result = port.campaign();
+    assert.equal(result.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+    assert.equal(port.readStatus().role, RAFT_ROLE.LEADER);
+    assert.deepEqual(observedRoles, [RAFT_ROLE.LEADER]);
+  } finally {
+    unsubscribe();
+    port.close();
+    request.durableStorage.close();
+  }
+});
+
+test('a single-replica partition observes liferaft leadership through the port',
+  async () => {
+    const provider = new RecordingLiferaftProvider();
+    const service = buildPartition(provider);
+    try {
+      await service.initialize();
+      assert.equal(service.isLeader, true);
+      assert.equal(service.role, RAFT_ROLE.LEADER);
+      assert.equal(service.raft.readStatus().role, RAFT_ROLE.LEADER);
+    } finally {
+      await service.shutdown();
     }
   });
 
