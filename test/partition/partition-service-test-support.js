@@ -35,6 +35,7 @@ export class ControllablePartitionRaftProvider {
     this.role = options.role || RAFT_ROLE.FOLLOWER;
     this.term = options.term || 1;
     this.leaderId = options.leaderId || null;
+    this.leaderAddress = options.leaderAddress || null;
     this.peers = Array.isArray(options.peers) ?
       options.peers.map((peer) => ({...peer})) :
       [];
@@ -95,6 +96,7 @@ export class ControllablePartitionRaftProvider {
         commitIndex: 0,
         role: this.role,
         leaderId: this.leaderId,
+        leaderAddress: this.leaderAddress,
         peerCount: this.peers.length,
         peers: this.peers.map((peer) => deepFreeze({...peer})),
       }),
@@ -123,9 +125,15 @@ export class ControllablePartitionRaftProvider {
     this.emitEvent(role);
   }
 
-  emitLeaderChange(leaderId) {
+  emitLeaderChange(leaderId, leaderAddress = null) {
     this.leaderId = leaderId;
+    this.leaderAddress = leaderAddress || leaderId;
     this.emitEvent('leader change', leaderId);
+  }
+
+  setLeaderObservation(leaderId, leaderAddress) {
+    this.leaderId = leaderId;
+    this.leaderAddress = leaderAddress;
   }
 
   setProposeHandler(handler) {
