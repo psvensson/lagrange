@@ -18,7 +18,7 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 function resolveLiveRaftLeaderAddressForPeer(partitionService, peerId) {
-  const leaderAddress = partitionService.raft?.leader;
+  const leaderAddress = partitionService.raft?.readStatus?.().leaderAddress;
   if (
     typeof peerId !== 'string' ||
     peerId.length === 0 ||
