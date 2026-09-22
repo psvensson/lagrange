@@ -1,0 +1,95 @@
+{
+  "schema": "core-convergence-certification-matrix/1",
+  "sourceCommit": "4fc46adfd02b9f1263c2d7f86a31facc9a43a266",
+  "entries": [
+    {
+      "id": "release-proof",
+      "kind": "terminal",
+      "command": "npm run check:release",
+      "status": "required-before-ready"
+    },
+    {
+      "id": "model-contracts",
+      "kind": "deterministic",
+      "command": "npm run model:contracts",
+      "status": "bound"
+    },
+    {
+      "id": "operation-boundary",
+      "kind": "deterministic",
+      "command": "node scripts/run-classified-test-files.js test/raft/raft-rs-backend/operation-port-boundary.test.js",
+      "status": "bound"
+    },
+    {
+      "id": "operation-port-regression",
+      "kind": "deterministic",
+      "command": "node scripts/run-classified-test-files.js test/raft/raft-rs-backend/operation-port-regression.test.js",
+      "status": "bound"
+    },
+    {
+      "id": "rs-raft-real-partition",
+      "kind": "deterministic",
+      "command": "node scripts/run-classified-test-files.js test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js",
+      "status": "bound"
+    },
+    {
+      "id": "formation-sim",
+      "kind": "deterministic",
+      "command": "node scripts/checks/formation-sim-charged-seed-host.js",
+      "status": "bound"
+    },
+    {
+      "id": "five-node-cold-formation",
+      "kind": "live",
+      "scenario": "release-0-2-five-node-convergence",
+      "authority": "solve/quests/release-0-2-five-node-convergence/quest.json",
+      "status": "terminal-only"
+    },
+    {
+      "id": "rolling-restart",
+      "kind": "live",
+      "scenario": "rolling-restart",
+      "authority": "solve/quests/rolling-restart-representative-certification/quest.json",
+      "runner": "scripts/rolling-restart-stat-gate.sh",
+      "status": "terminal-only"
+    },
+    {
+      "id": "acknowledged-write-visibility",
+      "kind": "live",
+      "scenario": "rolling-restart-acknowledged-write-durability-visibility",
+      "authority": "solve/quests/rolling-restart-acknowledged-write-durability-visibility/quest.json",
+      "status": "terminal-only"
+    },
+    {
+      "id": "snapshot-live-rebuild",
+      "kind": "live",
+      "scenario": "raft-snapshot-live-rebuild",
+      "authority": "solve/quests/raft-snapshot-live-rebuild/quest.json",
+      "status": "terminal-only"
+    },
+    {
+      "id": "representative-sql",
+      "kind": "focused",
+      "command": "node scripts/run-classified-test-files.js test/integration/sql-engine-system-writes-contract.integration.test.js test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js",
+      "status": "bound"
+    },
+    {
+      "id": "service-near-data",
+      "kind": "focused",
+      "command": "node scripts/run-classified-test-files.js test/runtime/movielens-affinity-demo-wiring.test.js",
+      "status": "bound"
+    },
+    {
+      "id": "message-group-liferaft",
+      "kind": "focused",
+      "command": "node scripts/run-classified-test-files.js test/message-group/message-group-service-strict-cdc-join-convergence.test.js",
+      "status": "required-while-message-groups-use-liferaft"
+    },
+    {
+      "id": "whole-repository",
+      "kind": "deterministic",
+      "command": "npm test",
+      "status": "bound"
+    }
+  ]
+}
