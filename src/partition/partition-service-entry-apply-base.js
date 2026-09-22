@@ -44,6 +44,7 @@ const {
   RaftRole,
   SYSTEM_TABLE_NAME,
   isRaftPacket,
+  isRaftRsTransportEnvelope,
   resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
 
@@ -185,6 +186,12 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
    */
   async handleTransportMessage(envelope) {
     const payload = envelope.payload || envelope;
+    if (isRaftRsTransportEnvelope(payload)) {
+      if (this.raft) {
+        await Promise.resolve(this.raft.step(payload));
+      }
+      return {acknowledged: true};
+    }
     if (isRaftPacket(payload)) {
       if (this.raft) {
         this.logger.trace(PARTITION_SERVICE_LOG_MSG.RECEIVED_RAFT_PACKET, {
