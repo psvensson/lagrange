@@ -1,8 +1,9 @@
 import {resolveTimeSource} from '../time/time-source.js';
-import {RAFT_EVENT} from './constants.js';
 import {createRaftOperationPort, deepFreeze} from './raft-operation-port.js';
-import {RAFT_MEMBERSHIP_OPERATION} from
-  './raft-operation-port-constants.js';
+import {
+  RAFT_EVENT,
+  RAFT_MEMBERSHIP_OPERATION,
+} from './raft-operation-port-constants.js';
 import {RAFT_PARTITION_NODE_REQUEST} from
   './raft-provider-contract-constants.js';
 import {RaftRsPeerIdentityRegistry} from './raft-rs-peer-identity.js';
