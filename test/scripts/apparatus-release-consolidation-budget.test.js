@@ -407,6 +407,11 @@ test('pre-commit refreshes generated test metadata as one owned unit', () => {
   );
   assert.match(
     hook,
+    /src\/\*\|scripts\/\*\|test\/\*\) REGEN_INVENTORIES=1/u,
+    'derived inventories also refresh for staged deletions',
+  );
+  assert.match(
+    hook,
     /test\/\*\|scripts\/\*\) REGEN_TEST_METADATA=1/u,
     'test and helper-script changes trigger metadata regeneration',
   );
