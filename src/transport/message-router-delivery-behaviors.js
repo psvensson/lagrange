@@ -19,7 +19,7 @@ const {
   TRANSPORT_TYPEOF,
   WebSocket,
   buildQueueWaitSummary,
-  isRaftPacket,
+  isRaftTransportPayload,
   normalizeDeliveryOutcome,
   resolveDeliverySource,
   resolveOperationIdFromMessage,
@@ -233,7 +233,7 @@ export function tryDeliverRaftDirect(
   payload,
   targetNodeId,
 ) {
-  if (!isRaftPacket(payload)) {
+  if (!isRaftTransportPayload(payload)) {
     return null;
   }
   const connection = router.nodeConnections.get(targetNodeId);
