@@ -206,7 +206,7 @@
     "test:roadmap-authority": "node scripts/run-documentation-current-state-scenario.js roadmap-audience-authority-cutover",
     "test:documentation-onboarding": "node scripts/run-documentation-audience-safe-onboarding-scenario.js documentation-audience-safe-onboarding",
     "hooks:install": "node scripts/install-git-hooks.js",
-    "prepare": "node -e \"import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))\" && node scripts/generate-test-subsystem-classes.js && git diff -- test/shards/subsystem-classes.json",
+    "prepare": "node -e \"import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))\"",
     "test:unit": "node scripts/run-classified-test-files.js --primary unit,packaging",
     "test:distributed:boundary:transition": "node test/distributed/harness/__tests__/boundary-transition-scenarios.test.js",
     "test:distributed:checkpoint:7node:transaction-recovery": "node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-read-write-load-transaction-recovery",
