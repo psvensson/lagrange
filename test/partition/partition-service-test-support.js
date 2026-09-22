@@ -7,6 +7,13 @@
  */
 
 import {EventEmitter} from 'node:events';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {
+  createRaftOperationPort,
+  deepFreeze,
+} from '../../src/raft/raft-operation-port.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
 import {LIFECYCLE_PHASE} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {
   evaluateLearnerPromotionProof,
@@ -15,6 +22,79 @@ import {
 const PROOF_STUB_TERM = 1;
 const PROOF_STUB_COMMITTED_INDEX = 0;
 const PROOF_STUB_MATCH_INDEX = 0;
+
+function testCoreOk(fields = {}) {
+  return deepFreeze({
+    outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+    ...fields,
+  });
+}
+
+export class ControllablePartitionRaftProvider {
+  constructor(options = {}) {
+    this.role = options.role || RAFT_ROLE.FOLLOWER;
+    this.term = options.term || 1;
+    this.leaderId = options.leaderId || null;
+    this.request = null;
+    this.proposeHandler = null;
+    this.listeners = new Map();
+  }
+
+  createPartitionPort(request) {
+    this.request = request;
+    const subscribe = (eventName, listener) => {
+      const listeners = this.listeners.get(eventName) || new Set();
+      listeners.add(listener);
+      this.listeners.set(eventName, listeners);
+      return Object.freeze(() => listeners.delete(listener));
+    };
+    return createRaftOperationPort({
+      subscribe,
+      step: () => testCoreOk(),
+      propose: async (entry) => {
+        const result = this.proposeHandler ?
+          await this.proposeHandler(entry) :
+          null;
+        return result?.outcome ? result : testCoreOk();
+      },
+      proposeConfChange: () => testCoreOk(),
+      tick: () => testCoreOk(),
+      campaign: () => {
+        this.setRole(RAFT_ROLE.LEADER);
+        return testCoreOk();
+      },
+      readStatus: () => deepFreeze({
+        term: this.term,
+        commitIndex: 0,
+        role: this.role,
+        leaderId: this.leaderId,
+        peerCount: Math.max(
+          0,
+          (request.bootstrapPeerIds?.length || 1) - 1,
+        ),
+        peers: [],
+      }),
+      configureTick: () => testCoreOk(),
+      startScheduling: () => testCoreOk(),
+      stopScheduling: () => testCoreOk(),
+      close: () => testCoreOk(),
+    });
+  }
+
+  setRole(role) {
+    this.role = role;
+    this.leaderId = role === RAFT_ROLE.LEADER ?
+      this.request?.peerId || null :
+      null;
+    for (const listener of this.listeners.get(role) || []) {
+      listener();
+    }
+  }
+
+  setProposeHandler(handler) {
+    this.proposeHandler = handler;
+  }
+}
 
 /**
  * Stub ONLY the transport hop of the learner-promotion proof: the
