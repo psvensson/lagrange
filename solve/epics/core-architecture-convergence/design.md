@@ -270,8 +270,12 @@ Record:
 - current shared main SHA;
 - whether it descends from the rs-raft foundation merge;
 - PR #46 merge SHA;
-- current result of
-  `scripts/checks/raft-rs-operation-boundary-audit.js`;
+- current result of the structural operation-boundary audit **as exercised by
+  its actual witness test**,
+  `test/raft/raft-rs-backend/operation-port-boundary.test.js`;
+- explicit confirmation that a direct
+  `node scripts/checks/raft-rs-operation-boundary-audit.js` invocation is not
+  being counted as proof while that module has no CLI entrypoint;
 - current validity of the 11 sealed operation-port receipts against their
   present test-file digests;
 - exact-main release-proof result.
@@ -389,7 +393,8 @@ Only when all are true:
 3. rs-raft real transport/demux is proven if rs-raft is that path;
 4. omitted/error configuration cannot silently fall back to Liferaft on the
    production partition path;
-5. operation-boundary audit is green;
+5. operation-boundary witness test is green and actually executes
+   `auditRaftRsOperationBoundary(...)`;
 6. real partition restart and committed-membership authority are proven;
 7. every remaining Liferaft production use is classified to a non-partition
    owner or explicit migration/test surface;
@@ -433,14 +438,16 @@ The independent verifier must try to disprove:
 2. that omitted configuration cannot still select Liferaft;
 3. that a provider injection/restart path bypasses the declared selector;
 4. that a RawNode/core/handle is still reachable through wrappers/re-exports;
-5. that lifecycle retirement has another writer;
-6. that peer-identity administration is being confused with committed
+5. that a vacuous direct execution of the audit library was mistaken for a
+   green checker;
+6. that lifecycle retirement has another writer;
+7. that peer-identity administration is being confused with committed
    membership authority;
-7. that service/cache mutation directly changes rs-raft membership;
-8. that real inbound transport actually reaches `step`;
-9. that local short-circuit and remote transport use the same semantic path;
-10. that branch-era receipts are stale relative to current head;
-11. that message-group Liferaft reachability is being misclassified as a
+8. that service/cache mutation directly changes rs-raft membership;
+9. that real inbound transport actually reaches `step`;
+10. that local short-circuit and remote transport use the same semantic path;
+11. that branch-era receipts are stale relative to current head;
+12. that message-group Liferaft reachability is being misclassified as a
     partition fallback.
 
 Any unresolved item keeps Q0 blocked.
@@ -877,6 +884,54 @@ For each periodic loop prove:
 Delete only if another mechanism demonstrably provides the same recovery
 guarantee.
 
+### W6 topology workflow -> local lifecycle -> committed ConfState
+
+The rs-raft merge introduced a real multi-owner interaction that must be
+preserved, not flattened.
+
+Census ADD, learner promotion, REMOVE and REPLACE end to end:
+
+```
+topology/workflow owner
+  -> participant/executor
+  -> local rs-raft lifecycle or promotion safety when relevant
+  -> operation-port membership request
+  -> raft-rs committed ConfState
+  -> metadata/publication projection
+  -> typed executor outcome
+  -> workflow owner
+```
+
+For each transition prove:
+
+- exactly which owner decides the desired topology action;
+- who reserves the stable peer identity;
+- who gates local active/retired execution;
+- who proves learner catch-up/promotion safety;
+- which operation-port command requests the Raft change;
+- that committed `ConfState` is the membership result;
+- which metadata update is a request/wake versus a projection of that result;
+- what durable event/outcome lets the topology workflow advance.
+
+Local durable retirement and consensus REMOVE are different facts. A local
+replica can be retired even while stale local `ConfState` still contains self;
+retirement gates local execution but does not rewrite consensus history.
+
+Likewise, a services-row DELETE may legitimately wake/request removal. It is not
+proof that the committed configuration already removed the peer.
+
+### W7 learner-promotion proof fences are not consensus membership
+
+The existing learner-promotion proof uses:
+
+- backend-owned follower progress from immutable Raft status;
+- a Lagrange publication/snapshot membership epoch as a proof/catch-up fence.
+
+Do not rename or consolidate that publication epoch into the Raft
+`ConfState` authority merely because both use "membership" vocabulary.
+
+The census must state what each epoch/fence protects and who writes it.
+
 ---
 
 # 8. Phase Q5 — post-cutover MessageRouter convergence
@@ -994,6 +1049,26 @@ Not allowed:
 - a second durable readiness truth;
 - a second operation ledger.
 
+## Lifecycle domains must stay distinct
+
+The merged rs-raft code has at least three differently scoped lifecycle
+concerns:
+
+1. `RaftRsReplicaLifecycleOwner`: local consensus-runtime eligibility
+   (`active|retired`) and the zero-core-entry retirement fence;
+2. replica/service lifecycle owners such as the existing
+   `ReplicaStateMachine`: externally visible replica/service state;
+3. topology operation workflow owners: durable progression of ADD/REMOVE/
+   REPLACE.
+
+They interact, but none is a replacement for the others.
+
+A cleanup based only on the shared word "lifecycle" is forbidden. Q6 must
+identify the owned handoff between the topology REMOVE executor and
+`raftRsLifecycleAdministration.retireReplica(...)`, and prove that local
+retirement neither independently completes the topology workflow nor gets
+re-derived from cache visibility.
+
 ## Temporary owner handoff
 
 Census startup/join/recovery/migration-only owners.
@@ -1088,6 +1163,12 @@ Before adding anything:
 
 Only add a new read-only shape where composition otherwise forces a consumer to
 re-derive semantics.
+
+For partition consensus observation, prefer the existing immutable operation
+port `readStatus()` projection (or its exact successor). Never expose RawNode,
+the runtime owner, a handle, or mutable lifecycle state to make observability
+easier. Label committed `ConfState` as observed consensus membership, never as
+desired placement policy.
 
 ## Suggested partition explanation shape
 
@@ -1227,7 +1308,8 @@ Do not start until:
 - all source-changing child Quests landed;
 - no verifier rejection is outstanding;
 - owner/interaction censuses validate current head;
-- operation-boundary audit is green;
+- the operation-boundary witness test is green and demonstrably executes the
+  exported structural audit;
 - model contracts and focused shards are green;
 - no architectural UNKNOWN remains.
 
@@ -1243,7 +1325,7 @@ npm run model:statecharts
 npm run model:owner-traces
 npm run audit:runtime-grammar
 npm run audit:operation-progress-authority
-node scripts/checks/raft-rs-operation-boundary-audit.js
+node scripts/run-classified-test-files.js test/raft/raft-rs-backend/operation-port-boundary.test.js
 npm run test:metrics:scoped
 npm run test:unused:ratchet
 npm test
