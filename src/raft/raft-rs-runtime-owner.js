@@ -625,12 +625,22 @@ function readGroupStatus(group, expectedGeneration) {
     return conf.result;
   }
   let leaderId = null;
+  let leaderAddress = null;
   try {
     leaderId = status.value.lead === NO_LEADER ? null :
       group.resolvePeerIdentity(status.value.lead);
   } catch (error) {
     group.health = RECOVERY_REQUIRED;
     return hostFailure(RUNTIME_PHASE.ADDRESS_RESOLUTION, error, true);
+  }
+  if (status.value.lead !== NO_LEADER) {
+    try {
+      leaderAddress = group.resolvePeerAddress(status.value.lead);
+    } catch {
+      // A network address can lag membership/identity without invalidating
+      // the consensus runtime. Status reports the identity and a null address.
+      leaderAddress = null;
+    }
   }
   return deepFreeze({
     outcome: CORE_OK,
@@ -641,6 +651,7 @@ function readGroupStatus(group, expectedGeneration) {
     commitIndex: Number(status.value.commit),
     role: ROLE[status.value.raftState] || RUNTIME_REASON.UNKNOWN,
     leaderId,
+    leaderAddress,
     peerCount: Math.max(0,
       conf.value.voters.length + conf.value.learners.length - 1),
     peers: peerSnapshot(group, conf.value),
