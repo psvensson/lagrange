@@ -590,6 +590,30 @@ function peerSnapshot(group, confState) {
     });
 }
 
+function followerProgressSnapshot(group, status) {
+  const progress = Array.isArray(status?.progress) ? status.progress : [];
+  const snapshot = {};
+  for (const item of progress) {
+    if (String(item?.id) === String(group.peerId)) {
+      continue;
+    }
+    const matched = Number(item?.matched);
+    if (!Number.isFinite(matched)) {
+      continue;
+    }
+    let address = null;
+    try {
+      address = group.resolvePeerAddress(item.id);
+    } catch {
+      continue;
+    }
+    if (typeof address === 'string' && address.length > 0) {
+      snapshot[address] = matched;
+    }
+  }
+  return snapshot;
+}
+
 function readGroupStatus(group, expectedGeneration) {
   const status = invokeCoreAt(group, expectedGeneration, 'status');
   if (!status.ok) {
@@ -620,6 +644,7 @@ function readGroupStatus(group, expectedGeneration) {
     peerCount: Math.max(0,
       conf.value.voters.length + conf.value.learners.length - 1),
     peers: peerSnapshot(group, conf.value),
+    followerProgress: followerProgressSnapshot(group, status.value),
     confState: conf.value,
     runtimeHealth,
     groupHealth: group.health,
