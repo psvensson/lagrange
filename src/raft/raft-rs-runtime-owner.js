@@ -15,6 +15,7 @@ import {
 } from './raft-rs-core-constants.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {admitRaftRsMessage} from './raft-rs-ingress.js';
+import {RAFT_RS_TRANSPORT_PROTOCOL} from './raft-rs-ingress-constants.js';
 import {
   RAFT_RS_CONF_CHANGE_ENTRY_TYPES,
 } from './raft-rs-ready-loop-constants.js';
@@ -381,7 +382,9 @@ function sendMessages(group, messages, index = 0) {
   let delivered;
   try {
     delivered = group.sendToPeer(address, {
+      protocol: RAFT_RS_TRANSPORT_PROTOCOL,
       groupId: group.groupId,
+      from: message.from,
       to: message.to,
       message,
     });
