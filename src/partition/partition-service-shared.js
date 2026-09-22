@@ -2,7 +2,6 @@ import {EventEmitter} from 'events';
 import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
-import LifeRaft from '../raft/liferaft.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from '../control-plane/control-plane-readiness-constants.js';
@@ -280,7 +279,6 @@ export const PARTITION_SERVICE_SHARED = {
   LIFECYCLE_REASON,
   LeaderActivationGate,
   LeaderActivationScheduler,
-  LifeRaft,
   LiferaftProvider,
   LoggingService,
   METRICS_LOG_TAG,
