@@ -38,8 +38,6 @@ const RAFT_ROLE = Object.freeze({
 // of every voter-readiness membership row (quorum-voter, load-routable,
 // repair-only, catchup-learner). Import it from there.
 
-
-
 const RAFT_ERROR_NAME = Object.freeze({
   NOT_FOUND: 'NotFoundError',
 });
