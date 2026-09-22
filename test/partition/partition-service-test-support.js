@@ -35,6 +35,10 @@ export class ControllablePartitionRaftProvider {
     this.role = options.role || RAFT_ROLE.FOLLOWER;
     this.term = options.term || 1;
     this.leaderId = options.leaderId || null;
+    this.peers = Array.isArray(options.peers) ?
+      options.peers.map((peer) => ({...peer})) :
+      [];
+    this.confChanges = [];
     this.request = null;
     this.proposeHandler = null;
     this.stepHandler = null;
@@ -63,7 +67,23 @@ export class ControllablePartitionRaftProvider {
           null;
         return result?.outcome ? result : testCoreOk();
       },
-      proposeConfChange: () => testCoreOk(),
+      proposeConfChange: (change) => {
+        this.confChanges.push({...change});
+        if (change?.type === 'remove-peer') {
+          this.peers = this.peers.filter(
+            (peer) => peer?.address !== change.peerAddress,
+          );
+        } else if (change?.type === 'add-peer') {
+          this.peers = [
+            ...this.peers,
+            {
+              address: change.peerAddress,
+              replicaIdentity: change.replicaIdentity || null,
+            },
+          ];
+        }
+        return testCoreOk();
+      },
       probePeerProgress: () => testCoreOk(),
       tick: () => testCoreOk(),
       campaign: () => {
@@ -75,11 +95,8 @@ export class ControllablePartitionRaftProvider {
         commitIndex: 0,
         role: this.role,
         leaderId: this.leaderId,
-        peerCount: Math.max(
-          0,
-          (request.bootstrapPeerIds?.length || 1) - 1,
-        ),
-        peers: [],
+        peerCount: this.peers.length,
+        peers: this.peers.map((peer) => deepFreeze({...peer})),
       }),
       configureTick: () => testCoreOk(),
       startScheduling: () => testCoreOk(),
