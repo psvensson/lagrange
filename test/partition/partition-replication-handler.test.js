@@ -246,11 +246,11 @@ test('PartitionReplicationHandler ProposalQueue integration',
           logger: createMockLogger(),
         });
 
-        let commandCalled = false;
+        let proposeCalled = false;
         handler.raft = {
-          command: () => {
-            commandCalled = true;
-            return Promise.resolve();
+          propose: () => {
+            proposeCalled = true;
+            return Promise.resolve({outcome: 'CORE_OK'});
           },
         };
         handler.storage = {
@@ -271,7 +271,7 @@ test('PartitionReplicationHandler ProposalQueue integration',
           handler.getPendingCommitCount(), 1,
           'should have 1 pending entry',
         );
-        t.ok(commandCalled, 'raft.command should be called');
+        t.ok(proposeCalled, 'raft.propose should be called');
 
         // Resolve the pending commit to complete the promise
         handler.resolveCommit(entry.entryId, {
@@ -302,7 +302,7 @@ test('PartitionReplicationHandler ProposalQueue integration',
         handler.proposalQueue = new ProposalQueue({maxCapacity: 1});
 
         handler.raft = {
-          command: () => Promise.resolve(),
+          propose: () => Promise.resolve({outcome: 'CORE_OK'}),
         };
 
         // Fill the queue
@@ -483,15 +483,15 @@ test('PartitionReplicationHandler unified write path',
           logger: createMockLogger(),
         });
 
-        let commandCalled = false;
+        let proposeCalled = false;
         handler.replicaIds = ['r-1', 'r-2', 'r-3'];
         handler.storage = {
           appendEntry: () => ({index: 10}),
         };
         handler.raft = {
-          command: () => {
-            commandCalled = true;
-            return Promise.resolve();
+          propose: () => {
+            proposeCalled = true;
+            return Promise.resolve({outcome: 'CORE_OK'});
           },
         };
 
@@ -504,7 +504,7 @@ test('PartitionReplicationHandler unified write path',
         // Start applyWrite (don't await — multi-replica waits for commit)
         const promise = handler.applyWrite(entry);
 
-        t.ok(commandCalled, 'raft.command should be called');
+        t.ok(proposeCalled, 'raft.propose should be called');
         t.equal(
           handler.getPendingCommitCount(), 1,
           'should have 1 pending entry',

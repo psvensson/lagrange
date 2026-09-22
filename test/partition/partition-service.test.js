@@ -26,6 +26,8 @@ import {
   INITIAL_PARTITION_IDS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {ControllablePartitionRaftProvider} from
+  './partition-service-test-support.js';
 import {
 } from '../../src/raft/constants.js';
 import {
@@ -467,6 +469,7 @@ test(
   'PartitionService - leader change demotes local leader even without follower event',
   async (t) => {
     const systemTableCache = new SystemTableCache();
+    const raftProvider = new ControllablePartitionRaftProvider();
     const partition = new PartitionService({
       partitionId: 'leader-change-partition-1',
       tableId: 'leader_change_table',
@@ -490,6 +493,7 @@ test(
       cdcIntegrationService: {
         updateSystemTableRow: async () => ({changes: 1}),
       },
+      raftProvider,
     });
 
     partition.isServicesLeaderAvailable = () => true;
@@ -505,8 +509,7 @@ test(
     const retryTimer = setTimeout(() => {}, 10000);
     partition.leaderNodeMutationHelper.retryTimer = retryTimer;
 
-    partition.raft.emit(
-      'leader change',
+    raftProvider.emitLeaderChange(
       'node-2/partition/leader-change-partition-1-r2',
     );
     await partition.flushRoleUpdate();
@@ -540,6 +543,7 @@ test(
     const canonicalLeaderAddress =
       `node-4-relocated/partition/${newLeaderReplicaId}`;
     const systemTableCache = new SystemTableCache();
+    const raftProvider = new ControllablePartitionRaftProvider();
     const partition = new PartitionService({
       partitionId,
       tableId: 'live_leader_routing_table',
@@ -560,12 +564,12 @@ test(
       suppressLifecycleLogs: true,
       deferElection: true,
       systemTableCache,
+      raftProvider,
     });
 
     await partition.initialize();
 
-    partition.raft.leader = liveLeaderAddress;
-    partition.raft.emit('leader change', liveLeaderAddress);
+    raftProvider.emitLeaderChange(liveLeaderAddress, liveLeaderAddress);
     await Promise.resolve();
 
     t.equal(
@@ -617,8 +621,10 @@ test(
         updated_at: Date.now() + 1,
       },
     );
-    partition.raft.leader =
-      `node-5/partition/${partitionId}-r5`;
+    raftProvider.setLeaderObservation(
+      `${partitionId}-r5`,
+      `node-5/partition/${partitionId}-r5`,
+    );
 
     t.throws(
       () => partition.resolveLeaderAddress(),

@@ -10,6 +10,7 @@ import {
   createLoopbackTransport,
   waitForCondition,
   createTrafficReadinessState,
+  ControllablePartitionRaftProvider,
 } from './partition-service-test-support.js';
 import {
   PartitionService,
@@ -67,6 +68,7 @@ afterEach(() => {
 });
 
 test('PartitionService - leader activation dedupes same-term flaps and cancels on candidate demotion', async (t) => {
+  const raftProvider = new ControllablePartitionRaftProvider();
   const partition = new PartitionService({
     partitionId: 'test-partition-leader-gate',
     tableId: 'leader_gate_test',
@@ -78,6 +80,7 @@ test('PartitionService - leader activation dedupes same-term flaps and cancels o
     dbPath: ':memory:',
     deferElection: true,
     leaderActivationStabilizationMs: 20,
+    raftProvider,
   });
 
   await partition.initialize();
@@ -96,10 +99,10 @@ test('PartitionService - leader activation dedupes same-term flaps and cancels o
     leaderEvents += 1;
   });
 
-  partition.raft.term = 7;
-  partition.raft.emit('leader');
-  partition.raft.emit('leader');
-  partition.raft.emit('leader');
+  raftProvider.setTerm(7);
+  raftProvider.setRole(RaftRole.LEADER);
+  raftProvider.setRole(RaftRole.LEADER);
+  raftProvider.setRole(RaftRole.LEADER);
 
   await waitForCondition(() => leaderEvents === 1, 500, 10);
 
@@ -114,9 +117,9 @@ test('PartitionService - leader activation dedupes same-term flaps and cancels o
   leaderEvents = 0;
   rebalancerLeadershipUpdates = 0;
 
-  partition.raft.term = 8;
-  partition.raft.emit('leader');
-  partition.raft.emit('candidate');
+  raftProvider.setTerm(8);
+  raftProvider.setRole(RaftRole.LEADER);
+  raftProvider.setRole(RaftRole.CANDIDATE);
 
   await new Promise((resolve) => setTimeout(resolve, 60));
 
