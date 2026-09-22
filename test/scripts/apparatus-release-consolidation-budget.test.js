@@ -417,6 +417,16 @@ test('pre-commit refreshes generated test metadata as one owned unit', () => {
   );
   assert.match(
     hook,
+    /git diff --name-only -- src scripts test/u,
+    'metadata regeneration refuses unstaged source/helper/test bytes',
+  );
+  assert.match(
+    hook,
+    /git ls-files --others --exclude-standard -- src scripts test/u,
+    'metadata regeneration refuses untracked source/helper/test bytes',
+  );
+  assert.match(
+    hook,
     /npm run -s test:metadata:refresh/u,
     'pre-commit invokes the canonical metadata refresh owner',
   );
