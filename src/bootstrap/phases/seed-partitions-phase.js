@@ -468,6 +468,9 @@ class SeedPartitionsPhase {
         raftTerm: status?.term ?? null,
         raftLeaderId: status?.leaderId ?? null,
         raftPeerCount: status?.peerCount ?? null,
+        raftPeers: Array.isArray(status?.peers) ?
+          status.peers.map((peer) => peer?.address || null) :
+          [],
       });
     }
     logger.error(BOOTSTRAP_LOG_MSG.PARTITION_LEADERS_PENDING, {
