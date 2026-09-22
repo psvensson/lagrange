@@ -38,6 +38,7 @@ const RAFT_ROLE = Object.freeze({
 // repair-only, catchup-learner). Import it from there.
 
 const RAFT_EVENT = Object.freeze({
+  DATA: 'data',
   LEADER: RAFT_ROLE.LEADER,
   FOLLOWER: RAFT_ROLE.FOLLOWER,
   CANDIDATE: RAFT_ROLE.CANDIDATE,
