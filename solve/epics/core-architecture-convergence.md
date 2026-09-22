@@ -82,6 +82,10 @@ following:
   those ownership boundaries structurally;
 - the sealed operation-port Quest is 11/11 green and its targeted
   operation/formation proof was 260/260 green;
+- the structural audit module is currently exercised by
+  `operation-port-boundary.test.js`; invoking the audit module directly with
+  `node scripts/checks/raft-rs-operation-boundary-audit.js` is not a proof
+  because the module currently exports the audit but has no CLI entrypoint;
 - that Quest deliberately kept real rs-raft transport/demux blocked;
 - PR #46 was merged with an owner-authorized bypass of the independent-review
   landing condition, and the merge commit explicitly says exact-main release
@@ -292,7 +296,9 @@ process/bootstrap envelope
  local partition replica assembly
    |       |        |
    |       |        +-- SQLite / durable partition storage
-   |       +----------- post-migration Raft engine adapter
+   |       +----------- frozen Raft operation port
+   |                        |
+   |                        +-- one rs-raft runtime/core-entry owner
    +------------------- partition-local execution owners
 
 declared policy
@@ -912,7 +918,7 @@ npm run model:statecharts
 npm run model:owner-traces
 npm run audit:runtime-grammar
 npm run audit:operation-progress-authority
-node scripts/checks/raft-rs-operation-boundary-audit.js
+node scripts/run-classified-test-files.js test/raft/raft-rs-backend/operation-port-boundary.test.js
 npm run test:metrics:scoped
 npm run test:unused:ratchet
 ```
