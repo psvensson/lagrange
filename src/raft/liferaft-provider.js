@@ -39,6 +39,7 @@ const LIFERAFT_ROUTE_MODE = Object.freeze({
 
 const LIFERAFT_PROPOSE_TIMEOUT_DEFAULT_MS = 1200;
 const LIFERAFT_IMMEDIATE_ELECTION_TIMEOUT_MS = 1;
+const LIFERAFT_EMPTY_LOG_INDEX = 0;
 const UNSUPPORTED_CONFIGURATION_CHANGE_ERROR =
   'unsupported liferaft configuration change';
 
@@ -288,6 +289,38 @@ class LiferaftProvider {
           return deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK});
         }
         throw new Error(UNSUPPORTED_CONFIGURATION_CHANGE_ERROR);
+      },
+      probePeerProgress: async (peerAddress) => {
+        if (!node.log || typeof peerAddress !== 'string' ||
+            peerAddress.length === 0) {
+          return deepFreeze({
+            outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+            reason: 'progress-probe-not-applicable',
+          });
+        }
+        const lastInfo = await node.log.getLastInfo();
+        const lastIndex = Number.isInteger(lastInfo?.index) ?
+          lastInfo.index :
+          LIFERAFT_EMPTY_LOG_INDEX;
+        if (lastIndex <= LIFERAFT_EMPTY_LOG_INDEX) {
+          return deepFreeze({
+            outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+            reason: 'progress-probe-empty-log',
+          });
+        }
+        const lastEntry = await node.log.get(lastIndex);
+        if (!lastEntry) {
+          return deepFreeze({
+            outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+            reason: 'progress-probe-entry-missing',
+          });
+        }
+        const probePacket = await node.appendPacket(lastEntry);
+        await Promise.resolve(node.message(peerAddress, probePacket));
+        return deepFreeze({
+          outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+          reason: 'progress-probe-sent',
+        });
       },
       tick: () => {
         if (typeof node.tick === 'function') {
