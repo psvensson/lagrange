@@ -5,6 +5,9 @@ import {
 } from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import LifeRaftCommitHarnessBase from '../../src/raft/liferaft.js';
+import {RAFT_COMMIT_APPLY_ROLLBACK_EVENT} from
+  '../../src/raft/liferaft-commit-scheduler.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {ControllablePartitionRaftProvider} from
   './partition-service-test-support.js';
@@ -31,6 +34,30 @@ afterEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
+
+function createLiferaftCommitHarness(partition) {
+  const request = partition.raftProvider.request;
+  class PartitionCommitHarness extends LifeRaftCommitHarnessBase {
+    initialize(_options, callback) {
+      callback?.();
+    }
+
+    prepareCommitApply(command, effects) {
+      return request.applyCommittedEntry(command, effects);
+    }
+  }
+
+  const raft = new PartitionCommitHarness(partition.unifiedAddress, {
+    Log: function() {
+      return partition.logAdapter;
+    },
+  });
+  raft.on(
+    RAFT_COMMIT_APPLY_ROLLBACK_EVENT,
+    request.applyTransactionRolledBack,
+  );
+  return raft;
+}
 
 function createPartition(id, replicaIds) {
   return new PartitionService({
@@ -262,6 +289,7 @@ test(
       'commit-rollback-r3',
     ]);
     await partition.initialize();
+    const commitRaft = createLiferaftCommitHarness(partition);
     const firstCommand = {
       type: 'INSERT',
       entryId: 'rollback-entry-1',
@@ -281,18 +309,18 @@ test(
       responses: [],
       command,
     }));
-    partition.raft.log.saveCommands(entries);
+    commitRaft.log.saveCommands(entries);
     const committedEvents = [];
     partition.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, (event) => {
       committedEvents.push(event.command.entryId);
     });
 
     await t.rejects(
-      partition.raft.commitEntries(entries),
+      commitRaft.commitEntries(entries),
       /missing_table/,
       'the failing state-machine entry rejects the batch',
     );
-    t.equal(partition.raft.log.getCommittedIndex(), 0,
+    t.equal(commitRaft.log.getCommittedIndex(), 0,
       'the Raft committed watermark rolls back');
     t.equal(partition.storage.lastApplied, 0,
       'the applied watermark cache refreshes from rolled-back storage');
@@ -318,17 +346,17 @@ test(
       params: ['rollback-row-2', 'value-2'],
     };
     entries[1] = {...entries[1], command: repairedCommand};
-    partition.raft.log.saveCommand(repairedCommand, 2, 2);
+    commitRaft.log.saveCommand(repairedCommand, 2, 2);
     let postCommitEffectFailureCount = 0;
-    partition.raft.on(RAFT_COMMIT_APPLY_EFFECT_FAILURE_EVENT, () => {
+    commitRaft.on(RAFT_COMMIT_APPLY_EFFECT_FAILURE_EVENT, () => {
       postCommitEffectFailureCount += 1;
     });
     partition.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, () => {
       throw new Error('injected post-commit observer failure');
     });
-    await partition.raft.commitEntries(entries);
+    await commitRaft.commitEntries(entries);
 
-    t.equal(partition.raft.log.getCommittedIndex(), 2,
+    t.equal(commitRaft.log.getCommittedIndex(), 2,
       'retry durably commits the repaired prefix');
     t.equal(partition.storage.lastApplied, 2,
       'retry durably applies the repaired prefix');
@@ -343,6 +371,7 @@ test(
     t.equal(postCommitEffectFailureCount, 2,
       'post-commit observer failures cannot reclassify durable apply');
 
+    commitRaft.end();
     await partition.shutdown();
   },
 );
@@ -356,6 +385,7 @@ test(
       'commit-outcome-rollback-r3',
     ]);
     await partition.initialize();
+    const commitRaft = createLiferaftCommitHarness(partition);
     const command = {
       type: PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
       entryId: 'transaction-outcome-entry',
@@ -370,7 +400,7 @@ test(
       responses: [],
       command,
     };
-    partition.raft.log.saveCommands([entry]);
+    commitRaft.log.saveCommands([entry]);
     const committedEvents = [];
     partition.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, (event) => {
       committedEvents.push(event.command.entryId);
@@ -381,11 +411,11 @@ test(
     };
 
     await t.rejects(
-      partition.raft.commitEntries([entry]),
+      commitRaft.commitEntries([entry]),
       /injected transaction outcome failure/,
       'a durable outcome failure rejects the Raft apply',
     );
-    t.equal(partition.raft.log.getCommittedIndex(), 0,
+    t.equal(commitRaft.log.getCommittedIndex(), 0,
       'the committed watermark rolls back with the outcome');
     t.equal(partition.storage.lastApplied, 0,
       'the applied watermark rolls back with the outcome');
@@ -400,8 +430,8 @@ test(
       'no observable commit event escapes the failed outcome write');
 
     partition.recordTransactionCommitOutcome = recordOutcome;
-    await partition.raft.commitEntries([entry]);
-    t.equal(partition.raft.log.getCommittedIndex(), 1,
+    await commitRaft.commitEntries([entry]);
+    t.equal(commitRaft.log.getCommittedIndex(), 1,
       'retry commits the Raft entry');
     t.equal(partition.storage.lastApplied, 1,
       'retry advances the applied watermark');
@@ -416,6 +446,7 @@ test(
     t.same(committedEvents, [command.entryId],
       'observable commit publishes only after the outcome is durable');
 
+    commitRaft.end();
     await partition.shutdown();
   },
 );
