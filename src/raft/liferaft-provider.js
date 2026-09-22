@@ -261,6 +261,7 @@ class LiferaftProvider {
         node.log.committedIndex : 0,
       role: resolveLiferaftRole(node.state),
       leaderId: node.leader || null,
+      leaderAddress: node.leader || null,
       peerCount: Array.isArray(node.nodes) ? node.nodes.length : 0,
       peers: Array.isArray(node.nodes) ? node.nodes.map((peer) => ({
         address: peer?.address || null,
