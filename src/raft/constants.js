@@ -1,4 +1,5 @@
 import {ADDRESS} from '../constants/index.js';
+import {RAFT_EVENT} from './raft-operation-port-constants.js';
 import {OUTBOUND_DELIVERY_PRIORITY} from '../constants/transport.js';
 import {
   INITIAL_PARTITION_IDS,
@@ -37,23 +38,7 @@ const RAFT_ROLE = Object.freeze({
 // of every voter-readiness membership row (quorum-voter, load-routable,
 // repair-only, catchup-learner). Import it from there.
 
-const RAFT_EVENT = Object.freeze({
-  DATA: 'data',
-  LEADER: RAFT_ROLE.LEADER,
-  FOLLOWER: RAFT_ROLE.FOLLOWER,
-  CANDIDATE: RAFT_ROLE.CANDIDATE,
-  LEADER_CHANGE: 'leader change',
-  COMMIT: 'commit',
-  TERM_CHANGE: 'term change',
-  // Typed committed-state divergence witness (quest raft-committed-prefix-
-  // conflict-livelock): a follower detected a same-index term conflict at or
-  // below its committed index — a poisoned committed prefix that truncation
-  // can never repair (the log adapter refuses committed-entry loss by
-  // design). Emitted by LifeRaft EXACTLY ONCE per conflict identity
-  // (index, localTerm, leaderTerm); repair rides the existing typed
-  // append-fail -> leader catch-up/install route.
-  COMMITTED_PREFIX_DIVERGENCE: 'committed prefix divergence',
-});
+
 
 const RAFT_ERROR_NAME = Object.freeze({
   NOT_FOUND: 'NotFoundError',
