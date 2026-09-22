@@ -6,10 +6,10 @@
 # seconds; whole-corpus ratchets (duplication, file-size, cycles,
 # unused-exports) remain push-time concerns.
 #
-# Also regenerates the checked-in deterministic inventories whenever
-# staged work touches their source surface - their freshness guards
-# re-stale on EVERY src commit by construction, so freshness is
-# automated here instead of failed later.
+# Also regenerates the checked-in deterministic inventories AND test
+# classification metadata whenever staged work touches their source surface.
+# Their freshness guards are intentionally fail-closed; automating the derived
+# state here prevents CI from discovering one stale manifest/seal per push.
 #
 # Extends the original fast structural guards (file-size,
 # hot-path-diagnostics, staged constant names, cached staged eslint)
@@ -32,9 +32,12 @@ if [ -n "${LAGRANGE_SKIP_PRECOMMIT:-}" ]; then
   exit 0
 fi
 
-# Staged (added/copied/modified/renamed) paths only; deletions need no scan.
+# Staged paths used by content scanners exclude deletions because there is no
+# file left to scan. Derived test metadata MUST include deletions: removing a
+# test/helper changes the complete census and observation closure.
 mapfile -t STAGED < <(git diff --cached --name-only --diff-filter=ACMR)
-if [ "${#STAGED[@]}" -eq 0 ]; then
+mapfile -t STAGED_METADATA < <(git diff --cached --name-only --diff-filter=ACMRD)
+if [ "${#STAGED_METADATA[@]}" -eq 0 ]; then
   exit 0
 fi
 
@@ -42,6 +45,7 @@ JS_FILES=()
 CODE_JS_FILES=()
 DOC_FILES=()
 REGEN_INVENTORIES=0
+REGEN_TEST_METADATA=0
 for f in "${STAGED[@]}"; do
   [ -f "$f" ] || continue
   case "$f" in
@@ -57,6 +61,16 @@ for f in "${STAGED[@]}"; do
   esac
   case "$f" in
     src/*|scripts/*|test/*) REGEN_INVENTORIES=1 ;;
+  esac
+done
+
+# Test classification metadata is a complete census, not a per-file lint.
+# Any test change (including deletion) can change the three manifests. Tests
+# also inherit observation surfaces from helpers under test/ and scripts/, so
+# helper edits must refresh the subsystem observation census too.
+for f in "${STAGED_METADATA[@]}"; do
+  case "$f" in
+    test/*|scripts/*) REGEN_TEST_METADATA=1 ;;
   esac
 done
 
@@ -128,11 +142,21 @@ if [ "$REGEN_INVENTORIES" = "1" ] \
   fi
   node scripts/generate-priority-recovery-owner-inventory.js > /dev/null
   # The --refresh fallback also rewrites the tracked import-graph seal; ship
-  # it with the same commit or the publisher's exact-HEAD worktree check fails
-  # when the gate's own --refresh regenerates a diverging seal (2026-08-22:
-  # three publish attempts died on exactly this).
+  # it with the same commit or the publisher's exact-HEAD worktree check fails.
   git add solve/changes/global-owner-debt-inventory/inventory.json \
     solve/changes/priority-recovery-owner-inventory/inventory.json \
+    test/shards/impact-graph-seal.json
+fi
+
+if [ "$REGEN_TEST_METADATA" = "1" ] \
+  && [ "$SOLVER_AUTHORIZED" = "0" ] \
+  && [ -z "${LAGRANGE_SKIP_INVENTORY_REGEN:-}" ]; then
+  echo "pre-commit: refreshing generated test metadata"
+  npm run -s test:metadata:refresh > /dev/null
+  git add \
+    test/shards/primary-classes.json \
+    test/shards/resource-classes.json \
+    test/shards/subsystem-classes.json \
     test/shards/impact-graph-seal.json
 fi
 
