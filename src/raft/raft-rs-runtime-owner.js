@@ -547,6 +547,18 @@ function drainReady(group, expectedGeneration, cycles = 0) {
     drainReady(group, expectedGeneration, cycles + 1) : result);
 }
 
+function semanticLeaderIdentity(group, lead) {
+  if (lead === NO_LEADER) {
+    return null;
+  }
+  try {
+    return group.resolvePeerIdentity(lead);
+  } catch {
+    group.health = RECOVERY_REQUIRED;
+    return null;
+  }
+}
+
 function announce(group, expectedGeneration) {
   const status = invokeCoreAt(group, expectedGeneration, 'status');
   if (!status.ok) {
@@ -559,10 +571,13 @@ function announce(group, expectedGeneration) {
     group.emit(ROLE[now.raftState] || ROLE[0]);
   }
   if (before && now.term !== before.term) {
-    group.emit(RUNTIME_EVENT.TERM_CHANGE, now.term);
+    group.emit(RUNTIME_EVENT.TERM_CHANGE, Number(now.term));
   }
   if (before && now.lead !== before.lead) {
-    group.emit(RUNTIME_EVENT.LEADER_CHANGE, now.lead);
+    group.emit(
+      RUNTIME_EVENT.LEADER_CHANGE,
+      semanticLeaderIdentity(group, now.lead),
+    );
   }
 }
 
