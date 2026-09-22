@@ -152,18 +152,22 @@ function main() {
         }).filter((testPath) =>
           JSON.stringify(committedManifest.observations?.[testPath] ?? null) !==
           JSON.stringify(manifest.observations?.[testPath] ?? null));
-        process.stderr.write(`${JSON.stringify({
-          expectedDigest: manifest.digest,
-          committedDigest: committedManifest.digest,
-          expectedObservationDigest: manifest.observationDigest,
-          committedObservationDigest: committedManifest.observationDigest,
-          changedClasses,
-          changedObservations: changedObservations.map((testPath) => ({
-            testPath,
-            committed: committedManifest.observations?.[testPath] ?? null,
-            expected: manifest.observations?.[testPath] ?? null,
-          })),
-        })}\n`);
+        process.stderr.write(
+          `DIAGNOSTIC digest expected=${manifest.digest} committed=${committedManifest.digest}\n`);
+        process.stderr.write(
+          `DIAGNOSTIC observationDigest expected=${manifest.observationDigest} committed=${committedManifest.observationDigest}\n`);
+        for (const testPath of changedClasses) {
+          process.stderr.write(
+            `DIAGNOSTIC changedClass ${testPath} committed=${JSON.stringify(committedManifest.classes?.[testPath] ?? null)} expected=${JSON.stringify(manifest.classes?.[testPath] ?? null)}\n`);
+        }
+        for (const testPath of changedObservations) {
+          process.stderr.write(
+            `DIAGNOSTIC changedObservation ${testPath}\n`);
+          process.stderr.write(
+            `DIAGNOSTIC committedObservation ${JSON.stringify(committedManifest.observations?.[testPath] ?? null)}\n`);
+          process.stderr.write(
+            `DIAGNOSTIC expectedObservation ${JSON.stringify(manifest.observations?.[testPath] ?? null)}\n`);
+        }
       }
       reportProblems([BYTE_DRIFT_PROBLEM]);
       return;
