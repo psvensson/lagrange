@@ -133,6 +133,27 @@ fi
 # rather than deferring the failure to a ~15-minute gate cycle. Skip for
 # rapid WIP loops: LAGRANGE_SKIP_INVENTORY_REGEN=1 (the push gate's
 # freshness guard then catches it).
+# Generators read repository bytes from the worktree. Before auto-refreshing,
+# require the derived-state source roots to match the staged index; otherwise an
+# unstaged or untracked test/helper/source file could leak into a committed
+# manifest/seal that does not describe the commit being made.
+if { [ "$REGEN_INVENTORIES" = "1" ] || [ "$REGEN_TEST_METADATA" = "1" ]; } \
+  && [ "$SOLVER_AUTHORIZED" = "0" ] \
+  && [ -z "${LAGRANGE_SKIP_INVENTORY_REGEN:-}" ]; then
+  mapfile -t UNSTAGED_DERIVED_INPUTS < <(
+    {
+      git diff --name-only -- src scripts test
+      git ls-files --others --exclude-standard -- src scripts test
+    } | sort -u
+  )
+  if [ "${#UNSTAGED_DERIVED_INPUTS[@]}" -gt 0 ]; then
+    echo "pre-commit: derived metadata needs src/scripts/test to match the staged index"
+    printf 'pre-commit: stage/stash or remove: %s\n' "${UNSTAGED_DERIVED_INPUTS[@]}"
+    echo "pre-commit: WIP bypass: LAGRANGE_SKIP_INVENTORY_REGEN=1 git commit"
+    exit 1
+  fi
+fi
+
 if [ "$REGEN_INVENTORIES" = "1" ] \
   && [ "$SOLVER_AUTHORIZED" = "0" ] \
   && [ -z "${LAGRANGE_SKIP_INVENTORY_REGEN:-}" ]; then
