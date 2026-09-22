@@ -18,9 +18,10 @@ partition/provider call sites require:
 | `step(envelope)` | deliver one already validated Raft envelope | frozen operation result |
 | `propose(bytes)` | propose application bytes | frozen operation result |
 | `proposeConfChange(change)` | propose a measured membership change | frozen operation result |
+| `probePeerProgress(peerAddress)` | best-effort materialization/observation of follower replication progress without exposing log/message internals | frozen operation result |
 | `tick()` | advance the Raft clock once | frozen operation result |
 | `campaign()` | request election | frozen operation result |
-| `readStatus()` | read role, term, leader, commit index and committed membership | deeply frozen snapshot by value |
+| `readStatus()` | read role, term, leader, commit index, committed membership and backend-owned follower progress | deeply frozen snapshot by value |
 | `configureTick(intervalMs)` | configure local scheduling interval | frozen host result |
 | `startScheduling()` / `stopScheduling()` | own local timer lifetime | frozen host result |
 | `close()` | idempotently close this port | frozen result |
@@ -43,7 +44,7 @@ may import the narrow port constructor, but retains no per-group WeakMap,
 runtime, core, lifecycle object or control accessor.
 
 Retirement semantics cover the whole whitelist. `tick`, `step`, `propose`,
-`proposeConfChange`, `campaign`, `readStatus`, `configureTick` and
+`proposeConfChange`, `probePeerProgress`, `campaign`, `readStatus`, `configureTick` and
 `startScheduling` refuse as `CORE_REFUSED/retired` before enqueue or entry.
 `stopScheduling` and `close` remain idempotent passive cleanup and cancel any
 timer without core entry; a retired close never frees its quarantined handle.
@@ -303,7 +304,7 @@ No receipt is certified by source keywords. The final tests drive:
   Node test suite by `operation-port-regression.test.js`.
 
 Ready durability tests fault snapshot, log and HardState tables. The retirement
-test enumerates all eleven public operations: active operations
+test enumerates all twelve public operations: active operations
 refuse, passive cleanup/subscription semantics hold, no timer fires, and no
 call increments actual entry.
 
@@ -345,3 +346,25 @@ serialization, or if an ordinary operation can enter a stale RawNode after a
 Ready host failure. No property-name repair round follows such a finding.
 Transport remains blocked until an independent verifier approves all structural
 questions and the landed Quest.
+## Implementation discovery — peer progress (2026-09-22)
+
+The implementation census found one pre-existing partition semantic that the
+initial eleven-operation design had hidden behind LifeRaft internals:
+learner-promotion liveness reads the leader's follower match index and, when
+that observation is absent/behind, asks the Raft backend to materialize progress
+once. Before this boundary, that request reached through `raft.log`,
+`appendPacket` and `message` directly.
+
+That is not retained as an implementation escape. The public contract gains the
+single semantic operation `probePeerProgress(peerAddress)`. LifeRaft implements
+it with the previous last-entry resend. raft-rs projects its native Progress
+tracker through `readStatus().followerProgress`; the probe is therefore an
+observation when progress is already present and otherwise advances one normal
+Raft tick through the same lifecycle/core gate. The partition no longer sees a
+log, message primitive, RawNode, peer object or backend-specific progress type.
+
+This supersedes only the design note's count of eleven operations; the sealed
+quest statement and its evidence receipts are unchanged. The exact frozen
+surface test and terminal-retirement test now enumerate all twelve operations,
+so the additional capability is measured rather than implicit.
+
