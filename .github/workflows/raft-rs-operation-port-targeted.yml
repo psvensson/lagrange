@@ -65,6 +65,21 @@ jobs:
             test/simulation/formation-sim-production-partitions.test.js \
             test/simulation/formation-sim-production-handoff.test.js
 
+      - name: Isolated phase regression diagnostic
+        run: |
+          env -u NODE_TEST_CONTEXT node --test-reporter=tap \
+            --test-name-pattern='^the verified integration remains green while transport has no raft-rs node access          cat solve/quests/raft-rs-operation-port-boundary/evidence/receipt.json
+
+      - name: Upload quest receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: raft-rs-operation-port-receipt
+          path: solve/quests/raft-rs-operation-port-boundary/evidence/receipt.json
+          retention-days: 7
+# current-head-proof: 2026-09-22
+ \
+            test/raft/raft-rs-backend/operation-port-regression.test.js
+
       - name: Quest evidence
         run: |
           node scripts/quest-evidence/raft-rs-operation-port-boundary.js
