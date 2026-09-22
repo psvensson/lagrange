@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2136,
+    "ordinary": 2137,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2153,
-  "digest": "fnv1a32-b62a9545",
+  "censusSize": 2154,
+  "digest": "fnv1a32-c2d4e9f9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1186,6 +1186,7 @@
     "test/partition/proposal-queue.test.js": "ordinary",
     "test/partition/raft-leadership-stability.property.test.js": "ordinary",
     "test/partition/raft-message-delivery.property.test.js": "ordinary",
+    "test/partition/raft-rs-transport-demux.test.js": "ordinary",
     "test/partition/range-integrity-validation.property.test.js": "ordinary",
     "test/partition/replica-operations-schema-migration.test.js": "ordinary",
     "test/partition/routing-key-comparator.test.js": "ordinary",
