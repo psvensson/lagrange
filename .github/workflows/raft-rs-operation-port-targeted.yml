@@ -42,6 +42,11 @@ jobs:
       - name: Fast static checks
         run: node scripts/check-fast-static.js
 
+      - name: Standalone phase-regression witness
+        env:
+          TAP_TIMEOUT_FLOOR: '120'
+        run: node --test test/raft/raft-rs-backend/operation-port-regression.test.js
+
       - name: Operation-port and formation parity
         env:
           TAP_TIMEOUT_FLOOR: '120'
