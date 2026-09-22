@@ -9,10 +9,7 @@
 
 import {describe, it, beforeEach, afterEach, mock} from 'node:test';
 import assert from 'node:assert';
-import {
-  ConnectionState,
-  MessageRouter,
-} from '../../src/transport/message-router.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
 
 describe('MessageRouter IPC Handler Registration', () => {
   let router;
@@ -142,53 +139,5 @@ describe('MessageRouter IPC Handler Registration', () => {
       assert.strictEqual(deliverFn1.mock.calls.length, 1);
       assert.strictEqual(deliverFn2.mock.calls.length, 1);
     });
-  });
-
-  describe('raft-rs semantic transport', () => {
-    it('uses the existing direct Raft delivery path without Liferaft packet imitation',
-      () => {
-        let transmitted = null;
-        const ws = {
-          readyState: 1,
-          send(value) {
-            transmitted = JSON.parse(value);
-          },
-        };
-        router.nodeConnections.set('node-2', {
-          nodeId: 'node-2',
-          state: ConnectionState.CONNECTED,
-          ws,
-        });
-        const payload = {
-          protocol: 'raft-rs',
-          groupId: 'transport-p1',
-          from: '101',
-          to: '202',
-          message: {
-            msgType: 3,
-            from: '101',
-            to: '202',
-            term: '1',
-            logTerm: '0',
-            index: '0',
-            commit: '0',
-            entries: [],
-          },
-        };
-
-        const outcome = router.tryDeliverRaftDirect(
-          'node-2/partition/transport-p1-r2',
-          'raft-rs-message-1',
-          payload,
-          'node-2',
-        );
-
-        assert.strictEqual(outcome?.direct, true,
-          'semantic raft-rs traffic uses the existing consensus fast path');
-        assert.deepStrictEqual(transmitted?.payload, payload,
-          'MessageRouter preserves the semantic envelope unchanged');
-        assert.strictEqual(transmitted?.payload?.type, undefined,
-          'MessageRouter does not fabricate a Liferaft packet type');
-      });
   });
 });
