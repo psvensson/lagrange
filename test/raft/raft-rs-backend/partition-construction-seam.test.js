@@ -181,6 +181,7 @@ test('liferaft step routes inbound vote packets through the Raft data event',
       [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: (value) => value,
     });
     const port = new LiferaftProvider().createPartitionPort(request);
+    const replies = [];
     try {
       assert.equal(port.readStatus().term, 0);
       port.step({
@@ -192,11 +193,15 @@ test('liferaft step routes inbound vote packets through the Raft data event',
           leader: '',
           last: {term: 0, index: 0},
         },
-        reply: () => undefined,
+        reply: (packet) => replies.push(packet),
       });
       await new Promise((resolve) => setImmediate(resolve));
       assert.equal(port.readStatus().term, 7,
         'the higher-term vote reaches LifeRaft through port.step');
+      assert.equal(replies.length, 1,
+        'the semantic step preserves LifeRaft\'s vote-reply callback');
+      assert.equal(replies[0]?.type, 'voted');
+      assert.equal(replies[0]?.data?.granted, true);
     } finally {
       port.close();
       request.durableStorage.close();
