@@ -220,10 +220,15 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
   const types = confChangeTypes();
   const transition = autoTransition();
   const leaderChanges = new Map(FOUNDING.map((replicaId) => [replicaId, []]));
-  const unsubscribes = FOUNDING.map((replicaId) =>
+  const termChanges = new Map(FOUNDING.map((replicaId) => [replicaId, []]));
+  const unsubscribes = FOUNDING.flatMap((replicaId) => [
     cluster.node(replicaId).subscribe('leader-change', (leaderId) => {
       leaderChanges.get(replicaId).push(leaderId);
-    }));
+    }),
+    cluster.node(replicaId).subscribe('term-change', (term) => {
+      termChanges.get(replicaId).push(term);
+    }),
+  ]);
   try {
     // ---- 2. elect -------------------------------------------------------
     const elected = cluster.settle(() => cluster.leaderReplicaId() !== null,
@@ -232,9 +237,12 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
     assert.ok(elected, 'the partition must elect a leader');
     const leader = cluster.leaderReplicaId();
     const leadershipObserved = cluster.settle(
-      () => FOUNDING.every((replicaId) =>
-        cluster.coreStatus(replicaId).lead === cluster.raftPeerIdOf(leader) &&
-        leaderChanges.get(replicaId).at(-1) === leader),
+      () => FOUNDING.every((replicaId) => {
+        const status = cluster.coreStatus(replicaId);
+        return status.lead === cluster.raftPeerIdOf(leader) &&
+          leaderChanges.get(replicaId).at(-1) === leader &&
+          termChanges.get(replicaId).at(-1) === Number(status.term);
+      }),
       {rounds: SETTLE_ROUNDS, between: (round) =>
         poisonEveryCache(cluster, round)},
     );
@@ -250,6 +258,11 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
       const observed = leaderChanges.get(replicaId);
       assert.equal(observed.at(-1), leader,
         'leader-change events expose the replica identity, not the raft-rs u64 id');
+      assert.equal(
+        termChanges.get(replicaId).at(-1),
+        Number(cluster.coreStatus(replicaId).term),
+        'term-change events use the same numeric term as semantic status',
+      );
     }
 
     // ---- 3. a normal proposal, committed and applied ---------------------
