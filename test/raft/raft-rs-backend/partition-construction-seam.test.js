@@ -170,6 +170,39 @@ test('a single-replica partition observes liferaft leadership through the port',
     }
   });
 
+test('liferaft step routes inbound vote packets through the Raft data event',
+  async () => {
+    const request = minimalPartitionRequest({
+      [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]:
+        'node-1/partition/replica-seam-1',
+      [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: (value) => value,
+    });
+    const port = new LiferaftProvider().createPartitionPort(request);
+    const replies = [];
+    try {
+      assert.equal(port.readStatus().term, 0);
+      port.step({
+        payload: {
+          type: 'vote',
+          term: 7,
+          address: 'node-2/partition/replica-seam-2',
+          state: 2,
+          leader: '',
+          last: {term: 0, index: 0},
+        },
+        reply: (packet) => replies.push(packet),
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(port.readStatus().term, 7,
+        'the higher-term vote reaches LifeRaft through port.step');
+      assert.ok(replies.length > 0,
+        'LifeRaft replies to the vote rather than silently dropping ingress');
+    } finally {
+      port.close();
+      request.durableStorage.close();
+    }
+  });
+
 test('the rollback fact crosses the request without exposing an event emitter',
   async () => {
     const provider = new RecordingLiferaftProvider();
