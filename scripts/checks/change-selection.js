@@ -89,6 +89,7 @@ import {
   SUBSYSTEM_TEST_INFRASTRUCTURE,
   PACKAGE_SURFACE_RELEASE_PROBLEM,
   RELEASE_SURFACE_PATHS,
+  RELEASE_SURFACE_PREFIXES,
   RELEASE_SURFACE_PROBLEM,
   REFUSAL_RELEASE_PROOF_REQUIRED,
   REFUSAL_UNKNOWN_SCOPE,
@@ -241,18 +242,24 @@ function addReason(plan, testPath, reason) {
   orderedStringSetAdd(orderedStringMapGet(plan, testPath), reason);
 }
 
-// Which package.json edits are safe to prove modularly. `changedPackageFields`
-// is supplied by the caller (it needs both revisions to compute); when it is
-// unavailable we fail closed to a release proof rather than guessing.
+// Which changed paths alter bytes consumers receive/execute. Published trees
+// need prefix ownership because enumerating today's generated files would make
+// a newly generated sibling silently unclassified.
+function isReleaseSurfacePath(changedPath) {
+  return arrayIncludes(RELEASE_SURFACE_PATHS, changedPath) ||
+    arraySome(RELEASE_SURFACE_PREFIXES,
+      (prefix) => stringStartsWith(changedPath, prefix));
+}
+
 export function packageChangeRequiresRelease(
   changedPaths,
   changedPackageFields,
   lockfileGraphChanged,
 ) {
-  const shipping = arrayFilter(changedPaths,
-    (changedPath) => arrayIncludes(RELEASE_SURFACE_PATHS, changedPath));
+  const shipping = arrayFilter(changedPaths, isReleaseSurfacePath);
   if (shipping.length > 0) {
-    return `${RELEASE_SURFACE_PROBLEM}: ${arrayJoin(shipping, PROBLEM_SEPARATOR)}`;
+    return `${RELEASE_SURFACE_PROBLEM}: ` +
+      arrayJoin(shipping, PROBLEM_SEPARATOR);
   }
   if (arrayIncludes(changedPaths, PACKAGE_LOCKFILE_PATH)) {
     if (lockfileGraphChanged !== false) return LOCKFILE_RELEASE_PROBLEM;
@@ -309,7 +316,7 @@ export function candidatePaths(root) {
 export function categoryForPath(candidatePath, classes) {
   if (candidatePath === PACKAGE_MANIFEST_PATH ||
     candidatePath === PACKAGE_LOCKFILE_PATH ||
-    arrayIncludes(RELEASE_SURFACE_PATHS, candidatePath)) {
+    isReleaseSurfacePath(candidatePath)) {
     return {category: CATEGORY_RELEASE_PROOF};
   }
   if (stringEndsWith(candidatePath, TEST_SUFFIX)) {
