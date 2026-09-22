@@ -93,6 +93,7 @@
     "docs:capabilities:generate": "node scripts/generate-current-capabilities-doc.js",
     "audit:impact-contracts": "node scripts/checks/impact-contract-registry.js",
     "audit:shards": "node scripts/check-curated-test-shards.js && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check && node scripts/generate-test-subsystem-classes.js --check",
+    "test:metadata:refresh": "node scripts/generate-test-primary-classes.js && node scripts/generate-test-resource-classes.js && node scripts/generate-test-subsystem-classes.js && node scripts/generate-global-owner-debt-inventory.js --refresh-import-graph-only",
     "audit:architecture-slices": "node scripts/check-architecture-slices.js",
     "test:metadata-gateway:audit": "node scripts/check-unified-system-metadata-gateway.js",
     "test:mutation": "stryker run",
