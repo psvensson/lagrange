@@ -146,6 +146,8 @@ test('the default liferaft port reports leadership as a semantic role', () => {
     const result = port.campaign();
     assert.equal(result.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.equal(port.readStatus().role, RAFT_ROLE.LEADER);
+    assert.equal(port.readStatus().leaderAddress, REPLICA_ID,
+      'the semantic status carries the live leader address separately');
     assert.deepEqual(observedRoles, [RAFT_ROLE.LEADER]);
   } finally {
     unsubscribe();
