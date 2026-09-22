@@ -452,10 +452,29 @@ class SeedPartitionsPhase {
     const missing = [...partitionIds].filter(
       (id) => !leaders.has(id),
     );
+    const missingLeaderDiagnostics = [];
+    for (const partition of d.getPartitionServices().values()) {
+      if (!missing.includes(partition.partitionId)) {
+        continue;
+      }
+      const status = partition.raft?.readStatus?.() || null;
+      missingLeaderDiagnostics.push({
+        partitionId: partition.partitionId,
+        replicaId: partition.replicaId,
+        electionStarted: partition.electionStarted,
+        serviceRole: partition.role,
+        serviceIsLeader: partition.isLeader,
+        raftRole: status?.role ?? null,
+        raftTerm: status?.term ?? null,
+        raftLeaderId: status?.leaderId ?? null,
+        raftPeerCount: status?.peerCount ?? null,
+      });
+    }
     logger.error(BOOTSTRAP_LOG_MSG.PARTITION_LEADERS_PENDING, {
       totalPartitions: partitionIds.size,
       leadersFound: leaders.size,
       missingLeaders: missing,
+      missingLeaderDiagnostics,
       elapsedMs: now() - startTime,
       nodeId: d.getNodeId(),
     });
