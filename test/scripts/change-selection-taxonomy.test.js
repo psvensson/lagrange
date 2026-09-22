@@ -23,6 +23,7 @@ import {
   ALWAYS_INERT_SUFFIX,
   NEVER_INERT_PREFIXES,
   RELEASE_SURFACE_PATHS,
+  RELEASE_SURFACE_PREFIXES,
   SELECTION_REFUSED,
   SOURCE_SUBSYSTEM_RULES,
 } from '../../scripts/checks/change-selection-constants.js';
@@ -82,6 +83,7 @@ test('INERT SAFETY: no executable or shipping path can be inert', () => {
   for (const probe of [
     'src/new-thing/x.js', 'scripts/new-tool.js', '.github/workflows/new.yml',
     'models/new-model.als', 'charts/new/values.yaml',
+    'vendor/raft-rs-wasm/pkg/new-binding.wasm',
   ]) {
     assert.ok(!isInertPath(probe), `${probe} must never classify as inert`);
   }
@@ -109,7 +111,11 @@ test('ONE-HOP: a coupled endpoint does not expand through its own contracts', ()
 });
 
 test('shipping-surface changes require a release proof', () => {
-  for (const shippingPath of RELEASE_SURFACE_PATHS) {
+  const shippingPaths = [
+    ...RELEASE_SURFACE_PATHS,
+    ...RELEASE_SURFACE_PREFIXES.map((prefix) => `${prefix}probe.bin`),
+  ];
+  for (const shippingPath of shippingPaths) {
     const selection = selectChangedTests({root, changedPaths: [shippingPath]});
     assert.equal(selection.kind, SELECTION_REFUSED,
       `${shippingPath} changes what consumers receive`);
