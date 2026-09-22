@@ -131,32 +131,6 @@ function main() {
     const committed = fs.existsSync(manifestFile) ?
       fs.readFileSync(manifestFile, UTF8_ENCODING) : '';
     if (committed !== serialized) {
-      try {
-        const committedManifest = JSON.parse(committed);
-        process.stderr.write(
-          `DIAGNOSTIC observationDigest expected=${manifest.observationDigest} committed=${committedManifest.observationDigest}\n`);
-        const observationKeys = Array.from(new Set([
-          ...Object.keys(committedManifest.observations || {}),
-          ...Object.keys(manifest.observations || {}),
-        ])).sort();
-        for (const testPath of observationKeys) {
-          const committedObservation =
-            committedManifest.observations?.[testPath] ?? null;
-          const expectedObservation = manifest.observations?.[testPath] ?? null;
-          if (JSON.stringify(committedObservation) ===
-              JSON.stringify(expectedObservation)) {
-            continue;
-          }
-          process.stderr.write(
-            `DIAGNOSTIC changedObservation ${testPath}\n`);
-          process.stderr.write(
-            `DIAGNOSTIC committedObservation ${JSON.stringify(committedObservation)}\n`);
-          process.stderr.write(
-            `DIAGNOSTIC expectedObservation ${JSON.stringify(expectedObservation)}\n`);
-        }
-      } catch (_error) {
-        process.stderr.write('DIAGNOSTIC committed manifest is not valid JSON\n');
-      }
       reportProblems([BYTE_DRIFT_PROBLEM]);
       return;
     }
