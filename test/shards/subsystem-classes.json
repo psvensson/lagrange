@@ -28,7 +28,7 @@
   "censusSize": 2153,
   "digest": "fnv1a32-67381418",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b2ee3a76",
+  "observationDigest": "fnv1a32-4812a20b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -9172,6 +9172,7 @@
         "solve/changes",
         "solve/epics",
         "solve/epics/solve-v2",
+        "solve/oracle",
         "solve/quests",
         "solve/report",
         "test/distributed",
@@ -9643,6 +9644,7 @@
         "solve/changes",
         "solve/epics",
         "solve/epics/solve-v2",
+        "solve/oracle",
         "solve/quests",
         "solve/report"
       ]
