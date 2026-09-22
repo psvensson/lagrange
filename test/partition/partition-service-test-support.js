@@ -58,6 +58,7 @@ export class ControllablePartitionRaftProvider {
         return result?.outcome ? result : testCoreOk();
       },
       proposeConfChange: () => testCoreOk(),
+      probePeerProgress: () => testCoreOk(),
       tick: () => testCoreOk(),
       campaign: () => {
         this.setRole(RAFT_ROLE.LEADER);
