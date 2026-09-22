@@ -20,11 +20,13 @@ test('the verified integration remains green while transport has no raft-rs node
       'real-partition-on-raft-rs.test.js',
     ].map((name) => path.join(
       ROOT, 'test', 'raft', 'raft-rs-backend', name));
+    const childEnv = {...process.env};
+    delete childEnv.NODE_TEST_CONTEXT;
     try {
       execFileSync(
         process.execPath,
         ['--test', ...phaseTests],
-        {cwd: ROOT, encoding: 'utf8', stdio: 'pipe'},
+        {cwd: ROOT, encoding: 'utf8', stdio: 'pipe', env: childEnv},
       );
     } catch (error) {
       const stdout = String(error?.stdout || '');
