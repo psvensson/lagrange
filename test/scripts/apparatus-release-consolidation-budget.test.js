@@ -383,3 +383,47 @@ test('receipts order by version core, a prerelease before its final', () => {
   const observed = reobserveNext(root, () => ({latest: '0.2.10', next: '0.2.10'}));
   assert.equal(observed.file, 'data/releases/v0.2.10.json', 'the owner\'s move lands on the newest release');
 });
+
+
+test('pre-commit refreshes generated test metadata as one owned unit', () => {
+  const packageJson = JSON.parse(fs.readFileSync(
+    path.join(REPO_ROOT, 'package.json'), UTF8));
+  assert.equal(
+    packageJson.scripts['test:metadata:refresh'],
+    'node scripts/generate-test-primary-classes.js && ' +
+      'node scripts/generate-test-resource-classes.js && ' +
+      'node scripts/generate-test-subsystem-classes.js && ' +
+      'node scripts/generate-global-owner-debt-inventory.js ' +
+      '--refresh-import-graph-only',
+    'one command owns all generated test metadata refreshes',
+  );
+
+  const hook = fs.readFileSync(
+    path.join(REPO_ROOT, '.githooks/pre-commit'), UTF8);
+  assert.match(
+    hook,
+    /STAGED_METADATA.*--diff-filter=ACMRD/u,
+    'metadata trigger includes deletions as well as additions/modifications/renames',
+  );
+  assert.match(
+    hook,
+    /test\/\*\|scripts\/\*\) REGEN_TEST_METADATA=1/u,
+    'test and helper-script changes trigger metadata regeneration',
+  );
+  assert.match(
+    hook,
+    /npm run -s test:metadata:refresh/u,
+    'pre-commit invokes the canonical metadata refresh owner',
+  );
+  for (const artifact of [
+    'test/shards/primary-classes.json',
+    'test/shards/resource-classes.json',
+    'test/shards/subsystem-classes.json',
+    'test/shards/impact-graph-seal.json',
+  ]) {
+    assert.ok(
+      hook.includes(artifact),
+      `pre-commit stages regenerated artifact ${artifact}`,
+    );
+  }
+});
