@@ -10,7 +10,7 @@ import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
-import {RAFT_EVENT} from './constants.js';
+import {RAFT_EVENT, RAFT_ROLE} from './constants.js';
 
 // The liferaft option keys a partition group's node is constructed with. They
 // are liferaft's own names; the request the provider receives uses none of
@@ -41,6 +41,16 @@ const LIFERAFT_PROPOSE_TIMEOUT_DEFAULT_MS = 1200;
 const LIFERAFT_IMMEDIATE_ELECTION_TIMEOUT_MS = 1;
 const UNSUPPORTED_CONFIGURATION_CHANGE_ERROR =
   'unsupported liferaft configuration change';
+
+const LIFERAFT_ROLE_BY_STATE = Object.freeze({
+  [LifeRaft.LEADER]: RAFT_ROLE.LEADER,
+  [LifeRaft.FOLLOWER]: RAFT_ROLE.FOLLOWER,
+  [LifeRaft.CANDIDATE]: RAFT_ROLE.CANDIDATE,
+});
+
+function resolveLiferaftRole(state) {
+  return LIFERAFT_ROLE_BY_STATE[state] || null;
+}
 
 function resolveProposeTimeoutMs(options = {}) {
   const timeoutMs = Number.isFinite(options.proposeTimeoutMs) &&
@@ -249,7 +259,7 @@ class LiferaftProvider {
       term: Number.isSafeInteger(node.term) ? node.term : 0,
       commitIndex: Number.isSafeInteger(node.log?.committedIndex) ?
         node.log.committedIndex : 0,
-      role: node.state || null,
+      role: resolveLiferaftRole(node.state),
       leaderId: node.leader || null,
       peerCount: Array.isArray(node.nodes) ? node.nodes.length : 0,
       peers: Array.isArray(node.nodes) ? node.nodes.map((peer) => ({
