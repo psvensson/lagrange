@@ -38,6 +38,7 @@ export class ControllablePartitionRaftProvider {
     this.request = null;
     this.proposeHandler = null;
     this.listeners = new Map();
+    this.steps = [];
   }
 
   createPartitionPort(request) {
@@ -50,7 +51,10 @@ export class ControllablePartitionRaftProvider {
     };
     return createRaftOperationPort({
       subscribe,
-      step: () => testCoreOk(),
+      step: (envelope) => {
+        this.steps.push(envelope);
+        return testCoreOk();
+      },
       propose: async (entry) => {
         const result = this.proposeHandler ?
           await this.proposeHandler(entry) :
