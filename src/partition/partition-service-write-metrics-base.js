@@ -12,7 +12,6 @@ import {preparePartitionReadStatement} from
 const {
   DURABLE_COMMIT_WITNESS_ERROR,
   ERRORS,
-  LifeRaft,
   METRICS_LOG_TAG,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LITERAL,
@@ -669,8 +668,8 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     }
     const commitMode = resolvePartitionWriteCommitMode({
       replicaIds: this.replicaIds,
-      raftState: this.raft?.state,
-      raftLeaderState: LifeRaft.LEADER,
+      raftState: this.raft?.readStatus?.().role,
+      raftLeaderState: RaftRole.LEADER,
       hasKnownRemoteLeader: this.hasKnownRemoteLeaderWitness(),
     });
     // Rejected writes must not touch the local raft log: an appended entry
