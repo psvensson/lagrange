@@ -37,6 +37,7 @@ export class ControllablePartitionRaftProvider {
     this.leaderId = options.leaderId || null;
     this.request = null;
     this.proposeHandler = null;
+    this.stepHandler = null;
     this.listeners = new Map();
     this.steps = [];
   }
@@ -53,7 +54,8 @@ export class ControllablePartitionRaftProvider {
       subscribe,
       step: (envelope) => {
         this.steps.push(envelope);
-        return testCoreOk();
+        const result = this.stepHandler ? this.stepHandler(envelope) : null;
+        return result?.outcome ? result : testCoreOk();
       },
       propose: async (entry) => {
         const result = this.proposeHandler ?
@@ -98,6 +100,10 @@ export class ControllablePartitionRaftProvider {
 
   setProposeHandler(handler) {
     this.proposeHandler = handler;
+  }
+
+  setStepHandler(handler) {
+    this.stepHandler = handler;
   }
 }
 
