@@ -29,6 +29,8 @@ import {
 import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
 import {RAFT_PARTITION_NODE_REQUEST} from
   '../../src/raft/raft-provider-contract-constants.js';
+import {ControllablePartitionRaftProvider} from
+  './partition-service-test-support.js';
 import {
   COLUMN,
   SERVICE_TYPE,
@@ -805,8 +807,8 @@ test('PartitionService - unsubscribe from CDC', async (t) => {
 
 // Tests for liferaft-based architecture (Requirements 14.1, 14.2, 14.3, 14.4)
 
-test('PartitionService - handleTransportMessage routes Raft packets to liferaft', async (t) => {
-  // Mock transport to avoid null reference errors when liferaft tries to respond
+test('PartitionService - handleTransportMessage routes Raft packets to the semantic port',
+  async (t) => {
   const mockTransport = {
     register: () => {},
     unregister: () => {},
@@ -820,23 +822,10 @@ test('PartitionService - handleTransportMessage routes Raft packets to liferaft'
     replicaIds: ['replica-1'],
     transport: mockTransport,
     dbPath: ':memory:',
+    raftProvider: new ControllablePartitionRaftProvider(),
   });
 
   await partition.initialize();
-
-  // Track if raft.emit was called with the packet
-  let emittedData = null;
-  let emittedEvent = null;
-
-  // Replace raft.emit to track calls without triggering liferaft's state machine
-  partition.raft.emit = (event, data, _write) => {
-    if (event === 'data') {
-      emittedEvent = event;
-      emittedData = data;
-    }
-    // Don't call original emit to avoid triggering liferaft's state machine
-    return true;
-  };
 
   // Send a Raft packet (vote request)
   const raftPacket = {
@@ -851,10 +840,11 @@ test('PartitionService - handleTransportMessage routes Raft packets to liferaft'
   const result = await partition.handleTransportMessage({payload: raftPacket});
 
   t.equal(result.acknowledged, true, 'Raft packet should be acknowledged');
-  t.equal(emittedEvent, 'data', 'Should emit data event to liferaft');
-  t.ok(emittedData, 'Raft packet should be emitted to liferaft');
-  t.equal(emittedData.type, 'vote', 'Packet type should be preserved');
-  t.equal(emittedData.term, 1, 'Packet term should be preserved');
+  t.equal(partition.raftProvider.steps.length, 1,
+    'one semantic step should cross the port');
+  const [stepEnvelope] = partition.raftProvider.steps;
+  t.equal(stepEnvelope.payload.type, 'vote', 'Packet type should be preserved');
+  t.equal(stepEnvelope.payload.term, 1, 'Packet term should be preserved');
 
   await partition.shutdown();
 });
@@ -978,6 +968,7 @@ test('PartitionService - non-critical Raft responses use background delivery',
       },
     };
 
+    const raftProvider = new ControllablePartitionRaftProvider();
     const partition = new PartitionService({
       partitionId: 'sql_transaction_participants-p1',
       tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
@@ -985,15 +976,15 @@ test('PartitionService - non-critical Raft responses use background delivery',
       replicaIds: ['sql_transaction_participants-p1-r1'],
       transport: mockTransport,
       dbPath: ':memory:',
+      raftProvider,
     });
 
     await partition.initialize();
 
     try {
-      const originalEmit = partition.raft.emit.bind(partition.raft);
-      partition.raft.emit = (event, data, write) => {
-        if (event === 'data' && typeof write === 'function') {
-          write({
+      raftProvider.setStepHandler((envelope) => {
+        if (typeof envelope.reply === 'function') {
+          envelope.reply({
             type: 'append',
             term: 1,
             address: 'node-1/partition/sql_transaction_participants-p1-r1',
@@ -1002,10 +993,8 @@ test('PartitionService - non-critical Raft responses use background delivery',
             last: {term: 1, index: 1},
             data: [{index: 2, term: 1, command: 'noop'}],
           });
-          return true;
         }
-        return originalEmit(event, data, write);
-      };
+      });
 
       await partition.handleTransportMessage({
         payload: {
