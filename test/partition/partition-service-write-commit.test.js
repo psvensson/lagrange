@@ -608,7 +608,7 @@ test(
   },
 );
 
-test('PartitionService rejects multi-replica leader writes when Liferaft is not leader',
+test('PartitionService rejects multi-replica leader writes when Raft is not leader',
   async (t) => {
     const replicaIds = [
       'commit-gate-r1',
