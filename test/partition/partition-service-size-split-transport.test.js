@@ -811,45 +811,45 @@ test('PartitionService - unsubscribe from CDC', async (t) => {
 
 test('PartitionService - handleTransportMessage routes Raft packets to the semantic port',
   async (t) => {
-  const mockTransport = {
-    register: () => {},
-    unregister: () => {},
-    deliver: () => Promise.resolve({acknowledged: true}),
-  };
+    const mockTransport = {
+      register: () => {},
+      unregister: () => {},
+      deliver: () => Promise.resolve({acknowledged: true}),
+    };
 
-  const partition = new PartitionService({
-    partitionId: 'test-partition-15',
-    tableId: 'raft_test',
-    replicaId: 'replica-1',
-    replicaIds: ['replica-1'],
-    transport: mockTransport,
-    dbPath: ':memory:',
-    raftProvider: new ControllablePartitionRaftProvider(),
+    const partition = new PartitionService({
+      partitionId: 'test-partition-15',
+      tableId: 'raft_test',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      transport: mockTransport,
+      dbPath: ':memory:',
+      raftProvider: new ControllablePartitionRaftProvider(),
+    });
+
+    await partition.initialize();
+
+    // Send a Raft packet (vote request)
+    const raftPacket = {
+      type: 'vote',
+      term: 1,
+      address: 'node2/partition/replica-2',
+      state: 1,
+      leader: '',
+      last: {term: 0, index: 0},
+    };
+
+    const result = await partition.handleTransportMessage({payload: raftPacket});
+
+    t.equal(result.acknowledged, true, 'Raft packet should be acknowledged');
+    t.equal(partition.raftProvider.steps.length, 1,
+      'one semantic step should cross the port');
+    const [stepEnvelope] = partition.raftProvider.steps;
+    t.equal(stepEnvelope.payload.type, 'vote', 'Packet type should be preserved');
+    t.equal(stepEnvelope.payload.term, 1, 'Packet term should be preserved');
+
+    await partition.shutdown();
   });
-
-  await partition.initialize();
-
-  // Send a Raft packet (vote request)
-  const raftPacket = {
-    type: 'vote',
-    term: 1,
-    address: 'node2/partition/replica-2',
-    state: 1,
-    leader: '',
-    last: {term: 0, index: 0},
-  };
-
-  const result = await partition.handleTransportMessage({payload: raftPacket});
-
-  t.equal(result.acknowledged, true, 'Raft packet should be acknowledged');
-  t.equal(partition.raftProvider.steps.length, 1,
-    'one semantic step should cross the port');
-  const [stepEnvelope] = partition.raftProvider.steps;
-  t.equal(stepEnvelope.payload.type, 'vote', 'Packet type should be preserved');
-  t.equal(stepEnvelope.payload.term, 1, 'Packet term should be preserved');
-
-  await partition.shutdown();
-});
 
 test('PartitionService - non-critical Raft peer writes use background delivery',
   async (t) => {
