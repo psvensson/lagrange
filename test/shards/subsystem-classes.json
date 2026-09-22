@@ -28,7 +28,7 @@
   "censusSize": 2154,
   "digest": "fnv1a32-aec6c8b0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b71604f2",
+  "observationDigest": "fnv1a32-30fd0098",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -6122,7 +6122,8 @@
     },
     "test/partition/partition-service-raft-transition-evidence.test.js": {
       "files": [
-        "src/partition/partition-service-raft-lifecycle-wiring.js"
+        "src/partition/partition-service-raft-lifecycle-wiring.js",
+        "src/raft/raft-operation-port-constants.js"
       ]
     },
     "test/partition/partition-service-role-metadata-publication.test.js": {
@@ -9912,6 +9913,11 @@
       "files": [
         "src/control-plane/timeout-budget.js",
         "src/workflow/durable-workflow-coordinator.js"
+      ]
+    },
+    "test/partition/partition-service.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js"
       ]
     }
   }
