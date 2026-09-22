@@ -111,11 +111,14 @@ test('ONE-HOP: a coupled endpoint does not expand through its own contracts', ()
 });
 
 test('shipping-surface changes require a release proof', () => {
-  const shippingPaths = [
-    ...RELEASE_SURFACE_PATHS,
-    ...RELEASE_SURFACE_PREFIXES.map((prefix) => `${prefix}probe.bin`),
-  ];
-  for (const shippingPath of shippingPaths) {
+  for (const shippingPath of RELEASE_SURFACE_PATHS) {
+    const selection = selectChangedTests({root, changedPaths: [shippingPath]});
+    assert.equal(selection.kind, SELECTION_REFUSED,
+      `${shippingPath} changes what consumers receive`);
+    assert.equal(selection.refusalCode, 'RELEASE_PROOF_REQUIRED');
+  }
+  for (const prefix of RELEASE_SURFACE_PREFIXES) {
+    const shippingPath = `${prefix}probe.bin`;
     const selection = selectChangedTests({root, changedPaths: [shippingPath]});
     assert.equal(selection.kind, SELECTION_REFUSED,
       `${shippingPath} changes what consumers receive`);
