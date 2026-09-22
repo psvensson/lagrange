@@ -219,6 +219,11 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
   const cluster = formedPartition();
   const types = confChangeTypes();
   const transition = autoTransition();
+  const leaderChanges = new Map(FOUNDING.map((replicaId) => [replicaId, []]));
+  const unsubscribes = FOUNDING.map((replicaId) =>
+    cluster.node(replicaId).subscribe('leader-change', (leaderId) => {
+      leaderChanges.get(replicaId).push(leaderId);
+    }));
   try {
     // ---- 2. elect -------------------------------------------------------
     const elected = cluster.settle(() => cluster.leaderReplicaId() !== null,
@@ -230,6 +235,9 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
     for (const replicaId of FOUNDING) {
       assert.equal(cluster.coreStatus(replicaId).lead,
         cluster.raftPeerIdOf(leader));
+      const observed = leaderChanges.get(replicaId);
+      assert.equal(observed.at(-1), leader,
+        'leader-change events expose the replica identity, not the raft-rs u64 id');
     }
 
     // ---- 3. a normal proposal, committed and applied ---------------------
@@ -396,6 +404,9 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
     assert.ok(!agreedVoters.includes(retiringPeerId),
       'yet the committed configuration removed it');
   } finally {
+    for (const unsubscribe of unsubscribes) {
+      unsubscribe();
+    }
     cluster.dispose();
   }
 });
