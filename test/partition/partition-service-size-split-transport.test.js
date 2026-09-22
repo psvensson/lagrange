@@ -29,6 +29,8 @@ import {
 import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
 import {RAFT_PARTITION_NODE_REQUEST} from
   '../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_MEMBERSHIP_OPERATION} from
+  '../../src/raft/raft-operation-port-constants.js';
 import {ControllablePartitionRaftProvider} from
   './partition-service-test-support.js';
 import {
@@ -1212,8 +1214,12 @@ test('PartitionService - cache reconciliation refreshes moved peers and joins ne
       raft_role: RaftRole.FOLLOWER,
     });
 
-    const joinedAddresses = [];
-    const leftAddresses = [];
+    const raftProvider = new ControllablePartitionRaftProvider({
+      peers: [{
+        address: 'node-old/partition/replica-2',
+        replicaIdentity: 'replica-2',
+      }],
+    });
     const partition = new PartitionService({
       partitionId: 'test-partition-19b',
       tableId: 'peer_refresh_test',
@@ -1222,48 +1228,53 @@ test('PartitionService - cache reconciliation refreshes moved peers and joins ne
       nodeId: 'node-1',
       peerAddresses: ['node-old/partition/replica-2'],
       dbPath: ':memory:',
+      deferElection: true,
+      raftProvider,
     });
 
-    partition.raft = {
-      nodes: [{address: 'node-old/partition/replica-2'}],
-      leave(address) {
-        leftAddresses.push(address);
-      },
-    };
-    partition.raftProvider = {
-      joinPeer(_raft, address) {
-        joinedAddresses.push(address);
-      },
-    };
+    await partition.initialize();
+    try {
+      raftProvider.confChanges.length = 0;
+      partition.systemTableCache = systemTableCache;
 
-    partition.systemTableCache = systemTableCache;
+      const refreshedAddress = partition.buildPeerAddress('replica-2');
+      await new Promise((resolve) => setImmediate(resolve));
 
-    const refreshedAddress = partition.buildPeerAddress('replica-2');
-    await new Promise((resolve) => setImmediate(resolve));
+      const removedAddresses = raftProvider.confChanges
+        .filter((change) =>
+          change.type === RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER)
+        .map((change) => change.peerAddress);
+      const joinedAddresses = raftProvider.confChanges
+        .filter((change) =>
+          change.type === RAFT_MEMBERSHIP_OPERATION.ADD_PEER)
+        .map((change) => change.peerAddress);
 
-    t.equal(
-      refreshedAddress,
-      'node-new/partition/replica-2',
-      'cache-backed ownership should override stale bootstrap peer hints',
-    );
-    t.same(
-      leftAddresses,
-      ['node-old/partition/replica-2'],
-      'stale raft peer address should be replaced when ownership moves',
-    );
-    t.same(
-      joinedAddresses,
-      [
+      t.equal(
+        refreshedAddress,
         'node-new/partition/replica-2',
-        'node-3/partition/replica-3',
-      ],
-      'newly visible peers should be joined from authoritative cache rows',
-    );
-    t.ok(
-      partition.replicaIds.includes('replica-2') &&
-      partition.replicaIds.includes('replica-3'),
-      'replicaIds should expand to include cache-discovered peers',
-    );
+        'cache-backed ownership should override stale bootstrap peer hints',
+      );
+      t.same(
+        removedAddresses,
+        ['node-old/partition/replica-2'],
+        'stale raft peer address should be replaced when ownership moves',
+      );
+      t.same(
+        joinedAddresses,
+        [
+          'node-new/partition/replica-2',
+          'node-3/partition/replica-3',
+        ],
+        'newly visible peers should be proposed through the semantic port',
+      );
+      t.ok(
+        partition.replicaIds.includes('replica-2') &&
+        partition.replicaIds.includes('replica-3'),
+        'replicaIds should expand to include cache-discovered peers',
+      );
+    } finally {
+      await partition.shutdown();
+    }
   });
 
 test('PartitionService - emits leaderElected event for single replica', async (t) => {
