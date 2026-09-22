@@ -179,11 +179,15 @@ jobs:
       # that skipped the gate's inventory refresh, and it must fail HERE with
       # its name rather than silently widen the proof (the seal would appear
       # as a changed path).
-      - name: Prepare the sealed import graph
+      - name: Prepare generated test metadata
         run: |
-          node scripts/generate-global-owner-debt-inventory.js --refresh-import-graph-only
-          git diff --exit-code -- test/shards/impact-graph-seal.json || {
-            echo "::error::test/shards/impact-graph-seal.json is stale for this tree; run the command above and commit the seal"
+          npm run -s test:metadata:refresh
+          git diff --exit-code -- \
+            test/shards/primary-classes.json \
+            test/shards/resource-classes.json \
+            test/shards/subsystem-classes.json \
+            test/shards/impact-graph-seal.json || {
+            echo "::error::generated test metadata is stale; run 'npm run test:metadata:refresh' and commit all four derived artifacts"
             exit 1
           }
 

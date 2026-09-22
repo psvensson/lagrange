@@ -256,6 +256,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:gate` — `node scripts/run-project-hardening-acceptance.js`
 - `test:gate:postpush` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/project-hardening-proof-postpush-manifest.json`
 - `test:metadata-gateway:audit` — `node scripts/check-unified-system-metadata-gateway.js`
+- `test:metadata:refresh` — `node scripts/generate-test-primary-classes.js && node scripts/generate-test-resource-classes.js && node scripts/generate-test-subsystem-classes.js && node scripts/generate-global-owner-debt-inventory.js --refresh-import-graph-only`
 - `test:metrics` — `npm run test:complexity:cognitive && npm run test:cycles && npm run test:duplication`
 - `test:metrics:scoped` — `node scripts/check-scoped-ratchets.js`
 - `test:metrics:scoped:strict` — `node scripts/check-scoped-ratchets.js --strict`
@@ -292,4 +293,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-190 scripts indexed; 31 have a curated description, 159 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+191 scripts indexed; 31 have a curated description, 160 fall back to their raw command. Improve coverage in the two sources named in the header comment.

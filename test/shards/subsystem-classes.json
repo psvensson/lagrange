@@ -28,7 +28,7 @@
   "censusSize": 2153,
   "digest": "fnv1a32-67381418",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4812a20b",
+  "observationDigest": "fnv1a32-aa7c08e4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7603,7 +7603,9 @@
         "test/manifests/project-hardening-proof-postpush-manifest.json",
         "test/manifests/proof-authority-falsifiers.receipt.json",
         "test/manifests/proof-obligations.json",
+        "test/shards/impact-graph-seal.json",
         "test/shards/primary-classes.json",
+        "test/shards/resource-classes.json",
         "test/shards/safety-spine.json",
         "test/shards/subsystem-classes.json"
       ],
@@ -9577,7 +9579,9 @@
         "solve/changes/priority-recovery-owner-inventory/inventory.json",
         "test/shards/impact-contracts.json",
         "test/shards/impact-graph-seal.json",
-        "test/shards/primary-classes.json"
+        "test/shards/primary-classes.json",
+        "test/shards/resource-classes.json",
+        "test/shards/subsystem-classes.json"
       ],
       "directories": [
         "scripts",
