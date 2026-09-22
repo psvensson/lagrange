@@ -28,7 +28,7 @@
   "censusSize": 2153,
   "digest": "fnv1a32-67381418",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9ca42fc5",
+  "observationDigest": "fnv1a32-b2ee3a76",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3717,6 +3717,16 @@
         "test/distributed/harness/raft-network-host.js"
       ]
     },
+    "test/convergence/dt6-learner-promotion-progress-proof.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js"
+      ]
+    },
+    "test/convergence/dt6-learner-promotion-proof-channel-wake.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js"
+      ]
+    },
     "test/convergence/dt6-network-pct-search.test.js": {
       "files": [
         "src/diagnostics/formation-turn-attribution.js",
@@ -3811,6 +3821,11 @@
       "files": [
         "src/diagnostics/formation-turn-attribution.js",
         "src/rebalancer/operation-workflow-recovery-reconcile-shared.js"
+      ]
+    },
+    "test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js"
       ]
     },
     "test/convergence/membership-publication-owner-driver-host.test.js": {
@@ -6092,9 +6107,16 @@
         "src/partition/partition-raft-storage.js"
       ]
     },
+    "test/partition/partition-service-learner-promotion.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js"
+      ]
+    },
     "test/partition/partition-service-raft-noop-cdc-placement.test.js": {
       "files": [
-        "src/config/configuration-manager.js"
+        "src/config/configuration-manager.js",
+        "src/raft/raft-operation-port-constants.js",
+        "test/partition/partition-service-test-support.js"
       ]
     },
     "test/partition/partition-service-raft-transition-evidence.test.js": {
@@ -6104,17 +6126,28 @@
     },
     "test/partition/partition-service-role-metadata-publication.test.js": {
       "files": [
-        "src/control-plane/control-plane-system-table-gateway.js"
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/raft/raft-operation-port-constants.js"
       ]
     },
     "test/partition/partition-service-size-split-transport.test.js": {
-      "directories": [
-        "data"
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "test/partition/partition-service-test-support.js"
       ]
     },
     "test/partition/partition-service-transactions-query-routing.test.js": {
       "files": [
-        "src/partition/partition-service-constants.js"
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-operation-port-constants.js"
+      ]
+    },
+    "test/partition/partition-service-write-commit.test.js": {
+      "files": [
+        "src/raft/liferaft-commit-scheduler.js",
+        "src/raft/raft-operation-port-constants.js",
+        "test/partition/partition-service-test-support.js"
       ]
     },
     "test/partition/partition-split-policy-precedence.test.js": {
@@ -6585,6 +6618,7 @@
       "files": [
         "src/partition/partition-service.js",
         "src/raft/raft-backend-selection.js",
+        "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port.js"
       ]
     },
