@@ -36,7 +36,10 @@ function minimalPartitionRequest(overrides = {}) {
     [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: REPLICA_ID,
     [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: REPLICA_ID,
     [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: [REPLICA_ID],
-    [RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG]: {end: () => undefined},
+    [RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG]: {
+      end: () => undefined,
+      getLastInfo: async () => ({index: 0, term: 0, committedIndex: 0}),
+    },
     [RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE]: new Database(':memory:'),
     [RAFT_PARTITION_NODE_REQUEST.TIMING]: TIMING,
     [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]: {},
