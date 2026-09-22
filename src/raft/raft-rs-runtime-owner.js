@@ -25,6 +25,7 @@ import {
 } from './raft-rs-group-constants.js';
 import {applyCommittedEntryTransaction} from
   './raft-rs-application-transaction-owner.js';
+import {RAFT_EVENT} from './constants.js';
 import {deepFreeze} from './raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 
@@ -56,8 +57,8 @@ const RUNTIME_COMMAND = Object.freeze({
   CAMPAIGN: 'campaign',
 });
 const RUNTIME_EVENT = Object.freeze({
-  TERM_CHANGE: 'term-change',
-  LEADER_CHANGE: 'leader-change',
+  TERM_CHANGE: RAFT_EVENT.TERM_CHANGE,
+  LEADER_CHANGE: RAFT_EVENT.LEADER_CHANGE,
 });
 const PEER_ADDRESS_STATUS = Object.freeze({
   RESOLVED: 'resolved',
