@@ -40,4 +40,9 @@ jobs:
             test/raft/raft-rs-backend/operation-port-provenance.test.js \
             test/raft/raft-rs-backend/operation-port-ready-recovery.test.js \
             test/raft/raft-rs-backend/operation-port-regression.test.js \
-            test/simulation/formation-sim-production-partitions.test.js
+            test/partition/partition-service-write-commit.test.js \
+            test/partition/partition-service-raft-noop-cdc-placement.test.js \
+            test/partition/partition-service-size-split-transport.test.js \
+            test/partition/partition-service-transactions-query-routing.test.js \
+            test/simulation/formation-sim-production-partitions.test.js \
+            test/simulation/formation-sim-production-handoff.test.js
