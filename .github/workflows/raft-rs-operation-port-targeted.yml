@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Fast static checks
+        run: node scripts/check-fast-static.js
+
       - name: Operation-port and formation parity
         env:
           TAP_TIMEOUT_FLOOR: '120'
@@ -46,3 +49,15 @@ jobs:
             test/partition/partition-service-transactions-query-routing.test.js \
             test/simulation/formation-sim-production-partitions.test.js \
             test/simulation/formation-sim-production-handoff.test.js
+
+      - name: Quest evidence
+        run: |
+          node scripts/quest-evidence/raft-rs-operation-port-boundary.js
+          cat solve/quests/raft-rs-operation-port-boundary/evidence/receipt.json
+
+      - name: Upload quest receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: raft-rs-operation-port-receipt
+          path: solve/quests/raft-rs-operation-port-boundary/evidence/receipt.json
+          retention-days: 7
