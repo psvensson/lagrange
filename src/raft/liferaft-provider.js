@@ -190,16 +190,6 @@ class LiferaftProvider {
     const snapshotCatchupNeeded =
       request[RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED];
     const timing = request[RAFT_PARTITION_NODE_REQUEST.TIMING];
-    const protocolDiagnostics = {
-      peerWrites: Object.create(null),
-      inbound: Object.create(null),
-      replies: Object.create(null),
-      sendFailures: Object.create(null),
-    };
-    const countProtocolPacket = (bucket, packet) => {
-      const type = String(packet?.type || 'unknown');
-      bucket[type] = (bucket[type] || 0) + 1;
-    };
 
     class PartitionGroupRaftNode extends LifeRaft {
       /**
@@ -231,13 +221,9 @@ class LiferaftProvider {
        */
       write(packet, callback) {
         const peerAddress = resolvePeerAddress(this.address);
-        countProtocolPacket(protocolDiagnostics.peerWrites, packet);
         sendToPeer(peerAddress, packet)
           .then((result) => callback(null, result))
-          .catch((error) => {
-            countProtocolPacket(protocolDiagnostics.sendFailures, packet);
-            callback(error);
-          });
+          .catch((error) => callback(error));
       }
     }
 
@@ -282,26 +268,14 @@ class LiferaftProvider {
       })) : [],
       followerProgress: node._followerMatchIndexByAddress instanceof Map ?
         Object.fromEntries(node._followerMatchIndexByAddress) : {},
-      protocolDiagnostics: {
-        peerWrites: {...protocolDiagnostics.peerWrites},
-        inbound: {...protocolDiagnostics.inbound},
-        replies: {...protocolDiagnostics.replies},
-        sendFailures: {...protocolDiagnostics.sendFailures},
-      },
     });
     return createRaftOperationPort({
       subscribe,
-      step: (envelope) => {
-        const payload = envelope?.payload ?? envelope;
-        countProtocolPacket(protocolDiagnostics.inbound, payload);
-        const reply = typeof envelope?.reply === 'function' ?
-          (responsePacket) => {
-            countProtocolPacket(protocolDiagnostics.replies, responsePacket);
-            return envelope.reply(responsePacket);
-          } :
-          envelope?.reply;
-        return node.emit(RAFT_EVENT.DATA, payload, reply);
-      },
+      step: (envelope) => node.emit(
+        RAFT_EVENT.DATA,
+        envelope?.payload ?? envelope,
+        envelope?.reply,
+      ),
       propose: (command) => Promise.resolve(node.command(command)),
       proposeConfChange: (change) => {
         if (change?.type === RAFT_MEMBERSHIP_OPERATION.ADD_PEER &&
