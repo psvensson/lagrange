@@ -320,6 +320,16 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
       between: (round) => poisonEveryCache(cluster, round)});
     assert.ok(caughtUp,
       'the learner must reach the leader\'s committed position');
+    const leaderStatus = cluster.node(leader).readStatus();
+    const learnerAddress = cluster.addressOf(JOINER);
+    assert.ok(
+      Number.isFinite(leaderStatus.followerProgress?.[learnerAddress]),
+      'semantic status projects raft-rs progress for the learner address',
+    );
+    const progressProbe = await cluster.node(leader)
+      .probePeerProgress(learnerAddress);
+    assert.equal(progressProbe.outcome, 'CORE_OK',
+      'the semantic progress probe stays behind the operation port');
     // Catching up did not make it a voter: that is ConfState's decision.
     assert.ok(!cluster.coreConfState(JOINER).voters.includes(joinerPeerId),
       'a caught-up learner is still a learner until a change commits');
