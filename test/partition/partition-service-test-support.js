@@ -105,14 +105,27 @@ export class ControllablePartitionRaftProvider {
     });
   }
 
+  setTerm(term) {
+    this.term = term;
+  }
+
+  emitEvent(eventName, ...args) {
+    for (const listener of this.listeners.get(eventName) || []) {
+      listener(...args);
+    }
+  }
+
   setRole(role) {
     this.role = role;
     this.leaderId = role === RAFT_ROLE.LEADER ?
       this.request?.peerId || null :
       null;
-    for (const listener of this.listeners.get(role) || []) {
-      listener();
-    }
+    this.emitEvent(role);
+  }
+
+  emitLeaderChange(leaderId) {
+    this.leaderId = leaderId;
+    this.emitEvent('leader change', leaderId);
   }
 
   setProposeHandler(handler) {
