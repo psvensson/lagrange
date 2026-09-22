@@ -13,7 +13,7 @@
     "usage": "node scripts/solve.js probe --id <quest> | --epic <epic> [--json]"
   },
   "land": {
-    "summary": "Land a sealed quest: the probe must be green; a standing rejection blocks; src/ changes need a current approving verification; the altitude budget, the epic's authorizes scope, the coupled-pair guard and the changed-path static checkers must pass; then the inventories refresh, the canonical import graph verifies, npm test runs, the change commits with LAGRANGE_SOLVER_LANDING=1, and a terminal solved entry is written. Never pushes.",
+    "summary": "Land a sealed quest: the probe must be green; a standing rejection blocks; src/ changes need a current approving verification; the altitude budget, the epic's authorizes scope, the coupled-pair guard and the changed-path static checkers must pass; then owner inventories and generated test metadata refresh, the canonical import graph verifies, npm test runs, the change commits with LAGRANGE_SOLVER_LANDING=1, and a terminal solved entry is written. Never pushes.",
     "usage": "node scripts/solve.js land --id <quest> [--json]"
   },
   "evidence": {
