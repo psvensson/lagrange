@@ -90,7 +90,7 @@ class PartitionReplicationHandler {
    * @param {Function} deps.buildPeerAddress - Function to resolve peer addresses.
    * @param {Object} deps.storage - PartitionRaftStorage instance.
    * @param {Object} deps.db - SQLite database instance.
-   * @param {Object} deps.raft - LifeRaft instance.
+   * @param {Object} deps.raft - Backend-neutral Raft operation port.
    * @param {Object} deps.hlcClock - HLC clock service.
    * @param {Function} deps.getRole - Function to get current Raft role.
    * @param {Function} deps.getLeaderId - Function to get current leader ID.
@@ -144,8 +144,8 @@ class PartitionReplicationHandler {
     ) {
       return true;
     }
-    const raftNodes = this.raft?.nodes;
-    return Array.isArray(raftNodes) && raftNodes.length > 0;
+    const peerCount = Number(this.raft?.readStatus?.().peerCount);
+    return Number.isFinite(peerCount) && peerCount > 0;
   }
 
   /**
