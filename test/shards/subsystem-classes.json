@@ -6152,6 +6152,11 @@
         "test/partition/partition-service-test-support.js"
       ]
     },
+    "test/partition/partition-service.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js"
+      ]
+    },
     "test/partition/partition-split-policy-precedence.test.js": {
       "files": [
         "examples/service-data-affinity/lagrange-loader.js",
@@ -9913,11 +9918,6 @@
       "files": [
         "src/control-plane/timeout-budget.js",
         "src/workflow/durable-workflow-coordinator.js"
-      ]
-    },
-    "test/partition/partition-service.test.js": {
-      "files": [
-        "src/raft/raft-operation-port-constants.js"
       ]
     }
   }
