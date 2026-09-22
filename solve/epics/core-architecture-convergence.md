@@ -14,13 +14,16 @@ authorizes:
   - docs
   - package.json
   - scripts/checks
+  - scripts/quest-evidence
   - solve/oracle
   - src/admin
   - src/bootstrap
+  - src/cache
   - src/cdc
   - src/config
   - src/constants
   - src/control-plane
+  - src/diagnostics
   - src/message-group
   - src/node
   - src/partition
@@ -30,15 +33,23 @@ authorizes:
   - src/rebalancer
   - src/runtime
   - src/service
+  - src/time
+  - src/topology
+  - src/random
   - src/transport
   - src/wasm-service
   - src/worker
   - src/workflow
+  - src/entrypoint-runtime-admin-composition.js
   - src/lagrange-runtime-startup.js
   - test/admin
   - test/bootstrap
+  - test/cache
+  - test/convergence
   - test/control-plane
   - test/distributed
+  - test/diagnostics
+  - test/integration
   - test/message-group
   - test/node
   - test/partition
@@ -53,6 +64,7 @@ authorizes:
   - test/shards
   - test/simulation
   - test/transport
+  - test/topology
   - test/wasm-service
   - test/workflow
 ---
@@ -408,7 +420,12 @@ Required output:
    - migration/test-only;
    - history/dead;
 8. current partition-only cutover deletion candidates;
-9. current documentation drift caused by the foundation merge;
+9. current documentation drift caused by the foundation merge, with the known
+   starting falsifiers rechecked rather than assumed:
+   - `src/partition/README.md` still names deleted `PartitionRaftNode`;
+   - `architecture/overview.md` still states every partition uses Liferaft;
+   - `architecture/runtime-components.md` still describes
+     `PartitionService` as Liferaft-backed;
 10. exact current certification commands/scenarios to be reused by Q9.
 
 The Quest returns one of two explicit outcomes:
