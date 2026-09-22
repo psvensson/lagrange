@@ -1,0 +1,13 @@
+{
+  "schema": "core-convergence-rs-raft-readiness-oracle/1",
+  "metric": 3,
+  "target": 0,
+  "result": "BLOCKED_ON_RAFT_CUTOVER",
+  "sourceCommit": "4fc46adfd02b9f1263c2d7f86a31facc9a43a266",
+  "blockers": [
+    "partition-backend-single-path",
+    "rs-raft-real-transport-demux",
+    "exact-main-release-proof"
+  ],
+  "evidence": "solve/epics/core-architecture-convergence/rs-raft-readiness-baseline.json"
+}

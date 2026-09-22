@@ -8,9 +8,16 @@ transactions, and partition-local write kernels.
 
 ## Primary Owners
 
-- `PartitionService` owns partition-local service behavior.
-- `PartitionRaftNode` and `PartitionRaftStorage` own Raft integration and
-  durable log/storage behavior.
+- `PartitionService` owns partition-local service behavior and consumes the
+  frozen partition Raft operation port returned by the selected provider.
+- The provider seam is `createRaftProvider(...)` /
+  `createPartitionPort(...)`. The rs-raft path keeps binding/core entry
+  private to `src/raft/raft-rs-runtime-owner.js`; local rs-raft
+  active/retired eligibility belongs to `RaftRsReplicaLifecycleOwner`.
+- `PartitionRaftStorage` and the selected backend's durable-store/application
+  transaction owners provide partition Raft durability. On rs-raft, committed
+  `ConfState` is current consensus membership; service/cache metadata is not
+  a second membership authority.
 - `PartitionWriteKernel` owns partition write execution.
 - `PartitionTransactionHandler` owns partition-local transaction handling.
 - `ManagedSplitWorkflow` owns split lifecycle progression.
@@ -30,6 +37,10 @@ transactions, and partition-local write kernels.
 ## Do Not
 
 - Do not infer lifecycle completion from cache visibility or timer age.
+- Do not reach through the partition Raft operation port to a RawNode, runtime
+  host, handle, SQLite connection, or mutable lifecycle record.
+- Do not infer desired placement/replication policy from committed Raft
+  membership; policy and current `ConfState` answer different questions.
 - Do not mutate row fields owned by another owner.
 - Do not add local readiness or repair fallbacks around split/merge admission.
 - Do not introduce a new oversized `segment` file when extracting partition

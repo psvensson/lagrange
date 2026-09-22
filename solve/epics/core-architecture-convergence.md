@@ -8,7 +8,8 @@ doneWhen:
   probe: oracle
   args:
     file: solve/oracle/core-architecture-convergence.json
-quests: []
+quests:
+  - core-convergence-rs-raft-readiness-baseline
 authorizes:
   - architecture
   - docs

@@ -213,7 +213,10 @@ No other source file may call `applySystemTableChange` directly.
 
 ### PartitionService
 - SQLite-backed Raft group for data storage
-- Uses liferaft library for Raft consensus
+- Consumes a frozen semantic Raft operation port from the partition provider
+  seam. Liferaft remains the production default today; the Rust raft-rs/WASM
+  backend is integrated behind that seam for fresh partition groups but its
+  real transport/default cutover is still a separate migration obligation.
 - Generates CDC events on writes; the leader stamps each event's `data` with the
   origin write HLC (`updated_at_hlc`) at generation
   (`src/partition/partition-cdc-generator.js`). The stamp rides `data` unchanged to

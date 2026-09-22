@@ -1,0 +1,153 @@
+{
+  "schema": "core-convergence-rs-raft-readiness-baseline/1",
+  "sourceCommit": "4fc46adfd02b9f1263c2d7f86a31facc9a43a266",
+  "foundationCommit": "f4f5b5a6e9c27d139b3ada85e0aabe38eb526480",
+  "result": "BLOCKED_ON_RAFT_CUTOVER",
+  "blockerCount": 3,
+  "unknownCount": 0,
+  "blockers": [
+    {
+      "id": "partition-backend-single-path",
+      "state": "PARTITION_DUAL_BACKEND",
+      "detail": "PartitionService accepts an injected raftProvider and otherwise createRaftProvider(options); RAFT_BACKEND_DEFAULT remains liferaft while raft-rs-wasm is explicit-selection only.",
+      "evidence": [
+        "src/raft/raft-backend-constants.js",
+        "src/raft/raft-backend-selection.js",
+        "src/partition/partition-service-core-base.js"
+      ]
+    },
+    {
+      "id": "rs-raft-real-transport-demux",
+      "state": "TRANSPORT_NOT_CUT_OVER",
+      "detail": "The rs-raft runtime emits semantic {groupId,to,message} payloads through the partition send callback, while PartitionService inbound transport still recognizes isRaftPacket(payload); the sealed operation-port regression explicitly keeps raft-rs-partition-transport-demux blocked.",
+      "evidence": [
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/partition/partition-service-raft-init-base.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "solve/quests/raft-rs-operation-port-boundary/quest.json",
+        "test/raft/raft-rs-backend/operation-port-regression.test.js"
+      ]
+    },
+    {
+      "id": "exact-main-release-proof",
+      "state": "UNPROVEN_EXACT_SHA",
+      "detail": "GitHub matching-ref lookup for refs/lagrange-proofs/release-full-v1/4fc46adfd02b9f1263c2d7f86a31facc9a43a266 returned no ref at Q0 measurement time.",
+      "evidence": [
+        "scripts/proof-authority.js",
+        "refs/lagrange-proofs/release-full-v1/4fc46adfd02b9f1263c2d7f86a31facc9a43a266"
+      ]
+    }
+  ],
+  "axes": {
+    "foundation": {
+      "state": "MERGED",
+      "pr": 46,
+      "mergeCommit": "f4f5b5a6e9c27d139b3ada85e0aabe38eb526480"
+    },
+    "operationBoundary": {
+      "state": "PROVEN_AND_REUSED",
+      "operationPort": "src/raft/raft-rs-operation-port.js",
+      "runtimeOwner": "src/raft/raft-rs-runtime-owner.js",
+      "lifecycleOwner": "src/raft/raft-rs-replica-lifecycle-owner.js",
+      "lifecycleAdministration": "src/raft/raft-rs-lifecycle-administration.js",
+      "identityAdministration": "src/raft/raft-rs-membership-administration.js",
+      "structuralAudit": "scripts/checks/raft-rs-operation-boundary-audit.js",
+      "executableWitness": "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+      "sealedReceipt": "solve/quests/raft-rs-operation-port-boundary/evidence/receipt.json",
+      "receiptCount": 11,
+      "receiptTestFilesUnchangedBetweenFoundationAndSourceCommit": true,
+      "candidateGate": {
+        "pr": 44,
+        "runId": 35741392425,
+        "head": "caa8f94d5abe7f139008f5d791578df0914607f5",
+        "conclusion": "success"
+      }
+    },
+    "consensusMembership": {
+      "state": "RS_RAFT_CONF_STATE_AUTHORITY",
+      "detail": "On the rs-raft path the core's committed ConfState is current consensus membership. Stable peer identity reservation and service/cache metadata are separate host concerns; metadata may request/project a transition but is not itself the committed configuration.",
+      "evidence": [
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-membership-administration.js",
+        "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js"
+      ]
+    },
+    "transport": {
+      "state": "TRANSPORT_NOT_CUT_OVER",
+      "outbound": "raft-rs runtime owner -> sendToPeer -> PartitionService request callback -> MessageRouter.deliver",
+      "inbound": "MessageRouter handler -> PartitionService.handleTransportMessage -> isRaftPacket -> operation-port step only for recognized current packet vocabulary",
+      "transportQuestPresent": false
+    },
+    "messageGroups": {
+      "state": "OUT_OF_SCOPE_ACTIVE_OWNER",
+      "backend": "liferaft",
+      "blocker": false,
+      "evidence": [
+        "src/message-group/message-group-service-state.js",
+        "src/message-group/message-group-service-raft-lifecycle.js"
+      ]
+    },
+    "documentation": {
+      "state": "DRIFT_REPAIRED_IN_Q0",
+      "blocker": false,
+      "changed": [
+        "src/partition/README.md",
+        "architecture/overview.md",
+        "architecture/runtime-components.md"
+      ],
+      "detail": "Current-state docs now describe the provider/operation-port boundary, Liferaft production default, rs-raft/WASM integrated-but-not-cut-over status, and ConfState-versus-policy ownership distinction."
+    }
+  },
+  "adversarialChecks": [
+    {
+      "id": "provider-omission",
+      "outcome": "BLOCKS",
+      "detail": "Omitting raftBackend selects the named liferaft default."
+    },
+    {
+      "id": "provider-injection",
+      "outcome": "CLASSIFIED",
+      "detail": "PartitionService still accepts options.raftProvider; this is a construction seam and must be censused at cutover."
+    },
+    {
+      "id": "raw-core-escape",
+      "outcome": "PROTECTED",
+      "detail": "Existing operation-boundary audit and witness cover raw binding/core/facade/lifecycle-writer bypasses."
+    },
+    {
+      "id": "identity-vs-membership",
+      "outcome": "DISTINGUISHED",
+      "detail": "Peer identity reservation is not ConfState membership authority."
+    },
+    {
+      "id": "metadata-vs-membership",
+      "outcome": "DISTINGUISHED",
+      "detail": "Hostile-cache real-partition proof keeps committed ConfState authoritative."
+    },
+    {
+      "id": "inbound-demux",
+      "outcome": "BLOCKS",
+      "detail": "Current inbound partition demux is not the authorized semantic rs-raft transport cutover."
+    },
+    {
+      "id": "message-group-liferaft",
+      "outcome": "CLASSIFIED_NON_BLOCKER",
+      "detail": "Message-group Liferaft is separately owned and is not evidence of partition fallback."
+    },
+    {
+      "id": "release-proof",
+      "outcome": "BLOCKS",
+      "detail": "No exact-SHA durable release-full-v1 receipt was present for the measured main commit."
+    }
+  ],
+  "generatedBy": "verifying-agent/q0-source-census",
+  "entries": [
+    "foundation",
+    "operationBoundary",
+    "consensusMembership",
+    "transport",
+    "messageGroups",
+    "documentation"
+  ]
+}

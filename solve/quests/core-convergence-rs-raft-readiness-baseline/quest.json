@@ -1,0 +1,39 @@
+{
+  "schema": "solve-quest/2",
+  "id": "core-convergence-rs-raft-readiness-baseline",
+  "class": "process",
+  "epic": "core-architecture-convergence",
+  "statement": "On the exact shared-main head after the rs-raft operation-port foundation, statically classify whether partition rs-raft is ready for core convergence without changing production behavior. Bind the current backend-selection state, operation-port/runtime/lifecycle ownership, committed-ConfState membership authority, real MessageRouter transport status, remaining Liferaft consumers, exact-main release-proof state, documentation drift, and the terminal certification matrix. READY requires one intended production partition backend, real rs-raft transport/demux, no omission/error fallback to Liferaft, a current operation-boundary witness, proven restart/ConfState authority, a green exact-main release proof, every remaining Liferaft use classified, and zero UNKNOWN. If any predecessor obligation is missing, report BLOCKED_ON_RAFT_CUTOVER and stop; do not implement transport or cutover inside Q0.",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/core-convergence-rs-raft-readiness-baseline.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "read-only-production",
+      "statement": "Q0 changes no src/ behavior. It is a census of the landed system."
+    },
+    {
+      "id": "reuse-operation-boundary",
+      "statement": "Reuse the merged operation-port audit, receipts, runtime owner, lifecycle owner, membership-identity administration and real-partition witnesses; do not build a parallel boundary checker."
+    },
+    {
+      "id": "blocked-is-honest",
+      "statement": "A BLOCKED_ON_RAFT_CUTOVER result is expected evidence, not permission to broaden Q0. Missing transport/default-selection/release-proof work belongs to its predecessor owner."
+    },
+    {
+      "id": "membership-semantics-separated",
+      "statement": "Committed rs-raft ConfState owns current consensus membership; placement policy, stable peer identity reservation, service/cache events and publication epochs remain distinct concerns."
+    },
+    {
+      "id": "message-group-separation",
+      "statement": "An explicitly owned message-group Liferaft path is classified separately and is not treated as a partition cutover failure."
+    },
+    {
+      "id": "zero-unknown",
+      "statement": "Every required Q0 axis must be classified; UNKNOWN is a red result."
+    }
+  ]
+}
