@@ -15,7 +15,7 @@ import {
 
 const {
   ConfigurationManager,
-  LifeRaft,
+  RaftRole,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
@@ -104,7 +104,7 @@ class PartitionServiceLearnerPromotionProofMethods {
     const proof = evaluateLearnerPromotionProof({
       raftIsLeader:
         this.isLeader === true &&
-          this.raft?.readStatus?.().role === LifeRaft.LEADER,
+          this.raft?.readStatus?.().role === RaftRole.LEADER,
       currentTerm: this.resolveCurrentTermSafe(),
       committedIndex: this.raft.readStatus().commitIndex,
       learnerMatchIndex: matchObservation.matchIndex,
