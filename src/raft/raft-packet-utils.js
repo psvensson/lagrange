@@ -40,8 +40,13 @@ function isRaftRsTransportEnvelope(payload) {
   );
 }
 
+function isRaftTransportPayload(payload) {
+  return isRaftPacket(payload) || isRaftRsTransportEnvelope(payload);
+}
+
 export {
   RAFT_PACKET_TYPES,
   isRaftPacket,
   isRaftRsTransportEnvelope,
+  isRaftTransportPayload,
 };
