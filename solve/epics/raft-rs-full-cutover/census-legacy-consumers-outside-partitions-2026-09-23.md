@@ -151,6 +151,10 @@ in `cdc-methods.js:171-172,266`); bridge transport outside MessageRouter.
    `MessageGroupWorkerService`, `ReplicaWorkerManager`'s consensus use, the
    worker message bridge as a consensus transport, and the worker bundles in
    `scripts/build-sea.js`; R8 item 14 is struck.
-6. WasmServiceReplica / RaftReplicaBase: pending the owner's answer
-   (recommendation on record: delete now, design any future WASM group
-   consensus path against the port).
+6. WasmServiceReplica / RaftReplicaBase: MIGRATE NOW. The owner (2026-09-23):
+   "take the hit now and implement the future consensus path". R4 builds the
+   WASM service-group consensus path on the operation port from the start:
+   a real durable store handle, a production constructor, the semantic
+   rs-raft envelope over MessageRouter, role/leader from port events and
+   status. `RaftReplicaBase` and its liferaft-shaped helpers are deleted,
+   not inherited; R8 item 13 stays and certifies the new path.
