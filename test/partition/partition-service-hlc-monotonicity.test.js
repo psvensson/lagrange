@@ -22,7 +22,6 @@ import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {PARTITION_SERVICE_OPERATION} from
   '../../src/partition/partition-service-constants.js';
 import {
-  RS_RAFT_SELECTION_ON_BASE,
   restartOverCommittedCommands,
 } from './partition-rs-raft-restart-fixture.js';
 import {warmHlcFromDurableWitnesses} from
@@ -187,7 +186,7 @@ test('Fix 2: an undecodable applied command fails partition init closed',
       const seeded = new Database(dbPath);
       writeUndecodableAppliedEntry(seeded, 'hlc-mono-partition');
       seeded.close();
-      partition = buildPartition({dbPath, ...RS_RAFT_SELECTION_ON_BASE});
+      partition = buildPartition({dbPath});
       await t.rejects(partition.initialize(),
         {code: RAFT_RS_PROPOSAL_CODEC_ERROR.UNDECODABLE},
         'init rejects with the typed codec error instead of warning and ' +

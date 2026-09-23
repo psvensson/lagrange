@@ -7,7 +7,6 @@ import {
 } from '../../src/partition/partition-service-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
-  RS_RAFT_SELECTION_ON_BASE,
   restartOverCommittedCommands,
 } from './partition-rs-raft-restart-fixture.js';
 
@@ -460,7 +459,7 @@ test(
           // Reconstruction reads the rs-raft committed log, so the partition
           // runs on rs-raft (named on this base; the default after the
           // cutover's A1 attempt, which deletes the selection).
-          const partition = createTransactionPartition(RS_RAFT_SELECTION_ON_BASE);
+          const partition = createTransactionPartition();
           await partition.initialize();
           const sessionId = 'reconstruct-prepared';
 

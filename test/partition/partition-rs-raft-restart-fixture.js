@@ -26,11 +26,6 @@ import {assertRaftOperationSucceeded} from
 import {RAFT_RS_SQL} from '../../src/raft/raft-rs-durable-store-constants.js';
 import {RAFT_RS_ENTRY_TYPE} from '../../src/raft/raft-rs-ready-loop-constants.js';
 
-// On this base the only way to reach rs-raft is to name it. The attempt that
-// makes rs-raft the default (quest raft-rs-single-path-partition-cutover, A1)
-// also refuses every named backend: when it lands this selection is deleted
-// and the partitions below are built with no selection at all.
-const RS_RAFT_SELECTION_ON_BASE = Object.freeze({raftBackend: 'raft-rs-wasm'});
 
 const TEMP_PREFIX = 'partition-rs-raft-restart-';
 const DB_FILE = 'partition.sqlite';
@@ -106,7 +101,6 @@ async function restartOverCommittedCommands(options, commands) {
     replicaIds: [`${options.partitionId}-r1`],
     deferElection: true,
     ...options,
-    ...RS_RAFT_SELECTION_ON_BASE,
     dbPath: path.join(directory, DB_FILE),
   };
   let restarted = null;
@@ -148,7 +142,6 @@ async function restartOverCommittedCommands(options, commands) {
 }
 
 export {
-  RS_RAFT_SELECTION_ON_BASE,
   readCommittedIndependently,
   restartOverCommittedCommands,
 };
