@@ -38,4 +38,4 @@ function scaleByMachineFactor(referenceMs) {
   return Math.round(referenceMs * TEST_MACHINE_FACTOR);
 }
 
-export {scaleByMachineFactor};
+export {resolveTestMachineFactor, scaleByMachineFactor};

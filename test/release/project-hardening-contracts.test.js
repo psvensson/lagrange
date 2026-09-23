@@ -276,12 +276,14 @@ describe('project hardening contracts', () => {
       .filter((step) => typeof step.run === 'string' &&
         /npm run /u.test(step.run))
       .map((step) => step.run.trim());
-    // --keep-going: the whole corpus means every lane. The classified runner
-    // stops at the first red batch (right for a gate); a finder that stopped
-    // there would leave the exclusive lane, every integration and bootstrap
-    // file, unproved behind one red unit test (2026-09-13).
-    assert.ok(canaryRuns.includes('npm run test:all -- --keep-going'),
+    // The whole corpus means every lane. Keep-going is the classified
+    // runner's one policy; a canary that opted into --fail-fast would leave
+    // the exclusive lane, every integration and bootstrap file, unproved
+    // behind one red unit test (2026-09-13).
+    assert.ok(canaryRuns.includes('npm run test:all'),
       'the canary runs the whole corpus, every lane, not a selection');
+    assert.ok(canaryRuns.every((run) => !run.includes('--fail-fast')),
+      'and never opts out of keep-going');
     assert.deepEqual(release.on.push.tags, ['v*']);
     assert.equal(release.permissions.contents, 'read');
     assert.equal(release.jobs.release.permissions.contents, 'write');

@@ -75,32 +75,74 @@ test('the executor runs classified lanes serially with their owned budgets', () 
   assert.equal(calls[0].tapTimeoutFloor, process.env.TAP_TIMEOUT_FLOOR);
 });
 
-test('a red batch stops the executor unless it is told to keep going', () => {
+// Keep-going is the one policy (process change 2026-09-23): a red batch never
+// ends the run, so a gate, npm test, the local corpus and a placed shard all
+// report every red file in one pass; the exit status is still the first
+// failure. Fail-fast is the explicit opt-in, for a hand-run that wants the
+// first red and nothing else.
+test('every batch runs by default; fail-fast is the explicit opt-in', () => {
   const failing = ORDINARY;
   const spawnFailingOrdinary = (calls) => (command, args) => {
     calls.push(args.at(-1));
     return {status: args.at(-1) === failing ? 3 : 0};
   };
 
-  const gateCalls = [];
-  const gateStatus = runClassifiedTestFiles([INTEGRATION, ORDINARY],
-    {root, spawn: spawnFailingOrdinary(gateCalls)});
-  assert.equal(gateStatus, 3);
-  assert.deepEqual(gateCalls, [ORDINARY],
-    'a gate fails fast: the exclusive lane never starts');
+  const defaultCalls = [];
+  const defaultStatus = runClassifiedTestFiles([INTEGRATION, ORDINARY],
+    {root, spawn: spawnFailingOrdinary(defaultCalls)});
+  assert.equal(defaultStatus, 3, 'the first failure is still the exit status');
+  assert.deepEqual(defaultCalls, [ORDINARY, INTEGRATION],
+    'a red ordinary batch never hides the exclusive lane');
 
-  // The canary is a finder: every lane still runs and the first failure is
-  // what it reports, so a red ordinary batch cannot hide the exclusive lane
-  // that holds every integration and bootstrap file.
-  const canaryCalls = [];
-  const canaryStatus = runClassifiedTestFiles([INTEGRATION, ORDINARY],
-    {root, keepGoing: true, spawn: spawnFailingOrdinary(canaryCalls)});
-  assert.equal(canaryStatus, 3, 'the red is still reported');
-  assert.deepEqual(canaryCalls, [ORDINARY, INTEGRATION]);
+  const failFastCalls = [];
+  const failFastStatus = runClassifiedTestFiles([INTEGRATION, ORDINARY],
+    {root, failFast: true, spawn: spawnFailingOrdinary(failFastCalls)});
+  assert.equal(failFastStatus, 3);
+  assert.deepEqual(failFastCalls, [ORDINARY],
+    'fail-fast, asked for, stops at the first red batch');
 
   assert.throws(() => runClassifiedTestFiles([ORDINARY],
-    {root, keepGoing: 'yes', spawn: () => ({status: 0})}),
+    {root, failFast: 'yes', spawn: () => ({status: 0})}),
   /own-data options record/u);
+});
+
+// The same policy through the real runner: two red files in two batches (the
+// ordinary and the exclusive lane) are both reported, by name, in one run.
+test('two red files in different batches are both reported', (t) => {
+  const fixtureRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'lagrange-classified-keep-going-'));
+  t.after(() => fs.rmSync(fixtureRoot, {recursive: true, force: true}));
+  const redOrdinary = 'test/unit/red-ordinary.test.js';
+  const redExclusive = 'test/integration/red-exclusive.integration.test.js';
+  const redSource = 'import {test} from \'node:test\';\n' +
+    'test(\'red\', () => { throw new Error(\'red on purpose\'); });\n';
+  for (const file of [redOrdinary, redExclusive]) {
+    fs.mkdirSync(path.dirname(path.join(fixtureRoot, file)), {recursive: true});
+    fs.writeFileSync(path.join(fixtureRoot, file), redSource);
+  }
+  const plan = planClassifiedTestFiles(fixtureRoot, [redOrdinary, redExclusive], []);
+  assert.deepEqual(plan.map((lane) => lane.files),
+    [[redOrdinary], [redExclusive]], 'the two files run in different batches');
+
+  let output = '';
+  const env = {...process.env};
+  delete env.NODE_TEST_CONTEXT;
+  delete env.LAGRANGE_RETRY_FAILED_ONCE;
+  const status = runClassifiedTestFiles([redOrdinary, redExclusive], {
+    root: fixtureRoot,
+    env,
+    spawn(command, args, options) {
+      const result = spawnSync(command,
+        [path.join(root, args[0]), ...args.slice(1)],
+        {...options, stdio: 'pipe', encoding: UTF8, timeout: 60000});
+      output += result.stdout;
+      return result;
+    },
+  });
+  assert.notEqual(status, 0, 'the run is red');
+  assert.match(output, new RegExp(`^not ok ${redOrdinary} `, 'mu'));
+  assert.match(output, new RegExp(`^not ok ${redExclusive} `, 'mu'),
+    'the second batch ran and its red is reported too');
 });
 
 test('the classified plan fails closed on duplicates and unknown paths', () => {

@@ -251,7 +251,7 @@ test('the local corpus records the whole-corpus receipt only when green', (t) =>
   assert.deepEqual(gate.args.slice(0, 6),
     ['scripts/checks/push-gate-corpus-worktree.js', '--gate', HEAD, '--run', 'sh', '-c']);
   assert.match(gate.args[6],
-    /^"\$2" scripts\/run-classified-test-files\.js --keep-going --stdin < "\$1"; status=\$\?;/u,
+    /^"\$2" scripts\/run-classified-test-files\.js --stdin < "\$1"; status=\$\?;/u,
     'the rest of the corpus, in a fresh exact checkout, with this very node');
   assert.match(gate.args[6], /npm run -s test:convergence-probes \|\|[^;]*; exit "\$status"$/u,
     'the convergence probes are observed after it, never the verdict');

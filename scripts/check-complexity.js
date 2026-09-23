@@ -49,7 +49,9 @@ const TARGET_THRESHOLD = 12;
 // 2026-09-19: tightened 1817 -> 1816 after the learner promotion's in-flight
 // operation read lost its over-threshold method (spread-cure authorization
 // carrier), measured with the hint.
-const BASELINE_COUNT = 1816;
+// 2026-09-23: tightened 1816 -> 1815: the hint already printed on 9d85ac283,
+// before the runner-policy change that measured it.
+const BASELINE_COUNT = 1815;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

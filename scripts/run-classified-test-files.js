@@ -69,10 +69,13 @@ const PRIMARY_FLAG = '--primary';
 const RESOURCE_FLAG = '--resource';
 const EXCLUDE_FLAG = '--exclude';
 const EXCLUDE_PREFIX_FLAG = '--exclude-prefix';
-// A finder, not a gate: run every lane and batch and report the first
-// non-zero status at the end, so one red ordinary batch cannot hide the
-// exclusive lane that holds every integration and bootstrap file.
-const KEEP_GOING_FLAG = '--keep-going';
+// Keep-going is the one policy for every invocation - the gate's cone, npm
+// test, the local corpus, a placed shard: every lane and batch runs and the
+// first non-zero status is reported at the end, so one red ordinary batch
+// cannot hide the exclusive lane that holds every integration and bootstrap
+// file, and a multi-red push learns every red in one run. Stopping at the
+// first red batch is the explicit opt-in.
+const FAIL_FAST_FLAG = '--fail-fast';
 const MAX_FILES_PER_RUN = 100;
 const EXCLUSIVE_TAP_TIMEOUT_FLOOR_SECONDS = '120';
 const NEWLINE = '\n';
@@ -354,10 +357,10 @@ export function planClassifiedTestFiles(
 export function runClassifiedTestFiles(inputFiles, options = {}) {
   const ownedOptions = copyOwnDataRecord(options);
   if (!ownedOptions) throw new Error(INVALID_OPTIONS_PROBLEM);
-  const {root = ROOT, spawn = spawnSync, keepGoing = false,
+  const {root = ROOT, spawn = spawnSync, failFast = false,
     env = process.env} = ownedOptions;
   if (typeof root !== 'string' || root.length === 0 ||
-      typeof spawn !== 'function' || typeof keepGoing !== 'boolean' ||
+      typeof spawn !== 'function' || typeof failFast !== 'boolean' ||
       !env || typeof env !== 'object') {
     throw new Error(INVALID_OPTIONS_PROBLEM);
   }
@@ -387,7 +390,7 @@ export function runClassifiedTestFiles(inputFiles, options = {}) {
         args,
         {cwd: root, env: laneEnv, stdio: 'inherit'});
       if (result.status !== 0) {
-        if (!keepGoing) return result.status ?? 1;
+        if (failFast) return result.status ?? 1;
         if (firstFailure === 0) firstFailure = result.status ?? 1;
       }
     }
@@ -427,10 +430,10 @@ function readInputFiles(argv) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const argv = arraySlice(process.argv, 2);
-  const keepGoing = stringCollectionHas(argv, KEEP_GOING_FLAG);
+  const failFast = stringCollectionHas(argv, FAIL_FAST_FLAG);
   const laneArgv = [];
   for (let index = 0; index < argv.length; index += 1) {
-    if (argv[index] !== KEEP_GOING_FLAG) appendArrayValue(laneArgv, argv[index]);
+    if (argv[index] !== FAIL_FAST_FLAG) appendArrayValue(laneArgv, argv[index]);
   }
   const files = readInputFiles(laneArgv);
   if (files.length === 0) {
@@ -441,7 +444,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     // cannot, or may not, it is exactly the local run it always was.
     process.exitCode = await runPlacedTestFiles(files, placementDeps({
       root: ROOT,
-      keepGoing,
+      failFast,
       planCosts: (planned) => estimateFileCosts(
         planClassifiedTestFiles(ROOT, planned), lastResultsRoots(ROOT)),
       runLocal: (planned, options) => runClassifiedTestFiles(planned, options),

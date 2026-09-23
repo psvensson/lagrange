@@ -899,7 +899,6 @@ const PLACEMENT_WRAPPER_EXIT = 'exit "$status";';
 const PLACEMENT_PARENT = 'test-output/placement-worktrees';
 const PLACEMENT_LOG_PARENT = 'test-output/placement';
 const PLACEMENT_FILES_MARK = 'LAGRANGE_PLACEMENT_FILES';
-const PLACEMENT_KEEP_GOING = '--keep-going';
 const PLACEMENT_MACHINE_FACTOR_ENV = 'LAGRANGE_TEST_MACHINE_FACTOR';
 const PLACEMENT_FACTOR_STEPS = 10;
 const PLACEMENT_MINUTE_DIGITS = 1;
@@ -941,6 +940,7 @@ const PLACEMENT_TEXT = Object.freeze({
   RED_THERE: ' file(s) red there are decided on the controller',
   OVER_CAP: 'remote reds exceed the rerun cap: breakage, reported red without a rerun',
   MISS: ' passed on the controller: routed away from ',
+  FAIL_FAST: 'fail-fast asks for the first red, which a placed run cannot give',
   DEADLINE: 'deadline',
   INTERRUPTED: 'interrupted',
 });
@@ -1123,7 +1123,7 @@ function shardVerdicts(shard, outcome) {
  * @param {string[]} files
  * @param {Object} deps
  * @param {Function} deps.planCosts files -> [{file, ms, jobs}]
- * @param {Function} deps.runLocal (files, {keepGoing}) -> exit status
+ * @param {Function} deps.runLocal (files, {failFast}) -> exit status
  * @param {Function} deps.lastGreen file -> whether its controller result is green
  * @param {Function} deps.commitAt () -> the sha the tree exactly is, or null
  * @param {Function} deps.discover async () -> {machines, record(name, key, files)}
@@ -1133,19 +1133,21 @@ function shardVerdicts(shard, outcome) {
  *   files while lab shards run, without blocking this process
  * @param {Object} [deps.signals] where SIGINT, SIGTERM and SIGHUP arrive (process)
  * @param {Function} [deps.exit] process.exit
- * @param {boolean} [deps.keepGoing]
+ * @param {boolean} [deps.failFast] the explicit opt-in to stop at the first
+ *   red batch; such a run is never placed
  * @param {Object} [deps.env]
  * @param {Function} [deps.write]
  * @return {Promise<number>} exit status
  */
 export async function runPlacedTestFiles(files, deps) {
-  const {env = process.env, keepGoing = false,
+  const {env = process.env, failFast = false,
     write = (line) => process.stdout.write(`${line}\n`)} = deps;
   const local = (reason) => {
     if (reason) write(`${PLACEMENT_TEXT.LOCAL}${reason}`);
-    return deps.runLocal(files, {keepGoing});
+    return deps.runLocal(files, {failFast});
   };
   if (env[PLACEMENT_ENV] === PLACEMENT_LOCAL) return local(null);
+  if (failFast) return local(PLACEMENT_TEXT.FAIL_FAST);
   const costs = deps.planCosts(files);
   const aloneMs = costs.reduce((sum, cost) => sum + cost.ms / cost.jobs, 0);
   if (aloneMs < PLACEMENT_MIN_PLAN_MS) return local(null);
@@ -1185,7 +1187,7 @@ export async function runPlacedTestFiles(files, deps) {
   let here = null;
   const runHere = (planned) => {
     here = deps.runLocalChild ? deps.runLocalChild(planned) :
-      {done: Promise.resolve(deps.runLocal(planned, {keepGoing: true}))};
+      {done: Promise.resolve(deps.runLocal(planned, {}))};
     return here.done;
   };
   // The handler stays installed and runs once: a hang-up arrives twice (the
@@ -1261,8 +1263,8 @@ async function settleRemoteShards(remote, outcomes, {deps, fleet, statuses, writ
 // controller's deadline can stop everything it started.
 const PLACEMENT_SCRIPT_HEAD = [
   'set -u',
-  'repo="$1"; sha="$2"; node_major="$3"; factor="$4"; run="$5"; bundle="$6"; keep="$7"',
-  'retry="$8"; tap_timeout="$9"',
+  'repo="$1"; sha="$2"; node_major="$3"; factor="$4"; run="$5"; bundle="$6"',
+  'retry="$7"; tap_timeout="$8"',
   // Before nvm, which reads its arguments (see the capability script).
   'set --',
   'pid=""',
@@ -1352,7 +1354,7 @@ const PLACEMENT_SCRIPT_TAIL = [
     `retry:\${${PLACEMENT_FORWARDED_ENV.RETRY}:-} timeout:\${${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}:-}"`,
   // The machine lock (fd 9) stays with this shell: a test process that
   // outlived its run must not hold the machine busy after it.
-  'setsid node scripts/run-classified-test-files.js $keep --stdin < "$list" 9>&- &',
+  'setsid node scripts/run-classified-test-files.js --stdin < "$list" 9>&- &',
   'pid=$!',
   'echo "placement-pid=$pid"',
   'wait "$pid"; status=$?',
@@ -1475,11 +1477,11 @@ function hasExited(child) {
  * stderr log, or a reason when the shard never ran or its deadline stopped
  * it; `stop` stops it now.
  * @param {{machine: Object, files: string[]}} shard
- * @param {{sha: string, deadlineMs: number, root: string, keepGoing?: boolean,
+ * @param {{sha: string, deadlineMs: number, root: string,
  *   runId?: string, env?: Object, forward?: {retry?: string, tapTimeout?: string}}} options
  * @return {{done: Promise<Object>, stop: Function}}
  */
-export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true,
+export function startRemoteShard(shard, {sha, deadlineMs, root,
   env = gitProcessEnvironment(), forward = {},
   runId = `${sha.slice(0, PLACEMENT_RUN_SHA_CHARACTERS)}-` +
     `${Date.now().toString(PLACEMENT_RUN_RADIX)}-${process.pid}`}) {
@@ -1506,8 +1508,7 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true
     bundleFile,
     run: commandLine(remoteCommand(machine, null, [machine.repoPath, sha,
       machine.nodeMajor || EMPTY, String(machine.factor || 1), runId, remoteBundle,
-      keepGoing ? PLACEMENT_KEEP_GOING : EMPTY, forward.retry || EMPTY,
-      forward.tapTimeout || EMPTY], {fromStdin: true})),
+      forward.retry || EMPTY, forward.tapTimeout || EMPTY], {fromStdin: true})),
     scriptFile,
   });
   const output = fs.openSync(logFile, 'w');
@@ -1617,8 +1618,7 @@ async function discoverPlacement(root, env) {
 // entry point as a child in a group of its own, told never to place again.
 // `abort` ends the whole group.
 function runClassifiedChild(root, files, env) {
-  const child = spawn(process.execPath, [PLACEMENT_RUNNER, PLACEMENT_KEEP_GOING,
-    PLACEMENT_RUNNER_STDIN], {
+  const child = spawn(process.execPath, [PLACEMENT_RUNNER, PLACEMENT_RUNNER_STDIN], {
     cwd: root,
     env: {...env, [PLACEMENT_ENV]: PLACEMENT_LOCAL},
     stdio: [PLACEMENT_STDIO_PIPE, PLACEMENT_STDIO_INHERIT, PLACEMENT_STDIO_INHERIT],
@@ -1638,14 +1638,14 @@ function runClassifiedChild(root, files, env) {
 /**
  * The real collaborators of runPlacedTestFiles, given the classified runner's
  * own planning and execution.
- * @param {{root: string, keepGoing?: boolean, env?: Object, planCosts: Function,
+ * @param {{root: string, failFast?: boolean, env?: Object, planCosts: Function,
  *   runLocal: Function, lastGreen: Function}} input
  * @return {Object}
  */
-export function placementDeps({root, keepGoing = false, env = process.env,
+export function placementDeps({root, failFast = false, env = process.env,
   planCosts, runLocal, lastGreen}) {
   return {
-    keepGoing, env, planCosts, runLocal, lastGreen,
+    failFast, env, planCosts, runLocal, lastGreen,
     runLocalChild: (files) => runClassifiedChild(root, files, env),
     commitAt: () => commitAt(root),
     discover: () => discoverPlacement(root, env),

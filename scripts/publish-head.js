@@ -609,7 +609,7 @@ const LOCAL_CORPUS_SHELL_COMMAND = '-c';
 // $1 the file list, $2 this node. The convergence probes follow, observed as
 // the hosted canary observed them: their result never decides the verdict.
 const LOCAL_CORPUS_RUN_SCRIPT =
-  `"$2" ${LOCAL_CORPUS_RUNNER} --keep-going --stdin < "$1"; status=$?; ` +
+  `"$2" ${LOCAL_CORPUS_RUNNER} --stdin < "$1"; status=$?; ` +
   'npm run -s test:convergence-probes || ' +
   'echo "local corpus: convergence probes red (observed, never the verdict)"; ' +
   'exit "$status"';

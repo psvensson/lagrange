@@ -170,6 +170,30 @@ function fakeDeps(overrides = {}) {
 
 const MANY = Array.from({length: 8}, (_, index) => `test/f${index}.test.js`);
 
+// Keep-going is the one policy, placed or local: the runner is handed no
+// policy but the explicit fail-fast opt-in, and a fail-fast run is never
+// placed, because a placed run reports the whole plan by construction.
+test('only an explicit fail-fast reaches the runner, and it is never placed', async () => {
+  const policies = [];
+  let run = fakeDeps({runLocal: (files, options) => {
+    policies.push(options);
+    return 0;
+  }});
+  assert.equal(await runPlacedTestFiles(MANY, run.deps), 0);
+  assert.equal(run.calls.remote.length, 1, 'the default run is placed');
+  assert.deepEqual(policies, [{}], 'the controller shard runs the default policy');
+
+  policies.length = 0;
+  run = fakeDeps({failFast: true, runLocal: (files, options) => {
+    policies.push(options);
+    return 0;
+  }});
+  assert.equal(await runPlacedTestFiles(MANY, run.deps), 0);
+  assert.deepEqual(policies, [{failFast: true}]);
+  assert.equal(run.calls.discover, 0, 'a fail-fast run never asks the fleet');
+  assert.match(run.calls.lines[0], /^placement: local - fail-fast asks for the first red/u);
+});
+
 test('a small plan, a tree that is not a commit or an empty fleet runs locally', async () => {
   let run = fakeDeps({env: {LAGRANGE_PLACEMENT: 'local'}});
   assert.equal(await runPlacedTestFiles(MANY, run.deps), 0);
