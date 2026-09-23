@@ -59,9 +59,9 @@ import {
 //     messageTimeoutMs (the router default MESSAGE_TIMEOUT_MS on the
 //     scenario clock) when no bound is given.
 //
-// SCENARIO CLOCK: liferaft's heartbeat/election timers are wall-clock, so
-// the drive runs on a scaled real clock: one scenario second is the
-// learner's proof retry interval in real milliseconds (VIRTUAL_SECOND_MS).
+// SCENARIO CLOCK: the promotion cadence and injected transport latency are
+// wall-clock, so the drive runs on a scaled real clock: one scenario second is
+// the learner's proof retry interval in real milliseconds (VIRTUAL_SECOND_MS).
 // Every injected delay and every bound is a multiple of that interval;
 // timings are reported in scenario seconds. The wake bound is half an
 // interval: an event-driven re-request lands within a few milliseconds,
@@ -265,9 +265,9 @@ function createProofChannelTransport(inner, clock, stallPlan, latencyMs) {
 
 // The durable landing of the learner's services row on the fixture's
 // explicit schedule (see ROW LANDING SCHEDULE above): (1) the leader cache
-// gains the row (INSERT, CDC fan-out; the leader joins the learner as a
-// raft peer), (2) the fixture waits for the leader to PROVE the learner's
-// replication on its own match-index observable, (3) the target's own
+// gains the row (INSERT, CDC fan-out), (2) the fixture drives the existing
+// semantic progress probe and waits for the leader to PROVE the learner's
+// replication on its own status observable, (3) the target's own
 // cache sees its local-only seed row converge (UPDATE — the wake).
 // landedAtMs / requestCountAtLanding anchor step 3, the learner-visible
 // landing. Idempotent; never rejects; cancelled by fixture shutdown.
@@ -297,10 +297,14 @@ function createRowLanding(clock) {
     insertServiceRow(
       fixture.leaderCache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER,
     );
-    landing.settled = waitForLeaderReplicationToLearner(
+    landing.settled = Promise.resolve(
+      fixture.leader.raft.probePeerProgress(
+        `${LEARNER_NODE}/partition/${LEARNER_REPLICA}`,
+      ),
+    ).then(() => waitForLeaderReplicationToLearner(
       fixture.leader, DRIVE_BUDGET_S * VIRTUAL_SECOND_MS,
       {isCancelled: () => landing.cancelled},
-    ).then((proven) => {
+    )).then((proven) => {
       landing.replicationProven = proven;
       landing.replicationAtLanding =
         readLeaderReplicationToLearner(fixture.leader);
