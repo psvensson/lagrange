@@ -223,15 +223,21 @@ test('partition write kernel separates commit/apply from replayable side effects
 // F-ae / F-z: every write this replica did not take is answered with a typed
 // code and a text that names its state, and every such text is one the
 // routers route again (they classify by the fragments the errors owner
-// lists, not by a text of their own).
+// lists, not by a text of their own) - but for a write whose outcome is not
+// known here, whose text is never routed again (F-aj after verification
+// round 6: a text carries no entryId, and a re-proposal under a fresh one
+// may apply the write twice); it is a retryable answer, never a failed
+// write.
 test('partition write kernel names the state of every write it did not ' +
-  'take, in a text the routers route again', async (t) => {
+  'take, in a text the routers route again unless its outcome is unknown',
+async (t) => {
   const {
     PARTITION_WRITE_LEADERSHIP_REFUSAL: REFUSAL,
     buildPartitionWriteLeadershipRefusal,
     buildReleasedPendingWriteAnswer,
   } = partitionWriteKernel;
-  const {ERRORS, REROUTABLE_WRITE_ERROR_FRAGMENTS} = errorConstants;
+  const {ERRORS, REROUTABLE_WRITE_ERROR_FRAGMENTS, isRetryableWriteError} =
+    errorConstants;
   const {PROPOSAL_QUEUE_PROPOSAL_STATE} = proposalQueueConstants;
   // Inputs: the port's own recovery outcomes (its outcome vocabulary).
   const recovering = (reason, retryAfterMs) => ({
@@ -280,19 +286,68 @@ test('partition write kernel names the state of every write it did not ' +
   t.equal(Object.hasOwn(answers.queued, 'logIndex'), false,
     'an index that is not known is not reported');
   for (const [name, answer] of Object.entries(answers)) {
-    t.ok(REROUTABLE_WRITE_ERROR_FRAGMENTS.some((fragment) =>
-      answer.error.includes(fragment)), `${name}: routed again by the ` +
-      `routers (${answer.error})`);
+    const unknown = answer.failureCode === REFUSAL.OUTCOME_UNKNOWN;
+    t.equal(REROUTABLE_WRITE_ERROR_FRAGMENTS.some((fragment) =>
+      answer.error.includes(fragment)), !unknown, `${name}: ` +
+      `${unknown ? 'never routed again by its text' : 'routed again by ' +
+        'the routers'} (${answer.error})`);
+    t.equal(isRetryableWriteError?.(answer.error), true, `${name}: its ` +
+      'text names a write that did not fail for good');
   }
 });
+
+// One answer's code and text agree, owner by owner: on routing it again
+// (without its entryId), and on the control plane retrying it; a caller
+// carrying the entryId routes again every write that did not fail for good;
+// only an unknown outcome is never routed again by its text.
+function assertRetryAgreement(t, name, answer, owners) {
+  const {failureCode: code, error: text} = answer;
+  const reroutableByCode = owners.isReroutableWriteFailureCode?.(code);
+  const retryableByCode = owners.isRetryableWriteFailureCode?.(code);
+  const retryableByText = owners.isRetryableWriteError?.(text);
+  t.equal(reroutableByCode, owners.isReroutableWriteError(text),
+    `${name}: its code and its text agree on routing it again ` +
+    `(${code}: ${text})`);
+  t.equal(retryableByCode, retryableByText, `${name}: its code and its ` +
+    'text agree on the control plane retrying it');
+  t.equal(owners.isReroutableWriteFailureCode?.(code, {carriesEntryId: true}),
+    retryableByCode, `${name}: a caller carrying its entryId routes again ` +
+    'every write that did not fail for good');
+  const expected = owners.unknown ? false : retryableByText;
+  const stated = owners.unknown ?
+    'an unknown outcome is never routed again by its text' :
+    'its text routes it again as its code does';
+  t.equal(owners.isReroutableWriteError(text), expected, `${name}: ${stated}`);
+}
+
+// The two codes the kernel's predicates single out: an unknown outcome,
+// routed again only under its entryId; a host failure, never.
+function assertCodeRouting(t, REFUSAL, owners) {
+  t.equal(owners.isReroutableWriteFailureCode?.(REFUSAL.OUTCOME_UNKNOWN),
+    false, 'an unknown outcome is not routed again by a caller without its ' +
+    'entryId');
+  t.equal(owners.isReroutableWriteFailureCode?.(REFUSAL.OUTCOME_UNKNOWN,
+    {carriesEntryId: true}), true, 'a caller that re-proposes it under its ' +
+    'entryId routes it again');
+  t.equal(owners.isReroutableWriteFailureCode?.(
+    REFUSAL.CONSENSUS_HOST_FAILURE), false, 'a host failure while proposing ' +
+    'is not routed again by code');
+  t.equal(owners.isRetryableWriteFailureCode?.(REFUSAL.CONSENSUS_HOST_FAILURE),
+    false, 'nor retried by the control plane');
+}
 
 // F-ak: the release at a commit deadline or at shutdown, a proposal queue at
 // capacity and a proposal the port refused or failed on are answered by the
 // kernel's two builders, typed with their entry; and every answer's code and
 // text agree on whether a router may route it again (a router holding the
-// answer branches on the code, one holding only the text on the fragments).
+// answer branches on the code, one holding only the text on the fragments)
+// and on whether the control plane retries it. The stated exception (F-aj
+// after verification round 6): an unknown outcome is routed again by its
+// code only by a caller that re-proposes the write under its own entryId,
+// and never by its text.
 test('partition write kernel types every release and proposal refusal, and ' +
-  'its routable codes and texts agree', async (t) => {
+  'its routable codes and texts agree but for the unknown outcome under its ' +
+  'entryId', async (t) => {
   const {
     PARTITION_WRITE_LEADERSHIP_REFUSAL: REFUSAL,
     PARTITION_WRITE_RELEASE_CAUSE: CAUSE,
@@ -300,8 +355,9 @@ test('partition write kernel types every release and proposal refusal, and ' +
     buildPartitionWriteProposalRefusal,
     buildReleasedPendingWriteAnswer,
     isReroutableWriteFailureCode,
+    isRetryableWriteFailureCode,
   } = partitionWriteKernel;
-  const {isReroutableWriteError} = errorConstants;
+  const {isReroutableWriteError, isRetryableWriteError} = errorConstants;
   const {PROPOSAL_QUEUE_PROPOSAL_STATE: STATE} = proposalQueueConstants;
   const released = (proposal, release) => buildReleasedPendingWriteAnswer(
     {entryId: TEST_ENTRY_ID, proposal, logIndex: null}, TEST_PARTITION_ID,
@@ -373,11 +429,12 @@ test('partition write kernel types every release and proposal refusal, and ' +
     TEST_PARTITION_ID),
   };
   for (const [name, answer] of Object.entries(all)) {
-    t.equal(isReroutableWriteFailureCode?.(answer.failureCode),
-      isReroutableWriteError(answer.error), `${name}: its code and its ` +
-      `text agree on routing it again (${answer.failureCode}: ` +
-      `${answer.error})`);
+    assertRetryAgreement(t, name, answer, {
+      isReroutableWriteFailureCode, isReroutableWriteError,
+      isRetryableWriteFailureCode, isRetryableWriteError,
+      unknown: answer.failureCode === REFUSAL.OUTCOME_UNKNOWN,
+    });
   }
-  t.equal(isReroutableWriteFailureCode?.(REFUSAL.CONSENSUS_HOST_FAILURE),
-    false, 'a host failure while proposing is not routed again by code');
+  assertCodeRouting(t, REFUSAL, {isReroutableWriteFailureCode,
+    isRetryableWriteFailureCode});
 });

@@ -707,7 +707,7 @@ test('B5: a committed entry with an unknown type (proposed straight through ' +
         refusal = error;
       }
       assert.equal(refusal?.code,
-        PARTITION_CONSENSUS_STARTUP_OUTCOME.SINGLE_REPLICA_CAMPAIGN_REFUSED,
+        PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED,
         `the restart fails closed (${refusal?.message})`);
       assert.ok(String(refusal.message).includes(unknownReason) &&
         String(refusal.message).includes('BOGUS'),

@@ -47,6 +47,7 @@ import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
   './partition-service-constants.js';
 import {createCommittedStatementOutcomeTable} from
   './partition-committed-statement-outcome.js';
+import {isHeldByHostFailure} from './partition-write-kernel.js';
 
 const {
   AddressManager,
@@ -81,18 +82,20 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 /**
- * The typed startup refusal of a single-replica partition whose port refused
- * its campaign: the partition can never lead its own group.
+ * The typed startup refusal of a partition its consensus port refused at
+ * initialization: the port opened its group held (its durable record could
+ * not be read), or a lone replica's campaign was refused.
  * @param {string} partitionId - The partition.
- * @param {Object} campaign - What the port answered.
- * @return {Error} The error, carrying the typed code and the port's answer.
+ * @param {Object} answer - What the port answered (a status or a campaign).
+ * @return {Error} The error, carrying the typed code, the port's phase and
+ *   the port's answer.
  */
-function singleReplicaCampaignRefusedError(partitionId, campaign) {
+function consensusInitRefusedError(partitionId, answer) {
   const error = new Error(PARTITION_SERVICE_ERROR_MSG
-    .singleReplicaCampaignRefused(partitionId, campaign));
-  error.code = PARTITION_CONSENSUS_STARTUP_OUTCOME
-    .SINGLE_REPLICA_CAMPAIGN_REFUSED;
-  error.campaign = campaign;
+    .consensusInitRefused(partitionId, answer));
+  error.code = PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED;
+  error.phase = answer?.phase ?? null;
+  error.consensus = answer;
   return error;
 }
 
@@ -477,6 +480,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         }
       },
     });
+    await this.refuseConsensusHeldAtOpen();
     // Committed-prefix divergence witness (quest raft-committed-prefix-
     // conflict-livelock): the follower-side liferaft surfaces a poisoned
     // committed prefix exactly once per conflict identity instead of
@@ -594,7 +598,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       const campaign = await this.raft.campaign();
       if (campaign?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
         await this.shutdown();
-        throw singleReplicaCampaignRefusedError(this.partitionId, campaign);
+        throw consensusInitRefusedError(this.partitionId, campaign);
       }
       this.logger.info(PARTITION_SERVICE_LOG_MSG.SINGLE_REPLICA_LEADER, {
         replicaId: this.replicaId,
@@ -623,6 +627,23 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
     });
+  }
+  /**
+   * Refuse initialization when the port opened the group held by its host
+   * failure (its durable record could not be read at open), whatever the
+   * replica count, releasing what initialization acquired (R11): a replica
+   * serves nothing from a record it could not read. Healing in place is for
+   * a group that fails while it runs.
+   * @return {Promise<void>}
+   * @private
+   */
+  async refuseConsensusHeldAtOpen() {
+    const opened = this.raft.readStatus();
+    if (!isHeldByHostFailure(opened)) {
+      return;
+    }
+    await this.shutdown();
+    throw consensusInitRefusedError(this.partitionId, opened);
   }
   /**
    * Start the Raft election timer.

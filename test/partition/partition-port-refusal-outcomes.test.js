@@ -153,10 +153,12 @@ async () => {
       assert.ok(error !== null,
         'initialization does not report a partition that cannot lead');
       assert.equal(error.code,
-        PARTITION_CONSENSUS_STARTUP_OUTCOME.SINGLE_REPLICA_CAMPAIGN_REFUSED,
+        PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED,
         `the refusal is the typed startup outcome (${error?.message})`);
-      assert.deepEqual(error.campaign, CAMPAIGN_REFUSAL,
+      assert.deepEqual(error.consensus, CAMPAIGN_REFUSAL,
         'the error carries what the port answered');
+      assert.equal(error.phase, CAMPAIGN_REFUSAL.phase ?? null,
+        'and names the port\'s phase (none here)');
       assert.equal(service.initialized, false, 'the partition is not initialized');
       assert.equal(service.raft, null, 'the port was released');
       assert.equal(service.db, null, 'the database handle was released');
@@ -188,11 +190,11 @@ test('F-f: production construction over an inert rs-raft record (no ' +
       assert.ok(error !== null,
         'initialization does not report a partition that cannot lead');
       assert.equal(error.code,
-        PARTITION_CONSENSUS_STARTUP_OUTCOME.SINGLE_REPLICA_CAMPAIGN_REFUSED,
+        PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED,
         `the refusal is the typed startup outcome (${error?.message})`);
-      assert.equal(error.campaign?.outcome,
+      assert.equal(error.consensus?.outcome,
         RAFT_OPERATION_OUTCOME.CORE_REFUSED, 'the port refused the campaign');
-      assert.equal(typeof error.campaign?.reason, 'string',
+      assert.equal(typeof error.consensus?.reason, 'string',
         'the port\'s own reason rides on the refusal');
       assert.equal(service.raft, null, 'the port was released');
       assert.equal(service.db, null, 'the database handle was released');

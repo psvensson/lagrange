@@ -237,10 +237,10 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     }
 
     isRetryableOperationPersistError(errorResult) {
-      // A partition write answer is classified by its code when the result
-      // carries it, by its text when only the text reached the repository.
-      if (isRetryableControlPlaneError(errorResult) ||
-          isReroutableWriteFailureCode(errorResult?.failureCode)) {
+      // A partition write answer is classified by the control plane's one
+      // classifier: by its code when the result carries it, by its text when
+      // only the text reached the repository.
+      if (isRetryableControlPlaneError(errorResult)) {
         return true;
       }
       const errorMessage = this.getOperationPersistErrorMessage(errorResult);

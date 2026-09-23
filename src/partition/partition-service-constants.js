@@ -220,11 +220,11 @@ const PARTITION_COMMITTED_COMMAND_ERROR_CODE = Object.freeze({
 
 const PARTITION_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
   BACKEND_SELECTION_REFUSED: 'partition_consensus_backend_selection_refused',
-  // A single-replica partition campaigns for its own group at initialization;
-  // a port that refuses the campaign yields a partition that can never lead,
-  // so initialization fails closed with this outcome (R11).
-  SINGLE_REPLICA_CAMPAIGN_REFUSED:
-    'partition_single_replica_campaign_refused',
+  // Its consensus port refused the partition at initialization - a port that
+  // opened its group held (its durable record unreadable), whatever the
+  // replica count, or a lone replica's refused campaign - so initialization
+  // fails closed with this outcome, naming the port's phase (R11).
+  CONSENSUS_INIT_REFUSED: 'partition_consensus_init_refused',
 });
 
 const PARTITION_SERVICE_ROLE = Object.freeze({
@@ -717,12 +717,12 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   COMMITTED_STATEMENT_ENVIRONMENT_FAILED:
     'Committed partition statement failed in the host environment; the ' +
     'entry is not consumed and is applied again when the host recovers',
-  singleReplicaCampaignRefused: (partitionId, campaign) =>
-    `Partition ${partitionId} cannot lead its single-replica group: the ` +
-    `consensus port refused its campaign (${campaign?.outcome}: ` +
-    `${campaign?.reason}` +
-    `${campaign?.phase ? `, phase ${campaign.phase}` : ''}` +
-    `${campaign?.detail ? ` ${JSON.stringify(campaign.detail)}` : ''})`,
+  consensusInitRefused: (partitionId, answer) => {
+    const detail = answer?.failure?.detail ?? answer?.detail;
+    return `Partition ${partitionId} cannot initialize: its consensus port ` +
+      `refused it in phase ${answer?.phase} (${answer?.outcome}: ` +
+      `${answer?.reason}${detail ? ` ${JSON.stringify(detail)}` : ''})`;
+  },
   backendSelectionRefused: (option, requested) =>
     `Partition consensus backend selection refused: ${option}=` +
     `${JSON.stringify(requested)} names a retired consensus backend; a ` +

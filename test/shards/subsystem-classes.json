@@ -13,22 +13,22 @@
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 240,
-    "query-sql": 160,
+    "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
-    "storage-partition": 150,
+    "storage-partition": 151,
     "storage-raft": 102,
     "test-infrastructure": 133,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2165,
-  "digest": "fnv1a32-cd19ab6a",
+  "censusSize": 2167,
+  "digest": "fnv1a32-0dde07c1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a82ad5ac",
+  "observationDigest": "fnv1a32-d4ac856c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1161,6 +1161,7 @@
     "test/partition/message-handler-registry.test.js": "storage-partition",
     "test/partition/partition-cdc-generator.test.js": "storage-partition",
     "test/partition/partition-cdc-parameterized-insert-or-ignore.test.js": "storage-partition",
+    "test/partition/partition-consensus-hold-log.test.js": "storage-partition",
     "test/partition/partition-coordinator.test.js": "storage-partition",
     "test/partition/partition-descriptor-epoch-contract.test.js": "storage-partition",
     "test/partition/partition-leader-row-publication-integrity.test.js": "storage-partition",
@@ -1304,6 +1305,7 @@
     "test/query/partition-callback-integration.test.js": "query-sql",
     "test/query/partition-resolver.test.js": "query-sql",
     "test/query/partition-transparency.property.test.js": "query-sql",
+    "test/query/partition-write-answer-consumers.test.js": "query-sql",
     "test/query/payload-hash-determinism.property.test.js": "query-sql",
     "test/query/pg-function-registry.property.test.js": "query-sql",
     "test/query/pg-function-registry.test.js": "query-sql",
@@ -3066,6 +3068,15 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/raft/replica-leadership-state.js"
+      ]
+    },
+    "test/control-plane/control-plane-error-classification.test.js": {
+      "files": [
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-write-kernel.js",
+        "src/partition/proposal-queue-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port.js"
       ]
     },
     "test/control-plane/control-plane-mutation-outcome-classifier.test.js": {
@@ -6167,6 +6178,13 @@
         "test/partition/fixtures/critical-spread-transition-authority/recorded-guard-shapes.json"
       ]
     },
+    "test/partition/partition-consensus-hold-log.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-rs-runtime-tuning.js"
+      ]
+    },
     "test/partition/partition-coordinator.test.js": {
       "files": [
         "src/partition/partition-coordinator.js"
@@ -6332,6 +6350,7 @@
     },
     "test/partition/partition-write-typed-releases.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/config/configuration-manager.js",
         "src/partition/partition-write-kernel.js",
         "src/partition/proposal-queue-constants.js",
@@ -6533,6 +6552,19 @@
         "src/query/sql-request.js",
         "src/runtime/runtime-startup-wiring.js",
         "src/wasm-service/query-budget-constants.js"
+      ]
+    },
+    "test/query/partition-write-answer-consumers.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/partition/partition-write-kernel.js",
+        "src/partition/proposal-queue-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/partition-admitted-group-fixture.js",
+        "test/partition/partition-service-test-support.js"
       ]
     },
     "test/query/postgres-wire-adapter.integration.test.js": {

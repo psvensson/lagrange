@@ -15,6 +15,7 @@ import {
 } from './sql-query-engine-test-support.js';
 import {createControllablePartitionService} from
   '../partition/partition-service-test-support.js';
+import {ERRORS} from '../../src/constants/errors.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -134,8 +135,15 @@ function createCounterPartition(replicaId, replicaIds) {
   });
 }
 
+// The stale leader proposed the write before it was demoted, so its outcome
+// is not known there: in a real group the proposal may still commit through
+// the new leader. The executor, which holds only the answer's text, answers
+// its client that unknown outcome once and never sends the statement again
+// under a fresh entryId (quest raft-rs-single-path-partition-cutover, F-aj
+// after verification round 6).
 test(
-  'one client write reroutes after stale-leader demotion and commits once',
+  'one client write proposed by a stale leader that is then demoted is ' +
+  'answered its unknown outcome once, never re-sent',
   async (t) => {
     const replicaIds = ['ratings-r1', 'ratings-r2', 'ratings-r3'];
     const staleLeader = createRatingsPartition(replicaIds[0], replicaIds);
@@ -226,11 +234,16 @@ test(
     );
 
     t.equal(clientSubmissions, 1, 'the logical write is submitted once');
-    t.equal(result.success, true, 'the write owner should absorb the demotion');
+    t.equal(result.success, false,
+      'the client is not told the write succeeded');
+    t.ok(
+      String(result.error).includes(ERRORS.WRITE_OUTCOME_UNKNOWN),
+      `the client is told its outcome is unknown (${result.error})`,
+    );
     t.same(
       deliveries,
-      [staleAddress, currentAddress],
-      'routing should move from the stale owner to the live leader candidate',
+      [staleAddress],
+      'the statement is not sent again without its entryId',
     );
     t.equal(
       staleLeader.db
@@ -245,8 +258,8 @@ test(
         .prepare('SELECT COUNT(*) AS count FROM ratings')
         .get()
         .count,
-      1,
-      'the live leader should commit the logical row exactly once',
+      0,
+      'the live leader was not handed a second copy under a fresh entryId',
     );
 
     await staleLeader.shutdown();

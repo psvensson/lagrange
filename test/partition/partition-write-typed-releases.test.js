@@ -37,6 +37,8 @@ import {
   ControllablePartitionRaftProvider,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
+import {SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
@@ -384,3 +386,49 @@ test('F-ak: the routers that hold a write answer route it again by its code',
       resetEnvironment();
     }
   });
+
+// F-aj (verification round 6): the CDC integration's local system-table
+// lane sends a write its local partition did not take on to the next local
+// service - without the write's entryId - so it routes on only an answer the
+// kernel names routable again without it. A write released after it was
+// proposed has an unknown outcome (it may have committed there): answered as
+// it is, never sent on. One released before it was proposed is sent on.
+test('F-aj: the CDC local system-table lane sends on a write never ' +
+  'proposed, and answers an unknown outcome as it is',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  quietEnvironment();
+  try {
+    const STATE = proposalQueueConstants.PROPOSAL_QUEUE_PROPOSAL_STATE;
+    const released = (proposal) => partitionWriteKernel
+      .buildReleasedPendingWriteAnswer({entryId: 'e-local', proposal,
+        logIndex: null}, 'local-p1', {cause: RELEASE_CAUSE?.LEADERSHIP_LOST});
+    for (const [proposal, sentOn] of [[STATE.PROPOSED, false],
+      [STATE.QUEUED, true]]) {
+      const cdc = new CDCIntegrationService({nodeId: 'typed-release-node'});
+      const answer = released(proposal);
+      const asked = [];
+      const localService = (name, answered) => ({
+        executeQuery: async () => {
+          asked.push(name);
+          return answered;
+        },
+      });
+      cdc.resolveLocalSystemTableServices = () => [
+        localService('first', answer),
+        localService('next', {success: true, changes: 1})];
+      cdc.hasActiveSystemTableWriteMirror = () => false;
+      const outcome = await cdc.tryExecuteLocalSystemTableWrite(
+        `INSERT INTO ${SYSTEM_TABLE_NAME.NODES} (node_id) VALUES (?)`,
+        ['node-local']);
+      assert.deepEqual(asked, sentOn ? ['first', 'next'] : ['first'],
+        `a ${proposal} release (${answer.failureCode}) is ` +
+        `${sentOn ? 'sent on to the next local service' : 'not sent on'}`);
+      if (!sentOn) {
+        assert.equal(outcome.result?.failureCode, REFUSAL.OUTCOME_UNKNOWN,
+          'the unknown outcome is answered as it is');
+      }
+    }
+  } finally {
+    resetEnvironment();
+  }
+});

@@ -33,15 +33,17 @@ const ERRORS = Object.freeze({
 
 // The texts of the partition write answers a caller may route again (to the
 // current leader, or here once the state they name has passed): no leader
-// here, a consensus recovery in progress here, a released write whose outcome
-// this replica cannot know, or a write this replica did not propose. A router
-// that holds the answer branches on its code (the partition write kernel's
-// isReroutableWriteFailureCode); these texts are for the routers that receive
-// only an error text, which classify by them, never by a text of their own.
+// here, a consensus recovery in progress here, or a write this replica did
+// not propose. A router that holds the answer branches on its code (the
+// partition write kernel's isReroutableWriteFailureCode); these texts are for
+// the routers that receive only an error text, which classify by them, never
+// by a text of their own. The text of a released write whose outcome this
+// replica cannot know is not among them: a re-proposal is idempotent only
+// under the write's entryId, which a text does not carry, so that answer is
+// the client's to decide.
 const REROUTABLE_WRITE_ERROR_FRAGMENTS = Object.freeze([
   ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
   ERRORS.CONSENSUS_RECOVERY_IN_PROGRESS,
-  ERRORS.WRITE_OUTCOME_UNKNOWN,
   ERRORS.WRITE_SERVICE_SHUTDOWN,
   ERRORS.WRITE_BACKPRESSURE,
   ERRORS.WRITE_CONSENSUS_REFUSED,
@@ -60,6 +62,20 @@ function isReroutableWriteError(message) {
       message.includes(fragment));
 }
 
+/**
+ * Whether an error text is the answer of a partition write that did not fail
+ * for good: one a caller may route again, or one whose outcome is not known
+ * to the replica that answered (never a failed write, and never routed again
+ * by its text). The text of the partition write kernel's
+ * isRetryableWriteFailureCode.
+ * @param {*} message - The error text.
+ * @return {boolean} Whether it names one of those answers.
+ */
+function isRetryableWriteError(message) {
+  return isReroutableWriteError(message) || (typeof message === 'string' &&
+    message.includes(ERRORS.WRITE_OUTCOME_UNKNOWN));
+}
+
 const ERRNO = Object.freeze({
   EPERM: 'EPERM',
   EACCES: 'EACCES',
@@ -68,4 +84,10 @@ const ERRNO = Object.freeze({
   NOT_RUNNING: 'ERR_SERVER_NOT_RUNNING',
 });
 
-export {ERRORS, ERRNO, REROUTABLE_WRITE_ERROR_FRAGMENTS, isReroutableWriteError};
+export {
+  ERRORS,
+  ERRNO,
+  REROUTABLE_WRITE_ERROR_FRAGMENTS,
+  isReroutableWriteError,
+  isRetryableWriteError,
+};

@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {createConsensusHoldLog} from './partition-consensus-hold-log.js';
 import {
   PARTITION_WRITE_RELEASE_CAUSE,
   buildReleasedPendingWriteAnswer,
@@ -35,6 +36,9 @@ function wirePartitionRaftLifecycleEvents(
   const releasePendingWrites = () => service.releasePendingCommittedWrites(
     (pending) => buildReleasedPendingWriteAnswer(pending, service.partitionId,
       {cause: PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST}));
+  // Every announcement is also where the partition sees its group held (the
+  // port announces a held group without a role) and serving again.
+  const observeConsensusHold = createConsensusHoldLog(service);
   // The term is the consensus core's own (readStatus().term); nothing here
   // copies it. Committed entries are applied only by the port's
   // committed-entry application, so COMMIT carries no handler; it stays in
@@ -61,6 +65,7 @@ function wirePartitionRaftLifecycleEvents(
         term,
       });
       service.scheduleLeaderOwnedActivation(term);
+      observeConsensusHold();
     },
     onFollower: ({term, demotedByLeaderChange}) => {
       recordTransition({
@@ -74,6 +79,7 @@ function wirePartitionRaftLifecycleEvents(
       releasePendingWrites();
       service.cancelLeaderOwnedActivation();
       service.updateRebalancerLeadership();
+      observeConsensusHold();
     },
     onCandidate: ({term}) => {
       recordTransition({
@@ -85,6 +91,7 @@ function wirePartitionRaftLifecycleEvents(
       releasePendingWrites();
       service.cancelLeaderOwnedActivation();
       service.updateRebalancerLeadership();
+      observeConsensusHold();
     },
     onLeaderChange: ({leaderId, previousLeaderId, term, demoted}) => {
       recordTransition({
@@ -102,6 +109,7 @@ function wirePartitionRaftLifecycleEvents(
         term,
         partitionId: service.partitionId,
       });
+      observeConsensusHold();
     },
   });
 }

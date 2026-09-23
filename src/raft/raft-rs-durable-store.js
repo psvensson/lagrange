@@ -132,10 +132,14 @@ class RaftRsDurableStore {
 
   /**
    * Create the record's tables together, on a database that has none of
-   * them. A database holding some of them holds a record that lost a table:
-   * created empty, the table would make the record read as one that never
-   * had that part (its configuration, its applied index), so it stays missing
-   * and every read of the record fails, naming it, until it is restored.
+   * them, in one transaction of the store's own (admitted like every write
+   * the store makes): the schema is created whole or not at all, so a
+   * creation that failed part way - a crash, a full disk - leaves no table,
+   * and the next open creates them again. A database holding some of them
+   * therefore holds a record that lost a table: created empty, the table
+   * would make the record read as one that never had that part (its
+   * configuration, its applied index), so it stays missing and every read of
+   * the record fails, naming it, until it is restored.
    * @private
    */
   createRecordTables() {
@@ -145,10 +149,12 @@ class RaftRsDurableStore {
       tablePresent.get(table) !== undefined)) {
       return;
     }
-    this.db.exec(RAFT_RS_SQL.CREATE_LOG_TABLE);
-    this.db.exec(RAFT_RS_SQL.CREATE_HARD_STATE_TABLE);
-    this.db.exec(RAFT_RS_SQL.CREATE_APPLIED_STATE_TABLE);
-    this.db.exec(RAFT_RS_SQL.CREATE_SNAPSHOT_TABLE);
+    this.transaction(() => {
+      this.db.exec(RAFT_RS_SQL.CREATE_LOG_TABLE);
+      this.db.exec(RAFT_RS_SQL.CREATE_HARD_STATE_TABLE);
+      this.db.exec(RAFT_RS_SQL.CREATE_APPLIED_STATE_TABLE);
+      this.db.exec(RAFT_RS_SQL.CREATE_SNAPSHOT_TABLE);
+    });
   }
 
   /**

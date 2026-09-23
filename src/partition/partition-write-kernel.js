@@ -42,13 +42,17 @@ const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
 });
 const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
 
-// The answers a caller may route again - to the current leader, or here once
-// the state it names has passed (a retry after an unknown outcome is
-// idempotent only with its entryId). A host failure while proposing is not
-// among them: its retryability is the port's, and the caller decides. Each
-// code's text is one the errors owner lists for the routers that receive
-// only a text (REROUTABLE_WRITE_ERROR_FRAGMENTS).
-const REROUTABLE_WRITE_FAILURE_CODES = Object.freeze([
+// The answers of a write that did not fail for good: a caller may retry it -
+// route it again to the current leader, or here once the state it names has
+// passed. A host failure while proposing is not among them: its retryability
+// is the port's, and the caller decides. An unknown outcome is among them,
+// but it is routed again only by a caller that re-proposes the write under
+// its own entryId: the retry is then idempotent (the write's outcome row
+// answers it), while a re-proposal under a fresh id may apply it twice. The
+// errors owner lists each code's text for the callers that receive only a
+// text (isRetryableWriteError); the unknown outcome's text is never routed
+// again (REROUTABLE_WRITE_ERROR_FRAGMENTS), since a text carries no entryId.
+const RETRYABLE_WRITE_FAILURE_CODES = Object.freeze([
   REFUSAL.NOT_LEADER,
   REFUSAL.CONSENSUS_RECOVERY_REQUIRED,
   REFUSAL.CONSENSUS_SESSION_OPEN,
@@ -86,12 +90,38 @@ const RELEASED_UNPROPOSED_ANSWER = Object.freeze({
 });
 
 /**
- * Whether a write answer's failureCode names one a caller may route again.
- * @param {*} code - A write answer's failureCode.
- * @return {boolean} Whether it is one of REROUTABLE_WRITE_FAILURE_CODES.
+ * Whether a code is one the write kernel answers a failed write with.
+ * @param {*} code - A failureCode.
+ * @return {boolean} Whether it is a PARTITION_WRITE_LEADERSHIP_REFUSAL.
  */
-function isReroutableWriteFailureCode(code) {
-  return REROUTABLE_WRITE_FAILURE_CODES.includes(code);
+function isPartitionWriteFailureCode(code) {
+  return Object.values(REFUSAL).includes(code);
+}
+
+/**
+ * Whether a write answer's failureCode names a write that did not fail for
+ * good (RETRYABLE_WRITE_FAILURE_CODES): the control plane retries it rather
+ * than record it as a failed write.
+ * @param {*} code - A write answer's failureCode.
+ * @return {boolean} Whether it is one of RETRYABLE_WRITE_FAILURE_CODES.
+ */
+function isRetryableWriteFailureCode(code) {
+  return RETRYABLE_WRITE_FAILURE_CODES.includes(code);
+}
+
+/**
+ * Whether a caller may route a write answer again, by its failureCode: an
+ * unknown outcome only when the caller re-proposes the write under its own
+ * entryId.
+ * @param {*} code - A write answer's failureCode.
+ * @param {Object} [options] - What the caller carries.
+ * @param {boolean} [options.carriesEntryId=false] - Whether the caller
+ *   re-proposes the write under the entryId it was answered for.
+ * @return {boolean} Whether the caller may route it again.
+ */
+function isReroutableWriteFailureCode(code, {carriesEntryId = false} = {}) {
+  return isRetryableWriteFailureCode(code) &&
+    (code !== REFUSAL.OUTCOME_UNKNOWN || carriesEntryId === true);
 }
 
 const PARTITION_WRITE_KERNEL_LITERAL = Object.freeze({
@@ -230,14 +260,23 @@ function recoveryRefusalMessage({reason, phase, retryAfterMs}) {
     `(phase ${phase})${retry}`;
 }
 
+/**
+ * Whether a port status names its group held by a host failure (the port's
+ * recovery outcome).
+ * @param {Object} status - A port status.
+ * @return {boolean} Whether the group is held.
+ */
+function isHeldByHostFailure(status) {
+  return status?.outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
+    status.recoveryRequired === true;
+}
+
 // A write this replica may not propose, typed by what its port reports: a
 // group held by its host failure (the port's recovery outcome, carried as
 // read; an open user session that holds the recovery is its own code), or no
 // leadership here. Answered at once; nothing is proposed.
 function buildPartitionWriteLeadershipRefusal(status, partitionId) {
-  const recovering = status?.outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
-    status.recoveryRequired === true;
-  if (!recovering) {
+  if (!isHeldByHostFailure(status)) {
     return {
       success: false,
       error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
@@ -412,6 +451,9 @@ export {
   buildPartitionWriteProposalRefusal,
   buildPartitionWriteSideEffectPlan,
   buildReleasedPendingWriteAnswer,
+  isHeldByHostFailure,
+  isPartitionWriteFailureCode,
   isReroutableWriteFailureCode,
+  isRetryableWriteFailureCode,
   resolvePartitionWriteCommitMode,
 };

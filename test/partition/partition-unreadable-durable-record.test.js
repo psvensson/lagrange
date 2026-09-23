@@ -11,10 +11,12 @@
 // answers typed and synchronously, its status names the failure and the
 // durable progress it could not read, a write is refused with the write
 // kernel's typed code, and no other group is touched. Restoring the table
-// heals the group without a restart. A partition restarted while the table
-// is still missing is refused at initialization, typed and naming the phase,
-// and releases its database; a follower whose record becomes unreadable
-// never stops its leader serving.
+// heals the group without a restart. A replica restarted while the table is
+// still missing - lone or a follower (F-ap) - is refused at initialization,
+// typed and naming the phase and the table, and releases its database; a
+// follower whose record becomes unreadable never stops its leader serving.
+// The record's tables are created whole or not at all (F-ao), so a partial
+// schema only ever comes from outside and stays a typed refusal.
 //
 // The failure is real: the partition's own connection drops the record's
 // applied-state table (the verifier's r5-ag shape); a real SQLITE_IOERR or
@@ -250,6 +252,29 @@ function assertHeldOnUnreadableRecord(answer, label) {
   return status;
 }
 
+// Asserts one initialization refusal is the typed refusal of a replica whose
+// durable record could not be read at open.
+function assertInitRefusedOnUnreadableRecord(error) {
+  const phase = runtimeConstants.RUNTIME_PHASE.DURABLE_RECORD_READ;
+  assert.ok(error !== null,
+    'initialization does not report a partition that cannot read its ' +
+    'durable record');
+  assert.equal(error.code,
+    PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED,
+    `the refusal is the typed startup outcome (${error?.message})`);
+  assert.ok(typeof phase === 'string' && error.phase === phase &&
+    error.consensus?.phase === phase, 'the refusal and the port\'s answer ' +
+    `name the durable-record-read phase (${JSON.stringify(error?.consensus)})`);
+  assert.ok(String(error.message).includes(phase),
+    `the refusal's text names the phase (${error.message})`);
+  assert.equal(error.consensus?.failure?.detail?.table, LOST_TABLE,
+    'it names the table it could not read');
+  assert.equal(typeof error.consensus?.failure?.detail?.code, 'string',
+    'and SQLite\'s own code');
+  assert.ok(String(error.message).includes(LOST_TABLE),
+    `the refusal's text names the table (${error.message})`);
+}
+
 async function withLonePartitions(body) {
   quietEnvironment();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
@@ -382,22 +407,7 @@ test('F-ah: a lone partition restarted while its record table is still ' +
       escapes.stop();
     }
     try {
-      assert.ok(error !== null,
-        'initialization does not report a partition that cannot read its ' +
-        'durable record');
-      assert.equal(error.code,
-        PARTITION_CONSENSUS_STARTUP_OUTCOME.SINGLE_REPLICA_CAMPAIGN_REFUSED,
-        `the refusal is the typed startup outcome (${error?.message})`);
-      assert.ok(typeof runtimeConstants.RUNTIME_PHASE.DURABLE_RECORD_READ ===
-        'string' && error.campaign?.phase ===
-        runtimeConstants.RUNTIME_PHASE.DURABLE_RECORD_READ,
-      'the port\'s answer names the durable-record-read phase ' +
-        `(${JSON.stringify(error?.campaign)})`);
-      assert.ok(String(error.message).includes(
-        runtimeConstants.RUNTIME_PHASE.DURABLE_RECORD_READ),
-      `the refusal's text names the phase (${error.message})`);
-      assert.equal(error.campaign?.failure?.detail?.table, LOST_TABLE,
-        'it names the table it could not read');
+      assertInitRefusedOnUnreadableRecord(error);
       assert.equal(restarted.raft, null, 'the port was released');
       assert.equal(restarted.db, null, 'the database handle was released');
       assert.equal(recordTablesOf(dbPath).includes(LOST_TABLE), false,
@@ -467,6 +477,108 @@ test('F-ah: a follower whose durable record becomes unreadable is held ' +
   } finally {
     await group.dispose();
     escapes.stop();
+    resetEnvironment();
+  }
+});
+
+// F-ap (verification round 6): one rule for every replica count. A replica
+// whose durable record cannot be read at open is refused at initialization,
+// typed as the lone replica is, and releases its database; its leader keeps
+// serving; once the table is restored a fresh initialization serves and
+// catches up. Healing in place is for a group that fails while it runs.
+test('F-ap: a follower restarted while its record table is missing is ' +
+  'refused at initialization, typed and naming the phase and the table; its ' +
+  'leader keeps serving, and once the table is restored it initializes and ' +
+  'catches up', {timeout: TEST_TIMEOUT_MS}, async () => {
+  quietEnvironment(GROUP_TIMING);
+  const partitionId = 'fap-follower-restart';
+  const members = [
+    [`${partitionId}-r1`, 'node-1'],
+    [`${partitionId}-r2`, 'node-2'],
+    [`${partitionId}-r3`, 'node-3'],
+  ];
+  const group = await formAdmittedGroup({
+    partitionId, members, tempPrefix: TEMP_PREFIX,
+    serviceOptions: tableOptions(), budgetMs: GROUP_BUDGET_MS,
+  });
+  const {services, dbFileOf, waitFor} = group;
+  const [leader, follower] = services;
+  const dbPath = dbFileOf(members[1]);
+  const restartOptions = {
+    ...tableOptions(),
+    partitionId,
+    replicaId: follower.replicaId,
+    replicaIds: follower.replicaIds,
+    peerAddresses: follower.peerAddresses,
+    nodeId: follower.nodeId,
+    dbPath,
+    transport: follower.transport,
+    systemTableCache: follower.systemTableCache,
+    deferElection: true,
+  };
+  const restarts = [];
+  const escapes = countEscapes();
+  try {
+    assert.equal((await insert(leader, 'row-0', 'setup', 'fap-setup'))
+      .success, true, 'setup: the group serves a write');
+    assert.equal(await waitFor(() => rowIds(dbPath).length === 1), true,
+      'setup: the follower applied it');
+    const saved = durableRecordOf(dbPath, partitionId);
+    await follower.shutdown();
+    const damage = new Database(dbPath);
+    try {
+      damage.exec(`DROP TABLE ${LOST_TABLE}`);
+    } finally {
+      damage.close();
+    }
+
+    const refused = new PartitionService(restartOptions);
+    restarts.push(refused);
+    let error = null;
+    try {
+      await refused.initialize();
+    } catch (refusal) {
+      error = refusal;
+    }
+    assertInitRefusedOnUnreadableRecord(error);
+    assert.equal(refused.initialized, false, 'the follower is not initialized');
+    assert.equal(refused.raft, null, 'the port was released');
+    assert.equal(refused.db, null, 'the database handle was released');
+    assert.equal((await insert(leader, 'row-1', 'during', 'fap-during'))
+      .success, true, 'the leader keeps serving');
+    assert.equal(leader.raft.readStatus().role, RAFT_ROLE.LEADER,
+      'the leader keeps leading');
+
+    // The table restored from the store owner's own DDL, its row through
+    // the store owner's own writer.
+    const repair = new Database(dbPath);
+    try {
+      repair.exec(RAFT_RS_SQL.CREATE_APPLIED_STATE_TABLE);
+      new RaftRsDurableStore(repair).putAppliedState(partitionId,
+        saved.appliedIndex, saved.confState);
+    } finally {
+      repair.close();
+    }
+    const restored = new PartitionService(restartOptions);
+    restarts.push(restored);
+    await restored.initialize();
+    restored.startElection();
+    assert.equal(await waitFor(() => rowIds(dbPath).length === 2), true,
+      'the restored follower catches up on the write it missed ' +
+      `(${JSON.stringify(rowIds(dbPath))})`);
+    assert.equal((await insert(leader, 'row-2', 'after', 'fap-after'))
+      .success, true, 'the group serves a write');
+    assert.equal(await waitFor(() => rowIds(dbPath).length === 3), true,
+      'the restored follower applies it');
+    assert.deepEqual(rowIds(dbPath), ['row-0', 'row-1', 'row-2'],
+      'each write applied once');
+    assert.deepEqual(escapes.escaped, [], 'nothing escaped');
+  } finally {
+    escapes.stop();
+    for (const restart of restarts) {
+      await restart.shutdown();
+    }
+    await group.dispose();
     resetEnvironment();
   }
 });
@@ -545,4 +657,80 @@ test('F-ah: a core failure restores every readable group; a group whose ' +
   } finally {
     escapes.stop();
   }
+});
+
+// F-ao (verification round 6): the record's four tables are created in one
+// transaction of the store's own. A creation that fails part way - here the
+// database reaches its page limit at the third table, a real SQLITE_FULL -
+// leaves no table, so the next open creates the whole record and the
+// partition serves; a partial schema can then only come from outside, and it
+// stays a typed refusal naming the missing table, with nothing created in
+// its place.
+test('F-ao: the durable record\'s tables are created whole or not at all, ' +
+  'and a partial schema made outside is refused typed',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await withLonePartitions(async ({open, directory}) => {
+    // The pages the first two tables take, by the store owner's own DDL on
+    // a scratch database.
+    const scratch = new Database(path.join(directory, `scratch-${DB_FILE}`));
+    let pagesForTwoTables = 0;
+    try {
+      scratch.exec(RAFT_RS_SQL.CREATE_LOG_TABLE);
+      scratch.exec(RAFT_RS_SQL.CREATE_HARD_STATE_TABLE);
+      pagesForTwoTables = scratch.pragma('page_count', {simple: true});
+    } finally {
+      scratch.close();
+    }
+    const wholePath = path.join(directory, `fao-whole-${DB_FILE}`);
+    const capped = new Database(wholePath);
+    let failure = null;
+    try {
+      capped.pragma(`max_page_count = ${pagesForTwoTables}`);
+      try {
+        new RaftRsDurableStore(capped);
+      } catch (error) {
+        failure = error;
+      }
+    } finally {
+      capped.close();
+    }
+    assert.equal(failure?.code, 'SQLITE_FULL', 'setup: the creation failed ' +
+      `when the database reached its page limit (${failure?.message})`);
+    assert.deepEqual(recordTablesOf(wholePath), [],
+      'the failed creation left no record table');
+    // The page limit was that connection's own; the partition opens the
+    // file afresh.
+    const {partition} = await open('fao-whole');
+    assert.equal((await insert(partition, 'row-0', 'whole', 'fao-whole'))
+      .success, true, 'a partition initializes on that database and serves ' +
+      'a write');
+    assert.deepEqual(recordTablesOf(wholePath), [...RAFT_RS_RECORD_TABLES],
+      'with the whole record');
+
+    const partialPath = path.join(directory, `fao-partial-${DB_FILE}`);
+    const byHand = new Database(partialPath);
+    try {
+      byHand.exec(RAFT_RS_SQL.CREATE_LOG_TABLE);
+      byHand.exec(RAFT_RS_SQL.CREATE_HARD_STATE_TABLE);
+    } finally {
+      byHand.close();
+    }
+    const partialTables = recordTablesOf(partialPath);
+    const partial = new PartitionService(
+      loneOptions('fao-partial', partialPath));
+    let error = null;
+    try {
+      await partial.initialize();
+    } catch (refusal) {
+      error = refusal;
+    }
+    try {
+      assertInitRefusedOnUnreadableRecord(error);
+      assert.equal(partial.db, null, 'the database handle was released');
+      assert.deepEqual(recordTablesOf(partialPath), partialTables,
+        'nothing was created in place of the missing tables');
+    } finally {
+      await partial.shutdown();
+    }
+  });
 });

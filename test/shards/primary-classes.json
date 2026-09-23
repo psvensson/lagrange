@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1901,
+    "unit": 1903,
     "integration": 75,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2165,
-  "digest": "fnv1a32-045f15d3",
+  "censusSize": 2167,
+  "digest": "fnv1a32-59f49051",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1142,6 +1142,7 @@
     "test/partition/message-handler-registry.test.js": "unit",
     "test/partition/partition-cdc-generator.test.js": "unit",
     "test/partition/partition-cdc-parameterized-insert-or-ignore.test.js": "unit",
+    "test/partition/partition-consensus-hold-log.test.js": "unit",
     "test/partition/partition-coordinator.test.js": "unit",
     "test/partition/partition-descriptor-epoch-contract.test.js": "unit",
     "test/partition/partition-leader-row-publication-integrity.test.js": "unit",
@@ -1285,6 +1286,7 @@
     "test/query/partition-callback-integration.test.js": "unit",
     "test/query/partition-resolver.test.js": "unit",
     "test/query/partition-transparency.property.test.js": "unit",
+    "test/query/partition-write-answer-consumers.test.js": "unit",
     "test/query/payload-hash-determinism.property.test.js": "unit",
     "test/query/pg-function-registry.property.test.js": "unit",
     "test/query/pg-function-registry.test.js": "unit",
