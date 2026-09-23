@@ -65,7 +65,6 @@ import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {computeReplicaElectionTimeouts} from '../raft/replica-election-timeouts.js';
 import {LeaderActivationGate} from '../raft/leader-activation-gate.js';
-import {LeaderActivationScheduler} from '../raft/leader-activation-scheduler.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
@@ -267,7 +266,6 @@ export const PARTITION_SERVICE_SHARED = {
   INITIAL_PARTITION_IDS,
   LIFECYCLE_REASON,
   LeaderActivationGate,
-  LeaderActivationScheduler,
   LoggingService,
   METRICS_LOG_TAG,
   NUM,

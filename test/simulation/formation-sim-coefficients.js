@@ -133,6 +133,10 @@ function loadCalibration(root, relativePath = CALIBRATION_FILE,
     // The share of the calibration window no owner claimed. It is carried as
     // an uncertainty band and never given a cost (owner amendment 7).
     residualPercent: Number(parsed.window?.unattributedPercent),
+    // How long live formation took in the calibration run: the bound a
+    // simulated formation is held to.
+    formationWindowMs: Number(parsed.window?.windowDurationUs) /
+      MICROSECONDS_PER_MILLISECOND,
     owners: Object.freeze(owners),
     costTable: createCostTable(spec),
   });

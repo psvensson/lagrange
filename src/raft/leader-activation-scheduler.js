@@ -14,18 +14,25 @@ function normalizeSpacingMs(value) {
     DEFAULT_LEADER_ACTIVATION_NODE_SPACING_MS;
 }
 
+// One node's leader-activation pacing, shared by every replica service on
+// that node. Its lifetime is bounded by its users: each acquireShared() is a
+// lease the caller returns with releaseShared() when it shuts down, and the
+// last release shuts the scheduler down and drops it from the registry. A
+// node's next generation of services therefore gets a fresh scheduler on its
+// own clock, and nothing stays armed once every user has shut down.
 class LeaderActivationScheduler {
-  static getShared(options = {}) {
+  static acquireShared(options = {}) {
     const nodeId = typeof options.nodeId === 'string' && options.nodeId.length > 0 ?
       options.nodeId :
       'shared-node';
-    const existing = SHARED_LEADER_ACTIVATION_SCHEDULERS.get(nodeId);
-    if (existing) {
-      existing.configure(options);
-      return existing;
+    let scheduler = SHARED_LEADER_ACTIVATION_SCHEDULERS.get(nodeId);
+    if (scheduler) {
+      scheduler.configure(options);
+    } else {
+      scheduler = new LeaderActivationScheduler(options);
+      SHARED_LEADER_ACTIVATION_SCHEDULERS.set(nodeId, scheduler);
     }
-    const scheduler = new LeaderActivationScheduler(options);
-    SHARED_LEADER_ACTIVATION_SCHEDULERS.set(nodeId, scheduler);
+    scheduler.sharedLeaseCount += 1;
     return scheduler;
   }
 
@@ -50,6 +57,21 @@ class LeaderActivationScheduler {
     this.dispatchTimer = null;
     this.lastDispatchAt = 0;
     this.destroyed = false;
+    this.sharedLeaseCount = 0;
+  }
+
+  releaseShared() {
+    if (this.sharedLeaseCount === 0) {
+      return;
+    }
+    this.sharedLeaseCount -= 1;
+    if (this.sharedLeaseCount > 0) {
+      return;
+    }
+    this.shutdown();
+    if (SHARED_LEADER_ACTIVATION_SCHEDULERS.get(this.nodeId) === this) {
+      SHARED_LEADER_ACTIVATION_SCHEDULERS.delete(this.nodeId);
+    }
   }
 
   configure(options = {}) {

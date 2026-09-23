@@ -168,8 +168,10 @@ function provenanceCallbacks(recorder, held, callbacks) {
     init(asyncId, type, triggerAsyncId, resource) {
       callbacks.init(asyncId, type, triggerAsyncId, resource);
       recorder.trigger.set(asyncId, triggerAsyncId);
-      if (held.attribution.asyncOwners.get(asyncId) !== UNATTRIBUTED) return;
+      // Every resource's type, so owned work that dispatches after the seal
+      // can be named; the creation site stays unowned-only (a stack walk).
       recorder.kind.set(asyncId, type);
+      if (held.attribution.asyncOwners.get(asyncId) !== UNATTRIBUTED) return;
       recorder.site.set(asyncId, firstRepoFrame());
     },
     before(asyncId) {

@@ -13,6 +13,7 @@
 // the phase calls, a field the bootstrap service sets - and nothing
 // production does depends on whether anyone is watching.
 import {TRANSPORT_EVENT} from '../../src/constants/transport.js';
+import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
   BOOTSTRAP_PHASE,
@@ -286,6 +287,21 @@ function observeIdentification(router, transcript, nodeId) {
   });
 }
 
+// The node's leader-activation pacing, read through the gate every replica
+// service holds. Read before production's shutdown clears the service maps,
+// so the same schedulers can be inspected once shutdown has returned.
+function leaderActivationSchedulers(bootstrap) {
+  const schedulers = new Set();
+  for (const services of [bootstrap.partitionServices,
+    bootstrap.messageGroupServices]) {
+    for (const service of services?.values() ?? []) {
+      const scheduler = service?.leaderActivationGate?.activationScheduler;
+      if (scheduler) schedulers.add(scheduler);
+    }
+  }
+  return [...schedulers];
+}
+
 /**
  * Mount the real seed bootstrap on a node environment.
  *
@@ -470,9 +486,20 @@ function createProductionSeedSimHost(environment, options = {}) {
   // not at rest afterwards. Owner order: production first, then the
   // lifecycle owners the phase started, then the router the setup owner
   // created, then the runtime that owns both.
+  // What production's own shutdown left armed of the leader-activation
+  // pacing, read from each scheduler's state the moment bootstrap.shutdown()
+  // returns: nothing the drain fires afterwards can make it look released.
+  const activationAtShutdown = {observed: 0, armed: []};
   async function stopProduction() {
     transcript.record('TEARDOWN_STARTED', {nodeId});
+    const activationSchedulers = leaderActivationSchedulers(bootstrap);
     await bootstrap.shutdown();
+    activationAtShutdown.observed = activationSchedulers.length;
+    activationAtShutdown.armed = activationSchedulers
+      .filter((scheduler) => scheduler.dispatchTimer !== null)
+      .map((scheduler) => ({
+        nodeId: scheduler.nodeId, queued: scheduler.queue.length,
+      }));
     bootstrap.seedInfrastructurePhase.stopUnifiedLifecycleOwners();
     if (bootstrap.messageRouter) await bootstrap.messageRouter.shutdown();
     await environment.stop();
@@ -590,6 +617,10 @@ function createProductionSeedSimHost(environment, options = {}) {
     },
     // Read-only physical facts the witnesses assert on.
     endpoints: connectionEnvironment.environment,
+    leaderActivationAtShutdown: () => ({
+      observed: activationAtShutdown.observed,
+      armed: [...activationAtShutdown.armed],
+    }),
   };
 }
 
@@ -721,6 +752,22 @@ function chargingScheduler(network, chargeDelta) {
   });
 }
 
+// The consensus population production composed, read at the mark from the
+// services themselves: which replica services run a liferaft runtime and how
+// many sibling peers each joins, and how many partition replicas the single
+// rs-raft path serves. A census compares what it observed against this rather
+// than against a topology written down once.
+function consensusComposition(bootstrap) {
+  const liferaftServices = [...bootstrap.messageGroupServices.values()]
+    .filter((service) => service.raftProvider instanceof LiferaftProvider);
+  return {
+    liferaftRuntimes: liferaftServices.length,
+    liferaftPeers: liferaftServices.reduce(
+      (total, service) => total + service.replicaIds.length - 1, 0),
+    rsRaftReplicas: bootstrap.partitionServices.size,
+  };
+}
+
 // The simulator's counterpart of production's "Cluster formed." mark: the
 // last phase has returned, its consequences have settled, write authority has
 // already changed hands, and nothing has been torn down yet.
@@ -733,6 +780,7 @@ function markFormationComplete(scenario, host, onFormationComplete) {
       enqueueEpoch,
       transcript: host.transcript().serialize(),
       provenance: JSON.stringify(host.provenance()),
+      composition: consensusComposition(host.bootstrap),
     });
   }
   return {atMs, enqueueEpoch};
@@ -817,9 +865,40 @@ async function runSeedScenarioInRoot({
     charged,
     enqueueEpoch: scenario.network.enqueueEpoch(),
     pendingEventCount: scenario.network.pendingEventCount(),
+    leaderActivationAtShutdown: host.leaderActivationAtShutdown(),
     // Held so a caller can prove the seal holds without re-running anything.
     scenario, host,
   };
+}
+
+// The network transcript MODULO CONSENSUS TIMING, one normalisation for every
+// witness that compares runs. Every adapter-timer fire is dropped - both the
+// instant it fired at and how many fired - and the instant of every remaining
+// event is dropped; what is kept is the ordered sequence of every non-timer
+// event (kind, type, from, to) and whether timers fired at all.
+//
+// Why a normalisation exists (owner decision O2, recorded in
+// solve/epics/raft-rs-full-cutover/design-r3-r4-message-groups-worker-wasm-
+// 2026-09-23.md): the rs-raft core draws each election timeout from
+// crypto.getRandomValues inside the binding and the port does not thread the
+// substrate's randomSource, so election expiries - and every tick they shift -
+// land at different virtual instants run to run. Production offers no
+// repeatable consensus schedule to assert. When O2 is funded (a seeded core),
+// the witnesses compare networkTranscript exactly again and this goes.
+const NETWORK_TIMER_EVENT_PREFIX = 'fired:adapter-timer:';
+
+function networkTranscriptStructure(networkTranscript) {
+  const events = [];
+  let timerFires = 0;
+  for (const line of networkTranscript.split('\n')) {
+    const event = line.slice(line.indexOf(' ') + 1);
+    if (event.startsWith(NETWORK_TIMER_EVENT_PREFIX)) {
+      timerFires += 1;
+      continue;
+    }
+    events.push(event);
+  }
+  return JSON.stringify({events, timersFired: timerFires > 0});
 }
 
 // Phase one only: the composition proof and its determinism gates.
@@ -843,6 +922,7 @@ const runSeedHandoffScenario = (options = {}) =>
 
 export {
   createProductionSeedSimHost,
+  networkTranscriptStructure,
   runSeedHandoffScenario,
   runSeedMessageGroupsScenario,
   runSeedPartitionsScenario,

@@ -23,6 +23,7 @@
 import BaseLifeRaft from '@markwylde/liferaft';
 
 import LifeRaft from '../../src/raft/liferaft.js';
+import {RaftRsWasmProvider} from '../../src/raft/raft-rs-provider.js';
 import {
   RemotePeerRepresentation,
 } from '../../src/raft/remote-peer-representation.js';
@@ -92,6 +93,20 @@ function observePeerRaftAuthority() {
     return node;
   };
 
+  // The rs-raft population: a partition's consensus runtime is one port per
+  // replica, created by the provider, with its peers as raft ids in the
+  // port's registry rather than as objects. It is counted where it is
+  // created, and it can never reach a peer slot: only clone() fills one.
+  const rsRaftPorts = {created: 0};
+  const realCreatePort = RaftRsWasmProvider.prototype.createPartitionPort;
+  RaftRsWasmProvider.prototype.createPartitionPort = function(request) {
+    rsRaftPorts.created += 1;
+    return realCreatePort.call(this, request);
+  };
+  restorers.push(() => {
+    RaftRsWasmProvider.prototype.createPartitionPort = realCreatePort;
+  });
+
   // Every peer slot is filled through clone(), whoever owns that path.
   const realClone = LifeRaft.prototype.clone;
   LifeRaft.prototype.clone = function(options) {
@@ -130,7 +145,7 @@ function observePeerRaftAuthority() {
 
   return {
     census: () => buildCensus({
-      calls, peerObjects, ownerAddresses, runtimesInPeerSlots,
+      calls, peerObjects, ownerAddresses, runtimesInPeerSlots, rsRaftPorts,
     }),
     restore: () => {
       for (const restore of restorers.reverse()) restore();
@@ -138,7 +153,9 @@ function observePeerRaftAuthority() {
   };
 }
 
-function buildCensus({calls, peerObjects, ownerAddresses, runtimesInPeerSlots}) {
+function buildCensus({
+  calls, peerObjects, ownerAddresses, runtimesInPeerSlots, rsRaftPorts,
+}) {
   const behaviours = (population) => Object.fromEntries(
     [...calls.entries()]
       .filter(([key]) => key.startsWith(`${population}.`))
@@ -156,6 +173,7 @@ function buildCensus({calls, peerObjects, ownerAddresses, runtimesInPeerSlots}) 
     ownerAddressCount: ownerAddresses.size,
     peerObjectCount: peerObjects.created,
     peerAddressCount: peerObjects.addresses.size,
+    rsRaftPortCount: rsRaftPorts.created,
     peerBehaviours,
     ownerBehaviours: behaviours('owner'),
     // What the owner asked of its representation. Not a breach.

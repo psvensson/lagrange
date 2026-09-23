@@ -25,7 +25,6 @@ const {
   EventEmitter,
   HLCClockService,
   LeaderActivationGate,
-  LeaderActivationScheduler,
   LoggingService,
   PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_DEFAULT,
@@ -259,16 +258,14 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.initialized = false;
     this.isShutdown = false;
     this.isLeader = false;
-    this.leaderActivationScheduler =
-      options.leaderActivationScheduler ||
-      LeaderActivationScheduler.getShared({
+    this.leaderActivationGate = new LeaderActivationGate({
+      holdoffMs: this.leaderActivationStabilizationMs,
+      activationScheduler: options.leaderActivationScheduler || null,
+      sharedActivationScheduler: {
         nodeId: this.nodeId,
         spacingMs: this.leaderActivationNodeSpacingMs,
         timeSource: this.providedTimeSource || undefined,
-      });
-    this.leaderActivationGate = new LeaderActivationGate({
-      holdoffMs: this.leaderActivationStabilizationMs,
-      activationScheduler: this.leaderActivationScheduler,
+      },
       timeSource: this.providedTimeSource || undefined,
     });
     this.lastPreparedStateReconstructionTerm = null;

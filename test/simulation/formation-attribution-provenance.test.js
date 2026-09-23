@@ -28,8 +28,6 @@ import {
 
 const ZERO = 0;
 const ONE_AMBIGUITY = 1;
-const OWNER_RUNTIME_COUNT = 138;
-const PEER_OBJECT_COUNT = 276;
 const REPO_ROOT = new URL('../../', import.meta.url);
 
 test('the formation census closes on its own terms, and its reasons are real',
@@ -67,11 +65,24 @@ test('the formation census closes on its own terms, and its reasons are real',
     t.ok(packet.formationWindowEndVirtualTimeMs > ZERO,
       'and it ends at a definite virtual instant');
 
-    // E is unchanged by measuring it.
-    t.equal(packet.ownerAddressCount, OWNER_RUNTIME_COUNT,
-      'the production construction authority still owns 138 runtimes');
-    t.equal(packet.peerObjectCount, PEER_OBJECT_COUNT,
-      '276 peer representations still cover the same topology');
+    // E is unchanged by measuring it. The populations are production's
+    // composition, read from the services at the mark, never a topology
+    // written down here: message-group services still run liferaft runtimes,
+    // each with one peer representation per sibling replica; partition
+    // replicas run one rs-raft port each and have no peer objects at all.
+    // When message groups leave liferaft the liferaft expectation is 0/0.
+    const composition = packet.consensusComposition;
+    t.ok(composition.rsRaftReplicas > ZERO,
+      'the seed composed partition replicas on the rs-raft path');
+    t.equal(packet.ownerAddressCount, composition.liferaftRuntimes,
+      'the production construction authority owns one liferaft runtime per ' +
+        `liferaft message-group service (${composition.liferaftRuntimes})`);
+    t.equal(packet.peerObjectCount, composition.liferaftPeers,
+      'peer representations are the liferaft runtimes\' sibling peers ' +
+        `(${composition.liferaftPeers}); rs-raft partitions add none`);
+    t.equal(packet.rsRaftPortCount, composition.rsRaftReplicas,
+      'every partition replica runs through one rs-raft port ' +
+        `(${composition.rsRaftReplicas})`);
     t.same(packet.runtimesInPeerSlots, [], 'no runtime sits in a peer slot');
     t.same(packet.authorityBreaches, [], 'no peer exercised local authority');
     // The strict substrate is gated by the probe, which runs this census as a
@@ -88,7 +99,8 @@ test('the formation census closes on its own terms, and its reasons are real',
     // Teardown is outside the census, and still has to end at rest.
     t.equal(packet.afterTeardown.pending, ZERO,
       'teardown reaches zero pending work');
-    t.equal(packet.afterTeardown.postSealProductionEffects, ZERO,
+    // Named, not counted: a red row says which resource ran and what armed it.
+    t.same(packet.afterTeardown.postSealProduction, [],
       'no production work runs after the seal');
     t.equal(packet.afterTeardown.postSealEnqueues, ZERO,
       'and nothing is enqueued after it');

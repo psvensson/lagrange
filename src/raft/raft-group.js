@@ -12,7 +12,6 @@ import {ADDRESS, NUM, STRING} from '../constants/index.js';
 import {assertRaftProviderContract} from './raft-provider-contract.js';
 import {LiferaftProvider} from './liferaft-provider.js';
 import {LeaderActivationGate} from './leader-activation-gate.js';
-import {LeaderActivationScheduler} from './leader-activation-scheduler.js';
 import {resolveRaftTransportDeliveryOptions} from './constants.js';
 import {
   deliverRaftPacketWithBackpressureMute,
@@ -138,14 +137,13 @@ class RaftGroup extends EventEmitter {
       options.leaderActivationNodeSpacingMs >= 0 ?
         Math.floor(options.leaderActivationNodeSpacingMs) :
         RAFT_GROUP_DEFAULT.LEADER_ACTIVATION_NODE_SPACING_MS;
-    this.leaderActivationScheduler = options.leaderActivationScheduler ||
-      LeaderActivationScheduler.getShared({
-        nodeId: this.activationNodeId,
-        spacingMs: this.leaderActivationNodeSpacingMs,
-      });
     this.leaderActivationGate = new LeaderActivationGate({
       holdoffMs: this.leaderActivationStabilizationMs,
-      activationScheduler: this.leaderActivationScheduler,
+      activationScheduler: options.leaderActivationScheduler || null,
+      sharedActivationScheduler: {
+        nodeId: this.activationNodeId,
+        spacingMs: this.leaderActivationNodeSpacingMs,
+      },
       timeSource: this.timeSource || undefined,
     });
 

@@ -1,5 +1,6 @@
 
 import {resolveTimeSource} from '../time/time-source.js';
+import {LeaderActivationScheduler} from './leader-activation-scheduler.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
@@ -14,7 +15,16 @@ function normalizeHoldoffMs(value) {
 class LeaderActivationGate {
   constructor(options = {}) {
     this.holdoffMs = normalizeHoldoffMs(options.holdoffMs);
-    this.activationScheduler = options.activationScheduler || null;
+    // The node's activation pacing: a scheduler the caller supplies and owns,
+    // or the node's shared one, which this gate leases for its own lifetime
+    // and returns in shutdown().
+    this.activationSchedulerLeased = !options.activationScheduler &&
+      Boolean(options.sharedActivationScheduler);
+    this.activationScheduler = options.activationScheduler ||
+      (this.activationSchedulerLeased ?
+        LeaderActivationScheduler.acquireShared(
+          options.sharedActivationScheduler) :
+        null);
     // The holdoff is a wait the hosting node takes before a new leader
     // serves, so it runs on that node's clock when there is one. Unsupplied,
     // it is the host clock exactly as before.
@@ -101,6 +111,10 @@ class LeaderActivationGate {
   shutdown() {
     this.destroyed = true;
     this.cancel({clearActivatedTerm: true});
+    if (this.activationSchedulerLeased) {
+      this.activationSchedulerLeased = false;
+      this.activationScheduler.releaseShared();
+    }
   }
 }
 

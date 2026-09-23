@@ -22,6 +22,8 @@ import {
 
 const ZERO = 0;
 const ENTRY = 'entry';
+const UNATTRIBUTED = 'unattributed';
+const LINEAGE_DEPTH = 8;
 
 /**
  * Run the census and return the frozen packet.
@@ -85,7 +87,7 @@ function unknownDetail(recorder) {
   const rows = [];
   for (const segment of recorder.segments) {
     if (segment.phase !== FORMATION) continue;
-    if (segment.owner !== 'unattributed') continue;
+    if (segment.owner !== UNATTRIBUTED) continue;
     if (segment.createdInWindow === false) continue;
     if (fileOf(segment.root ?? 'native') !== 'native') continue;
     rows.push({
@@ -97,11 +99,38 @@ function unknownDetail(recorder) {
   return rows;
 }
 
+// Causal identity for owned work that dispatched after the seal, so a red
+// "no production work runs after the seal" names the resource and the chain
+// that armed it rather than only how many there were.
+function triggerLineage(recorder, asyncId) {
+  const lineage = [];
+  let id = recorder.trigger.get(asyncId);
+  while (id !== undefined && lineage.length < LINEAGE_DEPTH) {
+    lineage.push({asyncId: id, type: recorder.kind.get(id) ?? null});
+    id = recorder.trigger.get(id);
+  }
+  return lineage;
+}
+
+function sealedOwnedDetail(recorder) {
+  const rows = [];
+  for (const segment of recorder.segments) {
+    if (segment.phase !== SEALED || segment.owner === UNATTRIBUTED) continue;
+    rows.push({
+      asyncId: segment.asyncId,
+      owner: segment.owner,
+      type: recorder.kind.get(segment.asyncId) ?? null,
+      lineage: triggerLineage(recorder, segment.asyncId),
+    });
+  }
+  return rows;
+}
+
 function buildPacket({census, mark, recorder, run, snapshot}) {
   const unowned = summarizeUnowned(recorder.segments);
   const strict = readStrict(run.strictReport);
   const owned = countSegments(recorder, FORMATION,
-    (segment) => segment.owner !== 'unattributed');
+    (segment) => segment.owner !== UNATTRIBUTED);
   return {
     formationWindowEndReason: FORMATION_END_REASON,
     formationWindowEndVirtualTimeMs: mark.atMs,
@@ -133,6 +162,8 @@ function buildPacket({census, mark, recorder, run, snapshot}) {
     ownerAddressCount: census.ownerAddressCount,
     peerObjectCount: census.peerObjectCount,
     peerAddressCount: census.peerAddressCount,
+    rsRaftPortCount: census.rsRaftPortCount,
+    consensusComposition: mark.composition,
     runtimesInPeerSlots: census.runtimesInPeerSlots,
     authorityBreaches: census.authorityBreaches,
 
@@ -147,7 +178,8 @@ function buildPacket({census, mark, recorder, run, snapshot}) {
     afterTeardown: {
       pending: run.pendingEventCount,
       postSealProductionEffects: countSegments(recorder, SEALED,
-        (segment) => segment.owner !== 'unattributed'),
+        (segment) => segment.owner !== UNATTRIBUTED),
+      postSealProduction: sealedOwnedDetail(recorder),
       postSealEnqueues:
         run.scenario.network.enqueueEpoch() - run.enqueueEpoch,
       teardownSegments: countSegments(recorder, TEARDOWN, () => true),
