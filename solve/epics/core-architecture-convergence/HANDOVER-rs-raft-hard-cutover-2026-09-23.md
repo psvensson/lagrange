@@ -273,3 +273,50 @@ Start by reproducing the exact DT6 fixture failure on PR #52. Do not begin the
 hard cutover until PR #52 itself is green and merged. After merge, re-measure
 Q0, record the reduced blocker set, then seal the hard-cutover quest under the
 owner decision above.
+## Addendum 2026-09-23 (afternoon): PR #52 landed, Q0 re-measured, cutover census started
+
+### What landed
+PR #52 merged as `8ed8f889cfa817c6d786ca688f581c83bc1573a5` (squash). Beyond the transport/demux production change it carries:
+
+- port migrations for every pre-operation-port fixture inside its proof cone: the
+  DT6 learner-promotion fixture and its two witnesses (real consensus kept; the
+  committed-prefix precondition declared through the partition's durable log
+  owner), the snapshot catch-up end-to-end witness (`campaign()`,
+  `probePeerProgress(peer)`, `readStatus().term`), the packet round-trip
+  property (delivery preservation over all packet types through the
+  backpressure-mute helper, plus the seam port's outbound send), and three
+  partition-service suites (controllable provider double);
+- three fixes-red repairs for statics main had carried since #46 and that made
+  the local push gate refuse every push (file-size ratchet 28/27 via the runtime
+  owner's vocabulary/tuning extraction, complexity ratchet 1817/1816 via
+  `runReadyCycle`, four literals in `liferaft-provider.js`).
+
+An earlier variant on the branch replaced both DT6 replicas' consensus with the
+controllable test double; it was superseded because it left real replication,
+catch-up and the production progress probe unexercised (the owner chose the
+real-replication version on 2026-09-23).
+
+### Still red on main, outside that cone (owner: the cutover epic's first quest)
+`test/bootstrap/production-scheduling-defaults.test.js`,
+`test/convergence/dt6-ledger-leader-durability-fitness.test.js`,
+`test/query/write-path-internal-pacing.test.js` - all fixture reach-through
+into the frozen port (`raft.emit`, `raft.leader =`, `raft.term =`).
+
+### Q0 re-measure
+`rs-raft-real-transport-demux` -> SATISFIED. Q0 stays `BLOCKED_ON_RAFT_CUTOVER`
+with two blockers: `partition-backend-single-path` (liferaft is still the
+default; note `raftBackend` is read only from PartitionService construction
+options, no configuration key reaches it, so production partitions are
+liferaft today) and `exact-main-release-proof`.
+
+### Cutover census (lab node, read-only)
+Running the whole corpus with `RAFT_BACKEND_DEFAULT = raft-rs-wasm` on
+`d551b2875` (local branch on tv-dator, never pushed) to measure, not assume,
+what breaks when rs-raft becomes the only partition path. Result:
+in progress on the lab node at the time of this addendum (interim, about half way: 986 files ok, 11 not ok - formation simulations, the DT6 channel-wake witness whose committed-prefix seeding is liferaft-only, the SEA bundle smoke, and the operation-port regression test that asserts liferaft is still the default). The full classification is recorded in a follow-up once the run completes.
+
+### Next
+1. Rebase and merge PR #55 (`raft-rs-full-cutover` epic, records + zero-reference audit).
+2. Seal R1 `single-path partition cutover` from the census, with red controls
+   named in the epic (omitted backend reaches liferaft; explicit old backend
+   constructs; legacy durable content coexists without typed refusal).
