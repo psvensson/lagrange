@@ -4,6 +4,7 @@ import {RAFT_OPERATION_OUTCOME} from
   '../raft/raft-operation-port-constants.js';
 import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../raft/raft-rs-durable-store-constants.js';
+import {PROPOSAL_QUEUE_RELEASED_CODE} from './proposal-queue-constants.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -14,6 +15,10 @@ const {
   buildPartitionWriteSideEffectPlan,
   runRetryableControlPlaneWrite,
 } = PARTITION_SERVICE_SHARED;
+
+// What the port answered a write's proposal: accepted (its answer is the
+// application's), or refused with the port's outcome as an error.
+const PROPOSAL_ACCEPTED = Object.freeze({refused: false});
 
 // The port's typed deferral while a user session holds the partition's
 // connection (nothing entered the core; the group stays usable), as the
@@ -86,6 +91,12 @@ async function executePartitionRaftWriteCommit(service, options) {
   }
   commitPromise.catch(() => {});
   const raftCommandDispatchStartMs = service.timeSource.now();
+  // A proposal the port refused is the write's own failure: when the pending
+  // write was released without an answer (a group that failed inside the
+  // proposal announces that it no longer leads, which releases it first),
+  // the answer names the port's outcome; an answer the application gave
+  // stands.
+  let proposal = PROPOSAL_ACCEPTED;
   try {
     const proposed = await proposeWithinDeferralBudget(service, entry);
     if (deferredByUserTransaction(proposed)) {
@@ -98,6 +109,7 @@ async function executePartitionRaftWriteCommit(service, options) {
     }
     assertRaftOperationSucceeded(proposed);
   } catch (error) {
+    proposal = Object.freeze({refused: true, error});
     service.rejectCommittedWrite(entry.entryId, error);
     service.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
       partitionId: service.partitionId,
@@ -153,7 +165,9 @@ async function executePartitionRaftWriteCommit(service, options) {
     );
     return {
       success: false,
-      error: error.message,
+      error: (proposal.refused &&
+        error?.code === PROPOSAL_QUEUE_RELEASED_CODE ?
+        proposal.error : error).message,
       partitionId: service.partitionId,
     };
   }

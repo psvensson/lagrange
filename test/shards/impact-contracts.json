@@ -473,15 +473,17 @@
       ]
     },
     "raft-rs-runtime-application-transaction": {
-      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; a reconstructed sole voter leads again, every restored group announces its role, and a retry is answered from its durable outcome.",
+      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; failure scope follows failure class (a core failure replaces the runtime and resumes every group once, a host failure reconstructs its own group at most once per retry window and touches no other group), a group without a usable host announces no role so its partition does not lead, a reconstructed sole voter leads again, a retry is answered from its durable outcome, and the admission owner refuses before consensus every command the application would refuse or never answer.",
       "owners": [
         "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-runtime-tuning.js",
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/partition/partition-service-raft-init-base.js",
         "src/partition/partition-service-entry-apply-base.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/partition/partition-committed-command-admission.js",
         "src/partition/partition-service-write-metrics-base.js"
       ],
       "tests": [
@@ -883,6 +885,7 @@
           "id": "ready-persistence-and-reconstruction",
           "owners": [
             "src/raft/raft-rs-runtime-owner.js",
+            "src/raft/raft-rs-runtime-tuning.js",
             "src/raft/raft-rs-durable-store.js"
           ]
         },
@@ -893,6 +896,7 @@
             "src/partition/partition-service-raft-init-base.js",
             "src/partition/partition-service-entry-apply-base.js",
             "src/partition/partition-committed-statement-outcome.js",
+            "src/partition/partition-committed-command-admission.js",
             "src/partition/partition-service-write-metrics-base.js"
           ]
         }

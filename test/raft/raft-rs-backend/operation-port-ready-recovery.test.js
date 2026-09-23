@@ -237,8 +237,11 @@ test('application effects and durable applied progress commit atomically',
       assert.ok(BigInt(appliedIndex(replica)) > BigInt(beforeApplied));
       const generationAfter = cluster.node('application-replica')
         .readStatus().runtimeGeneration;
-      assert.ok(generationAfter > generationBefore,
-        'replay occurs in a reconstructed execution generation');
+      // An application failure is a host failure of this group: the group
+      // is reconstructed alone, in the current core (only a core failure
+      // replaces the shared runtime).
+      assert.equal(generationAfter, generationBefore,
+        'replay occurs in the group reconstructed in the current core');
       assert.equal(lifecycleState(replica), 'active');
     } finally {
       cluster.dispose();
@@ -337,7 +340,8 @@ test('runtime traps and temporary host unavailability preserve logical identity'
       assert.equal(afterStorage.peerId, initial.peerId);
       assert.equal(afterStorage.replicaIdentity, initial.replicaIdentity);
       assert.equal(afterStorage.runtimeHealth, 'healthy');
-      assert.ok(afterStorage.runtimeGeneration > initial.runtimeGeneration);
+      assert.equal(afterStorage.runtimeGeneration, initial.runtimeGeneration,
+        'a storage failure reconstructs the group in the current core');
     } finally {
       cluster.dispose();
     }
@@ -385,7 +389,11 @@ test('runtime traps and temporary host unavailability preserve logical identity'
     }
   });
 
-test('closing a recovery-required group never enters its stale RawNode',
+// A group whose host failed keeps its node in the current core (only a core
+// failure discards the core), so closing it frees that node once: the node's
+// lifetime ends with its group (R13). Freeing drops the node with whatever
+// Ready it held; nothing else of the node is entered.
+test('closing a recovery-required group frees its node exactly once',
   async () => {
     const databaseFault = {failNextTransaction: false};
     const cluster = new PartitionNodeCluster({
@@ -403,9 +411,11 @@ test('closing a recovery-required group never enters its stale RawNode',
       const entriesBeforeClose = cluster.coreEntryCount();
       const closed = port.close();
       assert.equal(closed.outcome, CORE_OK);
-      assert.equal(closed.reason, 'closed-without-core-entry');
-      assert.equal(cluster.coreEntryCount(), entriesBeforeClose,
-        'close quarantines rather than frees the unadvanced RawNode');
+      assert.equal(closed.reason, 'closed',
+        'closing the failed group frees its node');
+      assert.equal(cluster.coreEntryCount(), entriesBeforeClose + 1,
+        'close frees the failed group\'s node (one core entry) and ' +
+        'enters nothing else');
     } finally {
       cluster.dispose();
     }

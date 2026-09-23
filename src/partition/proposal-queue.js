@@ -12,6 +12,7 @@
 import {
   PROPOSAL_QUEUE_DEFAULT,
   PROPOSAL_QUEUE_ERROR_MSG,
+  PROPOSAL_QUEUE_RELEASED_CODE,
 } from './proposal-queue-constants.js';
 import {resolveTimeSource} from '../time/time-source.js';
 
@@ -157,7 +158,9 @@ class ProposalQueue {
         this.timeSource.clearTimeout(pending.timeoutId);
       }
       if (pending.reject) {
-        pending.reject(new Error(reason));
+        const released = new Error(reason);
+        released.code = PROPOSAL_QUEUE_RELEASED_CODE;
+        pending.reject(released);
       }
       this.pendingCommits.delete(entryId);
     }

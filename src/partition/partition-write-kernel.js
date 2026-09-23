@@ -1,10 +1,20 @@
 import {randomUUID} from 'node:crypto';
+import {ERRORS} from '../constants/errors.js';
 import {isValidRaftLogIndex} from '../raft/log-index.js';
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 
 
 const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
   RAFT: 'raft',
   REJECTED: 'rejected',
+});
+
+// A write refused before it is proposed because this replica does not lead:
+// its group is unusable (the port's typed recovery outcome), or another
+// replica leads.
+const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
+  NOT_LEADER: 'partition_write_not_leader',
+  CONSENSUS_RECOVERY_REQUIRED: 'partition_write_consensus_recovery_required',
 });
 
 const PARTITION_WRITE_KERNEL_LITERAL = Object.freeze({
@@ -131,6 +141,27 @@ function resolvePartitionWriteCommitMode(options = {}) {
     PARTITION_WRITE_COMMIT_MODE.REJECTED;
 }
 
+// A write this replica may not propose, typed by what its port reports: a
+// group held by its host failure (the port's recovery outcome, carried as
+// read), or no leadership here. Answered at once; nothing is proposed.
+function buildPartitionWriteLeadershipRefusal(status, partitionId) {
+  const recovering = status?.outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
+    status.recoveryRequired === true;
+  return {
+    success: false,
+    error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+    failureCode: recovering ?
+      PARTITION_WRITE_LEADERSHIP_REFUSAL.CONSENSUS_RECOVERY_REQUIRED :
+      PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
+    ...(recovering ? {consensus: {
+      reason: status.reason,
+      phase: status.phase,
+      retryAfterMs: status.retryAfterMs ?? null,
+    }} : {}),
+    partitionId,
+  };
+}
+
 function buildPartitionWriteFailureResult(error, partitionId, logIndex = null) {
   const result = {
     success: false,
@@ -179,9 +210,11 @@ function buildPartitionWriteSideEffectPlan(entry, executionResult) {
 export {
   DURABLE_COMMIT_WITNESS_ERROR,
   PARTITION_WRITE_COMMIT_MODE,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
   buildDurableCommitWitness,
   buildPartitionWriteEntry,
   buildPartitionWriteFailureResult,
+  buildPartitionWriteLeadershipRefusal,
   buildPartitionWriteSideEffectPlan,
   resolvePartitionWriteCommitMode,
 };

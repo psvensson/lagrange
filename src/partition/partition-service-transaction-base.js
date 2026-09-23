@@ -6,6 +6,10 @@ import {
 import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
 import {readPartitionCommittedCommands} from './partition-committed-log.js';
 import {
+  PARTITION_COMMITTED_COMMAND_ORIGIN,
+  admitCommittedCommand,
+} from './partition-committed-command-admission.js';
+import {
   PARTITION_TRANSACTION_PREPARED_STATE,
 } from './partition-service-constants.js';
 
@@ -451,7 +455,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
   }
 
   /**
-   * Same predicate family as raft-init's isSingleReplica: a solo group is a
+   * A solo group is a
    * single configured replica with NO joined raft peers (a joined peer means
    * a follower exists that a leader-side rollback could make truncate).
    * @return {boolean}
@@ -912,21 +916,39 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       proposedBy: this.replicaId,
       proposedAt: Date.now(),
     };
-    // Propose-only: the marker's durable log is the consensus core's. The
-    // proposal stays fire-and-forget; only the leader proposes.
-    if (this.raft?.readStatus().role === RaftRole.LEADER) {
-      Promise.resolve(this.raft.propose(entry))
-        .then(assertRaftOperationSucceeded)
-        .catch((err) => {
-          if (err) {
-            this.logger.debug(
-              PARTITION_SERVICE_ERROR_MSG.TRANSACTION_COMMIT_RAFT_FAILED,
-              {partitionId: this.partitionId, error: err.message},
-            );
-          }
-        });
-    }
+    this.proposeTransactionMarker(
+      entry, PARTITION_SERVICE_ERROR_MSG.TRANSACTION_COMMIT_RAFT_FAILED);
     return entry;
+  }
+  /**
+   * Propose one transaction marker, after the session's local COMMIT or
+   * ROLLBACK. The admission owner decides it may enter consensus (its origin
+   * is this transaction owner); a refusal is logged and nothing is proposed.
+   * Propose-only: the marker's durable log is the consensus core's; the
+   * proposal stays fire-and-forget, and only the leader proposes.
+   * @param {Object} entry - The marker.
+   * @param {string} failureMessage - What a failed proposal is logged as.
+   * @private
+   */
+  proposeTransactionMarker(entry, failureMessage) {
+    const admission = admitCommittedCommand(entry, {
+      origin: PARTITION_COMMITTED_COMMAND_ORIGIN.TRANSACTION_OWNER});
+    if (!admission.admitted) {
+      this.logger.error(failureMessage, {partitionId: this.partitionId,
+        error: admission.reason, failureCode: admission.code});
+      return;
+    }
+    if (this.raft?.readStatus().role !== RaftRole.LEADER) {
+      return;
+    }
+    Promise.resolve(this.raft.propose(entry))
+      .then(assertRaftOperationSucceeded)
+      .catch((err) => {
+        if (err) {
+          this.logger.debug(failureMessage,
+            {partitionId: this.partitionId, error: err.message});
+        }
+      });
   }
   /**
    * Replicate one transaction rollback marker through Raft.
@@ -948,20 +970,8 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       proposedBy: this.replicaId,
       proposedAt: Date.now(),
     };
-    // Propose-only: the marker's durable log is the consensus core's. The
-    // proposal stays fire-and-forget; only the leader proposes.
-    if (this.raft?.readStatus().role === RaftRole.LEADER) {
-      Promise.resolve(this.raft.propose(entry))
-        .then(assertRaftOperationSucceeded)
-        .catch((err) => {
-          if (err) {
-            this.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
-              partitionId: this.partitionId,
-              error: err.message,
-            });
-          }
-        });
-    }
+    this.proposeTransactionMarker(
+      entry, PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED);
     return entry;
   }
 }

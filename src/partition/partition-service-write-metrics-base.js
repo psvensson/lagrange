@@ -13,10 +13,13 @@ import {
 } from './partition-committed-statement-outcome.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   './partition-committed-statement-outcome-constants.js';
+import {buildPartitionWriteLeadershipRefusal} from
+  './partition-write-kernel.js';
 import {
-  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
-  PARTITION_COMMITTED_SQL_COMMAND_TYPES,
-} from './partition-service-constants.js';
+  PARTITION_COMMITTED_COMMAND_ORIGIN,
+  admitCommittedCommand,
+  committedCommandRefusalResult,
+} from './partition-committed-command-admission.js';
 
 
 const {
@@ -661,22 +664,18 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     if (pendingOutcome) {
       return pendingOutcome;
     }
-    // A write of an SQL command type without its statement would be
-    // consumed as a log-only record and never answer its proposer: it is
-    // refused before it enters consensus.
-    if (PARTITION_COMMITTED_SQL_COMMAND_TYPES.has(entry.type) &&
-        !(typeof entry.sql === 'string' && entry.sql.length > 0)) {
+    // A command the application would refuse, or consume without answering
+    // its proposer, is refused before it enters consensus (the admission
+    // owner decides; a forwarded write arrives here too).
+    const admission = admitCommittedCommand(entry, {
+      origin: PARTITION_COMMITTED_COMMAND_ORIGIN.WRITE_PATH});
+    if (!admission.admitted) {
       this.recordWritePhaseDuration(
         phaseTimings,
         WRITE_PHASE_FIELD_APPLY_WRITE_MS,
         applyStartMs,
       );
-      return {
-        success: false,
-        error: PARTITION_SERVICE_ERROR_MSG.WRITE_STATEMENT_MISSING,
-        failureCode: PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_MISSING,
-        partitionId: this.partitionId,
-      };
+      return committedCommandRefusalResult(admission, this.partitionId);
     }
     // A settled entry key is answered from its durable outcome row, before
     // anything is proposed: a retry never adds a log entry, and its answer is
@@ -691,24 +690,23 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       return settledAnswer;
     }
     // Leadership is the consensus core's own, read through the port.
+    const consensusStatus = this.raft.readStatus();
     const commitMode = resolvePartitionWriteCommitMode({
       replicaIds: this.replicaIds,
-      raftState: this.raft.readStatus().role,
+      raftState: consensusStatus.role,
       raftLeaderState: RaftRole.LEADER,
       hasKnownRemoteLeader: this.hasKnownRemoteLeaderWitness(),
     });
-    // A rejected write is never proposed: only the consensus leader proposes.
+    // A rejected write is never proposed: only the consensus leader proposes,
+    // and a group held by its host failure proposes nothing.
     if (commitMode === PARTITION_WRITE_COMMIT_MODE.REJECTED) {
       this.recordWritePhaseDuration(
         phaseTimings,
         WRITE_PHASE_FIELD_APPLY_WRITE_MS,
         applyStartMs,
       );
-      return {
-        success: false,
-        error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
-        partitionId: this.partitionId,
-      };
+      return buildPartitionWriteLeadershipRefusal(
+        consensusStatus, this.partitionId);
     }
     // One propose() through the port; the committed-entry application
     // applies the write and resolves it with its durable commit witness.

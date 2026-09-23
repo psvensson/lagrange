@@ -31,6 +31,7 @@ import {
   CORE_CALL_WITHOUT_HANDLE,
   CORE_OPERATION,
   CORE_REFUSAL_KIND,
+  FOLLOWER_RAFT_STATE,
   HEALTHY,
   INBOUND_DRAIN_DELAY_MS,
   NO_LEADER,
@@ -47,7 +48,10 @@ import {
   UNHEALTHY,
   USABLE,
 } from './raft-rs-runtime-owner-constants.js';
-import {tuningOf} from './raft-rs-runtime-tuning.js';
+import {
+  recoveryRetryWindowMsOf,
+  tuningOf,
+} from './raft-rs-runtime-tuning.js';
 import {shapeGroupObservation} from './raft-rs-status-observation.js';
 import {applyCommittedEntryTransaction} from
   './raft-rs-application-transaction-owner.js';
@@ -141,10 +145,61 @@ function outcome(outcomeName, fields = {}) {
 function hostFailure(phase, error, recoveryRequired = false) {
   return outcome(HOST_FAILURE, {
     reason: String(error?.message || error),
+    ...(error?.detail && typeof error.detail === 'object' ?
+      {detail: error.detail} : {}),
     phase,
     retryable: true,
     recoveryRequired,
   });
+}
+
+// A committed-entry application may name its own failure: a typed `reason`
+// with a `detail` object is carried as the host failure's reason and detail;
+// any other failure is its message.
+function applicationFailureOf(error) {
+  return typeof error?.reason === 'string' && error.reason.length > 0 ?
+    {message: error.reason, detail: error.detail} : error;
+}
+
+// The group has no role and no leader while it is unusable: announced once,
+// through the role and leader events every announcement uses, so a partition's
+// leadership observation follows its port. The group's next announcement
+// after it is reconstructed names its real role.
+function announceNoRole(group) {
+  const before = group.lastStatus;
+  if (before === null) {
+    return;
+  }
+  group.lastStatus = {...before, raftState: FOLLOWER_RAFT_STATE,
+    lead: NO_LEADER};
+  if (before.raftState !== FOLLOWER_RAFT_STATE) {
+    group.emit(ROLE[FOLLOWER_RAFT_STATE]);
+  }
+  if (before.lead !== NO_LEADER) {
+    group.emit(RUNTIME_EVENT.LEADER_CHANGE, null);
+  }
+}
+
+// A host failure (persistence, application, delivery bookkeeping) is the
+// failing group's alone: the group becomes RECOVERY_REQUIRED and remembers the
+// failure that holds it there; no other group and not the shared core is
+// affected.
+function groupFailed(group, failed) {
+  group.health = RECOVERY_REQUIRED;
+  const failure = deepFreeze({
+    phase: failed.phase,
+    reason: failed.reason,
+    ...(failed.detail === undefined ? {} : {detail: failed.detail}),
+  });
+  group.recovery = group.recovery === null ?
+    {failure, attempts: 0, retryNotBefore: null} :
+    {...group.recovery, failure};
+  announceNoRole(group);
+  return failed;
+}
+
+function groupHostFailure(group, phase, error) {
+  return groupFailed(group, hostFailure(phase, error, true));
 }
 
 function admissionWaitOutcomes(group) {
@@ -153,11 +208,8 @@ function admissionWaitOutcomes(group) {
       reason: RUNTIME_REASON.CLOSED, phase: RUNTIME_PHASE.READY_PERSISTENCE,
       retryable: false, recoveryRequired: false,
     }),
-    exceeded: () => {
-      group.health = RECOVERY_REQUIRED;
-      return hostFailure(RUNTIME_PHASE.READY_PERSISTENCE,
-        RUNTIME_REASON.USER_TRANSACTION_OPEN, true);
-    },
+    exceeded: () => groupHostFailure(group, RUNTIME_PHASE.READY_PERSISTENCE,
+      RUNTIME_REASON.USER_TRANSACTION_OPEN),
   };
 }
 
@@ -214,10 +266,12 @@ function invokeCore(group, operation, ...args) {
   }
 }
 
+// A continuation from before a core replacement, or of a group that failed
+// earlier in the same operation, enters no core. A replacement restored every
+// group from its durable record, so a stale continuation marks nothing.
 function invokeCoreAt(group, expectedGeneration, operation, ...args) {
   if (expectedGeneration !== runtimeGeneration ||
       runtimeHealth !== HEALTHY || group.health === RECOVERY_REQUIRED) {
-    group.health = RECOVERY_REQUIRED;
     return {
       ok: false,
       result: hostFailure(
@@ -271,8 +325,8 @@ function openGroupInCurrentRuntime(group, restore) {
       group.store.putAppliedState(
         group.groupId, RAFT_RS_INITIAL_APPLIED, confState.value);
     } catch (error) {
-      group.health = RECOVERY_REQUIRED;
-      return hostFailure(RUNTIME_PHASE.BOOTSTRAP_PERSISTENCE, error, true);
+      return groupHostFailure(group, RUNTIME_PHASE.BOOTSTRAP_PERSISTENCE,
+        error);
     }
   }
   group.health = USABLE;
@@ -309,9 +363,10 @@ function resumeAfterReconstruction(group, expectedGeneration) {
 }
 
 // Reconstruct the shared runtime from every group's durable record, then let
-// each restored group resume. The outcome is the reconstruction's and, for
-// the group whose operation asked for it, that group's resumption: a group
-// that cannot resume is left RECOVERY_REQUIRED for its own next operation.
+// each restored group resume. Only a core failure (the instance trapped)
+// replaces the runtime. The outcome is the reconstruction's and, for the group
+// whose operation asked for it, that group's resumption: a group that cannot
+// resume is left RECOVERY_REQUIRED for its own next operation.
 function replaceRuntime(trigger) {
   core = null;
   runtimeHealth = HEALTHY;
@@ -325,6 +380,7 @@ function replaceRuntime(trigger) {
     if (restored.outcome !== CORE_OK) {
       return restored;
     }
+    group.recovery = null;
     restoredGroups.push(group);
   }
   const expectedGeneration = runtimeGeneration;
@@ -343,16 +399,109 @@ function replaceRuntime(trigger) {
   return triggerResumed;
 }
 
+// The typed answer of a group held by its host failure: the failure that
+// holds it, how many reconstructions it has cost, and when the next one is
+// due. The group has no role while it is held.
+function recoveryOutcome(group, reason) {
+  const recovery = group.recovery ||
+    {failure: null, attempts: 0, retryNotBefore: null};
+  return outcome(HOST_FAILURE, {
+    reason,
+    phase: recovery.failure?.phase ?? null,
+    failure: recovery.failure,
+    retryAfterMs: recovery.retryNotBefore === null ? 0 :
+      Math.max(0, recovery.retryNotBefore - group.timers.now()),
+    attempts: recovery.attempts,
+    retryable: true,
+    recoveryRequired: true,
+    role: null,
+  });
+}
+
+function insideRetryWindow(group) {
+  const retryNotBefore = group.recovery?.retryNotBefore ?? null;
+  return retryNotBefore !== null && group.timers.now() < retryNotBefore;
+}
+
+// A reconstruction's end: a group that is usable again forgets its failure
+// (its real role was announced by its resumption); one that failed again
+// waits one retry window from this attempt.
+function settleReconstruction(group, attemptedAt, result) {
+  if (result.outcome === CORE_OK && group.health !== RECOVERY_REQUIRED) {
+    group.recovery = null;
+    return outcome(CORE_OK, {reason: RUNTIME_REASON.GROUP_RECONSTRUCTED});
+  }
+  group.health = RECOVERY_REQUIRED;
+  group.recovery = {
+    ...group.recovery,
+    retryNotBefore: attemptedAt + recoveryRetryWindowMsOf(group.timing),
+  };
+  // A core outcome other than a host failure (a refusal, a trap) is answered
+  // as it is; otherwise the group is held by the failure it recorded.
+  return result.outcome === CORE_OK || result.outcome === HOST_FAILURE ?
+    recoveryOutcome(group, group.recovery.failure?.reason ?? result.reason) :
+    result;
+}
+
+// A host failure of one group reconstructs that group alone, in the current
+// core: its node is freed (a freed or missing handle is no error), created
+// again from its durable record, drained (the committed entries its failure
+// left unapplied are applied first), and resumed - a sole voter campaigns,
+// any other group announces its role. The runtime generation does not change
+// and no other group is touched. Inside the retry window the answer is a
+// typed deferral and nothing enters the core.
+function reconstructGroup(group) {
+  // A user session holds the connection: nothing enters the core.
+  if (insideRetryWindow(group) || !persistenceAdmitted(group)) {
+    return recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED);
+  }
+  const attemptedAt = group.timers.now();
+  group.recovery = {...group.recovery, attempts: group.recovery.attempts + 1};
+  const freed = group.handle === null ? null : invokeCore(group, 'free');
+  if (freed !== null && !freed.ok && freed.result.outcome === CORE_FATAL) {
+    return freed.result;
+  }
+  const restored = openGroupInCurrentRuntime(group, true);
+  const expectedGeneration = runtimeGeneration;
+  const resumed = restored.outcome !== CORE_OK ? restored :
+    thenMaybe(drainReady(group, expectedGeneration), (drained) =>
+      drained.outcome === CORE_OK ?
+        resumeAfterReconstruction(group, expectedGeneration) : drained);
+  return thenMaybe(resumed, (result) =>
+    settleReconstruction(group, attemptedAt, result));
+}
+
+// Failure scope follows the failure class: a core failure replaces the shared
+// runtime; a host failure reconstructs its own group.
 function ensureExecution(group) {
-  if (runtimeHealth !== HEALTHY || group.health === RECOVERY_REQUIRED) {
+  if (runtimeHealth !== HEALTHY) {
     return replaceRuntime(group);
+  }
+  if (group.health === RECOVERY_REQUIRED) {
+    if (group.recovery === null) {
+      group.recovery = {failure: null, attempts: 0, retryNotBefore: null};
+    }
+    return reconstructGroup(group);
   }
   return outcome(CORE_OK, {reason: RUNTIME_REASON.EXECUTION_USABLE});
 }
 
+// The group's synchronous work runs entered: an announcement it makes may
+// re-enter readStatus, which then answers from the group's state and never
+// starts a reconstruction inside the group's own operation.
+function withinGroup(group, work) {
+  group.entered += 1;
+  try {
+    return work();
+  } finally {
+    group.entered -= 1;
+  }
+}
+
 function enqueue(group, work) {
+  const run = () => withinGroup(group, work);
   if (group.tail === null) {
-    const result = work();
+    const result = run();
     if (result && typeof result.then === 'function') {
       const token = Promise.resolve(result).finally(() => {
         if (group.tail === token) {
@@ -364,7 +513,7 @@ function enqueue(group, work) {
     }
     return result;
   }
-  const queued = group.tail.then(work, work);
+  const queued = group.tail.then(run, run);
   const token = queued.finally(() => {
     if (group.tail === token) {
       group.tail = null;
@@ -506,9 +655,9 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
       applyCommittedEntry: group.applyCommittedEntry,
     });
   } catch (error) {
-    group.health = RECOVERY_REQUIRED;
     group.applyTransactionRolledBack?.();
-    return hostFailure(RUNTIME_PHASE.APPLICATION, error, true);
+    return groupHostFailure(group, RUNTIME_PHASE.APPLICATION,
+      applicationFailureOf(error));
   }
   return applyEntries(group, expectedGeneration, entries, index + 1);
 }
@@ -539,8 +688,7 @@ function finishReady(group, expectedGeneration, ready) {
         group.store.putCommitIndex(group.groupId, light.value.commitIndex);
       }
     } catch (error) {
-      group.health = RECOVERY_REQUIRED;
-      return hostFailure('light-ready-persistence', error, true);
+      return groupHostFailure(group, 'light-ready-persistence', error);
     }
     const persistedCommit = light.value.commitIndex === undefined ? null :
       invokeCoreAt(group, expectedGeneration,
@@ -563,10 +711,8 @@ function finishReady(group, expectedGeneration, ready) {
   }, admissionWaitOutcomes(group)));
   if (continuation && typeof continuation.then === 'function') {
     // Persistence and application failures remain host failures.
-    return continuation.catch((error) => {
-      group.health = RECOVERY_REQUIRED;
-      return hostFailure(RUNTIME_PHASE.READY_DRAIN, error, true);
-    });
+    return continuation.catch((error) =>
+      groupHostFailure(group, RUNTIME_PHASE.READY_DRAIN, error));
   }
   return continuation;
 }
@@ -597,8 +743,7 @@ function drainReady(group, expectedGeneration, cycles = 0) {
   try {
     group.store.persistReady(group.groupId, taken.value);
   } catch (error) {
-    group.health = RECOVERY_REQUIRED;
-    return hostFailure(RUNTIME_PHASE.READY_PERSISTENCE, error, true);
+    return groupHostFailure(group, RUNTIME_PHASE.READY_PERSISTENCE, error);
   }
   const finished = finishReady(group, expectedGeneration, taken.value);
   return thenMaybe(finished, (result) => result.outcome === CORE_OK ?
@@ -616,8 +761,8 @@ function semanticLeaderIdentity(group, lead) {
     const identity = group.resolvePeerIdentity(lead);
     return identity.status === RAFT_RS_PEER_IDENTITY_RESOLUTION.RESERVED ?
       identity.replicaIdentity : null;
-  } catch {
-    group.health = RECOVERY_REQUIRED;
+  } catch (error) {
+    groupHostFailure(group, RUNTIME_PHASE.ADDRESS_RESOLUTION, error);
     return null;
   }
 }
@@ -664,10 +809,8 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
 }
 
 function shapeGroupStatus(group, observation) {
-  return shapeGroupObservation(group, observation, (error) => {
-    group.health = RECOVERY_REQUIRED;
-    return hostFailure(RUNTIME_PHASE.ADDRESS_RESOLUTION, error, true);
-  });
+  return shapeGroupObservation(group, observation, (error) =>
+    groupHostFailure(group, RUNTIME_PHASE.ADDRESS_RESOLUTION, error));
 }
 
 function readGroupStatus(group, expectedGeneration) {
@@ -690,12 +833,35 @@ function recordStatusObservation(group, expectedGeneration, rawStatus = null) {
 // core read; otherwise (a read still drives delivered inbound, as before) the
 // status of the last completed core entry.
 function readStatusUndrained(group) {
-  const ready = ensureExecution(group);
-  return ready.outcome === CORE_OK ?
-    readGroupStatus(group, runtimeGeneration) : ready;
+  return thenMaybe(ensureExecution(group), (ready) =>
+    ready.outcome === CORE_OK ?
+      readGroupStatus(group, runtimeGeneration) : ready);
+}
+
+// A group held by its host failure answers from its own state while it is
+// busy (an announcement of its own operation may ask); idle, the read is the
+// group's next operation and may reconstruct it, through the group's queue so
+// a reconstruction is single-flight. Synchronous either way.
+function readStatusInRecovery(group) {
+  if (group.tail !== null || group.entered > 0) {
+    return recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED);
+  }
+  const read = enqueue(group, () => readStatusUndrained(group));
+  if (read && typeof read.then === 'function') {
+    read.catch(() => undefined);
+    return recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED);
+  }
+  return read;
 }
 
 function readStatusNow(group) {
+  if (runtimeHealth === HEALTHY && group.health === RECOVERY_REQUIRED) {
+    return readStatusInRecovery(group);
+  }
+  return withinGroup(group, () => readStatusObserved(group));
+}
+
+function readStatusObserved(group) {
   if ((group.tail === null && group.inbound.length === 0) ||
       group.statusObservation === null) {
     return readStatusUndrained(group);
@@ -868,13 +1034,14 @@ function perform(group, command) {
       readStatusUndrained(group) : hostFailure(
         RUNTIME_PHASE.READY_PERSISTENCE, RUNTIME_REASON.USER_TRANSACTION_OPEN);
   }
-  const ready = ensureExecution(group);
-  if (ready.outcome !== CORE_OK) {
-    return ready;
-  }
-  const expectedGeneration = runtimeGeneration;
-  return drainInbound(group, expectedGeneration,
-    () => performCommand(group, command, expectedGeneration));
+  return thenMaybe(ensureExecution(group), (ready) => {
+    if (ready.outcome !== CORE_OK) {
+      return ready;
+    }
+    const expectedGeneration = runtimeGeneration;
+    return drainInbound(group, expectedGeneration,
+      () => performCommand(group, command, expectedGeneration));
+  });
 }
 
 // step() hands the runtime an envelope; the runtime drives it through the
@@ -959,6 +1126,8 @@ function createRuntimeDispatcher(request) {
     lastStatus: null,
     statusObservation: null,
     health: USABLE,
+    recovery: null,
+    entered: 0,
     tail: null,
     inbound: [],
     inboundDrainScheduled: false,
@@ -993,6 +1162,12 @@ function createRuntimeDispatcher(request) {
           recoveryRequired: false,
         });
       }
+      // Inside a failed group's retry window a delivery is dropped (raft
+      // re-sends what a peer did not receive), so nothing accumulates while
+      // the failure persists.
+      if (group.health === RECOVERY_REQUIRED && insideRetryWindow(group)) {
+        return recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED);
+      }
       group.inbound.push(snapshotEnvelope(envelope));
       scheduleInboundDrain(group);
       return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_ENQUEUED});
@@ -1007,8 +1182,8 @@ function createRuntimeDispatcher(request) {
     close: Object.freeze(({enterCore}) => {
       group.closed = true;
       groups.delete(group.key);
-      if (!enterCore || group.handle === null || runtimeHealth !== HEALTHY ||
-          group.health === RECOVERY_REQUIRED) {
+      // A failed group's node lives in the current core until it is freed.
+      if (!enterCore || group.handle === null || runtimeHealth !== HEALTHY) {
         return outcome(CORE_OK, {
           reason: RUNTIME_REASON.CLOSED_WITHOUT_CORE_ENTRY,
         });

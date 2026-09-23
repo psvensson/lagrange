@@ -23,6 +23,14 @@ const PROPOSAL_QUEUE_ERROR_MSG = Object.freeze({
 });
 
 /**
+ * The code of a pending proposal released without an answer (its replica
+ * stopped leading): a named outcome, so a proposer that holds a more specific
+ * answer of its own reports that instead.
+ * @type {string}
+ */
+const PROPOSAL_QUEUE_RELEASED_CODE = 'proposal_released_without_answer';
+
+/**
  * Log messages for ProposalQueue operations.
  * @type {Object}
  */
@@ -36,4 +44,5 @@ export {
   PROPOSAL_QUEUE_DEFAULT,
   PROPOSAL_QUEUE_ERROR_MSG,
   PROPOSAL_QUEUE_LOG_MSG,
+  PROPOSAL_QUEUE_RELEASED_CODE,
 };

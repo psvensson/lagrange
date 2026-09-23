@@ -22,6 +22,8 @@ const UNHEALTHY = 'unhealthy';
 const USABLE = 'usable';
 const RECOVERY_REQUIRED = 'recovery-required';
 const NO_LEADER = '0';
+// The core's raft state of a follower (the key of ROLE naming it).
+const FOLLOWER_RAFT_STATE = 0;
 const CORE_REFUSAL_KIND = 'raft-rs-refusal';
 const ROLE_LEADER = 'leader';
 const ROLE = Object.freeze({
@@ -88,6 +90,11 @@ const RUNTIME_REASON = Object.freeze({
   RESTORED: 'restored',
   CREATED: 'created',
   RUNTIME_RECONSTRUCTED: 'runtime-reconstructed',
+  // A group whose host failed was reconstructed alone, in the current core.
+  GROUP_RECONSTRUCTED: 'group-reconstructed',
+  // An operation on a group whose host failure persists, inside the group's
+  // retry window: typed, and nothing entered the core.
+  RECOVERY_DEFERRED: 'recovery-deferred',
   EXECUTION_USABLE: 'execution-usable',
   ENTRIES_APPLIED: 'entries-applied',
   READY_DRAIN_BOUND_EXCEEDED: 'ready drain bound exceeded',
@@ -125,6 +132,7 @@ const PERSISTENCE_ADMISSION_WAIT = Object.freeze({
 
 export {
   CORE_CALL_WITHOUT_HANDLE,
+  FOLLOWER_RAFT_STATE,
   CORE_OPERATION,
   CORE_REFUSAL_KIND,
   HEALTHY,

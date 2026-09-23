@@ -504,14 +504,11 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         partitionId: this.partitionId,
       });
     }
-    const isSingleReplica = () => {
-      const peerCount = this.raft?.readStatus?.().peerCount || 0;
-      return this.replicaIds.length === 1 && peerCount === 0;
-    };
+    // A demotion the port announces is the core's: a lone leader whose group
+    // becomes unusable is announced without a role and must stop leading
+    // (its writes are refused, not proposed into a broken group). Only a
+    // joining learner's catch-up keeps its learner role.
     const shouldIgnoreDemotionEvent = (eventName) => {
-      if (isSingleReplica() && this.isLeader) {
-        return true;
-      }
       const isJoiningLearner =
         this.isJoiningExistingGroup === true &&
         isCatchupLearnerRaftRole(this.role);

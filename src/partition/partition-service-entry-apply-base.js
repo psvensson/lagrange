@@ -7,10 +7,13 @@ import {
 } from './partition-service-transaction-session-methods.js';
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
+  PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
-  PARTITION_COMMITTED_COMMAND_TYPES,
-  PARTITION_COMMITTED_SQL_COMMAND_TYPES,
 } from './partition-service-constants.js';
+import {
+  isCommittedCommandType,
+  isCommittedSqlCommandType,
+} from './partition-committed-command-admission.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   './partition-committed-statement-outcome-constants.js';
 import {
@@ -1026,12 +1029,19 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       });
     };
     const commandType = command?.type;
-    if (!PARTITION_COMMITTED_COMMAND_TYPES.has(commandType)) {
+    // Only a bug or version skew commits one (the admission owner never
+    // proposes it); consuming it silently would let this replica skip what
+    // another applies, so the application fails closed, typed: the group's
+    // host failure names the reason, the index and the type.
+    if (!isCommittedCommandType(commandType)) {
       const error = new Error(
         `${PARTITION_SERVICE_ERROR_MSG.COMMITTED_COMMAND_UNRECOGNISED}: ` +
         `${JSON.stringify(commandType)} at index ${index}`);
       error.code = PARTITION_COMMITTED_COMMAND_ERROR_CODE.UNRECOGNISED;
       error.outcome = PARTITION_COMMITTED_COMMAND_OUTCOME.UNRECOGNISED;
+      error.reason = PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON
+        .COMMAND_UNKNOWN;
+      error.detail = Object.freeze({index, commandType: commandType ?? null});
       scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () =>
         this.rejectCommittedWrite(command?.entryId, error),
       );
@@ -1049,7 +1059,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       partitionId: this.partitionId,
       commandType,
     });
-    if (PARTITION_COMMITTED_SQL_COMMAND_TYPES.has(commandType)) {
+    if (isCommittedSqlCommandType(commandType)) {
       if (command.sql) {
         const entryKey = this.getCommittedEntryKey(command);
         const identity = this.buildCommittedWriteIdentity(command, index, term);
@@ -1135,7 +1145,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     // A statement or a transaction outcome was applied; a marker (or a write
     // type without a statement) is recorded in the log only.
     return commandType === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT ||
-      (PARTITION_COMMITTED_SQL_COMMAND_TYPES.has(commandType) &&
+      (isCommittedSqlCommandType(commandType) &&
         Boolean(command.sql)) ?
       PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED :
       PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;

@@ -159,12 +159,13 @@ const PARTITION_SERVICE_OPERATION = Object.freeze({
   TRANSACTION_OUTCOME: 'TRANSACTION_OUTCOME',
 });
 
-// The committed command types the application executes as SQL, and every
-// type it recognises: the transaction markers PREPARE_TRANSACTION and
-// ROLLBACK are recorded in the log only. Anything else is UNRECOGNISED. A
-// write of an SQL type must carry its statement: one without is refused before
-// it is proposed (PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_MISSING).
-const PARTITION_COMMITTED_SQL_COMMAND_TYPES = Object.freeze(new Set([
+// The committed command types the application executes as SQL, the
+// transaction markers (session-bound: TRANSACTION_COMMIT records the session's
+// outcome, PREPARE_TRANSACTION and ROLLBACK are recorded in the log only), and
+// every type it recognises. Anything else is UNRECOGNISED. Frozen arrays:
+// membership is asked of the admission owner, which decides before consensus
+// what may be proposed (partition-committed-command-admission.js).
+const PARTITION_COMMITTED_SQL_COMMAND_TYPES = Object.freeze([
   PARTITION_SERVICE_OPERATION.WRITE,
   PARTITION_SERVICE_OPERATION.INSERT,
   PARTITION_SERVICE_OPERATION.UPDATE,
@@ -172,13 +173,23 @@ const PARTITION_COMMITTED_SQL_COMMAND_TYPES = Object.freeze(new Set([
   PARTITION_SERVICE_OPERATION.UPSERT,
   PARTITION_SERVICE_OPERATION.QUERY,
   PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE,
-]));
-const PARTITION_COMMITTED_COMMAND_TYPES = Object.freeze(new Set([
-  ...PARTITION_COMMITTED_SQL_COMMAND_TYPES,
+]);
+const PARTITION_COMMITTED_MARKER_COMMAND_TYPES = Object.freeze([
   PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
   PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
   PARTITION_SERVICE_OPERATION.ROLLBACK,
-]));
+]);
+const PARTITION_COMMITTED_COMMAND_TYPES = Object.freeze([
+  ...PARTITION_COMMITTED_SQL_COMMAND_TYPES,
+  ...PARTITION_COMMITTED_MARKER_COMMAND_TYPES,
+]);
+
+// The reason a group's host failure names when a committed entry carries a
+// command type the application does not recognise (a bug or version skew:
+// the admission owner never proposes one). The application fails closed.
+const PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON = Object.freeze({
+  COMMAND_UNKNOWN: 'committed-command-unknown',
+});
 
 // What the committed-entry application did with one committed command
 // (R07): a failed statement is a deterministic outcome that consumes the
@@ -200,6 +211,11 @@ const PARTITION_COMMITTED_COMMAND_ERROR_CODE = Object.freeze({
   STATEMENT_ENVIRONMENT_FAILED:
     'partition_committed_statement_environment_failed',
   STATEMENT_MISSING: 'partition_write_statement_missing',
+  // The admission owner's refusals before consensus.
+  COMMAND_TYPE_UNKNOWN: 'partition_write_command_type_unknown',
+  MARKER_NOT_ADMISSIBLE: 'partition_write_marker_not_admissible',
+  SESSION_MISSING: 'partition_write_session_missing',
+  ENTRY_ID_MISSING: 'partition_write_entry_id_missing',
 });
 
 const PARTITION_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
@@ -704,7 +720,8 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   singleReplicaCampaignRefused: (partitionId, campaign) =>
     `Partition ${partitionId} cannot lead its single-replica group: the ` +
     `consensus port refused its campaign (${campaign?.outcome}: ` +
-    `${campaign?.reason})`,
+    `${campaign?.reason}` +
+    `${campaign?.detail ? ` ${JSON.stringify(campaign.detail)}` : ''})`,
   backendSelectionRefused: (option, requested) =>
     `Partition consensus backend selection refused: ${option}=` +
     `${JSON.stringify(requested)} names a retired consensus backend; a ` +
@@ -745,8 +762,10 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
 
 export {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
+  PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
   PARTITION_COMMITTED_COMMAND_TYPES,
+  PARTITION_COMMITTED_MARKER_COMMAND_TYPES,
   PARTITION_COMMITTED_SQL_COMMAND_TYPES,
   PARTITION_CONSENSUS_STARTUP_OUTCOME,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,

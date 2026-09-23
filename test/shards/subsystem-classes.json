@@ -28,7 +28,7 @@
   "censusSize": 2162,
   "digest": "fnv1a32-2ae5c545",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a23201f2",
+  "observationDigest": "fnv1a32-81354e0a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -6130,6 +6130,7 @@
       "files": [
         "src/config/configuration-manager.js",
         "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/partition/partition-service-constants.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-provider-contract-constants.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -6185,10 +6186,13 @@
     "test/partition/partition-runtime-reconstruction-leadership.test.js": {
       "files": [
         "src/config/configuration-manager.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-write-kernel.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-provider-contract-constants.js",
         "src/raft/raft-rs-application-transaction-owner.js",
-        "src/raft/raft-rs-ready-loop-constants.js"
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner-constants.js"
       ]
     },
     "test/partition/partition-service-hlc-monotonicity.test.js": {

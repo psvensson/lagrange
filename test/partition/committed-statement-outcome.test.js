@@ -45,9 +45,15 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
+  PARTITION_CONSENSUS_STARTUP_OUTCOME,
   PARTITION_SERVICE_ERROR_MSG,
+  PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
+import * as partitionConstants from
+  '../../src/partition/partition-service-constants.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
 import {PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} from
   '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
@@ -99,6 +105,20 @@ function partitionOptions(partitionId, dbPath) {
       {name: 'value', type: 'TEXT'},
     ]},
   };
+}
+
+// The whole durable record of a group (hard state, applied state and every
+// log entry with its bytes) through the store owner's own reader, on a read
+// view of an independent connection that runs no DDL, plus the outcome rows.
+function wholeDurableRecord(dbPath, partitionId) {
+  const independent = new Database(dbPath, {readonly: true});
+  try {
+    const view = Object.create(RaftRsDurableStore.prototype);
+    view.db = independent;
+    return view.readDurableRecord(partitionId);
+  } finally {
+    independent.close();
+  }
 }
 
 // The durable record on a connection of the test's own, through the store
@@ -457,6 +477,124 @@ test('F-p: a write of an SQL command type without its statement is refused ' +
       'with the typed refusal');
     const after = durableRecord(dbPath, 'fp-no-statement');
     assert.deepEqual(after, before, 'nothing entered consensus');
+  });
+});
+
+// B5: every malformed command shape the verifier drove through the write path
+// (applyWrite, and a FORWARD_WRITE through the production transport handler)
+// is refused by the admission owner before it is proposed.
+const INADMISSIBLE_SQL = `INSERT INTO ${TABLE_NAME} (id, value) ` +
+  'VALUES (\'inadmissible\', \'v\')';
+const B5_SHAPES = Object.freeze([
+  {name: 'unknown-type', code: 'COMMAND_TYPE_UNKNOWN',
+    command: {type: 'BOGUS', sql: INADMISSIBLE_SQL, entryId: 'e-unknown'}},
+  {name: 'empty-type', code: 'COMMAND_TYPE_UNKNOWN',
+    command: {type: '', sql: INADMISSIBLE_SQL, entryId: 'e-empty'}},
+  {name: 'undefined-type', code: 'COMMAND_TYPE_UNKNOWN',
+    command: {sql: INADMISSIBLE_SQL, entryId: 'e-undefined'}},
+  {name: 'forward-write-replicate-rows', code: 'COMMAND_TYPE_UNKNOWN',
+    viaTransport: true,
+    command: {type: 'REPLICATE_ROWS', sql: INADMISSIBLE_SQL,
+      entryId: 'e-poison'}},
+  {name: 'prepare-marker', code: 'MARKER_NOT_ADMISSIBLE',
+    command: {type: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+      sessionId: 'session-x', entryId: 'e-prepare'}},
+  {name: 'rollback-marker', code: 'MARKER_NOT_ADMISSIBLE',
+    command: {type: PARTITION_SERVICE_OPERATION.ROLLBACK,
+      sessionId: 'session-x', entryId: 'e-rollback'}},
+  {name: 'transaction-commit-without-session', code: 'SESSION_MISSING',
+    command: {type: PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
+      entryId: 'e-commit'}},
+]);
+
+for (const shape of B5_SHAPES) {
+  test(`B5 (${shape.name}): refused before it is proposed, answered at once ` +
+    'with its typed code, and the partition keeps serving',
+  {timeout: TEST_TIMEOUT_MS}, async () => {
+    const partitionId = `b5-${shape.name}`;
+    await withPartition(partitionId, async ({dbPath, open}) => {
+      const partition = await open();
+      assert.equal((await insert(partition, 'row-0', 'setup', 'e-setup'))
+        .success, true, 'setup: the partition serves a write');
+      const before = wholeDurableRecord(dbPath, partitionId);
+      const outcomesBefore = outcomeRows(dbPath);
+      const asked = shape.viaTransport ?
+        partition.handleTransportMessage({payload: {
+          type: PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE,
+          operation: {...shape.command},
+        }}) :
+        partition.applyWrite({...shape.command});
+      const answer = await Promise.race([asked, new Promise((resolve) =>
+        setTimeout(() => resolve('pending'), PROMPT_ANSWER_MS))]);
+      assert.notEqual(answer, 'pending', 'the write is answered at once, ' +
+        'not left to the pending-request timeout');
+      assert.deepEqual(wholeDurableRecord(dbPath, partitionId), before,
+        'nothing entered consensus: the durable record is identical ' +
+        '(entriesAdded 0)');
+      assert.deepEqual(outcomeRows(dbPath), outcomesBefore,
+        'no outcome row was written');
+      assert.equal(answer.success, false,
+        `the write is refused (${JSON.stringify(answer)})`);
+      assert.equal(answer.failureCode,
+        PARTITION_COMMITTED_COMMAND_ERROR_CODE[shape.code],
+        `with the typed refusal ${shape.code}`);
+      assert.equal((await insert(partition, 'row-1', 'after', 'e-after'))
+        .success, true, 'the partition still serves a write afterwards');
+    });
+  });
+}
+
+test('B5: a committed entry with an unknown type (proposed straight through ' +
+  'the port) fails closed with a typed, named host failure on readStatus ' +
+  'and on the restart\'s initialize(), and its sibling is untouched',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  const unknownReason = partitionConstants
+    .PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON?.COMMAND_UNKNOWN;
+  await withPartition('b5-sibling', async ({dbPath: siblingPath, open:
+    openSibling}) => {
+    const sibling = await openSibling();
+    assert.equal((await insert(sibling, 's-0', 'setup', 's-setup')).success,
+      true, 'setup: the sibling serves a write');
+    const siblingBefore = {
+      record: wholeDurableRecord(siblingPath, 'b5-sibling'),
+      generation: sibling.raft.readStatus().runtimeGeneration,
+    };
+    await withPartition('b5-apply-unknown', async ({open}) => {
+      const partition = await open();
+      assert.equal((await insert(partition, 'row-0', 'setup', 'e-setup'))
+        .success, true, 'setup: the partition serves a write');
+      await partition.raft.propose({
+        type: 'BOGUS', sql: INADMISSIBLE_SQL, entryId: 'e-direct'});
+      const status = partition.raft.readStatus();
+      assert.equal(status.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+        `readStatus is the group's host failure (${JSON.stringify(status)})`);
+      assert.equal(status.failure?.detail?.commandType, 'BOGUS',
+        'readStatus names the committed type the application does not ' +
+        'recognise');
+      assert.equal(status.failure.reason, unknownReason,
+        'with the typed reason');
+      assert.ok(Number.isInteger(status.failure?.detail?.index) &&
+        status.failure.detail.index > 0, 'and the entry\'s index');
+      assert.deepEqual({
+        record: wholeDurableRecord(siblingPath, 'b5-sibling'),
+        generation: sibling.raft.readStatus().runtimeGeneration,
+      }, siblingBefore, 'the sibling is untouched');
+      await partition.shutdown();
+      let refusal = null;
+      try {
+        await open();
+      } catch (error) {
+        refusal = error;
+      }
+      assert.equal(refusal?.code,
+        PARTITION_CONSENSUS_STARTUP_OUTCOME.SINGLE_REPLICA_CAMPAIGN_REFUSED,
+        `the restart fails closed (${refusal?.message})`);
+      assert.ok(String(refusal.message).includes(unknownReason) &&
+        String(refusal.message).includes('BOGUS'),
+      `initialize() names the unknown committed command (${refusal.message})`);
+    });
+    assert.equal((await insert(sibling, 's-1', 'after', 's-after')).success,
+      true, 'the sibling still serves a write');
   });
 });
 
