@@ -37,6 +37,13 @@ const LIFERAFT_ROUTE_MODE = Object.freeze({
   FORWARD: 'forward',
 });
 
+const LIFERAFT_PROGRESS_PROBE_REASON = Object.freeze({
+  NOT_APPLICABLE: 'progress-probe-not-applicable',
+  EMPTY_LOG: 'progress-probe-empty-log',
+  ENTRY_MISSING: 'progress-probe-entry-missing',
+  SENT: 'progress-probe-sent',
+});
+
 const LIFERAFT_PROPOSE_TIMEOUT_DEFAULT_MS = 1200;
 const LIFERAFT_IMMEDIATE_ELECTION_TIMEOUT_MS = 1;
 const LIFERAFT_EMPTY_LOG_INDEX = 0;
@@ -295,7 +302,7 @@ class LiferaftProvider {
             peerAddress.length === 0) {
           return deepFreeze({
             outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
-            reason: 'progress-probe-not-applicable',
+            reason: LIFERAFT_PROGRESS_PROBE_REASON.NOT_APPLICABLE,
           });
         }
         const lastInfo = await node.log.getLastInfo();
@@ -305,21 +312,21 @@ class LiferaftProvider {
         if (lastIndex <= LIFERAFT_EMPTY_LOG_INDEX) {
           return deepFreeze({
             outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
-            reason: 'progress-probe-empty-log',
+            reason: LIFERAFT_PROGRESS_PROBE_REASON.EMPTY_LOG,
           });
         }
         const lastEntry = await node.log.get(lastIndex);
         if (!lastEntry) {
           return deepFreeze({
             outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
-            reason: 'progress-probe-entry-missing',
+            reason: LIFERAFT_PROGRESS_PROBE_REASON.ENTRY_MISSING,
           });
         }
         const probePacket = await node.appendPacket(lastEntry);
         await Promise.resolve(node.message(peerAddress, probePacket));
         return deepFreeze({
           outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
-          reason: 'progress-probe-sent',
+          reason: LIFERAFT_PROGRESS_PROBE_REASON.SENT,
         });
       },
       tick: () => {

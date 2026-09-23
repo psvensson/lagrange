@@ -25,6 +25,18 @@ function applyEntry(context, entry) {
   context.store.putAppliedState(context.groupId, entry.index, confState);
 }
 
+function persistReadyState(options, ready) {
+  const {core, handle, store, groupId} = options;
+  if (ready.snapshot) {
+    store.putSnapshot(groupId, ready.snapshot);
+  }
+  store.appendEntries(groupId, ready.entries || []);
+  if (ready.hardState) {
+    store.putHardState(groupId, ready.hardState);
+  }
+  core.persist_ready(handle);
+}
+
 function runReadyCycle(options) {
   const {core, handle, store, groupId} = options;
   if (!core.has_ready(handle)) {
@@ -38,14 +50,7 @@ function runReadyCycle(options) {
     options.send?.(messages);
   };
   send(ready.messages || []);
-  if (ready.snapshot) {
-    store.putSnapshot(groupId, ready.snapshot);
-  }
-  store.appendEntries(groupId, ready.entries || []);
-  if (ready.hardState) {
-    store.putHardState(groupId, ready.hardState);
-  }
-  core.persist_ready(handle);
+  persistReadyState(options, ready);
   const context = {...options, applied};
   for (const entry of ready.committedEntries || []) {
     applyEntry(context, entry);
