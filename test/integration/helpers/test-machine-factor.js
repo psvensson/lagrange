@@ -12,20 +12,9 @@
 // lease) that passed the rc.2 proof by margin and failed the 0.2.4 proof
 // twice; scaled by 3 on that host, both pass. Non-numeric or absent means 1.
 
-const MACHINE_FACTOR_ENV = 'LAGRANGE_TEST_MACHINE_FACTOR';
-const REFERENCE_MACHINE_FACTOR = 1;
-
-/**
- * The machine factor CI declared, or 1 on the reference machine.
- * @param {object} [env] process environment
- * @return {number} >= 1
- */
-function resolveTestMachineFactor(env = process.env) {
-  const parsed = Number(env[MACHINE_FACTOR_ENV]);
-  return Number.isFinite(parsed) && parsed >= REFERENCE_MACHINE_FACTOR ?
-    parsed :
-    REFERENCE_MACHINE_FACTOR;
-}
+// The factor itself has one reader, the test runner, which also records it on
+// every timeout.
+import {resolveTestMachineFactor} from '../../../scripts/run-test-files.js';
 
 const TEST_MACHINE_FACTOR = resolveTestMachineFactor();
 
@@ -38,4 +27,4 @@ function scaleByMachineFactor(referenceMs) {
   return Math.round(referenceMs * TEST_MACHINE_FACTOR);
 }
 
-export {resolveTestMachineFactor, scaleByMachineFactor};
+export {scaleByMachineFactor};

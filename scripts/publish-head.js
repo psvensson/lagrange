@@ -5,7 +5,6 @@ import path from 'node:path';
 import {spawn, spawnSync} from 'node:child_process';
 
 import {ACTION, authorizeAction, isAuthorized} from './action-authority.js';
-import {CORPUS_FULL_PROOF, OUTCOME as PROOF_OUTCOME, resolveProof} from './proof-authority.js';
 import {fileURLToPath} from 'node:url';
 
 import {
@@ -964,6 +963,20 @@ function localCorpusBookkeeping(write, action) {
 const POST_MERGE_ARGUMENT = '--post-merge';
 const POST_MERGE_FULL_SHA = /^[0-9a-f]{40}$/u;
 const POST_MERGE_FIRST_PARENT = Object.freeze(['rev-list', '--first-parent']);
+// The proof authority is spawned, never imported, as on the record path: an
+// import would put its whole closure into the push gate's (the gate imports
+// this module). This publisher's own copy answers, for the caller's checkout,
+// through its CLI contract: `check --json` exits 0 proven, 1 unproven, and
+// otherwise could not answer; stdout carries the typed outcome.
+const POST_MERGE_AUTHORITY = fileURLToPath(new URL('./proof-authority.js', import.meta.url));
+const PROOF_CHECK_COMMAND = 'check';
+const PROOF_JSON_FLAG = '--json';
+const PROOF_CHECK = Object.freeze({
+  PROVEN: Object.freeze({status: 0, outcome: 'proven'}),
+  UNPROVEN: Object.freeze({status: 1, outcome: 'unproven'}),
+});
+const PROOF_UNANSWERED = Object.freeze({status: null, outcome: 'unanswered'});
+const PROOF_UNREADABLE = 'unreadable';
 const POST_MERGE_REFUSAL = Object.freeze({
   NOT_A_SHA: 'not-a-full-sha',
   NOT_ON_MAIN: 'not-a-main-head',
@@ -978,7 +991,7 @@ const POST_MERGE_TEXT = Object.freeze({
   CLOSE: '): ',
   NOT_A_SHA: 'name the exact 40-character sha of a head on origin/main',
   NOT_ON_MAIN: ' is not a head of origin/main (not on its first-parent history)',
-  ALREADY_PROVEN: ` already holds a ${CORPUS_FULL_PROOF} receipt; nothing is owed`,
+  ALREADY_PROVEN: ` already holds a ${CORPUS_PROOF_ID} receipt; nothing is owed`,
   UNAVAILABLE: 'the proof store could not answer: ',
   RECORD_REFUSED: 'recording the receipt is not authorized: ',
   ALREADY_RUNNING: 'a local corpus is already running for ',
@@ -1030,6 +1043,33 @@ function mergedHeadCorpus(run, root, sha, wholeCorpus) {
   }
 }
 
+// The outcome the authority stated on stdout, or UNREADABLE.
+function statedProofOutcome(stdout) {
+  try {
+    return JSON.parse(String(stdout || '')).outcome || PROOF_UNREADABLE;
+  } catch {
+    return PROOF_UNREADABLE;
+  }
+}
+
+// The authority's answer for sha: PROVEN, UNPROVEN, or UNANSWERED with why.
+function corpusProofAnswer(run, root, sha) {
+  let answered = null;
+  try {
+    answered = run(process.execPath,
+      [POST_MERGE_AUTHORITY, PROOF_CHECK_COMMAND, CORPUS_PROOF_ID, sha, PROOF_JSON_FLAG],
+      {cwd: root, encoding: UTF8, timeout: RECORD_TIMEOUT_MS});
+  } catch (error) {
+    return {answer: PROOF_UNANSWERED, because: error.message};
+  }
+  const stated = statedProofOutcome(answered?.stdout);
+  const answer = Object.values(PROOF_CHECK).find((candidate) =>
+    answered?.status === candidate.status && stated === candidate.outcome);
+  return answer ? {answer, because: RECEIPT_NO_REASON} :
+    {answer: PROOF_UNANSWERED, because: String(answered?.stderr || answered?.stdout ||
+      answered?.error?.message || RECEIPT_NO_REASON).trim()};
+}
+
 // Refuse before any work when the head is owed nothing or cannot be proved.
 function assertMergedHeadOwed(run, root, sha) {
   if (!POST_MERGE_FULL_SHA.test(String(sha))) {
@@ -1038,12 +1078,12 @@ function assertMergedHeadOwed(run, root, sha) {
   if (!isMainHead(run, root, sha)) {
     throw postMergeRefusal(POST_MERGE_REFUSAL.NOT_ON_MAIN, `${sha}${POST_MERGE_TEXT.NOT_ON_MAIN}`);
   }
-  const proof = resolveProof({proofId: CORPUS_FULL_PROOF, sha, cwd: root});
-  if (proof.outcome === PROOF_OUTCOME.PROVEN) {
+  const proof = corpusProofAnswer(run, root, sha);
+  if (proof.answer === PROOF_CHECK.PROVEN) {
     throw postMergeRefusal(POST_MERGE_REFUSAL.ALREADY_PROVEN,
       `${sha}${POST_MERGE_TEXT.ALREADY_PROVEN}`);
   }
-  if (proof.outcome !== PROOF_OUTCOME.UNPROVEN) {
+  if (proof.answer !== PROOF_CHECK.UNPROVEN) {
     throw postMergeRefusal(POST_MERGE_REFUSAL.PROOF_STORE_UNAVAILABLE,
       `${POST_MERGE_TEXT.UNAVAILABLE}${proof.because}`);
   }

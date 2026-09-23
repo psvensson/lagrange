@@ -507,6 +507,16 @@ tap.test('the post-merge arm never re-mints an existing receipt', (t) => {
     'a proved head is refused, typed');
   t.same(merged.spawned, [], 'no corpus is started for it');
   t.equal(merged.receiptRef(merged.merged), receipt, 'the receipt is the same object');
+  // The authority is spawned, never imported; an answer outside its exit and
+  // stdout contract is not a verdict.
+  const unanswered = refusalOf(() => proveMergedHead(merged.root, merged.merged, {
+    localCorpusDir: merged.stateDir,
+    run: (command, args, options) => (args[0] === PROOF_AUTHORITY ?
+      {status: 2, stdout: 'UNAVAILABLE proof store lookup failed\n', stderr: ''} :
+      spawnSync(command, args, options)),
+  }));
+  t.equal(unanswered, POST_MERGE_REFUSAL.PROOF_STORE_UNAVAILABLE,
+    'a proof store that cannot answer refuses, typed');
   fs.rmSync(merged.parent, {recursive: true, force: true});
   t.end();
 });

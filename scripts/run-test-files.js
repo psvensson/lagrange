@@ -21,10 +21,6 @@ import {Parser} from 'tap-parser';
 import {
   extractTimeoutDeclarations,
 } from './checks/test-timeout-declarations.js';
-import {TEST_OUTPUT_PATH} from '../src/constants/test-output.js';
-import {
-  resolveTestMachineFactor,
-} from '../test/integration/helpers/test-machine-factor.js';
 
 const DEFAULT_JOBS = 4;
 const DEFAULT_TIMEOUT_MS = 600000;
@@ -96,9 +92,13 @@ const FAILED_ASSERTION_PREFIX = 'not ok ';
 // appends one JSON line here, the durable record of which files are slow,
 // which are red and which pass only on retry. It is git-ignored with the rest
 // of test-output. A library caller names its own ledger or writes none.
+// The runner owns this path whole: the gate executes the runner, so nothing
+// it imports may live outside the modules that trip the full corpus.
+const TEST_RESULTS_LEDGER_ROOT = 'test-output';
+const TEST_RESULTS_LEDGER_DIRECTORY = 'reports';
 const TEST_RESULTS_LEDGER_NAME = 'test-results.ndjson';
-const TEST_RESULTS_LEDGER_FILE = path.join(TEST_OUTPUT_PATH.ROOT,
-  TEST_OUTPUT_PATH.REPORTS_DIR, TEST_RESULTS_LEDGER_NAME);
+const TEST_RESULTS_LEDGER_FILE = path.join(TEST_RESULTS_LEDGER_ROOT,
+  TEST_RESULTS_LEDGER_DIRECTORY, TEST_RESULTS_LEDGER_NAME);
 // Bounded: past this size the ledger starts over and the full one is kept as
 // the single previous generation, about 30 whole-corpus runs each.
 const TEST_RESULTS_LEDGER_ROTATE_BYTES = 16 * 1024 * 1024;
@@ -108,6 +108,13 @@ const LEDGER_LINE_END = '\n';
 const BYTES_PER_MEBIBYTE = 1024 * 1024;
 const LOAD_AVERAGE_ONE_MINUTE = 0;
 const LOAD_DECIMALS = 2;
+// Hardware-relative budget scaling (hardware-relative-convergence-budget
+// epic): CI lanes and placed lab runs export LAGRANGE_TEST_MACHINE_FACTOR; the
+// reference machine is 1, and non-numeric, absent or below 1 means 1. This is
+// its one reader: the runner records it on a timeout, and the integration
+// budget helper (test/integration/helpers/test-machine-factor.js) scales by it.
+const MACHINE_FACTOR_ENV = 'LAGRANGE_TEST_MACHINE_FACTOR';
+const REFERENCE_MACHINE_FACTOR = 1;
 
 const CLI_OPTION = Object.freeze({
   FILTER: '--filter',
@@ -579,6 +586,18 @@ function finalizeTestRun(run, processResult, elapsedMs) {
   };
 }
 
+/**
+ * The machine factor the environment declares, or 1 on the reference machine.
+ * @param {object} [env] process environment
+ * @return {number} >= 1
+ */
+function resolveTestMachineFactor(env = process.env) {
+  const parsed = Number(env[MACHINE_FACTOR_ENV]);
+  return Number.isFinite(parsed) && parsed >= REFERENCE_MACHINE_FACTOR ?
+    parsed :
+    REFERENCE_MACHINE_FACTOR;
+}
+
 // What the host was doing when a file ran out of budget, so a timeout on a
 // loaded or slow machine reads as a budget question rather than a regression.
 function sampleTimeout(budgetMs, elapsedMs, env) {
@@ -868,6 +887,7 @@ export {
   RETRY_FAILED_ONCE_ENV,
   TEST_NODE_ARGS,
   TEST_RESULTS_LEDGER_ROTATE_BYTES,
+  resolveTestMachineFactor,
   analyzeTapOutput,
   filterTestFiles,
   formatTestFilesSummary,
