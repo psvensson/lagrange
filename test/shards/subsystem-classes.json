@@ -28,7 +28,7 @@
   "censusSize": 2157,
   "digest": "fnv1a32-6c522e4e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a5344b63",
+  "observationDigest": "fnv1a32-048e71e5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2212,7 +2212,12 @@
     },
     "test/address/address-manager-peer-location-authority.test.js": {
       "files": [
-        "src/address/address-manager.js"
+        "src/address/address-manager.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ],
       "directories": [
         "src"
@@ -3633,7 +3638,11 @@
     },
     "test/convergence/dt-movielens-raft-peer-cohort-pruning-election.test.js": {
       "files": [
-        "src/diagnostics/formation-turn-attribution.js"
+        "src/config/configuration-manager.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/convergence/dt-priority-partition-spread-cold-boot-network.test.js": {
@@ -3843,6 +3852,11 @@
         "src/raft/raft-provider-contract-constants.js",
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-ready-loop-constants.js"
+      ]
+    },
+    "test/convergence/dt6-zombie-transaction-lifecycle.test.js": {
+      "files": [
+        "src/partition/partition-committed-log.js"
       ]
     },
     "test/convergence/membership-publication-owner-driver-host.test.js": {
