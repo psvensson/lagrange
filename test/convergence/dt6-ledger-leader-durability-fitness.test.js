@@ -525,62 +525,6 @@ t.test(
   },
 );
 
-t.test(
-  'signal (b): declared-commit vs durable-watermark divergence must SUSTAIN ' +
-    'the full legal hold before it counts (a legal in-session quorum commit ' +
-    'diverges legally for the session length)',
-  async (t) => {
-    const unfitEvents = [];
-    const partition = await createLeaderPartition(t, {unfitEvents});
-    try {
-      if (typeof partition.enforceLeaderDurabilityFitness !== 'function') {
-        t.equal(
-          typeof partition.enforceLeaderDurabilityFitness,
-          'function',
-          'detector exists (red on the unfixed head)',
-        );
-        return;
-      }
-      partition.setLeaderDurabilitySuccessorProbe(() => true);
-      // The run-23 divergence shape at the adapter seam: commit intent
-      // declared, durable watermark never advancing (the zombie swallowed
-      // setCommittedIndex). Stamp the declared side directly — the fixture's
-      // single-replica path never calls adapter.commit().
-      partition.logAdapter.lastDeclaredCommitIndex = 149;
-
-      // Divergence inside the legal window: NOT stuck (a healthy leader
-      // running a legal participant session looks exactly like this).
-      driveFitnessTicks(partition, {fromMs: START_MS + 1_000, ticks: 5});
-      t.equal(
-        unfitEvents.length,
-        0,
-        'legal-window divergence never accumulates strikes',
-      );
-      t.notOk(
-        partition.isLeaderDurabilityUnfit === true,
-        'the leader stays fit through a legal divergence window',
-      );
-
-      // Sustained past the legal hold: stuck.
-      driveFitnessTicks(partition, {
-        fromMs: START_MS + 1_000 + LEGAL_HOLD_MS + SWEEP_TICK_MS,
-        ticks: STRIKE_TICKS,
-      });
-      t.ok(
-        unfitEvents.length >= 1,
-        'sustained divergence past the legal hold trips the detector',
-      );
-      t.match(
-        unfitEvents[0] || {},
-        {reason: 'leader_durability_unfit_commit_durability_divergence'},
-        'the evidence carries the divergence reason',
-      );
-    } finally {
-      await partition.shutdown();
-    }
-  },
-);
-
 t.test('single-replica leaders still become leader (fixture sanity)', async (t) => {
   const unfitEvents = [];
   const partition = await createLeaderPartition(t, {unfitEvents});

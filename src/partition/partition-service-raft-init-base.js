@@ -37,6 +37,13 @@ import {
 import {
   createPartitionSnapshotCadence,
 } from './partition-snapshot-cadence.js';
+import {
+  detectLegacyPartitionConsensusState,
+  legacyPartitionConsensusStateError,
+} from './partition-legacy-consensus-state.js';
+import {
+  LEGACY_PARTITION_CONSENSUS_OUTCOME,
+} from './partition-legacy-consensus-state-constants.js';
 
 const {
   AddressManager,
@@ -58,11 +65,9 @@ const {
   PARTITION_SERVICE_ROLE,
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
-  PartitionRaftStorage,
   RaftRole,
   ReplicaStatus,
   SERVICE_TYPE,
-  SQLiteLogAdapter,
   TABLES,
   assertCritical,
   computeReplicaElectionTimeouts,
@@ -325,7 +330,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       });
     }
     // The whole closed-handle boot block (dir/snapshot fs work, db open +
-    // pragmas, raft storage, schema DDL) is synchronous by design; tag it
+    // pragmas, legacy-state refusal, schema DDL) is synchronous by design; tag it
     // so bootstrap-batch stalls attribute in the watchdog's siteDeltas
     // instead of reporting as unexplained gaps (round-10).
     trackSyncSection(PARTITION_REPLICA_INIT_SYNC_SECTION_SITE, () => {
@@ -364,13 +369,18 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       this.db = new Database(this.dbPath);
       this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_JOURNAL_MODE);
       this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_SYNCHRONOUS);
-      this.logAdapter = new SQLiteLogAdapter(
-        this.db, null, this.logger, this.providedTimeSource);
-      this.storage = new PartitionRaftStorage(
-        this.db,
-        this.partitionId,
-        this.logAdapter,
-      );
+      // Before any DDL and before the port: a database holding the retired
+      // backend's consensus state and no rs-raft record is never reused.
+      const legacyConsensusState = detectLegacyPartitionConsensusState({
+        db: this.db, partitionId: this.partitionId});
+      if (legacyConsensusState.outcome ===
+          LEGACY_PARTITION_CONSENSUS_OUTCOME.DETECTED) {
+        this.db.close();
+        this.db = null;
+        throw legacyPartitionConsensusStateError(
+          legacyConsensusState, this.partitionId);
+      }
+      this.createTransactionOutcomeTable();
       if (this.schema) {
         this.createTable();
       }

@@ -26,9 +26,6 @@ function closePartitionConsensusResources(service) {
     service.raft.close();
     service.raft = null;
   }
-  if (service.logAdapter) {
-    service.logAdapter.close();
-  }
 }
 
 function clearPartitionLifecycleListeners(service) {
@@ -156,7 +153,6 @@ class PartitionServiceLifecycleMethods {
       this.pendingCDCEventDeliveries.clear();
     }
     closePartitionPersistenceResources(this);
-    this.closeLeaderDurabilityFitnessWitness?.();
     this.initialized = false;
     this.cdcSubscribers.clear();
     this.cdcSubscriberWrappers.clear();

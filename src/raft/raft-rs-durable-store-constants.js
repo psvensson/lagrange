@@ -18,6 +18,14 @@ const RAFT_RS_TABLE = Object.freeze({
   SNAPSHOT: '_raft_rs_snapshot',
 });
 
+// A caller that must not create the record asks the schema whether its
+// tables exist instead of opening a store (whose constructor creates them).
+const RAFT_RS_RECORD_TABLES = Object.freeze(Object.values(RAFT_RS_TABLE));
+const RAFT_RS_SCHEMA_SQL = Object.freeze({
+  SELECT_TABLE_PRESENT:
+    'SELECT 1 FROM sqlite_master WHERE type = \'table\' AND name = ?',
+});
+
 // The applied index and the configuration state are COLUMNS OF ONE ROW,
 // written by one statement. That is the whole mechanism behind "ConfState and
 // its applied progress are written atomically": there is no write that can
@@ -175,6 +183,8 @@ export {
   RAFT_RS_BOOLEAN_COLUMN,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
+  RAFT_RS_RECORD_TABLES,
+  RAFT_RS_SCHEMA_SQL,
   RAFT_RS_SQL,
   RAFT_RS_STORE_ERROR_MSG,
   RAFT_RS_ZERO_INDEX,

@@ -59,17 +59,12 @@ import {
 } from '../raft/raft-packet-utils.js';
 import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
 import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
-import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {assertPartitionRaftProviderContract} from
   '../raft/raft-provider-contract.js';
-import {LiferaftProvider} from '../raft/liferaft-provider.js';
 import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
 import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
-import {
-  applyRuntimeRaftTiming,
-  computeReplicaElectionTimeouts,
-} from '../raft/raft-timing-utils.js';
+import {computeReplicaElectionTimeouts} from '../raft/replica-election-timeouts.js';
 import {LeaderActivationGate} from '../raft/leader-activation-gate.js';
 import {LeaderActivationScheduler} from '../raft/leader-activation-scheduler.js';
 import {
@@ -153,10 +148,6 @@ import {
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
 } from './partition-service-constants.js';
-import {
-  PartitionRaftStorage,
-  PartitionRaftLogEntry,
-} from './partition-raft-storage.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../control-plane/timeout-budget.js';
 import {
   CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
@@ -282,7 +273,6 @@ export const PARTITION_SERVICE_SHARED = {
   LIFECYCLE_REASON,
   LeaderActivationGate,
   LeaderActivationScheduler,
-  LiferaftProvider,
   LoggingService,
   METRICS_LOG_TAG,
   NUM,
@@ -326,8 +316,6 @@ export const PARTITION_SERVICE_SHARED = {
   PRESSURE_WORK_CLASS,
   PartitionCDCDelivery,
   PartitionCDCGenerator,
-  PartitionRaftLogEntry,
-  PartitionRaftStorage,
   PartitionState,
   PendingRequestTracker,
   ProposalQueue,
@@ -345,7 +333,6 @@ export const PARTITION_SERVICE_SHARED = {
   SPLIT_PARTICIPANT_PREFIX,
   SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
   SQL,
-  SQLiteLogAdapter,
   STRING,
   SYSTEM_TABLE_NAME,
   TABLES,
@@ -360,7 +347,6 @@ export const PARTITION_SERVICE_SHARED = {
   WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
   WRITE_PHASE_FIELD_SQLITE_RUN_MS,
   WRITE_PHASE_FIELD_TOTAL_MS,
-  applyRuntimeRaftTiming,
   assertCritical,
   assertPartitionRaftProviderContract,
   attachTrafficReadinessListener,

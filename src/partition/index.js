@@ -7,9 +7,12 @@ export {
   PartitionState,
   RaftRole,
   CDCOperation,
+} from './partition-service.js';
+
+export {
   PartitionRaftLogEntry,
   PartitionRaftStorage,
-} from './partition-service.js';
+} from './partition-raft-storage.js';
 
 export {
   KeyRange,

@@ -14,6 +14,8 @@ import {
   RAFT_RS_BOOLEAN_COLUMN,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
+  RAFT_RS_RECORD_TABLES,
+  RAFT_RS_SCHEMA_SQL,
   RAFT_RS_SQL,
   RAFT_RS_STORE_ERROR_MSG,
   RAFT_RS_ZERO_INDEX,
@@ -295,6 +297,27 @@ class RaftRsDurableStore {
     const record = this.readDurableRecord(groupId);
     return record.hardState !== null || record.entries.length > 0 ||
       record.confState.voters.length > 0;
+  }
+
+  /**
+   * Whether a group has a durable record in a database, asked without opening
+   * a store: this creates no table and writes nothing. A database that lacks
+   * the record's tables has no record. The predicate is hasDurableRecord's
+   * own, run on a read view of the database that skips the constructor's DDL.
+   * @param {Object} db - A better-sqlite3 database.
+   * @param {string} groupId - The group.
+   * @return {boolean} Whether a record exists.
+   */
+  static hasDurableRecordIn(db, groupId) {
+    const tablePresent = db.prepare(RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT);
+    if (!RAFT_RS_RECORD_TABLES.every((table) =>
+      tablePresent.get(table) !== undefined)) {
+      return false;
+    }
+    const readView = Object.create(RaftRsDurableStore.prototype, {
+      db: {value: db},
+    });
+    return readView.hasDurableRecord(groupId);
   }
 }
 

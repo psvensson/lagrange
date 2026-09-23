@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
-    "storage-partition": 147,
+    "storage-partition": 148,
     "storage-raft": 96,
     "test-infrastructure": 133,
     "transactions": 14,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2155,
-  "digest": "fnv1a32-0ddff89c",
+  "censusSize": 2156,
+  "digest": "fnv1a32-c282abd3",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b0eabb84",
+  "observationDigest": "fnv1a32-b865539d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1163,6 +1163,7 @@
     "test/partition/partition-coordinator.test.js": "storage-partition",
     "test/partition/partition-descriptor-epoch-contract.test.js": "storage-partition",
     "test/partition/partition-leader-row-publication-integrity.test.js": "storage-partition",
+    "test/partition/partition-legacy-consensus-state.test.js": "storage-partition",
     "test/partition/partition-packet-round-trip.property.test.js": "storage-partition",
     "test/partition/partition-raft-node-write-preservation.property.test.js": "storage-partition",
     "test/partition/partition-raft-storage.test.js": "storage-partition",
@@ -6102,6 +6103,11 @@
     "test/partition/partition-coordinator.test.js": {
       "files": [
         "src/partition/partition-coordinator.js"
+      ]
+    },
+    "test/partition/partition-legacy-consensus-state.test.js": {
+      "files": [
+        "src/partition/partition-raft-storage.js"
       ]
     },
     "test/partition/partition-raft-storage.test.js": {
