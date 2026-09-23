@@ -2,8 +2,11 @@ import {spawn, spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import {StringDecoder} from 'node:string_decoder';
 
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
+import {RESOURCE_CLASS_EXCLUSIVE} from '../checks/test-resource-classification-constants.js';
+import {formatTestFilesSummary} from '../run-test-files.js';
 import {capture, killGroup, run} from './process.js';
 import {loadState, saveState} from './state.js';
 
@@ -859,8 +862,10 @@ const PLACEMENT_SHELL_LINE = /^placement-shell=(\d+)$/mu;
 // A stopped shard's shell gets this long to clean up before its connection
 // is cut.
 const PLACEMENT_STOP_GRACE_MS = 10 * MS_PER_SECOND;
-const PLACEMENT_RED_LINE = /^not ok (\S+) \(\d+ assertions, \d+ms\)$/u;
-const PLACEMENT_GREEN_LINE = /^ok (\S+) \(\d+ assertions, \d+ms\)$/u;
+// The runner's per-file verdict line: `ok|not ok FILE (N assertions, Tms)`.
+const PLACEMENT_VERDICT_LINE = /^(ok|not ok) (\S+) \((\d+) assertions, \d+ms\)$/u;
+const PLACEMENT_VERDICT_GREEN = 'ok';
+const PLACEMENT_VERDICT_PART = Object.freeze({VERDICT: 1, FILE: 2, ASSERTIONS: 3});
 const PLACEMENT_RETRIED_PASS_LINE = /^# retried-once pass (\S+)$/u;
 // A bundle upload that has not finished by this is a stalled machine.
 const PLACEMENT_UPLOAD_DEADLINE_SECONDS = 300;
@@ -904,6 +909,14 @@ const PLACEMENT_MACHINE_FACTOR_ENV = 'LAGRANGE_TEST_MACHINE_FACTOR';
 const PLACEMENT_FACTOR_STEPS = 10;
 const PLACEMENT_MINUTE_DIGITS = 1;
 const PLACEMENT_LINE = /\r?\n/u;
+// How often a streamed shard's relay files are read for new lines.
+const PLACEMENT_TAIL_POLL_MS = 250;
+const PLACEMENT_READ_FLAG = 'r';
+const PLACEMENT_STREAM = Object.freeze({OUT: 'out', ERR: 'err'});
+// The controller child's file list, named for this process and a count.
+const PLACEMENT_CHILD_LIST_PREFIX = 'controller-';
+const PLACEMENT_CHILD_LIST_SUFFIX = '.files';
+let childListCount = 0;
 // Keepalive for a long run: a dead connection is noticed within a minute.
 const SSH_RUN_OPTIONS = Object.freeze([
   SSH_OPTION, 'ConnectTimeout=5',
@@ -918,7 +931,8 @@ const PLACEMENT_GIT = 'git';
 const PLACEMENT_GIT_HAS_COMMIT = Object.freeze(['cat-file', '-e']);
 const PLACEMENT_GIT_IS_ANCESTOR = Object.freeze(['merge-base', '--is-ancestor']);
 const PLACEMENT_GIT_HEAD = Object.freeze(['rev-parse', 'HEAD']);
-const PLACEMENT_CHILD_EVENT = Object.freeze({ERROR: 'error', EXIT: 'exit'});
+const PLACEMENT_CHILD_EVENT = Object.freeze({ERROR: 'error', EXIT: 'exit', CLOSE: 'close',
+  DATA: 'data', END: 'end'});
 const PLACEMENT_STDIO_IGNORE = 'ignore';
 const PLACEMENT_NEWLINE = '\n';
 const PLACEMENT_VERSION_SEPARATOR = '.';
@@ -1035,6 +1049,9 @@ export function placementMachines(fleet, state, {controllerFactor = 1} = {}) {
       name: entry.name,
       controller: false,
       speed,
+      // The measured capacity a hand run's decision is printed with.
+      cores: cap.cores,
+      memKiB: cap.memKiB,
       factor: Math.max(1, Math.ceil(speed * controllerFactor * PLACEMENT_FACTOR_STEPS) /
         PLACEMENT_FACTOR_STEPS),
       sshTarget: node.ssh,
@@ -1097,24 +1114,36 @@ function deadlineFor(shard) {
 // controller; one with neither never reported, and the controller runs it. A
 // runner killed mid-batch, a truncated script or a lost connection can leave
 // any number of files unreported whatever the exit status (verifier round 1).
-function shardVerdicts(shard, outcome) {
-  const given = new Set(shard.files);
+function logVerdicts(files, log) {
+  const given = new Set(files);
   const green = new Set();
   const red = new Set();
-  for (const line of String(outcome.log || EMPTY).split(PLACEMENT_LINE)) {
-    const passed = PLACEMENT_GREEN_LINE.exec(line) || PLACEMENT_RETRIED_PASS_LINE.exec(line);
-    if (passed && given.has(passed[1])) green.add(passed[1]);
-    const failed = PLACEMENT_RED_LINE.exec(line);
-    if (failed && given.has(failed[1])) red.add(failed[1]);
+  const assertions = new Map();
+  const lines = String(log || EMPTY).split(PLACEMENT_LINE);
+  for (const line of lines) {
+    const verdict = PLACEMENT_VERDICT_LINE.exec(line);
+    const file = verdict?.[PLACEMENT_VERDICT_PART.FILE];
+    if (verdict && given.has(file)) {
+      (verdict[PLACEMENT_VERDICT_PART.VERDICT] === PLACEMENT_VERDICT_GREEN ? green : red)
+        .add(file);
+      assertions.set(file, Number(verdict[PLACEMENT_VERDICT_PART.ASSERTIONS]));
+    }
+    const retried = PLACEMENT_RETRIED_PASS_LINE.exec(line);
+    if (retried && given.has(retried[1])) green.add(retried[1]);
   }
-  for (const line of String(outcome.log || EMPTY).split(PLACEMENT_LINE)) {
+  for (const line of lines) {
     const retried = PLACEMENT_RETRIED_PASS_LINE.exec(line);
     if (retried) red.delete(retried[1]);
   }
   return {
-    red: [...red],
-    fallback: shard.files.filter((file) => !green.has(file) && !red.has(file)),
+    green, red, assertions,
+    unreported: files.filter((file) => !green.has(file) && !red.has(file)),
   };
+}
+
+function shardVerdicts(shard, outcome) {
+  const {red, unreported} = logVerdicts(shard.files, outcome.log);
+  return {red: [...red], fallback: unreported};
 }
 
 /**
@@ -1170,10 +1199,7 @@ export async function runPlacedTestFiles(files, deps) {
       `~${minutes(shard.loadMs)} min`);
   }
   // Every lab shard is on its way before the controller's own files start.
-  const forward = {
-    retry: env[PLACEMENT_FORWARDED_ENV.RETRY] || EMPTY,
-    tapTimeout: env[PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT] || EMPTY,
-  };
+  const forward = forwardedPolicy(env);
   const runs = await Promise.all(remote.map((shard) =>
     deps.runRemote(shard, {sha, deadlineMs: deadlineFor(shard), forward})));
   // While lab shards run, the controller's own files run in a child process
@@ -1188,29 +1214,48 @@ export async function runPlacedTestFiles(files, deps) {
       {done: Promise.resolve(deps.runLocal(planned, {keepGoing: true}))};
     return here.done;
   };
-  // The handler stays installed and runs once: a hang-up arrives twice (the
-  // shell resends it, then the kernel), and a second Ctrl-C can come during
-  // the lab shells' grace. A listener removed on first use handed either back
-  // to the default action, which killed this process mid-abort and left the
-  // detached shards running (verifier, placement-fixture-followups round 1).
-  let aborting = false;
-  const interrupted = () => {
-    if (aborting) return;
-    aborting = true;
+  const release = abortOnSignals(deps, () => {
     here?.abort?.();
     abortTogether(runs);
-    (deps.exit || process.exit)(PLACEMENT_EXIT.INTERRUPTED);
-  };
-  const signals = deps.signals || process;
-  for (const signal of PLACEMENT_SIGNALS) signals.on(signal, interrupted);
+  });
   try {
     const controllerShard = shards.find((shard) => shard.machine.controller);
     const statuses = controllerShard ? [await runHere(controllerShard.files)] : [];
     return await settleRemoteShards(remote, await Promise.all(runs.map((run) => run.done)),
       {deps, fleet, statuses, write, runHere});
   } finally {
-    for (const signal of PLACEMENT_SIGNALS) signals.removeListener(signal, interrupted);
+    release();
   }
+}
+
+// The controller's own retry and timeout policy, handed to a lab machine.
+function forwardedPolicy(env) {
+  return {
+    retry: env[PLACEMENT_FORWARDED_ENV.RETRY] || EMPTY,
+    tapTimeout: env[PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT] || EMPTY,
+  };
+}
+
+// Interrupted, hung up or terminated: cut everything a run started and exit.
+// The handler stays installed and runs once: a hang-up arrives twice (the
+// shell resends it, then the kernel), and a second Ctrl-C can come during
+// the lab shells' grace. A listener removed on first use handed either back
+// to the default action, which killed this process mid-abort and left the
+// detached shards running (verifier, placement-fixture-followups round 1).
+// Returns the removal of the handler.
+function abortOnSignals(deps, cutAll) {
+  let aborting = false;
+  const interrupted = () => {
+    if (aborting) return;
+    aborting = true;
+    cutAll();
+    (deps.exit || process.exit)(PLACEMENT_EXIT.INTERRUPTED);
+  };
+  const signals = deps.signals || process;
+  for (const signal of PLACEMENT_SIGNALS) signals.on(signal, interrupted);
+  return () => {
+    for (const signal of PLACEMENT_SIGNALS) signals.removeListener(signal, interrupted);
+  };
 }
 
 async function settleRemoteShards(remote, outcomes, {deps, fleet, statuses, write, runHere}) {
@@ -1259,10 +1304,11 @@ async function settleRemoteShards(remote, outcomes, {deps, fleet, statuses, writ
 // Exit 97 is a setup failure and 98 a busy machine: the controller then runs
 // the shard itself. The runner leads its own process group, so the
 // controller's deadline can stop everything it started.
+const PLACEMENT_RESULTS_PREFIX = 'placement-results=';
 const PLACEMENT_SCRIPT_HEAD = [
   'set -u',
   'repo="$1"; sha="$2"; node_major="$3"; factor="$4"; run="$5"; bundle="$6"; keep="$7"',
-  'retry="$8"; tap_timeout="$9"',
+  'retry="$8"; tap_timeout="$9"; results="${10}"',
   // Before nvm, which reads its arguments (see the capability script).
   'set --',
   'pid=""',
@@ -1356,6 +1402,10 @@ const PLACEMENT_SCRIPT_TAIL = [
   'pid=$!',
   'echo "placement-pid=$pid"',
   'wait "$pid"; status=$?',
+  // A results ledger the runner left in the worktree comes back on this
+  // relay, one prefixed line per record, before cleanup removes it.
+  'if [ -n "$results" ] && [ -f "$wt/$results" ]; then ' +
+    `sed 's/^/${PLACEMENT_RESULTS_PREFIX}/' "$wt/$results"; fi`,
   'exit "$status"',
 ];
 
@@ -1389,6 +1439,28 @@ function exitOf(child) {
   return new Promise((resolve) => {
     child.on(PLACEMENT_CHILD_EVENT.ERROR, () => resolve(null));
     child.on(PLACEMENT_CHILD_EVENT.EXIT, (code) => resolve(code));
+  });
+}
+
+// Its exit status once its output streams are also closed: every line read.
+function closeOf(child) {
+  return new Promise((resolve) => {
+    child.on(PLACEMENT_CHILD_EVENT.ERROR, () => resolve(null));
+    child.on(PLACEMENT_CHILD_EVENT.CLOSE, (code) => resolve(code));
+  });
+}
+
+function streamLines(readable, stream, onLine) {
+  let partial = EMPTY;
+  readable.setEncoding(TEXT_UTF8);
+  readable.on(PLACEMENT_CHILD_EVENT.DATA, (text) => {
+    const lines = `${partial}${text}`.split(PLACEMENT_LINE);
+    partial = lines.pop();
+    for (const line of lines) onLine(line, stream);
+  });
+  readable.on(PLACEMENT_CHILD_EVENT.END, () => {
+    if (partial) onLine(partial, stream);
+    partial = EMPTY;
   });
 }
 
@@ -1467,6 +1539,42 @@ function hasExited(child) {
   return child.exitCode !== null || child.signalCode !== null;
 }
 
+// The relay's lines as they land: the ssh session writes the lab machine's
+// output into these files live, so following them is streaming without a
+// second connection. Returns the finish, which delivers the rest and stops.
+function tailLines(file, stream, onLine) {
+  const decoder = new StringDecoder(TEXT_UTF8);
+  let offset = 0;
+  let partial = EMPTY;
+  const emit = (text) => {
+    const lines = `${partial}${text}`.split(PLACEMENT_LINE);
+    partial = lines.pop();
+    for (const line of lines) onLine(line, stream);
+  };
+  const drain = () => {
+    const size = fs.statSync(file).size;
+    if (size <= offset) return;
+    const buffer = Buffer.alloc(size - offset);
+    const fd = fs.openSync(file, PLACEMENT_READ_FLAG);
+    let read = 0;
+    try {
+      read = fs.readSync(fd, buffer, 0, buffer.length, offset);
+    } finally {
+      fs.closeSync(fd);
+    }
+    offset += read;
+    emit(decoder.write(buffer.subarray(0, read)));
+  };
+  const timer = setInterval(drain, PLACEMENT_TAIL_POLL_MS);
+  return () => {
+    clearInterval(timer);
+    drain();
+    emit(decoder.end());
+    if (partial) onLine(partial, stream);
+    partial = EMPTY;
+  };
+}
+
 /**
  * Start one shard on its machine. Returns at once: the upload and the run
  * go on in a process group of their own, reading from and writing to files,
@@ -1475,12 +1583,17 @@ function hasExited(child) {
  * stderr log, or a reason when the shard never ran or its deadline stopped
  * it; `stop` stops it now.
  * @param {{machine: Object, files: string[]}} shard
+ * `onLine(line, stream)`, when given, receives each line of the relay as it
+ * arrives - stdout as `out`, stderr as `err` - not only at settle; `results`
+ * names a ledger the runner leaves in the worktree, relayed back as prefixed
+ * lines; `gitRoot` is the checkout whose HEAD is the commit (default root).
  * @param {{sha: string, deadlineMs: number, root: string, keepGoing?: boolean,
- *   runId?: string, env?: Object, forward?: {retry?: string, tapTimeout?: string}}} options
+ *   runId?: string, env?: Object, forward?: {retry?: string, tapTimeout?: string},
+ *   onLine?: Function, results?: string, gitRoot?: string}} options
  * @return {{done: Promise<Object>, stop: Function}}
  */
 export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true,
-  env = gitProcessEnvironment(), forward = {},
+  env = gitProcessEnvironment(), forward = {}, onLine = null, results = EMPTY, gitRoot = root,
   runId = `${sha.slice(0, PLACEMENT_RUN_SHA_CHARACTERS)}-` +
     `${Date.now().toString(PLACEMENT_RUN_RADIX)}-${process.pid}`}) {
   const {machine} = shard;
@@ -1492,7 +1605,7 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true
   const scriptFile = `${local}.sh`;
   let bundleFile;
   try {
-    bundleFile = bundleFor(machine, {root, sha, local});
+    bundleFile = bundleFor(machine, {root: gitRoot, sha, local});
   } catch (error) {
     return {done: Promise.resolve({status: PLACEMENT_EXIT.SETUP, log: EMPTY,
       reason: error.message}), stop: () => {}, interrupt: () => null, abort: () => {}};
@@ -1507,7 +1620,7 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true
     run: commandLine(remoteCommand(machine, null, [machine.repoPath, sha,
       machine.nodeMajor || EMPTY, String(machine.factor || 1), runId, remoteBundle,
       keepGoing ? PLACEMENT_KEEP_GOING : EMPTY, forward.retry || EMPTY,
-      forward.tapTimeout || EMPTY], {fromStdin: true})),
+      forward.tapTimeout || EMPTY, results], {fromStdin: true})),
     scriptFile,
   });
   const output = fs.openSync(logFile, 'w');
@@ -1516,6 +1629,8 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true
     {env, stdio: [PLACEMENT_STDIO_IGNORE, output, errors], detached: true});
   fs.closeSync(output);
   fs.closeSync(errors);
+  const tails = onLine ? [tailLines(logFile, PLACEMENT_STREAM.OUT, onLine),
+    tailLines(errorFile, PLACEMENT_STREAM.ERR, onLine)] : [];
   let stopped = null;
   const stop = (reason) => {
     if (stopped || hasExited(child)) return;
@@ -1529,6 +1644,7 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true
     deadlineMs);
   const done = exitOf(child).then((status) => {
     clearTimeout(deadline);
+    for (const finish of tails) finish();
     // A wrapper stopped mid-upload never reached its own removals.
     fs.rmSync(scriptFile, {force: true});
     if (bundleFile) fs.rmSync(bundleFile, {force: true});
@@ -1604,6 +1720,7 @@ async function discoverPlacement(root, env) {
   await saveState(recordFleet(state, fleet));
   const controllerFactor = Number(env[PLACEMENT_MACHINE_FACTOR_ENV]);
   return {
+    fleet,
     machines: placementMachines(fleet, state, {
       controllerFactor: controllerFactor >= 1 ? controllerFactor : 1,
     }),
@@ -1615,18 +1732,43 @@ async function discoverPlacement(root, env) {
 
 // The controller's own files while lab shards run: the classified runner's
 // entry point as a child in a group of its own, told never to place again.
-// `abort` ends the whole group.
-function runClassifiedChild(root, files, env) {
-  const child = spawn(process.execPath, [PLACEMENT_RUNNER, PLACEMENT_KEEP_GOING,
-    PLACEMENT_RUNNER_STDIN], {
-    cwd: root,
-    env: {...env, [PLACEMENT_ENV]: PLACEMENT_LOCAL},
-    stdio: [PLACEMENT_STDIO_PIPE, PLACEMENT_STDIO_INHERIT, PLACEMENT_STDIO_INHERIT],
-    detached: true,
-  });
-  child.stdin.end(files.join(PLACEMENT_NEWLINE) + PLACEMENT_NEWLINE);
+// `abort` ends the whole group. With `onLine` its output is not inherited but
+// handed over line by line, as a lab shard's relay is, and it is done only
+// once that output has been read to the end.
+//
+// Its file list is its stdin as a FILE, never a socket this process writes:
+// the runner reads stdin synchronously, and a child that got there before
+// this event loop had written found the non-blocking socket empty and died
+// with EAGAIN - every child, when this process was busy for 300 ms after the
+// spawn (found 2026-09-23). The file is unlinked once the child holds it.
+function runClassifiedChild(root, files, env, {onLine = null} = {}) {
+  const output = onLine ? PLACEMENT_STDIO_PIPE : PLACEMENT_STDIO_INHERIT;
+  const listDir = path.join(root, PLACEMENT_LOG_PARENT);
+  fs.mkdirSync(listDir, {recursive: true});
+  const list = path.join(listDir, `${PLACEMENT_CHILD_LIST_PREFIX}${process.pid}-` +
+    `${Date.now().toString(PLACEMENT_RUN_RADIX)}-${childListCount += 1}` +
+    `${PLACEMENT_CHILD_LIST_SUFFIX}`);
+  fs.writeFileSync(list, files.join(PLACEMENT_NEWLINE) + PLACEMENT_NEWLINE);
+  const input = fs.openSync(list, PLACEMENT_READ_FLAG);
+  let child;
+  try {
+    child = spawn(process.execPath, [PLACEMENT_RUNNER, PLACEMENT_KEEP_GOING,
+      PLACEMENT_RUNNER_STDIN], {
+      cwd: root,
+      env: {...env, [PLACEMENT_ENV]: PLACEMENT_LOCAL},
+      stdio: [input, output, output],
+      detached: true,
+    });
+  } finally {
+    fs.closeSync(input);
+    fs.rmSync(list, {force: true});
+  }
+  if (onLine) {
+    streamLines(child.stdout, PLACEMENT_STREAM.OUT, onLine);
+    streamLines(child.stderr, PLACEMENT_STREAM.ERR, onLine);
+  }
   return {
-    done: exitOf(child).then((status) => status ?? 1),
+    done: (onLine ? closeOf(child) : exitOf(child)).then((status) => status ?? 1),
     abort: () => {
       if (!hasExited(child)) killGroup(child);
     },
@@ -1653,4 +1795,275 @@ export function placementDeps({root, keepGoing = false, env = process.env,
   };
 }
 
-export {PLACEMENT_ENV, PLACEMENT_EXIT, PLACEMENT_LOCAL, PLACEMENT_MIN_PLAN_MS};
+// ---------------------------------------------------------------------------
+// The hand verb: `lab test <profile> --lane <lane> [--on NAME] [--sha COMMIT]
+// [--split]`. No new placement layer: the exact commit goes out through the
+// same bundle and shard path a placed run uses, and each lane runs under its
+// own job policy because the machine's classified runner plans it again.
+// What is new is who chooses - the operator names a lane, and a machine or
+// none - and that each file's verdict is shown as it lands, not at settle.
+// The machine still comes from this run's discovery, never from a name in
+// any setup; `--on` is a choice made at run time.
+
+const LAB_TEST_PARENT = 'test-output/lab-test-worktrees';
+// What planning a commit's lanes reads: its test tree and its npm scripts.
+const LAB_TEST_PLANNED_PATHS = Object.freeze(['test', 'package.json']);
+// Where a runner leaves its per-file results ledger, and where a machine's
+// copy comes back to, named for the machine.
+const LAB_TEST_RESULTS_FILE = 'test-output/reports/test-results.ndjson';
+const LAB_TEST_RESULTS_DIR = 'test-output/reports';
+const LAB_TEST_RESULTS_STEM = 'test-results-';
+const LAB_TEST_RESULTS_EXTENSION = '.ndjson';
+const LAB_TEST_KIB_PER_GIB = 1024 * 1024;
+const LAB_TEST_MEMORY_DIGITS = 1;
+const LAB_TEST_FAILED = 1;
+const LAB_TEST_GIT = Object.freeze({
+  RESOLVE: Object.freeze(['rev-parse', '--verify', '--quiet', '--end-of-options']),
+  COMMIT_SUFFIX: '^{commit}',
+  ADD: Object.freeze(['worktree', 'add', '--detach', '--no-checkout', '--quiet']),
+  CHECKOUT: Object.freeze(['checkout', '--quiet']),
+  REMOVE: Object.freeze(['worktree', 'remove', '--force']),
+  PATHS: '--',
+});
+const LAB_TEST_TEXT = Object.freeze({
+  PREFIX: 'lab test: ',
+  NAME_ONE: ': commit it, or name a commit with --sha',
+  NOT_A_COMMIT: ' is not a commit here',
+  NOT_READY: ' is not a ready lab machine this run: ',
+  NOT_LISTED: 'not in the inventory',
+  CONTROLLER_TREE: 'the controller runs its lanes in this tree, which is not exactly ',
+  PLANNING_FAILED: 'the commit could not be checked out for planning: ',
+  UNREPORTED: ' file(s) reported no result: ',
+  COPIED: 'results copied to ',
+  LANES: ', ',
+});
+
+function gitMust(root, args) {
+  const result = gitAt(root, args);
+  if (result.status !== 0) {
+    throw new Error(`${LAB_TEST_TEXT.PLANNING_FAILED}${String(result.stderr || EMPTY).trim()}`);
+  }
+  return result;
+}
+
+/**
+ * The commit a hand lab run sends, and a checkout to plan it from. With no
+ * `sha` the tree must be exactly a commit - a working tree is never sent - and
+ * with one, any tree will do: the commit is named. Planning reads that
+ * commit's own test tree, checked out alone into a throwaway worktree whose
+ * HEAD is the commit, which is also what its bundle is made from. `release`
+ * removes it, and may be called any number of times.
+ * @param {{root: string, sha?: string|null}} input
+ * @return {{sha: string, gitRoot: string, release: Function}}
+ */
+export function labTestCommit({root, sha = null}) {
+  const resolved = sha ? resolveCommit(root, sha) : commitAt(root);
+  if (!resolved) throw new Error(`${PLACEMENT_TEXT.NOT_A_COMMIT}${LAB_TEST_TEXT.NAME_ONE}`);
+  const gitRoot = path.join(root, LAB_TEST_PARENT,
+    `${resolved.slice(0, PLACEMENT_RUN_SHA_CHARACTERS)}-` +
+    `${Date.now().toString(PLACEMENT_RUN_RADIX)}-${process.pid}`);
+  fs.mkdirSync(path.dirname(gitRoot), {recursive: true});
+  gitMust(root, [...LAB_TEST_GIT.ADD, gitRoot, resolved]);
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    gitAt(root, [...LAB_TEST_GIT.REMOVE, gitRoot]);
+    fs.rmSync(gitRoot, {recursive: true, force: true});
+  };
+  try {
+    gitMust(gitRoot, [...LAB_TEST_GIT.CHECKOUT, resolved, LAB_TEST_GIT.PATHS,
+      ...LAB_TEST_PLANNED_PATHS]);
+  } catch (error) {
+    release();
+    throw error;
+  }
+  return {sha: resolved, gitRoot, release};
+}
+
+function resolveCommit(root, name) {
+  const result = gitAt(root, [...LAB_TEST_GIT.RESOLVE, `${name}${LAB_TEST_GIT.COMMIT_SUFFIX}`]);
+  if (result.status !== 0) throw new Error(`${name}${LAB_TEST_TEXT.NOT_A_COMMIT}`);
+  return result.stdout.trim();
+}
+
+function bySpeed(left, right) {
+  return left.speed - right.speed;
+}
+
+function isExclusiveLane(lane) {
+  return lane.resourceClass === RESOURCE_CLASS_EXCLUSIVE;
+}
+
+/**
+ * Which machine runs which lanes of a hand run. Without --split every lane
+ * goes to one lab machine: the one named, or the fastest measured this run.
+ * With --split the exclusive lane goes there alone - it may share a machine
+ * with nothing - and the other lanes go to whichever is measured faster of
+ * the controller and the next lab machine.
+ * @param {Array<{resourceClass: string, files: string[], jobs: number}>} plan
+ * @param {Array<Object>} machines placementMachines' result
+ * @param {{on?: string|null, split?: boolean, controller?: Object,
+ *   fleet?: Array<Object>}} [options]
+ * @return {Array<{machine: Object, lanes: Array<Object>}>}
+ */
+export function placeLabLanes(plan, machines, {on = null, split = false,
+  controller = CONTROLLER_MACHINE, fleet = []} = {}) {
+  if (machines.length === 0) throw new Error(PLACEMENT_TEXT.NO_MACHINE);
+  const ranked = [...machines].sort(bySpeed);
+  const first = on === null ? ranked[0] : machines.find((machine) => machine.name === on);
+  if (!first) {
+    const entry = fleet.find((one) => one.name === on);
+    throw new Error(`${on}${LAB_TEST_TEXT.NOT_READY}` +
+      `${entry ? fleetVerdict(entry) : LAB_TEST_TEXT.NOT_LISTED}`);
+  }
+  if (!split) return [{machine: first, lanes: plan}];
+  // Stable: on a tie the controller, listed first, keeps the lanes here.
+  const rest = [controller, ...ranked.filter((machine) => machine !== first)].sort(bySpeed)[0];
+  return [
+    {machine: first, lanes: plan.filter(isExclusiveLane)},
+    {machine: rest, lanes: plan.filter((lane) => !isExclusiveLane(lane))},
+  ].filter((assignment) => assignment.lanes.length > 0);
+}
+
+function gibibytes(memKiB) {
+  return memKiB > 0 ? (memKiB / LAB_TEST_KIB_PER_GIB).toFixed(LAB_TEST_MEMORY_DIGITS) :
+    FLEET_UNKNOWN;
+}
+
+/**
+ * The decision, one line per machine, with the capacities it was made from.
+ * @param {Array<{machine: Object, lanes: Array<Object>}>} assignments
+ * @return {string[]}
+ */
+export function formatLabDecision(assignments) {
+  return assignments.map(({machine, lanes}) => {
+    const files = lanes.reduce((sum, lane) => sum + lane.files.length, 0);
+    return `${LAB_TEST_TEXT.PREFIX}${machine.name}: ` +
+      `${lanes.map((lane) => lane.resourceClass).join(LAB_TEST_TEXT.LANES)} (${files} files) ` +
+      `cores=${machine.cores ?? FLEET_UNKNOWN} mem=${gibibytes(machine.memKiB)}GiB ` +
+      `speed x${machine.speed.toFixed(FLEET_FACTOR_DIGITS)}`;
+  });
+}
+
+function controllerMachine(fleet) {
+  const capability = fleet.find((entry) => entry.controller)?.capability;
+  return {...CONTROLLER_MACHINE, cores: capability?.cores ?? null,
+    memKiB: capability?.memKiB ?? null};
+}
+
+// One machine's share, started: its lanes' files, the lines it streamed, and
+// the run to wait for. The controller's share runs as the placed run's own
+// child does; a lab machine's through the shard path, with the commit bundled
+// from the planning checkout.
+function startLabShare({machine, lanes}, {commit, deps, forward, results, costOf, write}) {
+  const files = lanes.flatMap((lane) => lane.files);
+  const lines = [];
+  const onLine = (line, stream) => {
+    if (stream === PLACEMENT_STREAM.OUT) lines.push(line);
+    if (!line.startsWith(PLACEMENT_RESULTS_PREFIX)) write(`[${machine.name}] ${line}`);
+  };
+  if (machine.controller) return {machine, files, lines, run: deps.runLocalChild(files, {onLine})};
+  const loadMs = PLACEMENT_REMOTE_SETUP_MS +
+    files.reduce((sum, file) => sum + (costOf.get(file) || 0), 0) * machine.speed;
+  const run = deps.runRemote({machine, files}, {sha: commit.sha, gitRoot: commit.gitRoot,
+    deadlineMs: deadlineFor({loadMs}), forward, results, onLine});
+  return {machine, files, lines, run};
+}
+
+// A machine's results ledger, back under its name beside the controller's.
+function copyLabResults(share, root, write) {
+  const records = share.lines.filter((line) => line.startsWith(PLACEMENT_RESULTS_PREFIX))
+    .map((line) => line.slice(PLACEMENT_RESULTS_PREFIX.length));
+  if (records.length === 0) return;
+  const file = path.join(LAB_TEST_RESULTS_DIR,
+    `${LAB_TEST_RESULTS_STEM}${safeName(share.machine.name)}${LAB_TEST_RESULTS_EXTENSION}`);
+  fs.mkdirSync(path.join(root, LAB_TEST_RESULTS_DIR), {recursive: true});
+  fs.writeFileSync(path.join(root, file), `${records.join(PLACEMENT_NEWLINE)}${PLACEMENT_NEWLINE}`);
+  write(`${LAB_TEST_TEXT.PREFIX}${share.machine.name}: ${LAB_TEST_TEXT.COPIED}${file}`);
+}
+
+// Every share's verdicts, from its own lines: what it proved, what was red,
+// and what never reported - which is a failure, never a pass.
+async function settleLabShares(shares, {root, write}) {
+  const totals = {total: 0, passed: 0, failed: 0, assertions: 0};
+  let status = 0;
+  for (const share of shares) {
+    const outcome = await share.run.done;
+    const exit = typeof outcome === 'object' ? outcome.status : outcome;
+    const {green, red, assertions, unreported} = logVerdicts(share.files,
+      share.lines.join(PLACEMENT_NEWLINE));
+    const summary = {
+      total: share.files.length,
+      passed: [...green].filter((file) => !red.has(file)).length,
+      failed: red.size + unreported.length,
+      assertions: [...assertions.values()].reduce((sum, count) => sum + count, 0),
+    };
+    write(`${LAB_TEST_TEXT.PREFIX}${share.machine.name}: ${formatTestFilesSummary(summary)}`);
+    if (unreported.length > 0) {
+      write(`${LAB_TEST_TEXT.PREFIX}${share.machine.name}: ${unreported.length}` +
+        `${LAB_TEST_TEXT.UNREPORTED}${outcome?.reason || `exit ${exit}`}`);
+    }
+    copyLabResults(share, root, write);
+    for (const key of Object.keys(totals)) totals[key] += summary[key];
+    if (exit !== 0 || summary.failed > 0) status = LAB_TEST_FAILED;
+  }
+  write(formatTestFilesSummary(totals));
+  return status;
+}
+
+/**
+ * Run a hand lab test: place the planned lanes, start every share, stream
+ * each machine's lines as they land, and end with the runner's own summary,
+ * merged over the machines. The planning checkout is released once every
+ * share has its commit. Interrupted, every share is cut.
+ * @param {{plan: Array<Object>, costs?: Array<Object>, commit: Object,
+ *   on?: string|null, split?: boolean, root: string, results?: string,
+ *   env?: Object, write?: Function}} request
+ * @param {Object} deps labTestDeps' collaborators (discover, runRemote,
+ *   runLocalChild, commitAt; signals and exit optional)
+ * @return {Promise<number>} exit status
+ */
+export async function runLabTest({plan, costs = [], commit, on = null, split = false, root,
+  results = LAB_TEST_RESULTS_FILE, env = process.env,
+  write = (line) => process.stdout.write(`${line}${PLACEMENT_NEWLINE}`)}, deps) {
+  let shares = [];
+  try {
+    const {fleet = [], machines} = await deps.discover();
+    const assignments = placeLabLanes(plan, machines,
+      {on, split, controller: controllerMachine(fleet), fleet});
+    if (assignments.some(({machine}) => machine.controller) && deps.commitAt() !== commit.sha) {
+      throw new Error(`${LAB_TEST_TEXT.CONTROLLER_TREE}${commit.sha}`);
+    }
+    for (const line of formatLabDecision(assignments)) write(line);
+    const costOf = new Map(costs.map((cost) => [cost.file, cost.ms / cost.jobs]));
+    const context = {commit, deps, forward: forwardedPolicy(env), results, costOf, write};
+    shares = assignments.map((assignment) => startLabShare(assignment, context));
+  } finally {
+    commit.release();
+  }
+  const release = abortOnSignals(deps, () => abortTogether(shares.map((share) => share.run)));
+  try {
+    await Promise.all(shares.map((share) => share.run.done));
+  } finally {
+    release();
+  }
+  return settleLabShares(shares, {root, write});
+}
+
+/**
+ * The real collaborators of runLabTest for a checkout.
+ * @param {{root: string, env?: Object}} input
+ * @return {Object}
+ */
+export function labTestDeps({root, env = gitProcessEnvironment()}) {
+  return {
+    discover: () => discoverPlacement(root, env),
+    runRemote: (shard, options) => startRemoteShard(shard, {...options, root, env}),
+    runLocalChild: (files, options) => runClassifiedChild(root, files, env, options),
+    commitAt: () => commitAt(root),
+  };
+}
+
+export {LAB_TEST_RESULTS_FILE, PLACEMENT_ENV, PLACEMENT_EXIT, PLACEMENT_LOCAL,
+  PLACEMENT_MIN_PLAN_MS};

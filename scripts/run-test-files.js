@@ -692,12 +692,20 @@ async function main() {
   if (summary.reasons.length > 0) {
     process.stderr.write(`${summary.reasons.join(REASON_SEPARATOR)}\n`);
   }
-  process.stdout.write(
-    `# test-files total=${summary.total} pass=${summary.passed} ` +
-    `fail=${summary.failed} assertions=${summary.assertions}\n`,
-  );
+  process.stdout.write(`${formatTestFilesSummary(summary)}\n`);
   if (summary.ok) return SUCCESS_EXIT_CODE;
   return retryFailedOnce(summary, options);
+}
+
+/**
+ * The one summary line a run of test files ends with. A lab run that merges
+ * several machines' verdicts prints the same line, from this owner.
+ * @param {{total: number, passed: number, failed: number, assertions: number}} summary
+ * @return {string}
+ */
+function formatTestFilesSummary(summary) {
+  return `# test-files total=${summary.total} pass=${summary.passed} ` +
+    `fail=${summary.failed} assertions=${summary.assertions}`;
 }
 
 // The policy above, as one exported unit so a witness can hold it: the
@@ -742,6 +750,7 @@ export {
   TEST_NODE_ARGS,
   analyzeTapOutput,
   filterTestFiles,
+  formatTestFilesSummary,
   parseOptions,
   retryFailedOnce,
   runTestFile,
