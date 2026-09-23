@@ -30,12 +30,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import process from 'node:process';
 import {test} from 'node:test';
 
 import Database from 'better-sqlite3';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
+import {answerOf, countEscapes} from
+  '../raft/raft-rs-backend/process-escape-counter.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -133,44 +134,6 @@ function insert(service, id, value, entryId) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// What one synchronous port read answered: its value, or that it threw.
-function answerOf(read) {
-  try {
-    const value = read();
-    return {threw: null, value};
-  } catch (error) {
-    return {threw: String(error?.message || error), value: null};
-  }
-}
-
-const ESCAPE_EVENTS = Object.freeze(['uncaughtException',
-  'unhandledRejection']);
-
-// Every exception and rejection that escapes to the process while counted.
-// The counter is the process's only listener meanwhile, so an escape is
-// counted (and asserted on) rather than ending the test where it happened.
-function countEscapes() {
-  const escaped = [];
-  const onEscape = (error) => escaped.push(String(error?.message || error));
-  const displaced = ESCAPE_EVENTS.map((event) => {
-    const listeners = process.listeners(event);
-    process.removeAllListeners(event);
-    process.on(event, onEscape);
-    return [event, listeners];
-  });
-  return {
-    escaped,
-    stop: () => {
-      for (const [event, listeners] of displaced) {
-        process.off(event, onEscape);
-        for (const listener of listeners) {
-          process.on(event, listener);
-        }
-      }
-    },
-  };
 }
 
 // The whole durable record of a group, through the store owner's own reader

@@ -28,7 +28,7 @@
   "censusSize": 2167,
   "digest": "fnv1a32-0dde07c1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c51e89e2",
+  "observationDigest": "fnv1a32-e002524a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -5995,6 +5995,11 @@
         "src/sea-entry.js"
       ]
     },
+    "test/integration/single-node-default-replica-count-writes.integration.test.js": {
+      "files": [
+        "test/integration/helpers/seed-query-surface.js"
+      ]
+    },
     "test/integration/strict-benchmark-local-readiness.integration.test.js": {
       "files": [
         "Dockerfile",
@@ -6337,7 +6342,8 @@
         "src/raft/raft-provider-contract-constants.js",
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-ready-loop-constants.js",
-        "src/raft/raft-rs-runtime-owner-constants.js"
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "test/raft/raft-rs-backend/process-escape-counter.js"
       ]
     },
     "test/partition/partition-write-kernel.test.js": {
@@ -6946,7 +6952,8 @@
         "src/partition/partition-raft-storage.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-service.js",
-        "src/raft/raft-rs-durable-store-constants.js"
+        "src/raft/raft-rs-durable-store-constants.js",
+        "test/integration/helpers/seed-query-surface.js"
       ],
       "directories": [
         "src"
