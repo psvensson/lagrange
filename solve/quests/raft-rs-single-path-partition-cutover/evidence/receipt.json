@@ -1,58 +1,52 @@
 {
   "schema": "test-receipt/1",
   "quest": "raft-rs-single-path-partition-cutover",
-  "status": "fail",
+  "status": "pass",
   "testFileDigests": {
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "0650a3f154ea5f86d93fdf8d1f5ac0448626e07e773aebf8c52e3524a21fc348"
   },
-  "generatedAt": "2026-09-23T07:50:09.931Z",
+  "generatedAt": "2026-09-23T17:55:23.337Z",
   "receipts": [
     {
       "id": "seed-bootstraps-and-serves-a-write-on-rs-raft-by-default",
-      "passed": false,
+      "passed": true,
       "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^seed bootstraps and serves a write on rs-raft by default$\" test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
       "detail": "Measured by ^seed bootstraps and serves a write on rs-raft by default$",
-      "failure": "1 test(s) failed",
       "testFile": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js"
     },
     {
       "id": "omitted-selection-cannot-reach-the-legacy-backend",
-      "passed": false,
+      "passed": true,
       "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^omitted selection cannot reach the legacy backend$\" test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
       "detail": "Measured by ^omitted selection cannot reach the legacy backend$",
-      "failure": "1 test(s) failed",
       "testFile": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js"
     },
     {
       "id": "explicit-legacy-selection-is-a-typed-refusal",
-      "passed": false,
+      "passed": true,
       "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^explicit legacy selection is a typed refusal$\" test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
       "detail": "Measured by ^explicit legacy selection is a typed refusal$",
-      "failure": "1 test(s) failed",
       "testFile": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js"
     },
     {
       "id": "the-write-path-has-one-durable-log",
-      "passed": false,
+      "passed": true,
       "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the write path has one durable log$\" test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
       "detail": "Measured by ^the write path has one durable log$",
-      "failure": "1 test(s) failed",
       "testFile": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js"
     },
     {
       "id": "legacy-durable-consensus-state-fails-closed",
-      "passed": false,
+      "passed": true,
       "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^legacy durable consensus state fails closed$\" test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
       "detail": "Measured by ^legacy durable consensus state fails closed$",
-      "failure": "1 test(s) failed",
       "testFile": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js"
     },
     {
       "id": "restart-serves-writes-from-the-rs-raft-store",
-      "passed": false,
+      "passed": true,
       "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^restart serves writes from the rs-raft store$\" test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
       "detail": "Measured by ^restart serves writes from the rs-raft store$",
-      "failure": "1 test(s) failed",
       "testFile": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js"
     }
   ]
