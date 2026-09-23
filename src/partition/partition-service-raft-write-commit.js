@@ -104,7 +104,10 @@ function unansweredWriteResult(service, proposal, error, entryId) {
   if (error?.code === PROPOSAL_QUEUE_RELEASED_CODE) {
     return {...error.answer, partitionId: service.partitionId};
   }
-  return buildPartitionWriteFailureResult(error, service.partitionId);
+  // A typed failure (a committed write whose application failed in the
+  // host's environment) names its entry: a retry under it is idempotent.
+  const answer = buildPartitionWriteFailureResult(error, service.partitionId);
+  return answer.failureCode === undefined ? answer : {...answer, entryId};
 }
 
 async function executePartitionRaftWriteCommit(service, options) {

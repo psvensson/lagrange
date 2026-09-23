@@ -273,8 +273,11 @@ test('B2: the same entry identity retried after its acknowledgement is an ' +
     assert.equal(retriedAfterRestart.success, true,
       'a retry after restart is acknowledged ' +
       `(${JSON.stringify(retriedAfterRestart)})`);
-    assert.equal(retriedAfterRestart.changes, 0,
-      'the replay changed nothing');
+    // The replay answers the rows the write changed (its outcome row keeps
+    // the count, quest reroute-carries-the-entry-id C2); that it changed
+    // nothing again is read from the log and the row below.
+    assert.equal(retriedAfterRestart.changes, acknowledged.changes,
+      'the replay answers the affected rows of the write it replays');
     assert.equal(retriedAfterRestart.idempotentReplay, true,
       'the retry after restart is answered as an idempotent replay');
     assert.equal(retriedAfterRestart.replayOfLogIndex, acknowledged.logIndex,

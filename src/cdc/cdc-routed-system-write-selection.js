@@ -3,6 +3,8 @@ import {
   resolveInsertMutationColumnNames,
   resolveReplicaOperationMutationCoalescingKey,
 } from './cdc-replica-operation-mutation-coalescing-key.js';
+import {deriveParticipantEntryId} from
+  '../query/distributed/distributed-write-coordinator.js';
 
 const {
   AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES,
@@ -15,6 +17,28 @@ const {
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
 const CDC_VOLATILE_SELECTION_PARAM_VALUE = '<volatile-row-version>';
+// The identity of one routed system-table mutation (quest
+// reroute-carries-the-entry-id, C1): the caller's idempotency key when it
+// carries one, otherwise one minted per routed call, outside its attempt
+// loop, and carried by every attempt and by the local lane.
+const CDC_ROUTED_MUTATION_IDEMPOTENCY_KEY_PREFIX = 'cdc-mutation-';
+
+function resolveRoutedMutationIdempotencyKey(options, mint) {
+  const supplied = options?.idempotencyKey;
+  return typeof supplied === 'string' && supplied.length > 0 ?
+    supplied :
+    `${CDC_ROUTED_MUTATION_IDEMPOTENCY_KEY_PREFIX}${mint()}`;
+}
+
+// The options a local replica is sent a routed mutation under: its key and
+// the entryId the distributed write coordinator derives for the replica's
+// partition (the one derivation); none for a write without a key.
+function routedMutationLocalWriteOptions(idempotencyKey, partitionId) {
+  return idempotencyKey === null ? {} : {
+    idempotencyKey,
+    entryId: deriveParticipantEntryId(idempotencyKey, partitionId),
+  };
+}
 
 function normalizeRoutedSystemWriteSelectionParams(sql, params = []) {
   if (!Array.isArray(params) || params.length === 0) {
@@ -98,6 +122,8 @@ function resolveRoutedSystemWriteRecoveryCandidateSelectionKey(
 }
 
 export {
+  resolveRoutedMutationIdempotencyKey,
   resolveRoutedSystemTableMutationCoalescingKey,
   resolveRoutedSystemWriteRecoveryCandidateSelectionKey,
+  routedMutationLocalWriteOptions,
 };

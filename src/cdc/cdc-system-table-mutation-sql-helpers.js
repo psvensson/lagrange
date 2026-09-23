@@ -48,6 +48,34 @@ export function buildSystemTableMutationSqlParts(mode, values) {
 // and refused forever). Mirrors buildSqlMutationPlan in
 // control-plane-system-table-gateway-query-execution.js verbatim so the two
 // builders share one convention.
+/**
+ * The routed-SQL options a system-table row mutation (insert, update,
+ * upsert, delete) passes to the CDC integration's executeSQL, from the
+ * options its caller gave it: timeouts, cancellation, session, coalescing,
+ * routing readiness, workload and delivery, and the mutation's idempotency
+ * key (carried unchanged, quest reroute-carries-the-entry-id C1).
+ * @param {Object} [options] - The mutation's options.
+ * @return {Object} The executeSQL options.
+ */
+export function buildSystemTableMutationExecutionOptions(options = {}) {
+  return {
+    queryTimeoutMs: options?.queryTimeoutMs,
+    cancellationToken: options?.cancellationToken || null,
+    sessionId: options?.sessionId,
+    disableSystemWriteSession: options?.disableSystemWriteSession,
+    coalescingKey: options?.coalescingKey,
+    recoveryCandidateSelectionKey: options?.recoveryCandidateSelectionKey,
+    routingReadinessDimension: options?.routingReadinessDimension,
+    workloadClass: options?.workloadClass,
+    workClass: options?.workClass,
+    pressureRetryAfterMs: options?.pressureRetryAfterMs,
+    deliveryPriority: options?.deliveryPriority,
+    deliverySource: options?.deliverySource,
+    replacePendingKey: options?.replacePendingKey,
+    idempotencyKey: options?.idempotencyKey,
+  };
+}
+
 function buildWhereParts(map) {
   const conditions = Object.keys(map);
   const whereStr = conditions

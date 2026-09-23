@@ -45,6 +45,9 @@ const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL = Object.freeze({
   READ: 'read',
   READOUTCOMECOUNTS: 'readOutcomeCounts',
   RECOVERYCANDIDATESELECTIONKEY: 'recoveryCandidateSelectionKey',
+  // The write identity a caller carries through the gateway unchanged
+  // (quest reroute-carries-the-entry-id, C1).
+  IDEMPOTENCYKEY: 'idempotencyKey',
   REPLACEPENDINGKEY: 'replacePendingKey',
   RESOURCEKEYS: 'resourceKeys',
   ROUTER_QUERY_TRANSPORT_NOT_READY: 'ROUTER_QUERY_TRANSPORT_NOT_READY',

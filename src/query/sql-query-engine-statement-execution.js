@@ -343,6 +343,10 @@ class SQLQueryEngineStatementExecution extends
    * @param {Array} params - Query parameters.
    * @param {Object} options - Execution options.
    * @param {string} options.sessionId - Session ID for transaction tracking.
+   * @param {string} [options.idempotencyKey] - The write's idempotency key:
+   *   two submissions of one write under one key are one write (the
+   *   partition answers the second from its outcome row).
+   * @param {string} [options.operationId] - The write's operation id.
    * @return {Promise<Object>} Query result.
    */
   async executeQuery(sql, params = [], options = {}) {

@@ -54,6 +54,11 @@ function buildGatewayQueryOptions(gateway, options = {}, context = {}) {
     options,
     CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYPRIORITY,
   );
+  queryOptions = copyOption(
+    queryOptions,
+    options,
+    CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.IDEMPOTENCYKEY,
+  );
   if (typeof deliverySource === 'string' &&
     deliverySource.length > CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ZERO) {
     queryOptions[CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYSOURCE] =
@@ -203,6 +208,11 @@ function buildGatewayWriteOptions(gateway, options = {}, context = {}) {
     writeOptions,
     options,
     CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REPLACEPENDINGKEY,
+  );
+  writeOptions = copyOption(
+    writeOptions,
+    options,
+    CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.IDEMPOTENCYKEY,
   );
   writeOptions = applyMutationWorkloadProfileDefaults(writeOptions, options);
   if (typeof deliverySource === 'string' &&

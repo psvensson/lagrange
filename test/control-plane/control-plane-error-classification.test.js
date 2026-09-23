@@ -8,8 +8,10 @@ import {
   isRetryableControlPlaneError,
 } from '../../src/control-plane/control-plane-error-classification.js';
 import {ROUTER_ERROR_MSG} from '../../src/constants/transport.js';
-import {PARTITION_SERVICE_DEFAULT} from
-  '../../src/partition/partition-service-constants.js';
+import {
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
+  PARTITION_SERVICE_DEFAULT,
+} from '../../src/partition/partition-service-constants.js';
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
 import {PROPOSAL_QUEUE_PROPOSAL_STATE} from
@@ -121,6 +123,52 @@ async (t) => {
   t.equal(isRetryableControlPlaneError(
     new Error('an answer text no owner lists')), false,
   'a text no owner lists is not retried');
+});
+
+// Quest reroute-carries-the-entry-id (F-at, F-as): the environmental failure
+// of a committed write's application did not fail the write for good (it is
+// applied again when the host recovers), so it is retried - and routed again
+// only under its entryId; and a distributed write's participant results are
+// walked for the partition answers they carry.
+test('isRetryableControlPlaneError lists a committed write\'s environmental ' +
+  'application failure as not failed for good, and walks participant results',
+async (t) => {
+  const {
+    PARTITION_WRITE_RELEASE_CAUSE: CAUSE,
+    buildPartitionWriteFailureResult,
+    buildReleasedPendingWriteAnswer,
+    isReroutableWriteFailureCode,
+  } = partitionWriteKernel;
+  // Input: the application's environmental failure, as its owner types it.
+  const environmental = buildPartitionWriteFailureResult(Object.assign(
+    new Error('database or disk is full'), {code:
+      PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED}),
+  TEST_PARTITION_ID);
+  t.equal(isRetryableControlPlaneError(environmental), true,
+    `the environmental failure is retried (${environmental.failureCode})`);
+  t.equal(isReroutableWriteFailureCode(environmental.failureCode), false,
+    'it is not routed again without its entryId');
+  t.equal(isReroutableWriteFailureCode(environmental.failureCode,
+    {carriesEntryId: true}), true, 'it is routed again under its entryId');
+  const unknown = buildReleasedPendingWriteAnswer({entryId: TEST_ENTRY_ID,
+    proposal: PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED, logIndex: null},
+  TEST_PARTITION_ID, {cause: CAUSE?.LEADERSHIP_LOST});
+  const constraint = {success: false, error: 'UNIQUE constraint failed',
+    failureCode: 'SQLITE_CONSTRAINT_PRIMARYKEY'};
+  const withParticipant = (participant) => ({
+    success: false,
+    error: 'an answer text no owner lists',
+    participantResults: [
+      {success: true, partitionId: 'classification-p0'},
+      {success: false, partitionId: TEST_PARTITION_ID,
+        error: 'a participant text no owner lists',
+        participantFailures: [participant]},
+    ],
+  });
+  t.equal(isRetryableControlPlaneError(withParticipant(unknown)), true,
+    'a participant result carrying an unknown outcome is retried');
+  t.equal(isRetryableControlPlaneError(withParticipant(constraint)), false,
+    'a participant result carrying a failed statement is not');
 });
 
 test('isRetryableControlPlaneError detects transaction lane contention', async (t) => {

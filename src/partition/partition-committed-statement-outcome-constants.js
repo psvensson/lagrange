@@ -16,6 +16,12 @@
 // committed entry that wrote them (`log_index`), so the table is compacted
 // together with the rs-raft log by the snapshot/log-bound quest; until then
 // it grows one row per committed statement, exactly like the log.
+//
+// `changes` (a recorded widening, quest reroute-carries-the-entry-id C2) is
+// the affected-row count of an APPLIED statement, so a replay answers the
+// rows the write changed; it is NULL for a STATEMENT_FAILED row and for a
+// row recorded before the column existed (a table created before it gains
+// the column at initialization, ADD_CHANGES_COLUMN).
 const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
   CREATE_TABLE: `
       CREATE TABLE IF NOT EXISTS _partition_statement_outcomes (
@@ -24,16 +30,21 @@ const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
         log_index INTEGER NOT NULL,
         term INTEGER NOT NULL,
         failure_code TEXT,
-        failure_message TEXT
+        failure_message TEXT,
+        changes INTEGER
       )
     `,
+  SELECT_COLUMNS: 'PRAGMA table_info(_partition_statement_outcomes)',
+  CHANGES_COLUMN: 'changes',
+  ADD_CHANGES_COLUMN:
+    'ALTER TABLE _partition_statement_outcomes ADD COLUMN changes INTEGER',
   SELECT_BY_ENTRY_KEY:
-    'SELECT outcome, log_index, term, failure_code, failure_message ' +
-    'FROM _partition_statement_outcomes WHERE entry_key = ?',
+    'SELECT outcome, log_index, term, failure_code, failure_message, ' +
+    'changes FROM _partition_statement_outcomes WHERE entry_key = ?',
   INSERT:
     'INSERT INTO _partition_statement_outcomes ' +
-    '(entry_key, outcome, log_index, term, failure_code, failure_message) ' +
-    'VALUES (?, ?, ?, ?, ?, ?)',
+    '(entry_key, outcome, log_index, term, failure_code, failure_message, ' +
+    'changes) VALUES (?, ?, ?, ?, ?, ?, ?)',
 });
 
 // Whether an entry key has a recorded terminal outcome (R07: an absent row is

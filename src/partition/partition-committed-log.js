@@ -27,6 +27,18 @@ function readPartitionCommittedCommands(service) {
 }
 
 /**
+ * One applied proposal of the partition, by its log index.
+ * @param {Object} service - The partition (its open `db` and `partitionId`).
+ * @param {number} logIndex - The entry's index.
+ * @return {Object|null} Frozen {index, term, command} (index and term as
+ *   decimal strings), or null when the log holds no applied proposal there.
+ */
+function readPartitionCommittedCommandAt(service, logIndex) {
+  return RaftRsDurableStore.readCommittedEntryAtIn(
+    service.db, service.partitionId, logIndex);
+}
+
+/**
  * The partition's durable applied index: the last entry its state machine
  * holds, written atomically with the state machine's SQL.
  * @param {Object} service - The partition (its open `db` and `partitionId`).
@@ -38,4 +50,8 @@ function readPartitionAppliedIndex(service) {
     service.db, service.partitionId);
 }
 
-export {readPartitionAppliedIndex, readPartitionCommittedCommands};
+export {
+  readPartitionAppliedIndex,
+  readPartitionCommittedCommandAt,
+  readPartitionCommittedCommands,
+};

@@ -42,22 +42,31 @@ import {
   PARTITION_SQLITE_RESULT_CODE,
 } from './partition-committed-statement-outcome-constants.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {readPartitionCommittedCommandAt} from './partition-committed-log.js';
 
 const {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_VALUE,
+  TABLES,
   buildDurableCommitWitness,
 } = PARTITION_SERVICE_SHARED;
 
 /**
  * Create the outcome table (DDL; run once at partition initialization, after
- * the legacy-state detector).
+ * the legacy-state detector). A table created before the affected-row count
+ * was recorded gains its column here.
  * @param {Object} db - The partition's connection.
  */
 function createCommittedStatementOutcomeTable(db) {
   db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE);
+  const columns = db.prepare(
+    PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.SELECT_COLUMNS).all();
+  if (!columns.some((column) => column.name ===
+      PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CHANGES_COLUMN)) {
+    db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.ADD_CHANGES_COLUMN);
+  }
 }
 
 const UNSETTLED_RECORD = Object.freeze({
@@ -70,7 +79,8 @@ const UNSETTLED_RECORD = Object.freeze({
  * @param {Object} service - The partition (its `db`).
  * @param {string} entryKey - The committed entry key.
  * @return {Object} Frozen {state} (a PARTITION_COMMITTED_STATEMENT_RECORD_STATE)
- *   and, when SETTLED, {outcome, logIndex, term, failureCode, failureMessage}.
+ *   and, when SETTLED, {outcome, logIndex, term, failureCode, failureMessage,
+ *   changes} (`changes` null when the row recorded none).
  */
 function readCommittedStatementOutcome(service, entryKey) {
   const row = service.db
@@ -86,6 +96,7 @@ function readCommittedStatementOutcome(service, entryKey) {
     term: Number(row.term),
     failureCode: row.failure_code,
     failureMessage: row.failure_message,
+    changes: row.changes === null ? null : Number(row.changes),
   });
 }
 
@@ -93,15 +104,17 @@ function readCommittedStatementOutcome(service, entryKey) {
  * Record an entry key's terminal outcome, inside the application
  * transaction.
  * @param {Object} service - The partition (its `db`).
- * @param {Object} outcome - {entryKey, outcome, index, term, error}; `error`
- *   only for STATEMENT_FAILED.
+ * @param {Object} outcome - {entryKey, outcome, index, term, error, changes};
+ *   `error` only for STATEMENT_FAILED, `changes` (the affected-row count)
+ *   only for APPLIED.
  */
 function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
-  term, error = null}) {
+  term, error = null, changes = null}) {
   service.db.prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT).run(
     entryKey, outcome, index, term,
     error === null ? null : failureCodeOf(error),
-    error === null ? null : String(error.message));
+    error === null ? null : String(error.message),
+    changes);
 }
 
 /**
@@ -165,38 +178,84 @@ function statementEnvironmentFailure(error) {
 }
 
 /**
+ * The node of a replica of this partition, as the partition's services rows
+ * name it (the source its peer addresses are resolved from); null when no
+ * row names it.
+ * @param {Object} service - The partition.
+ * @param {string} replicaId - The replica.
+ * @return {string|null} Its node id.
+ */
+function replicaNodeIdOf(service, replicaId) {
+  if (replicaId === service.replicaId) {
+    return service.nodeId;
+  }
+  const row = service.systemTableCache?.get?.(TABLES.SERVICES, replicaId);
+  return typeof row?.node_id === 'string' && row.node_id.length > 0 ?
+    row.node_id : null;
+}
+
+/**
+ * The durable commit witness of a replayed entry: the committed entry of the
+ * durable log at the row's index - the replica that proposed it, and the
+ * term and index it was applied at - never the replica answering the replay.
+ * No witness when the log no longer holds the entry (compacted), holds
+ * another entry there, or no services row names the proposer's node: the
+ * answer is then an unwitnessed replay.
+ * @param {Object} service - The partition.
+ * @param {Object} recorded - The SETTLED APPLIED record.
+ * @param {string} entryId - The replayed entry.
+ * @return {Object} {durableCommitWitness} or {}.
+ */
+function replayedCommitWitness(service, recorded, entryId) {
+  const logged = readPartitionCommittedCommandAt(service, recorded.logIndex);
+  if (logged === null || logged.command?.entryId !== entryId ||
+      Number(logged.term) !== recorded.term) {
+    return {};
+  }
+  const proposer = logged.command.proposedBy;
+  const proposerNodeId = replicaNodeIdOf(service, proposer);
+  if (proposerNodeId === null) {
+    return {};
+  }
+  return {durableCommitWitness: buildDurableCommitWitness({
+    partitionId: service.partitionId,
+    leaderNodeId: proposerNodeId,
+    leaderReplicaId: proposer,
+    logEntry: {term: recorded.term, index: recorded.logIndex,
+      data: logged.command},
+  })};
+}
+
+/**
  * The answer to a settled entry key, built from its outcome row alone: the
  * same answer wherever and whenever it is asked - a retry before it is
  * proposed, in process or after a restart, or a retry that was proposed and
  * reached the application. An APPLIED row answers an idempotent replay with
- * the durable commit witness this replica attests (the entry and the term and
- * index it was applied at); a STATEMENT_FAILED row answers the original
- * failure.
+ * the affected-row count the write had and the durable commit witness of the
+ * committed entry (its proposer, term and index, from the durable log); a
+ * STATEMENT_FAILED row answers the original failure. Both name the entry.
  * @param {Object} service - The partition (its identity).
  * @param {Object} settled - {recorded, command}: the SETTLED record and the
  *   command asking.
  * @return {Object} The write result.
  */
 function answerSettledStatement(service, {recorded, command}) {
+  const entryId = typeof command.entryId === 'string' &&
+    command.entryId.length > 0 ? command.entryId : null;
   const settledAt = {
     partitionId: service.partitionId,
     logIndex: recorded.logIndex,
     replayOfLogIndex: recorded.logIndex,
+    ...(entryId === null ? {} : {entryId}),
   };
   if (recorded.outcome === PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED) {
     return {
       success: true,
-      changes: 0,
+      changes: recorded.changes,
       idempotentReplay: true,
       ...settledAt,
-      ...(typeof command.entryId === 'string' && command.entryId.length > 0 ?
-        {durableCommitWitness: buildDurableCommitWitness({
-          partitionId: service.partitionId,
-          leaderNodeId: service.nodeId,
-          leaderReplicaId: service.replicaId,
-          logEntry: {term: recorded.term, index: recorded.logIndex,
-            data: command},
-        })} : {}),
+      ...(entryId === null ? {} :
+        replayedCommitWitness(service, recorded, entryId)),
     };
   }
   return {

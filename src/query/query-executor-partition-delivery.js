@@ -16,6 +16,8 @@ import {
 import {
   resolvePartitionExecutionBuilders,
 } from './query-executor-partition-request-builders.js';
+import {pickPartitionWriteAnswerFields} from
+  '../partition/partition-write-kernel.js';
 
 const {
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
@@ -377,17 +379,18 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 ),
               };
             }
+            const redirectRequest = buildRequest({
+              partitionId,
+              address: response.leaderAddress,
+              redirectedFromAddress: address,
+              leaderAddress: response.leaderAddress,
+              sql,
+              params,
+              executionOptions,
+            });
             const redirectResponse = await this.messageRouter.deliver(
               response.leaderAddress,
-              buildRequest({
-                partitionId,
-                address: response.leaderAddress,
-                redirectedFromAddress: address,
-                leaderAddress: response.leaderAddress,
-                sql,
-                params,
-                executionOptions,
-              }),
+              redirectRequest,
               redirectRouterDeliveryOptions,
             );
             if (isSuccessfulResponse(redirectResponse)) {
@@ -424,7 +427,13 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               this.resolveControlPlaneWriteRetryDecision(
                 partitionId,
                 executionOptions,
-                redirectResponse,
+                {
+                  ...redirectResponse,
+                  ...this.describePartitionAnswer(
+                    redirectResponse,
+                    redirectRequest,
+                  ),
+                },
                 forRead,
               );
             recordCandidateFailure(
@@ -484,6 +493,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             continue;
           }
           const errorMessage = response.error || ERRORS.QUERY_FAILED;
+          const partitionAnswer = this.describePartitionAnswer(
+            response,
+            request,
+          );
           const controlPlaneWriteRetryDecision =
             this.resolveControlPlaneWriteRetryDecision(
               partitionId,
@@ -493,6 +506,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 errorCode: response?.errorCode,
                 retryAfterMs: response?.retryAfterMs,
                 deferRetry: response?.deferRetry,
+                ...partitionAnswer,
               },
               forRead,
             );
@@ -528,7 +542,11 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           }
           if (
             !forRead &&
-            this.isLeaderUnavailable(errorMessage, response?.errorCode)
+            this.isLeaderUnavailable(
+              errorMessage,
+              response?.errorCode,
+              partitionAnswer,
+            )
           ) {
             recordCandidateFailure(
               errorMessage,
@@ -571,6 +589,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           }
           return {
             ...buildFailureResult(errorMessage, {
+              ...pickPartitionWriteAnswerFields(response),
               errorCode: response?.errorCode,
               retryAfterMs: response?.retryAfterMs,
               deferRetry: response?.deferRetry,

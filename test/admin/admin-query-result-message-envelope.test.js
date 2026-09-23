@@ -111,6 +111,7 @@ test('admin query result envelope builds write payload messages', async (t) => {
       acceptingNodeId: 'node-2',
       acknowledgedAtMs: 1785630280000,
       durableCommitWitness: TEST_DURABLE_COMMIT_WITNESS,
+      idempotentReplay: false,
       complete: true,
     }],
   }, 'should project a bounded write receipt for the harness ledger');

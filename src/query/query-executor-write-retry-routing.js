@@ -1,5 +1,8 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
-import {isReroutableWriteError} from '../constants/errors.js';
+import {
+  isPartitionWriteFailureCode,
+  isReroutableWriteFailureCode,
+} from '../partition/partition-write-kernel.js';
 import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
@@ -15,6 +18,7 @@ const {
   ERRORS,
   PARTITION_SERVICE_ERROR_MSG,
   QUERY_EXECUTOR_LITERAL,
+  QUERY_MESSAGE_FIELD_ENTRY_ID,
   QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
   QUERY_ROUTING_REPAIR_REASON,
   SYSTEM_TABLE_NAMES,
@@ -380,19 +384,48 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
   }
 
   /**
-   * Check if an error indicates missing partition leadership.
-   * @param {string} errorMessage - Error message.
-   * @return {boolean} True if leader is unavailable.
+   * What the executor knows of one partition answer for its reroute
+   * admission: the write kernel's failureCode the answer carries, and
+   * whether the request it answered carried the write's entryId (a reroute
+   * then re-proposes the write under it).
+   * @param {Object|null} answer - The partition's answer.
+   * @param {Object|null} request - The request it answered.
+   * @return {{failureCode: *, carriesEntryId: boolean}}
    * @private
    */
-  isLeaderUnavailable(errorMessage, errorCode = null) {
+  describePartitionAnswer(answer, request) {
+    const entryId = request?.[QUERY_MESSAGE_FIELD_ENTRY_ID];
+    return {
+      failureCode: answer?.failureCode,
+      carriesEntryId: typeof entryId === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+        entryId.length > 0,
+    };
+  }
+
+  /**
+   * Whether a failed write delivery may be routed again to another replica.
+   * A partition write answer is admitted by the write kernel's code alone
+   * (an unknown outcome only when the request carries the write's entryId);
+   * a failure that is not a partition answer, by the transport's own
+   * signals (a closed connection, a message timeout, no handler, no
+   * connection, a failed forward).
+   * @param {string} errorMessage - Error message.
+   * @param {string|null} [errorCode=null] - The failure's error code.
+   * @param {Object|null} [partitionAnswer=null] - describePartitionAnswer.
+   * @return {boolean} True if the write may be routed again.
+   * @private
+   */
+  isLeaderUnavailable(errorMessage, errorCode = null, partitionAnswer = null) {
+    if (isPartitionWriteFailureCode(partitionAnswer?.failureCode)) {
+      return isReroutableWriteFailureCode(partitionAnswer.failureCode,
+        {carriesEntryId: partitionAnswer.carriesEntryId === true});
+    }
     if (errorCode === QUERY_EXECUTOR_LITERAL.STRING_ROUTER_CONNECTION_CLOSED) {
       return true;
     }
     return (
       errorMessage &&
-      (isReroutableWriteError(errorMessage) ||
-        errorMessage.includes(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT) ||
+      (errorMessage.includes(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT) ||
         errorMessage.includes(ERRORS.NO_HANDLER_FOR_ADDRESS) ||
         (errorMessage.includes(
           QUERY_EXECUTOR_LITERAL.STRING_CONNECTION_TO_NODE,
@@ -458,6 +491,12 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
       )
     ) {
       return false;
+    }
+    // A partition write answer widens by its code, as any reroute does: an
+    // unknown outcome only under the write's entryId.
+    if (isPartitionWriteFailureCode(failure?.failureCode)) {
+      return isReroutableWriteFailureCode(failure.failureCode,
+        {carriesEntryId: failure.carriesEntryId === true});
     }
     return isRetryableControlPlaneError(failure);
   }

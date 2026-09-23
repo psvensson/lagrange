@@ -1,3 +1,5 @@
+import {pickPartitionWriteAnswerFields} from
+  '../../partition/partition-write-kernel.js';
 
 function normalizeRetryAfterMs(value) {
   return Number.isFinite(value) && value >= 0 ?
@@ -37,6 +39,7 @@ function normalizePartitionExecutionFailureSnapshot(
   fallbackErrorMessage,
 ) {
   return {
+    ...pickPartitionWriteAnswerFields(failure),
     partitionId,
     status: partitionMetrics.status,
     error: normalizeFailureString(failure?.error) ||
@@ -65,6 +68,7 @@ function normalizePartitionExecutionFailureSnapshot(
  */
 function buildPartitionExecutionFailureOutcome(snapshot) {
   return {
+    ...pickPartitionWriteAnswerFields(snapshot),
     partitionId: snapshot.partitionId,
     success: false,
     status: snapshot.status,
@@ -94,11 +98,15 @@ function buildPartitionExecutionSuccessOutcome(
   result,
 ) {
   return {
+    ...pickPartitionWriteAnswerFields(result),
     partitionId,
     success: true,
     status: partitionMetrics.status,
     rows: result.rows || [],
     changes: result.changes,
+    durableCommitWitness: result.durableCommitWitness,
+    acceptingNodeId: result.acceptingNodeId,
+    acknowledgedAtMs: result.acknowledgedAtMs,
   };
 }
 

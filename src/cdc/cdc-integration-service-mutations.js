@@ -1,5 +1,8 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
-import {buildSystemTableMutationSqlParts} from './cdc-system-table-mutation-sql-helpers.js';
+import {
+  buildSystemTableMutationExecutionOptions,
+  buildSystemTableMutationSqlParts,
+} from './cdc-system-table-mutation-sql-helpers.js';
 
 const {
   CDCOperationType,
@@ -56,21 +59,8 @@ export async function deleteSystemTableRow(context, tableName, whereClause, opti
       const {whereStr, values} =
         buildSystemTableMutationSqlParts(CDC_OPERATION.DELETE, whereClause);
       const sql = `${SQL.DELETE_FROM} ${tableName} ${SQL.WHERE} ${whereStr}`;
-      const result = await context.executeSQL(sql, values, {
-        queryTimeoutMs: options?.queryTimeoutMs,
-        cancellationToken: options?.cancellationToken || null,
-        sessionId: options?.sessionId,
-        disableSystemWriteSession: options?.disableSystemWriteSession,
-        coalescingKey: options?.coalescingKey,
-        recoveryCandidateSelectionKey: options?.recoveryCandidateSelectionKey,
-        routingReadinessDimension: options?.routingReadinessDimension,
-        workloadClass: options?.workloadClass,
-        workClass: options?.workClass,
-        pressureRetryAfterMs: options?.pressureRetryAfterMs,
-        deliveryPriority: options?.deliveryPriority,
-        deliverySource: options?.deliverySource,
-        replacePendingKey: options?.replacePendingKey,
-      });
+      const result = await context.executeSQL(sql, values,
+        buildSystemTableMutationExecutionOptions(options));
       if (!result.success) {
         throw buildSystemTableMutationError(
           result,
@@ -189,21 +179,8 @@ export async function upsertSystemTableRow(context, tableName, data, options = {
       const sql =
         `${SQL.INSERT_OR_REPLACE_INTO} ${tableName} (${columns}) ` +
         `${SQL.VALUES} (${placeholders})`;
-      const result = await context.executeSQL(sql, values, {
-        queryTimeoutMs: options?.queryTimeoutMs,
-        cancellationToken: options?.cancellationToken || null,
-        sessionId: options?.sessionId,
-        disableSystemWriteSession: options?.disableSystemWriteSession,
-        coalescingKey: options?.coalescingKey,
-        recoveryCandidateSelectionKey: options?.recoveryCandidateSelectionKey,
-        routingReadinessDimension: options?.routingReadinessDimension,
-        workloadClass: options?.workloadClass,
-        workClass: options?.workClass,
-        pressureRetryAfterMs: options?.pressureRetryAfterMs,
-        deliveryPriority: options?.deliveryPriority,
-        deliverySource: options?.deliverySource,
-        replacePendingKey: options?.replacePendingKey,
-      });
+      const result = await context.executeSQL(sql, values,
+        buildSystemTableMutationExecutionOptions(options));
       if (!result.success) {
         throw buildSystemTableMutationError(
           result,

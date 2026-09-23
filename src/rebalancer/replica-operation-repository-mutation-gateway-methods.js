@@ -1,6 +1,5 @@
-import {isReroutableWriteError} from '../constants/errors.js';
-import {isReroutableWriteFailureCode} from
-  '../partition/partition-write-kernel.js';
+import {hasReroutableWriteFailure} from
+  '../control-plane/control-plane-error-classification.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
@@ -8,6 +7,8 @@ const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
 const REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_PREFIX =
   'control-plane:write';
 const REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_SEPARATOR = ':';
+const REPLICA_OPERATION_MUTATION_IDEMPOTENCY_KEY_PREFIX =
+  'replica-operation-mutation-';
 
 function assignReplicaOperationRepositoryMutationGatewayMethods(
   ReplicaOperationRepository,
@@ -49,10 +50,12 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     async executeOperationMutationWithRetry(sql, params, options = {}) {
       const startedAt = this.timeSource.now();
       let retryAttempt = 0;
+      const idempotencyKey = this.mintOperationMutationIdempotencyKey();
       while (true) {
         const queryOptions = this.buildOperationMutationQueryOptions(
           options,
           retryAttempt,
+          idempotencyKey,
         );
         let result = null;
         try {
@@ -101,10 +104,12 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       let retryAttempt = 0;
       const shouldRetryDeferredCanonicalMutation =
         this.canUseReplicaOperationMutationIngress(mutation?.operation);
+      const idempotencyKey = this.mintOperationMutationIdempotencyKey();
       while (true) {
         const queryOptions = this.buildOperationMutationQueryOptions(
           options,
           retryAttempt,
+          idempotencyKey,
         );
         let result = null;
         try {
@@ -238,16 +243,15 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
 
     isRetryableOperationPersistError(errorResult) {
       // A partition write answer is classified by the control plane's one
-      // classifier: by its code when the result carries it, by its text when
-      // only the text reached the repository.
+      // classifier (by its code; its text only when nothing but the text
+      // reached the repository); the texts below are not write answers.
       if (isRetryableControlPlaneError(errorResult)) {
         return true;
       }
       const errorMessage = this.getOperationPersistErrorMessage(errorResult);
       return (
         typeof errorMessage === 'string' &&
-        (isReroutableWriteError(errorMessage) ||
-          errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
+        (errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
           RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS.some((fragment) =>
             errorMessage.includes(fragment),
           ) ||
@@ -379,9 +383,11 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       if (!this.isRetryableOperationPersistError(errorResult)) {
         return false;
       }
-      // A partition write answer that carries its code is routed again by
-      // it; otherwise the error's text and shape decide.
-      return isReroutableWriteFailureCode(errorResult?.failureCode) ||
+      // A partition write answer linked to the failure is routed again by
+      // its code (every attempt of one mutation carries the mutation's
+      // identity, so an unknown outcome too); otherwise the failure's
+      // routing signature decides.
+      return hasReroutableWriteFailure(errorResult, {carriesEntryId: true}) ||
         this.hasOperationMutationRouteRepairSignature(errorResult);
     }
 
@@ -395,7 +401,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       }
       return (
         hasControlPlaneMutationRoutingGapFailureSignature(errorResult) ||
-        isReroutableWriteError(errorMessage) ||
         errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
         RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS.some((fragment) =>
           errorMessage.includes(fragment),
@@ -503,7 +508,20 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       );
     }
 
-    buildOperationMutationQueryOptions(options = {}, retryAttempt = 0) {
+    /**
+     * The identity of one logical replica-operation mutation (quest
+     * reroute-carries-the-entry-id, C1): minted once per mutation call,
+     * outside its retry loop, so every attempt of the call carries it and
+     * the partition answers a retry of a write it applied from its outcome
+     * row; a new call is a new mutation.
+     * @return {string} The mutation's idempotency key.
+     */
+    mintOperationMutationIdempotencyKey() {
+      return `${REPLICA_OPERATION_MUTATION_IDEMPOTENCY_KEY_PREFIX}${uuidv4()}`;
+    }
+
+    buildOperationMutationQueryOptions(options = {}, retryAttempt = 0,
+      idempotencyKey = null) {
       const timeoutBudget =
         options.timeoutBudget &&
         typeof options.timeoutBudget ===
@@ -552,6 +570,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         ...(coalescingKey ? {coalescingKey} : {}),
         ...(deliverySource ? {deliverySource} : {}),
         ...(coalescingKey ? {replacePendingKey: coalescingKey} : {}),
+        ...(idempotencyKey ? {idempotencyKey} : {}),
       };
     }
 

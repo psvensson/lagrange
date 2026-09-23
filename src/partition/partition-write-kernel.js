@@ -42,16 +42,25 @@ const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
 });
 const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
 
+// The environmental failure of a committed write's own application (the
+// host failed while applying it after it committed; the application failed
+// closed and the entry is applied again when the host recovers): the write
+// is committed, so it did not fail for good.
+const STATEMENT_ENVIRONMENT_FAILED =
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED;
+
 // The answers of a write that did not fail for good: a caller may retry it -
 // route it again to the current leader, or here once the state it names has
 // passed. A host failure while proposing is not among them: its retryability
-// is the port's, and the caller decides. An unknown outcome is among them,
-// but it is routed again only by a caller that re-proposes the write under
-// its own entryId: the retry is then idempotent (the write's outcome row
-// answers it), while a re-proposal under a fresh id may apply it twice. The
-// errors owner lists each code's text for the callers that receive only a
-// text (isRetryableWriteError); the unknown outcome's text is never routed
-// again (REROUTABLE_WRITE_ERROR_FRAGMENTS), since a text carries no entryId.
+// is the port's, and the caller decides. An unknown outcome and the
+// environmental failure of a committed write's application are among them,
+// but they are routed again only by a caller that re-proposes the write
+// under its own entryId (ENTRY_ID_BOUND_RETRY_CODES): the retry is then
+// idempotent (the write's outcome row answers it), while a re-proposal under
+// a fresh id may apply it twice. Partition write answers carry their code
+// across the wire (PARTITION_WRITE_ANSWER_FIELDS), so a caller routes them
+// by it; the errors owner keeps each code's text only for the control
+// plane's retry of a failure that reached it as text (isRetryableWriteError).
 const RETRYABLE_WRITE_FAILURE_CODES = Object.freeze([
   REFUSAL.NOT_LEADER,
   REFUSAL.CONSENSUS_RECOVERY_REQUIRED,
@@ -61,7 +70,42 @@ const RETRYABLE_WRITE_FAILURE_CODES = Object.freeze([
   REFUSAL.BACKPRESSURE,
   REFUSAL.SERVICE_SHUTDOWN,
   REFUSAL.COMMIT_DEADLINE_EXCEEDED,
+  STATEMENT_ENVIRONMENT_FAILED,
 ]);
+const ENTRY_ID_BOUND_RETRY_CODES = Object.freeze([
+  REFUSAL.OUTCOME_UNKNOWN,
+  STATEMENT_ENVIRONMENT_FAILED,
+]);
+
+// The typed fields of a partition write answer, which cross every boundary
+// (the transport query reply, the query executor's results and errors) as
+// the partition answered them (quest reroute-carries-the-entry-id, C3).
+const PARTITION_WRITE_ANSWER_FIELDS = Object.freeze([
+  'failureCode',
+  'retryAfterMs',
+  'consensus',
+  'entryId',
+  'idempotentReplay',
+  'logIndex',
+  'replayOfLogIndex',
+  'changes',
+]);
+
+/**
+ * The typed fields a partition write answer carries, as it carries them.
+ * @param {Object|null} answer - A partition write answer (or an error that
+ *   carries one).
+ * @return {Object} The PARTITION_WRITE_ANSWER_FIELDS it has.
+ */
+function pickPartitionWriteAnswerFields(answer) {
+  const fields = {};
+  for (const field of PARTITION_WRITE_ANSWER_FIELDS) {
+    if (answer?.[field] !== undefined) {
+      fields[field] = answer[field];
+    }
+  }
+  return fields;
+}
 
 // Why pending writes are released without an answer from consensus: their
 // replica stopped leading, their commit deadline passed, or their service is
@@ -92,10 +136,12 @@ const RELEASED_UNPROPOSED_ANSWER = Object.freeze({
 /**
  * Whether a code is one the write kernel answers a failed write with.
  * @param {*} code - A failureCode.
- * @return {boolean} Whether it is a PARTITION_WRITE_LEADERSHIP_REFUSAL.
+ * @return {boolean} Whether it is a PARTITION_WRITE_LEADERSHIP_REFUSAL or
+ *   the environmental failure of a committed write's application.
  */
 function isPartitionWriteFailureCode(code) {
-  return Object.values(REFUSAL).includes(code);
+  return Object.values(REFUSAL).includes(code) ||
+    code === STATEMENT_ENVIRONMENT_FAILED;
 }
 
 /**
@@ -111,8 +157,8 @@ function isRetryableWriteFailureCode(code) {
 
 /**
  * Whether a caller may route a write answer again, by its failureCode: an
- * unknown outcome only when the caller re-proposes the write under its own
- * entryId.
+ * unknown outcome (or a committed write's environmental application failure)
+ * only when the caller re-proposes the write under its own entryId.
  * @param {*} code - A write answer's failureCode.
  * @param {Object} [options] - What the caller carries.
  * @param {boolean} [options.carriesEntryId=false] - Whether the caller
@@ -121,7 +167,7 @@ function isRetryableWriteFailureCode(code) {
  */
 function isReroutableWriteFailureCode(code, {carriesEntryId = false} = {}) {
   return isRetryableWriteFailureCode(code) &&
-    (code !== REFUSAL.OUTCOME_UNKNOWN || carriesEntryId === true);
+    (!ENTRY_ID_BOUND_RETRY_CODES.includes(code) || carriesEntryId === true);
 }
 
 const PARTITION_WRITE_KERNEL_LITERAL = Object.freeze({
@@ -301,6 +347,20 @@ function buildPartitionWriteLeadershipRefusal(status, partitionId) {
   };
 }
 
+/**
+ * The error a replica that neither leads nor knows a leader to forward to
+ * throws for a write: typed NOT_LEADER, as buildPartitionWriteLeadershipRefusal
+ * answers it, so the answer the transport carries is routed by its code.
+ * @param {string} partitionId - The partition.
+ * @return {Error} The typed error.
+ */
+function buildPartitionWriteNotLeaderError(partitionId) {
+  return Object.assign(new Error(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE), {
+    failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
+    partitionId,
+  });
+}
+
 // The answer of a pending write released without an answer from consensus,
 // from what the proposal queue knew of it and why it was released ({cause},
 // a PARTITION_WRITE_RELEASE_CAUSE, and the deadline for a passed commit
@@ -394,10 +454,14 @@ function buildPartitionWriteProposalRefusal(refusal, rejection,
   };
 }
 
+// A write's own failure; one the kernel types (a committed write's
+// environmental application failure) keeps its code as its failureCode.
 function buildPartitionWriteFailureResult(error, partitionId, logIndex = null) {
   const result = {
     success: false,
     error: error?.message || String(error),
+    ...(isPartitionWriteFailureCode(error?.code) ?
+      {failureCode: error.code} : {}),
     partitionId,
   };
   if (Number.isFinite(logIndex)) {
@@ -448,6 +512,7 @@ export {
   buildPartitionWriteEntry,
   buildPartitionWriteFailureResult,
   buildPartitionWriteLeadershipRefusal,
+  buildPartitionWriteNotLeaderError,
   buildPartitionWriteProposalRefusal,
   buildPartitionWriteSideEffectPlan,
   buildReleasedPendingWriteAnswer,
@@ -455,5 +520,6 @@ export {
   isPartitionWriteFailureCode,
   isReroutableWriteFailureCode,
   isRetryableWriteFailureCode,
+  pickPartitionWriteAnswerFields,
   resolvePartitionWriteCommitMode,
 };

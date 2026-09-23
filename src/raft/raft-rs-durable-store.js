@@ -119,6 +119,15 @@ function readRecordTable(table, read) {
 /**
  * The durable Raft record for the raft-rs-wasm backend.
  */
+// One applied proposal row, decoded through the proposal codec.
+function decodedCommittedEntry(row) {
+  return Object.freeze({
+    index: fromExactInteger(row.log_index),
+    term: fromExactInteger(row.term),
+    command: decodeCommittedProposal(Buffer.from(row.data, PAYLOAD_ENCODING)),
+  });
+}
+
 class RaftRsDurableStore {
   /**
    * @param {Object} db - The replica's own better-sqlite3 database.
@@ -429,12 +438,30 @@ class RaftRsDurableStore {
     }
     return db.prepare(RAFT_RS_SQL.SELECT_APPLIED_PROPOSAL_ENTRIES)
       .safeIntegers(true).all(groupId, RAFT_RS_ENTRY_TYPE.NORMAL)
-      .map((row) => Object.freeze({
-        index: fromExactInteger(row.log_index),
-        term: fromExactInteger(row.term),
-        command: decodeCommittedProposal(
-          Buffer.from(row.data, PAYLOAD_ENCODING)),
-      }));
+      .map(decodedCommittedEntry);
+  }
+
+  /**
+   * Read one applied proposal of a group, by its index, from an existing
+   * connection: the record readCommittedEntriesIn returns at that index.
+   * Read-only and DDL-free. An index the log no longer holds (compacted) or
+   * does not hold applied is not there.
+   * @param {Object} db - An open better-sqlite3 database.
+   * @param {string} groupId - The group.
+   * @param {number|string} logIndex - The entry's index.
+   * @return {Object|null} Frozen {index, term, command}, or null.
+   */
+  static readCommittedEntryAtIn(db, groupId, logIndex) {
+    const {present} = db.prepare(
+      RAFT_RS_SQL.COUNT_LOG_AND_APPLIED_STATE_TABLES).get();
+    if (present !== LOG_AND_APPLIED_STATE_TABLE_COUNT) {
+      return null;
+    }
+    const row = db.prepare(RAFT_RS_SQL.SELECT_APPLIED_PROPOSAL_ENTRY_AT)
+      .safeIntegers(true)
+      .get(groupId, RAFT_RS_ENTRY_TYPE.NORMAL,
+        toExactInteger(String(logIndex)));
+    return row === undefined ? null : decodedCommittedEntry(row);
   }
 
   /**

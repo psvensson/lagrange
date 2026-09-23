@@ -1,5 +1,8 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
-import {buildSystemTableMutationSqlParts} from './cdc-system-table-mutation-sql-helpers.js';
+import {
+  buildSystemTableMutationExecutionOptions,
+  buildSystemTableMutationSqlParts,
+} from './cdc-system-table-mutation-sql-helpers.js';
 import {hydrateCdcPropagatedTablesFromAuthority} from
   './cdc-integration-service-authoritative-catchup.js';
 
@@ -244,22 +247,8 @@ class CDCIntegrationServiceMutationOperations {
           `${options?.ignoreExisting === true ? SQL.INSERT_OR_IGNORE_INTO : SQL.INSERT_INTO} ${tableName} (${columns}) ` +
           `${SQL.VALUES} (${placeholders})`;
         const sqlStartMs = this.timeSource.now();
-        const result = await this.executeSQL(sql, values, {
-          queryTimeoutMs: options?.queryTimeoutMs,
-          cancellationToken: options?.cancellationToken || null,
-          routingReadinessDimension: options?.routingReadinessDimension,
-          workloadClass: options?.workloadClass,
-          workClass: options?.workClass,
-          pressureRetryAfterMs: options?.pressureRetryAfterMs,
-          deliveryPriority: options?.deliveryPriority,
-          deliverySource: options?.deliverySource,
-          replacePendingKey: options?.replacePendingKey,
-          sessionId: options?.sessionId,
-          disableSystemWriteSession: options?.disableSystemWriteSession,
-          coalescingKey: options?.coalescingKey,
-          recoveryCandidateSelectionKey:
-            options?.recoveryCandidateSelectionKey,
-        });
+        const result = await this.executeSQL(sql, values,
+          buildSystemTableMutationExecutionOptions(options));
         const sqlDurationMs = this.timeSource.now() - sqlStartMs;
         if (!result.success) {
           throw buildSystemTableMutationError(
@@ -425,22 +414,7 @@ class CDCIntegrationServiceMutationOperations {
         const result = await this.executeSQL(
           sql,
           [...setValues, ...whereValues],
-          {
-            queryTimeoutMs: options?.queryTimeoutMs,
-            cancellationToken: options?.cancellationToken || null,
-            sessionId: options?.sessionId,
-            disableSystemWriteSession: options?.disableSystemWriteSession,
-            coalescingKey: options?.coalescingKey,
-            recoveryCandidateSelectionKey:
-              options?.recoveryCandidateSelectionKey,
-            routingReadinessDimension: options?.routingReadinessDimension,
-            workloadClass: options?.workloadClass,
-            workClass: options?.workClass,
-            pressureRetryAfterMs: options?.pressureRetryAfterMs,
-            deliveryPriority: options?.deliveryPriority,
-            deliverySource: options?.deliverySource,
-            replacePendingKey: options?.replacePendingKey,
-          },
+          buildSystemTableMutationExecutionOptions(options),
         );
         const sqlDurationMs = this.timeSource.now() - sqlStartMs;
         if (!result.success) {

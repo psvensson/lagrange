@@ -62,8 +62,11 @@ const RATCHET_TARGETS = [
     // cutover deleted the v1 solver (checker hint).
     // 2026-09-21: tightened 57/1845 -> 56/1815 after the raft-rs operation
     // port removed the duplicated node/control implementation surface.
+    // 2026-09-23: tightened 56/1815 -> 56/1812 (checker hint) when the CDC
+    // row mutations took their executeSQL options from one owner (quest
+    // reroute-carries-the-entry-id).
     baselineCloneGroupCount: 56,
-    baselineDuplicatedLineCount: 1815,
+    baselineDuplicatedLineCount: 1812,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },

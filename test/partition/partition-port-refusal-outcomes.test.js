@@ -159,6 +159,9 @@ async () => {
         'the error carries what the port answered');
       assert.equal(error.phase, CAMPAIGN_REFUSAL.phase ?? null,
         'and names the port\'s phase (none here)');
+      assert.equal(error.message.includes(
+        `in phase ${CAMPAIGN_REFUSAL.phase}`), false,
+      `its text names no phase the port did not answer (${error.message})`);
       assert.equal(service.initialized, false, 'the partition is not initialized');
       assert.equal(service.raft, null, 'the port was released');
       assert.equal(service.db, null, 'the database handle was released');

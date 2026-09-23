@@ -87,8 +87,10 @@ import {
 import {resolveSystemTableMutationDeliveryPriority} from '../bootstrap/system-partition-classification.js';
 import {getSystemCachePrimaryKeyFieldOrFallback} from '../cache/system-cache-key-descriptor.js';
 import {isTableInternalCachePropagationEnabled} from '../cache/cdc-table-policy.js';
-import {isReroutableWriteFailureCode} from
-  '../partition/partition-write-kernel.js';
+import {
+  isPartitionWriteFailureCode,
+  isReroutableWriteFailureCode,
+} from '../partition/partition-write-kernel.js';
 import {CDCEventHandler} from './cdc-event-handler.js';
 import {
   CDC_CONFIG_KEY,
@@ -413,11 +415,14 @@ function isSystemTableOwnerHandoffFailure(errorLike, fallbackTableName = null) {
   if (!tableName) {
     return false;
   }
+  // A partition write answer is handed off by its code alone (an unknown
+  // outcome never: the handoff does not carry the write's entryId); a
+  // failure that is not one, by its routing and transport signals.
+  if (isPartitionWriteFailureCode(errorLike?.failureCode)) {
+    return isReroutableWriteFailureCode(errorLike.failureCode);
+  }
   const errorCode = getControlPlaneErrorCode(errorLike);
-  // A partition write answer the caller holds is routed again by its code;
-  // one that reached it only as text, by the fragments below.
-  if (errorCode === QUERY_ERROR_CODE.ROUTER_CONNECTION_CLOSED ||
-      isReroutableWriteFailureCode(errorLike?.failureCode)) {
+  if (errorCode === QUERY_ERROR_CODE.ROUTER_CONNECTION_CLOSED) {
     return true;
   }
   const errorMessage = getControlPlaneErrorMessage(errorLike);

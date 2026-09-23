@@ -1,9 +1,5 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {
-  isPartitionWriteFailureCode,
-  isReroutableWriteFailureCode,
-} from '../partition/partition-write-kernel.js';
-import {
   PARTITION_TRANSITION_STATE,
 } from '../partition/partition-constants.js';
 import {
@@ -11,9 +7,11 @@ import {
   resolveControlPlaneSystemTableDeliverySource,
 } from '../control-plane/control-plane-system-table-gateway-shared.js';
 import {
+  resolveRoutedMutationIdempotencyKey,
   resolveRoutedSystemTableMutationCoalescingKey,
   resolveRoutedSystemWriteRecoveryCandidateSelectionKey,
 } from './cdc-routed-system-write-selection.js';
+import {sendLocalSystemTableWrite} from './cdc-local-system-table-write-lane.js';
 import {
   buildControlPlaneWorkloadProfile,
 } from '../control-plane/control-plane-workload-profile.js';
@@ -98,7 +96,9 @@ class CDCRoutedMutationReadiness {
       PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
   }
 
-  async tryExecuteLocalSystemTableWrite(sql, params = []) {
+  // Under the routed mutation's key every local service is sent the write
+  // under the entryId the coordinator derives for it (the local lane).
+  async tryExecuteLocalSystemTableWrite(sql, params = [], idempotencyKey = null) {
     if (!sql || typeof sql !== 'string') {
       return {
         handled: false,
@@ -136,51 +136,8 @@ class CDCRoutedMutationReadiness {
         handled: false,
       };
     }
-    for (const partitionService of localServices) {
-      if (typeof partitionService?.executeQuery !== 'function') {
-        continue;
-      }
-      try {
-        const localResult = await partitionService.executeQuery(sql, params);
-        const result = this.normalizeLocalSystemTableWriteResult(localResult);
-        if (this.isLocalSystemTableWriteRoutedOn(result)) {
-          continue;
-        }
-        return {
-          handled: true,
-          result,
-        };
-      } catch (error) {
-        if (
-          this.isTransientCdcError(
-            error?.message || CDC_INTEGRATION_SERVICE_LITERAL.EMPTY,
-          )
-        ) {
-          continue;
-        }
-        throw error;
-      }
-    }
-    return {
-      handled: false,
-    };
-  }
-
-  /**
-   * Whether the local partition's answer to a system-table write sends it on
-   * to the next local service: a typed answer only when its code says it may
-   * be sent again without its entryId (never an unknown outcome: it may have
-   * committed here), an untyped one by its text.
-   * @param {Object|null} result - The local partition's answer.
-   * @return {boolean} Whether the write is sent on.
-   */
-  isLocalSystemTableWriteRoutedOn(result) {
-    if (result && result.success !== false) {
-      return false;
-    }
-    return isPartitionWriteFailureCode(result?.failureCode) ?
-      isReroutableWriteFailureCode(result.failureCode) :
-      this.isTransientCdcError(result?.error || '');
+    return sendLocalSystemTableWrite(this, localServices, {sql, params,
+      idempotencyKey});
   }
 
   validateTableName(tableName) {
@@ -509,7 +466,9 @@ class CDCRoutedMutationReadiness {
       operationKind: CONTROL_PLANE_SQL_OPERATION.WRITE,
       coalescingKey,
     });
+    const idempotencyKey = resolveRoutedMutationIdempotencyKey(options, uuidv4);
     const baseQueryOptions = {
+      idempotencyKey,
       recoveryCandidateSelectionKey:
         this.resolveSystemWriteRecoveryCandidateSelectionKey(
           tableName,
@@ -579,6 +538,7 @@ class CDCRoutedMutationReadiness {
           const localWriteResult = await this.tryExecuteLocalSystemTableWrite(
             sql,
             params,
+            idempotencyKey,
           );
           if (localWriteResult.handled) {
             return localWriteResult.result;

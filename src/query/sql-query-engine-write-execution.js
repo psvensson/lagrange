@@ -21,6 +21,12 @@ const WRITE_TRANSACTION_OWNERSHIP = Object.freeze({
   STATEMENT_AUTOCOMMIT: 'STATEMENT_AUTOCOMMIT',
 });
 const STATEMENT_AUTOCOMMIT_SESSION_PREFIX = 'statement-autocommit';
+// The write identity a client may supply with a statement (quest
+// reroute-carries-the-entry-id, C1).
+const CLIENT_WRITE_IDENTITY_FIELDS = Object.freeze([
+  'idempotencyKey',
+  'operationId',
+]);
 
 class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMethods {
   /**
@@ -63,6 +69,31 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       expectedPartitionVersion:
         this.resolveWriteFencePartitionVersion(tableInfo),
     }, queryOptions);
+  }
+
+  /**
+   * The write plan options of a statement, and the client-facing identity
+   * boundary of a write: the idempotency key and operation id the client
+   * supplied pass unchanged into the plan (the coordinator derives each
+   * participant's entryId from the key). A client that supplies none gets a
+   * fresh identity per submission.
+   * @param {string} sessionId - Owning session.
+   * @param {Object} queryOptions - Caller query options.
+   * @param {Array<string>} [partitionIds] - The planned partitions (UPDATE
+   *   and DELETE).
+   * @return {Object} The createWritePlan options.
+   * @private
+   */
+  buildWritePlanOptions(sessionId, queryOptions, partitionIds = undefined) {
+    const planOptions = partitionIds === undefined ?
+      {sessionId} : {sessionId, partitionIds};
+    for (const field of CLIENT_WRITE_IDENTITY_FIELDS) {
+      const value = queryOptions?.[field];
+      if (typeof value === 'string' && value.length > 0) {
+        planOptions[field] = value;
+      }
+    }
+    return planOptions;
   }
 
   resolveWriteTransactionOwnership(sessionId, writePlan) {
@@ -183,7 +214,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     const writePlan = this.distributedWriteCoordinator.createWritePlan(
       ast,
       params,
-      {sessionId},
+      this.buildWritePlanOptions(sessionId, queryOptions),
     );
     this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
 
@@ -348,10 +379,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     const writePlan = this.distributedWriteCoordinator.createWritePlan(
       ast,
       params,
-      {
-        sessionId,
-        partitionIds,
-      },
+      this.buildWritePlanOptions(sessionId, queryOptions, partitionIds),
     );
     this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
     const writePartitions = Array.from(writePlan.partitionStatements.keys());
@@ -516,10 +544,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     const writePlan = this.distributedWriteCoordinator.createWritePlan(
       ast,
       params,
-      {
-        sessionId,
-        partitionIds,
-      },
+      this.buildWritePlanOptions(sessionId, queryOptions, partitionIds),
     );
     this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
     const writePartitions = Array.from(writePlan.partitionStatements.keys());

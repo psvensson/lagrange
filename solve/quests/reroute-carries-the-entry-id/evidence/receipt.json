@@ -1,50 +1,45 @@
 {
   "schema": "test-receipt/1",
   "quest": "reroute-carries-the-entry-id",
-  "status": "fail",
+  "status": "pass",
   "testFileDigests": {
     "test/query/write-identity-end-to-end.test.js": "ac727c1365f655b53638827e593620896087a86ad3dbe7997f68545a86c1d459"
   },
-  "generatedAt": "2026-09-23T18:49:38.828Z",
+  "generatedAt": "2026-09-23T19:45:01.810Z",
   "receipts": [
     {
       "id": "rerouted-write-after-outcome-unknown-applies-once-and-answers-success",
-      "passed": false,
+      "passed": true,
       "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^rerouted write after outcome unknown applies once and answers success$\" test/query/write-identity-end-to-end.test.js",
       "detail": "Measured by ^rerouted write after outcome unknown applies once and answers success$",
-      "failure": "1 test(s) failed",
       "testFile": "test/query/write-identity-end-to-end.test.js"
     },
     {
       "id": "every-release-cause-reroutes-with-the-entry-id",
-      "passed": false,
+      "passed": true,
       "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every release cause reroutes with the entry id$\" test/query/write-identity-end-to-end.test.js",
       "detail": "Measured by ^every release cause reroutes with the entry id$",
-      "failure": "1 test(s) failed",
       "testFile": "test/query/write-identity-end-to-end.test.js"
     },
     {
       "id": "a-client-idempotency-key-makes-resubmission-idempotent",
-      "passed": false,
+      "passed": true,
       "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a client idempotency key makes resubmission idempotent$\" test/query/write-identity-end-to-end.test.js",
       "detail": "Measured by ^a client idempotency key makes resubmission idempotent$",
-      "failure": "1 test(s) failed",
       "testFile": "test/query/write-identity-end-to-end.test.js"
     },
     {
       "id": "write-answers-cross-the-wire-whole-and-reroute-admission-is-by-code",
-      "passed": false,
+      "passed": true,
       "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^write answers cross the wire whole and reroute admission is by code$\" test/query/write-identity-end-to-end.test.js",
       "detail": "Measured by ^write answers cross the wire whole and reroute admission is by code$",
-      "failure": "1 test(s) failed",
       "testFile": "test/query/write-identity-end-to-end.test.js"
     },
     {
       "id": "admin-receipt-binds-a-replayed-answer-by-entry-id",
-      "passed": false,
+      "passed": true,
       "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admin receipt binds a replayed answer by entry id$\" test/query/write-identity-end-to-end.test.js",
       "detail": "Measured by ^admin receipt binds a replayed answer by entry id$",
-      "failure": "1 test(s) failed",
       "testFile": "test/query/write-identity-end-to-end.test.js"
     }
   ]

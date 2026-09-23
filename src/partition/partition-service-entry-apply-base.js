@@ -22,6 +22,10 @@ import {
   settleFailedCommittedStatement,
   settleRecordedCommittedStatement,
 } from './partition-committed-statement-outcome.js';
+import {
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
+  pickPartitionWriteAnswerFields,
+} from './partition-write-kernel.js';
 
 const QUERY_RESULT_REQUEST_FIELD = Object.freeze({
   DEADLINE_MS: 'resultDeadlineMs',
@@ -710,6 +714,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         acknowledged: true,
         success: false,
         error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+        failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
         partitionId: this.partitionId,
       };
     }
@@ -748,7 +753,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       // NO_LEADER when a stale-topology commit guard refuses a unilateral
       // apply). The envelope must carry that outcome — collapsing it to
       // success acks a write that never landed and the coordinator stops
-      // re-routing to the true leader.
+      // re-routing to the true leader. A write answer crosses whole: its
+      // typed fields (code, retry time, consensus, entry, replay, index,
+      // affected rows) as the partition answered them.
       const resultSuccess = result?.success !== false;
       return {
         acknowledged: true,
@@ -757,6 +764,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         ...(resultSuccess || !result?.errorCode ?
           {} :
           {errorCode: result.errorCode}),
+        ...pickPartitionWriteAnswerFields(result),
         rows: result.rows,
         changes: result.changes,
         count: result.count,
@@ -780,6 +788,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         success: false,
         error: error.message,
         errorCode: error.code || null,
+        ...pickPartitionWriteAnswerFields(error),
         partitionId: this.partitionId,
       };
     }
@@ -1089,6 +1098,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
           outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
           index,
           term,
+          changes: info.changes,
         });
         if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
           afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));

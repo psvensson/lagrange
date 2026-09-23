@@ -13,8 +13,10 @@ import {
 } from './partition-committed-statement-outcome.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   './partition-committed-statement-outcome-constants.js';
-import {buildPartitionWriteLeadershipRefusal} from
-  './partition-write-kernel.js';
+import {
+  buildPartitionWriteLeadershipRefusal,
+  buildPartitionWriteNotLeaderError,
+} from './partition-write-kernel.js';
 import {
   PARTITION_COMMITTED_COMMAND_ORIGIN,
   admitCommittedCommand,
@@ -563,7 +565,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         );
       }
     }
-    throw new Error(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
+    throw buildPartitionWriteNotLeaderError(this.partitionId);
   }
   /**
    * Attach a CDC confirmation promise to the write result when the

@@ -1,4 +1,6 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {pickPartitionWriteAnswerFields} from
+  '../partition/partition-write-kernel.js';
 
 const {
   MIGRATION_PARTITION_OPERATION,
@@ -128,6 +130,7 @@ function resolvePartitionExecutionBuilders({
       QUERY_EXECUTOR_LITERAL.STRING_FUNCTION ?
       executionOptions.buildSuccessResult :
       (response) => ({
+        ...pickPartitionWriteAnswerFields(response),
         partitionId,
         success: true,
         rows: response.rows || [],

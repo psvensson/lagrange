@@ -1,4 +1,6 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {pickPartitionWriteAnswerFields} from
+  '../partition/partition-write-kernel.js';
 
 const {
   QUERY_EXECUTOR_LITERAL,
@@ -39,7 +41,8 @@ function resolveRetryableLeaderFailureRetryAfterMs({
       typeof failure?.code === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
         failure.code :
         null;
-  if (!executor.isLeaderUnavailable(errorMessage, errorCode)) {
+  if (!executor.isLeaderUnavailable(errorMessage, errorCode,
+    {failureCode: failure?.failureCode})) {
     return null;
   }
   const connectionState = executor.messageRouter.getConnectionState(
@@ -71,6 +74,7 @@ function buildQueryPartitionCandidateFailureDetails({
   participantAddress,
 }) {
   return {
+    ...pickPartitionWriteAnswerFields(failure),
     errorCode: failure?.errorCode || failure?.code,
     retryAfterMs: resolveRetryableLeaderFailureRetryAfterMs({
       executor,

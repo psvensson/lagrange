@@ -1,5 +1,4 @@
 import {ERRORS, NUM, TIME_MS} from '../constants/index.js';
-import {REROUTABLE_WRITE_ERROR_FRAGMENTS} from '../constants/errors.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {QUERY_ERROR_MSG} from '../query/query-constants.js';
 
@@ -40,9 +39,13 @@ const CDC_INTEGRATION_SERVICE_LITERAL = Object.freeze({
   TABLE_NAME_EXTRACTION_STATE_INVALID_INPUT: 'invalid_input',
   TABLE_NAME_EXTRACTION_STATE_NOT_FOUND: 'not_found',
 });
+// The routing and transport texts of a failure that is not a partition
+// write answer (a partition write answer is handed off by its code): no
+// handler, the query executor's own no-routable-leader outcome, no active
+// service, a routing failure, no connection, a failed forward, a timeout.
 const CDC_OWNER_HANDOFF_ROUTING_ERROR_FRAGMENTS = Object.freeze([
   ERRORS.NO_HANDLER_FOR_ADDRESS,
-  ...REROUTABLE_WRITE_ERROR_FRAGMENTS,
+  ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
   QUERY_ERROR_MSG.NO_ACTIVE_SERVICE_FOR_PARTITION,
   QUERY_ERROR_MSG.QUERY_ROUTING_FAILED,
   'No connection to node',

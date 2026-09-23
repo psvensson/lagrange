@@ -1,8 +1,33 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {renderSqliteIdentifier} from './sqlite-identifier.js';
+import {pickPartitionWriteAnswerFields} from
+  '../partition/partition-write-kernel.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
+
+/**
+ * The identity a write's success answer keeps from its one partition
+ * answer, for INSERT, UPDATE and DELETE alike: the durable commit witness,
+ * the accepting node and time, and the typed fields of the partition's
+ * answer (its entry, a replay and the index it replays).
+ * @param {Object|null} result - The partition's success answer.
+ * @return {Object} The fields the rendered answer carries.
+ */
+function renderWriteAnswerIdentity(result) {
+  return {
+    ...pickPartitionWriteAnswerFields(result),
+    durableCommitWitness: result?.durableCommitWitness,
+    acceptingNodeId: result?.acceptingNodeId,
+    acknowledgedAtMs: result?.acknowledgedAtMs,
+  };
+}
+
+// A statement's answers render a single identity only when one partition
+// answered it.
+function renderSinglePartitionIdentity(results) {
+  return results.length === 1 ? renderWriteAnswerIdentity(results[0]) : {};
+}
 
 const {
   PG_EXPR_TYPE,
@@ -275,9 +300,9 @@ const queryExecutorSqlCommandMethods = {
       executionOptions,
     );
     if (!result.success) {
-      const error = new Error(
+      const error = Object.assign(new Error(
         result.error || `Insert failed on partition: ${partitionId}`,
-      );
+      ), pickPartitionWriteAnswerFields(result));
       if (
         typeof result?.errorCode === LOCAL_STR_STRING &&
         result.errorCode.length > 0
@@ -348,6 +373,7 @@ const queryExecutorSqlCommandMethods = {
       throw error;
     }
     return {
+      ...renderWriteAnswerIdentity(result),
       success: true,
       operation: QUERY_EXECUTOR_LITERAL.STRING_INSERT,
       affectedRows:
@@ -356,9 +382,6 @@ const queryExecutorSqlCommandMethods = {
           ast.values.length,
       rows: Array.isArray(result.rows) ? result.rows : [],
       partitions: [partitionId],
-      durableCommitWitness: result.durableCommitWitness,
-      acceptingNodeId: result.acceptingNodeId,
-      acknowledgedAtMs: result.acknowledgedAtMs,
     };
   },
 
@@ -465,6 +488,7 @@ const queryExecutorSqlCommandMethods = {
       };
     }
     return {
+      ...renderSinglePartitionIdentity(results),
       success: true,
       operation: QUERY_AST_TYPE.UPDATE,
       affectedRows: totalChanges,
@@ -556,6 +580,7 @@ const queryExecutorSqlCommandMethods = {
       };
     }
     return {
+      ...renderSinglePartitionIdentity(results),
       success: true,
       operation: QUERY_AST_TYPE.DELETE,
       affectedRows: totalChanges,

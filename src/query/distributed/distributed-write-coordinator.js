@@ -1,5 +1,7 @@
 import {createHash, randomUUID} from 'node:crypto';
 import {LoggingService} from '../../logging/logging-service.js';
+import {pickPartitionWriteAnswerFields} from
+  '../../partition/partition-write-kernel.js';
 import {
   QUERY_AST_NODE,
   QUERY_AST_TYPE,
@@ -45,6 +47,24 @@ function buildParticipantFailureLogContext(plan, participantFailures) {
       failedTable: entry.failedTable,
     })),
   };
+}
+
+/**
+ * The one derivation of a partition write's entryId: a pure function of the
+ * logical write's idempotency key and the partition it is written to, so
+ * every attempt, reroute or handoff of one logical write carries the same
+ * entryId (and the partition answers a retry from its outcome row). Every
+ * path that sends a write to a partition takes its entryId from here.
+ * @param {string} idempotencyKey - The logical write's idempotency key.
+ * @param {string} partitionId - The partition written.
+ * @return {string} The participant entryId.
+ */
+function deriveParticipantEntryId(idempotencyKey, partitionId) {
+  const entryIdentityDigest = createHash(HASH_ALGORITHM)
+    .update(JSON.stringify({idempotencyKey, partitionId}))
+    .digest(DIGEST_ENCODING)
+    .slice(0, DIGEST_PREFIX_LENGTH);
+  return `${PARTICIPANT_ENTRY_ID_PREFIX}${entryIdentityDigest}`;
 }
 
 /**
@@ -249,6 +269,7 @@ class DistributedWriteCoordinator {
 
     if (failedParticipants.length > 0) {
       const participantFailures = failedParticipants.map((result) => ({
+        ...pickPartitionWriteAnswerFields(result),
         partitionId: result.partitionId,
         participantNodeId:
             typeof result.participantNodeId === 'string' ?
@@ -393,6 +414,7 @@ class DistributedWriteCoordinator {
       return {...result, attempts: 1};
     } catch (error) {
       return {
+        ...pickPartitionWriteAnswerFields(error),
         success: false,
         error: error.message,
         errorCode:
@@ -560,22 +582,14 @@ class DistributedWriteCoordinator {
     executionOptions = {},
     participantOptions = {},
   ) {
-    const entryIdentityPayload = JSON.stringify({
-      idempotencyKey: plan.idempotencyKey,
-      partitionId,
-    });
-    const entryIdentityDigest = createHash(HASH_ALGORITHM)
-      .update(entryIdentityPayload)
-      .digest(DIGEST_ENCODING)
-      .slice(0, DIGEST_PREFIX_LENGTH);
     return {
       ...(executionOptions || {}),
       operationId: plan.operationId,
       idempotencyKey: plan.idempotencyKey,
-      entryId: `${PARTICIPANT_ENTRY_ID_PREFIX}${entryIdentityDigest}`,
+      entryId: deriveParticipantEntryId(plan.idempotencyKey, partitionId),
       ...(participantOptions || {}),
     };
   }
 }
 
-export {DistributedWriteCoordinator};
+export {DistributedWriteCoordinator, deriveParticipantEntryId};

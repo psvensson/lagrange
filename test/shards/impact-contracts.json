@@ -545,7 +545,7 @@
       ]
     },
     "partition-write-answer-retry-classification": {
-      "description": "The partition write kernel (the answer's code) and the errors owner (its text) are the one owner of what may be done again with a write the partition did not take, and every consumer asks them, never a text of its own: the control plane's retry classification retries every answer but a host failure while proposing (a write whose outcome is unknown did not fail, so it is never recorded as a failed write) - by the kernel's code when it holds the answer, by the errors owner's texts when only a text reached it; a router that sends the write again without its entryId never does so for an unknown outcome - never by its text, and by its code only when it re-proposes under the write's own entryId, where the retry is idempotent.",
+      "description": "The partition write kernel (the answer's code) and the errors owner (its text) are the one owner of what may be done again with a write the partition did not take, and every consumer asks them, never a text of its own: the control plane's retry classification retries every answer but a host failure while proposing (a write whose outcome is unknown, or whose committed application failed in the host's environment, did not fail, so it is never recorded as a failed write) - by the kernel's code when it holds the answer, by the errors owner's texts only when nothing but a text reached it; a write answer crosses every boundary whole (its code, retry time, consensus, entry, replay, index and affected rows), and a router sends the write again by the kernel's code alone, never by its text - an unknown outcome only when it re-proposes under the write's own entryId, where the retry is idempotent.",
       "owners": [
         "src/partition/partition-write-kernel.js",
         "src/constants/errors.js",
@@ -554,7 +554,8 @@
         "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
         "src/cdc/cdc-integration-service-shared.js",
         "src/cdc/cdc-integration-service-shared-constants.js",
-        "src/query/query-executor-write-retry-routing.js"
+        "src/query/query-executor-write-retry-routing.js",
+        "src/cdc/cdc-local-system-table-write-lane.js"
       ],
       "tests": [
         "test/control-plane/control-plane-error-classification.test.js",
@@ -1019,7 +1020,7 @@
       ]
     },
     "partition-write-answer-retry-classification": {
-      "description": "The write-answer owners and the consumers that retry or re-send a write must agree on one classification of each answer: its code and its text say the same, but for the unknown outcome, which only a caller carrying its entryId routes again.",
+      "description": "The write-answer owners and the consumers that retry or re-send a write must agree on one classification of each answer: its code and its text say the same on retrying it, a consumer re-sends it by its code alone, and the unknown outcome is routed again only by a caller carrying its entryId.",
       "endpoints": [
         {
           "id": "write-answer-owners",
@@ -1036,7 +1037,8 @@
             "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
             "src/cdc/cdc-integration-service-shared.js",
             "src/cdc/cdc-integration-service-shared-constants.js",
-            "src/query/query-executor-write-retry-routing.js"
+            "src/query/query-executor-write-retry-routing.js",
+            "src/cdc/cdc-local-system-table-write-lane.js"
           ]
         }
       ],

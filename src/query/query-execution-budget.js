@@ -1,4 +1,6 @@
 import {ERRORS} from '../constants/index.js';
+import {pickPartitionWriteAnswerFields} from
+  '../partition/partition-write-kernel.js';
 
 const QUERY_EXECUTION_BUDGET_FIELD = Object.freeze({
   DELIVERY_SOURCE: 'deliverySource',
@@ -28,6 +30,7 @@ export function resolveParticipantBackpressureState(result = {}) {
 
 export function buildParticipantFailureEntry(result) {
   return {
+    ...pickPartitionWriteAnswerFields(result),
     partitionId: result.partitionId,
     participantNodeId: normalizeParticipantFailureString(result.participantNodeId),
     participantAddress: normalizeParticipantFailureString(result.participantAddress),
@@ -66,6 +69,7 @@ export function buildPartitionExecutionFailureResult({
   details = {},
 }) {
   return {
+    ...pickPartitionWriteAnswerFields(details),
     partitionId,
     success: false,
     error: errorMessage || ERRORS.QUERY_FAILED,

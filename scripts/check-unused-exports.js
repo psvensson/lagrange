@@ -29,7 +29,10 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // removed; every new evidence/observer export has a consumer).
 // 2026-09-21: tightened 1438 -> 1437 while replacing the raft-rs public
 // object graph with its operation-only port and de-exporting dead internals.
-const BASELINE_UNUSED_EXPORT_COUNT = 1437;
+// 2026-09-23: tightened 1437 -> 1433 when the partition write answer
+// crossed the wire whole (quest reroute-carries-the-entry-id): the text
+// reroute classification and duplicate failure builders were deleted.
+const BASELINE_UNUSED_EXPORT_COUNT = 1433;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

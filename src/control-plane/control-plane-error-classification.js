@@ -8,6 +8,7 @@ import {
 import {ROUTER_ERROR_MSG} from '../constants/transport.js';
 import {
   isPartitionWriteFailureCode,
+  isReroutableWriteFailureCode,
   isRetryableWriteFailureCode,
 } from '../partition/partition-write-kernel.js';
 
@@ -173,6 +174,10 @@ function admitLinkedFailureCandidate(candidate, visited) {
   return typeof candidate === 'string';
 }
 
+// The failures a candidate links: its cause, its first failed participant,
+// its participant failures, and the failed answers among its participant
+// results (a distributed write's participant carries the partition's own
+// typed answer, and its own participant failures).
 function enqueueLinkedFailureSources(queue, candidate) {
   if (candidate.cause) {
     queue.push(candidate.cause);
@@ -184,6 +189,13 @@ function enqueueLinkedFailureSources(queue, candidate) {
   if (Array.isArray(candidate.participantFailures)) {
     for (const participantFailure of candidate.participantFailures) {
       queue.push(participantFailure);
+    }
+  }
+  if (Array.isArray(candidate.participantResults)) {
+    for (const participantResult of candidate.participantResults) {
+      if (participantResult?.success === false) {
+        queue.push(participantResult);
+      }
     }
   }
 }
@@ -254,6 +266,23 @@ function isRetryableControlPlaneError(value) {
   }
   return collectLinkedControlPlaneFailures(value).some(
     isRetryableControlPlaneCandidate);
+}
+
+/**
+ * Whether a failure links a partition write answer a caller may route again
+ * by its code (the write kernel's isReroutableWriteFailureCode): the one walk
+ * of a failure's linked partition answers for a reroute decision.
+ * @param {*} value - A failure, a failed result, or an error.
+ * @param {Object} [options] - {carriesEntryId}: whether the caller routes the
+ *   write again under the entryId it was answered for.
+ * @return {boolean} Whether a linked partition answer is reroutable.
+ */
+function hasReroutableWriteFailure(value, {carriesEntryId = false} = {}) {
+  if (!value) {
+    return false;
+  }
+  return collectLinkedControlPlaneFailures(value).some((candidate) =>
+    isReroutableWriteFailureCode(candidate?.failureCode, {carriesEntryId}));
 }
 
 function resolveControlPlanePrimaryFailureReason(summary) {
@@ -338,6 +367,7 @@ export {
   getControlPlaneFailureSummary,
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
+  hasReroutableWriteFailure,
   isRetryableControlPlaneError,
   normalizeKnownNodeBootIncarnation,
   RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS,

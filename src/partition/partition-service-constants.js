@@ -717,10 +717,10 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   COMMITTED_STATEMENT_ENVIRONMENT_FAILED:
     'Committed partition statement failed in the host environment; the ' +
     'entry is not consumed and is applied again when the host recovers',
-  consensusInitRefused: (partitionId, answer) => {
-    const detail = answer?.failure?.detail ?? answer?.detail;
+  consensusInitRefused: (partitionId, answer) => { // a phase only when known
+    const [detail, phase] = [answer?.failure?.detail ?? answer?.detail, answer?.phase ?? null];
     return `Partition ${partitionId} cannot initialize: its consensus port ` +
-      `refused it in phase ${answer?.phase} (${answer?.outcome}: ` +
+      `refused it${phase === null ? '' : ` in phase ${phase}`} (${answer?.outcome}: ` +
       `${answer?.reason}${detail ? ` ${JSON.stringify(detail)}` : ''})`;
   },
   backendSelectionRefused: (option, requested) =>
