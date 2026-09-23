@@ -6153,10 +6153,25 @@
         "test/partition/partition-service-test-support.js"
       ]
     },
+    "test/partition/partition-service.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "test/partition/partition-service-test-support.js"
+      ]
+    },
     "test/partition/partition-split-policy-precedence.test.js": {
       "files": [
         "examples/service-data-affinity/lagrange-loader.js",
         "src/partition/partition-split-merge-manager.js"
+      ]
+    },
+    "test/partition/raft-rs-transport-demux.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
     "test/partition/replica-operations-schema-migration.test.js": {
@@ -9909,21 +9924,6 @@
       "files": [
         "src/control-plane/timeout-budget.js",
         "src/workflow/durable-workflow-coordinator.js"
-      ]
-    },
-    "test/partition/partition-service.test.js": {
-      "files": [
-        "src/raft/raft-operation-port-constants.js",
-        "test/partition/partition-service-test-support.js"
-      ]
-    },
-    "test/partition/raft-rs-transport-demux.test.js": {
-      "files": [
-        "src/raft/raft-operation-port-constants.js",
-        "src/raft/raft-rs-lifecycle-administration.js",
-        "src/raft/raft-rs-peer-identity.js",
-        "src/raft/raft-rs-runtime-owner.js",
-        "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     }
   }
