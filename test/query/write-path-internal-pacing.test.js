@@ -1,7 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
-import LifeRaft from '../../src/raft/liferaft.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
@@ -14,6 +14,8 @@ import {
   createMockMessageRouter,
   createMockSystemCache,
 } from './sql-query-engine-test-support.js';
+import {ControllablePartitionRaftProvider} from
+  '../partition/partition-service-test-support.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -110,6 +112,7 @@ function createRatingsPartition(replicaId, replicaIds) {
       ],
     },
     dbPath: ':memory:',
+    raftProvider: new ControllablePartitionRaftProvider(),
   });
 }
 
@@ -130,6 +133,7 @@ function createCounterPartition(replicaId, replicaIds) {
       ],
     },
     dbPath: ':memory:',
+    raftProvider: new ControllablePartitionRaftProvider(),
   });
 }
 
@@ -145,16 +149,16 @@ test(
     staleLeader.role = 'leader';
     staleLeader.isLeader = true;
     staleLeader.leaderId = staleLeader.replicaId;
-    staleLeader.raft.state = LifeRaft.LEADER;
-    staleLeader.raftProvider.propose = async () => {};
+    staleLeader.raftProvider.setRole(RAFT_ROLE.LEADER);
+    staleLeader.raftProvider.setProposeHandler(async () => {});
 
     currentLeader.role = 'leader';
     currentLeader.isLeader = true;
     currentLeader.leaderId = currentLeader.replicaId;
-    currentLeader.raft.state = LifeRaft.LEADER;
-    currentLeader.raftProvider.propose = async (_raft, entry) => {
+    currentLeader.raftProvider.setRole(RAFT_ROLE.LEADER);
+    currentLeader.raftProvider.setProposeHandler(async (entry) => {
       currentLeader.applyCommittedEntry(entry);
-    };
+    });
 
     const staleAddress = 'node-stale/partition/ratings-r1';
     const currentAddress = 'node-current/partition/ratings-r2';
@@ -197,7 +201,7 @@ test(
         const response = service.handleRemoteQuery(message);
         if (address === staleAddress) {
           await Promise.resolve();
-          staleLeader.raft.change({state: LifeRaft.FOLLOWER});
+          staleLeader.raftProvider.setRole(RAFT_ROLE.FOLLOWER);
         }
         return response;
       },
@@ -402,10 +406,10 @@ test(
     leader.role = 'leader';
     leader.isLeader = true;
     leader.leaderId = leader.replicaId;
-    leader.raft.state = LifeRaft.LEADER;
-    leader.raftProvider.propose = async (_raft, entry) => {
+    leader.raftProvider.setRole(RAFT_ROLE.LEADER);
+    leader.raftProvider.setProposeHandler(async (entry) => {
       leader.applyCommittedEntry(entry);
-    };
+    });
 
     const address = 'node-leader/partition/counters-r1';
     const deliveredEntryIds = [];
