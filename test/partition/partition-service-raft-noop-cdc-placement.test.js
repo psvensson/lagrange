@@ -11,10 +11,11 @@ import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {ControllablePartitionRaftProvider} from
-  './partition-service-test-support.js';
+import {
+  ControllablePartitionRaftProvider,
+  createControllablePartitionService,
+} from './partition-service-test-support.js';
 import {
   INITIAL_PARTITION_IDS,
   SERVICES_SCHEMA,
@@ -131,7 +132,7 @@ async function admitPlacement(observation) {
 
 function createServicesPartition() {
   const replicaIds = ['services-test-r1', 'services-test-r2', 'services-test-r3'];
-  return new PartitionService({
+  return createControllablePartitionService({
     partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES],
     tableId: SYSTEM_TABLE_NAME.SERVICES,
     tableName: SYSTEM_TABLE_NAME.SERVICES,
@@ -142,8 +143,7 @@ function createServicesPartition() {
     ),
     schema: SERVICES_SCHEMA,
     dbPath: ':memory:',
-    raftProvider: new ControllablePartitionRaftProvider(),
-  });
+  }, new ControllablePartitionRaftProvider());
 }
 
 test('MovieLens schema admission rejects a stale priority lifecycle overlay',
@@ -174,7 +174,7 @@ test('zero-change Raft apply cannot overwrite completed priority placement',
     const cache = buildPriorityPlacementCache();
     const partition = createServicesPartition();
     await partition.initialize();
-    partition.raftProvider.setRole(RAFT_ROLE.LEADER);
+    partition.controllableProvider.setRole(RAFT_ROLE.LEADER);
     await partition.subscribeToCDCWithHandshake((event) => {
       cache.applySystemTableChange(
         event.tableName,
@@ -182,8 +182,8 @@ test('zero-change Raft apply cannot overwrite completed priority placement',
         event.data,
       );
     });
-    partition.raftProvider.setProposeHandler(async (entry) => {
-      partition.applyCommittedEntry(entry);
+    partition.controllableProvider.setProposeHandler(async (entry) => {
+      partition.controllableProvider.commit(entry);
     });
 
     const targetReplicaId =

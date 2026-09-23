@@ -31,11 +31,7 @@ const {
   WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
   WRITE_PHASE_FIELD_SQLITE_RUN_MS,
   WRITE_PHASE_FIELD_TOTAL_MS,
-  buildDurableCommitWitness,
   buildPartitionWriteEntry,
-  buildPartitionWriteFailureResult,
-  buildPartitionWriteSideEffectPlan,
-  executePartitionWriteStatement,
   getSystemCachePrimaryKeyFieldOrFallback,
   resolvePartitionWriteCommitMode,
 } = PARTITION_SERVICE_SHARED;
@@ -666,15 +662,14 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       );
       return this.buildAppliedEntryReplayResult(entryKey);
     }
+    // Leadership is the consensus core's own, read through the port.
     const commitMode = resolvePartitionWriteCommitMode({
       replicaIds: this.replicaIds,
-      raftState: this.raft?.readStatus?.().role,
+      raftState: this.raft.readStatus().role,
       raftLeaderState: RaftRole.LEADER,
       hasKnownRemoteLeader: this.hasKnownRemoteLeaderWitness(),
     });
-    // Rejected writes must not touch the local raft log: an appended entry
-    // at a self-assigned index conflicts with the index space the true
-    // leader is committing into.
+    // A rejected write is never proposed: only the consensus leader proposes.
     if (commitMode === PARTITION_WRITE_COMMIT_MODE.REJECTED) {
       this.recordWritePhaseDuration(
         phaseTimings,
@@ -687,89 +682,14 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         partitionId: this.partitionId,
       };
     }
-    const logAppendStartMs = this.timeSource.now();
-    const logEntry = this.storage.appendEntry(entry);
-    const durableCommitWitness = buildDurableCommitWitness({
-      partitionId: this.partitionId,
-      leaderNodeId: this.nodeId,
-      leaderReplicaId: this.replicaId,
-      logEntry,
-    });
-    this.recordWritePhaseDuration(
+    // One propose() through the port; the committed-entry application
+    // applies the write and resolves it with its durable commit witness.
+    return startPartitionRaftWriteCommit(this, {
+      entry,
+      entryKey,
       phaseTimings,
-      WRITE_PHASE_FIELD_LOG_APPEND_MS,
-      logAppendStartMs,
-    );
-    if (commitMode === PARTITION_WRITE_COMMIT_MODE.RAFT) {
-      return startPartitionRaftWriteCommit(this, {
-        entry,
-        entryKey,
-        logEntry,
-        phaseTimings,
-        applyStartMs,
-        durableCommitWitness,
-      });
-    }
-    let result;
-    const sqliteRunStartMs = this.timeSource.now();
-    try {
-      if (entry.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
-        this.registerMigrationDefaultFromAlterSql(entry.sql);
-      }
-      result = executePartitionWriteStatement(
-        this.db,
-        entry,
-        this.partitionId,
-        logEntry.index,
-      );
-      result.durableCommitWitness = durableCommitWitness;
-      this.recordWritePhaseDuration(
-        phaseTimings,
-        WRITE_PHASE_FIELD_SQLITE_RUN_MS,
-        sqliteRunStartMs,
-      );
-      const sideEffectPlan = buildPartitionWriteSideEffectPlan(entry, result);
-      await this.applyWriteSideEffectPlan({
-        entry,
-        entryKey,
-        result,
-        sideEffectPlan,
-        commitPromise: null,
-      });
-      if (entry.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
-        this.logger.info(
-          PARTITION_SERVICE_LOG_MSG.MIGRATION_ALTER_TABLE_APPLIED,
-          {
-            partitionId: this.partitionId,
-            tableName: this.tableName,
-            migrationId: entry.migrationId || null,
-          },
-        );
-      }
-    } catch (error) {
-      this.recordWritePhaseDuration(
-        phaseTimings,
-        WRITE_PHASE_FIELD_SQLITE_RUN_MS,
-        sqliteRunStartMs,
-      );
-      result = buildPartitionWriteFailureResult(error, this.partitionId);
-    }
-    if (!result.success) {
-      this.recordWritePhaseDuration(
-        phaseTimings,
-        WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-        applyStartMs,
-      );
-      return result;
-    }
-    result.acceptingNodeId = this.nodeId;
-    result.acknowledgedAtMs = this.timeSource.now();
-    this.recordWritePhaseDuration(
-      phaseTimings,
-      WRITE_PHASE_FIELD_APPLY_WRITE_MS,
       applyStartMs,
-    );
-    return result;
+    });
   }
   async applyWriteSideEffectPlan({
     entry,

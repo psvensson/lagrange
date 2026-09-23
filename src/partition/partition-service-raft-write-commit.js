@@ -13,17 +13,15 @@ async function executePartitionRaftWriteCommit(service, options) {
   const {
     entry,
     entryKey,
-    logEntry,
     phaseTimings,
     applyStartMs,
-    durableCommitWitness,
   } = options;
   let commitPromise;
   try {
-    commitPromise = service.waitForCommittedWrite(entry.entryId, {
-      logIndex: logEntry.index,
-      result: {durableCommitWitness},
-    });
+    // Registered before the proposal: a lone leader commits and applies its
+    // own proposal inside propose(), and the application resolves this
+    // pending write with the committed entry's index and witness.
+    commitPromise = service.waitForCommittedWrite(entry.entryId);
   } catch (error) {
     service.recordWritePhaseDuration(
       phaseTimings,
@@ -50,6 +48,16 @@ async function executePartitionRaftWriteCommit(service, options) {
   );
   try {
     const result = await commitPromise;
+    // A committed statement that failed is the write's outcome: reported as
+    // the failure it is, with no replay marker and no write side effects.
+    if (result?.success !== true) {
+      service.recordWritePhaseDuration(
+        phaseTimings,
+        WRITE_PHASE_FIELD_APPLY_WRITE_MS,
+        applyStartMs,
+      );
+      return result;
+    }
     const acknowledgedResult = {
       ...result,
       acceptingNodeId: service.nodeId,
@@ -85,7 +93,6 @@ async function executePartitionRaftWriteCommit(service, options) {
       success: false,
       error: error.message,
       partitionId: service.partitionId,
-      logIndex: logEntry.index,
     };
   }
 }

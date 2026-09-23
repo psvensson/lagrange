@@ -9,7 +9,10 @@ import {
   retireRaftPeerFromAuthoritativeServiceChange,
   resolveLiveRaftLeaderAddressForPeer,
 } from './partition-service-raft-peer-cache-reconciliation.js';
-import {createRaftProvider} from '../raft/raft-backend-selection.js';
+import {RaftRsWasmProvider} from '../raft/raft-rs-provider.js';
+import {
+  PARTITION_CONSENSUS_STARTUP_OUTCOME,
+} from './partition-service-constants.js';
 import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
 const {
@@ -42,7 +45,6 @@ const {
   SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
   TABLES,
   TIMEOUT_BUDGET_DEFAULT,
-  assertPartitionRaftProviderContract,
   attachTrafficReadinessListener,
   createControlPlaneRuntimeBundle,
   getTrafficReadinessSnapshot,
@@ -50,6 +52,31 @@ const {
   isMetadataPublicationLifecycleReady,
   normalizePublishedRaftRole,
 } = PARTITION_SERVICE_SHARED;
+// The one consensus backend a partition runs on. Stateless and frozen, so
+// one instance serves every partition in the process.
+const RAFT_RS_PROVIDER = Object.freeze(new RaftRsWasmProvider());
+// Construction options that once selected or injected a consensus backend.
+// Naming either is refused: there is no selection and no alternate backend.
+const RETIRED_BACKEND_SELECTION_OPTIONS = Object.freeze([
+  'raftBackend', 'raftProvider',
+]);
+
+function refuseBackendSelection(options) {
+  const option = RETIRED_BACKEND_SELECTION_OPTIONS.find((name) =>
+    options[name] !== undefined);
+  if (option === undefined) {
+    return;
+  }
+  const requested = options[option];
+  const error = new Error(PARTITION_SERVICE_ERROR_MSG.backendSelectionRefused(
+    option,
+    typeof requested === 'string' ? requested :
+      requested?.constructor?.name ?? String(requested),
+  ));
+  error.code = PARTITION_CONSENSUS_STARTUP_OUTCOME.BACKEND_SELECTION_REFUSED;
+  throw error;
+}
+
 // COPY, never the caller's array: this list is mutated in place by raft peer
 // reconciliation, and callers hand in the shared system-table declaration.
 // Taking it by reference made a minted replacement replica append to the
@@ -70,6 +97,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     if (!options.replicaId) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.REQUIRE_REPLICA_ID);
     }
+    refuseBackendSelection(options);
     // One clock for this replica, on the node hosting it. Held in two parts
     // for the reason resolveOwnedTimeSource states: stamps read the resolved
     // source, and only a clock that was actually GIVEN may take over a
@@ -96,11 +124,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.replicaIds = copyPeerList(options.replicaIds, this.replicaId);
     this.nodeId = options.nodeId || PARTITION_SERVICE_DEFAULT.NODE_ID;
     this.transport = options.transport || null;
-    // The backend seam: liferaft unless a configuration names another
-    // backend (src/raft/raft-backend-selection.js). An absent selection is
-    // the default, never a fallback.
-    this.raftProvider = options.raftProvider || createRaftProvider(options);
-    assertPartitionRaftProviderContract(this.raftProvider);
     this.dbPath = options.dbPath || PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH;
     this.leaderAddressHint =
       typeof options.leaderAddress === 'string' &&
@@ -442,6 +465,16 @@ class PartitionServiceCoreBase extends EventEmitter {
         this._metadataPublicationReadinessState,
         this.metadataPublicationReadinessTransitionListener,
       );
+  }
+  /**
+   * Build this replica's consensus operation port. The partition states its
+   * own requirements in the request and the rs-raft backend builds the port;
+   * there is no selection and no injected provider.
+   * @param {Object} request - The partition's RAFT_PARTITION_NODE_REQUEST.
+   * @return {Object} The frozen operation port.
+   */
+  createOperationPort(request) {
+    return RAFT_RS_PROVIDER.createPartitionPort(request);
   }
   isMetadataPublicationReady() {
     if (!this.metadataPublicationReadinessState) {

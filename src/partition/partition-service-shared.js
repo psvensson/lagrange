@@ -29,7 +29,6 @@ import {
   buildPartitionWriteEntry,
   buildPartitionWriteFailureResult,
   buildPartitionWriteSideEffectPlan,
-  executePartitionWriteStatement,
   resolvePartitionWriteCommitMode,
 } from './partition-write-kernel.js';
 import {CDCEventBuffer} from './cdc-event-buffer.js';
@@ -361,7 +360,6 @@ export const PARTITION_SERVICE_SHARED = {
   cloneSplitRoutingEntry,
   computeReplicaElectionTimeouts,
   createControlPlaneRuntimeBundle,
-  executePartitionWriteStatement,
   extractPartitionSplitRoutingKey,
   fs,
   getSystemCachePrimaryKeyFieldOrFallback,

@@ -1,7 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
-import {applyPartitionApplicationAndProgress} from
-  '../raft/raft-rs-application-transaction-owner.js';
 import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
@@ -116,7 +114,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
    * @return {number|null}
    */
   resolveCurrentTermSafe() {
-    if (!this.raft || !this.raftProvider) {
+    if (!this.raft) {
       return null;
     }
     try {
@@ -423,23 +421,18 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     // previously committed. Warm the clock from the max committed HLC on the log.
     this.warmHlcFromCommittedLog();
     // The backend boundary (binding direction addendum §1): the group states
-    // its own requirements and the selected backend builds the node. Nothing
-    // liferaft-shaped is named here, and nothing is read from a global - a
-    // backend that needs something absent from this request changes the
-    // boundary rather than reaching around it.
-    this.raft = this.raftProvider.createPartitionPort({
+    // its own requirements and the rs-raft backend builds the port. Nothing
+    // is read from a global - a backend that needs something absent from
+    // this request changes the boundary rather than reaching around it.
+    this.raft = this.createOperationPort({
       [RAFT_PARTITION_NODE_REQUEST.GROUP_ID]: this.partitionId,
       [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: this.replicaId,
       [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: this.unifiedAddress,
       [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: this.replicaIds,
-      [RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG]: this.logAdapter,
       [RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE]: this.db,
       [RAFT_PARTITION_NODE_REQUEST.TIMING]: this.raftTimingConfig,
       [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]: hostedConsensusSubstrate(this),
       [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: this.deferElection,
-      [RAFT_PARTITION_NODE_REQUEST.INITIAL_TERM]:
-        Number.isSafeInteger(this.storage?.currentTerm) ?
-          this.storage.currentTerm : 0,
       [RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER]: (peerAddress, packet) =>
         this.transport.deliver(
           peerAddress,
@@ -451,17 +444,10 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         ),
       [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: (address) =>
         this.buildPeerAddress(address),
-      [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]:
-        (command, effects) => {
-          applyPartitionApplicationAndProgress({
-            service: this, command, effects,
-          });
-        },
-      // The apply transaction did not commit, so the cached applied
-      // watermark may be ahead of the store. Re-read it from the store.
-      [RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK]: () => {
-        this.storage.refreshAppliedWatermarkCacheFromStore();
-      },
+      // One committed record per applied entry, inside the transaction
+      // that also advances the rs-raft applied state.
+      [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]: (committed) =>
+        this.applyCommittedEntry(committed),
       [RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: (decision) => {
         if (typeof this.onSnapshotCatchupNeeded ===
             PARTITION_SERVICE_TYPE.FUNCTION) {
@@ -469,12 +455,6 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         }
       },
     });
-    // Recorded-gap closure (S4, pre-existing defect): base liferaft always
-    // boots at term 0, but an INSTALLED replica carries a durable
-    // currentTerm (nothing else persists that row today, so the blast
-    // radius is exactly installed replicas). Seed the live term before any
-    // lifecycle wiring observes it so vote/append term checks start from
-    // durable truth.
     // Committed-prefix divergence witness (quest raft-committed-prefix-
     // conflict-livelock): the follower-side liferaft surfaces a poisoned
     // committed prefix exactly once per conflict identity instead of

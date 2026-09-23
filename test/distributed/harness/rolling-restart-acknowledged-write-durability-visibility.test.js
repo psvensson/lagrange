@@ -20,6 +20,8 @@ import {buildDurableCommitWitness} from
 import {createMockSystemCache} from
   '../../query/query-executor-test-support.js';
 import {createVirtualNetwork} from './virtual-network.js';
+import {applyCommandThroughApplicationOwner} from
+  '../../partition/partition-service-test-support.js';
 import {connectRaftCluster, driveNetwork} from './raft-network-host.js';
 import {LoadGenerator} from './load-generator.js';
 import {
@@ -198,12 +200,27 @@ async function initializeRun13Partitions(tempDir) {
   return partitions;
 }
 
+// The simulated quorum's committed entries reach each partition through the
+// production application-transaction owner, under a group of their own so
+// they never touch the applied state of the partition's own consensus group.
+const RUN13_SIMULATED_GROUP_ID = 'run13-simulated-quorum';
+
 function wireRun13CommitApplication(rafts, partitions, dropAppliedNodeId) {
   for (const nodeId of RUN13_NODE_IDS) {
+    let appliedIndex = 0;
     rafts.get(nodeId).on('commit', (command) => {
       const partition = partitions.get(nodeId);
       if (partition && nodeId !== dropAppliedNodeId) {
-        partition.applyCommittedEntry(command);
+        appliedIndex += 1;
+        applyCommandThroughApplicationOwner({
+          database: partition.db,
+          groupId: RUN13_SIMULATED_GROUP_ID,
+          index: appliedIndex,
+          term: rafts.get(nodeId).term,
+          command,
+          applyCommittedEntry: (committed) =>
+            partition.applyCommittedEntry(committed),
+        });
       }
     });
   }

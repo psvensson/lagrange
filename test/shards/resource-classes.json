@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2137,
+    "ordinary": 2138,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2154,
-  "digest": "fnv1a32-af98cacb",
+  "censusSize": 2155,
+  "digest": "fnv1a32-b32f5657",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1409,6 +1409,7 @@
     "test/raft/raft-rs-backend/operation-port-provenance.test.js": "ordinary",
     "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js": "ordinary",
     "test/raft/raft-rs-backend/operation-port-regression.test.js": "ordinary",
+    "test/raft/raft-rs-backend/operation-port-status-observation.test.js": "ordinary",
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": "ordinary",
     "test/raft/raft-rs-backend/peer-identity.test.js": "ordinary",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "ordinary",

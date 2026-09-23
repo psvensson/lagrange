@@ -19,16 +19,16 @@
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 145,
-    "storage-raft": 97,
+    "storage-raft": 98,
     "test-infrastructure": 133,
     "transactions": 14,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2154,
-  "digest": "fnv1a32-94c494e8",
+  "censusSize": 2155,
+  "digest": "fnv1a32-bb453835",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a648e25a",
+  "observationDigest": "fnv1a32-a7d31069",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1429,6 +1429,7 @@
     "test/raft/raft-rs-backend/operation-port-provenance.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-regression.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/operation-port-status-observation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": "storage-raft",
     "test/raft/raft-rs-backend/peer-identity.test.js": "storage-raft",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "storage-raft",
@@ -3720,12 +3721,22 @@
     },
     "test/convergence/dt6-learner-promotion-progress-proof.test.js": {
       "files": [
-        "src/raft/raft-operation-port-constants.js"
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/convergence/dt6-learner-promotion-proof-channel-wake.test.js": {
       "files": [
-        "src/raft/raft-operation-port-constants.js"
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/convergence/dt6-network-pct-search.test.js": {
@@ -3826,7 +3837,10 @@
     },
     "test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js": {
       "files": [
-        "src/raft/raft-operation-port-constants.js"
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/convergence/membership-publication-owner-driver-host.test.js": {
@@ -5492,7 +5506,12 @@
         "src/diagnostics/formation-turn-attribution.js",
         "src/partition/partition-write-kernel.js",
         "src/query/distributed/distributed-write-coordinator.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "test/distributed/config/local.json",
+        "test/partition/partition-service-test-support.js",
         "test/query/query-executor-test-support.js"
       ]
     },
@@ -6119,6 +6138,7 @@
       "files": [
         "src/partition/partition-hlc-warmup.js",
         "src/partition/partition-service-constants.js",
+        "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port.js",
         "src/raft/raft-rs-proposal-codec-constants.js",
         "src/raft/raft-rs-ready-loop-constants.js"
@@ -6126,53 +6146,76 @@
     },
     "test/partition/partition-service-learner-promotion.test.js": {
       "files": [
-        "src/raft/raft-operation-port-constants.js"
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/partition/partition-service-raft-noop-cdc-placement.test.js": {
       "files": [
         "src/config/configuration-manager.js",
         "src/raft/raft-operation-port-constants.js",
-        "test/partition/partition-service-test-support.js"
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/partition/partition-service-raft-transition-evidence.test.js": {
       "files": [
         "src/partition/partition-service-raft-lifecycle-wiring.js",
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "test/partition/partition-service-test-support.js"
+      ]
+    },
+    "test/partition/partition-service-replay-dedupe.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js"
       ]
     },
     "test/partition/partition-service-role-metadata-publication.test.js": {
       "files": [
         "src/control-plane/control-plane-system-table-gateway.js",
-        "src/raft/raft-operation-port-constants.js"
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/partition/partition-service-size-split-transport.test.js": {
       "files": [
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-provider-contract-constants.js",
-        "test/partition/partition-service-test-support.js"
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/partition/partition-service-transactions-query-routing.test.js": {
       "files": [
         "src/partition/partition-service-constants.js",
-        "src/raft/raft-operation-port-constants.js"
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/partition/partition-service-write-commit.test.js": {
       "files": [
-        "src/raft/liferaft-commit-scheduler.js",
         "src/raft/raft-operation-port-constants.js",
-        "test/partition/partition-service-test-support.js"
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/partition/partition-service.test.js": {
       "files": [
         "src/raft/raft-operation-port-constants.js",
-        "test/partition/partition-service-test-support.js"
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/partition/partition-split-policy-precedence.test.js": {
@@ -6189,8 +6232,11 @@
     "test/partition/raft-rs-transport-demux.test.js": {
       "files": [
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
@@ -6572,11 +6618,7 @@
       ]
     },
     "test/raft/raft-rs-backend/backend-seam.test.js": {
-      "files": [
-        "src/raft/raft-backend-selection.js"
-      ],
       "directories": [
-        "src",
         "src/raft/spike"
       ]
     },
@@ -6648,6 +6690,7 @@
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js"
       ]
     },
@@ -6659,12 +6702,22 @@
         "test/raft/raft-rs-backend"
       ]
     },
+    "test/raft/raft-rs-backend/operation-port-status-observation.test.js": {
+      "files": [
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": {
       "files": [
+        "src/partition/partition-service-core-base.js",
         "src/partition/partition-service.js",
-        "src/raft/raft-backend-selection.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/raft/raft-rs-backend/peer-identity.test.js": {
@@ -6679,6 +6732,8 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-proposal-codec.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js"
       ]
     },

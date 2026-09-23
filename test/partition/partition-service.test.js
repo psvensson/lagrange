@@ -26,8 +26,10 @@ import {
   INITIAL_PARTITION_IDS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {ControllablePartitionRaftProvider} from
-  './partition-service-test-support.js';
+import {
+  ControllablePartitionRaftProvider,
+  createControllablePartitionService,
+} from './partition-service-test-support.js';
 import {
 } from '../../src/raft/constants.js';
 import {
@@ -470,7 +472,7 @@ test(
   async (t) => {
     const systemTableCache = new SystemTableCache();
     const raftProvider = new ControllablePartitionRaftProvider();
-    const partition = new PartitionService({
+    const partition = createControllablePartitionService({
       partitionId: 'leader-change-partition-1',
       tableId: 'leader_change_table',
       tableName: 'leader_change_table',
@@ -493,8 +495,7 @@ test(
       cdcIntegrationService: {
         updateSystemTableRow: async () => ({changes: 1}),
       },
-      raftProvider,
-    });
+    }, raftProvider);
 
     partition.isServicesLeaderAvailable = () => true;
 
@@ -544,7 +545,7 @@ test(
       `node-4-relocated/partition/${newLeaderReplicaId}`;
     const systemTableCache = new SystemTableCache();
     const raftProvider = new ControllablePartitionRaftProvider();
-    const partition = new PartitionService({
+    const partition = createControllablePartitionService({
       partitionId,
       tableId: 'live_leader_routing_table',
       tableName: 'live_leader_routing_table',
@@ -564,8 +565,7 @@ test(
       suppressLifecycleLogs: true,
       deferElection: true,
       systemTableCache,
-      raftProvider,
-    });
+    }, raftProvider);
 
     await partition.initialize();
 
@@ -1426,8 +1426,9 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
     cdcEvents.push(event);
   });
 
-  // Directly call applyCommittedEntry as liferaft would on a follower
-  partition.applyCommittedEntry({
+  // The committed entry reaches the application through the port; the
+  // application decides CDC on this replica's own leadership state.
+  await partition.raft.propose({
     type: 'INSERT',
     sql: 'INSERT INTO cdc_test (id, value) VALUES (?, ?)',
     params: ['f1', 42],

@@ -9,6 +9,13 @@ import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {PartitionService} from '../../src/partition/partition-service.js';
 
+// The consensus log's length as the core reports it: the committed index the
+// partition's rs-raft port reads back (a lone leader commits its own
+// proposals).
+async function committedLogIndex(partition) {
+  return (await partition.raft.readStatus()).commitIndex;
+}
+
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
@@ -67,7 +74,7 @@ test('Property 48: Committed transactions are replicated to Raft log', async (t)
 
         try {
           // Get initial log length
-          const initialLogLength = partition.storage.getLogLength();
+          const initialLogLength = await committedLogIndex(partition);
 
           // Begin transaction
           await partition.beginTransaction();
@@ -88,7 +95,7 @@ test('Property 48: Committed transactions are replicated to Raft log', async (t)
           }
 
           // Verify Raft log has grown (transaction commit entry added)
-          const finalLogLength = partition.storage.getLogLength();
+          const finalLogLength = await committedLogIndex(partition);
 
           // Log should have at least one new entry for the transaction commit
           return finalLogLength > initialLogLength;
@@ -103,10 +110,10 @@ test('Property 48: Committed transactions are replicated to Raft log', async (t)
   t.pass('Raft log replication property holds');
 });
 
-test('Property 48: Commit returns Raft log index', async (t) => {
+test('Property 48: Commit is committed through consensus', async (t) => {
   /**
-   * Property: For any committed transaction, the commit result should
-   * include the Raft log index for tracking durability.
+   * Property: For any committed transaction, the commit marker is proposed
+   * through the partition's consensus port and committed.
    */
   await fc.assert(
     fc.asyncProperty(
@@ -130,6 +137,7 @@ test('Property 48: Commit returns Raft log index', async (t) => {
         await partition.initialize();
 
         try {
+          const committedBefore = await committedLogIndex(partition);
           // Begin transaction
           await partition.beginTransaction();
 
@@ -141,10 +149,12 @@ test('Property 48: Commit returns Raft log index', async (t) => {
           // Commit transaction
           const commitResult = await partition.commitTransaction();
 
-          // Verify commit was successful and has raft log index
+          // The commit marker is one proposal through consensus; a proposal
+          // has no log index until it commits, so the result carries none.
           return commitResult.success === true &&
                  commitResult.committed === true &&
-                 commitResult.raftLogIndex !== undefined;
+                 !Object.hasOwn(commitResult, 'raftLogIndex') &&
+                 await committedLogIndex(partition) === committedBefore + 1;
         } finally {
           await partition.shutdown();
         }
@@ -153,7 +163,7 @@ test('Property 48: Commit returns Raft log index', async (t) => {
     {numRuns: 10},
   );
 
-  t.pass('Raft log index in commit result property holds');
+  t.pass('Commit through consensus property holds');
 });
 
 test('Property 48: Data persists after commit', async (t) => {
@@ -238,7 +248,7 @@ test('Property 48: Rolled back transactions are not in Raft log', async (t) => {
 
         try {
           // Get initial log length
-          const initialLogLength = partition.storage.getLogLength();
+          const initialLogLength = await committedLogIndex(partition);
 
           // Begin transaction
           await partition.beginTransaction();
@@ -255,7 +265,7 @@ test('Property 48: Rolled back transactions are not in Raft log', async (t) => {
 
           // Rollback may append control entries, but it must not
           // make uncommitted row writes visible.
-          const finalLogLength = partition.storage.getLogLength();
+          const finalLogLength = await committedLogIndex(partition);
           let rolledBackRowsVisible = false;
           for (const op of ops) {
             const readResult = await partition.executeQuery(
@@ -306,7 +316,7 @@ test('Property 48: Multiple commits create multiple Raft entries', async (t) => 
         await partition.initialize();
 
         try {
-          const initialLogLength = partition.storage.getLogLength();
+          const initialLogLength = await committedLogIndex(partition);
 
           // Execute multiple transactions
           for (let i = 0; i < numTransactions; i++) {
@@ -317,7 +327,7 @@ test('Property 48: Multiple commits create multiple Raft entries', async (t) => 
             await partition.commitTransaction();
           }
 
-          const finalLogLength = partition.storage.getLogLength();
+          const finalLogLength = await committedLogIndex(partition);
 
           // Each transaction should add at least one entry
           return finalLogLength >= initialLogLength + numTransactions;

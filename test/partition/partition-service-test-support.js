@@ -14,10 +14,22 @@ import {
 } from '../../src/raft/raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
+import {RAFT_PARTITION_NODE_REQUEST} from
+  '../../src/raft/raft-provider-contract-constants.js';
+import {applyCommittedEntryTransaction} from
+  '../../src/raft/raft-rs-application-transaction-owner.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {
+  decodeCommittedProposal,
+  encodeProposal,
+} from '../../src/raft/raft-rs-proposal-codec.js';
+import {RAFT_RS_ENTRY_TYPE} from
+  '../../src/raft/raft-rs-ready-loop-constants.js';
 import {LIFECYCLE_PHASE} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {
   evaluateLearnerPromotionProof,
 } from '../../src/raft/learner-promotion-progress.js';
+import {PartitionService} from '../../src/partition/partition-service.js';
 
 const PROOF_STUB_TERM = 1;
 const PROOF_STUB_COMMITTED_INDEX = 0;
@@ -27,6 +39,37 @@ function testCoreOk(fields = {}) {
   return deepFreeze({
     outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
     ...fields,
+  });
+}
+
+/**
+ * Apply one committed command the way the rs-raft runtime applies a committed
+ * entry: the command round-trips through the production proposal codec and
+ * the production application-transaction owner applies it on the given
+ * database, handing the application the port's frozen committed record.
+ * Throws (after the rollback effects ran) when the application fails.
+ * @param {Object} options - {database, groupId, index, term, command,
+ *   applyCommittedEntry}.
+ */
+export function applyCommandThroughApplicationOwner({database, groupId, index,
+  term, command, applyCommittedEntry}) {
+  applyCommittedEntryTransaction({
+    store: new RaftRsDurableStore(database),
+    groupId,
+    entry: {
+      index: String(index),
+      term: String(term),
+      entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
+      data: Buffer.from(encodeProposal(command)).toString('base64'),
+    },
+    confState: {},
+    applyCommittedEntry: (bytes, position) => applyCommittedEntry(
+      Object.freeze({
+        command: decodeCommittedProposal(bytes),
+        index: Number(position.index),
+        term: Number(position.term),
+        effects: position.effects,
+      })),
   });
 }
 
@@ -45,6 +88,27 @@ export class ControllablePartitionRaftProvider {
     this.stepHandler = null;
     this.listeners = new Map();
     this.steps = [];
+    this.committedIndex = 0;
+  }
+
+  /**
+   * Commit one proposed command the way the rs-raft runtime applies a
+   * committed entry (see applyCommandThroughApplicationOwner). Throws (after
+   * the rollback effects ran) when the application fails.
+   * @param {Object} command - The proposed command.
+   */
+  commit(command) {
+    const index = this.committedIndex + 1;
+    applyCommandThroughApplicationOwner({
+      database: this.request[RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE],
+      groupId: this.request[RAFT_PARTITION_NODE_REQUEST.GROUP_ID],
+      index,
+      term: this.term,
+      command,
+      applyCommittedEntry:
+        this.request[RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY],
+    });
+    this.committedIndex = index;
   }
 
   createPartitionPort(request) {
@@ -93,7 +157,7 @@ export class ControllablePartitionRaftProvider {
       },
       readStatus: () => deepFreeze({
         term: this.term,
-        commitIndex: 0,
+        commitIndex: this.committedIndex,
         role: this.role,
         leaderId: this.leaderId,
         leaderAddress: this.leaderAddress,
@@ -143,6 +207,35 @@ export class ControllablePartitionRaftProvider {
   setStepHandler(handler) {
     this.stepHandler = handler;
   }
+}
+
+// The test seam for a controllable consensus port. Production construction
+// takes no provider and no backend selection (naming one is refused); a suite
+// that drives roles and proposals by hand subclasses the service and builds
+// its port from the controllable provider instead.
+class ControllablePartitionService extends PartitionService {
+  constructor(options, provider) {
+    super(options);
+    this.controllableProvider = provider;
+  }
+
+  createOperationPort(request) {
+    return this.controllableProvider.createPartitionPort(request);
+  }
+}
+
+/**
+ * Construct a PartitionService whose operation port the given controllable
+ * provider builds.
+ * @param {Object} options - PartitionService construction options.
+ * @param {ControllablePartitionRaftProvider} [provider] - The provider.
+ * @return {PartitionService} The service.
+ */
+export function createControllablePartitionService(
+  options,
+  provider = new ControllablePartitionRaftProvider(),
+) {
+  return new ControllablePartitionService(options, provider);
 }
 
 /**

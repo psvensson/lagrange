@@ -27,6 +27,10 @@ import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
+  createRaftOperationPort,
+  deepFreeze,
+} from '../../src/raft/raft-operation-port.js';
+import {
 } from '../../src/raft/constants.js';
 import {
   SERVICE_TYPE,
@@ -1153,14 +1157,23 @@ test(
     });
     await partition.initialize();
     partition.role = RaftRole.LEADER;
-    partition.storage.currentTerm = 7;
+    // The term is the consensus core's, read through the port; the witness
+    // decorates the port's status observation, never the core.
+    let observedTerm = 7;
+    const realPort = partition.raft;
+    partition.raft = createRaftOperationPort({
+      ...realPort,
+      readStatus: () => deepFreeze({
+        ...realPort.readStatus(), term: observedTerm,
+      }),
+    });
     const originalDateNow = Date.now;
     let nowMs = 100;
     Date.now = () => nowMs;
     partition.executeQuery = async () => {
       nowMs = 200;
       partition.role = RaftRole.FOLLOWER;
-      partition.storage.currentTerm = 8;
+      observedTerm = 8;
       return {success: true, rows: [], count: 0};
     };
     try {
@@ -1176,6 +1189,7 @@ test(
         'the witness reports the term that entered the local snapshot');
     } finally {
       Date.now = originalDateNow;
+      partition.raft = realPort;
       partition.shutdown();
     }
   },

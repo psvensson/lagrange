@@ -32,6 +32,8 @@ import {RAFT_RS_PROPOSAL_CODEC_ERROR} from
   '../../src/raft/raft-rs-proposal-codec-constants.js';
 import {RAFT_RS_ENTRY_TYPE} from
   '../../src/raft/raft-rs-ready-loop-constants.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
 
 const SCHEMA = {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]};
 
@@ -59,13 +61,17 @@ test('Fix 1: applyCommittedEntry witnesses a remote HLC so the next local ' +
   const remote = `${Date.now() + 1_000_000}-7-remote-node`;
   const remoteTs = HLCTimestamp.fromString(remote);
 
-  partition.applyCommittedEntry({
+  // Committed through the partition's own port: a lone rs-raft leader
+  // commits and applies its proposal before propose() returns.
+  const proposed = await partition.raft.propose({
     entryId: 'e-remote',
     type: 'INSERT',
     sql: 'INSERT INTO t (id) VALUES (?)',
     params: ['a'],
     timestamp: remote,
   });
+  t.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+    'the remote write commits and applies');
 
   const next = partition.hlcClock.now();
   t.ok(next.compare(remoteTs) > 0,
@@ -80,15 +86,17 @@ test('Fix 1: a missing/unparseable timestamp is skipped, never fatal',
     await partition.initialize();
 
     const before = partition.hlcClock.current();
-    t.doesNotThrow(() => {
-      partition.applyCommittedEntry({
-        entryId: 'e-no-ts',
-        type: 'INSERT',
-        sql: 'INSERT INTO t (id) VALUES (?)',
-        params: ['b'],
-        // no timestamp field
-      });
-    }, 'applying an entry without an HLC must not throw');
+    const proposed = await partition.raft.propose({
+      entryId: 'e-no-ts',
+      type: 'INSERT',
+      sql: 'INSERT INTO t (id) VALUES (?)',
+      params: ['b'],
+      // no timestamp field
+    });
+    t.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      'applying an entry without an HLC must not fail its application');
+    t.equal(partition.db.prepare('SELECT COUNT(*) AS count FROM t').get()
+      .count, 1, 'the entry without an HLC is applied');
 
     const after = partition.hlcClock.now();
     t.ok(after.compare(before) >= 0, 'clock must not regress');
