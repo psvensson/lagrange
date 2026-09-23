@@ -71,10 +71,10 @@ import {
 // learner-promotion-proof-channel-witness-determinism): the durable landing
 // of the learner's services row is an explicit fixture schedule, never a
 // wall-clock race. The leader cache gains the row first (INSERT; the leader
-// joins the learner as a raft peer and replicates the committed prefix on
-// liferaft's wall-clock heartbeat), the fixture then waits until the leader
-// has PROVEN that replication (its own learnerMatchIndex observable at the
-// committed prefix — the proof's input, never elapsed time), and only then
+// observes the learner through the semantic progress boundary), the fixture
+// then drives probePeerProgress and waits until the leader has PROVEN that
+// replication (its own followerProgress observable at the committed prefix —
+// the proof's input, never elapsed time), and only then
 // does the target's own cache see its local-only seed row converge
 // (UPDATE, the services_row_visible wake). The wake proof request therefore
 // always meets a caught-up learner: two drives yield the identical
