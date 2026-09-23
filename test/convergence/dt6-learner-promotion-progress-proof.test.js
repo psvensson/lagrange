@@ -58,6 +58,8 @@ import {
   LEARNER_PROMOTION_PROOF_DECISION,
   LEARNER_PROMOTION_PROOF_REASON,
 } from '../../src/raft/learner-promotion-progress.js';
+import {RAFT_PEER_PROGRESS_PROBE_REASON} from
+  '../../src/raft/raft-operation-port-constants.js';
 import {
   COMMITTED_ENTRY_COUNT,
   LEARNER_ADDRESS,
@@ -74,12 +76,6 @@ import {
 const LAG_OBSERVATION_MS = 300;
 const PROMOTION_BUDGET_MS = 5000;
 const PUBLICATION_EPOCH_ONE = 1;
-// The probe's typed reasons (the rs-raft operation port states them inline;
-// finding F18 names the honest pair).
-const PROGRESS_PROBE_REASON = Object.freeze({
-  SENT: 'progress-probe-sent',
-  OBSERVED: 'progress-observed',
-});
 
 // The learner's proof channel with a gate: while closed, every promotion
 // proof request is lost in the network (the learner's typed transport
@@ -311,7 +307,7 @@ async (t) => {
       await leader.raft.probePeerProgress(LEARNER_ADDRESS),
       {
         outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
-        reason: PROGRESS_PROBE_REASON.SENT,
+        reason: RAFT_PEER_PROGRESS_PROBE_REASON.PROGRESS_PROBE_SENT,
       },
       'for a learner with no acknowledged progress the probe sends ' +
         '(typed progress-probe-sent; F18: the inert rs-raft probe reports ' +
@@ -341,10 +337,10 @@ async (t) => {
       observed,
       {
         outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
-        reason: PROGRESS_PROBE_REASON.OBSERVED,
+        reason: RAFT_PEER_PROGRESS_PROBE_REASON.PROGRESS_OBSERVED,
       },
       'for the idle caught-up learner the probe reports typed ' +
-        'progress-observed',
+        RAFT_PEER_PROGRESS_PROBE_REASON.PROGRESS_OBSERVED,
     );
     t.ok(
       observed.matchIndex >= COMMITTED_ENTRY_COUNT,

@@ -12,6 +12,8 @@ import {
 } from '../../src/partition/partition-service-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {LEADER_DURABILITY_CONSEQUENCE_OUTCOME} from
+  '../../src/partition/partition-service-durability-fitness.js';
 
 // Quest formation-ledger-leader-local-persistence-wedge (P1) — deterministic
 // reproduction of the run-23 ledger-leader durability freeze:
@@ -80,15 +82,6 @@ const STRIKE_TICKS = 3;
 // a multi-member leader that stays successorless-unfit for this long is
 // demoted anyway. Mirrors LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK_MS.
 const SUCCESSORLESS_FALLBACK_TICKS = 15;
-// The fitness owner's typed consequence outcomes (finding F1). The owner
-// module does not export its LEADER_DURABILITY_CONSEQUENCE_OUTCOME map, so
-// the witness pins the values it logs and hands the hook.
-const CONSEQUENCE_OUTCOME = Object.freeze({
-  CANDIDACY_DEFERRAL_UNSUPPORTED:
-    'leader_durability_candidacy_deferral_unsupported',
-  DEMOTION_UNSUPPORTED: 'leader_durability_demotion_unsupported',
-});
-
 let tmpDirCounter = 0;
 function makeTmpDbPath(t) {
   const dir = fs.mkdtempSync(
@@ -281,7 +274,7 @@ t.test(
       );
       t.equal(
         unfitEvents[0]?.candidacyDeferral,
-        CONSEQUENCE_OUTCOME.CANDIDACY_DEFERRAL_UNSUPPORTED,
+        LEADER_DURABILITY_CONSEQUENCE_OUTCOME.CANDIDACY_DEFERRAL_UNSUPPORTED,
         'the unfitness evidence states candidacy deferral as the typed ' +
           'unsupported outcome, not a silent no-op call',
       );
@@ -486,7 +479,7 @@ t.test(
       // not silently kept as if nothing had been decided.
       t.equal(
         unfitEvents[0]?.demotion,
-        CONSEQUENCE_OUTCOME.DEMOTION_UNSUPPORTED,
+        LEADER_DURABILITY_CONSEQUENCE_OUTCOME.DEMOTION_UNSUPPORTED,
         'past the bound the fallback demotion is decided and stated as the ' +
           'typed demotion-unsupported outcome (F1: no step-down on the port)',
       );
@@ -598,7 +591,7 @@ t.test(
         unfitEvents[0] || {},
         {
           successorViable: true,
-          demotion: CONSEQUENCE_OUTCOME.DEMOTION_UNSUPPORTED,
+          demotion: LEADER_DURABILITY_CONSEQUENCE_OUTCOME.DEMOTION_UNSUPPORTED,
         },
         'the viable-successor handoff is decided immediately (no fallback ' +
           'wait) and its demotion is the typed unsupported outcome (F1)',
