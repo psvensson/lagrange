@@ -942,10 +942,24 @@ test('a lab shard streams its lines while it runs and relays its results ledger'
   const out = streamed.filter(({stream}) => stream === 'out').map(({line}) => line);
   assert.deepEqual(out, outcome.log.split('\n').filter(Boolean),
     'every line of the log was streamed, once, in order');
-  assert.deepEqual(out.filter((line) => line.startsWith('placement-results=')),
-    RESULTS_TEXT.trim().split('\n').map((line) => `placement-results=${line}`),
-    'the results ledger left in the throwaway worktree comes back before it is removed');
+  const relayed = out.filter((line) => line.startsWith('placement-results='))
+    .map((line) => line.slice('placement-results='.length));
+  assertLedgerCameBack(relayed, [FAST_TEST, GATE_TEST]);
 });
+
+// The ledger in the throwaway worktree came back whole before it was
+// removed: the commit's own records first, then the runner's record of every
+// file the shard ran (the runner appends one per attempt).
+function assertLedgerCameBack(records, files) {
+  const committed = RESULTS_TEXT.trim().split('\n');
+  assert.deepEqual(records.slice(0, committed.length), committed,
+    'the results ledger left in the throwaway worktree comes back before it is removed');
+  const ran = records.slice(committed.length).map((record) => JSON.parse(record));
+  for (const file of files) {
+    assert.ok(ran.some((record) => record.file === file && record.ok === true),
+      `with the runner's own record of ${file}: ${records.join('\n')}`);
+  }
+}
 
 test('a split lab run sends the exclusive lane away, runs the rest here and merges', async (t) => {
   const {controller, machine, sha, env} = labFixture(t);
@@ -980,8 +994,10 @@ test('a split lab run sends the exclusive lane away, runs the rest here and merg
   const assertions = lines.filter((line) => /^\[[^\]]+\] ok /u.test(line))
     .reduce((sum, line) => sum + Number(/\((\d+) assertions/u.exec(line)[1]), 0);
   assert.equal(merged, `# test-files total=2 pass=2 fail=0 assertions=${assertions}`);
-  assert.equal(fs.readFileSync(path.join(controller, 'test-output', 'reports',
-    'test-results-lab.ndjson'), 'utf8'), RESULTS_TEXT, 'copied back under the machine\'s name');
+  const copied = fs.readFileSync(path.join(controller, 'test-output', 'reports',
+    'test-results-lab.ndjson'), 'utf8');
+  assert.ok(copied.endsWith('\n'), 'copied back under the machine\'s name, whole');
+  assertLedgerCameBack(copied.trim().split('\n'), [FAST_TEST]);
   commit.release();
   assert.equal(fs.existsSync(commit.gitRoot), false, 'the planning checkout is gone');
 

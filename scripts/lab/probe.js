@@ -1309,13 +1309,8 @@ async function settleRemoteShards(remote, outcomes, {deps, fleet, statuses, writ
 const PLACEMENT_RESULTS_PREFIX = 'placement-results=';
 const PLACEMENT_SCRIPT_HEAD = [
   'set -u',
-<<<<<<< HEAD
   'repo="$1"; sha="$2"; node_major="$3"; factor="$4"; run="$5"; bundle="$6"',
-  'retry="$7"; tap_timeout="$8"',
-=======
-  'repo="$1"; sha="$2"; node_major="$3"; factor="$4"; run="$5"; bundle="$6"; keep="$7"',
-  'retry="$8"; tap_timeout="$9"; results="${10}"',
->>>>>>> process/t-lab
+  'retry="$7"; tap_timeout="$8"; results="$9"',
   // Before nvm, which reads its arguments (see the capability script).
   'set --',
   'pid=""',
@@ -1590,26 +1585,17 @@ function tailLines(file, stream, onLine) {
  * stderr log, or a reason when the shard never ran or its deadline stopped
  * it; `stop` stops it now.
  * @param {{machine: Object, files: string[]}} shard
-<<<<<<< HEAD
- * @param {{sha: string, deadlineMs: number, root: string,
- *   runId?: string, env?: Object, forward?: {retry?: string, tapTimeout?: string}}} options
- * @return {{done: Promise<Object>, stop: Function}}
- */
-export function startRemoteShard(shard, {sha, deadlineMs, root,
-  env = gitProcessEnvironment(), forward = {},
-=======
  * `onLine(line, stream)`, when given, receives each line of the relay as it
  * arrives - stdout as `out`, stderr as `err` - not only at settle; `results`
  * names a ledger the runner leaves in the worktree, relayed back as prefixed
  * lines; `gitRoot` is the checkout whose HEAD is the commit (default root).
- * @param {{sha: string, deadlineMs: number, root: string, keepGoing?: boolean,
+ * @param {{sha: string, deadlineMs: number, root: string,
  *   runId?: string, env?: Object, forward?: {retry?: string, tapTimeout?: string},
  *   onLine?: Function, results?: string, gitRoot?: string}} options
  * @return {{done: Promise<Object>, stop: Function}}
  */
-export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true,
+export function startRemoteShard(shard, {sha, deadlineMs, root,
   env = gitProcessEnvironment(), forward = {}, onLine = null, results = EMPTY, gitRoot = root,
->>>>>>> process/t-lab
   runId = `${sha.slice(0, PLACEMENT_RUN_SHA_CHARACTERS)}-` +
     `${Date.now().toString(PLACEMENT_RUN_RADIX)}-${process.pid}`}) {
   const {machine} = shard;
@@ -1635,12 +1621,7 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true
     bundleFile,
     run: commandLine(remoteCommand(machine, null, [machine.repoPath, sha,
       machine.nodeMajor || EMPTY, String(machine.factor || 1), runId, remoteBundle,
-<<<<<<< HEAD
-      forward.retry || EMPTY, forward.tapTimeout || EMPTY], {fromStdin: true})),
-=======
-      keepGoing ? PLACEMENT_KEEP_GOING : EMPTY, forward.retry || EMPTY,
-      forward.tapTimeout || EMPTY, results], {fromStdin: true})),
->>>>>>> process/t-lab
+      forward.retry || EMPTY, forward.tapTimeout || EMPTY, results], {fromStdin: true})),
     scriptFile,
   });
   const output = fs.openSync(logFile, 'w');
@@ -1752,17 +1733,6 @@ async function discoverPlacement(root, env) {
 
 // The controller's own files while lab shards run: the classified runner's
 // entry point as a child in a group of its own, told never to place again.
-<<<<<<< HEAD
-// `abort` ends the whole group.
-function runClassifiedChild(root, files, env) {
-  const child = spawn(process.execPath, [PLACEMENT_RUNNER, PLACEMENT_RUNNER_STDIN], {
-    cwd: root,
-    env: {...env, [PLACEMENT_ENV]: PLACEMENT_LOCAL},
-    stdio: [PLACEMENT_STDIO_PIPE, PLACEMENT_STDIO_INHERIT, PLACEMENT_STDIO_INHERIT],
-    detached: true,
-  });
-  child.stdin.end(files.join(PLACEMENT_NEWLINE) + PLACEMENT_NEWLINE);
-=======
 // `abort` ends the whole group. With `onLine` its output is not inherited but
 // handed over line by line, as a lab shard's relay is, and it is done only
 // once that output has been read to the end.
@@ -1783,8 +1753,7 @@ function runClassifiedChild(root, files, env, {onLine = null} = {}) {
   const input = fs.openSync(list, PLACEMENT_READ_FLAG);
   let child;
   try {
-    child = spawn(process.execPath, [PLACEMENT_RUNNER, PLACEMENT_KEEP_GOING,
-      PLACEMENT_RUNNER_STDIN], {
+    child = spawn(process.execPath, [PLACEMENT_RUNNER, PLACEMENT_RUNNER_STDIN], {
       cwd: root,
       env: {...env, [PLACEMENT_ENV]: PLACEMENT_LOCAL},
       stdio: [input, output, output],
@@ -1798,7 +1767,6 @@ function runClassifiedChild(root, files, env, {onLine = null} = {}) {
     streamLines(child.stdout, PLACEMENT_STREAM.OUT, onLine);
     streamLines(child.stderr, PLACEMENT_STREAM.ERR, onLine);
   }
->>>>>>> process/t-lab
   return {
     done: (onLine ? closeOf(child) : exitOf(child)).then((status) => status ?? 1),
     abort: () => {
