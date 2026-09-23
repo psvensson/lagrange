@@ -7,10 +7,11 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   checkLearnerPromotionWithGrantedProof,
-  createLoopbackTransport,
-  waitForCondition,
-  createTrafficReadinessState,
   ControllablePartitionRaftProvider,
+  createControllablePartitionService,
+  createLoopbackTransport,
+  createTrafficReadinessState,
+  waitForCondition,
 } from './partition-service-test-support.js';
 import {
   PartitionService,
@@ -69,7 +70,7 @@ afterEach(() => {
 
 test('PartitionService - leader activation dedupes same-term flaps and cancels on candidate demotion', async (t) => {
   const raftProvider = new ControllablePartitionRaftProvider();
-  const partition = new PartitionService({
+  const partition = createControllablePartitionService({
     partitionId: 'test-partition-leader-gate',
     tableId: 'leader_gate_test',
     replicaId: 'replica-1',
@@ -80,8 +81,7 @@ test('PartitionService - leader activation dedupes same-term flaps and cancels o
     dbPath: ':memory:',
     deferElection: true,
     leaderActivationStabilizationMs: 20,
-    raftProvider,
-  });
+  }, raftProvider);
 
   await partition.initialize();
 

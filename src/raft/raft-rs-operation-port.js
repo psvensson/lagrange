@@ -7,6 +7,10 @@ import {
 import {RAFT_PARTITION_NODE_REQUEST} from
   './raft-provider-contract-constants.js';
 import {RaftRsPeerIdentityRegistry} from './raft-rs-peer-identity.js';
+import {
+  decodeCommittedProposal,
+  encodeProposal,
+} from './raft-rs-proposal-codec.js';
 import {RaftRsReplicaLifecycleOwner} from
   './raft-rs-replica-lifecycle-owner.js';
 import {registerPeerIdentityReservationOwner} from
@@ -44,14 +48,16 @@ function coreOk(reason, fields = {}) {
   return deepFreeze({outcome: CORE_OK, reason, ...fields});
 }
 
-function bytesOf(value) {
-  if (value instanceof Uint8Array) {
-    return value;
-  }
-  if (Buffer.isBuffer(value)) {
-    return new Uint8Array(value);
-  }
-  return new Uint8Array(Buffer.from(JSON.stringify(value)));
+// The partition's application receives one frozen committed record: the
+// command the port encoded, decoded by the same codec, and the entry's
+// position and deferred-effect bag the runtime hands the application.
+function committedEntryApplication(applyCommittedEntry) {
+  return (bytes, {index, term, effects}) => applyCommittedEntry(Object.freeze({
+    command: decodeCommittedProposal(bytes),
+    index: Number(index),
+    term: Number(term),
+    effects,
+  }));
 }
 
 function tickIntervalOf(timing) {
@@ -134,8 +140,8 @@ function createRaftRsOperationPort(request) {
       }
       return identity;
     },
-    applyCommittedEntry: required(
-      request, RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY),
+    applyCommittedEntry: committedEntryApplication(required(
+      request, RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY)),
     applyTransactionRolledBack:
       request[RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
     emit,
@@ -195,7 +201,9 @@ function createRaftRsOperationPort(request) {
   const port = createRaftOperationPort({
     subscribe,
     step: enqueueStep,
-    propose: (value) => execute({type: 'propose', bytes: bytesOf(value)}),
+    propose: (value) => execute({
+      type: 'propose', bytes: encodeProposal(value),
+    }),
     proposeConfChange: (change) => lifecycle.execute(() => {
       if (closed || dispatcher === null) {
         return deepFreeze({outcome: CORE_REFUSED, reason: 'closed'});

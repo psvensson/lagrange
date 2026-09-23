@@ -352,15 +352,14 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
   }
 
   // A swept/healed rollback is NOT crash-equivalent for JS memory: the apply
-  // dedup set and the adapter's monotonic committed-index cache survive it and
-  // would make post-heal catch-up skip re-execution and clamp the durable
-  // watermark forever (verifier finding Z1). Both MUST be cleared together so
-  // the replica genuinely re-applies what the rollback evaporated; kept as one
-  // method so the two clears never drift apart.
+  // dedup set survives it and would make post-heal catch-up skip
+  // re-execution (verifier finding Z1). The key set and its witnesses MUST be
+  // cleared together so the replica genuinely re-applies what the rollback
+  // evaporated; the applied watermark is the rs-raft store's own and rolls
+  // back with the transaction.
   clearPostRollbackApplyState() {
     this.recentlyAppliedEntryKeys?.clear?.();
     this.recentlyAppliedEntryWitnesses?.clear?.();
-    this.logAdapter?.refreshCommittedIndexCacheFromStore?.();
   }
 
   enforcePreparedStateHoldTimeouts(nowMs = Date.now()) {
@@ -641,7 +640,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         conflicts: conflictCheck.conflicts,
       };
     }
-    const raftEntry = await this.replicatePreparedTransaction(
+    await this.replicatePreparedTransaction(
       transactionSessionId,
       transactionState,
     );
@@ -653,7 +652,6 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       operations: transactionState.operations,
       writeSet: transactionState.writeSet,
       readSet: transactionState.readSet,
-      raftLogIndex: raftEntry?.index || null,
       preparedAt: Date.now(),
     });
     this.syncLegacyTransactionAliases();
@@ -663,7 +661,6 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       partitionId: this.partitionId,
       prepared: true,
       sessionId: transactionSessionId,
-      raftLogIndex: raftEntry?.index || null,
     };
   }
   /**
@@ -696,7 +693,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       operationCount: transactionState.operations.length,
     });
     try {
-      const raftEntry = await this.replicateTransactionCommit(
+      await this.replicateTransactionCommit(
         transactionState.operations,
         resolvedSessionId,
         transactionState.transactionEpoch,
@@ -740,7 +737,6 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         committed: true,
         durationMs: duration,
         operationCount,
-        raftLogIndex: raftEntry?.index || null,
         sessionId: resolvedSessionId,
       };
     } catch (error) {
@@ -796,7 +792,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       operationCount: transactionState.operations.length,
     });
     try {
-      const raftEntry = await this.replicateTransactionRollback(
+      await this.replicateTransactionRollback(
         resolvedSessionId,
         transactionState.transactionEpoch,
       );
@@ -815,7 +811,6 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         durationMs: duration,
         operationCount,
         sessionId: resolvedSessionId,
-        raftLogIndex: raftEntry?.index || null,
       };
     } catch (error) {
       this.logger.error(
@@ -898,7 +893,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
   }
   /**
    * Replicate transaction commit through Raft for durability.
-   * @return {Promise<Object>} Raft log entry.
+   * @return {Promise<Object>} The proposed marker entry.
    * @private
    */
   async replicateTransactionCommit(
@@ -916,9 +911,9 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       proposedBy: this.replicaId,
       proposedAt: Date.now(),
     };
-    const logEntry = this.storage.appendEntry(entry);
-    const isLiferaftLeader = this.raft?.readStatus?.().role === RaftRole.LEADER;
-    if (isLiferaftLeader) {
+    // Propose-only: the marker's durable log is the consensus core's. The
+    // proposal stays fire-and-forget; only the leader proposes.
+    if (this.raft?.readStatus().role === RaftRole.LEADER) {
       Promise.resolve(this.raft.propose(entry))
         .then(assertRaftOperationSucceeded)
         .catch((err) => {
@@ -930,13 +925,13 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
           }
         });
     }
-    return logEntry;
+    return entry;
   }
   /**
    * Replicate one transaction rollback marker through Raft.
    * @param {string} sessionId - Transaction session ID.
    * @param {number|null} transactionEpoch - Transaction snapshot epoch.
-   * @return {Promise<Object>} Raft log entry.
+   * @return {Promise<Object>} The proposed marker entry.
    * @private
    */
   async replicateTransactionRollback(
@@ -952,9 +947,9 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       proposedBy: this.replicaId,
       proposedAt: Date.now(),
     };
-    const logEntry = this.storage.appendEntry(entry);
-    const isLiferaftLeader = this.raft?.readStatus?.().role === RaftRole.LEADER;
-    if (isLiferaftLeader) {
+    // Propose-only: the marker's durable log is the consensus core's. The
+    // proposal stays fire-and-forget; only the leader proposes.
+    if (this.raft?.readStatus().role === RaftRole.LEADER) {
       Promise.resolve(this.raft.propose(entry))
         .then(assertRaftOperationSucceeded)
         .catch((err) => {
@@ -966,13 +961,13 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
           }
         });
     }
-    return logEntry;
+    return entry;
   }
   /**
    * Replicate prepared transaction state through Raft for durability.
    * @param {string} sessionId - Transaction session ID.
    * @param {Object} transactionState - Active transaction state.
-   * @return {Promise<Object>} Raft log entry.
+   * @return {Promise<Object>} The proposed marker entry.
    * @private
    */
   async replicatePreparedTransaction(sessionId, transactionState) {
@@ -986,9 +981,9 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       proposedBy: this.replicaId,
       proposedAt: Date.now(),
     };
-    const logEntry = this.storage.appendEntry(entry);
-    const isLiferaftLeader = this.raft?.readStatus?.().role === RaftRole.LEADER;
-    if (isLiferaftLeader) {
+    // Propose-only: the marker's durable log is the consensus core's. The
+    // proposal stays fire-and-forget; only the leader proposes.
+    if (this.raft?.readStatus().role === RaftRole.LEADER) {
       Promise.resolve(this.raft.propose(entry))
         .then(assertRaftOperationSucceeded)
         .catch((err) => {
@@ -1000,7 +995,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
           }
         });
     }
-    return logEntry;
+    return entry;
   }
 }
 

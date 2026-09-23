@@ -3,7 +3,6 @@ import {isValidRaftLogIndex} from '../raft/log-index.js';
 
 
 const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
-  DIRECT: 'direct',
   RAFT: 'raft',
   REJECTED: 'rejected',
 });
@@ -23,10 +22,6 @@ function normalizeInteger(value, fallback = null) {
 function resolveProposedAt(value) {
   const supplied = normalizeInteger(value);
   return supplied === null ? Date.now() : supplied;
-}
-
-function normalizeWriteParams(params) {
-  return Array.isArray(params) ? params : [];
 }
 
 function normalizeCommitWitnessString(value) {
@@ -114,42 +109,26 @@ function buildDurableCommitWitness(options) {
   return Object.freeze(witness);
 }
 
+// A write is proposed only by the consensus leader; a lone leader commits its
+// own proposal, so there is no direct-execution mode.
 function resolvePartitionWriteCommitMode(options = {}) {
   const replicaIds = Array.isArray(options.replicaIds) ? options.replicaIds : [];
-  if (replicaIds.length <= 1) {
-    // A self-only replica list must not authorize a unilateral direct commit
-    // when a remote leader is known to exist: the local list can be
-    // viability-filtered down to self under membership churn (CL-013 class),
-    // and a direct apply then forks the group — one replica fabricates
-    // committed entries the true leader never saw (run-15:
-    // replica_operations-p1-r5 self-committed phantom operations that
-    // safety-gated the control plane into a cluster-wide freeze). The
-    // witness must be an ACTUAL (a leader observed via raft traffic or the
-    // published leader pointer on another node) — never a target like
-    // replica_count, which legitimately exceeds placed membership on
-    // single-node and degraded clusters.
-    if (options.hasKnownRemoteLeader === true) {
-      return PARTITION_WRITE_COMMIT_MODE.REJECTED;
-    }
-    return PARTITION_WRITE_COMMIT_MODE.DIRECT;
+  // A self-only replica list must not authorize a unilateral commit when a
+  // remote leader is known to exist: the local list can be viability-filtered
+  // down to self under membership churn (CL-013 class), and a self-elected
+  // solo leader then forks the group - one replica fabricates committed
+  // entries the true leader never saw (run-15: replica_operations-p1-r5
+  // self-committed phantom operations that safety-gated the control plane
+  // into a cluster-wide freeze). The witness must be an ACTUAL (a leader
+  // observed via raft traffic or the published leader pointer on another
+  // node) - never a target like replica_count, which legitimately exceeds
+  // placed membership on single-node and degraded clusters.
+  if (replicaIds.length <= 1 && options.hasKnownRemoteLeader === true) {
+    return PARTITION_WRITE_COMMIT_MODE.REJECTED;
   }
-
   return options.raftState === options.raftLeaderState ?
     PARTITION_WRITE_COMMIT_MODE.RAFT :
     PARTITION_WRITE_COMMIT_MODE.REJECTED;
-}
-
-function executePartitionWriteStatement(db, entry, partitionId, logIndex) {
-  const statement = db.prepare(entry.sql);
-  const info = statement.run(...normalizeWriteParams(entry.params));
-
-  return {
-    success: true,
-    changes: info.changes,
-    lastInsertRowid: info.lastInsertRowid,
-    partitionId,
-    logIndex,
-  };
 }
 
 function buildPartitionWriteFailureResult(error, partitionId, logIndex = null) {
@@ -204,6 +183,5 @@ export {
   buildPartitionWriteEntry,
   buildPartitionWriteFailureResult,
   buildPartitionWriteSideEffectPlan,
-  executePartitionWriteStatement,
   resolvePartitionWriteCommitMode,
 };

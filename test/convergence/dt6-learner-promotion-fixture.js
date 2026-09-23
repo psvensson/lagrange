@@ -3,9 +3,9 @@
  * witnesses (quests learner-promotion-progress-proof and
  * learner-promotion-proof-channel-wake): the REAL owners — live
  * PartitionService leader + learner on a loopback transport with real
- * replication through the partition's Raft operation port (liferaft backend
- * by default), the real proof RPC over the application-message channel, and
- * the real promotion gate chain.
+ * replication through the partition's rs-raft operation port, the real
+ * proof RPC over the application-message channel, and the real promotion
+ * gate chain.
  *
  * FIDELITY: in-process deterministic guard (loopback transport, single
  * process). The three passive voters are authoritative service rows (the
@@ -25,6 +25,10 @@ import {
   RaftRole,
   CDCOperation,
 } from '../../src/partition/partition-service.js';
+import {PARTITION_SERVICE_OPERATION} from
+  '../../src/partition/partition-service-constants.js';
+import {assertRaftOperationSucceeded} from
+  '../../src/raft/raft-operation-port.js';
 import {
   createRaftOperationPort,
   deepFreeze,
@@ -55,7 +59,13 @@ const TARGET_REPLICA_COUNT = 5;
 export const COMMITTED_ENTRY_COUNT = 3;
 const RETRY_INTERVAL_MS = 25;
 const POLL_MS = 10;
-const NOOP_COMMAND_TYPE = 'progress-proof-noop';
+// The committed prefix is real partition writes into the fixture's table,
+// so the learner applies what it replicates like any production follower.
+const TABLE_SCHEMA = Object.freeze({
+  columns: [{name: 'seq', type: 'INTEGER', primaryKey: true}],
+});
+const PREFIX_INSERT_SQL = `INSERT INTO ${TABLE_NAME} (seq) VALUES (?)`;
+const PREFIX_SEED_ATTEMPTS = COMMITTED_ENTRY_COUNT + 1;
 const PUBLISHED_STATUS = 'PUBLISHED';
 const LOG_LEVELS = ['info', 'warn', 'error', 'debug', 'trace', 'fatal'];
 const RAFT_HEARTBEAT_INTERVAL_MS = 20;
@@ -240,26 +250,27 @@ async function createLeader(transport, cache) {
     nodeId: LEADER_NODE,
     transport,
     systemTableCache: cache,
+    schema: TABLE_SCHEMA,
     dbPath: ':memory:',
   });
   await leader.initialize();
-  for (let seq = 1; seq <= COMMITTED_ENTRY_COUNT; seq++) {
-    await leader.raftProvider.propose(leader.raft, {
-      type: NOOP_COMMAND_TYPE,
-      seq,
-    });
-  }
   // How the prefix became committed is a precondition here, not the
-  // mechanism under test — the proof consumes committedIndex however it
-  // advanced. A solo liferaft leader never self-commits (base liferaft
-  // commits only on follower acks) and production's solo writes bypass Raft,
-  // so the partition's durable log owner declares the committed prefix,
-  // index by index (commit is prefix-driven, the watermark monotonic). The
-  // noop commands are not applied.
-  for (let index = 1; index <= COMMITTED_ENTRY_COUNT; index++) {
-    leader.logAdapter.commit(index);
+  // mechanism under test - the proof consumes committedIndex however it
+  // advanced. A solo rs-raft leader commits its own proposals, so the prefix
+  // is seeded by proposing through the port until the core reports exactly
+  // COMMITTED_ENTRY_COUNT committed entries (the leader's own election entry
+  // is one of them).
+  for (let seq = 1; seq <= PREFIX_SEED_ATTEMPTS &&
+      (await leader.raft.readStatus()).commitIndex < COMMITTED_ENTRY_COUNT;
+    seq++) {
+    assertRaftOperationSucceeded(await leader.raft.propose({
+      type: PARTITION_SERVICE_OPERATION.INSERT,
+      sql: PREFIX_INSERT_SQL,
+      params: [seq],
+      entryId: `progress-proof-prefix-${seq}`,
+    }));
   }
-  const {commitIndex} = leader.raft.readStatus();
+  const {commitIndex} = await leader.raft.readStatus();
   if (commitIndex !== COMMITTED_ENTRY_COUNT) {
     throw new Error(
       `fixture precondition: leader commitIndex ${commitIndex}, expected ` +
@@ -296,6 +307,7 @@ async function createLearner(transport, cache, options = {}) {
     nodeId: LEARNER_NODE,
     transport,
     systemTableCache: cache,
+    schema: TABLE_SCHEMA,
     dbPath: ':memory:',
     isJoiningExistingGroup: true,
     leaderAddress: LEADER_ADDRESS,

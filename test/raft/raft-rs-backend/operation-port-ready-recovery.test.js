@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {TextEncoder} from 'node:util';
 
 import Database from 'better-sqlite3';
 
@@ -8,9 +7,10 @@ import {RaftRsDurableStore} from
   '../../../src/raft/raft-rs-durable-store.js';
 import {applyCommittedEntryTransaction} from
   '../../../src/raft/raft-rs-application-transaction-owner.js';
+import {RAFT_RS_ENTRY_TYPE} from
+  '../../../src/raft/raft-rs-ready-loop-constants.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 
-const TEXT = new TextEncoder();
 const HOST_FAILURE = 'HOST_FAILURE';
 const CORE_FATAL = 'CORE_FATAL';
 const CORE_OK = 'CORE_OK';
@@ -148,7 +148,7 @@ test('every Ready host failure reconstructs the group before another core operat
           .runtimeGeneration;
         transportFault.phase = phase;
         transportFault.armed = true;
-        await cluster.propose(leader, TEXT.encode(`force-${phase}-delivery`));
+        await cluster.propose(leader, `force-${phase}-delivery`);
         const failed = await tickUntilHostFailure(cluster, leader);
         assert.equal(failed?.outcome, HOST_FAILURE, `${phase} is a host result`);
         assert.equal(failed.phase, phase);
@@ -184,6 +184,7 @@ test('application effects and durable applied progress commit atomically',
         groupId: 'atomic-application',
         entry: {
           index: '1',
+          entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
           data: Buffer.from('application-effect').toString('base64'),
         },
         confState: {
@@ -222,7 +223,7 @@ test('application effects and durable applied progress commit atomically',
         .readStatus().runtimeGeneration;
       applicationFault.armed = true;
       const failed = await cluster.propose(
-        'application-replica', TEXT.encode('apply-exactly-once'));
+        'application-replica', 'apply-exactly-once');
       assert.equal(failed.outcome, HOST_FAILURE);
       assert.equal(failed.phase, 'application');
       assert.equal(replica.appliedCommands.length, 0,
@@ -266,7 +267,7 @@ test('runtime replacement cannot re-enter a Ready generation suspended in host d
       const victim = ['epoch-a', 'epoch-b', 'epoch-c']
         .find((replicaId) => replicaId !== leader);
       const leaderPeerId = cluster.raftPeerIdOf(leader);
-      await cluster.propose(leader, TEXT.encode('suspend-ready'));
+      await cluster.propose(leader, 'suspend-ready');
       suspendDelivery = true;
       let pendingReady = null;
       for (let index = 0; index < 12 && releaseDelivery === null; index += 1) {

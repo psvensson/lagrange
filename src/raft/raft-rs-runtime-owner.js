@@ -29,7 +29,6 @@ import {
   CORE_REFUSAL_KIND,
   HEALTHY,
   NO_LEADER,
-  PEER_ADDRESS_STATUS,
   RECOVERY_REQUIRED,
   ROLE,
   RUNTIME_COMMAND,
@@ -40,6 +39,10 @@ import {
   USABLE,
 } from './raft-rs-runtime-owner-constants.js';
 import {tuningOf} from './raft-rs-runtime-tuning.js';
+import {
+  followerProgressSnapshot,
+  peerSnapshot,
+} from './raft-rs-status-observation.js';
 import {applyCommittedEntryTransaction} from
   './raft-rs-application-transaction-owner.js';
 import {deepFreeze} from './raft-operation-port.js';
@@ -118,6 +121,8 @@ let nextGroupKey = 1;
 let actualCoreEntries = 0;
 let actualCoreEntryObserver = null;
 const groups = new Map();
+// A recorded observation is shaped once, when a busy-queue read asks for it.
+const SHAPED_STATUS = new WeakMap();
 
 function outcome(outcomeName, fields = {}) {
   return deepFreeze({outcome: outcomeName, ...fields});
@@ -279,13 +284,13 @@ function enqueue(group, work) {
   if (group.tail === null) {
     const result = work();
     if (result && typeof result.then === 'function') {
-      const token = Promise.resolve(result);
-      group.tail = token.finally(() => {
+      const token = Promise.resolve(result).finally(() => {
         if (group.tail === token) {
           group.tail = null;
         }
       });
-      return group.tail;
+      group.tail = token;
+      return token;
     }
     return result;
   }
@@ -509,6 +514,7 @@ function announce(group, expectedGeneration) {
   const now = status.value;
   const before = group.lastStatus;
   group.lastStatus = now;
+  recordStatusObservation(group, expectedGeneration, now);
   if (before && now.raftState !== before.raftState) {
     group.emit(ROLE[now.raftState] || ROLE[0]);
   }
@@ -523,76 +529,38 @@ function announce(group, expectedGeneration) {
   }
 }
 
-function peerSnapshot(group, confState) {
-  return [...confState.voters, ...confState.learners]
-    .filter((id) => id !== group.peerId)
-    .map((id) => {
-      const replicaIdentity = group.resolvePeerIdentity(id);
-      let address = null;
-      let addressStatus = PEER_ADDRESS_STATUS.RESOLVED;
-      try {
-        address = group.resolvePeerAddress(id);
-      } catch {
-        // Status is an observation. A temporarily unavailable address is not
-        // a Ready failure and must not invalidate the execution container.
-        addressStatus = PEER_ADDRESS_STATUS.UNAVAILABLE;
-      }
-      return {
-        peerId: id,
-        replicaIdentity,
-        address,
-        addressStatus,
-        learner: confState.learners.includes(id),
-      };
-    });
-}
-
-function followerProgressSnapshot(group, status) {
-  const progress = Array.isArray(status?.progress) ? status.progress : [];
-  const snapshot = {};
-  for (const item of progress) {
-    if (String(item?.id) === String(group.peerId)) {
-      continue;
-    }
-    const matched = Number(item?.matched);
-    if (!Number.isFinite(matched)) {
-      continue;
-    }
-    let address = null;
-    try {
-      address = group.resolvePeerAddress(item.id);
-    } catch {
-      continue;
-    }
-    if (typeof address === 'string' && address.length > 0) {
-      snapshot[address] = matched;
-    }
-  }
-  return snapshot;
-}
-
-function readGroupStatus(group, expectedGeneration) {
-  const status = invokeCoreAt(group, expectedGeneration, 'status');
+// The core's facts about a group (raw status and configuration); shaping them
+// is separate, so recording them resolves no address.
+function readGroupObservation(group, expectedGeneration, rawStatus = null) {
+  const status = rawStatus === null ?
+    invokeCoreAt(group, expectedGeneration, 'status') :
+    {ok: true, value: rawStatus};
   if (!status.ok) {
-    return status.result;
+    return status;
   }
   const conf = invokeCoreAt(
     group, expectedGeneration, CORE_OPERATION.CONF_STATE);
   if (!conf.ok) {
-    return conf.result;
+    return conf;
   }
+  return {ok: true, value: {status: status.value, confState: conf.value,
+    runtimeHealth, runtimeGeneration}};
+}
+
+function shapeGroupStatus(group, observation) {
+  const {status, confState} = observation;
   let leaderId = null;
   let leaderAddress = null;
   try {
-    leaderId = status.value.lead === NO_LEADER ? null :
-      group.resolvePeerIdentity(status.value.lead);
+    leaderId = status.lead === NO_LEADER ? null :
+      group.resolvePeerIdentity(status.lead);
   } catch (error) {
     group.health = RECOVERY_REQUIRED;
     return hostFailure(RUNTIME_PHASE.ADDRESS_RESOLUTION, error, true);
   }
-  if (status.value.lead !== NO_LEADER) {
+  if (status.lead !== NO_LEADER) {
     try {
-      leaderAddress = group.resolvePeerAddress(status.value.lead);
+      leaderAddress = group.resolvePeerAddress(status.lead);
     } catch {
       // A network address can lag membership/identity without invalidating
       // the consensus runtime. Status reports the identity and a null address.
@@ -604,20 +572,61 @@ function readGroupStatus(group, expectedGeneration) {
     groupId: group.groupId,
     replicaIdentity: group.replicaIdentity,
     peerId: group.peerId,
-    term: Number(status.value.term),
-    commitIndex: Number(status.value.commit),
-    role: ROLE[status.value.raftState] || RUNTIME_REASON.UNKNOWN,
+    term: Number(status.term),
+    commitIndex: Number(status.commit),
+    role: ROLE[status.raftState] || RUNTIME_REASON.UNKNOWN,
     leaderId,
     leaderAddress,
     peerCount: Math.max(0,
-      conf.value.voters.length + conf.value.learners.length - 1),
-    peers: peerSnapshot(group, conf.value),
-    followerProgress: followerProgressSnapshot(group, status.value),
-    confState: conf.value,
-    runtimeHealth,
+      confState.voters.length + confState.learners.length - 1),
+    peers: peerSnapshot(group, confState),
+    followerProgress: followerProgressSnapshot(group, status),
+    confState,
+    runtimeHealth: observation.runtimeHealth,
     groupHealth: group.health,
-    runtimeGeneration,
+    runtimeGeneration: observation.runtimeGeneration,
   });
+}
+
+function readGroupStatus(group, expectedGeneration) {
+  const observed = recordStatusObservation(group, expectedGeneration);
+  return observed.ok ? shapeGroupStatus(group, observed.value) :
+    observed.result;
+}
+
+// Every drain that completes a core entry ends in announce, which records the
+// core's facts here for readStatus to answer while the queue is busy.
+function recordStatusObservation(group, expectedGeneration, rawStatus = null) {
+  const observed = readGroupObservation(group, expectedGeneration, rawStatus);
+  if (observed.ok) {
+    group.statusObservation = observed.value;
+  }
+  return observed;
+}
+
+// readStatus answers synchronously: idle with nothing delivered, the fresh
+// core read; otherwise (a read still drives delivered inbound, as before) the
+// status of the last completed core entry.
+function readStatusNow(group) {
+  if ((group.tail === null && group.inbound.length === 0) ||
+      group.statusObservation === null) {
+    const ready = ensureExecution(group);
+    return ready.outcome === CORE_OK ?
+      readGroupStatus(group, runtimeGeneration) : ready;
+  }
+  if (group.inbound.length > 0) {
+    const read = enqueue(group, () =>
+      perform(group, {type: RUNTIME_COMMAND.READ_STATUS}));
+    if (!read || typeof read.then !== 'function') {
+      return read;
+    }
+    read.catch(() => undefined);
+  }
+  const observation = group.statusObservation;
+  if (!SHAPED_STATUS.has(observation)) {
+    SHAPED_STATUS.set(observation, shapeGroupStatus(group, observation));
+  }
+  return SHAPED_STATUS.get(observation);
 }
 
 function campaignGroup(group, expectedGeneration) {
@@ -719,6 +728,7 @@ function createRuntimeDispatcher(request) {
     emit: request.emit,
     handle: null,
     lastStatus: null,
+    statusObservation: null,
     health: USABLE,
     tail: null,
     inbound: [],
@@ -734,6 +744,7 @@ function createRuntimeDispatcher(request) {
   const first = invokeCore(group, 'status');
   if (first.ok) {
     group.lastStatus = first.value;
+    recordStatusObservation(group, runtimeGeneration, first.value);
   }
   return Object.freeze({
     enqueueStep: Object.freeze((envelope) => {
@@ -753,8 +764,9 @@ function createRuntimeDispatcher(request) {
       group.inbound.push(snapshotEnvelope(envelope));
       return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_ENQUEUED});
     }),
-    execute: Object.freeze((command) => enqueue(group,
-      () => perform(group, command))),
+    execute: Object.freeze((command) =>
+      command?.type === RUNTIME_COMMAND.READ_STATUS ? readStatusNow(group) :
+        enqueue(group, () => perform(group, command))),
     configureTiming: Object.freeze((timing) => {
       group.timing = deepFreeze({...group.timing, ...timing});
       return true;

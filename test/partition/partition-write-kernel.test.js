@@ -6,7 +6,6 @@ import {
   buildPartitionWriteEntry,
   buildPartitionWriteFailureResult,
   buildPartitionWriteSideEffectPlan,
-  executePartitionWriteStatement,
   resolvePartitionWriteCommitMode,
 } from '../../src/partition/partition-write-kernel.js';
 
@@ -64,16 +63,30 @@ test('partition write kernel rejects non-durable Raft positions', async (t) => {
   }
 });
 
-test('partition write kernel resolves direct, raft, and rejected commit modes',
+test('partition write kernel resolves raft and rejected commit modes',
   async (t) => {
+    t.same(Object.values(PARTITION_WRITE_COMMIT_MODE).sort(),
+      [PARTITION_WRITE_COMMIT_MODE.RAFT, PARTITION_WRITE_COMMIT_MODE.REJECTED]
+        .sort(),
+      'a write is either proposed through consensus or rejected; there is no ' +
+      'direct-execution mode');
     t.equal(
       resolvePartitionWriteCommitMode({
         replicaIds: ['r1'],
         raftState: 'leader',
         raftLeaderState: 'leader',
       }),
-      PARTITION_WRITE_COMMIT_MODE.DIRECT,
-      'single-replica writes should be direct',
+      PARTITION_WRITE_COMMIT_MODE.RAFT,
+      'a lone leader proposes: it commits its own proposal',
+    );
+    t.equal(
+      resolvePartitionWriteCommitMode({
+        replicaIds: ['r1'],
+        raftState: 'follower',
+        raftLeaderState: 'leader',
+      }),
+      PARTITION_WRITE_COMMIT_MODE.REJECTED,
+      'a single replica that is not the consensus leader rejects',
     );
     t.equal(
       resolvePartitionWriteCommitMode({
@@ -95,70 +108,26 @@ test('partition write kernel resolves direct, raft, and rejected commit modes',
     );
   });
 
-test('partition write kernel executes SQL once and shapes the canonical result',
-  async (t) => {
-    const runCalls = [];
-    const db = {
-      prepare(sql) {
-        return {
-          run(...params) {
-            runCalls.push({sql, params});
-            return {
-              changes: 1,
-              lastInsertRowid: 99,
-            };
-          },
-        };
-      },
-    };
-
-    const result = executePartitionWriteStatement(
-      db,
-      {
-        sql: 'INSERT INTO test_table (id) VALUES (?)',
-        params: ['r1'],
-      },
-      TEST_PARTITION_ID,
-      TEST_LOG_INDEX,
-    );
-
-    t.same(runCalls, [{
-      sql: 'INSERT INTO test_table (id) VALUES (?)',
-      params: ['r1'],
-    }]);
-    t.same(
-      result,
-      {
-        success: true,
-        changes: 1,
-        lastInsertRowid: 99,
-        partitionId: TEST_PARTITION_ID,
-        logIndex: TEST_LOG_INDEX,
-      },
-      'kernel execution should shape the canonical success result',
-    );
-  });
-
-test('partition write kernel refuses unilateral direct commit against contradicted topology',
+test('partition write kernel refuses a unilateral commit against contradicted topology',
   async (t) => {
     // Run-15 freeze poison: a REPLACE-added replica whose local replica list
     // was viability-filtered to self-only (CL-013 class) self-committed
-    // coordinator writes as a phantom leader. A known remote leader — an
-    // ACTUAL, observed via raft traffic or the published leader pointer —
-    // must force the consensus path instead of DIRECT. Targets like
-    // replica_count are NOT witnesses: they legitimately exceed placed
-    // membership on single-node and degraded clusters, and using them
+    // coordinator writes as a phantom leader. A known remote leader - an
+    // ACTUAL, observed via raft traffic or the published leader pointer -
+    // rejects the write even when the self-only group elected itself.
+    // Targets like replica_count are NOT witnesses: they legitimately exceed
+    // placed membership on single-node and degraded clusters, and using them
     // rejected (and, through the query envelope, silently dropped) every
     // user-table write on a default-config single-node cluster.
     t.equal(
       resolvePartitionWriteCommitMode({
         replicaIds: ['r5'],
-        raftState: 'follower',
+        raftState: 'leader',
         raftLeaderState: 'leader',
         hasKnownRemoteLeader: true,
       }),
       PARTITION_WRITE_COMMIT_MODE.REJECTED,
-      'self-only list with a known remote leader must reject, not direct-commit',
+      'self-only list with a known remote leader must reject',
     );
     t.equal(
       resolvePartitionWriteCommitMode({
@@ -167,17 +136,8 @@ test('partition write kernel refuses unilateral direct commit against contradict
         raftLeaderState: 'leader',
         hasKnownRemoteLeader: false,
       }),
-      PARTITION_WRITE_COMMIT_MODE.DIRECT,
-      'genuine single-replica groups keep the direct path',
-    );
-    t.equal(
-      resolvePartitionWriteCommitMode({
-        replicaIds: ['r1'],
-        raftState: 'leader',
-        raftLeaderState: 'leader',
-      }),
-      PARTITION_WRITE_COMMIT_MODE.DIRECT,
-      'absent witnesses keep the direct path (message groups, bare replicas)',
+      PARTITION_WRITE_COMMIT_MODE.RAFT,
+      'genuine single-replica groups propose through their own leader',
     );
     t.equal(
       resolvePartitionWriteCommitMode({
@@ -186,8 +146,8 @@ test('partition write kernel refuses unilateral direct commit against contradict
         raftLeaderState: 'leader',
         expectedReplicaCount: 3,
       }),
-      PARTITION_WRITE_COMMIT_MODE.DIRECT,
-      'replica_count-style targets must NOT reject — 1-of-N placement is legitimate',
+      PARTITION_WRITE_COMMIT_MODE.RAFT,
+      'replica_count-style targets must NOT reject - 1-of-N placement is legitimate',
     );
   });
 

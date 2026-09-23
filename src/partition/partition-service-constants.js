@@ -143,6 +143,28 @@ const PARTITION_SERVICE_OPERATION = Object.freeze({
   TRANSACTION_OUTCOME: 'TRANSACTION_OUTCOME',
 });
 
+// What the committed-entry application did with one committed command
+// (R07): a failed statement is a deterministic outcome that consumes the
+// entry; a command type it does not know fails the application closed,
+// never a silent no-op.
+const PARTITION_COMMITTED_COMMAND_OUTCOME = Object.freeze({
+  APPLIED: 'applied',
+  REPLAYED: 'replayed',
+  RECORDED_ONLY: 'recorded_only',
+  STATEMENT_FAILED: 'statement_failed',
+  UNRECOGNISED: 'unrecognised',
+});
+
+// The typed error codes of the committed-entry application and of partition
+// consensus construction.
+const PARTITION_COMMITTED_COMMAND_ERROR_CODE = Object.freeze({
+  UNRECOGNISED: 'partition_committed_command_unrecognised',
+});
+
+const PARTITION_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
+  BACKEND_SELECTION_REFUSED: 'partition_consensus_backend_selection_refused',
+});
+
 const PARTITION_SERVICE_ROLE = Object.freeze({
   LEADER: 'leader',
   FOLLOWER: 'follower',
@@ -620,6 +642,14 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   NESTED_ACK_UNSUPPORTED: 'Nested ACK responses are not supported',
   MESSAGE_DELIVERY_FAILED: 'Message delivery failed',
   MIGRATION_ALTER_MISSING_SQL: 'Migration ALTER TABLE SQL is required',
+  COMMITTED_COMMAND_UNRECOGNISED:
+    'Committed partition command type is not recognised',
+  COMMITTED_ENTRY_EFFECT_FAILED:
+    'Committed partition entry effect failed after its transaction',
+  backendSelectionRefused: (option, requested) =>
+    `Partition consensus backend selection refused: ${option}=` +
+    `${JSON.stringify(requested)} names a retired consensus backend; a ` +
+    'partition runs on its single consensus path and takes no selection',
 });
 
 const PARTITION_SERVICE_VALUE = Object.freeze({
@@ -655,6 +685,9 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
 });
 
 export {
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
+  PARTITION_COMMITTED_COMMAND_OUTCOME,
+  PARTITION_CONSENSUS_STARTUP_OUTCOME,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
   PARTITION_SERVICE_CDC,

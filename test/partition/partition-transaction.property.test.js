@@ -182,7 +182,7 @@ test(
 // Validates: Requirements 1.3, 8.1
 // ---------------------------------------------------------------------------
 test(
-  'Property 12: successful prepare records durable raft log index in prepared state',
+  'Property 12: successful prepare proposes its marker through the consensus port',
   async (t) => {
     await fc.assert(
       fc.asyncProperty(
@@ -194,6 +194,8 @@ test(
 
           try {
             const sessionId = 'prepare-durable';
+            const {commitIndex: committedBefore} =
+              await partition.raft.readStatus();
             await partition.beginTransaction(sessionId, 500);
             await partition.executeQuery(
               `INSERT INTO ${TEST_TABLE_NAME} (id, value) VALUES ('${rowId}', '${value}')`,
@@ -212,8 +214,14 @@ test(
               return false;
             }
 
-            return Number.isInteger(preparedState.raftLogIndex) &&
-              preparedState.raftLogIndex === prepareResult.raftLogIndex;
+            // The marker is one proposal through the port, committed by the
+            // lone leader; the prepared state carries no log index, since a
+            // proposal has none until it commits.
+            const {commitIndex: committedAfter} =
+              await partition.raft.readStatus();
+            return committedAfter === committedBefore + 1 &&
+              !Object.hasOwn(preparedState, 'raftLogIndex') &&
+              !Object.hasOwn(prepareResult, 'raftLogIndex');
           } finally {
             await partition.shutdown();
           }
@@ -222,7 +230,7 @@ test(
       {numRuns: 10},
     );
 
-    t.pass('prepare durability metadata is persisted before success response');
+    t.pass('prepare proposes its marker through consensus before success');
   },
 );
 

@@ -25,6 +25,10 @@ function wirePartitionRaftLifecycleEvents(
       ...fields,
     });
   };
+  // The term is the consensus core's own (readStatus().term); nothing here
+  // copies it. Committed entries are applied only by the port's
+  // committed-entry application, so COMMIT carries no handler; it stays in
+  // the map because the lifecycle owner subscribes to every named event.
   wireReplicaLifecycleEvents(service, {
     events: {
       LEADER: PARTITION_SERVICE_ROLE.LEADER,
@@ -40,7 +44,6 @@ function wirePartitionRaftLifecycleEvents(
       service.normalizeLeaderReplicaId(candidate),
     shouldIgnoreDemotionEvent,
     onLeader: ({term}) => {
-      service.storage.currentTerm = term;
       recordTransition({
         eventType: PARTITION_SERVICE_RAFT_EVIDENCE.EVENT_ROLE_TRANSITION,
         role: PARTITION_SERVICE_ROLE.LEADER,
@@ -50,7 +53,6 @@ function wirePartitionRaftLifecycleEvents(
       service.scheduleLeaderOwnedActivation(term);
     },
     onFollower: ({term, demotedByLeaderChange}) => {
-      service.storage.currentTerm = term;
       recordTransition({
         eventType: PARTITION_SERVICE_RAFT_EVIDENCE.EVENT_ROLE_TRANSITION,
         role: PARTITION_SERVICE_ROLE.FOLLOWER,
@@ -66,7 +68,6 @@ function wirePartitionRaftLifecycleEvents(
       service.updateRebalancerLeadership();
     },
     onCandidate: ({term}) => {
-      service.storage.currentTerm = term;
       recordTransition({
         eventType: PARTITION_SERVICE_RAFT_EVIDENCE.EVENT_ROLE_TRANSITION,
         role: PARTITION_SERVICE_ROLE.CANDIDATE,
@@ -78,17 +79,6 @@ function wirePartitionRaftLifecycleEvents(
       );
       service.cancelLeaderOwnedActivation();
       service.updateRebalancerLeadership();
-    },
-    onCommit: (command) => {
-      service.applyCommittedEntry(command);
-      // Applied-watermark certificate (raft-snapshot-checkpoint-format):
-      // commit events arrive once per committed entry in index order and
-      // applyCommittedEntry is synchronous, so a dense +1 advance equals the
-      // applied entry's own index. The adapter committedIndex must NOT be
-      // copied here — on a batch it already sits at the batch end before the
-      // first apply. On apply throw the advance is skipped and checkpoint
-      // creation fails closed on the divergence.
-      service.storage.recordAppliedAdvance();
     },
     onLeaderChange: ({leaderId, previousLeaderId, term, demoted}) => {
       recordTransition({
@@ -106,9 +96,6 @@ function wirePartitionRaftLifecycleEvents(
         term,
         partitionId: service.partitionId,
       });
-    },
-    onTermChange: ({term}) => {
-      service.storage.currentTerm = term;
     },
   });
 }

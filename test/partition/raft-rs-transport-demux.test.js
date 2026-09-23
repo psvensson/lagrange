@@ -1,5 +1,4 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
@@ -10,6 +9,7 @@ import {PartitionNodeCluster} from
   '../raft/raft-rs-backend/partition-node-cluster.js';
 import {
   ControllablePartitionRaftProvider,
+  createControllablePartitionService,
 } from './partition-service-test-support.js';
 
 beforeEach(() => {
@@ -34,7 +34,7 @@ test('PartitionService routes semantic raft-rs transport envelopes to the operat
         return {acknowledged: true};
       },
     };
-    const partition = new PartitionService({
+    const partition = createControllablePartitionService({
       partitionId: 'raft-rs-transport-p1',
       tableId: 'raft_rs_transport',
       tableName: 'raft_rs_transport',
@@ -44,9 +44,8 @@ test('PartitionService routes semantic raft-rs transport envelopes to the operat
       nodeId: 'node-r2',
       transport,
       dbPath: ':memory:',
-      raftProvider,
       deferElection: true,
-    });
+    }, raftProvider);
 
     await partition.initialize();
     try {
