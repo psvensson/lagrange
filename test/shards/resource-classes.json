@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2150,
+    "ordinary": 2151,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2167,
-  "digest": "fnv1a32-f120b221",
+  "censusSize": 2168,
+  "digest": "fnv1a32-60c50198",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1365,6 +1365,7 @@
     "test/query/transaction-recovery-poison-row-attribution.test.js": "ordinary",
     "test/query/wasm-call-adapter.integration.test.js": "ordinary",
     "test/query/wasm-call-adapter.test.js": "ordinary",
+    "test/query/write-identity-end-to-end.test.js": "ordinary",
     "test/query/write-path-internal-pacing.test.js": "ordinary",
     "test/query/write-tracking-recursion-guard.test.js": "ordinary",
     "test/raft/append-ack-packet-detection.test.js": "ordinary",

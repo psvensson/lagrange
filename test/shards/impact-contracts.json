@@ -551,14 +551,18 @@
         "src/constants/errors.js",
         "src/control-plane/control-plane-error-classification.js",
         "src/cdc/cdc-routed-mutation-readiness.js",
-        "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
+        "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+        "src/cdc/cdc-integration-service-shared.js",
+        "src/cdc/cdc-integration-service-shared-constants.js",
+        "src/query/query-executor-write-retry-routing.js"
       ],
       "tests": [
         "test/control-plane/control-plane-error-classification.test.js",
         "test/partition/partition-write-kernel.test.js",
         "test/partition/partition-write-typed-releases.test.js",
         "test/query/partition-write-answer-consumers.test.js",
-        "test/query/write-path-internal-pacing.test.js"
+        "test/query/write-path-internal-pacing.test.js",
+        "test/query/write-identity-end-to-end.test.js"
       ]
     }
   },
@@ -1029,7 +1033,10 @@
           "owners": [
             "src/control-plane/control-plane-error-classification.js",
             "src/cdc/cdc-routed-mutation-readiness.js",
-            "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
+            "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+            "src/cdc/cdc-integration-service-shared.js",
+            "src/cdc/cdc-integration-service-shared-constants.js",
+            "src/query/query-executor-write-retry-routing.js"
           ]
         }
       ],
@@ -1039,7 +1046,8 @@
         "test/partition/partition-write-kernel.test.js",
         "test/partition/partition-write-typed-releases.test.js",
         "test/query/partition-write-answer-consumers.test.js",
-        "test/query/write-path-internal-pacing.test.js"
+        "test/query/write-path-internal-pacing.test.js",
+        "test/query/write-identity-end-to-end.test.js"
       ]
     }
   }

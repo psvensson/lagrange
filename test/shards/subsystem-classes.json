@@ -13,7 +13,7 @@
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 240,
-    "query-sql": 161,
+    "query-sql": 162,
     "release-packaging": 11,
     "runtime-primitives": 22,
     "services-runtime": 169,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2167,
-  "digest": "fnv1a32-0dde07c1",
+  "censusSize": 2168,
+  "digest": "fnv1a32-5ed4d351",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c51e89e2",
+  "observationDigest": "fnv1a32-b2464d22",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1385,6 +1385,7 @@
     "test/query/transaction-recovery-poison-row-attribution.test.js": "query-sql",
     "test/query/wasm-call-adapter.integration.test.js": "query-sql",
     "test/query/wasm-call-adapter.test.js": "query-sql",
+    "test/query/write-identity-end-to-end.test.js": "query-sql",
     "test/query/write-path-internal-pacing.test.js": "query-sql",
     "test/query/write-tracking-recursion-guard.test.js": "query-sql",
     "test/raft/append-ack-packet-detection.test.js": "storage-raft",
@@ -6690,6 +6691,16 @@
       "files": [
         "src/query/distributed/distributed-transaction-coordinator-constants.js",
         "src/query/distributed/distributed-transaction-coordinator.js"
+      ]
+    },
+    "test/query/write-identity-end-to-end.test.js": {
+      "files": [
+        "src/constants/errors.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-proposal-codec.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/query/write-path-internal-pacing.test.js": {

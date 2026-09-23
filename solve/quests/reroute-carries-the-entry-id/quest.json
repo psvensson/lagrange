@@ -1,0 +1,44 @@
+{
+  "schema": "solve-quest/2",
+  "id": "reroute-carries-the-entry-id",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A partition write that is rerouted or retried after an honest 'outcome unknown' answer must apply exactly once and answer the client the truth. Today (integrated head 7e08cefcd, round-5 r5-g2-dup and round-7 evidence): the distributed write coordinator mints a per-plan participant entryId, but the transport query reply (partition-service-entry-apply-base.js handleRemoteQuery) drops failureCode, retryAfterMs, consensus and entryId, so every remote consumer is text-only by construction; the query executor's system-table widening (query-executor-write-retry-routing.js:462,540), the CDC routed-mutation loop, the CDC local lane and the rebalancer mutation loops re-issue a write under a fresh identity, so an UPDATE released as outcome_unknown is applied twice on every replica and an INSERT answers a constraint error although the row exists; a replay reaches the client as success with changes 0; SQLQueryEngine drops a client-supplied idempotencyKey; the admin write receipt marks a replayed answer complete only when the answering replica claims leadership (F-w); the control-plane classifier does not walk participantResults and treats the post-commit environmental application failure as failed-for-good (F-as, F-at). After this quest: the write identity is minted at exactly one boundary per path (the engine for client statements; once per logical mutation for the CDC and rebalancer loops) and carried unchanged on every reroute or retry; the partition answers a same-entryId retry from the durable outcome row (idempotentReplay, the original affected-row count); write answers cross the wire whole, and reroute admission is by the kernel's code predicate with carriesEntryId, with no text fallback for a partition answer; the admin receipt binds a replayed answer by (partitionId, entryId, term, logIndex) and the replay flag; the classifier walks participant results and lists the post-commit environmental failure with the not-failed-for-good answers; the registry names every consumer of the write-answer classification.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/reroute-carries-the-entry-id/evidence/receipt.json",
+      "requiredReceipts": [
+        "rerouted-write-after-outcome-unknown-applies-once-and-answers-success",
+        "every-release-cause-reroutes-with-the-entry-id",
+        "a-client-idempotency-key-makes-resubmission-idempotent",
+        "write-answers-cross-the-wire-whole-and-reroute-admission-is-by-code",
+        "admin-receipt-binds-a-replayed-answer-by-entry-id"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-minting-boundary",
+      "statement": "The write identity is minted at exactly one boundary per path (the SQL engine for client statements; once per logical mutation, outside the attempt loop, for the CDC routed mutation, the CDC local lane and the rebalancer mutation gateway). No downstream retry, reroute, widening or handoff mints a second identity; a client-supplied idempotencyKey reaches the coordinator's derivation unchanged."
+    },
+    {
+      "id": "no-text-fallback-for-partition-answers",
+      "statement": "A partition write answer is classified and rerouted by its failureCode through the kernel's predicates (isRetryableWriteFailureCode, isReroutableWriteFailureCode with carriesEntryId); the transport query reply carries the answer whole (failureCode, retryAfterMs, consensus, entryId, idempotentReplay, logIndex, replayOfLogIndex, changes). REROUTABLE_WRITE_ERROR_FRAGMENTS / isReroutableWriteError and their text consumers are deleted only when the static census of text consumers is zero; a remaining text consumer is a recorded finding, never a silent fallback."
+    },
+    {
+      "id": "no-budget-raised",
+      "statement": "No deadline, attempt count or retry budget is raised (the 30 s pending-commit deadline, the CDC and rebalancer attempt bounds stay); the replica-operation INSERT UNIQUE-collision patch is retired only when its red-on-revert witness shows the identity contract covers it."
+    },
+    {
+      "id": "src-query-and-wire-only",
+      "statement": "Owners touched: src/query (engine, executor routing, request builders), the transport query reply in the partition owner, the CDC and rebalancer retry loops, the admin write receipt, the control-plane classifier, src/constants/errors.js and the write kernel's predicates; the frozen operation port, the runtime owner and the durable outcome row's schema are not changed (the row may gain the affected-row count as a recorded widening)."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "recovery-replay",
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

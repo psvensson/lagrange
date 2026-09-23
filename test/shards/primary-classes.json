@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1903,
+    "unit": 1904,
     "integration": 75,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2167,
-  "digest": "fnv1a32-59f49051",
+  "censusSize": 2168,
+  "digest": "fnv1a32-5f212f6a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1366,6 +1366,7 @@
     "test/query/transaction-recovery-poison-row-attribution.test.js": "unit",
     "test/query/wasm-call-adapter.integration.test.js": "integration",
     "test/query/wasm-call-adapter.test.js": "unit",
+    "test/query/write-identity-end-to-end.test.js": "unit",
     "test/query/write-path-internal-pacing.test.js": "unit",
     "test/query/write-tracking-recursion-guard.test.js": "unit",
     "test/raft/append-ack-packet-detection.test.js": "unit",
