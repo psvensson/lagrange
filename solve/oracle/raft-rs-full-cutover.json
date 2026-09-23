@@ -1,0 +1,8 @@
+{
+  "schema": "raft-rs-full-cutover-epic/1",
+  "metric": 8,
+  "target": 0,
+  "status": "transport-predecessor-in-progress",
+  "statement": "Full cutover is incomplete until R0-R8 close, all active consensus paths use raft-rs, active Liferaft references/dependency are zero, exact-main certification is durable, and core-convergence Q0 reports READY.",
+  "terminalEvidence": null
+}

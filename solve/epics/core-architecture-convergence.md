@@ -74,8 +74,9 @@ authorizes:
 
 ## Status and activation
 
-The rs-raft/WASM foundation is now merged on shared `main` at
-`f4f5b5a6e9c27d139b3ada85e0aabe38eb526480`.
+The rs-raft/WASM foundation is merged. Core convergence is now explicitly
+blocked behind the separate `raft-rs-full-cutover` epic: no behavior-changing
+Q1+ convergence work starts until that epic closes and Q0 re-measures READY.
 
 That merge is a **foundation landing**, not evidence that the partition Raft
 cutover is already complete. The exact merged tree currently says all of the
@@ -114,9 +115,11 @@ not yet complete, the Quest stops with a typed blocker and this epic waits for
 the Raft predecessor work. It does not absorb transport/cutover work merely to
 make itself start.
 
-Message groups are a separate concern. Liferaft remaining reachable for an
-explicitly owned message-group path does not by itself block this epic. A silent
-partition fallback to Liferaft after partition cutover would block it.
+There is no longer a message-group exception. The hard-cutover owner decision
+requires zero active Liferaft consensus paths across partitions, message groups,
+workers, WASM replicas and generic helpers. Historical append-only solve
+evidence may name the old backend, but active runtime/test/doc/package surfaces
+must not.
 
 ## Intent
 
@@ -485,8 +488,8 @@ At minimum census:
 - transport/addressing;
 - diagnostic/admin/harness projections;
 - any remaining partition Liferaft compatibility surface after cutover;
-- message-group Liferaft surface separately, so it is not accidentally deleted
-  as partition debt.
+- message-group consensus surface as a required rs-raft owner, with any
+  remaining Liferaft reachability treated as a cutover blocker.
 
 Classify every site as:
 
@@ -499,8 +502,9 @@ Classify every site as:
 - `OUT_OF_SCOPE_ACTIVE_OWNER`;
 - `UNKNOWN`.
 
-`UNKNOWN` is red. An intentionally active message-group Liferaft owner should
-be `OUT_OF_SCOPE_ACTIVE_OWNER`, not mislabeled duplicate debt.
+`UNKNOWN` is red. There is no `OUT_OF_SCOPE_ACTIVE_OWNER` exemption for Liferaft after the
+hard-cutover decision. Any active Liferaft owner is a blocker owned by
+`raft-rs-full-cutover`.
 
 Follow reachable call/construction graphs, not names alone. A wrapper,
 re-export, nested escape, alias, provider option, or restart/recovery constructor
@@ -756,14 +760,10 @@ canonical owners:
   owner internals;
 - retain the rs-raft operation-boundary audit as a permanent ratchet.
 
-**Do not use a global "no Liferaft in src" criterion.** Message groups or another
-explicitly owned subsystem may still use Liferaft. The correct cutover
-invariant is:
-
-> production partition construction/operation has one backend path, and cannot
-> silently fall back to Liferaft by omission or error.
-
-If message-group migration is later chosen, that is separately scoped work.
+Use the stronger terminal criterion from `raft-rs-full-cutover`: zero active
+Liferaft references/dependency across production, tests and current docs. There
+is no retained subsystem exception. Append-only historical solve evidence is
+the only provenance exception.
 
 Candidates to re-census after cutover include:
 
@@ -983,8 +983,8 @@ head:
     exposing rs-raft RawNode/runtime control.
 15. Every deleted partition compatibility/bypass path has an adversarial
     reachability guard that cannot be satisfied by renaming.
-16. Any remaining Liferaft production use is explicitly mapped to a different
-    owner such as message groups; it is not an implicit partition fallback.
+16. No active Liferaft production use, test fixture, current documentation
+    contract, package dependency, or alternate consensus selector remains.
 17. Architecture contracts, invariants, owner maps, current-state docs, and
     implementation agree.
 18. The integrated deterministic and live certification matrix frozen by Q0 is
