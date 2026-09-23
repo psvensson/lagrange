@@ -11,14 +11,16 @@
 // authorities, so when it hands out a resolved clock the replicas a node
 // hosts as seed schedule differently from the ones it hosts as joiner.
 //
-// The consensus witness asks the operation port to start scheduling
-// (`raft.startScheduling()`) on every backend the provider seam can select
-// and reads the primitive that arms, so it holds across the cutover; which
-// timer manager a backend chose is the field, not the primitive, and is no
-// longer read. The commit-apply yield witness this file carried read
-// liferaft's timer manager, which the frozen operation port does not expose
-// and the rs-raft backend has no counterpart of (it applies a Ready's
-// committed entries inside one ready cycle); it is gone with that subject.
+// A partition replica runs on one consensus backend, rs-raft, built through
+// the one operation-port construction path; there is no backend to select.
+// The consensus witness asks that port to start scheduling
+// (`raft.startScheduling()`) and reads the primitive it arms; which timer
+// manager the backend chose is the field, not the primitive, and is not
+// read. The commit-apply yield witness this file once carried read liferaft's
+// timer manager, which the operation port does not expose and rs-raft has no
+// counterpart of (it applies a Ready's committed entries inside one ready
+// cycle); it is gone with that subject. Message-group replicas still run
+// liferaft, and their hop witnesses are unchanged.
 //
 // The reconciler's witness lives here rather than under test/service
 // because what it proves is the same seam on the same composition, and one
@@ -38,10 +40,6 @@ import {MessageGroupService} from
   '../../src/message-group/message-group-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
-import {
-  RAFT_BACKEND_NAMES,
-  RAFT_BACKEND_OPTION,
-} from '../../src/raft/raft-backend-constants.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {
@@ -301,44 +299,38 @@ async function closeReplica(open, replica) {
 }
 
 /**
- * What a replica's consensus scheduling arms, on every backend the provider
- * seam can select: one partition replica per backend, composed with the given
- * authorities, whose operation port is asked to start scheduling. Each
- * replica is shut down once measured.
+ * What a replica's consensus scheduling arms: one partition replica, composed
+ * with the given authorities, whose operation port is asked to start
+ * scheduling. The replica is shut down once measured.
  * @param {Array<Object>} open - the replicas this test still holds open.
  * @param {string} label - distinguishes this composition's ids.
  * @param {Object} authorities - hosted-replica authorities, or {}.
  * @param {Function} [countClockArms] - how many primitives a supplied clock
  *   has armed so far.
- * @return {Promise<Array<Object>>} per backend: the host primitives armed,
- *   and how many the supplied clock armed meanwhile.
+ * @return {Promise<Object>} the host primitives armed, and how many the
+ *   supplied clock armed meanwhile.
  */
-async function consensusSchedulingByBackend(open, label, authorities,
+async function consensusScheduling(open, label, authorities,
   countClockArms = () => NO_CLOCK_ARMS) {
-  const measured = [];
-  for (const backend of RAFT_BACKEND_NAMES) {
-    const partition = await startPartitionReplica(open, `${label}-${backend}`,
-      {...authorities, [RAFT_BACKEND_OPTION]: backend});
-    const beforeStart = countClockArms();
-    let started = null;
-    const armed = primitivesArmedBy(() => {
-      started = partition.raft.startScheduling();
-    });
-    assert.equal(started?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
-      `${backend}: the port starts its scheduling before it returns`);
-    measured.push({backend, armed,
-      clockArms: countClockArms() - beforeStart});
-    await closeReplica(open, partition);
-  }
-  return measured;
+  const partition = await startPartitionReplica(open, `${label}-consensus`,
+    authorities);
+  const beforeStart = countClockArms();
+  let started = null;
+  const armed = primitivesArmedBy(() => {
+    started = partition.raft.startScheduling();
+  });
+  assert.equal(started?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+    'the port starts its scheduling before it returns');
+  const clockArms = countClockArms() - beforeStart;
+  await closeReplica(open, partition);
+  return {armed, clockArms};
 }
 
 /**
- * @param {Array<Object>} measured - from consensusSchedulingByBackend.
- * @return {Array<Array>} per backend, the kinds of host primitive it armed.
+ * @param {Object} measured - from consensusScheduling.
+ * @return {Array<string>} the kinds of host primitive it armed.
  */
-const armedKindsByBackend = (measured) => measured.map(
-  ({backend, armed}) => [backend, armed.map(primitiveKind)]);
+const armedKinds = ({armed}) => armed.map(primitiveKind);
 
 /**
  * Run one witness and leave nothing armed: a witness that fails early must
@@ -413,11 +405,9 @@ test('a seed-hosted replica schedules like a production replica', () =>
     assert.equal(authorities.nodeService, bootstrap.nodeService,
       'the hosting runtime is still the replica\'s node-local authority');
 
-    for (const {backend, armed} of
-      await consensusSchedulingByBackend(open, 'seed', authorities)) {
-      assert.notDeepEqual(armed, NO_HOST_PRIMITIVE,
-        `${backend}: consensus scheduling runs on a host timer`);
-    }
+    const {armed} = await consensusScheduling(open, 'seed', authorities);
+    assert.notDeepEqual(armed, NO_HOST_PRIMITIVE,
+      'consensus scheduling runs on a host timer');
 
     const partition = await startPartitionReplica(open, 'seed', authorities);
     assert.deepEqual(
@@ -443,10 +433,8 @@ test('a seed-hosted and a joiner-hosted replica schedule alike', () =>
     const hosted = resolveHostedReplicaAuthorities(
       bootstrap.seedMessageGroupsPhase.delegates);
     assert.deepEqual(
-      armedKindsByBackend(
-        await consensusSchedulingByBackend(open, 'alike-seed', hosted)),
-      armedKindsByBackend(
-        await consensusSchedulingByBackend(open, 'alike-join', {})),
+      armedKinds(await consensusScheduling(open, 'alike-seed', hosted)),
+      armedKinds(await consensusScheduling(open, 'alike-join', {})),
       'both replicas arm the same consensus scheduling primitive');
 
     const seeded = await startPartitionReplica(open, 'alike-seed', hosted);
@@ -479,14 +467,12 @@ test('a supplied clock still owns hosted replica and reconciler scheduling',
     assert.equal(authorities.timeSource, clock,
       'a runtime that owns a clock hands that clock to its replicas');
 
-    for (const {backend, armed, clockArms} of
-      await consensusSchedulingByBackend(open, 'supplied', authorities,
-        () => armedCount(clock))) {
-      assert.deepEqual(armed, NO_HOST_PRIMITIVE,
-        `${backend}: consensus scheduling never reaches for a host primitive`);
-      assert.equal(clockArms > NO_CLOCK_ARMS, true,
-        `${backend}: consensus scheduling is armed on the supplied clock`);
-    }
+    const {armed, clockArms} = await consensusScheduling(open, 'supplied',
+      authorities, () => armedCount(clock));
+    assert.deepEqual(armed, NO_HOST_PRIMITIVE,
+      'consensus scheduling never reaches for a host primitive');
+    assert.equal(clockArms > NO_CLOCK_ARMS, true,
+      'consensus scheduling is armed on the supplied clock');
 
     const partition = await startPartitionReplica(open, 'supplied', authorities);
     const beforeHops = zeroDelayArmCount(clock);
