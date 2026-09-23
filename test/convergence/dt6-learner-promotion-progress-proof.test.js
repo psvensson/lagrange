@@ -2,7 +2,7 @@
  * Scenario 'learner-promotion-progress-proof' (quest
  * learner-promotion-progress-proof): a five-node recovery scenario over the
  * REAL owners — live PartitionService leader + learner on a loopback
- * transport with real liferaft replication, real proof RPC over the
+ * transport with a semantic operation-port progress source, real proof RPC over the
  * application-message channel, and the real promotion gate chain.
  *
  * FIDELITY: in-process deterministic guard (loopback transport, single
@@ -36,17 +36,16 @@ import {
   LEARNER_PROMOTION_PROOF_REASON,
 } from '../../src/raft/learner-promotion-progress.js';
 import {
-  FOLLOWER_MATCH_INDEX_STATE,
-  readFollowerMatchIndex,
-} from '../../src/raft/liferaft.js';
-import {
   COMMITTED_ENTRY_COUNT,
   LEARNER_ADDRESS,
+  REPLICATION_OBSERVATION_STATE,
   configureFixtureRuntime,
   createFiveNodeFixture,
   insertPublishedEpochRow,
   insertServiceRow,
+  readLeaderReplicationToLearner,
   resetFixtureRuntime,
+  seedLearnerDurableProgress,
   waitFor,
 } from './dt6-learner-promotion-fixture.js';
 
@@ -69,7 +68,7 @@ async (t) => {
   const {leader, learner, leaderTransport, deferrals} = fixture;
   try {
     t.equal(
-      leader.raftProvider.getCommittedIndex(leader.raft),
+      leader.raft.readStatus().commitIndex,
       COMMITTED_ENTRY_COUNT,
       'recovery precondition: the leader holds a committed prefix the ' +
         'learner does not have',
@@ -91,8 +90,8 @@ async (t) => {
         'not leader discovery or quorum shape',
     );
     t.equal(
-      readFollowerMatchIndex(leader.raft, LEARNER_ADDRESS).state,
-      FOLLOWER_MATCH_INDEX_STATE.UNAVAILABLE,
+      readLeaderReplicationToLearner(leader).state,
+      REPLICATION_OBSERVATION_STATE.UNAVAILABLE,
       'the leader holds no progress evidence for the partitioned learner',
     );
 
@@ -110,13 +109,10 @@ async (t) => {
       true,
       'the proven learner promotes within the retry cadence, not 30s',
     );
-    const matchObservation = readFollowerMatchIndex(
-      leader.raft,
-      LEARNER_ADDRESS,
-    );
+    const matchObservation = readLeaderReplicationToLearner(leader);
     t.equal(
       matchObservation.state,
-      FOLLOWER_MATCH_INDEX_STATE.AVAILABLE,
+      REPLICATION_OBSERVATION_STATE.AVAILABLE,
       'promotion happened only after the leader observed learner progress',
     );
     t.ok(
@@ -154,7 +150,7 @@ async (t) => {
       ) {
         staleInjected = true;
         observedGrantTerm = proof.term;
-        learner.raft.term = proof.term + 1;
+        learner.raftProvider.setTerm(proof.term + 1);
       }
       return proof;
     };
@@ -180,7 +176,7 @@ async (t) => {
 
     // Recovery: the learner observes the proof term again (the "new leader"
     // proved it) — promotion completes through the same contract.
-    learner.raft.term = observedGrantTerm;
+    learner.raftProvider.setTerm(observedGrantTerm);
     const promoted = await waitFor(
       () => learner.role === RaftRole.FOLLOWER,
       PROMOTION_BUDGET_MS,
@@ -240,15 +236,11 @@ async (t) => {
   const fixture = await createFiveNodeFixture({startPartitioned: true});
   const {leader, learner, leaderTransport} = fixture;
   try {
-    // Install-equivalent: seed the learner's log with the leader's full
-    // committed prefix out-of-band (the moral equivalent of a snapshot
-    // transfer), with NO further writes. Pure heartbeats carry no data, so
-    // the learner never acks on its own — the leader's progress probe must
-    // create the evidence.
-    for (let index = 1; index <= COMMITTED_ENTRY_COUNT; index++) {
-      const entry = await leader.raft.log.get(index);
-      await learner.raft.log.saveCommand(entry.command, entry.term, entry.index);
-    }
+    // Install-equivalent: the learner has durably reached the leader's
+    // committed prefix, but the leader has no observed follower-progress
+    // evidence yet. The semantic progress probe must materialize that
+    // observation; no backend log object is exposed to the fixture.
+    seedLearnerDurableProgress(leader, COMMITTED_ENTRY_COUNT);
     leaderTransport.state.dropToLearner = false;
 
     const promoted = await waitFor(
