@@ -29,6 +29,39 @@ const FAST_TEST = 'test/query/distributed-merge-engine.test.js';
 const SLOW_TEST = 'test/scripts/check-operation-dispatch-completion-owner.test.js';
 const OTHER_FAST_TEST = 'test/query/budget-limit-error.test.js';
 
+// This worktree's own recorded result for each file: a witness that drives
+// the real runner must never write here, where the corpus writes the same
+// path concurrently (a NUL-filled .tap there was a false red, 2026-09-23).
+function worktreeResults(files) {
+  return files.map((file) => {
+    const tap = path.join(process.cwd(), '.tap', 'test-results', `${file}.tap`);
+    return fs.existsSync(tap) ? `${file} ${fs.statSync(tap).mtimeMs}` : `${file} absent`;
+  });
+}
+
+// Fixture test files only a runner fixture has: one that runs until it is
+// stopped (bounded at a minute) and one that passes at once.
+const RUNNER_SLOW_FIXTURE = 'test/scripts/placement-runner-slow.test.js';
+const RUNNER_FAST_FIXTURE = 'test/scripts/placement-runner-fast.test.js';
+const RUNNER_FIXTURE_HEAD = 'import assert from \'node:assert/strict\';\n' +
+  'import {test} from \'node:test\';\n';
+
+// A throwaway checkout of this commit whose own root the real runner runs in
+// and records its results under - never this worktree, never a corpus file.
+function runnerFixture(t) {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'placement-runner-'));
+  t.after(() => fs.rmSync(scratch, {recursive: true, force: true}));
+  const root = path.join(scratch, 'checkout');
+  git(scratch, 'clone', '-q', '--shared', process.cwd(), root);
+  fs.symlinkSync(path.join(process.cwd(), 'node_modules'), path.join(root, 'node_modules'));
+  fs.writeFileSync(path.join(root, RUNNER_SLOW_FIXTURE), `${RUNNER_FIXTURE_HEAD}` +
+    'test(\'runs until stopped\', async () => {\n' +
+    '  await new Promise((resolve) => setTimeout(resolve, 60000));\n  assert.ok(true);\n});\n');
+  fs.writeFileSync(path.join(root, RUNNER_FAST_FIXTURE),
+    `${RUNNER_FIXTURE_HEAD}test('passes', () => assert.ok(true));\n`);
+  return {root, tap: (file) => path.join(root, '.tap', 'test-results', `${file}.tap`)};
+}
+
 function lab(name, speed, extra = {}) {
   return {name, controller: false, speed, avoid: [], gapsKey: 'k', ...extra};
 }
@@ -144,7 +177,7 @@ function fakeDeps(overrides = {}) {
   const deps = {
     env: {},
     write: (line) => calls.lines.push(line),
-    planCosts: (files) => files.map((file) => ({file, ms: 2 * MINUTE, jobs: 1})),
+    planCosts: (files) => files.map((file) => ({file, ms: 2 * MINUTE, jobs: 1, lane: 'ordinary'})),
     runLocal: (files) => {
       calls.order.push('local');
       calls.local.push([...files]);
@@ -451,8 +484,26 @@ test('a lab host too hot to run is reported thermal-unfit and its files run once
     'the refusal itself is relayed');
     assert.equal(remoteCalls, 1, 'never retried on the same host in this invocation');
     assert.deepEqual(run.calls.local.slice(1).flat().sort(), [...given.files].sort(),
-      'its files are placed once more, elsewhere: here');
+      'with no other ready host, its files are placed once more, here');
     assert.equal(run.calls.local.length, 2, 'once');
+
+    // One re-placement policy for a host that refused, hot or held: a ready
+    // host this run has not tried, that fits the files, takes them first.
+    const tried = [];
+    const moved = fakeDeps({
+      discover: async () => ({machines: [lab('lab', 1), lab('spare', 2)],
+        record: async () => {}}),
+      runRemote: (shard) => {
+        tried.push({name: shard.machine.name, files: [...shard.files]});
+        const ran = labRunnerLog(shard.files, shard.machine.name === 'lab' ? 90 : 50);
+        return {done: Promise.resolve({status: ran.status, log: ran.log})};
+      },
+    });
+    assert.equal(await runPlacedTestFiles([...REAL_FILES], moved.deps), 0);
+    assert.deepEqual(tried.map((one) => one.name), ['lab', 'spare'],
+      'the unfit host once, then the next ready host');
+    assert.deepEqual(tried[1].files, tried[0].files, 'which takes the files it never ran');
+    assert.equal(moved.calls.local.length, 1, 'the controller runs only its own shard');
   });
 
 // Git addresses these scratch repositories only, never one a push hook
@@ -487,6 +538,8 @@ test('an interrupted placed run stops every machine at once', async (t) => {
   // For real: a SIGTERM to a placed run whose controller files are running
   // ends it at once, and nothing either side started survives.
   const probe = path.join(process.cwd(), 'scripts', 'lab', 'probe.js');
+  const fixture = runnerFixture(t);
+  const before = worktreeResults([RUNNER_SLOW_FIXTURE]);
   const child = spawn(process.execPath, ['--input-type=module', '-e', `
     import {spawn} from 'node:child_process';
     import {placementDeps, runPlacedTestFiles} from ${JSON.stringify(probe)};
@@ -495,7 +548,7 @@ test('an interrupted placed run stops every machine at once', async (t) => {
       console.log('group=' + sleeper.pid);
       return sleeper;
     };
-    const real = placementDeps({root: process.cwd()});
+    const real = placementDeps({root: ${JSON.stringify(fixture.root)}});
     await runPlacedTestFiles(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], {
       env: {}, write: () => {},
       planCosts: (files) => files.map((file) => ({file, ms: 120000, jobs: 1})),
@@ -507,7 +560,7 @@ test('an interrupted placed run stops every machine at once', async (t) => {
         return {done: new Promise(() => {}), abort: () => process.kill(-lab.pid, 'SIGKILL')};
       },
       runLocalChild: (files) => {
-        const local = real.runLocalChild(['${SLOW_TEST}']);
+        const local = real.runLocalChild(['${RUNNER_SLOW_FIXTURE}']);
         console.log('local-group=' + local.group);
         console.log('local-started');
         return local;
@@ -547,6 +600,8 @@ test('an interrupted placed run stops every machine at once', async (t) => {
     }
   }
   assert.equal(slowAlive, false, 'and the controller\'s own runner group is gone');
+  assert.deepEqual(worktreeResults([RUNNER_SLOW_FIXTURE]), before,
+    'the worktree\'s results root is untouched');
 });
 
 test('a hang-up stops a placed run like an interrupt', async () => {
@@ -646,9 +701,15 @@ test('an aborted lab shard cleans up before it is cut', async (t) => {
 test('the controller child runs with placement switched off', async (t) => {
   // Its own files are the controller's shard: placing them again would
   // rediscover a fleet that is busy with this very run.
-  const local = placementDeps({root: process.cwd(), env: gitProcessEnvironment()})
-    .runLocalChild([SLOW_TEST]);
+  const fixture = runnerFixture(t);
+  const before = worktreeResults([RUNNER_SLOW_FIXTURE]);
+  const local = placementDeps({root: fixture.root, env: gitProcessEnvironment()})
+    .runLocalChild([RUNNER_SLOW_FIXTURE]);
   t.after(() => local.abort());
+  for (let poll = 0; poll < 1200 && !fs.existsSync(fixture.tap(RUNNER_SLOW_FIXTURE)); poll += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.ok(fs.existsSync(fixture.tap(RUNNER_SLOW_FIXTURE)), 'the fixture root holds the result');
   assert.doesNotThrow(() => process.kill(-local.group, 0), 'it leads its own group');
   if (fs.existsSync(`/proc/${local.group}/environ`)) {
     const environ = fs.readFileSync(`/proc/${local.group}/environ`, 'utf8').split('\0');
@@ -656,6 +717,8 @@ test('the controller child runs with placement switched off', async (t) => {
   }
   local.abort();
   assert.notEqual(await local.done, 0, 'and an abort ends it');
+  assert.deepEqual(worktreeResults([RUNNER_SLOW_FIXTURE]), before,
+    'the worktree\'s results root is untouched');
 });
 
 const GATE_TEST = 'test/scripts/lab-stream-gate.test.js';
@@ -678,7 +741,7 @@ function gateTestSource(gate) {
   ].join('\n');
 }
 
-test('the controller child gets its file list even while this process is busy', async () => {
+test('the controller child gets its file list even while this process is busy', async (t) => {
   // Its list used to go down a socket written from this event loop; a child
   // that read it first - this process blocked after the spawn, as a placed
   // run is while it bundles and starts lab shards - found the non-blocking
@@ -690,14 +753,20 @@ test('the controller child gets its file list even while this process is busy', 
   // Streamed, so its output does not land in this file's own TAP; the list
   // reaches an inherited-output child the same way.
   const lines = [];
-  const streamed = labTestDeps({root: process.cwd(), env}).runLocalChild([OTHER_FAST_TEST],
+  const fixture = runnerFixture(t);
+  const before = worktreeResults([RUNNER_FAST_FIXTURE]);
+  const streamed = labTestDeps({root: fixture.root, env}).runLocalChild([RUNNER_FAST_FIXTURE],
     {onLine: (line) => lines.push(line)});
   const until = Date.now() + 300;
   while (Date.now() < until) {
     // Busy, as the controller is between starting its child and returning.
   }
   assert.equal(await streamed.done, 0, lines.join('\n'));
-  assert.ok(lines.some((line) => line.startsWith(`ok ${OTHER_FAST_TEST} `)), lines.join('\n'));
+  assert.ok(lines.some((line) => line.startsWith(`ok ${RUNNER_FAST_FIXTURE} `)),
+    lines.join('\n'));
+  assert.ok(fs.existsSync(fixture.tap(RUNNER_FAST_FIXTURE)), 'the fixture root holds the result');
+  assert.deepEqual(worktreeResults([RUNNER_FAST_FIXTURE]), before,
+    'the worktree\'s results root is untouched');
 });
 
 function git(cwd, ...args) {
@@ -727,7 +796,8 @@ function exitOf(child) {
 }
 
 // The descriptors a started runner holds, read from /proc once its pid is in
-// the log: the machine lock must not be one of them.
+// the log: neither the machine-wide lock nor the checkout lock may be one of
+// them. Returns the runner's pid.
 async function assertRunnerFreeOfLock(logFile) {
   let runnerPid = null;
   for (let poll = 0; poll < 1200 && !runnerPid; poll += 1) {
@@ -735,7 +805,7 @@ async function assertRunnerFreeOfLock(logFile) {
     runnerPid = /^placement-pid=(\d+)$/mu.exec(fs.readFileSync(logFile, 'utf8'))?.[1];
   }
   assert.ok(runnerPid, 'the runner started');
-  if (!fs.existsSync(`/proc/${runnerPid}/fd`)) return;
+  if (!fs.existsSync(`/proc/${runnerPid}/fd`)) return runnerPid;
   const held = fs.readdirSync(`/proc/${runnerPid}/fd`).map((fd) => {
     try {
       return fs.readlinkSync(`/proc/${runnerPid}/fd/${fd}`);
@@ -743,8 +813,9 @@ async function assertRunnerFreeOfLock(logFile) {
       return '';
     }
   });
-  assert.ok(!held.some((target) => target.endsWith('lagrange-placement.lock')),
-    'the runner does not hold the machine lock');
+  assert.ok(!held.some((target) => target.endsWith('lagrange-placement.lock') ||
+    target.endsWith('machine.lock')), 'the runner holds neither lock');
+  return runnerPid;
 }
 
 function leftovers(repo) {
@@ -755,6 +826,27 @@ function leftovers(repo) {
     refs: git(repo, 'for-each-ref', 'refs/lagrange-placement'),
     files: fs.existsSync(parent) ? fs.readdirSync(parent) : [],
   };
+}
+
+// What a fixture shard tells other agents it is doing, unless a witness says.
+const FIXTURE_HOLDER = Object.freeze({purpose: 'test:ordinary', expectedMs: MINUTE});
+
+// The machine-wide lock in a scratch directory the shard's shell is pointed
+// at, and a `flock` first on its PATH that records how it was called.
+function labLockFixture(scratch, env) {
+  const dir = path.join(scratch, 'lab-lock');
+  const calls = path.join(scratch, 'flock-calls');
+  const real = spawnSync('sh', ['-c', 'command -v flock'], {encoding: 'utf8'}).stdout.trim();
+  const stubs = path.join(scratch, 'stub-bin');
+  fs.mkdirSync(stubs);
+  fs.writeFileSync(path.join(stubs, 'flock'),
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> '${calls}'\nexec '${real}' "$@"\n`, {mode: 0o755});
+  env.PATH = `${stubs}${path.delimiter}${env.PATH}`;
+  env.LAB_LOCK_DIR = dir;
+  env.LAGRANGE_LAB_AGENT = 'claude:placement-witness';
+  return {dir, lock: path.join(dir, 'machine.lock'),
+    holder: path.join(dir, 'machine.holder.json'),
+    calls: () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : [])};
 }
 
 // A lab machine's checkout at this commit, and a controller one commit on,
@@ -799,9 +891,13 @@ function labFixture(t) {
   // session carries neither.
   const env = gitProcessEnvironment();
   delete env.NODE_TEST_CONTEXT;
+  // The lab's machine-wide lock lives in the fixture, never in this
+  // machine's own $HOME/.lab, and every flock call is recorded on its way to
+  // the real one.
+  const labLock = labLockFixture(scratch, env);
   const start = (files, options = {}) => startRemoteShard({machine, files},
-    {sha, deadlineMs: 10 * MINUTE, root: controller, env, ...options});
-  return {node, controller, parent, machine, sha, env, start,
+    {sha, deadlineMs: 10 * MINUTE, root: controller, env, holder: FIXTURE_HOLDER, ...options});
+  return {node, controller, parent, machine, sha, env, start, labLock,
     releaseGate: () => fs.writeFileSync(gate, 'go')};
 }
 
@@ -820,7 +916,10 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
     // never from a host name.
     assert.match(sent, /^cores="\$\(getconf _NPROCESSORS_ONLN 2>\/dev\/null \|\| nproc 2>\/dev\/null\)"$/mu,
       'the remote host counts its own processors');
-    assert.doesNotMatch(sent, /\blab\b/u, 'and no machine is named in what it runs');
+    // The lab convention's default lock directory is `$HOME/.lab` on every
+    // host; the fixture's machine is also called lab.
+    assert.doesNotMatch(sent.replaceAll('$HOME/.lab', ''), /\blab\b/u,
+      'and no machine is named in what it runs');
     assert.equal(green.status, 0, green.log + green.errors);
     assert.match(green.log, new RegExp(`^placement-head=${sha}$`, 'mu'),
       'the worktree is at the commit the controller holds, sent as a bundle');
@@ -935,9 +1034,192 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
     git(controller, 'commit', '-qam', 'placement witness two');
     const unsent = git(controller, 'rev-parse', 'HEAD');
     const unreachable = await (await startRemoteShard({machine: {...machine, repoHead: unsent},
-      files: [FAST_TEST]}, {sha: unsent, deadlineMs: MINUTE, root: controller, env})).done;
+      files: [FAST_TEST]}, {sha: unsent, deadlineMs: MINUTE, root: controller, env,
+      holder: FIXTURE_HOLDER})).done;
     assert.equal(unreachable.status, PLACEMENT_EXIT.SETUP);
     assert.deepEqual(leftovers(node), {worktrees: 1, refs: '', files: []});
+  });
+
+// ---------------------------------------------------------------------------
+// Sharing the lab (owner directive 2026-09-23): a placed shard takes the one
+// machine-wide lock every agent in every project takes, waits for it no longer
+// than its own budget, and keeps a holder record beside it for as long as it
+// holds it. A host found held is a typed outcome, and its shard goes on to the
+// next ready host before the controller.
+
+const SECOND = 1000;
+// The lab's cap on any lock wait, in seconds.
+const LOCK_WAIT_CAP_SECONDS = 30 * 60;
+const HOLDER_FIELDS = Object.freeze(['project', 'agent', 'controller', 'purpose', 'sha',
+  'startedAt', 'expectedMinutes', 'pid']);
+// Another project's holder of a lab machine.
+const OTHER_HOLDER = Object.freeze({project: 'other-project', agent: 'codex:task-7',
+  controller: 'laptop', purpose: 'formation:rolling-restart', sha: 'e'.repeat(40),
+  startedAt: '2026-09-23T10:00:00Z', expectedMinutes: 25, pid: 4242});
+const HOST_BUSY_LINE = 'placement: host-busy b held-by codex:task-7 since 2026-09-23T10:00:00Z';
+
+// Holds a lock file from a process group of its own until released.
+async function holdLock(t, lock) {
+  const holder = spawn('flock', [lock, 'sleep', '60'], {stdio: 'ignore', detached: true});
+  const release = async () => {
+    try {
+      process.kill(-holder.pid, 'SIGKILL');
+    } catch {
+      // already gone
+    }
+    await exitOf(holder);
+  };
+  t.after(release);
+  for (let poll = 0; poll < 600 && spawnSync('flock', ['-n', lock, 'true']).status === 0;
+    poll += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return {pid: holder.pid, release};
+}
+
+function lockIsFree(lock) {
+  return spawnSync('flock', ['-n', lock, 'true']).status === 0;
+}
+
+test('a lab shard takes the machine-wide lock for its budget and records who holds it',
+  async (t) => {
+    const {start, controller, sha, labLock} = labFixture(t);
+    const running = start([SLOW_TEST], {runId: 'held',
+      holder: {purpose: 'test:cpu-heavy', expectedMs: 90 * SECOND}});
+    const logFile = path.join(controller, 'test-output', 'placement', 'held-lab.log');
+    await assertRunnerFreeOfLock(logFile);
+    assert.deepEqual(labLock.calls(), ['-w 90 9', '-n 8'],
+      'the machine-wide lock, waited for no longer than the shard budget, then the checkout ' +
+        'lock inside it');
+    const shell = Number(/^placement-shell=(\d+)$/mu.exec(fs.readFileSync(logFile, 'utf8'))[1]);
+    const record = JSON.parse(fs.readFileSync(labLock.holder, 'utf8'));
+    assert.deepEqual(Object.keys(record), HOLDER_FIELDS, 'the holder record has all eight fields');
+    assert.deepEqual({...record, startedAt: null}, {project: 'lagrange',
+      agent: 'claude:placement-witness', controller: os.hostname(), purpose: 'test:cpu-heavy',
+      sha, startedAt: null, expectedMinutes: 2, pid: shell},
+    'written by the lab shell that holds the lock, from the shard\'s own estimate');
+    assert.match(record.startedAt, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/u);
+    assert.equal(lockIsFree(labLock.lock), false, 'held while the shard runs');
+    running.stop();
+    assert.equal((await running.done).reason, 'interrupted');
+    assert.equal(fs.existsSync(labLock.holder), false, 'a stopped shard removes its record');
+    assert.equal(lockIsFree(labLock.lock), true, 'and frees the machine');
+
+    const long = await start([FAST_TEST], {runId: 'long',
+      holder: {purpose: 'test:ordinary', expectedMs: 10 * 60 * MINUTE}}).done;
+    assert.equal(long.status, 0, long.log + long.errors);
+    assert.equal(labLock.calls().at(-2), `-w ${LOCK_WAIT_CAP_SECONDS} 9`,
+      'a shard of hours still waits no longer than the lab\'s cap');
+    assert.equal(fs.existsSync(labLock.holder), false, 'a finished shard removes its record');
+  });
+
+test('a lab shard finding the machine held waits its budget, then refuses naming the holder',
+  async (t) => {
+    const {start, node, machine, labLock} = labFixture(t);
+    fs.mkdirSync(labLock.dir, {recursive: true});
+    const other = await holdLock(t, labLock.lock);
+    const record = `${JSON.stringify({...OTHER_HOLDER, pid: other.pid})}\n`;
+    fs.writeFileSync(labLock.holder, record);
+    const startedAt = Date.now();
+    const busy = await start([FAST_TEST], {runId: 'busy',
+      holder: {purpose: 'test:ordinary', expectedMs: 1500}}).done;
+    assert.equal(busy.status, PLACEMENT_EXIT.BUSY, busy.log + busy.errors);
+    assert.equal(labLock.calls()[0], '-w 2 9', 'a budget under two seconds waits two');
+    assert.ok(Date.now() - startedAt >= 1900, 'it waited its budget before refusing');
+    assert.ok(busy.log.split('\n').includes(`machine-lock-busy=${record.trim()}`),
+      `and named who holds the machine: ${busy.log}`);
+    assert.equal(fs.readFileSync(labLock.holder, 'utf8'), record,
+      'the holder\'s own record is left exactly as it was');
+    assert.deepEqual(leftovers(node), {worktrees: 1,
+      refs: `${machine.repoHead} commit\trefs/lagrange-placement/old-run`,
+      files: ['old-run', 'old-run.bundle', 'old-run.files']},
+    'it left nothing of its own, and touched nothing of a run it never held the machine for');
+  });
+
+test('discovery keeps a machine another agent holds out of placement before it is tried', () => {
+  const ready = {ready: true, missing: [], gaps: []};
+  const cap = (machineLock) => ({repoPath: '/srv/lagrange', cpuSampleMs: 260,
+    nodeVersion: 'v22.22.3', repo: {head: 'c'.repeat(40)}, machineLock});
+  const fleet = [
+    {name: '(controller)', controller: true, capability: {cpuSampleMs: 200}, readiness: ready},
+    {name: 'held', capability: cap({state: 'busy', holder: OTHER_HOLDER}), readiness: ready},
+    {name: 'stale', capability: cap({state: 'stale-record', holder: OTHER_HOLDER,
+      holderPidAlive: false}), readiness: ready},
+    {name: 'free', capability: cap({state: 'free', holder: null}), readiness: ready},
+  ];
+  const nodes = Object.fromEntries(fleet.filter((entry) => !entry.controller)
+    .map((entry) => [entry.name, {name: entry.name, ssh: `peer@${entry.name}`}]));
+  assert.deepEqual(placementMachines(fleet, {nodes}).map((machine) => machine.name),
+    ['stale', 'free'], 'a held machine is skipped; a stale record is evidence, not a lock');
+});
+
+// Six one-minute files over the controller, `b` and a slow `c` that the
+// split leaves idle: `c` is the next ready host when `b` is found held.
+function busyFleetDeps(busyHosts) {
+  const tried = [];
+  const run = fakeDeps({
+    planCosts: (files) => files.map((file) => ({file, ms: MINUTE, jobs: 1, lane: 'ordinary'})),
+    discover: async () => ({machines: [lab('b', 1), lab('c', 4)], record: async () => {}}),
+    runRemote: (shard, options) => {
+      tried.push({name: shard.machine.name, files: [...shard.files], options});
+      const holder = busyHosts[shard.machine.name];
+      return {done: Promise.resolve(holder === undefined ?
+        {status: 0, log: shard.files.map((file) => `ok ${file} (1 assertions, 5ms)`).join('\n')} :
+        {status: PLACEMENT_EXIT.BUSY,
+          log: `placement-shell=1\nmachine-lock-busy=${holder ? JSON.stringify(holder) : ''}`})};
+    },
+  });
+  return {...run, tried};
+}
+
+test('a held lab host is reported, and its shard goes to the next ready host, then here',
+  async () => {
+    const six = MANY.slice(0, 6);
+    let run = busyFleetDeps({b: OTHER_HOLDER});
+    assert.equal(await runPlacedTestFiles(six, run.deps), 0);
+    assert.ok(run.calls.lines.includes(HOST_BUSY_LINE),
+      `a typed placement outcome naming the holder: ${run.calls.lines.join('\n')}`);
+    assert.deepEqual(run.tried.map((one) => one.name), ['b', 'c'],
+      'the held host once, then the next ready host');
+    assert.deepEqual(run.tried[1].files, run.tried[0].files, 'which takes its whole shard');
+    assert.deepEqual(run.tried[0].options.holder, {purpose: 'test:ordinary',
+      expectedMs: 3.5 * MINUTE}, 'each shard tells others its lanes and its own estimate');
+    assert.equal(run.calls.local.length, 1, 'the controller runs only its own shard');
+
+    run = busyFleetDeps({b: OTHER_HOLDER, c: null});
+    assert.equal(await runPlacedTestFiles(six, run.deps), 0);
+    assert.ok(run.calls.lines.includes('placement: host-busy c held-by (no holder record)'),
+      run.calls.lines.join('\n'));
+    assert.deepEqual(run.tried.map((one) => one.name), ['b', 'c'],
+      'no held host is tried again in the same invocation');
+    assert.deepEqual(run.calls.local.slice(1).flat().sort(), [...run.tried[0].files].sort(),
+      'with no ready host left, the controller runs the shard');
+  });
+
+test('a hand lab run on a held host reports it and never counts its files as passed',
+  async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-test-busy-'));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    const {fleet} = fakeInventory();
+    const lines = [];
+    let given = null;
+    const status = await runLabTest({
+      plan: [{resourceClass: 'ordinary', files: [FAST_TEST], jobs: 4}],
+      commit: {sha: 'a'.repeat(40), gitRoot: root, release: () => {}},
+      on: 'alpha', root, write: (line) => lines.push(line),
+    }, {
+      discover: async () => ({fleet, machines: [{...lab('alpha', 1), cores: 12, memKiB: 1}]}),
+      commitAt: () => 'a'.repeat(40),
+      runRemote: (shard, options) => {
+        given = options;
+        options.onLine(`machine-lock-busy=${JSON.stringify(OTHER_HOLDER)}`, 'out');
+        return {done: Promise.resolve({status: PLACEMENT_EXIT.BUSY, log: '', errors: ''})};
+      },
+    });
+    assert.ok(lines.includes('placement: host-busy alpha held-by codex:task-7 since ' +
+      '2026-09-23T10:00:00Z'), lines.join('\n'));
+    assert.equal(status, 1, 'a file never run is never a pass');
+    assert.equal(given.holder.purpose, 'test:ordinary', 'the share names its lanes');
   });
 
 // ---------------------------------------------------------------------------

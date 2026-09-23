@@ -28,7 +28,7 @@
   "censusSize": 2154,
   "digest": "fnv1a32-aec6c8b0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-0155fa79",
+  "observationDigest": "fnv1a32-49ced379",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7130,14 +7130,22 @@
         "Dockerfile",
         "README.md",
         "RELEASE.md",
+        "docs/development/home-lab.md",
+        "docs/development/solver-runbook.md",
         "docs/dockerhub-overview.md",
         "package.json",
         "scripts/checks/run-golden-capability-guard-scenarios.js",
+        "scripts/lab/harness.js",
+        "scripts/lab/probe.js",
         "scripts/release-notes.js",
         "scripts/run-classified-test-files.js",
         "src/public-api.js",
         "test/manifests/project-hardening-proof-manifest.json",
         "test/manifests/project-hardening-proof-postpush-manifest.json"
+      ],
+      "directories": [
+        ".github",
+        "scripts"
       ]
     },
     "test/release/public-api-side-effect-boundary.test.js": {
@@ -8510,7 +8518,9 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/test-resource-classification-constants.js",
-        "scripts/run-classified-test-files.js"
+        "scripts/run-classified-test-files.js",
+        "test/distributed/config/local-three-node.json",
+        "test/distributed/run.js"
       ],
       "env": [
         "APPDATA",

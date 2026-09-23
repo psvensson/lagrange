@@ -309,7 +309,8 @@ function medianOf(values) {
 
 // What each planned file is expected to cost, for placement: its last green
 // duration here, else the median of its lane's timed files, else a default.
-// A red or unknown file is priced like its lane, never as free.
+// A red or unknown file is priced like its lane, never as free. Each names
+// its lane, which a placed shard tells other agents on the lab it runs.
 export function estimateFileCosts(plan, resultsRoots) {
   const costs = [];
   for (let laneIndex = 0; laneIndex < plan.length; laneIndex += 1) {
@@ -327,6 +328,7 @@ export function estimateFileCosts(plan, resultsRoots) {
         file: lane.files[index],
         jobs: lane.jobs,
         ms: measured[index] === null ? fallback : measured[index],
+        lane: lane.resourceClass,
       });
     }
   }

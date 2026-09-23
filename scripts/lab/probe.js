@@ -1,6 +1,7 @@
 import {spawn, spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {StringDecoder} from 'node:string_decoder';
 
@@ -97,6 +98,223 @@ export async function probeRemoteNode(sshTarget) {
   }
   return probeWindows(sshTarget);
 }
+
+// ---------------------------------------------------------------------------
+// Sharing the lab between agents and projects (owner directive 2026-09-23:
+// runs that could not see each other overwhelmed a lab machine). Every lab
+// host has ONE machine-wide lock, `${LAB_LOCK_DIR:-$HOME/.lab}/machine.lock`,
+// which whoever runs anything heavy there - a test corpus, a formation, a
+// benchmark - takes with flock and a bounded wait, and one holder record
+// beside it, `machine.holder.json`, written by the holder under the lock and
+// removed by it on exit. flock is the lock; the record is for people and for
+// `lab fleet`, and a record whose lock is free is stale evidence, never a
+// lock. The convention is plain shell (docs/development/home-lab.md,
+// "Sharing the lab between agents and projects"), so another project follows
+// it with nothing from here. In this repository the lines below are its one
+// owner: discovery reads a machine's lock with them, and the placement
+// wrapper and a formation's hold on each node take it with them.
+
+// The convention's exit statuses: 98 is the busy refusal its recipe's
+// `flock -w N 9 || exit 98` gives, 97 a host that cannot take part, 143 a
+// holder stopped by a signal.
+const LAB_LOCK_EXIT = Object.freeze({SETUP: 97, BUSY: 98, TERMINATED: 143});
+const MS_PER_SECOND = 1000;
+const MS_PER_MINUTE = 60 * MS_PER_SECOND;
+// No wait is longer, whatever the caller's budget: a host held for longer is
+// another run's, and the caller goes elsewhere or refuses.
+const LAB_LOCK_WAIT_MAX_MS = 30 * MS_PER_MINUTE;
+const LAB_LOCK_WAIT_MIN_SECONDS = 1;
+// A released hold's session gets this long to remove its record and end.
+const LAB_HOLD_RELEASE_GRACE_MS = 5 * MS_PER_SECOND;
+// How a holder names itself: this repository, and who placed the work
+// (LAGRANGE_LAB_AGENT, such as claude:SESSION, or this controller's process).
+const LAB_PROJECT = 'lagrange';
+const LAB_AGENT_ENV = 'LAGRANGE_LAB_AGENT';
+const LAB_AGENT_SEPARATOR = ':';
+const LAB_TEST_PURPOSE = 'test:';
+const LAB_PURPOSE_SEPARATOR = ',';
+// What a lab-side shell prints about the lock: busy, with the holder's record
+// when there is one, and held.
+const LAB_LOCK_LINE = Object.freeze({BUSY: 'machine-lock-busy=', HELD: 'machine-lock-held'});
+// What discovery found of a machine's lock, from the probe's answer.
+const LAB_LOCK_STATE = Object.freeze({
+  FREE: 'free', BUSY: 'busy', STALE: 'stale-record', UNKNOWN: 'unknown',
+});
+const LAB_LOCK_PROBED = Object.freeze({HELD: 'held', FREE: 'free'});
+// What a formation's hold on one node came to.
+const LAB_HOLD = Object.freeze({HELD: 'held', BUSY: 'busy', FAILED: 'failed'});
+const LAB_HOLDER_UNKNOWN = '?';
+const LAB_HOLD_REASON_SEPARATOR = ': ';
+const LAB_LOCK_TEXT = Object.freeze({
+  FREE: 'free',
+  BUSY: 'busy: ',
+  STALE_DEAD: 'stale record (pid dead)',
+  STALE_LOCK_FREE: 'stale record (lock free)',
+  UNKNOWN: 'lock unknown',
+  NO_RECORD: 'held (no holder record)',
+  UNREADABLE: 'held (unreadable holder record)',
+  EXPECTED: ', expected ',
+  MINUTES: ' min',
+});
+const LAB_LOCK_PATHS = Object.freeze([
+  'lab_dir="${LAB_LOCK_DIR:-$HOME/.lab}"',
+  'lab_lock="$lab_dir/machine.lock"; lab_holder="$lab_dir/machine.holder.json"',
+]);
+// A record read bounded and onto one line: another project may write it over
+// several.
+const LAB_HOLDER_READ = 'head -c 4096 "$lab_holder" 2>/dev/null | tr -d \'\\r\\n\'';
+// Discovery's view of the lock: whether it is held - asked with `flock -n`,
+// which releases at once, and never of a lock file it would have to create -
+// and the holder record as written, with whether its pid still runs. The
+// probe reads; it never takes the lock. A host that cannot say reports
+// nothing, which reads as unknown.
+const LAB_LOCK_PROBE = Object.freeze([
+  ...LAB_LOCK_PATHS,
+  'if [ -f "$lab_holder" ]; then',
+  `  say machine_holder "$(${LAB_HOLDER_READ})"`,
+  '  holder_pid="$(sed -n \'s/.*"pid"[ ]*:[ ]*\\([0-9][0-9]*\\).*/\\1/p\' "$lab_holder" | ' +
+    'head -n 1)"',
+  '  if [ -n "$holder_pid" ]; then if ps -p "$holder_pid" >/dev/null 2>&1; then ' +
+    'say machine_holder_pid_alive yes; else say machine_holder_pid_alive no; fi; fi',
+  'fi',
+  'if [ ! -e "$lab_lock" ]; then say machine_lock free',
+  'elif command -v flock >/dev/null 2>&1 && [ -r "$lab_lock" ]; then',
+  '  flock -n "$lab_lock" true 2>/dev/null',
+  '  case $? in 0) say machine_lock free;; 1) say machine_lock held;; esac',
+  'fi',
+]);
+// Take the lock on fd 9, waiting at most $lock_wait seconds - as a job, so a
+// stop signal ends the wait at once - and, busy, name the holder's record and
+// exit busy without touching it.
+const LAB_LOCK_TAKE = Object.freeze([
+  `mkdir -p "$lab_dir" || exit ${LAB_LOCK_EXIT.SETUP}`,
+  `exec 9>"$lab_lock" || exit ${LAB_LOCK_EXIT.SETUP}`,
+  'flock -w "$lock_wait" 9 & pid=$!',
+  'wait "$pid"; locked=$?; pid=""',
+  `if [ "$locked" != 0 ]; then echo "${LAB_LOCK_LINE.BUSY}$(${LAB_HOLDER_READ})"; ` +
+    `exit ${LAB_LOCK_EXIT.BUSY}; fi`,
+]);
+// Under the lock, the holder record: the caller's fields ($holder_head,
+// $expected_minutes) around what only the holder knows - when it started and
+// its pid. Whoever sets `holding` removes it on exit.
+const LAB_LOCK_RECORD = Object.freeze([
+  'printf \'{%s,"startedAt":"%s","expectedMinutes":%s,"pid":%s}\\n\' "$holder_head" ' +
+    '"$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$expected_minutes" "$$" > "$lab_holder" || ' +
+    `exit ${LAB_LOCK_EXIT.SETUP}`,
+  'holding=1',
+]);
+// A formation's hold on one node: the lock taken and recorded as above, then
+// kept for as long as the controller keeps this session's input open. Its
+// end - a release, or the session's own - lets the shell exit, which removes
+// the record and frees the machine.
+const LAB_HOLD_SCRIPT = [
+  'set -u',
+  'lock_wait="$1"; holder_head="$2"; expected_minutes="$3"',
+  'set --',
+  'pid=""; holding=""',
+  ...LAB_LOCK_PATHS,
+  'trap \'if [ -n "$holding" ]; then rm -f "$lab_holder"; fi\' EXIT',
+  'trap \'if [ -n "$pid" ]; then kill "$pid" 2>/dev/null; fi; ' +
+    `exit ${LAB_LOCK_EXIT.TERMINATED}' HUP INT TERM`,
+  'if ! command -v flock >/dev/null 2>&1; then echo "a lab hold needs flock here" >&2; ' +
+    `exit ${LAB_LOCK_EXIT.SETUP}; fi`,
+  ...LAB_LOCK_TAKE,
+  ...LAB_LOCK_RECORD,
+  `echo ${LAB_LOCK_LINE.HELD}`,
+  'cat >/dev/null 9>&-',
+].join('\n');
+
+// Seconds for `flock -w`: the caller's budget, at least a second, never more
+// than the lab's cap.
+function labLockWaitSeconds(waitMs) {
+  return Math.max(LAB_LOCK_WAIT_MIN_SECONDS,
+    Math.ceil(Math.min(waitMs, LAB_LOCK_WAIT_MAX_MS) / MS_PER_SECOND));
+}
+
+// The arguments a lab shell takes the lock with: its wait, the head of its
+// holder record - this project, the agent, the controller, the purpose and
+// the commit, as JSON members - and the minutes it expects to hold the
+// machine.
+function labLockArgs({waitMs, purpose, expectedMs, sha, env}) {
+  const controller = os.hostname();
+  const agent = env[LAB_AGENT_ENV] ||
+    [LAB_PROJECT, controller, process.pid].join(LAB_AGENT_SEPARATOR);
+  const head = JSON.stringify({project: LAB_PROJECT, agent, controller, purpose, sha});
+  return [String(labLockWaitSeconds(waitMs)), head.slice(1, -1),
+    String(Math.ceil(expectedMs / MS_PER_MINUTE))];
+}
+
+// What a test run tells other agents it is doing: its lanes.
+function labTestPurpose(lanes) {
+  return `${LAB_TEST_PURPOSE}${[...new Set(lanes)].join(LAB_PURPOSE_SEPARATOR)}`;
+}
+
+// A holder record as its holder wrote it, when it is a JSON object.
+function parseLabHolder(text) {
+  if (!text) return null;
+  try {
+    const record = JSON.parse(text);
+    return record !== null && typeof record === 'object' && !Array.isArray(record) ?
+      record : null;
+  } catch {
+    return null;
+  }
+}
+
+// The holder a lab shell named when it refused busy, from its lines.
+function busyHolder(lines) {
+  const line = lines.find((one) => one.startsWith(LAB_LOCK_LINE.BUSY));
+  return parseLabHolder(line?.slice(LAB_LOCK_LINE.BUSY.length));
+}
+
+/**
+ * Who holds a machine, as a person reads it: `held by AGENT (PROJECT,
+ * PURPOSE) since STARTED`, a field the holder left out shown as unknown.
+ * @param {Object|null} holder a holder record
+ * @return {string}
+ */
+export function labHolderText(holder) {
+  if (!holder) return LAB_LOCK_TEXT.NO_RECORD;
+  return `held by ${holder.agent ?? LAB_HOLDER_UNKNOWN} (${holder.project ?? LAB_HOLDER_UNKNOWN}` +
+    `, ${holder.purpose ?? LAB_HOLDER_UNKNOWN}) since ${holder.startedAt ?? LAB_HOLDER_UNKNOWN}`;
+}
+
+// A machine's lock for the fleet: who holds it and for how long they expect
+// to, or that it is free, a stale record, or not known.
+function labLockText(lock) {
+  if (lock.state === LAB_LOCK_STATE.BUSY) return `${LAB_LOCK_TEXT.BUSY}${heldText(lock)}`;
+  if (lock.state === LAB_LOCK_STATE.STALE) {
+    return lock.holderPidAlive === false ? LAB_LOCK_TEXT.STALE_DEAD :
+      LAB_LOCK_TEXT.STALE_LOCK_FREE;
+  }
+  return lock.state === LAB_LOCK_STATE.FREE ? LAB_LOCK_TEXT.FREE : LAB_LOCK_TEXT.UNKNOWN;
+}
+
+function heldText(lock) {
+  if (!lock.holder) return lock.record ? LAB_LOCK_TEXT.UNREADABLE : LAB_LOCK_TEXT.NO_RECORD;
+  return `${labHolderText(lock.holder)}${LAB_LOCK_TEXT.EXPECTED}` +
+    `${lock.holder.expectedMinutes ?? LAB_HOLDER_UNKNOWN}${LAB_LOCK_TEXT.MINUTES}`;
+}
+
+// The probe's lock lines as discovery records them: the lock decides busy or
+// free, and a record whose lock is free is stale.
+function parseMachineLock(values) {
+  const record = capabilityText(values.machine_holder);
+  return {
+    state: machineLockState(values.machine_lock, record),
+    record,
+    holder: parseLabHolder(record),
+    holderPidAlive: capabilityFlag(values.machine_holder_pid_alive),
+  };
+}
+
+function machineLockState(probed, record) {
+  if (probed === LAB_LOCK_PROBED.HELD) return LAB_LOCK_STATE.BUSY;
+  if (probed !== LAB_LOCK_PROBED.FREE) return LAB_LOCK_STATE.UNKNOWN;
+  return record ? LAB_LOCK_STATE.STALE : LAB_LOCK_STATE.FREE;
+}
+
+export {LAB_HOLD};
 
 // ---------------------------------------------------------------------------
 // Test capability: what a machine can actually run, measured rather than
@@ -226,6 +444,7 @@ const CAPABILITY_SCRIPT = [
   '  say repo_present no',
   'fi',
   `say cpu_sample_ms "$(node -e '${CPU_SAMPLE_SCRIPT}' 2>/dev/null)"`,
+  ...LAB_LOCK_PROBE,
 ].join('\n');
 
 function capabilityNumber(value) {
@@ -285,6 +504,7 @@ export function parseCapability(text, probedAt = Date.now()) {
     },
     movielensSha256: repoPresent ? capabilityText(values.movielens_sha256) : null,
     cpuSampleMs: capabilityNumber(values.cpu_sample_ms),
+    machineLock: parseMachineLock(values),
   };
 }
 
@@ -765,6 +985,7 @@ const FLEET_TEXT = Object.freeze({
   GAPS_OPEN: ' (gaps: ',
   GAPS_CLOSE: ')',
   LIST: ', ',
+  LOCK: ' | ',
 });
 
 /**
@@ -795,7 +1016,8 @@ export function recordFleet(state, fleet, now = Date.now()) {
 
 /**
  * One line per machine: identity-merged, unreachable, ready or not, and the
- * gaps placement would route around, with speed relative to the controller.
+ * gaps placement would route around, with speed relative to the controller;
+ * then who holds the machine under the lab convention, when it answered.
  * @param {Array<Object>} fleet
  * @return {string[]}
  */
@@ -806,8 +1028,13 @@ export function formatFleet(fleet) {
     const factor = cap?.cpuSampleMs && reference ?
       (cap.cpuSampleMs / reference).toFixed(FLEET_FACTOR_DIGITS) : FLEET_UNKNOWN;
     return `${entry.name.padEnd(FLEET_NAME_COLUMN)} cores=${cap?.cores ?? FLEET_UNKNOWN} ` +
-      `speed x${factor} ${fleetVerdict(entry)}${fleetGaps(entry)}`;
+      `speed x${factor} ${fleetVerdict(entry)}${fleetGaps(entry)}${fleetLock(cap)}`;
   });
+}
+
+function fleetLock(capability) {
+  return capability?.machineLock ?
+    `${FLEET_TEXT.LOCK}${labLockText(capability.machineLock)}` : EMPTY;
 }
 
 function fleetVerdict(entry) {
@@ -838,8 +1065,6 @@ function fleetGaps(entry) {
 
 const PLACEMENT_ENV = 'LAGRANGE_PLACEMENT';
 const PLACEMENT_LOCAL = 'local';
-const MS_PER_SECOND = 1000;
-const MS_PER_MINUTE = 60 * MS_PER_SECOND;
 // Below this the whole plan costs less on the controller than waiting for a
 // lab machine's setup is worth: the common small cone never probes at all.
 const PLACEMENT_MIN_PLAN_MS = 5 * MS_PER_MINUTE;
@@ -858,7 +1083,8 @@ const PLACEMENT_RERUN_CAP = 20;
 const PLACEMENT_DEADLINE_FACTOR = 3;
 const PLACEMENT_DEADLINE_FLOOR_MS = 30 * MS_PER_MINUTE;
 const PLACEMENT_EXIT = Object.freeze({
-  SETUP: 97, BUSY: 98, INTERRUPTED: 130, TERMINATED: 143, SSH: 255,
+  SETUP: LAB_LOCK_EXIT.SETUP, BUSY: LAB_LOCK_EXIT.BUSY, INTERRUPTED: 130,
+  TERMINATED: LAB_LOCK_EXIT.TERMINATED, SSH: 255,
 });
 const PLACEMENT_SHELL_LINE = /^placement-shell=(\d+)$/mu;
 // A stopped shard's shell gets this long to clean up before its connection
@@ -958,6 +1184,15 @@ const PLACEMENT_TEXT = Object.freeze({
   MISS: ' passed on the controller: routed away from ',
   FAIL_FAST: 'fail-fast asks for the first red, which a placed run cannot give',
   THERMAL_UNFIT: 'host-thermal-unfit ',
+  HOST_BUSY: 'host-busy ',
+  HELD_BY: ' held-by ',
+  SINCE: ' since ',
+  NO_HOLDER: ' held-by (no holder record)',
+  MOVED_FROM: ' (from ',
+  MOVED_CLOSE: ')',
+  REFUSED_BUSY: 'held by another agent',
+  REFUSED_HOT: 'too hot to run',
+  NO_NEXT_HOST: ', and no ready lab host is left',
   DEADLINE: 'deadline',
   INTERRUPTED: 'interrupted',
 });
@@ -1070,12 +1305,14 @@ export function placementMachines(fleet, state, {controllerFactor = 1} = {}) {
 }
 
 // A lab machine a shard can go to: discovered ready this run, answering, not
-// the controller reached a second time, with an ssh target, the checkout
-// path, the commit that checkout is at and a speed sample.
+// the controller reached a second time, not held by another agent under the
+// lab convention, with an ssh target, the checkout path, the commit that
+// checkout is at and a speed sample. A stale holder record is no lock.
 function isPlaceable(entry, node) {
   const cap = entry.capability;
   const distinct = !entry.controller && !entry.error && !entry.sameMachineAs;
-  const reachable = Boolean(node?.ssh) && entry.readiness?.ready === true;
+  const reachable = Boolean(node?.ssh) && entry.readiness?.ready === true &&
+    cap?.machineLock?.state !== LAB_LOCK_STATE.BUSY;
   return distinct && reachable && Boolean(cap?.repoPath) && Boolean(cap.repo?.head) &&
     cap.cpuSampleMs > 0;
 }
@@ -1156,6 +1393,86 @@ function reportThermalUnfit(name, lines, write) {
   write(`${PLACEMENT_TEXT.PREFIX}${PLACEMENT_TEXT.THERMAL_UNFIT}${name}`);
 }
 
+// A host another agent held for the whole of the shard's wait is a typed
+// placement outcome, naming the holder its lab shell relayed.
+function reportHostBusy(name, lines, write) {
+  const holder = busyHolder(lines);
+  write(`${PLACEMENT_TEXT.PREFIX}${PLACEMENT_TEXT.HOST_BUSY}${name}` + (holder ?
+    `${PLACEMENT_TEXT.HELD_BY}${holder.agent ?? LAB_HOLDER_UNKNOWN}${PLACEMENT_TEXT.SINCE}` +
+      `${holder.startedAt ?? LAB_HOLDER_UNKNOWN}` : PLACEMENT_TEXT.NO_HOLDER));
+}
+
+// Start one lab shard, telling other agents what it is and how long it
+// expects to hold the machine: its lanes and its own estimate, which is also
+// the longest it waits for the machine lock.
+function startShard(shard, {deps, sha, forward, costs}) {
+  const lanes = costs.filter((cost) => shard.files.includes(cost.file)).map((cost) => cost.lane);
+  return deps.runRemote(shard, {sha, deadlineMs: deadlineFor(shard), forward,
+    holder: {purpose: labTestPurpose(lanes), expectedMs: shard.loadMs}});
+}
+
+// The next ready host for files whose host refused them: the fastest this
+// run has not tried that takes every one, charged its setup and its speed.
+function nextHostFor(files, {machines, tried, costs}) {
+  const priced = costs.filter((cost) => files.includes(cost.file));
+  const machine = machines.filter((one) => !tried.has(one.name)).sort(bySpeed)
+    .find((one) => priced.every((cost) => fits(one, cost)));
+  if (!machine) return null;
+  return {machine, files, loadMs: PLACEMENT_REMOTE_SETUP_MS +
+    priced.reduce((sum, cost) => sum + cost.ms / cost.jobs, 0) * machine.speed};
+}
+
+// Whether a lab host refused its shard, as a typed placement outcome: held
+// by another agent for the whole wait (the lab shell's busy exit), or too
+// hot to run (its runner's thermal refusal). Reported once; null if it ran.
+function hostRefusal(shard, outcome, write) {
+  const lines = String(outcome.log || EMPTY).split(PLACEMENT_LINE);
+  if (outcome.status === PLACEMENT_EXIT.BUSY) {
+    reportHostBusy(shard.machine.name, lines, write);
+    return PLACEMENT_TEXT.REFUSED_BUSY;
+  }
+  if (!lines.some((line) => THERMAL_REFUSAL_LINE.test(line))) return null;
+  reportThermalUnfit(shard.machine.name, lines, write);
+  return PLACEMENT_TEXT.REFUSED_HOT;
+}
+
+// A started shard's settled outcomes: the one re-placement policy. The files
+// a host that refused never ran go on to the next ready host this run has
+// not tried - a host that refused is never tried again in it - and, with none
+// left, to the controller. What it did run is settled as it ran.
+async function followShard(shard, run, context) {
+  const outcome = await run.done;
+  const refusal = hostRefusal(shard, outcome, context.write);
+  if (!refusal) return [{shard, outcome}];
+  const {unreported} = logVerdicts(shard.files, outcome.log);
+  const ran = {shard: {...shard, files: shard.files.filter((file) => !unreported.includes(file))},
+    outcome};
+  if (unreported.length === 0) return [ran];
+  const next = nextHostFor(unreported, context);
+  if (!next) {
+    context.write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${unreported.length}` +
+      `${PLACEMENT_TEXT.UNREPORTED}${refusal}${PLACEMENT_TEXT.NO_NEXT_HOST}`);
+    context.leftover.push(...unreported);
+    return [ran];
+  }
+  context.tried.add(next.machine.name);
+  context.write(`${PLACEMENT_TEXT.PREFIX}${next.machine.name}: ${next.files.length} files, ` +
+    `~${minutes(next.loadMs)} min${PLACEMENT_TEXT.MOVED_FROM}${shard.machine.name}` +
+    `${PLACEMENT_TEXT.MOVED_CLOSE}`);
+  const moved = await startShard(next, context);
+  context.runs.push(moved);
+  return [ran, ...await followShard(next, moved, context)];
+}
+
+// A lab machine's own lines, shown under its name.
+function relayShardLines(shard, outcome, write) {
+  for (const stream of [outcome.log, outcome.errors]) {
+    for (const line of String(stream || EMPTY).split(PLACEMENT_LINE)) {
+      if (line) write(`[${shard.machine.name}] ${line}`);
+    }
+  }
+}
+
 /**
  * Run test files placed across the fleet when that can shorten the run, and
  * on the controller alone otherwise. Every choice is reported on one line.
@@ -1211,9 +1528,13 @@ export async function runPlacedTestFiles(files, deps) {
       `~${minutes(shard.loadMs)} min`);
   }
   // Every lab shard is on its way before the controller's own files start.
-  const forward = forwardedPolicy(env);
-  const runs = await Promise.all(remote.map((shard) =>
-    deps.runRemote(shard, {sha, deadlineMs: deadlineFor(shard), forward})));
+  const context = {deps, sha, forward: forwardedPolicy(env), costs, write,
+    machines: fleet.machines, tried: new Set(remote.map((shard) => shard.machine.name)),
+    runs: [], leftover: []};
+  const started = await Promise.all(remote.map((shard) => startShard(shard, context)));
+  context.runs.push(...started);
+  const followed = Promise.all(remote.map((shard, index) =>
+    followShard(shard, started[index], context)));
   // While lab shards run, the controller's own files run in a child process
   // of their own group, never in this process's blocking lanes: a signal
   // handler here could not run until those lanes finished, so a Ctrl-C or a
@@ -1228,13 +1549,13 @@ export async function runPlacedTestFiles(files, deps) {
   };
   const release = abortOnSignals(deps, () => {
     here?.abort?.();
-    abortTogether(runs);
+    abortTogether(context.runs);
   });
   try {
     const controllerShard = shards.find((shard) => shard.machine.controller);
     const statuses = controllerShard ? [await runHere(controllerShard.files)] : [];
-    return await settleRemoteShards(remote, await Promise.all(runs.map((run) => run.done)),
-      {deps, fleet, statuses, write, runHere});
+    return await settleRemoteShards((await followed).flat(),
+      {deps, fleet, statuses, write, runHere, leftover: context.leftover});
   } finally {
     release();
   }
@@ -1270,20 +1591,14 @@ function abortOnSignals(deps, cutAll) {
   };
 }
 
-async function settleRemoteShards(remote, outcomes, {deps, fleet, statuses, write, runHere}) {
+async function settleRemoteShards(settled, {deps, fleet, statuses, write, runHere, leftover}) {
   const reruns = [];
-  const fallback = [];
-  remote.forEach((shard, index) => {
-    const outcome = outcomes[index];
-    for (const stream of [outcome.log, outcome.errors]) {
-      for (const line of String(stream || EMPTY).split(PLACEMENT_LINE)) {
-        if (line) write(`[${shard.machine.name}] ${line}`);
-      }
-    }
+  // Files no ready lab host was left to take after theirs was held.
+  const fallback = [...leftover];
+  settled.forEach(({shard, outcome}) => {
+    relayShardLines(shard, outcome, write);
     // Its files not proved there are placed once more, on the controller:
     // never retried on the machine within this run.
-    reportThermalUnfit(shard.machine.name, String(outcome.log || EMPTY).split(PLACEMENT_LINE),
-      write);
     const {red, fallback: back} = shardVerdicts(shard, outcome);
     if (back.length > 0) {
       write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${back.length}` +
@@ -1316,18 +1631,24 @@ async function settleRemoteShards(remote, outcomes, {deps, fleet, statuses, writ
 // needed), prove it in a throwaway worktree with the workspace links the
 // publisher's gate checkout gets, run the controller-chosen files through the
 // same classified runner, and remove the worktree, ref, bundle and file list
-// on every exit. One placed run per machine at a time (flock where present).
-// Exit 97 is a setup failure and 98 a busy machine: the controller then runs
-// the shard itself. The runner leads its own process group, so the
-// controller's deadline can stop everything it started.
+// on every exit. One heavy run per machine at a time, whoever starts it: the
+// lab convention's machine-wide lock, waited for no longer than the shard's
+// budget, with the holder record beside it for as long as it is held; and
+// inside it this checkout's own lock, which a run placed from another clone
+// by an older wrapper takes alone. Exit 97 is a setup failure and 98 a
+// machine held by another run: the controller then places the shard on the
+// next ready host, or runs it itself. The runner leads its own process group,
+// so the controller's deadline can stop everything it started.
 const PLACEMENT_RESULTS_PREFIX = 'placement-results=';
 const PLACEMENT_SCRIPT_HEAD = [
   'set -u',
   'repo="$1"; sha="$2"; node_major="$3"; factor="$4"; run="$5"; bundle="$6"',
-  'retry="$7"; tap_timeout="$8"; results="$9"',
+  'retry="$7"; tap_timeout="$8"; results="$9"; lock_wait="${10}"; holder_head="${11}"',
+  'expected_minutes="${12}"',
   // Before nvm, which reads its arguments (see the capability script).
   'set --',
-  'pid=""',
+  'pid=""; holding=""',
+  ...LAB_LOCK_PATHS,
   // The controller stops a shard by signalling this shell, whose trap stops
   // the runner's group and whose exit removes everything below.
   'echo "placement-shell=$$"',
@@ -1335,10 +1656,12 @@ const PLACEMENT_SCRIPT_HEAD = [
   `parent="$repo/${PLACEMENT_PARENT}"`,
   'wt="$parent/$run"; list="$parent/$run.files"; ref="refs/lagrange-placement/$run"',
   // Installed before anything that can fail or be interrupted, so every exit
-  // - busy, a failed fetch, a signal - removes what this run was given.
-  'cleanup() { cd "$repo" || return; git worktree remove --force "$wt" >/dev/null 2>&1; ' +
+  // - busy, a failed fetch, a signal - removes what this run was given, and
+  // last the holder record, if this shell wrote one.
+  'cleanup() { if cd "$repo"; then git worktree remove --force "$wt" >/dev/null 2>&1; ' +
     'rm -rf "$wt"; git worktree prune >/dev/null 2>&1; git update-ref -d "$ref" >/dev/null 2>&1; ' +
-    'rm -f "$list"; if [ -n "$bundle" ]; then rm -f "$bundle"; fi; }',
+    'rm -f "$list"; if [ -n "$bundle" ]; then rm -f "$bundle"; fi; fi; ' +
+    'if [ -n "$holding" ]; then rm -f "$lab_holder"; fi; }',
   'trap cleanup EXIT',
   // Stop the runner's whole group and wait for the runner, so cleanup never
   // races a dying test writing into the worktree. The runner and its tests
@@ -1362,8 +1685,10 @@ const PLACEMENT_SCRIPT_HEAD = [
     '[ -n "$node_major" ] && nvm use "$node_major" >/dev/null 2>&1',
   `common="$(git rev-parse --git-common-dir 2>/dev/null)" || exit ${PLACEMENT_EXIT.SETUP}`,
   'case "$common" in /*) ;; *) common="$repo/$common";; esac',
-  'exec 9>"$common/lagrange-placement.lock"',
-  `flock -n 9 || exit ${PLACEMENT_EXIT.BUSY}`,
+  ...LAB_LOCK_TAKE,
+  'exec 8>"$common/lagrange-placement.lock"',
+  `flock -n 8 || { echo "${LAB_LOCK_LINE.BUSY}"; exit ${PLACEMENT_EXIT.BUSY}; }`,
+  ...LAB_LOCK_RECORD,
   `mkdir -p "$parent" || exit ${PLACEMENT_EXIT.SETUP}`,
   // Under the lock nothing else is placed here, so anything left by an
   // earlier run - a connection lost after its upload, an interrupted one -
@@ -1419,9 +1744,9 @@ const PLACEMENT_SCRIPT_TAIL = [
   `echo "placement-env=factor:$${PLACEMENT_MACHINE_FACTOR_ENV} mode:$${PLACEMENT_ENV} ` +
     `retry:\${${PLACEMENT_FORWARDED_ENV.RETRY}:-} timeout:\${${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}:-} ` +
     `lanecap:\${${LANE_JOBS_CAP_ENV}:-}"`,
-  // The machine lock (fd 9) stays with this shell: a test process that
+  // Both locks (fds 8 and 9) stay with this shell: a test process that
   // outlived its run must not hold the machine busy after it.
-  'setsid node scripts/run-classified-test-files.js --stdin < "$list" 9>&- &',
+  'setsid node scripts/run-classified-test-files.js --stdin < "$list" 8>&- 9>&- &',
   'pid=$!',
   'echo "placement-pid=$pid"',
   'wait "$pid"; status=$?',
@@ -1610,12 +1935,16 @@ function tailLines(file, stream, onLine) {
  * arrives - stdout as `out`, stderr as `err` - not only at settle; `results`
  * names a ledger the runner leaves in the worktree, relayed back as prefixed
  * lines; `gitRoot` is the checkout whose HEAD is the commit (default root).
+ * `holder` is what the shard tells other agents under the lab convention: its
+ * purpose, and the time it expects to hold the machine, which is also the
+ * longest it waits for the machine lock (capped by the lab).
  * @param {{sha: string, deadlineMs: number, root: string,
+ *   holder: {purpose: string, expectedMs: number},
  *   runId?: string, env?: Object, forward?: {retry?: string, tapTimeout?: string},
  *   onLine?: Function, results?: string, gitRoot?: string}} options
  * @return {{done: Promise<Object>, stop: Function}}
  */
-export function startRemoteShard(shard, {sha, deadlineMs, root,
+export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
   env = gitProcessEnvironment(), forward = {}, onLine = null, results = EMPTY, gitRoot = root,
   runId = `${sha.slice(0, PLACEMENT_RUN_SHA_CHARACTERS)}-` +
     `${Date.now().toString(PLACEMENT_RUN_RADIX)}-${process.pid}`}) {
@@ -1642,7 +1971,9 @@ export function startRemoteShard(shard, {sha, deadlineMs, root,
     bundleFile,
     run: commandLine(remoteCommand(machine, null, [machine.repoPath, sha,
       machine.nodeMajor || EMPTY, String(machine.factor || 1), runId, remoteBundle,
-      forward.retry || EMPTY, forward.tapTimeout || EMPTY, results], {fromStdin: true})),
+      forward.retry || EMPTY, forward.tapTimeout || EMPTY, results,
+      ...labLockArgs({waitMs: holder.expectedMs, purpose: holder.purpose,
+        expectedMs: holder.expectedMs, sha, env})], {fromStdin: true})),
     scriptFile,
   });
   const output = fs.openSync(logFile, 'w');
@@ -1704,6 +2035,58 @@ function abortTogether(runs) {
     {stdio: PLACEMENT_STDIO_IGNORE, timeout: 2 * PLACEMENT_ABORT_GRACE_MS});
   }
   for (const one of pending) one.cut();
+}
+
+// ---------------------------------------------------------------------------
+// A formation's hold on a lab machine, under the lab convention above: the
+// same lock and record the placement wrapper takes, in a session of its own
+// that the harness keeps open for the whole formation.
+
+/**
+ * Hold one lab machine for a formation under the lab convention: its lock
+ * taken with a bounded wait and its holder record written, both kept until
+ * `release`. `outcome` settles `{state: 'held'}`, `{state: 'busy', holder}`
+ * (the holder's record, or null) or `{state: 'failed', reason}`.
+ * @param {{name: string, sshTarget: string|null}} machine
+ * @param {{waitMs: number, purpose: string, expectedMs: number, env?: Object,
+ *   root?: string}} request
+ * @return {{outcome: Promise<Object>, release: Function}}
+ */
+export function holdLabMachine(machine, {waitMs, purpose, expectedMs, env = process.env,
+  root = process.cwd()}) {
+  const sha = gitAt(root, PLACEMENT_GIT_HEAD).stdout?.trim() || LAB_HOLDER_UNKNOWN;
+  const [command, args] = remoteCommand(machine, LAB_HOLD_SCRIPT,
+    labLockArgs({waitMs, purpose, expectedMs, sha, env}));
+  const child = spawn(command, args, {env, stdio: PLACEMENT_STDIO_PIPE});
+  const lines = [];
+  const errors = [];
+  const closed = closeOf(child);
+  const outcome = new Promise((resolve) => {
+    streamLines(child.stdout, PLACEMENT_STREAM.OUT, (line) => {
+      lines.push(line);
+      if (line === LAB_LOCK_LINE.HELD) resolve({state: LAB_HOLD.HELD});
+    });
+    streamLines(child.stderr, PLACEMENT_STREAM.ERR, (line) => errors.push(line));
+    closed.then((code) => resolve(holdEnded(code, lines, errors)));
+  });
+  let released = null;
+  const release = () => {
+    if (!released) {
+      child.stdin.end();
+      const cut = setTimeout(() => killGroup(child), LAB_HOLD_RELEASE_GRACE_MS);
+      released = closed.then(() => clearTimeout(cut));
+    }
+    return released;
+  };
+  return {outcome, release};
+}
+
+// A hold whose session ended before it held: busy, naming the holder, or
+// failed with what its shell said.
+function holdEnded(code, lines, errors) {
+  if (code === LAB_LOCK_EXIT.BUSY) return {state: LAB_HOLD.BUSY, holder: busyHolder(lines)};
+  return {state: LAB_HOLD.FAILED,
+    reason: [`exit ${code}`, ...errors].join(LAB_HOLD_REASON_SEPARATOR)};
 }
 
 /**
@@ -1988,7 +2371,9 @@ function startLabShare({machine, lanes}, {commit, deps, forward, results, costOf
   const loadMs = PLACEMENT_REMOTE_SETUP_MS +
     files.reduce((sum, file) => sum + (costOf.get(file) || 0), 0) * machine.speed;
   const run = deps.runRemote({machine, files}, {sha: commit.sha, gitRoot: commit.gitRoot,
-    deadlineMs: deadlineFor({loadMs}), forward, results, onLine});
+    deadlineMs: deadlineFor({loadMs}), forward, results, onLine,
+    holder: {purpose: labTestPurpose(lanes.map((lane) => lane.resourceClass)),
+      expectedMs: loadMs}});
   return {machine, files, lines, run};
 }
 
@@ -2021,6 +2406,7 @@ async function settleLabShares(shares, {root, write}) {
       assertions: [...assertions.values()].reduce((sum, count) => sum + count, 0),
     };
     reportThermalUnfit(share.machine.name, share.lines, write);
+    if (exit === PLACEMENT_EXIT.BUSY) reportHostBusy(share.machine.name, share.lines, write);
     write(`${LAB_TEST_TEXT.PREFIX}${share.machine.name}: ${formatTestFilesSummary(summary)}`);
     if (unreported.length > 0) {
       write(`${LAB_TEST_TEXT.PREFIX}${share.machine.name}: ${unreported.length}` +
