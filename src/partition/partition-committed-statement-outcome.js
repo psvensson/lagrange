@@ -25,24 +25,33 @@
 // the same entry key - in process, on another replica, or after a restart -
 // is never executed again. It resolves from the row: an APPLIED row as an
 // idempotent replay, a STATEMENT_FAILED row as the original failure, each
-// with `replayOfLogIndex`. There is no in-memory replay state: a retry is
-// answered from the row before it is proposed, and one that was proposed
-// anyway (its original not yet applied here when it was proposed) is answered
-// from the row when it is applied - the same answer either way.
+// with `replayOfLogIndex`. The row binds the statement it settled (its
+// digest): the key asked for by another statement is refused, typed
+// (ENTRY_ID_STATEMENT_MISMATCH), and that statement is never applied. There
+// is no in-memory replay state: a retry is answered from the row before it is
+// proposed, and one that was proposed anyway (its original not yet applied
+// here when it was proposed) is answered from the row when it is applied -
+// the same answer either way.
+
+import {createHash} from 'node:crypto';
 
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
 } from './partition-service-constants.js';
 import {
+  PARTITION_COMMITTED_STATEMENT_BINDING,
   PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
   PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
   PARTITION_DETERMINISTIC_STATEMENT_BINDING_ERRORS,
   PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES,
   PARTITION_SQLITE_RESULT_CODE,
+  PARTITION_STATEMENT_DIGEST,
+  PARTITION_STATEMENT_MISMATCH_ERROR_MSG,
 } from './partition-committed-statement-outcome-constants.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {readPartitionCommittedCommandAt} from './partition-committed-log.js';
+import {encodeProposal} from '../raft/raft-rs-proposal-codec.js';
 
 const {
   PARTITION_SERVICE_ERROR_MSG,
@@ -55,18 +64,49 @@ const {
 
 /**
  * Create the outcome table (DDL; run once at partition initialization, after
- * the legacy-state detector). A table created before the affected-row count
- * was recorded gains its column here.
+ * the legacy-state detector). A table created before a recorded widening
+ * (the affected-row count, the statement digest) gains its column here.
  * @param {Object} db - The partition's connection.
  */
 function createCommittedStatementOutcomeTable(db) {
   db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE);
-  const columns = db.prepare(
-    PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.SELECT_COLUMNS).all();
-  if (!columns.some((column) => column.name ===
-      PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CHANGES_COLUMN)) {
-    db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.ADD_CHANGES_COLUMN);
+  const present = new Set(db.prepare(
+    PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.SELECT_COLUMNS).all()
+    .map((column) => column.name));
+  for (const widening of
+    PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.WIDENING_COLUMNS) {
+    if (!present.has(widening.name)) {
+      db.exec(widening.add);
+    }
   }
+}
+
+/**
+ * The digest a statement is bound by: its text and parameters as the
+ * proposal codec encodes them (the same digest before it is proposed and
+ * after its committed entry is decoded).
+ * @param {Object} command - A write command ({sql, params}).
+ * @return {string} The digest.
+ */
+function statementDigestOf(command) {
+  return createHash(PARTITION_STATEMENT_DIGEST.ALGORITHM)
+    .update(encodeProposal([command?.sql, command?.params ?? []]))
+    .digest(PARTITION_STATEMENT_DIGEST.ENCODING);
+}
+
+/**
+ * Whether a settled record binds the statement asking for its entry key.
+ * @param {Object} recorded - The SETTLED record.
+ * @param {Object} command - The command asking.
+ * @return {string} A PARTITION_COMMITTED_STATEMENT_BINDING.
+ */
+function statementBindingOf(recorded, command) {
+  if (recorded.statementDigest === null) {
+    return PARTITION_COMMITTED_STATEMENT_BINDING.UNRECORDED;
+  }
+  return recorded.statementDigest === statementDigestOf(command) ?
+    PARTITION_COMMITTED_STATEMENT_BINDING.SAME_STATEMENT :
+    PARTITION_COMMITTED_STATEMENT_BINDING.OTHER_STATEMENT;
 }
 
 const UNSETTLED_RECORD = Object.freeze({
@@ -80,7 +120,8 @@ const UNSETTLED_RECORD = Object.freeze({
  * @param {string} entryKey - The committed entry key.
  * @return {Object} Frozen {state} (a PARTITION_COMMITTED_STATEMENT_RECORD_STATE)
  *   and, when SETTLED, {outcome, logIndex, term, failureCode, failureMessage,
- *   changes} (`changes` null when the row recorded none).
+ *   changes, statementDigest} (`changes` and `statementDigest` null when the
+ *   row recorded none).
  */
 function readCommittedStatementOutcome(service, entryKey) {
   const row = service.db
@@ -97,24 +138,25 @@ function readCommittedStatementOutcome(service, entryKey) {
     failureCode: row.failure_code,
     failureMessage: row.failure_message,
     changes: row.changes === null ? null : Number(row.changes),
+    statementDigest: row.statement_digest,
   });
 }
 
 /**
  * Record an entry key's terminal outcome, inside the application
- * transaction.
+ * transaction, bound to the statement it settled.
  * @param {Object} service - The partition (its `db`).
- * @param {Object} outcome - {entryKey, outcome, index, term, error, changes};
- *   `error` only for STATEMENT_FAILED, `changes` (the affected-row count)
- *   only for APPLIED.
+ * @param {Object} outcome - {entryKey, outcome, index, term, command, error,
+ *   changes}; `error` only for STATEMENT_FAILED, `changes` (the affected-row
+ *   count) only for APPLIED.
  */
 function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
-  term, error = null, changes = null}) {
+  term, command, error = null, changes = null}) {
   service.db.prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT).run(
     entryKey, outcome, index, term,
     error === null ? null : failureCodeOf(error),
     error === null ? null : String(error.message),
-    changes);
+    changes, statementDigestOf(command));
 }
 
 /**
@@ -231,9 +273,11 @@ function replayedCommitWitness(service, recorded, entryId) {
  * same answer wherever and whenever it is asked - a retry before it is
  * proposed, in process or after a restart, or a retry that was proposed and
  * reached the application. An APPLIED row answers an idempotent replay with
- * the affected-row count the write had and the durable commit witness of the
- * committed entry (its proposer, term and index, from the durable log); a
- * STATEMENT_FAILED row answers the original failure. Both name the entry.
+ * the affected-row count the write had (unknown - `changesKnown` false - for
+ * a row that recorded none) and the durable commit witness of the committed
+ * entry (its proposer, term and index, from the durable log); a
+ * STATEMENT_FAILED row answers the original failure. Both name the entry. A
+ * row settled for another statement answers neither: the key is refused.
  * @param {Object} service - The partition (its identity).
  * @param {Object} settled - {recorded, command}: the SETTLED record and the
  *   command asking.
@@ -242,6 +286,17 @@ function replayedCommitWitness(service, recorded, entryId) {
 function answerSettledStatement(service, {recorded, command}) {
   const entryId = typeof command.entryId === 'string' &&
     command.entryId.length > 0 ? command.entryId : null;
+  if (statementBindingOf(recorded, command) ===
+      PARTITION_COMMITTED_STATEMENT_BINDING.OTHER_STATEMENT) {
+    return {
+      success: false,
+      error: PARTITION_STATEMENT_MISMATCH_ERROR_MSG,
+      failureCode:
+        PARTITION_COMMITTED_COMMAND_ERROR_CODE.ENTRY_ID_STATEMENT_MISMATCH,
+      partitionId: service.partitionId,
+      ...(entryId === null ? {} : {entryId}),
+    };
+  }
   const settledAt = {
     partitionId: service.partitionId,
     logIndex: recorded.logIndex,
@@ -252,6 +307,7 @@ function answerSettledStatement(service, {recorded, command}) {
     return {
       success: true,
       changes: recorded.changes,
+      changesKnown: recorded.changes !== null,
       idempotentReplay: true,
       ...settledAt,
       ...(entryId === null ? {} :
@@ -270,16 +326,18 @@ function answerSettledStatement(service, {recorded, command}) {
  * Settle a committed entry whose entry key already has a recorded outcome:
  * the statement is not executed again, and the proposer's write resolves to
  * the settled answer. Nothing new is recorded - the first outcome stays the
- * authority.
+ * authority. An entry whose key is settled for another statement is consumed
+ * as refused: never applied, never reported committed.
  * @param {Object} service - The partition.
  * @param {Object} replay - {recorded, command, afterCommit}.
  * @return {string} A PARTITION_COMMITTED_COMMAND_OUTCOME.
  */
 function settleRecordedCommittedStatement(service, {recorded, command,
   afterCommit}) {
-  afterCommit(() => service.resolveCommittedWrite(command.entryId,
-    answerSettledStatement(service, {recorded, command})));
-  if (recorded.outcome !== PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED) {
+  const answer = answerSettledStatement(service, {recorded, command});
+  afterCommit(() => service.resolveCommittedWrite(command.entryId, answer));
+  if (recorded.outcome !== PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED ||
+      answer.success !== true) {
     return PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED;
   }
   afterCommit(() => {
@@ -320,6 +378,7 @@ function settleFailedCommittedStatement(service, {error, command, entryKey,
     outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
     index,
     term,
+    command,
     error,
   });
   service.logger.error(PARTITION_SERVICE_ERROR_MSG.APPLY_COMMITTED_FAILED, {

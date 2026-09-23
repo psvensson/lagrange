@@ -140,10 +140,16 @@ function applyAdminWriteQueryResultMessagePayload(
   payloadContext,
 ) {
   message.operation = result.operation || NO_HOST_CALLBACK_VALUE;
-  message.affectedRows = resolveAdminQueryResultAffectedRows(
-    result.affectedRows,
-    false,
-  );
+  // A count the engine names unknown stays unknown, never 0.
+  if (result.affectedRowsKnown === false) {
+    message.affectedRows = null;
+    message.affectedRowsKnown = false;
+  } else {
+    message.affectedRows = resolveAdminQueryResultAffectedRows(
+      result.affectedRows,
+      false,
+    );
+  }
   applyAdminQueryResultTableScope(message, result);
   message.writeReceipt = buildAdminWriteReceipt(result);
   if (payloadContext.hasRowPayload) {

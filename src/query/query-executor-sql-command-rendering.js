@@ -1,7 +1,9 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {renderSqliteIdentifier} from './sqlite-identifier.js';
-import {pickPartitionWriteAnswerFields} from
-  '../partition/partition-write-kernel.js';
+import {
+  pickPartitionWriteAnswerFields,
+  sumAffectedRows,
+} from '../partition/partition-write-kernel.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
@@ -27,6 +29,13 @@ function renderWriteAnswerIdentity(result) {
 // answered it.
 function renderSinglePartitionIdentity(results) {
   return results.length === 1 ? renderWriteAnswerIdentity(results[0]) : {};
+}
+
+// A statement's failure keeps the typed fields of its one partition's answer
+// (its code, its entry) when one partition answered it.
+function renderSinglePartitionFailure(results) {
+  return results.length === 1 ? pickPartitionWriteAnswerFields(results[0]) :
+    {};
 }
 
 const {
@@ -376,10 +385,10 @@ const queryExecutorSqlCommandMethods = {
       ...renderWriteAnswerIdentity(result),
       success: true,
       operation: QUERY_EXECUTOR_LITERAL.STRING_INSERT,
-      affectedRows:
+      ...sumAffectedRows([{known: result?.changesKnown !== false, count:
         typeof result?.changes === QUERY_EXECUTOR_LITERAL.STRING_NUMBER ?
           result.changes :
-          ast.values.length,
+          ast.values.length}]),
       rows: Array.isArray(result.rows) ? result.rows : [],
       partitions: [partitionId],
     };
@@ -441,64 +450,8 @@ const queryExecutorSqlCommandMethods = {
       table: ast.table,
       partitionCount: partitionIds.length,
     });
-    const results = await this.executeOnPartitions(
-      partitionIds,
-      sql,
-      params,
-      this.hlcClock.now(),
-      false,
-      false,
-      false,
-      {
-        ...executionOptions,
-        tableName: ast.table,
-      },
-    );
-    const fanoutMetrics = this.getLastCoordinatorMetrics();
-    const failedResults = results.filter((result) => !result.success);
-    const totalChanges = results.reduce(
-      (sum, result) => sum + (result.success ? result.changes || 0 : 0),
-      0,
-    );
-    const returningRows = [];
-    for (const result of results) {
-      if (
-        result.success &&
-        Array.isArray(result.rows) &&
-        result.rows.length > 0
-      ) {
-        returningRows.push(...result.rows);
-      }
-    }
-    if (failedResults.length > 0) {
-      const failureSummary = buildDistributedFailureSummary(failedResults);
-      return {
-        success: false,
-        operation: QUERY_AST_TYPE.UPDATE,
-        affectedRows: totalChanges,
-        partitions: partitionIds,
-        ...failureSummary,
-        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        rows: returningRows,
-        distributedMetrics: {
-          fanout: fanoutMetrics,
-          failedPartitionCount: failedResults.length,
-        },
-      };
-    }
-    return {
-      ...renderSinglePartitionIdentity(results),
-      success: true,
-      operation: QUERY_AST_TYPE.UPDATE,
-      affectedRows: totalChanges,
-      partitions: partitionIds,
-      rows: returningRows,
-      distributedMetrics: {
-        fanout: fanoutMetrics,
-        failedPartitionCount: 0,
-      },
-    };
+    return this.executeFanOutWrite(QUERY_AST_TYPE.UPDATE, {ast, sql,
+      partitionIds, params, executionOptions});
   },
 
   /**
@@ -533,6 +486,23 @@ const queryExecutorSqlCommandMethods = {
       table: ast.table,
       partitionCount: partitionIds.length,
     });
+    return this.executeFanOutWrite(QUERY_AST_TYPE.DELETE, {ast, sql,
+      partitionIds, params, executionOptions});
+  },
+
+  /**
+   * Execute an UPDATE or DELETE on its partitions and render its answer: the
+   * affected rows of the partitions that took it (unknown when a replay's
+   * count is not known), their RETURNING rows, and - when one partition
+   * answered - its identity, or its typed failure.
+   * @param {string} operation - QUERY_AST_TYPE.UPDATE or DELETE.
+   * @param {Object} statement - {ast, sql, partitionIds, params,
+   *   executionOptions}.
+   * @return {Promise<Object>} The statement's result.
+   * @private
+   */
+  async executeFanOutWrite(operation, {ast, sql, partitionIds, params,
+    executionOptions}) {
     const results = await this.executeOnPartitions(
       partitionIds,
       sql,
@@ -548,28 +518,20 @@ const queryExecutorSqlCommandMethods = {
     );
     const fanoutMetrics = this.getLastCoordinatorMetrics();
     const failedResults = results.filter((result) => !result.success);
-    const totalChanges = results.reduce(
-      (sum, result) => sum + (result.success ? result.changes || 0 : 0),
-      0,
-    );
-    const returningRows = [];
-    for (const result of results) {
-      if (
-        result.success &&
-        Array.isArray(result.rows) &&
-        result.rows.length > 0
-      ) {
-        returningRows.push(...result.rows);
-      }
-    }
+    const affectedRows = sumAffectedRows(results
+      .filter((result) => result.success)
+      .map((result) => ({count: result.changes || 0,
+        known: result.changesKnown !== false})));
+    const returningRows = results.flatMap((result) =>
+      result.success && Array.isArray(result.rows) ? result.rows : []);
     if (failedResults.length > 0) {
-      const failureSummary = buildDistributedFailureSummary(failedResults);
       return {
+        ...renderSinglePartitionFailure(results),
         success: false,
-        operation: QUERY_AST_TYPE.DELETE,
-        affectedRows: totalChanges,
+        operation,
+        ...affectedRows,
         partitions: partitionIds,
-        ...failureSummary,
+        ...buildDistributedFailureSummary(failedResults),
         errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
         error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
         rows: returningRows,
@@ -582,8 +544,8 @@ const queryExecutorSqlCommandMethods = {
     return {
       ...renderSinglePartitionIdentity(results),
       success: true,
-      operation: QUERY_AST_TYPE.DELETE,
-      affectedRows: totalChanges,
+      operation,
+      ...affectedRows,
       partitions: partitionIds,
       rows: returningRows,
       distributedMetrics: {

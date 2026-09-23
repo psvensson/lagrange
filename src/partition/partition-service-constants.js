@@ -1,3 +1,4 @@
+import {ERRORS} from '../constants/errors.js';
 import {NUM} from '../constants/numbers.js';
 import {STRING} from '../constants/strings.js';
 import {TABLES} from '../constants/tables.js';
@@ -216,6 +217,7 @@ const PARTITION_COMMITTED_COMMAND_ERROR_CODE = Object.freeze({
   MARKER_NOT_ADMISSIBLE: 'partition_write_marker_not_admissible',
   SESSION_MISSING: 'partition_write_session_missing',
   ENTRY_ID_INVALID: 'partition_write_entry_id_invalid',
+  ENTRY_ID_STATEMENT_MISMATCH: 'partition_write_entry_id_statement_mismatch',
 });
 
 const PARTITION_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
@@ -714,9 +716,7 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   WRITE_STATEMENT_MISSING:
     'Partition write refused before it was proposed: a write of an SQL ' +
     'command type carries no statement',
-  COMMITTED_STATEMENT_ENVIRONMENT_FAILED:
-    'Committed partition statement failed in the host environment; the ' +
-    'entry is not consumed and is applied again when the host recovers',
+  COMMITTED_STATEMENT_ENVIRONMENT_FAILED: ERRORS.COMMITTED_STATEMENT_ENVIRONMENT_FAILED,
   consensusInitRefused: (partitionId, answer) => { // a phase only when known
     const [detail, phase] = [answer?.failure?.detail ?? answer?.detail, answer?.phase ?? null];
     return `Partition ${partitionId} cannot initialize: its consensus port ` +

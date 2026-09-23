@@ -59,8 +59,10 @@ const STATEMENT_ENVIRONMENT_FAILED =
 // idempotent (the write's outcome row answers it), while a re-proposal under
 // a fresh id may apply it twice. Partition write answers carry their code
 // across the wire (PARTITION_WRITE_ANSWER_FIELDS), so a caller routes them
-// by it; the errors owner keeps each code's text only for the control
-// plane's retry of a failure that reached it as text (isRetryableWriteError).
+// by it; the errors owner keeps each code's text - every code below,
+// STATEMENT_ENVIRONMENT_FAILED included - only for the control plane's retry
+// of a failure that reached it as text (isRetryableWriteError), so a code
+// and its text always agree on the retry.
 const RETRYABLE_WRITE_FAILURE_CODES = Object.freeze([
   REFUSAL.NOT_LEADER,
   REFUSAL.CONSENSUS_RECOVERY_REQUIRED,
@@ -80,6 +82,8 @@ const ENTRY_ID_BOUND_RETRY_CODES = Object.freeze([
 // The typed fields of a partition write answer, which cross every boundary
 // (the transport query reply, the query executor's results and errors) as
 // the partition answered them (quest reroute-carries-the-entry-id, C3).
+// `changesKnown` is false on the replay of an outcome row recorded before its
+// affected-row count was (its `changes` is then null, never 0).
 const PARTITION_WRITE_ANSWER_FIELDS = Object.freeze([
   'failureCode',
   'retryAfterMs',
@@ -89,6 +93,7 @@ const PARTITION_WRITE_ANSWER_FIELDS = Object.freeze([
   'logIndex',
   'replayOfLogIndex',
   'changes',
+  'changesKnown',
 ]);
 
 /**
@@ -105,6 +110,27 @@ function pickPartitionWriteAnswerFields(answer) {
     }
   }
   return fields;
+}
+
+// The affected rows of a write whose count is not known (a replay of an
+// outcome row that recorded none): never rendered as a number (R07).
+const AFFECTED_ROWS_UNKNOWN = Object.freeze({
+  affectedRows: null,
+  affectedRowsKnown: false,
+});
+
+/**
+ * The affected rows of a write's successful answers: their sum, or unknown
+ * (AFFECTED_ROWS_UNKNOWN) when any answer's count is not known - an unknown
+ * count is never summed as 0.
+ * @param {Array<Object>} counts - One {count, known} per successful answer.
+ * @return {Object} {affectedRows} or AFFECTED_ROWS_UNKNOWN.
+ */
+function sumAffectedRows(counts) {
+  if (counts.some((part) => part.known !== true)) {
+    return {...AFFECTED_ROWS_UNKNOWN};
+  }
+  return {affectedRows: counts.reduce((sum, part) => sum + part.count, 0)};
 }
 
 // Why pending writes are released without an answer from consensus: their
@@ -505,6 +531,7 @@ function buildPartitionWriteSideEffectPlan(entry, executionResult) {
 
 export {
   DURABLE_COMMIT_WITNESS_ERROR,
+  PARTITION_WRITE_ANSWER_FIELDS,
   PARTITION_WRITE_COMMIT_MODE,
   PARTITION_WRITE_LEADERSHIP_REFUSAL,
   PARTITION_WRITE_RELEASE_CAUSE,
@@ -522,4 +549,5 @@ export {
   isRetryableWriteFailureCode,
   pickPartitionWriteAnswerFields,
   resolvePartitionWriteCommitMode,
+  sumAffectedRows,
 };

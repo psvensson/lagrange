@@ -1098,6 +1098,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
           outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
           index,
           term,
+          command,
           changes: info.changes,
         });
         if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {

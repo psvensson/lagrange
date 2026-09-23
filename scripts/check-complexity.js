@@ -52,7 +52,9 @@ const TARGET_THRESHOLD = 12;
 // 2026-09-23: tightened 1816 -> 1814 on the checker's hint after the rs-raft
 // single-path cutover removed the write path's direct-execution branch and the
 // runtime owner's status shaping moved beside it.
-const BASELINE_COUNT = 1814;
+// 2026-09-23: tightened 1814 -> 1812 on the checker's hint (quest
+// reroute-carries-the-entry-id, attempt A2).
+const BASELINE_COUNT = 1812;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

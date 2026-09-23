@@ -5,7 +5,7 @@
     "admin-diagnostics": 113,
     "architecture-governance": 19,
     "bootstrap-membership": 252,
-    "cdc-metadata": 56,
+    "cdc-metadata": 57,
     "cli-tooling": 96,
     "control-plane": 193,
     "convergence-topology": 91,
@@ -13,7 +13,7 @@
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 240,
-    "query-sql": 162,
+    "query-sql": 164,
     "release-packaging": 11,
     "runtime-primitives": 22,
     "services-runtime": 169,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2168,
-  "digest": "fnv1a32-5ed4d351",
+  "censusSize": 2171,
+  "digest": "fnv1a32-f5bdefd2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-985b6e59",
+  "observationDigest": "fnv1a32-cc522d61",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -331,6 +331,7 @@
     "test/cdc/cdc-integration-service-time-seam.test.js": "cdc-metadata",
     "test/cdc/cdc-integration-service-write-metrics.test.js": "cdc-metadata",
     "test/cdc/cdc-integration-service.test.js": "cdc-metadata",
+    "test/cdc/cdc-local-system-table-write-lane.test.js": "cdc-metadata",
     "test/cdc/cdc-observability.test.js": "cdc-metadata",
     "test/cdc/cdc-pipeline-metrics.property.test.js": "cdc-metadata",
     "test/cdc/cdc-pipeline-metrics.test.js": "cdc-metadata",
@@ -1386,6 +1387,8 @@
     "test/query/wasm-call-adapter.integration.test.js": "query-sql",
     "test/query/wasm-call-adapter.test.js": "query-sql",
     "test/query/write-identity-end-to-end.test.js": "query-sql",
+    "test/query/write-identity-loops.test.js": "query-sql",
+    "test/query/write-identity-replay-answers.test.js": "query-sql",
     "test/query/write-path-internal-pacing.test.js": "query-sql",
     "test/query/write-tracking-recursion-guard.test.js": "query-sql",
     "test/raft/append-ack-packet-detection.test.js": "storage-raft",
@@ -2772,6 +2775,13 @@
     "test/cdc/cdc-integration-service-write-metrics.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/cdc/cdc-local-system-table-write-lane.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/cdc/cdc-local-system-table-write-lane.js",
+        "src/partition/proposal-queue-constants.js"
       ]
     },
     "test/cdc/cdc-pipeline-readiness-gate.property.test.js": {
@@ -6342,11 +6352,13 @@
     },
     "test/partition/partition-write-kernel.test.js": {
       "files": [
+        "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-write-kernel.js",
         "src/partition/proposal-queue-constants.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port.js",
-        "src/raft/raft-rs-durable-store-constants.js"
+        "src/raft/raft-rs-durable-store-constants.js",
+        "test/query/write-identity-end-to-end.test.js"
       ]
     },
     "test/partition/partition-write-typed-releases.test.js": {
@@ -6695,6 +6707,36 @@
     "test/query/write-identity-end-to-end.test.js": {
       "files": [
         "src/constants/errors.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-proposal-codec.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
+      ]
+    },
+    "test/query/write-identity-loops.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-shared.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/proposal-queue-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-proposal-codec.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/replica-operation-repository.js"
+      ]
+    },
+    "test/query/write-identity-replay-answers.test.js": {
+      "files": [
+        "src/admin/admin-query-result-message-envelope.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-write-kernel.js",
+        "src/partition/proposal-queue-constants.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-provider-contract-constants.js",
         "src/raft/raft-rs-application-transaction-owner.js",

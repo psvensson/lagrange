@@ -1,0 +1,232 @@
+// What a client is told when a partition answers a write from its outcome
+// row (quest reroute-carries-the-entry-id, verification round 1: B1, F3,
+// F4), through the production client path - SQLQueryEngine, the distributed
+// write coordinator, QueryExecutor, the replica's transport handler - and,
+// for the admin write receipt, the admin envelope that builds it from the
+// engine's answer (createAdminQueryResultMessageEnvelope).
+//
+// B1: a client re-issue under its idempotency key is the SAME logical write:
+// its replayed answer is bound to the committed entry by (entryId,
+// replayOfLogIndex) and the witness's entryId, whatever operationId the
+// re-issue's plan minted; an answer that is not a replay keeps the
+// operationId binding, and a replay whose witness names another entry is
+// never complete.
+// F3: the replay of an outcome row that recorded no affected-row count (a
+// row written before the count was recorded) answers the count as unknown,
+// never as 0.
+// F4: a key reused for a different statement is refused, typed, and never
+// answered with the first statement's replay; a committed entry whose key is
+// settled for a different statement is consumed without being reported
+// committed.
+//
+// Every expectation is read from production: the engine's answers, the
+// envelope, the replica's rows and what it applied. The literals are inputs
+// and the names of the contract: the refusal code the quest names.
+
+import assert from 'node:assert/strict';
+import {test} from 'node:test';
+
+import Database from 'better-sqlite3';
+
+import {
+  INSERT_ROW_SQL,
+  UPDATE_ROW_SQL,
+  createClientPath,
+  openReplica,
+} from './write-identity-attempt-harness.js';
+import {createAdminQueryResultMessageEnvelope} from
+  '../../src/admin/admin-query-result-message-envelope.js';
+import {PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} from
+  '../../src/partition/partition-committed-statement-outcome-constants.js';
+import {
+  PARTITION_SERVICE_EVENT,
+  PARTITION_SERVICE_OPERATION,
+} from '../../src/partition/partition-service-constants.js';
+import {buildPartitionWriteEntry} from
+  '../../src/partition/partition-write-kernel.js';
+
+const TEST_TIMEOUT_MS = 60000;
+const STATEMENT_MISMATCH_CODE = 'partition_write_entry_id_statement_mismatch';
+// The owner exports its DDL; the table is named from it.
+const OUTCOME_TABLE = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE
+  .match(/CREATE TABLE IF NOT EXISTS\s+(\w+)/u)[1];
+
+function participantOf(answer) {
+  return [...(answer?.participantResults ?? []),
+    ...(answer?.participantFailures ?? [])][0] ?? null;
+}
+
+function receiptOf(answer, queryId) {
+  return createAdminQueryResultMessageEnvelope(queryId, answer).writeReceipt;
+}
+
+async function withClient(partitionId, body, options = {}) {
+  const replica = await openReplica(partitionId, options);
+  try {
+    await body({replica, client: createClientPath(replica)});
+  } finally {
+    await replica.close();
+  }
+}
+
+test('B1: a keyed re-issue\'s replayed answer is a complete admin receipt, ' +
+  'bound to the committed entry', {timeout: TEST_TIMEOUT_MS}, async () => {
+  await withClient('identity-receipt-key', async ({client}) => {
+    const write = {sql: INSERT_ROW_SQL, params: ['op-receipt', 'written']};
+    const idempotencyKey = 'client-key-receipt';
+    const first = await client.engine.executeQuery(write.sql, write.params,
+      {idempotencyKey});
+    const reissue = await client.engine.executeQuery(write.sql, write.params,
+      {idempotencyKey});
+    const firstReceipt = receiptOf(first, 'q-first');
+    assert.equal(firstReceipt.commitWitnessComplete, true,
+      'setup: the first answer\'s receipt is complete');
+    assert.equal(participantOf(reissue)?.idempotentReplay, true,
+      'setup: the re-issue is answered from the outcome row');
+    assert.notEqual(reissue.operationId, first.operationId,
+      'setup: the re-issue\'s plan minted its own operationId');
+    const receipt = receiptOf(reissue, 'q-reissue');
+    assert.deepEqual({
+      complete: receipt.commitWitnessComplete,
+      witnessed: receipt.witnessedParticipantCount,
+      missing: receipt.missingCommitWitnessPartitions,
+    }, {complete: true, witnessed: 1, missing: []},
+    'the keyed re-issue\'s replay is a complete receipt ' +
+      `(${JSON.stringify(receipt)})`);
+    const [witnessed] = receipt.durableCommitWitnesses;
+    const [original] = firstReceipt.durableCommitWitnesses;
+    assert.deepEqual({entryId: witnessed?.entryId, term: witnessed?.term,
+      logIndex: witnessed?.logIndex}, {entryId: original?.entryId,
+      term: original?.term, logIndex: original?.logIndex},
+    'it binds the entry the first answer committed');
+    assert.equal(receipt.participantReceipts[0]?.idempotentReplay, true,
+      'the receipt marks the answer as a replay');
+  });
+});
+
+test('B1: a replay naming another entry, and an answer that is not a replay ' +
+  'under another operationId, are never complete receipts',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await withClient('identity-receipt-bound', async ({client}) => {
+    const write = {sql: INSERT_ROW_SQL, params: ['op-bound', 'written']};
+    const other = {sql: INSERT_ROW_SQL, params: ['op-other', 'written']};
+    const first = await client.engine.executeQuery(write.sql, write.params,
+      {idempotencyKey: 'client-key-bound'});
+    const otherAnswer = await client.engine.executeQuery(other.sql,
+      other.params, {idempotencyKey: 'client-key-other'});
+    const otherEntryId =
+      participantOf(otherAnswer)?.durableCommitWitness?.entryId;
+    assert.ok(otherEntryId, 'setup: the other write is witnessed');
+    // The replica answering the re-issue names the other entry in the
+    // witness it gives (everything else as it answered).
+    client.router.rewrite = (answer) => ({...answer, durableCommitWitness: {
+      ...answer.durableCommitWitness, entryId: otherEntryId}});
+    const reissue = await client.engine.executeQuery(write.sql, write.params,
+      {idempotencyKey: 'client-key-bound'});
+    client.router.rewrite = null;
+    assert.equal(participantOf(reissue)?.idempotentReplay, true,
+      'setup: the re-issue is a replay');
+    assert.equal(receiptOf(reissue, 'q-false').commitWitnessComplete, false,
+      'a replay whose witness names another entry is not complete');
+    assert.equal(receiptOf({...first, operationId: otherAnswer.operationId},
+      'q-other-operation').commitWitnessComplete, false,
+    'an answer that is not a replay is bound by its operationId');
+  });
+});
+
+test('F3: a replay of an outcome row without an affected-row count answers ' +
+  'the count as unknown, never 0', {timeout: TEST_TIMEOUT_MS}, async () => {
+  await withClient('identity-unknown-count', async ({replica, client}) => {
+    await client.engine.executeQuery(INSERT_ROW_SQL, ['op-count', 'seed']);
+    const update = {sql: UPDATE_ROW_SQL, params: ['counted', 'op-count']};
+    const idempotencyKey = 'client-key-count';
+    const applied = await client.engine.executeQuery(update.sql,
+      update.params, {idempotencyKey});
+    assert.equal(applied.affectedRows, 1, 'setup: the update changed a row');
+    // The row as a replica holds one recorded before the count was.
+    const writer = new Database(replica.dbPath);
+    try {
+      writer.prepare(`UPDATE ${OUTCOME_TABLE} SET ` +
+        `${PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CHANGES_COLUMN} = NULL ` +
+        'WHERE log_index = ?').run(participantOf(applied).logIndex);
+    } finally {
+      writer.close();
+    }
+    const replayed = await client.engine.executeQuery(update.sql,
+      update.params, {idempotencyKey});
+    const participant = participantOf(replayed);
+    assert.equal(participant?.idempotentReplay, true,
+      'setup: the re-issue is answered from the outcome row');
+    assert.deepEqual({changes: participant?.changes,
+      changesKnown: participant?.changesKnown}, {changes: null,
+      changesKnown: false}, 'the partition answers the count as unknown');
+    assert.deepEqual({success: replayed.success,
+      affectedRows: replayed.affectedRows,
+      affectedRowsKnown: replayed.affectedRowsKnown}, {success: true,
+      affectedRows: null, affectedRowsKnown: false},
+    'the engine answers the affected rows as unknown, never 0 ' +
+      `(${JSON.stringify({affectedRows: replayed.affectedRows})})`);
+    const envelope = createAdminQueryResultMessageEnvelope('q-count',
+      replayed);
+    assert.deepEqual({affectedRows: envelope.affectedRows,
+      affectedRowsKnown: envelope.affectedRowsKnown}, {affectedRows: null,
+      affectedRowsKnown: false}, 'the admin answer says the same');
+    assert.equal(replica.applications(update), 1,
+      'the replay applied nothing again');
+  });
+});
+
+test('F4: a key reused for a different statement is refused, typed, and ' +
+  'never answered with the first statement\'s replay',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await withClient('identity-reused-key', async ({replica, client}) => {
+    await client.engine.executeQuery(INSERT_ROW_SQL, ['op-reused', 'seed']);
+    const first = {sql: UPDATE_ROW_SQL, params: ['first', 'op-reused']};
+    const second = {sql: UPDATE_ROW_SQL, params: ['second', 'op-reused']};
+    const idempotencyKey = 'client-key-reused';
+    const applied = await client.engine.executeQuery(first.sql, first.params,
+      {idempotencyKey});
+    assert.equal(applied.success, true, 'setup: the first update applied');
+    const reused = await client.engine.executeQuery(second.sql,
+      second.params, {idempotencyKey});
+    const participant = participantOf(reused);
+    assert.equal(reused.success, false,
+      `the reused key is refused (${JSON.stringify(participant)})`);
+    assert.equal(participant?.failureCode, STATEMENT_MISMATCH_CODE,
+      'the refusal is typed');
+    assert.notEqual(participant?.idempotentReplay, true,
+      'it is not answered as the first statement\'s replay');
+    assert.deepEqual({value: replica.valueOf('op-reused'),
+      second: replica.applications(second), first:
+        replica.applications(first)}, {value: 'first', second: 0, first: 1},
+    'the second statement is not applied and the first stays applied once');
+  });
+});
+
+test('F4: a committed entry whose key is settled for a different statement ' +
+  'is consumed without being applied or reported committed',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await withClient('identity-reused-entry', async ({replica, client}) => {
+    await client.engine.executeQuery(INSERT_ROW_SQL, ['op-entry', 'seed']);
+    const first = {sql: UPDATE_ROW_SQL, params: ['first', 'op-entry']};
+    const second = {sql: UPDATE_ROW_SQL, params: ['second', 'op-entry']};
+    const applied = await client.engine.executeQuery(first.sql, first.params,
+      {idempotencyKey: 'client-key-entry'});
+    assert.equal(applied.success, true, 'setup: the first update applied');
+    const [entryId] = replica.entryIdsSentFor(first);
+    const reported = [];
+    replica.service.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED,
+      ({command}) => reported.push(command));
+    // A second proposal of the entryId, for another statement, reaches the
+    // application (proposed before the first was applied where it was).
+    replica.commitCommand(buildPartitionWriteEntry({
+      type: PARTITION_SERVICE_OPERATION.UPDATE, ...second, entryId},
+    {proposedBy: replica.replicaId}));
+    assert.deepEqual({value: replica.valueOf('op-entry'),
+      second: replica.applications(second)}, {value: 'first', second: 0},
+    'the second statement is not applied');
+    assert.deepEqual(reported.filter((command) =>
+      command.params?.[0] === second.params[0]), [],
+    'the second statement is never reported committed');
+  }, {releasable: true});
+});

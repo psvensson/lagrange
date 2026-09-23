@@ -5,9 +5,9 @@
 // write coordinator derives for the replica's partition (the one derivation,
 // quest reroute-carries-the-entry-id C1), so the write is sent on after any
 // answer that did not fail it for good; without a key it is sent on only
-// after an answer that never proposed it.
+// after an answer that never proposed it. A thrown answer is decided as a
+// returned one: by its code, never by its text.
 
-import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {routedMutationLocalWriteOptions} from
   './cdc-routed-system-write-selection.js';
 import {
@@ -15,26 +15,27 @@ import {
   isReroutableWriteFailureCode,
 } from '../partition/partition-write-kernel.js';
 
-const {CDC_INTEGRATION_SERVICE_LITERAL} = CDC_INTEGRATION_SERVICE_SHARED;
-
 /**
- * Whether the local partition's answer to a system-table write sends it on
- * to the next local service: a typed answer when its code says it may be
- * sent again - an unknown outcome only when the write is sent on under its
- * entryId (it may have committed here) - an untyped one by its text.
+ * Whether a local partition's failed answer to a system-table write - the
+ * answer it returned or the error it threw - sends the write on to the next
+ * local service. A partition answer is decided by its code through the write
+ * kernel's predicate: an unknown outcome only when the write is sent on under
+ * its entryId (it may have committed here). A failure without a kernel code
+ * is not a partition answer, so nothing says the write was never proposed:
+ * it is sent on, when the CDC integration names it transient, only under the
+ * entryId (the re-send is then idempotent).
  * @param {Object} cdc - The CDC integration (its transient-error test).
- * @param {Object|null} result - The local partition's answer.
+ * @param {Object} failure - The failed answer or the thrown error.
  * @param {boolean} carriesEntryId - Whether the write is sent on under the
  *   entryId it was answered for.
  * @return {boolean} Whether the write is sent on.
  */
-function isLocalSystemTableWriteRoutedOn(cdc, result, carriesEntryId) {
-  if (result && result.success !== false) {
-    return false;
+function isLocalSystemTableWriteFailureRoutedOn(cdc, failure,
+  carriesEntryId) {
+  if (isPartitionWriteFailureCode(failure?.failureCode)) {
+    return isReroutableWriteFailureCode(failure.failureCode, {carriesEntryId});
   }
-  return isPartitionWriteFailureCode(result?.failureCode) ?
-    isReroutableWriteFailureCode(result.failureCode, {carriesEntryId}) :
-    cdc.isTransientCdcError(result?.error || '');
+  return carriesEntryId && cdc.isTransientCdcError(failure);
 }
 
 /**
@@ -55,14 +56,15 @@ async function sendLocalSystemTableWrite(cdc, localServices,
         routedMutationLocalWriteOptions(idempotencyKey,
           partitionService.partitionId));
       const result = cdc.normalizeLocalSystemTableWriteResult(localResult);
-      if (isLocalSystemTableWriteRoutedOn(cdc, result,
-        idempotencyKey !== null)) {
+      if (result?.success === false &&
+        isLocalSystemTableWriteFailureRoutedOn(cdc, result,
+          idempotencyKey !== null)) {
         continue;
       }
       return {handled: true, result};
     } catch (error) {
-      if (cdc.isTransientCdcError(
-        error?.message || CDC_INTEGRATION_SERVICE_LITERAL.EMPTY)) {
+      if (isLocalSystemTableWriteFailureRoutedOn(cdc, error,
+        idempotencyKey !== null)) {
         continue;
       }
       throw error;

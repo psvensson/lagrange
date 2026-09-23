@@ -40,6 +40,12 @@ function normalizeCommitWitness(value) {
   return witness;
 }
 
+// Whether a witness is the participant's: its partition, the result's
+// idempotency key, and - for an answer that is not a replay - the result's
+// operationId. A replay answers a client's re-issue of the same logical
+// write under its key, whose plan minted a fresh operationId per submission,
+// while the witness names the committed entry's own: a replay is bound to the
+// committed entry by its entryId and index instead (replayBindsWitness).
 function witnessMatchesParticipant(witness, participant, resultIdentity) {
   if (!witness) return false;
   const partitionId = normalizeString(participant?.partitionId);
@@ -47,6 +53,7 @@ function witnessMatchesParticipant(witness, participant, resultIdentity) {
     return false;
   }
   if (
+    participant?.idempotentReplay !== true &&
     resultIdentity.operationId.length > 0 &&
     witness.operationId !== resultIdentity.operationId
   ) {

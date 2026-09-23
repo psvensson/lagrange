@@ -65,8 +65,11 @@ const RATCHET_TARGETS = [
     // 2026-09-23: tightened 56/1815 -> 56/1812 (checker hint) when the CDC
     // row mutations took their executeSQL options from one owner (quest
     // reroute-carries-the-entry-id).
-    baselineCloneGroupCount: 56,
-    baselineDuplicatedLineCount: 1812,
+    // 2026-09-23: tightened 56/1812 -> 55/1775 (checker hint) when the query
+    // executor's UPDATE and DELETE answers took one renderer (the same quest,
+    // attempt A2).
+    baselineCloneGroupCount: 55,
+    baselineDuplicatedLineCount: 1775,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },

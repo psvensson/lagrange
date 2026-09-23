@@ -27,6 +27,13 @@ const ERRORS = Object.freeze({
     'The consensus port refused the proposal; the write was not proposed',
   WRITE_COMMIT_DEADLINE_EXCEEDED:
     'The write was not proposed before its commit deadline',
+  // A committed write whose own application failed in the host environment
+  // (the partition's committed-statement outcome owner appends the host's
+  // code and message): it is committed and applied again when the host
+  // recovers, so it did not fail for good.
+  COMMITTED_STATEMENT_ENVIRONMENT_FAILED:
+    'Committed partition statement failed in the host environment; the ' +
+    'entry is not consumed and is applied again when the host recovers',
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
   NO_HANDLER_FOR_ADDRESS: 'No handler registered for address',
 });
@@ -34,7 +41,8 @@ const ERRORS = Object.freeze({
 // The texts of the partition write answers that did not fail for good (the
 // partition write kernel's isRetryableWriteFailureCode, by its codes' texts):
 // no leader here, a consensus recovery in progress here, a write this replica
-// did not propose, or a write whose outcome is not known to this replica.
+// did not propose, a write whose outcome is not known to this replica, or a
+// committed write whose own application failed in the host environment.
 // Partition write answers carry their code across every boundary, and a
 // caller routes them again by that code alone (the kernel's
 // isReroutableWriteFailureCode); these texts are only for the control
@@ -48,6 +56,7 @@ const RETRYABLE_WRITE_ERROR_FRAGMENTS = Object.freeze([
   ERRORS.WRITE_CONSENSUS_REFUSED,
   ERRORS.WRITE_COMMIT_DEADLINE_EXCEEDED,
   ERRORS.WRITE_OUTCOME_UNKNOWN,
+  ERRORS.COMMITTED_STATEMENT_ENVIRONMENT_FAILED,
 ]);
 
 /**

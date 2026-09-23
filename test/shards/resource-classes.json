@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2151,
+    "ordinary": 2154,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2168,
-  "digest": "fnv1a32-60c50198",
+  "censusSize": 2171,
+  "digest": "fnv1a32-fa175e93",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -311,6 +311,7 @@
     "test/cdc/cdc-integration-service-time-seam.test.js": "ordinary",
     "test/cdc/cdc-integration-service-write-metrics.test.js": "ordinary",
     "test/cdc/cdc-integration-service.test.js": "ordinary",
+    "test/cdc/cdc-local-system-table-write-lane.test.js": "ordinary",
     "test/cdc/cdc-observability.test.js": "ordinary",
     "test/cdc/cdc-pipeline-metrics.property.test.js": "ordinary",
     "test/cdc/cdc-pipeline-metrics.test.js": "ordinary",
@@ -1366,6 +1367,8 @@
     "test/query/wasm-call-adapter.integration.test.js": "ordinary",
     "test/query/wasm-call-adapter.test.js": "ordinary",
     "test/query/write-identity-end-to-end.test.js": "ordinary",
+    "test/query/write-identity-loops.test.js": "ordinary",
+    "test/query/write-identity-replay-answers.test.js": "ordinary",
     "test/query/write-path-internal-pacing.test.js": "ordinary",
     "test/query/write-tracking-recursion-guard.test.js": "ordinary",
     "test/raft/append-ack-packet-detection.test.js": "ordinary",

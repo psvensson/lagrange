@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+
 import {test} from '../../src/test-helpers/tap.js';
 import {
   DURABLE_COMMIT_WITNESS_ERROR,
@@ -11,6 +13,8 @@ import {
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
 import * as errorConstants from '../../src/constants/errors.js';
+import {settleFailedCommittedStatement} from
+  '../../src/partition/partition-committed-statement-outcome.js';
 import * as proposalQueueConstants from
   '../../src/partition/proposal-queue-constants.js';
 import {ProposalQueue} from '../../src/partition/proposal-queue.js';
@@ -430,4 +434,65 @@ async (t) => {
   }
   assertCodeRouting(t, REFUSAL, {isReroutableWriteFailureCode,
     isRetryableWriteFailureCode});
+});
+
+// F2 (quest reroute-carries-the-entry-id, verification round 1): the
+// environmental failure of a committed write's own application, as the
+// committed-statement outcome owner raises it and the kernel answers it, is a
+// write that did not fail for good by its code AND by its text (the errors
+// owner lists its text with the other retryable answers), and it is routed
+// again only under its own entryId, like an unknown outcome.
+test('F2: the environmental application failure agrees by code and text ' +
+  'that it did not fail for good', async (t) => {
+  const {
+    PARTITION_WRITE_LEADERSHIP_REFUSAL: REFUSAL,
+    buildPartitionWriteFailureResult: answerOf,
+    isReroutableWriteFailureCode,
+    isRetryableWriteFailureCode,
+  } = partitionWriteKernel;
+  const {isRetryableWriteError} = errorConstants;
+  // Input: what SQLite raises when the host's disk is full (its own code).
+  const hostError = Object.assign(new Error('database or disk is full'),
+    {code: 'SQLITE_FULL'});
+  let raised = null;
+  try {
+    settleFailedCommittedStatement({db: {open: true}}, {error: hostError,
+      command: {entryId: TEST_ENTRY_ID}, afterCommit: () => {},
+      afterRollback: () => {}});
+  } catch (error) {
+    raised = error;
+  }
+  const answer = answerOf(raised, TEST_PARTITION_ID);
+  t.equal(typeof answer.failureCode, 'string',
+    `the kernel types the environmental failure (${JSON.stringify(answer)})`);
+  t.equal(isRetryableWriteFailureCode(answer.failureCode), true,
+    'by its code it did not fail for good');
+  assertRetryAgreement(t, 'environmentFailed', answer, {
+    isReroutableWriteFailureCode, isRetryableWriteFailureCode,
+    isRetryableWriteError, unknown: true});
+  t.not(answer.failureCode, REFUSAL.OUTCOME_UNKNOWN,
+    'it is its own state, not an unknown outcome');
+});
+
+// F12: the typed fields of a write answer are the kernel's exported
+// contract; the sealed end-to-end witness names its eight fields as literals
+// (it is sealed and stays unchanged), so they are compared here with the
+// kernel's list: every sealed name is in it, and the only field the kernel
+// carries beyond them is the replay's affected-row state (F3, recorded).
+test('F12: the sealed witness\'s write-answer fields are the kernel\'s ' +
+  'exported contract', async (t) => {
+  const sealedWitness = fs.readFileSync(new URL(
+    '../query/write-identity-end-to-end.test.js', import.meta.url), 'utf8');
+  const literal = sealedWitness.match(
+    /WRITE_ANSWER_WIRE_FIELDS = Object\.freeze\(\[([^\]]*)\]\)/u)?.[1] ?? '';
+  const sealedFields = [...literal.matchAll(/'([A-Za-z]+)'/gu)]
+    .map((match) => match[1]);
+  const kernelFields = partitionWriteKernel.PARTITION_WRITE_ANSWER_FIELDS;
+  t.equal(sealedFields.length, 8, 'setup: the sealed witness names eight');
+  t.ok(Array.isArray(kernelFields), 'the kernel exports its field list');
+  t.same(sealedFields.filter((field) => !kernelFields?.includes(field)), [],
+    'every field the sealed witness names is in the kernel\'s contract');
+  t.same((kernelFields ?? []).filter((field) =>
+    !sealedFields.includes(field)), ['changesKnown'],
+  'the kernel carries beyond them only the replay\'s affected-row state');
 });
