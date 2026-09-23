@@ -5,6 +5,9 @@ import {
 } from '../diagnostics/raft-churn-sync-sections.js';
 import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
 import {readPartitionCommittedCommands} from './partition-committed-log.js';
+import {
+  PARTITION_TRANSACTION_PREPARED_STATE,
+} from './partition-service-constants.js';
 
 
 const {
@@ -640,10 +643,9 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         conflicts: conflictCheck.conflicts,
       };
     }
-    await this.replicatePreparedTransaction(
-      transactionSessionId,
-      transactionState,
-    );
+    // No PREPARE marker while the session stages on the connection: consensus
+    // persistence never runs inside a user transaction. The prepared state is
+    // this replica's own (LOCAL_STAGING) until the session ends.
     this.activeTransactions.delete(transactionSessionId);
     this.preparedTransactions.set(transactionSessionId, {
       sessionId: transactionSessionId,
@@ -660,6 +662,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       operation: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
       partitionId: this.partitionId,
       prepared: true,
+      preparedState: PARTITION_TRANSACTION_PREPARED_STATE.LOCAL_STAGING,
       sessionId: transactionSessionId,
     };
   }
@@ -693,16 +696,18 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       operationCount: transactionState.operations.length,
     });
     try {
-      await this.replicateTransactionCommit(
-        transactionState.operations,
-        resolvedSessionId,
-        transactionState.transactionEpoch,
-      );
       this.recordTransactionCommitOutcome(
         resolvedSessionId,
         transactionState.transactionEpoch,
       );
       this.db.exec(PARTITION_SERVICE_SQL.COMMIT);
+      // The session has ended: its marker is consensus work, proposed only
+      // once the connection is out of the user transaction.
+      await this.replicateTransactionCommit(
+        transactionState.operations,
+        resolvedSessionId,
+        transactionState.transactionEpoch,
+      );
       const duration = Date.now() - transactionState.startTime;
       const operationCount = transactionState.operations.length;
       for (const op of transactionState.operations) {
@@ -792,11 +797,12 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       operationCount: transactionState.operations.length,
     });
     try {
+      this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
+      // Proposed after the ROLLBACK, so the rollback cannot erase its marker.
       await this.replicateTransactionRollback(
         resolvedSessionId,
         transactionState.transactionEpoch,
       );
-      this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
       const duration = Date.now() - transactionState.startTime;
       const operationCount = transactionState.operations.length;
       this.activeTransactions.delete(resolvedSessionId);
@@ -948,40 +954,6 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       type: PARTITION_SERVICE_OPERATION.ROLLBACK,
       sessionId,
       transactionEpoch,
-      timestamp: timestamp.toString(),
-      proposedBy: this.replicaId,
-      proposedAt: Date.now(),
-    };
-    // Propose-only: the marker's durable log is the consensus core's. The
-    // proposal stays fire-and-forget; only the leader proposes.
-    if (this.raft?.readStatus().role === RaftRole.LEADER) {
-      Promise.resolve(this.raft.propose(entry))
-        .then(assertRaftOperationSucceeded)
-        .catch((err) => {
-          if (err) {
-            this.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
-              partitionId: this.partitionId,
-              error: err.message,
-            });
-          }
-        });
-    }
-    return entry;
-  }
-  /**
-   * Replicate prepared transaction state through Raft for durability.
-   * @param {string} sessionId - Transaction session ID.
-   * @param {Object} transactionState - Active transaction state.
-   * @return {Promise<Object>} The proposed marker entry.
-   * @private
-   */
-  async replicatePreparedTransaction(sessionId, transactionState) {
-    const timestamp = this.hlcClock.now();
-    const entry = {
-      type: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
-      sessionId,
-      epoch: transactionState.transactionEpoch,
-      writeSet: [...transactionState.writeSet],
       timestamp: timestamp.toString(),
       proposedBy: this.replicaId,
       proposedAt: Date.now(),

@@ -19,16 +19,16 @@
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 145,
-    "storage-raft": 98,
+    "storage-raft": 99,
     "test-infrastructure": 133,
-    "transactions": 14,
+    "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2155,
-  "digest": "fnv1a32-bb453835",
+  "censusSize": 2157,
+  "digest": "fnv1a32-6c522e4e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3e77e105",
+  "observationDigest": "fnv1a32-a5344b63",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1432,6 +1432,7 @@
     "test/raft/raft-rs-backend/operation-port-status-observation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": "storage-raft",
     "test/raft/raft-rs-backend/peer-identity.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/persistence-admission.test.js": "storage-raft",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "storage-raft",
@@ -2026,6 +2027,7 @@
     "test/topology/latency-tree-service.test.js": "convergence-topology",
     "test/topology/topology-anti-entropy-reconciler.test.js": "convergence-topology",
     "test/transaction/cross-partition-rejection.property.test.js": "transactions",
+    "test/transaction/session-transaction-isolation.test.js": "transactions",
     "test/transaction/single-partition-acid.property.test.js": "transactions",
     "test/transaction/transaction-durability-raft.property.test.js": "transactions",
     "test/transaction/transaction-support.test.js": "transactions",
@@ -6732,6 +6734,19 @@
         "src/raft/raft-rs-peer-identity.js"
       ]
     },
+    "test/raft/raft-rs-backend/persistence-admission.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-proposal-codec.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": {
       "files": [
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -9822,6 +9837,14 @@
       "files": [
         "src/topology/topology-anti-entropy-reconciler.js",
         "src/workflow/reconcile-queue-constants.js"
+      ]
+    },
+    "test/transaction/session-transaction-isolation.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-rs-proposal-codec.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/transport/immediate-ack-ordering.property.test.js": {

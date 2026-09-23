@@ -1,9 +1,17 @@
 // The semantic parts of an rs-raft status observation that need no core
 // entry: the peers of a configuration and the leader's follower progress,
-// each resolved to the Lagrange identities and addresses the group knows.
-// The runtime owner reads the core; these only shape what it read.
+// each resolved to the Lagrange identities and addresses the group knows, and
+// the frozen status those make up. The runtime owner reads the core; these
+// only shape what it read.
 
-import {PEER_ADDRESS_STATUS} from './raft-rs-runtime-owner-constants.js';
+import {deepFreeze} from './raft-operation-port.js';
+import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
+import {
+  NO_LEADER,
+  PEER_ADDRESS_STATUS,
+  ROLE,
+  RUNTIME_REASON,
+} from './raft-rs-runtime-owner-constants.js';
 
 function peerSnapshot(group, confState) {
   return [...confState.voters, ...confState.learners]
@@ -53,4 +61,53 @@ function followerProgressSnapshot(group, status) {
   return snapshot;
 }
 
-export {followerProgressSnapshot, peerSnapshot};
+/**
+ * The status one observation of the core describes.
+ * @param {Object} group - The runtime group.
+ * @param {Object} observation - {status, confState, runtimeHealth,
+ *   runtimeGeneration} as the runtime owner recorded them.
+ * @param {Function} leaderIdentityUnresolved - The owner's outcome when the
+ *   leader's identity cannot be resolved.
+ * @return {Object} The frozen status, or the owner's outcome.
+ */
+function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
+  const {status, confState} = observation;
+  let leaderId = null;
+  let leaderAddress = null;
+  try {
+    leaderId = status.lead === NO_LEADER ? null :
+      group.resolvePeerIdentity(status.lead);
+  } catch (error) {
+    return leaderIdentityUnresolved(error);
+  }
+  if (status.lead !== NO_LEADER) {
+    try {
+      leaderAddress = group.resolvePeerAddress(status.lead);
+    } catch {
+      // A network address can lag membership/identity without invalidating
+      // the consensus runtime. Status reports the identity and a null address.
+      leaderAddress = null;
+    }
+  }
+  return deepFreeze({
+    outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+    groupId: group.groupId,
+    replicaIdentity: group.replicaIdentity,
+    peerId: group.peerId,
+    term: Number(status.term),
+    commitIndex: Number(status.commit),
+    role: ROLE[status.raftState] || RUNTIME_REASON.UNKNOWN,
+    leaderId,
+    leaderAddress,
+    peerCount: Math.max(0,
+      confState.voters.length + confState.learners.length - 1),
+    peers: peerSnapshot(group, confState),
+    followerProgress: followerProgressSnapshot(group, status),
+    confState,
+    runtimeHealth: observation.runtimeHealth,
+    groupHealth: group.health,
+    runtimeGeneration: observation.runtimeGeneration,
+  });
+}
+
+export {shapeGroupObservation};

@@ -1,13 +1,68 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../raft/raft-operation-port-constants.js';
+import {RAFT_RS_PERSISTENCE_ADMISSION} from
+  '../raft/raft-rs-durable-store-constants.js';
 
 const {
+  PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   WRITE_PHASE_FIELD_APPLY_WRITE_MS,
   WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
   buildPartitionWriteFailureResult,
   buildPartitionWriteSideEffectPlan,
+  runRetryableControlPlaneWrite,
 } = PARTITION_SERVICE_SHARED;
+
+// The port's typed deferral while a user session holds the partition's
+// connection (nothing entered the core; the group stays usable), as the
+// retryable result the canonical retry owner re-runs.
+async function proposeUnlessDeferred(service, entry) {
+  const proposed = await service.raft.propose(entry);
+  const deferred = proposed?.outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
+    proposed.recoveryRequired === false &&
+    proposed.reason === RAFT_RS_PERSISTENCE_ADMISSION.USER_TRANSACTION_OPEN;
+  return deferred ? {
+    success: false,
+    deferRetry: true,
+    admission: RAFT_RS_PERSISTENCE_ADMISSION.USER_TRANSACTION_OPEN,
+  } : proposed;
+}
+
+function deferredByUserTransaction(result) {
+  return result?.deferRetry === true &&
+    result.admission === RAFT_RS_PERSISTENCE_ADMISSION.USER_TRANSACTION_OPEN;
+}
+
+// One proposal, proposed again on the replica's own clock while a user
+// session defers it, within the deferral budget.
+function proposeWithinDeferralBudget(service, entry) {
+  return runRetryableControlPlaneWrite(
+    () => proposeUnlessDeferred(service, entry), {
+      timeoutMs:
+        PARTITION_SERVICE_DEFAULT.USER_TRANSACTION_WRITE_DEFER_BUDGET_MS,
+      baseDelayMs:
+        PARTITION_SERVICE_DEFAULT.USER_TRANSACTION_WRITE_RETRY_INTERVAL_MS,
+      maxDelayMs:
+        PARTITION_SERVICE_DEFAULT.USER_TRANSACTION_WRITE_RETRY_MAX_DELAY_MS,
+      now: () => service.timeSource.now(),
+      sleep: (delayMs) => new Promise(
+        (resolve) => service.timeSource.setTimeout(resolve, delayMs)),
+    });
+}
+
+// A write still deferred when its budget runs out is not a failure of the
+// write: the pending commit is released and the router retries it later.
+function userTransactionWriteDeferral(service, entryId) {
+  const deferral = new Error(
+    PARTITION_SERVICE_ERROR_MSG.WRITE_DEFERRED_USER_TRANSACTION_OPEN);
+  service.rejectCommittedWrite(entryId, deferral);
+  return {
+    ...buildPartitionWriteFailureResult(deferral, service.partitionId),
+    deferRetry: true,
+  };
+}
 
 async function executePartitionRaftWriteCommit(service, options) {
   const {
@@ -33,7 +88,16 @@ async function executePartitionRaftWriteCommit(service, options) {
   commitPromise.catch(() => {});
   const raftCommandDispatchStartMs = service.timeSource.now();
   try {
-    assertRaftOperationSucceeded(await service.raft.propose(entry));
+    const proposed = await proposeWithinDeferralBudget(service, entry);
+    if (deferredByUserTransaction(proposed)) {
+      service.recordWritePhaseDuration(
+        phaseTimings,
+        WRITE_PHASE_FIELD_APPLY_WRITE_MS,
+        applyStartMs,
+      );
+      return userTransactionWriteDeferral(service, entry.entryId);
+    }
+    assertRaftOperationSucceeded(proposed);
   } catch (error) {
     service.rejectCommittedWrite(entry.entryId, error);
     service.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {

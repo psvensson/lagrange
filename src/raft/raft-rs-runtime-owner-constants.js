@@ -7,6 +7,9 @@
 // owner remains the sole importer and invoker of both.
 
 import {RAFT_EVENT} from './raft-operation-port-constants.js';
+import {
+  RAFT_RS_PERSISTENCE_ADMISSION,
+} from './raft-rs-durable-store-constants.js';
 
 const HEALTHY = 'healthy';
 const UNHEALTHY = 'unhealthy';
@@ -67,6 +70,23 @@ const RUNTIME_REASON = Object.freeze({
   INBOUND_ENQUEUED: 'inbound-enqueued',
   CLOSED_WITHOUT_CORE_ENTRY: 'closed-without-core-entry',
   CLOSED: 'closed',
+  // The store's own admission state, carried as the reason of the typed,
+  // retryable, non-fatal deferral while a user transaction holds the
+  // replica's connection.
+  USER_TRANSACTION_OPEN: RAFT_RS_PERSISTENCE_ADMISSION.USER_TRANSACTION_OPEN,
+  // The command reached the core; the Readies it produced wait in the core
+  // until the store admits their persistence again.
+  READY_DEFERRED: 'ready-deferred-user-transaction-open',
+});
+// A Ready already taken holds the core's pending Ready, so its remaining
+// durable writes cannot be refused after an asynchronous send: they wait for
+// the store's admission. The bound is longer than the partition's own hold
+// on a session (60 s), so a session the transaction owner still admits never
+// costs the group its runtime; beyond it the connection is wedged and the
+// group is reconstructed from its durable record.
+const PERSISTENCE_ADMISSION_WAIT = Object.freeze({
+  POLL_INTERVAL_MS: 10,
+  BOUND_MS: 120000,
 });
 
 export {
@@ -76,6 +96,7 @@ export {
   HEALTHY,
   NO_LEADER,
   PEER_ADDRESS_STATUS,
+  PERSISTENCE_ADMISSION_WAIT,
   RECOVERY_REQUIRED,
   ROLE,
   RUNTIME_COMMAND,

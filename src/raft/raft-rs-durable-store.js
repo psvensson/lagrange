@@ -14,9 +14,11 @@ import {
   RAFT_RS_BOOLEAN_COLUMN,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
+  RAFT_RS_PERSISTENCE_ADMISSION,
   RAFT_RS_RECORD_TABLES,
   RAFT_RS_SCHEMA_SQL,
   RAFT_RS_SQL,
+  RAFT_RS_STORE_ERROR_CODE,
   RAFT_RS_STORE_ERROR_MSG,
   RAFT_RS_ZERO_INDEX,
 } from './raft-rs-durable-store-constants.js';
@@ -105,6 +107,7 @@ class RaftRsDurableStore {
   constructor(db) {
     this.db = db;
     this.journal = [];
+    this.ownTransactionDepth = 0;
     this.db.exec(RAFT_RS_SQL.CREATE_LOG_TABLE);
     this.db.exec(RAFT_RS_SQL.CREATE_HARD_STATE_TABLE);
     this.db.exec(RAFT_RS_SQL.CREATE_APPLIED_STATE_TABLE);
@@ -133,12 +136,45 @@ class RaftRsDurableStore {
   }
 
   /**
-   * Run a unit of work as one SQLite transaction.
+   * Whether the store may write now: only when its connection is in
+   * autocommit or inside a transaction the store itself opened. A transaction
+   * someone else opened on the shared connection (a user session's `BEGIN`)
+   * would absorb the write, and its ROLLBACK would erase consensus rows.
+   * @return {string} A RAFT_RS_PERSISTENCE_ADMISSION state.
+   */
+  persistenceAdmission() {
+    return this.db.inTransaction && this.ownTransactionDepth === 0 ?
+      RAFT_RS_PERSISTENCE_ADMISSION.USER_TRANSACTION_OPEN :
+      RAFT_RS_PERSISTENCE_ADMISSION.ADMITTED;
+  }
+
+  /**
+   * Refuse, with a typed error, a write the connection cannot admit.
+   * @private
+   */
+  admitWrite() {
+    const admission = this.persistenceAdmission();
+    if (admission !== RAFT_RS_PERSISTENCE_ADMISSION.ADMITTED) {
+      throw Object.assign(
+        new Error(RAFT_RS_STORE_ERROR_MSG.USER_TRANSACTION_OPEN),
+        {code: RAFT_RS_STORE_ERROR_CODE.USER_TRANSACTION_OPEN, admission});
+    }
+  }
+
+  /**
+   * Run a unit of work as one SQLite transaction the store opens itself;
+   * refused while a transaction the store did not open is in progress.
    * @param {Function} work - The work to run.
    * @return {*} Whatever the work returned.
    */
   transaction(work) {
-    return this.db.transaction(work)();
+    this.admitWrite();
+    this.ownTransactionDepth += 1;
+    try {
+      return this.db.transaction(work)();
+    } finally {
+      this.ownTransactionDepth -= 1;
+    }
   }
 
   /** Persist the storage-bearing portion of one Ready atomically. */
@@ -161,6 +197,7 @@ class RaftRsDurableStore {
    * @param {Array<Object>} entries - Ready entries from the core.
    */
   appendEntries(groupId, entries) {
+    this.admitWrite();
     if (entries.length === 0) {
       return;
     }
@@ -189,6 +226,7 @@ class RaftRsDurableStore {
    * @param {Object} hardState - {term, vote, commit} as decimal strings.
    */
   putHardState(groupId, hardState) {
+    this.admitWrite();
     this.db.prepare(RAFT_RS_SQL.UPSERT_HARD_STATE).run(
       groupId,
       toExactInteger(hardState.term),
@@ -204,6 +242,7 @@ class RaftRsDurableStore {
    * @param {string} commitIndex - The commit index as a decimal string.
    */
   putCommitIndex(groupId, commitIndex) {
+    this.admitWrite();
     this.db.prepare(RAFT_RS_SQL.UPSERT_COMMIT_INDEX)
       .run(groupId, toExactInteger(commitIndex));
     this.record(RAFT_RS_HOST_WRITE.COMMIT_INDEX, {groupId, commitIndex});
@@ -220,6 +259,7 @@ class RaftRsDurableStore {
    */
   putAppliedState(groupId, appliedIndex, confState,
     write = RAFT_RS_HOST_WRITE.CONF_STATE_AND_APPLIED) {
+    this.admitWrite();
     this.db.prepare(RAFT_RS_SQL.UPSERT_APPLIED_STATE).run(
       groupId,
       toExactInteger(appliedIndex),
@@ -234,6 +274,7 @@ class RaftRsDurableStore {
    * @param {Object} snapshot - A Ready snapshot from the core.
    */
   putSnapshot(groupId, snapshot) {
+    this.admitWrite();
     const metadata = snapshot.metadata || {};
     this.db.prepare(RAFT_RS_SQL.UPSERT_SNAPSHOT).run(
       groupId,

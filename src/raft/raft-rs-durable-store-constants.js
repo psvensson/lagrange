@@ -198,6 +198,21 @@ const RAFT_RS_CONF_STATE_MEMBER_FIELDS = Object.freeze([
   RAFT_RS_CONF_STATE_FIELD.LEARNERS_NEXT,
 ]);
 
+// Whether the store may write now. The record shares its connection with
+// the replica's user sessions, which hold `BEGIN` across round trips; a write
+// made while such a transaction is open would become part of it (better-sqlite3
+// nests a savepoint) and the session's ROLLBACK would erase it. The store
+// writes only when the connection is in autocommit or inside a transaction the
+// store itself opened.
+const RAFT_RS_PERSISTENCE_ADMISSION = Object.freeze({
+  ADMITTED: 'admitted',
+  USER_TRANSACTION_OPEN: 'user-transaction-open',
+});
+
+const RAFT_RS_STORE_ERROR_CODE = Object.freeze({
+  USER_TRANSACTION_OPEN: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN',
+});
+
 const RAFT_RS_ZERO_INDEX = '0';
 const RAFT_RS_BOOLEAN_COLUMN = Object.freeze({TRUE: 1, FALSE: 0});
 
@@ -207,15 +222,20 @@ const RAFT_RS_STORE_ERROR_MSG = Object.freeze({
     `${JSON.stringify(value)}`,
   noRecord: (groupId) =>
     `no durable raft-rs record for group ${JSON.stringify(groupId)}`,
+  USER_TRANSACTION_OPEN:
+    'the rs-raft store refuses to write while its connection is inside a ' +
+    'transaction the store did not open',
 });
 
 export {
   RAFT_RS_BOOLEAN_COLUMN,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
+  RAFT_RS_PERSISTENCE_ADMISSION,
   RAFT_RS_RECORD_TABLES,
   RAFT_RS_SCHEMA_SQL,
   RAFT_RS_SQL,
+  RAFT_RS_STORE_ERROR_CODE,
   RAFT_RS_STORE_ERROR_MSG,
   RAFT_RS_ZERO_INDEX,
 };
