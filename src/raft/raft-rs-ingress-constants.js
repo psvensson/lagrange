@@ -10,6 +10,8 @@
 // The admission outcome when nothing is wrong with the envelope. It is a
 // named state, so a caller never reads admission out of the absence of a
 // refusal.
+const RAFT_RS_TRANSPORT_PROTOCOL = 'raft-rs';
+
 const RAFT_RS_INGRESS_OUTCOME = Object.freeze({
   ADMITTED: 'admitted',
 });
@@ -54,4 +56,5 @@ export {
   RAFT_RS_MESSAGE_TYPE_RANGE,
   RAFT_RS_PEER_ID_FIELDS,
   RAFT_RS_POSITION_FIELDS,
+  RAFT_RS_TRANSPORT_PROTOCOL,
 };

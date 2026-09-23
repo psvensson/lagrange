@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict';
-import {EventEmitter} from 'node:events';
 import test from 'node:test';
 import {wirePartitionRaftLifecycleEvents} from
   '../../src/partition/partition-service-raft-lifecycle-wiring.js';
+import {ControllablePartitionRaftProvider} from
+  './partition-service-test-support.js';
 
 const TRANSITION_MESSAGE = 'Raft leadership transition evidence';
 
 function buildService() {
   const records = [];
-  const raft = new EventEmitter();
-  let term = 7;
+  const raftProvider = new ControllablePartitionRaftProvider({term: 7});
+  const raft = raftProvider.createPartitionPort({peerId: 'orders-p1-r2'});
   const service = {
     raft,
     role: 'follower',
@@ -26,11 +27,6 @@ function buildService() {
       },
       debug() {},
     },
-    raftProvider: {
-      getCurrentTerm() {
-        return term;
-      },
-    },
     normalizeLeaderReplicaId(value) {
       return value;
     },
@@ -39,14 +35,7 @@ function buildService() {
     updateRebalancerLeadership() {},
     scheduleLeaderOwnedActivation() {},
   };
-  return {
-    raft,
-    records,
-    service,
-    setTerm(value) {
-      term = value;
-    },
-  };
+  return {raftProvider, records, service};
 }
 
 test('partition raft lifecycle records campaign, election, and leader change',
@@ -54,11 +43,11 @@ test('partition raft lifecycle records campaign, election, and leader change',
     const fixture = buildService();
     wirePartitionRaftLifecycleEvents(fixture.service, () => false);
 
-    fixture.raft.emit('candidate');
-    fixture.setTerm(8);
-    fixture.raft.emit('leader');
-    fixture.setTerm(9);
-    fixture.raft.emit('leader change', 'orders-p1-r1');
+    fixture.raftProvider.setRole('candidate');
+    fixture.raftProvider.setTerm(8);
+    fixture.raftProvider.setRole('leader');
+    fixture.raftProvider.setTerm(9);
+    fixture.raftProvider.emitLeaderChange('orders-p1-r1');
 
     const evidence = fixture.records.filter(
       (record) => record.message === TRANSITION_MESSAGE,

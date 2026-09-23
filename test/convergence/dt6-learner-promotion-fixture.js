@@ -3,8 +3,9 @@
  * witnesses (quests learner-promotion-progress-proof and
  * learner-promotion-proof-channel-wake): the REAL owners — live
  * PartitionService leader + learner on a loopback transport with real
- * liferaft replication, the real proof RPC over the application-message
- * channel, and the real promotion gate chain.
+ * replication through the partition's Raft operation port (liferaft backend
+ * by default), the real proof RPC over the application-message channel, and
+ * the real promotion gate chain.
  *
  * FIDELITY: in-process deterministic guard (loopback transport, single
  * process). The three passive voters are authoritative service rows (the
@@ -24,7 +25,10 @@ import {
   RaftRole,
   CDCOperation,
 } from '../../src/partition/partition-service.js';
-import {readFollowerMatchIndex} from '../../src/raft/liferaft.js';
+import {
+  createRaftOperationPort,
+  deepFreeze,
+} from '../../src/raft/raft-operation-port.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -98,14 +102,16 @@ export function waitFor(predicate, timeoutMs, pollMs = POLL_MS) {
   });
 }
 
-// The leader's own replication observable for the learner: the proof's
-// learnerMatchIndex input (readFollowerMatchIndex) against the committed
-// prefix the proof's safePromotionIndex is read from. A witness that must
-// sequence an injected event AFTER the learner is caught up reads this —
-// the same owner observable the proof consumes — never elapsed time.
+// The leader's own replication observable for the learner: the port's
+// followerProgress (the proof's learnerMatchIndex input) against the
+// committed prefix the proof's safePromotionIndex is read from — the same
+// owner observable production's proof consumes. A witness that must
+// sequence an injected event AFTER the learner is caught up reads this,
+// never elapsed time.
 export function readLeaderReplicationToLearner(leader) {
-  const committedIndex = leader.raftProvider.getCommittedIndex(leader.raft);
-  const {matchIndex} = readFollowerMatchIndex(leader.raft, LEARNER_ADDRESS);
+  const status = leader.raft.readStatus();
+  const committedIndex = status.commitIndex;
+  const matchIndex = status.followerProgress?.[LEARNER_ADDRESS];
   return {
     committedIndex,
     matchIndex,
@@ -243,16 +249,40 @@ async function createLeader(transport, cache) {
       seq,
     });
   }
-  // Base liferaft only commits on follower acks; a single-replica leader is
-  // its own quorum, so commit the appended prefix explicitly (how the
-  // prefix became committed is a precondition here, not the mechanism under
-  // test — the proof consumes committedIndex however it advanced).
-  const uncommittedEntries = await leader.raft.log.getUncommittedEntriesUpToIndex(
-    COMMITTED_ENTRY_COUNT,
-    leader.raft.term,
-  );
-  await leader.raft.commitEntries(uncommittedEntries);
+  // How the prefix became committed is a precondition here, not the
+  // mechanism under test — the proof consumes committedIndex however it
+  // advanced. A solo liferaft leader never self-commits (base liferaft
+  // commits only on follower acks) and production's solo writes bypass Raft,
+  // so the partition's durable log owner declares the committed prefix,
+  // index by index (commit is prefix-driven, the watermark monotonic). The
+  // noop commands are not applied.
+  for (let index = 1; index <= COMMITTED_ENTRY_COUNT; index++) {
+    leader.logAdapter.commit(index);
+  }
+  const {commitIndex} = leader.raft.readStatus();
+  if (commitIndex !== COMMITTED_ENTRY_COUNT) {
+    throw new Error(
+      `fixture precondition: leader commitIndex ${commitIndex}, expected ` +
+        `${COMMITTED_ENTRY_COUNT}`,
+    );
+  }
   return leader;
+}
+
+// The learner observing a newer term than the proof carries is the "leader
+// changed after proof collection" fact. The port is the learner's term
+// observable, so the witness decorates the observation, never the core:
+// readStatus reports `term`, every other operation is the real port's.
+// Returns the restore that reinstalls the real port.
+export function observeLearnerTerm(learner, term) {
+  const realPort = learner.raft;
+  learner.raft = createRaftOperationPort({
+    ...realPort,
+    readStatus: () => deepFreeze({...realPort.readStatus(), term}),
+  });
+  return () => {
+    learner.raft = realPort;
+  };
 }
 
 async function createLearner(transport, cache, options = {}) {

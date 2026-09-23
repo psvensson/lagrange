@@ -35,6 +35,7 @@ export class ControllablePartitionRaftProvider {
     this.role = options.role || RAFT_ROLE.FOLLOWER;
     this.term = options.term || 1;
     this.leaderId = options.leaderId || null;
+    this.leaderAddress = options.leaderAddress || null;
     this.peers = Array.isArray(options.peers) ?
       options.peers.map((peer) => ({...peer})) :
       [];
@@ -95,6 +96,7 @@ export class ControllablePartitionRaftProvider {
         commitIndex: 0,
         role: this.role,
         leaderId: this.leaderId,
+        leaderAddress: this.leaderAddress,
         peerCount: this.peers.length,
         peers: this.peers.map((peer) => deepFreeze({...peer})),
       }),
@@ -105,14 +107,33 @@ export class ControllablePartitionRaftProvider {
     });
   }
 
+  setTerm(term) {
+    this.term = term;
+  }
+
+  emitEvent(eventName, ...args) {
+    for (const listener of this.listeners.get(eventName) || []) {
+      listener(...args);
+    }
+  }
+
   setRole(role) {
     this.role = role;
     this.leaderId = role === RAFT_ROLE.LEADER ?
       this.request?.peerId || null :
       null;
-    for (const listener of this.listeners.get(role) || []) {
-      listener();
-    }
+    this.emitEvent(role);
+  }
+
+  emitLeaderChange(leaderId, leaderAddress = null) {
+    this.leaderId = leaderId;
+    this.leaderAddress = leaderAddress || leaderId;
+    this.emitEvent('leader change', leaderId);
+  }
+
+  setLeaderObservation(leaderId, leaderAddress) {
+    this.leaderId = leaderId;
+    this.leaderAddress = leaderAddress;
   }
 
   setProposeHandler(handler) {

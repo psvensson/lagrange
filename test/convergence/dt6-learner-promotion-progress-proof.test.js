@@ -2,7 +2,8 @@
  * Scenario 'learner-promotion-progress-proof' (quest
  * learner-promotion-progress-proof): a five-node recovery scenario over the
  * REAL owners — live PartitionService leader + learner on a loopback
- * transport with real liferaft replication, real proof RPC over the
+ * transport with real replication through the partition's Raft operation
+ * port (liferaft backend by default), real proof RPC over the
  * application-message channel, and the real promotion gate chain.
  *
  * FIDELITY: in-process deterministic guard (loopback transport, single
@@ -36,16 +37,13 @@ import {
   LEARNER_PROMOTION_PROOF_REASON,
 } from '../../src/raft/learner-promotion-progress.js';
 import {
-  FOLLOWER_MATCH_INDEX_STATE,
-  readFollowerMatchIndex,
-} from '../../src/raft/liferaft.js';
-import {
   COMMITTED_ENTRY_COUNT,
   LEARNER_ADDRESS,
   configureFixtureRuntime,
   createFiveNodeFixture,
   insertPublishedEpochRow,
   insertServiceRow,
+  observeLearnerTerm,
   resetFixtureRuntime,
   waitFor,
 } from './dt6-learner-promotion-fixture.js';
@@ -69,7 +67,7 @@ async (t) => {
   const {leader, learner, leaderTransport, deferrals} = fixture;
   try {
     t.equal(
-      leader.raftProvider.getCommittedIndex(leader.raft),
+      leader.raft.readStatus().commitIndex,
       COMMITTED_ENTRY_COUNT,
       'recovery precondition: the leader holds a committed prefix the ' +
         'learner does not have',
@@ -91,8 +89,8 @@ async (t) => {
         'not leader discovery or quorum shape',
     );
     t.equal(
-      readFollowerMatchIndex(leader.raft, LEARNER_ADDRESS).state,
-      FOLLOWER_MATCH_INDEX_STATE.UNAVAILABLE,
+      leader.raft.readStatus().followerProgress[LEARNER_ADDRESS],
+      undefined,
       'the leader holds no progress evidence for the partitioned learner',
     );
 
@@ -110,17 +108,14 @@ async (t) => {
       true,
       'the proven learner promotes within the retry cadence, not 30s',
     );
-    const matchObservation = readFollowerMatchIndex(
-      leader.raft,
-      LEARNER_ADDRESS,
-    );
-    t.equal(
-      matchObservation.state,
-      FOLLOWER_MATCH_INDEX_STATE.AVAILABLE,
+    const matchIndex =
+      leader.raft.readStatus().followerProgress[LEARNER_ADDRESS];
+    t.ok(
+      Number.isFinite(matchIndex),
       'promotion happened only after the leader observed learner progress',
     );
     t.ok(
-      matchObservation.matchIndex >= COMMITTED_ENTRY_COUNT,
+      matchIndex >= COMMITTED_ENTRY_COUNT,
       'the leader-observed match index covers the safe promotion index',
     );
     t.equal(
@@ -138,6 +133,7 @@ test('a term change after proof collection invalidates the proof ' +
 async (t) => {
   const fixture = await createFiveNodeFixture({startPartitioned: true});
   const {learner, leaderTransport} = fixture;
+  let restoreLearnerTerm = null;
   try {
     // Interleave: capture the REAL granted proof, then observe a newer term
     // before the validation runs — the exact "leader change after proof
@@ -145,7 +141,6 @@ async (t) => {
     const realRequest =
       learner.requestLearnerPromotionProofFromLeader.bind(learner);
     let staleInjected = false;
-    let observedGrantTerm = null;
     learner.requestLearnerPromotionProofFromLeader = async (observation) => {
       const proof = await realRequest(observation);
       if (
@@ -153,8 +148,7 @@ async (t) => {
         !staleInjected
       ) {
         staleInjected = true;
-        observedGrantTerm = proof.term;
-        learner.raft.term = proof.term + 1;
+        restoreLearnerTerm = observeLearnerTerm(learner, proof.term + 1);
       }
       return proof;
     };
@@ -179,14 +173,19 @@ async (t) => {
     );
 
     // Recovery: the learner observes the proof term again (the "new leader"
-    // proved it) — promotion completes through the same contract.
-    learner.raft.term = observedGrantTerm;
+    // proved it) — promotion completes through the same contract: the real
+    // port again reports the proof's term.
+    restoreLearnerTerm();
+    restoreLearnerTerm = null;
     const promoted = await waitFor(
       () => learner.role === RaftRole.FOLLOWER,
       PROMOTION_BUDGET_MS,
     );
     t.equal(promoted, true, 'promotion resumes once the term matches');
   } finally {
+    if (restoreLearnerTerm) {
+      restoreLearnerTerm();
+    }
     await fixture.shutdown();
   }
 });
@@ -240,14 +239,14 @@ async (t) => {
   const fixture = await createFiveNodeFixture({startPartitioned: true});
   const {leader, learner, leaderTransport} = fixture;
   try {
-    // Install-equivalent: seed the learner's log with the leader's full
-    // committed prefix out-of-band (the moral equivalent of a snapshot
-    // transfer), with NO further writes. Pure heartbeats carry no data, so
-    // the learner never acks on its own — the leader's progress probe must
-    // create the evidence.
+    // Install-equivalent: seed the learner's durable log, through its log
+    // owner, with the leader's full committed prefix out-of-band (the moral
+    // equivalent of a snapshot transfer), with NO further writes. Pure
+    // heartbeats carry no data, so the learner never acks on its own — the
+    // leader's progress probe must create the evidence.
     for (let index = 1; index <= COMMITTED_ENTRY_COUNT; index++) {
-      const entry = await leader.raft.log.get(index);
-      await learner.raft.log.saveCommand(entry.command, entry.term, entry.index);
+      const entry = await leader.logAdapter.get(index);
+      await learner.logAdapter.saveCommand(entry.command, entry.term, entry.index);
     }
     leaderTransport.state.dropToLearner = false;
 

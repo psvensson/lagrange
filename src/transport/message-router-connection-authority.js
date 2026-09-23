@@ -25,7 +25,10 @@ import {
   normalizeToWebSocketAddress,
 } from '../constants/transport.js';
 import {HOST, METRICS_LOG_TAG} from '../constants/index.js';
-import {isRaftPacket} from '../raft/raft-packet-utils.js';
+import {
+  isRaftPacket,
+  isRaftTransportPayload,
+} from '../raft/raft-packet-utils.js';
 import {
   ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
@@ -589,6 +592,7 @@ const MESSAGE_ROUTER_SHARED = {
   extractSqlOperationKind,
   extractSqlTableName,
   isRaftPacket,
+  isRaftTransportPayload,
   isSupersedableHeartbeatNodeStateUpdate,
   isSupersedableRaftAppendFail,
   isSupersedableRaftHeartbeatAppend,

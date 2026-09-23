@@ -53,7 +53,10 @@ import {
   CDC_PIPELINE_METRIC,
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
-import {isRaftPacket} from '../raft/raft-packet-utils.js';
+import {
+  isRaftPacket,
+  isRaftRsTransportEnvelope,
+} from '../raft/raft-packet-utils.js';
 import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
 import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
@@ -382,6 +385,7 @@ export const PARTITION_SERVICE_SHARED = {
   isMetadataPublicationLifecycleReady,
   isPriorityControlPlanePartition,
   isRaftPacket,
+  isRaftRsTransportEnvelope,
   isSystemTableWriteReady,
   normalizePublishedRaftRole,
   path,

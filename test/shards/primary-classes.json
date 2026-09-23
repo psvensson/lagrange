@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1889,
+    "unit": 1890,
     "integration": 75,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2153,
-  "digest": "fnv1a32-5b0e79e3",
+  "censusSize": 2154,
+  "digest": "fnv1a32-49a10eab",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1187,6 +1187,7 @@
     "test/partition/proposal-queue.test.js": "unit",
     "test/partition/raft-leadership-stability.property.test.js": "unit",
     "test/partition/raft-message-delivery.property.test.js": "unit",
+    "test/partition/raft-rs-transport-demux.test.js": "unit",
     "test/partition/range-integrity-validation.property.test.js": "unit",
     "test/partition/replica-operations-schema-migration.test.js": "unit",
     "test/partition/routing-key-comparator.test.js": "unit",

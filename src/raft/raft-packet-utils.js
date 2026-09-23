@@ -6,6 +6,7 @@
  */
 
 import {RAFT_PACKET_TYPES} from './constants.js';
+import {RAFT_RS_TRANSPORT_PROTOCOL} from './raft-rs-ingress-constants.js';
 
 /**
  * Detect if a payload is a native liferaft Raft packet.
@@ -24,7 +25,28 @@ function isRaftPacket(payload) {
   );
 }
 
+function isRaftRsTransportEnvelope(payload) {
+  return Boolean(
+    payload &&
+    payload.protocol === RAFT_RS_TRANSPORT_PROTOCOL &&
+    typeof payload.groupId === 'string' &&
+    payload.groupId.length > 0 &&
+    typeof payload.from === 'string' &&
+    payload.from.length > 0 &&
+    typeof payload.to === 'string' &&
+    payload.to.length > 0 &&
+    payload.message &&
+    typeof payload.message === 'object',
+  );
+}
+
+function isRaftTransportPayload(payload) {
+  return isRaftPacket(payload) || isRaftRsTransportEnvelope(payload);
+}
+
 export {
   RAFT_PACKET_TYPES,
   isRaftPacket,
+  isRaftRsTransportEnvelope,
+  isRaftTransportPayload,
 };

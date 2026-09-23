@@ -14,7 +14,6 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
-import LifeRaft from '../../src/raft/liferaft.js';
 import {
   requestSnapshotInstall,
   resolveReplicaCheckpointsRoot,
@@ -150,11 +149,11 @@ function buildService(router, {replicaId, replicaIds, dbPath}) {
   });
 }
 
-// Manual leader promotion — the production single-replica precedent
-// (partition-service-raft-init-base.js): no live election timers anywhere.
+// Manual leader promotion through the Raft operation port's campaign — the
+// production single-replica precedent (partition-service-raft-init-base.js
+// calls this.raft.campaign()): no live election timers anywhere.
 function promoteLeader(service) {
-  service.raft.change({state: LifeRaft.LEADER});
-  service.raft.leader = service.getUnifiedAddress();
+  service.raft.campaign();
 }
 
 // Commit+apply one production INSERT envelope on the leader WITHOUT quorum
@@ -175,9 +174,12 @@ function commitLeaderInsert(service, ordinal) {
   return entry;
 }
 
-async function driveHeartbeat(service) {
-  const heartbeat = await service.raft.packet('append');
-  service.raft.message(LifeRaft.FOLLOWER, heartbeat);
+// Drive one leader append to `peerAddress` through the Raft operation port's
+// probePeerProgress: the leader sends its last entry as an append packet, and
+// a behind or installed follower answers through the same append-fail ->
+// catch-up route a heartbeat triggers.
+async function driveHeartbeat(service, peerAddress) {
+  await service.raft.probePeerProgress(peerAddress);
 }
 
 function readStateRows(db) {
@@ -223,7 +225,7 @@ test('a fresh follower behind an installed leader recovers end to end',
       leader = buildService(router,
         {replicaId: leaderReplicaId, replicaIds, dbPath: leaderDbPath});
       await leader.initialize();
-      t.equal(leader.raft.term, TERM,
+      t.equal(leader.raft.readStatus().term, TERM,
         'recorded gap: the live raft term is boot-seeded from durable ' +
         'currentTerm on the installed leader');
       follower = buildService(router,
@@ -241,7 +243,7 @@ test('a fresh follower behind an installed leader recovers end to end',
       // The append-fail cycle emits the typed decision through the seam.
       const decisions = [];
       leader.onSnapshotCatchupNeeded = (decision) => decisions.push(decision);
-      await driveHeartbeat(leader);
+      await driveHeartbeat(leader, follower.getUnifiedAddress());
       await waitFor(() => decisions.length > 0, 'install_snapshot decision');
       t.equal(decisions[0].outcome,
         RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
@@ -302,7 +304,7 @@ test('a fresh follower behind an installed leader recovers end to end',
         'the replacement is handed to registerReplacementService');
       t.equal(follower.isShutdown, true,
         'the old service instance is shut down, never re-initialized');
-      t.equal(replacement.raft.term, TERM,
+      t.equal(replacement.raft.readStatus().term, TERM,
         'the recreated follower raft term equals the durable currentTerm');
       t.equal(
         Number(readRaftStateValue(replacement.db,
@@ -311,7 +313,7 @@ test('a fresh follower behind an installed leader recovers end to end',
         'the recreated follower boots at the installed boundary');
 
       // Resume: the next leader append-fail cycle batches boundary+1..head.
-      await driveHeartbeat(leader);
+      await driveHeartbeat(leader, replacement.getUnifiedAddress());
       await waitFor(
         () => replacement.logAdapter.getCommittedIndex() === HEAD_INDEX,
         'follower commits through the leader head');
@@ -386,12 +388,12 @@ test('scenario (a) regression: an installed follower resumes against a ' +
     leader = buildService(router,
       {replicaId: leaderReplicaId, replicaIds, dbPath: leaderDbPath});
     await leader.initialize();
-    t.equal(leader.raft.term, TERM,
+    t.equal(leader.raft.readStatus().term, TERM,
       'the durable currentTerm row seeds the full-log leader term too');
     follower = buildService(router,
       {replicaId: followerReplicaId, replicaIds, dbPath: followerDbPath});
     await follower.initialize();
-    t.equal(follower.raft.term, TERM,
+    t.equal(follower.raft.readStatus().term, TERM,
       'the installed follower raft term is boot-seeded');
     promoteLeader(leader);
     for (let ordinal = 1; ordinal <= EXTRA_ENTRY_COUNT; ordinal += 1) {
@@ -400,15 +402,14 @@ test('scenario (a) regression: an installed follower resumes against a ' +
 
     const decisions = [];
     leader.onSnapshotCatchupNeeded = (decision) => decisions.push(decision);
-    await driveHeartbeat(leader);
+    await driveHeartbeat(leader, follower.getUnifiedAddress());
     await waitFor(
       () => follower.logAdapter.getCommittedIndex() === HEAD_INDEX,
       'installed follower commits through the full-log leader head');
 
     t.same(decisions, [],
-      'a boundary-0 leader never emits a catch-up decision (no dispatch)');
-    t.equal(leader.raft._lastSnapshotCatchupDecision, undefined,
-      'no decision is recorded on the leader instance either');
+      'a boundary-0 leader never emits a catch-up decision (no dispatch); ' +
+      'the typed callback is the only observable');
     t.equal(
       follower.db.prepare(
         'SELECT MIN(log_index) AS m FROM _raft_log').get().m,

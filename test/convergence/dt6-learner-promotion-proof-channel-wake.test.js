@@ -673,7 +673,7 @@ test(
           learnerReplicaId: FOREIGN_LEARNER_REPLICA,
           proof: evaluateLearnerPromotionProof({
             raftIsLeader: true,
-            currentTerm: leader.raft.term,
+            currentTerm: leader.raft.readStatus().term,
             committedIndex: COMMITTED_ENTRY_COUNT,
             learnerMatchIndex: COMMITTED_ENTRY_COUNT,
             leaderMembershipEpoch: BOOTSTRAP_EPOCH,

@@ -117,12 +117,11 @@ function createTrackedHandler(replicaIds) {
     return originalExecuteWriteEntry(entry, emitCdc);
   };
 
-  // For multi-replica: mock raft.command to simulate Raft consensus.
-  // After raft.command is called, we simulate the commit event by
-  // calling applyCommittedEntry and then resolveCommit.
+  // For multi-replica: mock operation-port propose() to simulate Raft
+  // consensus. After propose() is called, simulate the commit callback.
   handler.raft = {
-    command: (entry) => {
-      callLog.push({method: 'raft.command', entryId: entry.entryId});
+    propose: (entry) => {
+      callLog.push({method: 'raft.propose', entryId: entry.entryId});
       // Simulate async Raft commit: call applyCommittedEntry then
       // resolve the pending commit (mimicking PartitionService).
       Promise.resolve().then(() => {
@@ -133,7 +132,7 @@ function createTrackedHandler(replicaIds) {
           partitionId: 'p-test',
         });
       });
-      return Promise.resolve();
+      return Promise.resolve({outcome: 'CORE_OK'});
     },
   };
 
@@ -185,7 +184,7 @@ test('Property 7: Unified write path through applyCommittedEntry',
 
     /**
      * Property: For any write entry on a multi-replica handler,
-     * applyWrite SHALL propose through Raft (raft.command) and the
+     * applyWrite SHALL propose through the Raft operation port and the
      * commit event SHALL trigger applyCommittedEntry.
      */
     t.test(
@@ -201,9 +200,9 @@ test('Property 7: Unified write path through applyCommittedEntry',
 
               await handler.applyWrite({...entry});
 
-              // raft.command must have been called
+              // operation-port propose() must have been called
               const raftCalls = callLog.filter(
-                (c) => c.method === 'raft.command',
+                (c) => c.method === 'raft.propose',
               );
               if (raftCalls.length !== 1) return false;
 
@@ -214,9 +213,9 @@ test('Property 7: Unified write path through applyCommittedEntry',
               );
               if (committedCalls.length !== 1) return false;
 
-              // raft.command must come before applyCommittedEntry
+              // propose() must come before applyCommittedEntry
               const raftIdx = callLog.findIndex(
-                (c) => c.method === 'raft.command',
+                (c) => c.method === 'raft.propose',
               );
               const committedIdx = callLog.findIndex(
                 (c) => c.method === 'applyCommittedEntry',

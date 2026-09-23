@@ -15,21 +15,35 @@ import {
 } from './raft-rs-core-constants.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {admitRaftRsMessage} from './raft-rs-ingress.js';
+import {RAFT_RS_TRANSPORT_PROTOCOL} from './raft-rs-ingress-constants.js';
 import {
   RAFT_RS_CONF_CHANGE_ENTRY_TYPES,
 } from './raft-rs-ready-loop-constants.js';
 import {
-  RAFT_RS_GROUP_TUNING,
   RAFT_RS_INITIAL_APPLIED,
   RAFT_RS_READY_DRAIN_MAX_CYCLES,
 } from './raft-rs-group-constants.js';
+import {
+  CORE_CALL_WITHOUT_HANDLE,
+  CORE_OPERATION,
+  CORE_REFUSAL_KIND,
+  HEALTHY,
+  NO_LEADER,
+  PEER_ADDRESS_STATUS,
+  RECOVERY_REQUIRED,
+  ROLE,
+  RUNTIME_COMMAND,
+  RUNTIME_EVENT,
+  RUNTIME_PHASE,
+  RUNTIME_REASON,
+  UNHEALTHY,
+  USABLE,
+} from './raft-rs-runtime-owner-constants.js';
+import {tuningOf} from './raft-rs-runtime-tuning.js';
 import {applyCommittedEntryTransaction} from
   './raft-rs-application-transaction-owner.js';
 import {deepFreeze} from './raft-operation-port.js';
-import {
-  RAFT_EVENT,
-  RAFT_OPERATION_OUTCOME,
-} from './raft-operation-port-constants.js';
+import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 
 const {
   CORE_OK,
@@ -37,66 +51,6 @@ const {
   CORE_FATAL,
   HOST_FAILURE,
 } = RAFT_OPERATION_OUTCOME;
-const HEALTHY = 'healthy';
-const UNHEALTHY = 'unhealthy';
-const USABLE = 'usable';
-const RECOVERY_REQUIRED = 'recovery-required';
-const NO_LEADER = '0';
-const CORE_REFUSAL_KIND = 'raft-rs-refusal';
-const ROLE = Object.freeze({
-  0: 'follower',
-  1: 'candidate',
-  2: 'leader',
-  3: 'pre-candidate',
-});
-const CORE_CALL_WITHOUT_HANDLE = new Set([
-  'create_node',
-  'decode_conf_change_entry',
-]);
-const CORE_OPERATION = Object.freeze({CONF_STATE: 'conf_state'});
-const RUNTIME_COMMAND = Object.freeze({
-  READ_STATUS: 'read-status',
-  CAMPAIGN: 'campaign',
-});
-const RUNTIME_EVENT = Object.freeze({
-  TERM_CHANGE: RAFT_EVENT.TERM_CHANGE,
-  LEADER_CHANGE: RAFT_EVENT.LEADER_CHANGE,
-});
-const PEER_ADDRESS_STATUS = Object.freeze({
-  RESOLVED: 'resolved',
-  UNAVAILABLE: 'unavailable',
-});
-const RUNTIME_PHASE = Object.freeze({
-  GENERATION_CHANGED: 'runtime-generation-changed',
-  BOOTSTRAP_PERSISTENCE: 'bootstrap-persistence',
-  ADDRESS_RESOLUTION: 'address-resolution',
-  SEND: 'send',
-  SEND_NO_HANDLER: 'send-no-handler',
-  APPLICATION: 'application',
-  READY_DRAIN: 'ready-drain',
-  READY_PERSISTENCE: 'ready-persistence',
-  CAMPAIGN_ELIGIBILITY: 'campaign-eligibility',
-  DISPATCH: 'dispatch',
-  ADMISSION: 'admission',
-});
-const RUNTIME_REASON = Object.freeze({
-  CORE_REFUSED: 'core-refused',
-  GENERATION_CHANGED:
-    'execution generation changed while host work was pending',
-  RESTORED: 'restored',
-  CREATED: 'created',
-  RUNTIME_RECONSTRUCTED: 'runtime-reconstructed',
-  EXECUTION_USABLE: 'execution-usable',
-  ENTRIES_APPLIED: 'entries-applied',
-  READY_DRAIN_BOUND_EXCEEDED: 'ready drain bound exceeded',
-  DRAINED: 'drained',
-  UNKNOWN: 'unknown',
-  NOT_ACTIVE_VOTER: 'not-an-active-voter',
-  UNKNOWN_OPERATION: 'unknown-operation',
-  INBOUND_ENQUEUED: 'inbound-enqueued',
-  CLOSED_WITHOUT_CORE_ENTRY: 'closed-without-core-entry',
-  CLOSED: 'closed',
-});
 const REPOSITORY_ROOT = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   RAFT_RS_WASM_FILE.PARENT_OF_SOURCE_ROOT,
@@ -247,23 +201,6 @@ function invokeCoreAt(group, expectedGeneration, operation, ...args) {
   return invokeCore(group, operation, ...args);
 }
 
-function tuningOf(timing = {}) {
-  const heartbeatMs = Number(timing.heartbeatMs);
-  const electionMinMs = Number(timing.electionMinMs);
-  const tickIntervalMs = Number(timing.tickIntervalMs);
-  const heartbeatTick = RAFT_RS_GROUP_TUNING.HEARTBEAT_TICK;
-  const derivedTickMs = Number.isFinite(tickIntervalMs) && tickIntervalMs > 0 ?
-    tickIntervalMs : Math.max(1, Math.floor(heartbeatMs / heartbeatTick));
-  return {
-    electionTick: Number.isFinite(electionMinMs) ?
-      Math.max(heartbeatTick + 1, Math.ceil(electionMinMs / derivedTickMs)) :
-      RAFT_RS_GROUP_TUNING.ELECTION_TICK,
-    heartbeatTick,
-    preVote: RAFT_RS_GROUP_TUNING.PRE_VOTE,
-    checkQuorum: RAFT_RS_GROUP_TUNING.CHECK_QUORUM,
-  };
-}
-
 function createNodeArguments(group, restore) {
   const base = {
     id: group.peerId,
@@ -381,7 +318,9 @@ function sendMessages(group, messages, index = 0) {
   let delivered;
   try {
     delivered = group.sendToPeer(address, {
+      protocol: RAFT_RS_TRANSPORT_PROTOCOL,
       groupId: group.groupId,
+      from: message.from,
       to: message.to,
       message,
     });
