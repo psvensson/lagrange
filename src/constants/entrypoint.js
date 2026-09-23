@@ -129,6 +129,19 @@ const ENTRYPOINT_LOG_MSG = Object.freeze({
   SHUTDOWN: 'Shutting down...',
 });
 
+// What a dry run concluded. A dry run validates the deployment layout, and a
+// layout whose vendored consensus binding is unavailable is a packaging defect
+// whichever Raft provider is selected, so that is a named failure of its own.
+const ENTRYPOINT_DRY_RUN_OUTCOME = Object.freeze({
+  COMPLETED: 'completed',
+  BINDING_UNAVAILABLE: 'binding-unavailable',
+});
+// The process exit each dry-run outcome ends in.
+const ENTRYPOINT_DRY_RUN_EXIT_CODE = Object.freeze({
+  [ENTRYPOINT_DRY_RUN_OUTCOME.COMPLETED]: 0,
+  [ENTRYPOINT_DRY_RUN_OUTCOME.BINDING_UNAVAILABLE]: 1,
+});
+
 const ENTRYPOINT_ERROR_MSG = Object.freeze({
   SYSTEM_TABLE_CACHE_REQUIRED: 'System table cache required after join',
   LIVE_QUERY_MANAGER_REQUIRED: 'Live query manager required during startup',
@@ -182,6 +195,8 @@ const ENTRYPOINT_TEXT = Object.freeze({
 export {
   ENTRYPOINT_APP,
   ENTRYPOINT_DEFAULT,
+  ENTRYPOINT_DRY_RUN_EXIT_CODE,
+  ENTRYPOINT_DRY_RUN_OUTCOME,
   ENTRYPOINT_ERROR_MSG,
   ENTRYPOINT_ENV,
   ENTRYPOINT_FLAG,

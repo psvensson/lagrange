@@ -1,8 +1,12 @@
 import fs from 'fs';
 import path from 'path';
+import {fileURLToPath} from 'url';
 
 const LOCAL_NUM_TEN = 10;
 const LOCAL_STR_STRING = 'string';
+// An ES module's stack frames name their file as a URL, a CommonJS bundle's
+// as a path; the directory this owner returns is always a path.
+const FILE_URL_SCHEME = 'file:';
 
 /**
  * Resolve the directory of the calling module without relying on import.meta.
@@ -25,7 +29,8 @@ function resolveModuleDirectory(skipFn) {
     for (const frame of stack) {
       const fileName = frame?.getFileName?.();
       if (typeof fileName === LOCAL_STR_STRING && fileName.length > 0) {
-        return path.dirname(fileName);
+        return path.dirname(fileName.startsWith(FILE_URL_SCHEME) ?
+          fileURLToPath(fileName) : fileName);
       }
     }
   } finally {

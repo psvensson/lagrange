@@ -15,6 +15,7 @@ import {
   CORE_OK,
   CORE_REFUSED,
   createRuntimeDispatcher,
+  verifyRaftRsBinding,
 } from './raft-rs-runtime-owner.js';
 
 const EVENTS = new Set([
@@ -279,4 +280,7 @@ function createRaftRsOperationPort(request) {
   return port;
 }
 
-export {createRaftRsOperationPort};
+// The runtime owner is private to this constructor (the operation-boundary
+// audit), so the binding verdict a dry run reports is passed through here: a
+// digest and load check that returns a state and never dispatches.
+export {createRaftRsOperationPort, verifyRaftRsBinding};

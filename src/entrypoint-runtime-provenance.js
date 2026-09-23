@@ -5,7 +5,14 @@ import {
   SOURCE_FINGERPRINT_ENV_VAR,
 } from './diagnostics/source-fingerprint.js';
 import {resolveAutoRejoinStartupDecision} from './bootstrap/rejoin-hints.js';
-import {ENTRYPOINT_REJOIN_DEFAULT} from './constants/entrypoint.js';
+import {
+  ENTRYPOINT_DRY_RUN_EXIT_CODE,
+  ENTRYPOINT_DRY_RUN_OUTCOME,
+  ENTRYPOINT_LOG_MSG,
+  ENTRYPOINT_REJOIN_DEFAULT,
+} from './constants/entrypoint.js';
+import {RAFT_RS_BINDING_STATE} from './raft/raft-rs-core-constants.js';
+import {verifyRaftRsBinding} from './raft/raft-rs-operation-port.js';
 
 async function resolveLocalClusterIncarnationFence(options = {}) {
   const startupDecision = await resolveAutoRejoinStartupDecision({
@@ -35,6 +42,35 @@ async function resolveBootSourceProvenance(env = process.env) {
   return {expectedSrcFingerprint, bootedSrcFingerprint, srcFingerprintMatches};
 }
 
+/**
+ * Decide and report a dry run: the node and data directory it validated, the
+ * Raft provider the process selected, and the raft-rs binding's own verdict
+ * on the binding this artifact carries (present, matching its digests and
+ * loadable). A dry run validates the deployment layout, so an unavailable
+ * binding is its named failure whichever provider is selected: it is logged
+ * at error level and ends the process non-zero.
+ * @param {Object} options
+ * @param {Object} options.logger
+ * @param {string} options.nodeId
+ * @param {string} options.dataDir
+ * @param {string} options.provider
+ * @return {{dryRun: boolean, dryRunOutcome: string, exitCode: number}}
+ */
+function reportDryRunCompletion({logger, nodeId, dataDir, provider}) {
+  const raftRsBinding = verifyRaftRsBinding();
+  const dryRunOutcome = raftRsBinding.state === RAFT_RS_BINDING_STATE.VERIFIED ?
+    ENTRYPOINT_DRY_RUN_OUTCOME.COMPLETED :
+    ENTRYPOINT_DRY_RUN_OUTCOME.BINDING_UNAVAILABLE;
+  const report = {nodeId, dataDir, provider, raftRsBinding, dryRunOutcome};
+  if (dryRunOutcome === ENTRYPOINT_DRY_RUN_OUTCOME.COMPLETED) {
+    logger.info(ENTRYPOINT_LOG_MSG.DRY_RUN_COMPLETED, report);
+  } else {
+    logger.error(ENTRYPOINT_LOG_MSG.DRY_RUN_COMPLETED, report);
+  }
+  return Object.freeze({dryRun: true, dryRunOutcome,
+    exitCode: ENTRYPOINT_DRY_RUN_EXIT_CODE[dryRunOutcome]});
+}
+
 function resolveJoinReattemptPolicy(env = process.env) {
   const configuredMaxAttempts = Number(env.LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS);
   return Object.freeze({
@@ -49,6 +85,7 @@ function resolveJoinReattemptPolicy(env = process.env) {
 }
 
 export {
+  reportDryRunCompletion,
   resolveBootSourceProvenance,
   resolveJoinReattemptPolicy,
   resolveLocalClusterIncarnationFence,

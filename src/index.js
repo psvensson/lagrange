@@ -39,7 +39,11 @@ async function main() {
     configuration: Object.freeze(Object.create(null)),
     environment,
   });
-  if (runtime.dryRun === true) return;
+  if (runtime.dryRun === true) {
+    // The dry run's own verdict decides the exit; nothing else runs after it.
+    process.exitCode = runtime.exitCode;
+    return;
+  }
 
   registerProcessLifecycleDiagnostics(runtime.logger, () => ({
     nodeId: runtime.nodeId,

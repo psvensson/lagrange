@@ -2,9 +2,12 @@ import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import {createRequire} from 'node:module';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
 
+import {resolveModuleDirectory, resolvePackagedRuntimeFile} from
+  '../sea/runtime-file-resolution.js';
 import {
+  RAFT_RS_BINDING_LAYOUT,
+  RAFT_RS_BINDING_STATE,
   RAFT_RS_CORE_ERROR_MSG,
   RAFT_RS_CORE_PRIMITIVES,
   RAFT_RS_DIGEST_ALGORITHM,
@@ -45,28 +48,21 @@ import {applyCommittedEntryTransaction} from
 import {deepFreeze} from './raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 
-const {
-  CORE_OK,
-  CORE_REFUSED,
-  CORE_FATAL,
-  HOST_FAILURE,
-} = RAFT_OPERATION_OUTCOME;
-const REPOSITORY_ROOT = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  RAFT_RS_WASM_FILE.PARENT_OF_SOURCE_ROOT,
-  RAFT_RS_WASM_FILE.PARENT_OF_SOURCE_ROOT,
-);
-const BINDING_ROOT = path.join(
-  REPOSITORY_ROOT,
-  RAFT_RS_WASM_FILE.VENDOR_DIRECTORY,
-  RAFT_RS_WASM_FILE.DIRECTORY,
-);
-const PACKAGE_ROOT = path.join(
-  BINDING_ROOT, RAFT_RS_WASM_FILE.PACKAGE_DIRECTORY);
-const GLUE_FILE = path.join(PACKAGE_ROOT, RAFT_RS_WASM_FILE.GLUE);
-const WASM_FILE = path.join(PACKAGE_ROOT, RAFT_RS_WASM_FILE.WASM);
-const DIGEST_FILE = path.join(BINDING_ROOT, RAFT_RS_WASM_FILE.DIGEST);
-const requireBinding = createRequire(import.meta.url);
+const {CORE_OK, CORE_REFUSED, CORE_FATAL, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
+
+// Resolved when the core is first needed, never at module load: the resolver
+// owns where source, the dist bundle and the SEA executable keep the binding.
+function bindingFiles() {
+  const {DIGEST_FROM_ROOT, SOURCE_ROOT_FROM_OWNER} = RAFT_RS_BINDING_LAYOUT;
+  const digest = resolvePackagedRuntimeFile({
+    moduleDir: resolveModuleDirectory(resolveModuleDirectory),
+    sourceFileName: path.join(...SOURCE_ROOT_FROM_OWNER, ...DIGEST_FROM_ROOT),
+    bundledFileName: path.join(...DIGEST_FROM_ROOT),
+  });
+  const pkg = path.join(path.dirname(digest), RAFT_RS_WASM_FILE.PACKAGE_DIRECTORY);
+  return {digest, glue: path.join(pkg, RAFT_RS_WASM_FILE.GLUE),
+    wasm: path.join(pkg, RAFT_RS_WASM_FILE.WASM)};
+}
 
 function fileDigest(file) {
   return createHash(RAFT_RS_DIGEST_ALGORITHM)
@@ -74,11 +70,11 @@ function fileDigest(file) {
     .digest(RAFT_RS_DIGEST_ENCODING);
 }
 
-function assertArtifactIntegrity() {
-  const digest = JSON.parse(fs.readFileSync(DIGEST_FILE, 'utf8'));
+function assertArtifactIntegrity(binding) {
+  const digest = JSON.parse(fs.readFileSync(binding.digest, 'utf8'));
   const files = [
-    [RAFT_RS_WASM_FILE.WASM, WASM_FILE, digest[RAFT_RS_DIGEST_KEY.WASM]],
-    [RAFT_RS_WASM_FILE.GLUE, GLUE_FILE, digest[RAFT_RS_DIGEST_KEY.GLUE]],
+    [RAFT_RS_WASM_FILE.WASM, binding.wasm, digest[RAFT_RS_DIGEST_KEY.WASM]],
+    [RAFT_RS_WASM_FILE.GLUE, binding.glue, digest[RAFT_RS_DIGEST_KEY.GLUE]],
   ];
   for (const [name, file, recorded] of files) {
     const actual = fileDigest(file);
@@ -105,10 +101,25 @@ function facadeOf(binding) {
   return Object.freeze(facade);
 }
 
-function instantiateRaftRsCore() {
-  assertArtifactIntegrity();
-  delete requireBinding.cache[requireBinding.resolve(GLUE_FILE)];
-  return facadeOf(requireBinding(GLUE_FILE));
+function instantiateRaftRsCore(binding = bindingFiles()) {
+  assertArtifactIntegrity(binding);
+  const requireBinding = createRequire(binding.glue);
+  delete requireBinding.cache[requireBinding.resolve(binding.glue)];
+  return facadeOf(requireBinding(binding.glue));
+}
+
+// The core's own integrity check and load, answered as a state for the dry
+// run; the loaded facade is discarded and never entered.
+function verifyRaftRsBinding() {
+  const binding = bindingFiles();
+  const found = {digestFile: binding.digest};
+  try {
+    instantiateRaftRsCore(binding);
+    return deepFreeze({state: RAFT_RS_BINDING_STATE.VERIFIED, ...found});
+  } catch (error) {
+    return deepFreeze({state: RAFT_RS_BINDING_STATE.UNAVAILABLE, ...found,
+      reason: String(error?.message || error)});
+  }
 }
 
 let core = null;
@@ -784,4 +795,5 @@ export {
   CORE_REFUSED,
   createRuntimeDispatcher,
   setActualCoreEntryObserver,
+  verifyRaftRsBinding,
 };

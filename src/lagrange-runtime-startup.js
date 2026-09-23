@@ -51,6 +51,7 @@ import {
   resolveSeedContactUrls,
 } from './entrypoint-runtime-join-decision.js';
 import {
+  reportDryRunCompletion,
   resolveBootSourceProvenance,
   resolveJoinReattemptPolicy,
   resolveLocalClusterIncarnationFence,
@@ -736,12 +737,9 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
   );
 
   if (cliArgs.dryRun) {
-    mainLogger.info(ENTRYPOINT_LOG_MSG.DRY_RUN_COMPLETED, {
+    return reportDryRunCompletion({logger: mainLogger,
       nodeId: config.get(CONFIG_KEY.NODE_ID),
-      dataDir: dataDirectoryManager.getDataDir(),
-      provider: selectedRaftProvider,
-    });
-    return Object.freeze({dryRun: true});
+      dataDir: dataDirectoryManager.getDataDir(), provider: selectedRaftProvider});
   }
 
   const startupJoinDecision = await awaitStartupAcquisition(resolveStartupJoinDecision({

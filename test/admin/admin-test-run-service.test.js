@@ -4,11 +4,14 @@
 
 import {EventEmitter} from 'node:events';
 import {access, mkdtemp, mkdir, rm, writeFile} from 'node:fs/promises';
+import {createRequire} from 'node:module';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {URL} from 'node:url';
+import {URL, fileURLToPath} from 'node:url';
+import * as esbuild from 'esbuild';
 import {test} from '../../src/test-helpers/tap.js';
 import {AdminTestRunService} from '../../src/admin/admin-test-run-service.js';
+import {ADMIN_TEST_RUN_PATH} from '../../src/admin/admin-constants.js';
 
 const FILE_ENCODING = 'utf8';
 const TMP_PREFIX = 'lagrange-admin-test-run-';
@@ -634,4 +637,44 @@ test('AdminTestRunService - deleteRun removes historical metadata and report', a
   } finally {
     await rm(workspace, {recursive: true, force: true});
   }
+});
+
+// Every node the SEA bundle starts constructs this service (the admin API's
+// startup composition), and a CommonJS bundle leaves import.meta empty. The
+// witness bundles the module as scripts/build-sea.js bundles the main system
+// (CommonJS, platform node) and constructs it from that bundle.
+test('AdminTestRunService - constructs from a CommonJS bundle', async (t) => {
+  const workspace = await createWorkspace();
+  const bundleDir = await mkdtemp(join(tmpdir(), TMP_PREFIX));
+  t.teardown(async () => {
+    await rm(workspace, {recursive: true, force: true});
+    await rm(bundleDir, {recursive: true, force: true});
+  });
+  const source = new AdminTestRunService({workspaceRoot: workspace});
+  t.match(await source.readDashboardPage(), /<html/iu,
+    'from source the service reads the dashboard page beside its module');
+
+  const bundleFile = join(bundleDir, 'admin-test-run-service.bundle.cjs');
+  await esbuild.build({
+    entryPoints: [fileURLToPath(new URL(
+      '../../src/admin/admin-test-run-service.js', import.meta.url))],
+    bundle: true, platform: 'node', format: 'cjs', outfile: bundleFile,
+    logLevel: 'silent',
+  });
+  const BundledService =
+    createRequire(import.meta.url)(bundleFile).AdminTestRunService;
+  let bundled = null;
+  let constructionFailure = null;
+  try {
+    bundled = new BundledService({workspaceRoot: workspace});
+  } catch (error) {
+    constructionFailure = error.message;
+  }
+  t.equal(constructionFailure, null,
+    'the CommonJS bundle constructs the service');
+  t.equal(bundled?.dashboardPath,
+    join(bundleDir, ADMIN_TEST_RUN_PATH.DASHBOARD_PAGE),
+    'the bundled service looks for its dashboard page beside the bundle');
+  await t.rejects(async () => bundled.readDashboardPage(), {code: 'ENOENT'},
+    'no page is staged there, so the read reports the page missing');
 });

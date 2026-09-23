@@ -13,8 +13,11 @@ import {
   validatePgwireRuntimeConfig,
 } from '../../src/runtime/pgwire-descriptor.js';
 import {PGWIRE_DEFAULT} from '../../src/runtime/pgwire-runtime-module.js';
+import {RAFT_RS_BINDING_LAYOUT} from '../../src/raft/raft-rs-core-constants.js';
 
 const UTF8 = 'utf8';
+const RUNTIME_IMAGE_STAGE = /^FROM \S+ AS runtime$/mu;
+const CONTEXT_COPY = /^COPY (?!--from)\S+ \S+$/gmu;
 const PINNED_ACTION_PATTERN = /^[^@\s]+@[a-f0-9]{40}$/u;
 const ACTION_REFERENCE_PATTERN = /^\s*uses:\s*(\S+)/gmu;
 const GOLDEN_CAPABILITY_GATE_COMMAND_ID =
@@ -363,6 +366,29 @@ describe('project hardening contracts', () => {
       /codeberg|forgejo|\.forgejo/iu,
     );
   });
+
+  it('ships the vendored raft-rs binding in the runtime image beside src/',
+    async () => {
+      const [dockerfile, dockerignore] = await Promise.all([
+        readFile('Dockerfile', UTF8),
+        readFile('.dockerignore', UTF8),
+      ]);
+      // The runtime owner resolves the binding at the layout root the
+      // constants name, relative to the directory that holds src/; the image
+      // must carry it there or the rs-raft backend cannot load in it.
+      const bindingRoot = `${RAFT_RS_BINDING_LAYOUT.ROOT.join('/')}/`;
+      const runtimeStage = dockerfile.slice(
+        dockerfile.search(RUNTIME_IMAGE_STAGE));
+      const contextCopies = runtimeStage.match(CONTEXT_COPY) || [];
+      assert.ok(contextCopies.includes('COPY src/ ./src/'),
+        'the runtime stage copies src/ from the build context');
+      assert.ok(contextCopies.includes(`COPY ${bindingRoot} ./${bindingRoot}`),
+        'the runtime stage copies the binding layout root beside src/');
+      const admitted = dockerignore.split('\n').map((line) => line.trim());
+      assert.ok(admitted.includes(`!${bindingRoot}`) &&
+        admitted.includes(`!${bindingRoot}**`),
+      'the build context admits the binding layout root');
+    });
 });
 
 // One contract, not four flags: a prerelease semver tag (0.2.4-rc.0) must

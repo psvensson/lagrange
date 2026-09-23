@@ -26,6 +26,36 @@ const RAFT_RS_WASM_FILE = Object.freeze({
   FORK_SOURCE_FILE: 'lib.rs',
 });
 
+// Where the binding sits relative to the root that carries it: the repository
+// in a source checkout (SOURCE_ROOT_FROM_OWNER above the runtime owner's own
+// directory), and the directory of the bundle or the SEA executable in the
+// packaged layouts, where scripts/build-sea.js stages STAGED_ENTRIES at this
+// same ROOT. The runtime owner finds it through the SEA runtime-file resolver
+// (src/sea/runtime-file-resolution.js), whose search order is exactly those
+// roots; neither the owner nor the bundler spells the layout itself.
+const RAFT_RS_BINDING_ROOT = Object.freeze([
+  RAFT_RS_WASM_FILE.VENDOR_DIRECTORY, RAFT_RS_WASM_FILE.DIRECTORY]);
+const RAFT_RS_BINDING_LAYOUT = Object.freeze({
+  ROOT: RAFT_RS_BINDING_ROOT,
+  DIGEST_FROM_ROOT: Object.freeze([
+    ...RAFT_RS_BINDING_ROOT, RAFT_RS_WASM_FILE.DIGEST]),
+  SOURCE_ROOT_FROM_OWNER: Object.freeze([
+    RAFT_RS_WASM_FILE.PARENT_OF_SOURCE_ROOT,
+    RAFT_RS_WASM_FILE.PARENT_OF_SOURCE_ROOT]),
+  // What the runtime owner reads: the digest, and the wasm-pack package whose
+  // own package.json keeps the glue CommonJS under an ESM root.
+  STAGED_ENTRIES: Object.freeze([
+    RAFT_RS_WASM_FILE.DIGEST, RAFT_RS_WASM_FILE.PACKAGE_DIRECTORY]),
+});
+
+// Whether the binding a layout carries is present, matches its recorded
+// digests and exposes exactly the primitive facade: the runtime owner's
+// verdict, never inferred from a missing file or a thrown error.
+const RAFT_RS_BINDING_STATE = Object.freeze({
+  VERIFIED: 'verified',
+  UNAVAILABLE: 'unavailable',
+});
+
 // The primitives phase 1 carries forward. Create/restore, the tick, the
 // message step, the proposal, the Ready and LightReady lifecycle, the advance
 // of append and apply, the status, the export of durable state, and the
@@ -91,6 +121,8 @@ const RAFT_RS_CORE_ERROR_MSG = Object.freeze({
 });
 
 export {
+  RAFT_RS_BINDING_LAYOUT,
+  RAFT_RS_BINDING_STATE,
   RAFT_RS_CORE_ERROR_MSG,
   RAFT_RS_CORE_PRIMITIVES,
   RAFT_RS_DIGEST_ALGORITHM,

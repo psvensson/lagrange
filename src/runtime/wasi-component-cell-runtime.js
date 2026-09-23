@@ -1,7 +1,6 @@
 import {
   Worker,
 } from 'node:worker_threads';
-import {fileURLToPath} from 'node:url';
 import {
   resolveModuleDirectory,
   resolvePackagedRuntimeFile,
@@ -60,12 +59,7 @@ const WASI_COMPONENT_CELL_ERROR_MESSAGE = Object.freeze({
   START_FAILED: 'Component startup failed',
   STOPPED: 'Component instance stopped',
 });
-const CELL_RUNTIME_MODULE_LOCATION =
-  resolveModuleDirectory(resolveModuleDirectory);
-const CELL_RUNTIME_MODULE_DIR =
-  CELL_RUNTIME_MODULE_LOCATION.startsWith('file:') ?
-    fileURLToPath(CELL_RUNTIME_MODULE_LOCATION) :
-    CELL_RUNTIME_MODULE_LOCATION;
+const CELL_RUNTIME_MODULE_DIR = resolveModuleDirectory(resolveModuleDirectory);
 
 const WASI_COMPONENT_CELL_ERROR_CODE = Object.freeze({
   BUDGET_EXHAUSTED: 'request_cell_budget_exhausted',
