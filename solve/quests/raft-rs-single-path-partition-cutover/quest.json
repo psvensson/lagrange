@@ -1,0 +1,56 @@
+{
+  "schema": "solve-quest/2",
+  "id": "raft-rs-single-path-partition-cutover",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Make rs-raft the only partition consensus path. Today a production partition reaches the legacy backend by omission (RAFT_BACKEND_DEFAULT is liferaft and raftBackend is read only from PartitionService construction options that no production caller sets), and the partition write path is liferaft-shaped: applyWrite appends the entry to the legacy durable log through PartitionRaftStorage before proposing, so with rs-raft as the default the seed's first write during cache hydration dies (NOT NULL _raft_log.term) and 37 corpus files fail (census 2026-09-23). After this quest: normal PartitionService construction always yields the frozen rs-raft operation port with no selector, no default fallback and no raftProvider injection as an alternate semantic backend; a write is one propose() through the port whose committed-entry application applies it, with the rs-raft durable store as the only durable log (the legacy log adapter is never written on the partition write path, and the single-replica direct-execution bypass is gone because a solo rs-raft leader commits its own proposals); an explicit legacy backend name is a typed refusal; a partition database holding meaningful legacy consensus state and no rs-raft record fails closed with a typed outcome instead of being reused; and a restarted partition serves its writes from the rs-raft store. Proven by a seed node that bootstraps and serves CREATE TABLE, INSERT and SELECT through production construction with no backend selection at all.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/raft-rs-single-path-partition-cutover/evidence/receipt.json",
+      "requiredReceipts": [
+        "seed-bootstraps-and-serves-a-write-on-rs-raft-by-default",
+        "omitted-selection-cannot-reach-the-legacy-backend",
+        "explicit-legacy-selection-is-a-typed-refusal",
+        "the-write-path-has-one-durable-log",
+        "legacy-durable-consensus-state-fails-closed",
+        "restart-serves-writes-from-the-rs-raft-store"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-fallback-no-selector",
+      "statement": "After this quest no production path constructs, selects, defaults to, or falls back to the legacy backend for a partition: not by omission, error, restart, snapshot recovery, worker path, or a test-shaped production option. The selector module and its default constant do not survive; a legacy backend name is refused by name."
+    },
+    {
+      "id": "one-write-path-one-durable-log",
+      "statement": "A partition write is one propose() through the frozen operation port; application happens in the committed-entry callback the runtime owner already invokes. The rs-raft durable store is the only durable log; PartitionRaftStorage/SQLiteLogAdapter are never written on the write path, and the single-replica direct-execution branch is deleted rather than kept as a second path."
+    },
+    {
+      "id": "port-unchanged",
+      "statement": "The frozen operation port keeps its twelve operations; no compatibility accessor, raw log, term or core reachability is added to satisfy the write path. The operation-boundary audit and its witnesses stay green."
+    },
+    {
+      "id": "fail-closed-on-legacy-state",
+      "statement": "A partition database with meaningful legacy consensus rows and no rs-raft record produces a typed startup outcome (legacy_partition_consensus_state_detected or the name the owner card fixes); there is no automatic log migration and no dual write. Mere existence of the historically named tables is not the detector."
+    },
+    {
+      "id": "expectations-from-production",
+      "statement": "Every witness expectation comes from production construction or the core (readStatus, the durable store on an independent connection, SELECT results), never from a test literal or the code path under test; each receipt must be red on the sealed head for the reason the census names."
+    },
+    {
+      "id": "record-not-absorb",
+      "statement": "Message groups, RaftGroup, RaftReplicaBase, WasmServiceReplica, snapshot catch-up ownership, pre_vote/check_quorum and runtime blast radius are recorded as findings for their own quests, never fixed here."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "Source changes land only behind independent adversarial verification that attacks: an old-backend fallback, an alternate constructor, raw core reachability, stale durable-state reuse, a test stand-in instead of production engagement, and a second durable log."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "recovery-replay",
+    "owner-interaction"
+  ]
+}

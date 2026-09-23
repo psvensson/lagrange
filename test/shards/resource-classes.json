@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2137,
+    "ordinary": 2138,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2154,
-  "digest": "fnv1a32-c2d4e9f9",
+  "censusSize": 2155,
+  "digest": "fnv1a32-dddb6b56",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1415,6 +1415,7 @@
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "ordinary",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "ordinary",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "ordinary",
+    "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "ordinary",
     "test/raft/raft-timing-utils.test.js": "ordinary",
     "test/raft/raft-transport-backpressure-mute.test.js": "ordinary",
     "test/raft/remote-peer-representation.test.js": "ordinary",
