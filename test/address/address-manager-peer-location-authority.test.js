@@ -13,6 +13,17 @@
 // real write actually reached, never from a returned string. The registry is
 // poisoned again immediately before the write, because resolution happens
 // twice: once when the peer is joined and once at send time.
+//
+// On the rs-raft partition path the partition's peer is joined the way
+// production joins one: the partition leads its group, commits a prefix
+// through its own operation port, and admits the peer through its
+// services-cache reconcile (an ADD_PEER proposal the core commits). The real
+// write is the port's progress probe: the leader holds no acknowledged
+// progress for the peer (the recording transport never answers), so the probe
+// sends one append to the peer at the address resolved at send time
+// (epic raft-rs-full-cutover finding F18: the rs-raft probe was inert - it
+// reported progress-observed for the unacknowledged peer and sent nothing -
+// so these witnesses are red until the runtime owner makes the probe honest).
 import {test} from '../../src/test-helpers/tap.js';
 import {readdirSync, readFileSync} from 'node:fs';
 
@@ -32,9 +43,15 @@ import {
   PartitionService, RaftRole,
 } from '../../src/partition/partition-service.js';
 import {
+  PARTITION_SERVICE_OPERATION,
+} from '../../src/partition/partition-service-constants.js';
+import {assertRaftOperationSucceeded} from
+  '../../src/raft/raft-operation-port.js';
+import {
   RemotePeerRepresentation,
 } from '../../src/raft/remote-peer-representation.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {waitForCondition} from '../partition/partition-service-test-support.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -66,6 +83,14 @@ const REGISTRY_READ_API = Object.freeze([
 ]);
 
 let nextPort = 19980;
+const ADMISSION_BUDGET_MS = 5000;
+// The partition's own table: the committed prefix is a real partition write
+// into it, proposed through the operation port.
+const PARTITION_TABLE = 'services';
+const PARTITION_SCHEMA = Object.freeze({
+  columns: [{name: 'id', type: 'INTEGER', primaryKey: true}],
+});
+const PREFIX_INSERT_SQL = `INSERT INTO ${PARTITION_TABLE} (id) VALUES (?)`;
 
 function initializeProcess() {
   ConfigurationManager.resetInstance();
@@ -120,20 +145,29 @@ function recordingTransport(sent) {
   };
 }
 
+// A partition that starts as the lone voter of its group (deferred election:
+// it campaigns when the witness says so), with the authoritative cache naming
+// its peer; the peer is admitted once the partition leads.
 function buildPartition({cache, peerAddresses, sent}) {
   const partition = new PartitionService({
     partitionId: PARTITION_ID,
-    tableId: 'services',
-    tableName: 'services',
+    tableId: PARTITION_TABLE,
+    tableName: PARTITION_TABLE,
     replicaId: PARTITION_SELF,
-    replicaIds: [PARTITION_SELF, PARTITION_PEER],
+    replicaIds: [PARTITION_SELF],
     nodeId: NODE_ID,
     peerAddresses,
     transport: recordingTransport(sent),
+    schema: PARTITION_SCHEMA,
     dbPath: ':memory:',
+    deferElection: true,
   });
   partition.systemTableCache = cache;
   return partition;
+}
+
+function authoritativePeerRow() {
+  return serviceRow(PARTITION_PEER, PARTITION_A, SERVICE_TYPE.PARTITION);
 }
 
 function authoritativePartitionCache() {
@@ -141,18 +175,34 @@ function authoritativePartitionCache() {
     serviceRow(PARTITION_SELF,
       `${NODE_ID}/${ENTITY_TYPE.PARTITION}/${PARTITION_SELF}`,
       SERVICE_TYPE.PARTITION),
-    serviceRow(PARTITION_PEER, PARTITION_A, SERVICE_TYPE.PARTITION),
+    authoritativePeerRow(),
   ]);
 }
 
-function seedPartitionProgressProbe(partition) {
-  const status = partition.raft.readStatus();
-  const term = Number.isSafeInteger(status.term) && status.term > 0 ?
-    status.term : ONE;
-  partition.logAdapter.saveCommand(
-    {type: 'address-authority-progress-probe'},
-    term,
+// Lead the group, commit a prefix write through the operation port, and
+// admit the peer the way production does: its ACTIVE services row lands in
+// the cache again (a durable re-landing, UPDATE) and the leader's
+// services-cache reconcile proposes it. Admission is complete when the port's
+// configuration names the peer.
+async function leadAndAdmitPeer(partition, peerRow) {
+  assertRaftOperationSucceeded(await partition.raft.campaign());
+  assertRaftOperationSucceeded(await partition.raft.propose({
+    type: PARTITION_SERVICE_OPERATION.INSERT,
+    sql: PREFIX_INSERT_SQL,
+    params: [ONE],
+    entryId: `address-authority-prefix-${partition.replicaId}`,
+  }));
+  partition.systemTableCache.applySystemTableChange(
+    TABLES.SERVICES, CDC_OPERATIONS.UPDATE, {...peerRow, updated_at: ONE + 1});
+  const admitted = await waitForCondition(
+    () => partition.raft.readStatus().peers
+      .some((peer) => peer.address === peerRow.address),
+    ADMISSION_BUDGET_MS,
   );
+  if (!admitted) {
+    throw new Error('fixture precondition: the leader never admitted peer ' +
+      `${peerRow.address}: ${JSON.stringify(partition.raft.readStatus())}`);
+  }
 }
 
 async function probePartitionPeerDestination(partition, peerAddress, sent) {
@@ -181,7 +231,7 @@ test('a poisoned process registry cannot move a partition peer destination',
     // Observe the frozen peer projection, then drive the semantic progress
     // probe which sends one real Raft packet without exposing a peer object.
     await partition.initialize();
-    seedPartitionProgressProbe(partition);
+    await leadAndAdmitPeer(partition, authoritativePeerRow());
     poisonTowardB(PARTITION_B);
     const status = await partition.raft.readStatus();
     t.equal(status.peers.length, ONE,
@@ -224,22 +274,25 @@ test('one node mutating the shared registry cannot move another node destination
       const peerAddress = `${nodeId}/${ENTITY_TYPE.PARTITION}/${peerId}`;
       const partition = new PartitionService({
         partitionId: PARTITION_ID,
-        tableId: 'services',
-        tableName: 'services',
+        tableId: PARTITION_TABLE,
+        tableName: PARTITION_TABLE,
         replicaId: selfId,
-        replicaIds: [selfId, peerId],
+        replicaIds: [selfId],
         nodeId,
         peerAddresses: [peerAddress],
         transport: recordingTransport(sent),
+        schema: PARTITION_SCHEMA,
         dbPath: ':memory:',
+        deferElection: true,
       });
+      const peerRow = serviceRow(peerId, peerAddress, SERVICE_TYPE.PARTITION);
       partition.systemTableCache = cacheSaying([
         serviceRow(selfId, `${nodeId}/${ENTITY_TYPE.PARTITION}/${selfId}`,
           SERVICE_TYPE.PARTITION),
-        serviceRow(peerId, peerAddress, SERVICE_TYPE.PARTITION),
+        peerRow,
       ]);
       await partition.initialize();
-      seedPartitionProgressProbe(partition);
+      await leadAndAdmitPeer(partition, peerRow);
       hosts.push({partition, peerAddress});
     }
 
@@ -251,6 +304,10 @@ test('one node mutating the shared registry cannot move another node destination
 
     const beforeA = await write(hosts[ZERO]);
     const beforeB = await write(hosts[ONE]);
+    t.same(beforeA, [hosts[ZERO].peerAddress],
+      'node-a\'s progress probe sends to its own authoritative peer location');
+    t.same(beforeB, [hosts[ONE].peerAddress],
+      'node-b\'s progress probe sends to its own authoritative peer location');
 
     // Mutate the shared registry under both of them. No reset, no
     // re-initialization, one singleton throughout.

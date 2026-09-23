@@ -1,11 +1,15 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 import t from 'tap';
 import {
   PartitionService,
   RaftRole,
 } from '../../src/partition/partition-service.js';
+import {readPartitionAppliedIndex} from
+  '../../src/partition/partition-committed-log.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {DurableWorkflowCoordinator} from '../../src/workflow/durable-workflow-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -29,9 +33,16 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 //      durability-fitness demotion (a leader rollback re-mints acked raft
 //      indices and followers truncate committed entries).
 //   2. The heal is NOT crash-equivalent for JS memory (verifier finding Z1):
-//      it must clear the apply-dedup set and re-anchor the adapter's
-//      monotonic committed-index cache, or post-heal catch-up silently
-//      skips re-execution and clamps the durable watermark forever.
+//      it must clear the apply-dedup set, and the committed/applied
+//      watermark the replica acts on must be the DURABLE one, or post-heal
+//      catch-up silently skips re-execution and clamps the durable watermark
+//      forever. On rs-raft the watermark has no JS-memory cache to strand
+//      (the retired adapter's `_committedIndexCache` is gone): it is the
+//      rs-raft store's applied-state row, written in each committed entry's
+//      own transaction. So the re-anchor claim is read from production
+//      observables - the partition's own committed-log reader on its
+//      connection, the store read on an INDEPENDENT connection, and the
+//      port's readStatus() - never from a seeded private field.
 //   3. The coordinator never commits against lost enlistment state: recovery
 //      never clobbers a LIVE workflow's participant registry with a staler
 //      cache view, and a stage over an empty/missing registry fails instead
@@ -56,6 +67,23 @@ function makeTmpDbPath(t) {
   );
   t.teardown(() => fs.rmSync(dir, {recursive: true, force: true}));
   return path.join(dir, 'partition.db');
+}
+
+// What the rs-raft durable store of the partition holds, read on a
+// connection of the test's own (DDL-free readers): the durable applied index
+// and the applied proposals.
+function readDurableRecordIndependently(partition) {
+  const independent = new Database(partition.dbPath, {readonly: true});
+  try {
+    return {
+      appliedIndex: RaftRsDurableStore.readAppliedIndexIn(
+        independent, partition.partitionId),
+      proposals: RaftRsDurableStore.readCommittedEntriesIn(
+        independent, partition.partitionId),
+    };
+  } finally {
+    independent.close();
+  }
 }
 
 // A real single-replica PartitionService (peers cannot initialize without a
@@ -98,11 +126,16 @@ t.test(
     });
     try {
       partition.role = RaftRole.FOLLOWER;
+      // The durable watermark before the zombie opens: the core's commit
+      // index on the port, and the store's applied index on an independent
+      // connection.
+      const durableBefore = readDurableRecordIndependently(partition);
+      const commitIndexBefore = partition.raft.readStatus().commitIndex;
       await partition.beginTransaction('tx-zombie');
-      // Seed the Z1 poison state: an apply-dedup key and a stale adapter
-      // committed-index cache that a bare rollback would strand.
+      // Seed the Z1 poison state: an apply-dedup key that a bare rollback
+      // would strand (the watermark has no JS-memory cache on rs-raft; see
+      // the header).
       partition.recentlyAppliedEntryKeys.add('poisoned-entry-key');
-      partition.logAdapter._committedIndexCache = 155;
 
       const swept = partition.enforcePreparedStateHoldTimeouts(
         pastLegalHold(),
@@ -126,11 +159,30 @@ t.test(
         0,
         'Z1: the apply-dedup set is cleared so evaporated entries re-execute',
       );
+      const durableAfter = readDurableRecordIndependently(partition);
       t.equal(
-        partition.logAdapter.getCommittedIndex(),
-        0,
-        'Z1: the committed-index cache is re-anchored to DURABLE state ' +
-          '(0 here — nothing was ever durably committed)',
+        readPartitionAppliedIndex(partition),
+        durableAfter.appliedIndex,
+        'Z1: the applied watermark the partition reads on its own ' +
+          'connection is the DURABLE one (the rs-raft store, read on an ' +
+          'independent connection)',
+      );
+      t.equal(
+        durableAfter.appliedIndex,
+        durableBefore.appliedIndex,
+        'Z1: the heal leaves the durable applied watermark where it was ' +
+          'before the zombie opened',
+      );
+      t.equal(
+        partition.raft.readStatus().commitIndex,
+        commitIndexBefore,
+        'Z1: the core commit index is untouched by the heal',
+      );
+      t.same(
+        durableAfter.proposals,
+        [],
+        'Z1: nothing was ever durably committed (no applied proposal in the ' +
+          'rs-raft store)',
       );
       t.ok(
         warnings.some(
