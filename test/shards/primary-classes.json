@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1891,
+    "unit": 1892,
     "integration": 75,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2155,
-  "digest": "fnv1a32-8c8aba38",
+  "censusSize": 2156,
+  "digest": "fnv1a32-5585e6ce",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1404,6 +1404,7 @@
     "test/raft/raft-rs-backend/backend-seam.test.js": "unit",
     "test/raft/raft-rs-backend/conf-state-authority.test.js": "unit",
     "test/raft/raft-rs-backend/durable-ready-loop.test.js": "unit",
+    "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "unit",
     "test/raft/raft-rs-backend/election-safety.test.js": "unit",
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "unit",
     "test/raft/raft-rs-backend/operation-port-boundary.test.js": "unit",

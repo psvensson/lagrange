@@ -19,8 +19,13 @@ import {
   RAFT_RS_ZERO_INDEX,
 } from './raft-rs-durable-store-constants.js';
 import {RAFT_RS_HOST_WRITE} from './raft-rs-host-contract.js';
+import {decodeCommittedProposal} from './raft-rs-proposal-codec.js';
+import {RAFT_RS_ENTRY_TYPE} from './raft-rs-ready-loop-constants.js';
 
 const DECIMAL_DIGITS = /^\d+$/u;
+const PAYLOAD_ENCODING = 'base64';
+// The log table and the applied-state table.
+const LOG_AND_APPLIED_STATE_TABLE_COUNT = 2;
 
 /**
  * Convert a raft-rs decimal string into the BigInt SQLite binds exactly.
@@ -280,6 +285,54 @@ class RaftRsDurableStore {
         },
       } : null,
     };
+  }
+
+  /**
+   * Read one group's applied proposals from an existing connection: the
+   * NORMAL entries that carry a payload, at or below the durable applied
+   * index, each decoded through the proposal codec. Configuration changes
+   * belong to the runtime and are never decoded here.
+   *
+   * Read-only and DDL-free: when the record's tables do not exist the group
+   * has no applied proposals and nothing is created. An undecodable applied
+   * entry fails closed with the codec's typed error.
+   * @param {Object} db - An open better-sqlite3 database.
+   * @param {string} groupId - The group.
+   * @return {Array<Object>} Frozen {index, term, command} records in log
+   *   order, index and term as decimal strings.
+   */
+  static readCommittedEntriesIn(db, groupId) {
+    const {present} = db.prepare(
+      RAFT_RS_SQL.COUNT_LOG_AND_APPLIED_STATE_TABLES).get();
+    if (present !== LOG_AND_APPLIED_STATE_TABLE_COUNT) {
+      return [];
+    }
+    return db.prepare(RAFT_RS_SQL.SELECT_APPLIED_PROPOSAL_ENTRIES)
+      .safeIntegers(true).all(groupId, RAFT_RS_ENTRY_TYPE.NORMAL)
+      .map((row) => Object.freeze({
+        index: fromExactInteger(row.log_index),
+        term: fromExactInteger(row.term),
+        command: decodeCommittedProposal(
+          Buffer.from(row.data, PAYLOAD_ENCODING)),
+      }));
+  }
+
+  /**
+   * Read one group's durable applied index from an existing connection.
+   * Read-only and DDL-free.
+   * @param {Object} db - An open better-sqlite3 database.
+   * @param {string} groupId - The group.
+   * @return {string|null} The applied index as a decimal string, or null when
+   *   the group has no applied-state row (or the table does not exist).
+   */
+  static readAppliedIndexIn(db, groupId) {
+    const {present} = db.prepare(RAFT_RS_SQL.COUNT_APPLIED_STATE_TABLE).get();
+    if (present === 0) {
+      return null;
+    }
+    const row = db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE)
+      .safeIntegers(true).get(groupId);
+    return row ? fromExactInteger(row.applied_index) : null;
   }
 
   /**

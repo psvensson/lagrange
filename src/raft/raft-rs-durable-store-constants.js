@@ -81,6 +81,36 @@ const RAFT_RS_SQL = Object.freeze({
     WHERE group_id = ?
     ORDER BY log_index ASC
   `,
+  // The applied proposals of one group: NORMAL entries that carry a
+  // payload, at or below the durable applied index, in log order. The applied
+  // index is written in the same transaction as the state machine's SQL, so
+  // this is exactly the prefix the state machine holds; an entry that is
+  // committed but not yet applied is not part of it. One statement, so the
+  // boundary and the entries are one read.
+  SELECT_APPLIED_PROPOSAL_ENTRIES: `
+    SELECT log.log_index, log.term, log.data
+    FROM ${RAFT_RS_TABLE.LOG} AS log
+    JOIN ${RAFT_RS_TABLE.APPLIED_STATE} AS applied
+      ON applied.group_id = log.group_id
+    WHERE log.group_id = ?
+      AND log.entry_type = ?
+      AND log.data IS NOT NULL
+      AND log.log_index <= applied.applied_index
+    ORDER BY log.log_index ASC
+  `,
+  // Whether the tables a read-only reader needs exist, asked of the schema
+  // rather than created: a reader never runs DDL.
+  COUNT_LOG_AND_APPLIED_STATE_TABLES: `
+    SELECT COUNT(*) AS present
+    FROM sqlite_master
+    WHERE type = 'table'
+      AND name IN ('${RAFT_RS_TABLE.LOG}', '${RAFT_RS_TABLE.APPLIED_STATE}')
+  `,
+  COUNT_APPLIED_STATE_TABLE: `
+    SELECT COUNT(*) AS present
+    FROM sqlite_master
+    WHERE type = 'table' AND name = '${RAFT_RS_TABLE.APPLIED_STATE}'
+  `,
   UPSERT_HARD_STATE: `
     INSERT INTO ${RAFT_RS_TABLE.HARD_STATE}
       (group_id, term, vote, commit_index)

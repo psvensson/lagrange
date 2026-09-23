@@ -274,27 +274,19 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     }
   }
   /**
-   * Warm the partition HLC from the maximum HLC over the committed Raft log, so
-   * a restarted node never emits an HLC below one it previously committed.
-   * One-time full scan of the committed prefix at init. NOTE: `_raft_log` is not
-   * compacted, so this is O(committed-log-size); it is acceptable because init is
-   * not re-entered, but a future optimization could tail-bound the scan once HLCs
-   * are guaranteed monotonic along the log (they are, post merge-on-apply, for
-   * entries written after this fix ships). Best-effort and never fatal to init.
+   * Warm the partition HLC from the maximum HLC over the committed commands of
+   * the rs-raft durable store, so a restarted node never emits an HLC below one
+   * it previously committed. One-time full scan of the committed prefix at
+   * init. NOTE: the rs-raft log is not compacted, so this is
+   * O(committed-log-size); it is acceptable because init is not re-entered.
+   * A database without the rs-raft record is a no-op; an undecodable
+   * committed command fails init closed (the durable log is not trustworthy).
    */
   warmHlcFromCommittedLog() {
-    try {
-      warmHlcFromDurableWitnesses({
-        logAdapter: this.logAdapter,
-        hlcClock: this.hlcClock,
-      });
-    } catch (error) {
-      this.logger.warn(PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY, {
-        partitionId: this.partitionId,
-        hlcWarmFailed: true,
-        error: error.message,
-      });
-    }
+    warmHlcFromDurableWitnesses({
+      service: this,
+      hlcClock: this.hlcClock,
+    });
   }
   /**
    * Initialize the partition service.

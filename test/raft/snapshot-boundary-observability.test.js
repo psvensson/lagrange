@@ -22,13 +22,14 @@ import {requestSnapshotInstall} from '../../src/raft/snapshot-install.js';
 import {
   RAFT_SNAPSHOT_INSTALL_OUTCOME,
 } from '../../src/raft/snapshot-install-constants.js';
-import {warmHlcFromDurableWitnesses} from '../../src/partition/partition-hlc-warmup.js';
 
 // raft-snapshot-atomic-install (R3): after an install the adapters must
 // OBSERVE the reconstructed boundary — last-log identity, compacted lineage,
 // witness-silent truncation clamps, the COMPACTED idempotent write outcome,
-// re-checkpointability at the boundary, and HLC warm-up from the sealed
-// witness — while genuinely virgin logs keep the CL-042 zero.
+// and re-checkpointability at the boundary — while genuinely virgin logs keep
+// the CL-042 zero. HLC warm-up no longer reads the legacy sealed witness: the
+// partition warms from the rs-raft committed log only, and the snapshot-boundary
+// HLC on rs-raft is a recorded gap of the snapshot/catch-up quest (epic F5).
 
 const PARTITION_ID = 'sql_transactions-p1';
 const STATE_TABLE = 'sql_transactions';
@@ -219,27 +220,6 @@ test('an installed replica can re-checkpoint at its own boundary', async (t) => 
     fixture.close();
   }
 });
-
-test('HLC warm-up reads the sealed witness on a compacted-empty log',
-  async (t) => {
-    const fixture = await createInstalledFixture();
-    try {
-      let warmed = null;
-      warmHlcFromDurableWitnesses({
-        logAdapter: fixture.targetAdapter,
-        hlcClock: {
-          update: (hlc) => {
-            warmed = hlc;
-          },
-        },
-      });
-      t.ok(warmed, 'the clock is warmed despite the empty log');
-      t.equal(warmed.toString(), SEALED_HLC,
-        'the warm value is the sealed maxCommittedHlc witness');
-    } finally {
-      fixture.close();
-    }
-  });
 
 test('creation refuses prepared-but-undecided transactions at the boundary',
   async (t) => {

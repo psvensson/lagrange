@@ -6,6 +6,10 @@ import {
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {
+  RS_RAFT_SELECTION_ON_BASE,
+  restartOverCommittedCommands,
+} from './partition-rs-raft-restart-fixture.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -17,7 +21,7 @@ const CDC_INSERT_OPERATION = 'INSERT';
 const rowIdArb = fc.stringMatching(/^[a-z][a-z0-9]{2,11}$/);
 const valueArb = fc.stringMatching(/^[a-z]{1,8}$/);
 
-function createTransactionPartition() {
+function createTransactionPartition(selection = {}) {
   return new PartitionService({
     partitionId: `tx-partition-${Date.now()}-${Math.random()}`,
     tableId: TEST_TABLE_NAME,
@@ -31,6 +35,7 @@ function createTransactionPartition() {
       ],
     },
     dbPath: ':memory:',
+    ...selection,
   });
 }
 
@@ -444,7 +449,10 @@ test(
         valueArb,
         fc.boolean(),
         async (rowId, value, shouldCommit) => {
-          const partition = createTransactionPartition();
+          // Reconstruction reads the rs-raft committed log, so the partition
+          // runs on rs-raft (named on this base; the default after the
+          // cutover's A1 attempt, which deletes the selection).
+          const partition = createTransactionPartition(RS_RAFT_SELECTION_ON_BASE);
           await partition.initialize();
           const sessionId = 'reconstruct-prepared';
 
@@ -497,6 +505,75 @@ test(
     );
 
     t.pass('prepared state reconstruction preserves commit/rollback behavior');
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Property 13 across a restart: reconstruction reads the committed PREPARE
+// markers from the rs-raft store (the only durable log). The markers are
+// committed through the partition's own operation port, as a leader's
+// replication commits them on a replica that later takes over; the legacy
+// log is never written, so a reconstruction that reads it finds nothing.
+// Validates: Requirements 8.2, 8.3, 8.4
+// ---------------------------------------------------------------------------
+test(
+  'Property 13 (restart): prepared state is reconstructed from the committed rs-raft log',
+  async (t) => {
+    const preparedMarker = {
+      type: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+      sessionId: 'restart-prepared',
+      epoch: 1_300,
+      writeSet: [`${TEST_TABLE_NAME}:prepared-row`],
+      proposedBy: 'previous-leader',
+      proposedAt: 1_700_000_000_000,
+    };
+    const terminatedMarker = {
+      ...preparedMarker,
+      sessionId: 'restart-rolled-back',
+      writeSet: [`${TEST_TABLE_NAME}:rolled-back-row`],
+    };
+    const {restarted, committed, dispose} = await restartOverCommittedCommands({
+      partitionId: `tx-partition-restart-${Date.now()}`,
+      tableId: TEST_TABLE_NAME,
+      tableName: TEST_TABLE_NAME,
+      schema: {
+        columns: [
+          {name: 'id', type: 'TEXT', primaryKey: true},
+          {name: 'value', type: 'TEXT'},
+        ],
+      },
+    }, [
+      preparedMarker,
+      terminatedMarker,
+      {
+        type: PARTITION_SERVICE_OPERATION.ROLLBACK,
+        sessionId: terminatedMarker.sessionId,
+        transactionEpoch: terminatedMarker.epoch,
+      },
+    ]);
+    try {
+      const committedPrepare = committed.find((entry) =>
+        entry.command.sessionId === preparedMarker.sessionId);
+      const reconstruction = restarted.reconstructPreparedState();
+      const reconstructed = restarted.preparedTransactions.get(
+        preparedMarker.sessionId);
+      t.strictSame({
+        preparedTransactionCount: reconstruction.preparedTransactionCount,
+        preparedSessions: [...restarted.preparedTransactions.keys()],
+        writeSet: reconstructed ? [...reconstructed.writeSet] : null,
+        transactionEpoch: reconstructed?.transactionEpoch ?? null,
+        raftLogIndex: reconstructed?.raftLogIndex ?? null,
+      }, {
+        preparedTransactionCount: 1,
+        preparedSessions: [committedPrepare.command.sessionId],
+        writeSet: committedPrepare.command.writeSet,
+        transactionEpoch: committedPrepare.command.epoch,
+        raftLogIndex: committedPrepare.index,
+      }, 'the committed PREPARE marker the rs-raft store holds is the ' +
+        'reconstructed prepared state; the rolled-back session is terminal');
+    } finally {
+      await dispose();
+    }
   },
 );
 
