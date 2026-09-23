@@ -608,11 +608,12 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     return this.role;
   }
   /**
-   * Get the current term.
-   * @return {number} Current term.
+   * Get the current term, as the consensus port's readStatus reports it.
+   * @return {number} Current term; 0 while no port is up or its status is
+   *   not synchronously readable.
    */
   getCurrentTerm() {
-    return this.storage?.currentTerm || 0;
+    return this.resolveCurrentTermSafe() ?? 0;
   }
   /**
    * Get the partition state.
@@ -635,8 +636,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       role: this.role,
       isLeader: this.isLeader,
       leaderId: this.leaderId,
-      term: this.storage?.currentTerm || 0,
-      logLength: this.storage?.getLogLength() || 0,
+      term: this.getCurrentTerm(),
       state: this.state,
       keyRange: this.keyRange,
       sizeBytes: this.sizeBytes,

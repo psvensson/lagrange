@@ -860,6 +860,11 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     );
   }
 
+  /** Create the participant commit-outcome table this base reads and writes. */
+  createTransactionOutcomeTable() {
+    this.db.exec(PARTITION_SERVICE_SQL.CREATE_TRANSACTION_OUTCOME_TABLE);
+  }
+
   recordTransactionCommitOutcome(sessionId, transactionEpoch = null) {
     const normalizedEpoch = Number.isFinite(transactionEpoch) ?
       Math.floor(transactionEpoch) :

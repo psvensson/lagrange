@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
-    "storage-partition": 147,
+    "storage-partition": 145,
     "storage-raft": 97,
     "test-infrastructure": 133,
     "transactions": 14,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2156,
-  "digest": "fnv1a32-ac943d1d",
+  "censusSize": 2154,
+  "digest": "fnv1a32-94c494e8",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a9383551",
+  "observationDigest": "fnv1a32-a648e25a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1163,14 +1163,13 @@
     "test/partition/partition-coordinator.test.js": "storage-partition",
     "test/partition/partition-descriptor-epoch-contract.test.js": "storage-partition",
     "test/partition/partition-leader-row-publication-integrity.test.js": "storage-partition",
+    "test/partition/partition-legacy-consensus-state.test.js": "storage-partition",
     "test/partition/partition-packet-round-trip.property.test.js": "storage-partition",
     "test/partition/partition-raft-node-write-preservation.property.test.js": "storage-partition",
     "test/partition/partition-raft-storage.test.js": "storage-partition",
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": "storage-partition",
     "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js": "storage-partition",
     "test/partition/partition-rebalancer-readiness-edge-gate.test.js": "storage-partition",
-    "test/partition/partition-replication-handler-multireplica-guard.test.js": "storage-partition",
-    "test/partition/partition-replication-handler.test.js": "storage-partition",
     "test/partition/partition-service-cdc-log-suppression.test.js": "storage-partition",
     "test/partition/partition-service-hlc-monotonicity.test.js": "storage-partition",
     "test/partition/partition-service-learner-promotion-wake.test.js": "storage-partition",
@@ -1228,7 +1227,6 @@
     "test/partition/sql-statement-parser-coverage-matrix.test.js": "storage-partition",
     "test/partition/table-partition-structure.property.test.js": "storage-partition",
     "test/partition/timeout-cleanup.property.test.js": "storage-partition",
-    "test/partition/unified-write-path.property.test.js": "storage-partition",
     "test/partition/workflow-fencing-wiring.test.js": "storage-partition",
     "test/partition/write-path-epoch-fencing.test.js": "storage-partition",
     "test/policy/policy-driven-adjustment.property.test.js": "control-plane",
@@ -6105,6 +6103,11 @@
     "test/partition/partition-coordinator.test.js": {
       "files": [
         "src/partition/partition-coordinator.js"
+      ]
+    },
+    "test/partition/partition-legacy-consensus-state.test.js": {
+      "files": [
+        "src/partition/partition-raft-storage.js"
       ]
     },
     "test/partition/partition-raft-storage.test.js": {
