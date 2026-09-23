@@ -1,10 +1,13 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {
+  PARTITION_WRITE_RELEASE_CAUSE,
+  buildReleasedPendingWriteAnswer,
+} from './partition-write-kernel.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_TYPE,
 } = PARTITION_SERVICE_SHARED;
@@ -144,9 +147,12 @@ class PartitionServiceLifecycleMethods {
     clearPartitionLifecycleListeners(this);
     this.releaseMetadataPublicationReadinessListener = null;
     this._metadataPublicationReadinessState = null;
-    this.clearPendingCommittedWrites(
-      PARTITION_SERVICE_LITERAL.PARTITION_SERVICE_SHUTDOWN,
-    );
+    // Every pending write is released with the write kernel's typed answer:
+    // one handed to consensus may still commit, so its outcome is not known
+    // here; one never handed to it was not proposed.
+    this.releasePendingCommittedWrites((pending) =>
+      buildReleasedPendingWriteAnswer(pending, this.partitionId,
+        {cause: PARTITION_WRITE_RELEASE_CAUSE.SHUTDOWN}));
     await this.quiesceRebalancing();
     if (this.pendingCDCEventDeliveries.size > 0) {
       await Promise.allSettled([...this.pendingCDCEventDeliveries]);

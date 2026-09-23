@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
-    "storage-partition": 148,
-    "storage-raft": 101,
+    "storage-partition": 150,
+    "storage-raft": 102,
     "test-infrastructure": 133,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2162,
-  "digest": "fnv1a32-2ae5c545",
+  "censusSize": 2165,
+  "digest": "fnv1a32-cd19ab6a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-62424063",
+  "observationDigest": "fnv1a32-a82ad5ac",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1200,7 +1200,9 @@
     "test/partition/partition-transaction-handler.test.js": "storage-partition",
     "test/partition/partition-transaction.property.test.js": "storage-partition",
     "test/partition/partition-transition-projection.test.js": "storage-partition",
+    "test/partition/partition-unreadable-durable-record.test.js": "storage-partition",
     "test/partition/partition-write-kernel.test.js": "storage-partition",
+    "test/partition/partition-write-typed-releases.test.js": "storage-partition",
     "test/partition/pending-request-round-trip.property.test.js": "storage-partition",
     "test/partition/pending-request-tracker.test.js": "storage-partition",
     "test/partition/proposal-queue-capacity.property.test.js": "storage-partition",
@@ -1434,6 +1436,7 @@
     "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-regression.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-status-observation.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/operation-port-throw-containment.test.js": "storage-raft",
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": "storage-raft",
     "test/raft/raft-rs-backend/partition-peer-admission.test.js": "storage-raft",
     "test/raft/raft-rs-backend/peer-identity.test.js": "storage-raft",
@@ -6307,12 +6310,37 @@
         "src/raft/raft-operation-port.js"
       ]
     },
+    "test/partition/partition-unreadable-durable-record.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner-constants.js"
+      ]
+    },
     "test/partition/partition-write-kernel.test.js": {
       "files": [
         "src/partition/partition-write-kernel.js",
         "src/partition/proposal-queue-constants.js",
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port.js",
         "src/raft/raft-rs-durable-store-constants.js"
+      ]
+    },
+    "test/partition/partition-write-typed-releases.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/partition/partition-write-kernel.js",
+        "src/partition/proposal-queue-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-proposal-codec.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/replica-operation-repository.js"
       ]
     },
     "test/partition/raft-rs-transport-demux.test.js": {
@@ -6806,6 +6834,13 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/operation-port-throw-containment.test.js": {
+      "files": [
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-runtime-tuning.js"
       ]
     },
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": {

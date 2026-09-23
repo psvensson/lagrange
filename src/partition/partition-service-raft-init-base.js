@@ -96,9 +96,9 @@ function singleReplicaCampaignRefusedError(partitionId, campaign) {
   return error;
 }
 
-// The clock and randomness a replica hands to liferaft. Absent keys mean
-// liferaft keeps its own tick-tock and Math.random, so production is
-// byte-identical.
+// The clock and randomness a replica hands its consensus port (the rs-raft
+// runtime's timers and ticks run on the clock). Absent keys mean the port
+// resolves the host clock, so production is byte-identical.
 function hostedConsensusSubstrate(replica) {
   const substrate = {};
   if (replica.providedTimeSource) {

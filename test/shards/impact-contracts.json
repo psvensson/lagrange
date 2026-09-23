@@ -473,7 +473,7 @@
       ]
     },
     "raft-rs-runtime-application-transaction": {
-      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; failure scope follows failure class (a core failure replaces the runtime and resumes every group once, a host failure reconstructs its own group and touches no other group; a failure within one retry window of the last instant the previous one held the group is the same persisting failure, whatever its class and whether or not a reconstruction succeeded in between, so the group is reconstructed at most once per window while it persists - at most ceil(span / window) + 1 reconstructions over any span - and a failure more than one window after the last one starts afresh), a group without a usable host announces no role so its partition does not lead, a reconstructed sole voter leads again, a retry is answered from its durable outcome, and the admission owner refuses before consensus every command the application would refuse or never answer.",
+      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; failure scope follows failure class (a core failure replaces the runtime and resumes every group once, a host failure reconstructs its own group and touches no other group; a failure within one retry window of the last instant the previous one held the group is the same persisting failure, whatever its class and whether or not a reconstruction succeeded in between, so the group is reconstructed at most once per window while it persists - at most ceil(span / window) + 1 reconstructions over any span - and a failure more than one window after the last one starts afresh; a group healed inside a window serves again only after it, so its first write after a heal waits up to one window), a durable record that cannot be read where a group is opened or reconstructed (a missing table, SQLITE_IOERR, SQLITE_CORRUPT) is that group's own typed host failure of phase durable-record-read and never a throw, a record that lost a table is never recreated empty, a throw the runtime did not type is contained by the port as the group's typed host failure, a group without a usable host announces no role so its partition does not lead, a reconstructed sole voter leads again, a retry is answered from its durable outcome, and the admission owner refuses before consensus (and before a session stages it) every command the application would refuse or never answer.",
       "owners": [
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/raft-rs-runtime-tuning.js",
@@ -488,12 +488,14 @@
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+        "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
         "test/partition/committed-statement-outcome.test.js",
-        "test/partition/partition-runtime-reconstruction-leadership.test.js"
+        "test/partition/partition-runtime-reconstruction-leadership.test.js",
+        "test/partition/partition-unreadable-durable-record.test.js"
       ]
     },
     "partition-raft-operation-port": {
-      "description": "The rs-raft provider is the partition's only consensus backend: PartitionService builds its operation-only port through the fixed rs-raft factory (no selection, no provider injection) and consumes semantic operations, typed outcomes and immutable snapshots without a live node/control graph; a refused campaign or peer admission is the port's typed answer, never reported as done; a pending write released when its replica stops leading is answered with what the replica knows of it (outcome unknown once handed to consensus, not leader otherwise).",
+      "description": "The rs-raft provider is the partition's only consensus backend: PartitionService builds its operation-only port through the fixed rs-raft factory (no selection, no provider injection) and consumes semantic operations, typed outcomes and immutable snapshots without a live node/control graph; a refused campaign or peer admission is the port's typed answer, never reported as done; every write the replica did not take is answered by the write kernel's builders, typed with its entry: a pending write released when its replica stops leading, at its commit deadline or at shutdown with what the replica knows of it (outcome unknown once handed to consensus; not leader, deadline passed or service shut down otherwise), a proposal queue at capacity as backpressure with the queue's retry time, a proposal the port refused with the port's reason, and a router holding the answer routes it again by its code.",
       "owners": [
         "src/raft/raft-operation-port.js",
         "src/raft/raft-rs-provider.js",
@@ -506,7 +508,8 @@
       "tests": [
         "test/raft/raft-rs-backend/partition-construction-seam.test.js",
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
-        "test/partition/partition-port-refusal-outcomes.test.js"
+        "test/partition/partition-port-refusal-outcomes.test.js",
+        "test/partition/partition-write-typed-releases.test.js"
       ]
     },
     "partition-session-transaction-persistence-admission": {
@@ -904,8 +907,10 @@
       "contract": "raft-rs-runtime-application-transaction",
       "witnessTests": [
         "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+        "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
         "test/partition/committed-statement-outcome.test.js",
-        "test/partition/partition-runtime-reconstruction-leadership.test.js"
+        "test/partition/partition-runtime-reconstruction-leadership.test.js",
+        "test/partition/partition-unreadable-durable-record.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -933,7 +938,8 @@
       "witnessTests": [
         "test/raft/raft-rs-backend/partition-construction-seam.test.js",
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
-        "test/partition/partition-port-refusal-outcomes.test.js"
+        "test/partition/partition-port-refusal-outcomes.test.js",
+        "test/partition/partition-write-typed-releases.test.js"
       ]
     },
     "spread-cure-transition-authorization": {

@@ -12,7 +12,10 @@ import {
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
 } from './raft-rs-peer-identity-constants.js';
-import {RUNTIME_COMMAND} from './raft-rs-runtime-owner-constants.js';
+import {
+  RUNTIME_COMMAND,
+  RUNTIME_REASON,
+} from './raft-rs-runtime-owner-constants.js';
 import {
   decodeCommittedProposal,
   encodeProposal,
@@ -72,6 +75,22 @@ function tickIntervalOf(timing) {
   }
   return Math.max(1, Math.floor(
     timing.heartbeatMs / HEARTBEAT_TICK_DIVISOR));
+}
+
+// The one containment boundary between the runtime owner and every caller of
+// a port - the partition, and the port's own timers: a throw the runtime owner
+// did not type (synchronously, or as the rejection of the work it returned)
+// becomes that group's typed host failure, recorded by the runtime owner, so
+// nothing is rethrown into a caller or a timer.
+function containRuntimeThrow(dispatcher, work) {
+  let result;
+  try {
+    result = work();
+  } catch (error) {
+    return dispatcher.containUnexpectedThrow(error);
+  }
+  return result && typeof result.then === 'function' ?
+    result.then(undefined, dispatcher.containUnexpectedThrow) : result;
 }
 
 // {change} in the core's ConfChangeV2 shape, or {refusal} naming how the
@@ -164,24 +183,25 @@ function createRaftRsOperationPort(request) {
       request[RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
     // A core entry the runtime schedules itself (the drain of delivered
     // inbound) is admitted by this replica's lifecycle owner like every
-    // operation the port is asked for.
-    admitScheduledEntry: (work) => lifecycle.execute(() => (closed ?
-      deepFreeze({outcome: CORE_REFUSED, reason: 'closed'}) : work())),
+    // operation the port is asked for, inside the same containment.
+    admitScheduledEntry: (work) => dispatch(work),
     emit,
   }) : null;
 
-  const execute = (command) => lifecycle.execute(() => {
-    if (closed || dispatcher === null) {
-      return deepFreeze({outcome: CORE_REFUSED, reason: 'closed'});
-    }
-    return dispatcher.execute(command);
-  });
-  const enqueueStep = (envelope) => lifecycle.execute(() => {
-    if (closed || dispatcher === null) {
-      return deepFreeze({outcome: CORE_REFUSED, reason: 'closed'});
-    }
-    return dispatcher.enqueueStep(envelope);
-  });
+  // Every entry into the runtime: admitted by the lifecycle owner, refused
+  // once the port is closed, and contained (containRuntimeThrow).
+  function dispatch(work) {
+    return lifecycle.execute(() => {
+      if (closed || dispatcher === null) {
+        return deepFreeze({
+          outcome: CORE_REFUSED, reason: RUNTIME_REASON.CLOSED});
+      }
+      return containRuntimeThrow(dispatcher, work);
+    });
+  }
+  const execute = (command) => dispatch(() => dispatcher.execute(command));
+  const enqueueStep = (envelope) =>
+    dispatch(() => dispatcher.enqueueStep(envelope));
   const stopScheduling = () => {
     if (timer !== null) {
       timers.clearInterval(timer);
@@ -189,18 +209,15 @@ function createRaftRsOperationPort(request) {
     }
     return coreOk('scheduling-stopped');
   };
-  const startScheduling = () => lifecycle.execute(() => {
-    if (closed || dispatcher === null) {
-      return deepFreeze({outcome: CORE_REFUSED, reason: 'closed'});
-    }
+  // The scheduled tick is a contained port operation: it answers typed and
+  // never throws into its timer.
+  const scheduleTicks = () => {
     stopScheduling();
-    timer = timers.setInterval(() => {
-      const result = execute({type: 'tick'});
-      if (result && typeof result.catch === 'function') {
-        result.catch(() => undefined);
-      }
-    }, tickIntervalMs);
+    timer = timers.setInterval(() => execute({type: 'tick'}), tickIntervalMs);
     timer.unref?.();
+  };
+  const startScheduling = () => dispatch(() => {
+    scheduleTicks();
     return coreOk('scheduling-started');
   });
   const subscribe = (eventName, listener) => {
@@ -222,10 +239,7 @@ function createRaftRsOperationPort(request) {
     propose: (value) => execute({
       type: 'propose', bytes: encodeProposal(value),
     }),
-    proposeConfChange: (change) => lifecycle.execute(() => {
-      if (closed || dispatcher === null) {
-        return deepFreeze({outcome: CORE_REFUSED, reason: 'closed'});
-      }
+    proposeConfChange: (change) => dispatch(() => {
       const normalized = normalizedConfChange(change, registry);
       return normalized.refusal === undefined ? dispatcher.execute({
         type: 'propose-conf-change', change: normalized.change,
@@ -243,10 +257,7 @@ function createRaftRsOperationPort(request) {
     tick: () => execute({type: 'tick'}),
     campaign: () => execute({type: 'campaign'}),
     readStatus: () => execute({type: 'read-status'}),
-    configureTick: (nextTiming) => lifecycle.execute(() => {
-      if (closed || dispatcher === null) {
-        return deepFreeze({outcome: CORE_REFUSED, reason: 'closed'});
-      }
+    configureTick: (nextTiming) => dispatch(() => {
       const command = typeof nextTiming === 'number' ?
         {tickIntervalMs: nextTiming} : nextTiming;
       const wasScheduling = timer !== null;
@@ -256,14 +267,7 @@ function createRaftRsOperationPort(request) {
       }
       dispatcher.configureTiming(command || {});
       if (wasScheduling) {
-        stopScheduling();
-        timer = timers.setInterval(() => {
-          const result = execute({type: 'tick'});
-          if (result && typeof result.catch === 'function') {
-            result.catch(() => undefined);
-          }
-        }, tickIntervalMs);
-        timer.unref?.();
+        scheduleTicks();
       }
       return coreOk('timing-configured');
     }),

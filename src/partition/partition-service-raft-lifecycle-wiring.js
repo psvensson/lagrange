@@ -1,5 +1,8 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {buildReleasedPendingWriteAnswer} from './partition-write-kernel.js';
+import {
+  PARTITION_WRITE_RELEASE_CAUSE,
+  buildReleasedPendingWriteAnswer,
+} from './partition-write-kernel.js';
 
 const {
   PARTITION_SERVICE_LOG_MSG,
@@ -30,7 +33,8 @@ function wirePartitionRaftLifecycleEvents(
   // answer): one handed to consensus has an outcome this replica cannot know;
   // one never handed to it was not proposed, and this replica does not lead.
   const releasePendingWrites = () => service.releasePendingCommittedWrites(
-    (pending) => buildReleasedPendingWriteAnswer(pending, service.partitionId));
+    (pending) => buildReleasedPendingWriteAnswer(pending, service.partitionId,
+      {cause: PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST}));
   // The term is the consensus core's own (readStatus().term); nothing here
   // copies it. Committed entries are applied only by the port's
   // committed-entry application, so COMMIT carries no handler; it stays in

@@ -10,6 +10,7 @@
  */
 
 import {
+  PROPOSAL_QUEUE_BACKPRESSURE_CODE,
   PROPOSAL_QUEUE_DEFAULT,
   PROPOSAL_QUEUE_ERROR_MSG,
   PROPOSAL_QUEUE_PROPOSAL_STATE,
@@ -89,14 +90,18 @@ class ProposalQueue {
    * @param {string} entryId - Unique identifier for the proposal.
    * @param {Object} entry - Proposal entry containing resolve/reject
    *   callbacks and timeout information.
-   * @throws {Error} Backpressure error when queue is at capacity.
+   * @throws {Error} Backpressure error when queue is at capacity, typed with
+   *   PROPOSAL_QUEUE_BACKPRESSURE_CODE and the queue's retryAfterMs.
    */
   enqueue(entryId, entry) {
     if (this.pendingCommits.has(entryId)) {
       throw new Error(PROPOSAL_QUEUE_ERROR_MSG.DUPLICATE_ENTRY);
     }
     if (this.isFull) {
-      throw new Error(PROPOSAL_QUEUE_ERROR_MSG.BACKPRESSURE);
+      throw Object.assign(new Error(PROPOSAL_QUEUE_ERROR_MSG.BACKPRESSURE), {
+        code: PROPOSAL_QUEUE_BACKPRESSURE_CODE,
+        retryAfterMs: PROPOSAL_QUEUE_DEFAULT.BACKPRESSURE_RETRY_AFTER_MS,
+      });
     }
     this.pendingCommits.set(entryId, entry);
     this.proposals.set(entryId, PROPOSAL_QUEUE_PROPOSAL_STATE.QUEUED);
@@ -170,41 +175,52 @@ class ProposalQueue {
   }
 
   /**
-   * Release every pending proposal without an answer from consensus. Each is
-   * rejected with a PROPOSAL_QUEUE_RELEASED_CODE error carrying the answer
-   * `answerOf` gives it from what the queue knew of it.
+   * Release every pending proposal without an answer from consensus (its
+   * replica stopped leading, or is shutting down). Each is released as
+   * releaseEntry releases one.
    *
    * @param {Function} answerOf - ({entryId, proposal, logIndex}) => the
    *   released write's answer ({success: false, error, ...}).
    */
   release(answerOf) {
-    for (const [entryId, pending] of this.pendingCommits) {
-      if (pending.timeoutId) {
-        this.timeSource.clearTimeout(pending.timeoutId);
-      }
-      const answer = answerOf(Object.freeze({
-        entryId,
-        proposal: this.proposals.get(entryId),
-        logIndex: Number.isFinite(pending.logIndex) ? pending.logIndex : null,
-      }));
-      this.pendingCommits.delete(entryId);
-      this.proposals.delete(entryId);
-      if (pending.reject) {
-        const released = new Error(answer.error);
-        released.code = PROPOSAL_QUEUE_RELEASED_CODE;
-        released.answer = answer;
-        pending.reject(released);
-      }
+    for (const entryId of [...this.pendingCommits.keys()]) {
+      this.releaseEntry(entryId, answerOf);
     }
   }
 
   /**
-   * Release every pending proposal with one plain reason (shutdown).
+   * Release one pending proposal without an answer from consensus (its
+   * commit deadline passed). It is rejected with a
+   * PROPOSAL_QUEUE_RELEASED_CODE error carrying the answer `answerOf` gives
+   * it from what the queue knew of it; this is the queue's one release.
    *
-   * @param {string} reason - Reason for clearing the queue.
+   * @param {string} entryId - Unique identifier of the proposal.
+   * @param {Function} answerOf - ({entryId, proposal, logIndex}) => the
+   *   released write's answer ({success: false, error, ...}).
+   * @return {boolean} True if the entry was pending and was released.
    */
-  clear(reason) {
-    this.release(() => ({success: false, error: reason}));
+  releaseEntry(entryId, answerOf) {
+    const pending = this.pendingCommits.get(entryId);
+    if (!pending) {
+      return false;
+    }
+    if (pending.timeoutId) {
+      this.timeSource.clearTimeout(pending.timeoutId);
+    }
+    const answer = answerOf(Object.freeze({
+      entryId,
+      proposal: this.proposals.get(entryId),
+      logIndex: Number.isFinite(pending.logIndex) ? pending.logIndex : null,
+    }));
+    this.pendingCommits.delete(entryId);
+    this.proposals.delete(entryId);
+    if (pending.reject) {
+      const released = new Error(answer.error);
+      released.code = PROPOSAL_QUEUE_RELEASED_CODE;
+      released.answer = answer;
+      pending.reject(released);
+    }
+    return true;
   }
 
   /**

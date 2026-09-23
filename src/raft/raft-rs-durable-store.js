@@ -20,6 +20,7 @@ import {
   RAFT_RS_SQL,
   RAFT_RS_STORE_ERROR_CODE,
   RAFT_RS_STORE_ERROR_MSG,
+  RAFT_RS_TABLE,
   RAFT_RS_ZERO_INDEX,
 } from './raft-rs-durable-store-constants.js';
 import {RAFT_RS_HOST_WRITE} from './raft-rs-host-contract.js';
@@ -98,6 +99,24 @@ function confStateFromRow(row) {
 }
 
 /**
+ * One read of a record table. A read that fails (the table is missing, the
+ * file is unreadable or corrupt) throws an error that names the table beside
+ * SQLite's own code, so its reader can say which part of the record it could
+ * not read.
+ * @param {string} table - The record table the read reaches.
+ * @param {Function} read - The read.
+ * @return {*} What the read returned.
+ */
+function readRecordTable(table, read) {
+  try {
+    return read();
+  } catch (error) {
+    throw Object.assign(new Error(String(error?.message || error),
+      {cause: error}), {code: error?.code, table});
+  }
+}
+
+/**
  * The durable Raft record for the raft-rs-wasm backend.
  */
 class RaftRsDurableStore {
@@ -108,6 +127,24 @@ class RaftRsDurableStore {
     this.db = db;
     this.journal = [];
     this.ownTransactionDepth = 0;
+    this.createRecordTables();
+  }
+
+  /**
+   * Create the record's tables together, on a database that has none of
+   * them. A database holding some of them holds a record that lost a table:
+   * created empty, the table would make the record read as one that never
+   * had that part (its configuration, its applied index), so it stays missing
+   * and every read of the record fails, naming it, until it is restored.
+   * @private
+   */
+  createRecordTables() {
+    const tablePresent = this.db.prepare(
+      RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT);
+    if (RAFT_RS_RECORD_TABLES.some((table) =>
+      tablePresent.get(table) !== undefined)) {
+      return;
+    }
     this.db.exec(RAFT_RS_SQL.CREATE_LOG_TABLE);
     this.db.exec(RAFT_RS_SQL.CREATE_HARD_STATE_TABLE);
     this.db.exec(RAFT_RS_SQL.CREATE_APPLIED_STATE_TABLE);
@@ -290,19 +327,19 @@ class RaftRsDurableStore {
   }
 
   /**
-   * Read one group's whole durable Raft record.
+   * Read one group's whole durable Raft record. A table it cannot read is
+   * named on the error it throws (readRecordTable).
    * @param {string} groupId - The group.
    * @return {Object} {hardState, confState, appliedIndex, entries, snapshot}.
    */
   readDurableRecord(groupId) {
-    const hardStateRow = this.db.prepare(RAFT_RS_SQL.SELECT_HARD_STATE)
-      .safeIntegers(true).get(groupId);
-    const appliedRow = this.db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE)
-      .safeIntegers(true).get(groupId);
-    const snapshotRow = this.db.prepare(RAFT_RS_SQL.SELECT_SNAPSHOT)
-      .safeIntegers(true).get(groupId);
-    const entryRows = this.db.prepare(RAFT_RS_SQL.SELECT_LOG_ENTRIES)
-      .safeIntegers(true).all(groupId);
+    const {hardStateRow, appliedRow} = this.readProgressRows(groupId);
+    const snapshotRow = readRecordTable(RAFT_RS_TABLE.SNAPSHOT, () =>
+      this.db.prepare(RAFT_RS_SQL.SELECT_SNAPSHOT)
+        .safeIntegers(true).get(groupId));
+    const entryRows = readRecordTable(RAFT_RS_TABLE.LOG, () =>
+      this.db.prepare(RAFT_RS_SQL.SELECT_LOG_ENTRIES)
+        .safeIntegers(true).all(groupId));
     return {
       hardState: hardStateRow ? {
         term: fromExactInteger(hardStateRow.term),
@@ -331,6 +368,23 @@ class RaftRsDurableStore {
   }
 
   /**
+   * The hard-state and applied-state rows of one group.
+   * @param {string} groupId - The group.
+   * @return {Object} {hardStateRow, appliedRow}, each undefined when absent.
+   * @private
+   */
+  readProgressRows(groupId) {
+    return {
+      hardStateRow: readRecordTable(RAFT_RS_TABLE.HARD_STATE, () =>
+        this.db.prepare(RAFT_RS_SQL.SELECT_HARD_STATE)
+          .safeIntegers(true).get(groupId)),
+      appliedRow: readRecordTable(RAFT_RS_TABLE.APPLIED_STATE, () =>
+        this.db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE)
+          .safeIntegers(true).get(groupId)),
+    };
+  }
+
+  /**
    * Read one group's durable progress without its log: the commit index of
    * its hard state and its applied index.
    * @param {string} groupId - The group.
@@ -338,10 +392,7 @@ class RaftRsDurableStore {
    *   when the group has no such row).
    */
   readDurableProgress(groupId) {
-    const hardStateRow = this.db.prepare(RAFT_RS_SQL.SELECT_HARD_STATE)
-      .safeIntegers(true).get(groupId);
-    const appliedRow = this.db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE)
-      .safeIntegers(true).get(groupId);
+    const {hardStateRow, appliedRow} = this.readProgressRows(groupId);
     return {
       commitIndex: hardStateRow ?
         fromExactInteger(hardStateRow.commit_index) : RAFT_RS_ZERO_INDEX,

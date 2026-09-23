@@ -13,6 +13,9 @@ import * as partitionWriteKernel from
 import * as errorConstants from '../../src/constants/errors.js';
 import * as proposalQueueConstants from
   '../../src/partition/proposal-queue-constants.js';
+import {ProposalQueue} from '../../src/partition/proposal-queue.js';
+import {assertRaftOperationSucceeded} from
+  '../../src/raft/raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_PERSISTENCE_ADMISSION} from
@@ -255,10 +258,12 @@ test('partition write kernel names the state of every write it did not ' +
       TEST_PARTITION_ID),
     proposed: buildReleasedPendingWriteAnswer({entryId: TEST_ENTRY_ID,
       proposal: PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED,
-      logIndex: TEST_LOG_INDEX}, TEST_PARTITION_ID),
+      logIndex: TEST_LOG_INDEX}, TEST_PARTITION_ID, {cause:
+      partitionWriteKernel.PARTITION_WRITE_RELEASE_CAUSE?.LEADERSHIP_LOST}),
     queued: buildReleasedPendingWriteAnswer({entryId: TEST_ENTRY_ID,
       proposal: PROPOSAL_QUEUE_PROPOSAL_STATE.QUEUED, logIndex: null},
-    TEST_PARTITION_ID),
+    TEST_PARTITION_ID, {cause:
+      partitionWriteKernel.PARTITION_WRITE_RELEASE_CAUSE?.LEADERSHIP_LOST}),
   };
   t.same(Object.fromEntries(Object.entries(answers).map(([name, answer]) =>
     [name, answer.failureCode])), {
@@ -279,4 +284,100 @@ test('partition write kernel names the state of every write it did not ' +
       answer.error.includes(fragment)), `${name}: routed again by the ` +
       `routers (${answer.error})`);
   }
+});
+
+// F-ak: the release at a commit deadline or at shutdown, a proposal queue at
+// capacity and a proposal the port refused or failed on are answered by the
+// kernel's two builders, typed with their entry; and every answer's code and
+// text agree on whether a router may route it again (a router holding the
+// answer branches on the code, one holding only the text on the fragments).
+test('partition write kernel types every release and proposal refusal, and ' +
+  'its routable codes and texts agree', async (t) => {
+  const {
+    PARTITION_WRITE_LEADERSHIP_REFUSAL: REFUSAL,
+    PARTITION_WRITE_RELEASE_CAUSE: CAUSE,
+    buildPartitionWriteLeadershipRefusal,
+    buildPartitionWriteProposalRefusal,
+    buildReleasedPendingWriteAnswer,
+    isReroutableWriteFailureCode,
+  } = partitionWriteKernel;
+  const {isReroutableWriteError} = errorConstants;
+  const {PROPOSAL_QUEUE_PROPOSAL_STATE: STATE} = proposalQueueConstants;
+  const released = (proposal, release) => buildReleasedPendingWriteAnswer(
+    {entryId: TEST_ENTRY_ID, proposal, logIndex: null}, TEST_PARTITION_ID,
+    release);
+  // Inputs: the refusals as their owners raise them - the proposal queue at
+  // capacity, and the port's outcomes as the write path asserts them.
+  const queue = new ProposalQueue({maxCapacity: 1});
+  queue.enqueue('entry-holding-the-slot', {});
+  let backpressure = null;
+  try {
+    queue.enqueue(TEST_ENTRY_ID, {});
+  } catch (error) {
+    backpressure = error;
+  }
+  const portRefusal = (outcome) => {
+    try {
+      assertRaftOperationSucceeded({outcome, reason: `${outcome}-reason`,
+        phase: 'propose', retryable: false, recoveryRequired: false});
+    } catch (error) {
+      return error;
+    }
+    return null;
+  };
+  const refused = (refusal) => buildPartitionWriteProposalRefusal(refusal,
+    null, {partitionId: TEST_PARTITION_ID, entryId: TEST_ENTRY_ID});
+  const deadline = {cause: CAUSE?.COMMIT_DEADLINE_EXCEEDED,
+    deadlineMs: 30000};
+  const answers = {
+    deadlineProposed: released(STATE.PROPOSED, deadline),
+    deadlineQueued: released(STATE.QUEUED, deadline),
+    shutdownProposed: released(STATE.PROPOSED, {cause: CAUSE?.SHUTDOWN}),
+    shutdownQueued: released(STATE.QUEUED, {cause: CAUSE?.SHUTDOWN}),
+    backpressure: refused(backpressure),
+    coreRefused: refused(portRefusal(RAFT_OPERATION_OUTCOME.CORE_REFUSED)),
+    coreFatal: refused(portRefusal(RAFT_OPERATION_OUTCOME.CORE_FATAL)),
+    hostFailure: refused(portRefusal(RAFT_OPERATION_OUTCOME.HOST_FAILURE)),
+  };
+  t.same(Object.fromEntries(Object.entries(answers).map(([name, answer]) =>
+    [name, answer.failureCode])), {
+    deadlineProposed: REFUSAL.OUTCOME_UNKNOWN,
+    deadlineQueued: REFUSAL.COMMIT_DEADLINE_EXCEEDED,
+    shutdownProposed: REFUSAL.OUTCOME_UNKNOWN,
+    shutdownQueued: REFUSAL.SERVICE_SHUTDOWN,
+    backpressure: REFUSAL.BACKPRESSURE,
+    coreRefused: REFUSAL.CONSENSUS_REFUSED,
+    coreFatal: REFUSAL.OUTCOME_UNKNOWN,
+    hostFailure: REFUSAL.CONSENSUS_HOST_FAILURE,
+  }, 'each release and refusal has its own typed code');
+  for (const [name, answer] of Object.entries(answers)) {
+    t.equal(answer.entryId, TEST_ENTRY_ID, `${name}: it names its entry`);
+    t.equal(typeof answer.failureCode, 'string', `${name}: it is typed`);
+  }
+  t.same(answers.deadlineProposed.consensus, {reason:
+    CAUSE?.COMMIT_DEADLINE_EXCEEDED, deadlineMs: 30000},
+  'a deadline release names its cause and the deadline');
+  t.equal(answers.backpressure.retryAfterMs, backpressure?.retryAfterMs,
+    'backpressure carries the queue\'s own retry time');
+  t.same(answers.coreRefused.consensus, {reason: 'CORE_REFUSED-reason',
+    phase: 'propose', retryable: false},
+  'a core refusal carries the port\'s reason and retryability');
+  const all = {
+    ...answers,
+    notLeader: buildPartitionWriteLeadershipRefusal(
+      {outcome: RAFT_OPERATION_OUTCOME.CORE_OK, role: 'follower'},
+      TEST_PARTITION_ID),
+    recovery: buildPartitionWriteLeadershipRefusal({
+      outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE, recoveryRequired: true,
+      reason: 'recovery-deferred', phase: 'application', retryAfterMs: 5},
+    TEST_PARTITION_ID),
+  };
+  for (const [name, answer] of Object.entries(all)) {
+    t.equal(isReroutableWriteFailureCode?.(answer.failureCode),
+      isReroutableWriteError(answer.error), `${name}: its code and its ` +
+      `text agree on routing it again (${answer.failureCode}: ` +
+      `${answer.error})`);
+  }
+  t.equal(isReroutableWriteFailureCode?.(REFUSAL.CONSENSUS_HOST_FAILURE),
+    false, 'a host failure while proposing is not routed again by code');
 });

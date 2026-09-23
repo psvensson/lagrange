@@ -104,7 +104,8 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
           type: PARTITION_SERVICE_OPERATION.QUERY,
           sql,
           params,
-          entryId: options.entryId || null,
+          // As supplied: the admission owner decides whether it is valid.
+          entryId: options.entryId ?? null,
           operationId: options.operationId || null,
           idempotencyKey: options.idempotencyKey || null,
           splitMirrorOrigin: options.splitMirrorOrigin || null,
@@ -208,6 +209,15 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         proposedAt: this.timeSource.now(),
       },
     );
+    // A session write enters consensus inside its transaction's commit
+    // marker, so the admission owner admits it at staging exactly as the
+    // write path admits a write: an invalid entryId is refused before
+    // anything is staged, and an absent one was minted by the builder.
+    const admission = admitCommittedCommand(entry, {
+      origin: PARTITION_COMMITTED_COMMAND_ORIGIN.WRITE_PATH});
+    if (!admission.admitted) {
+      return committedCommandRefusalResult(admission, this.partitionId);
+    }
     try {
       const stmt = this.db.prepare(entry.sql);
       const info = stmt.run(...(entry.params || []));

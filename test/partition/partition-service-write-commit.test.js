@@ -290,7 +290,8 @@ test(
     );
 
     if (demotionOutcome.kind === 'test-timeout') {
-      partition.clearPendingCommittedWrites('test cleanup');
+      partition.releasePendingCommittedWrites(() => ({
+        success: false, error: 'test cleanup'}));
       await writeOutcomePromise;
     }
     await partition.shutdown();

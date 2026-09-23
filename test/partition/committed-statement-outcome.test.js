@@ -612,6 +612,58 @@ test('F-ad: a present-but-invalid entryId is refused before consensus; a ' +
   });
 });
 
+// F-ai: a session write enters consensus inside its transaction's commit
+// marker, so the admission owner admits it where it is staged, exactly as it
+// admits a write on the write path.
+test('F-ai: a session write is admitted at staging - a present-but-invalid ' +
+  'entryId is refused typed before anything is staged, an absent one is ' +
+  'minted - so the commit marker carries only string entry ids',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await withPartition('fai-session', async ({dbPath, open}) => {
+    const partition = await open();
+    assert.equal((await insert(partition, 'row-0', 'setup', 'e-setup'))
+      .success, true, 'setup: the partition serves a write');
+    const sessionId = 'fai-session-1';
+    await partition.beginTransaction(sessionId);
+    for (const [name, entryId] of INVALID_ENTRY_IDS) {
+      const staged = await partition.executeQuery(INSERT_SQL,
+        [`session-${name}`, 'v'], {sessionId, entryId});
+      assert.equal(staged?.success, false, 'a session write with an ' +
+        `invalid entryId (${name}) is refused (${JSON.stringify(staged)})`);
+      assert.equal(staged.failureCode,
+        PARTITION_COMMITTED_COMMAND_ERROR_CODE.ENTRY_ID_INVALID,
+        `with the admission owner's typed code (${name})`);
+    }
+    const minted = await partition.executeQuery(INSERT_SQL,
+      ['session-minted', 'v'], {sessionId});
+    assert.equal(minted?.success, true, 'a session write without an ' +
+      'entryId is staged');
+    assert.equal((await partition.commitTransaction(sessionId))?.success,
+      true, 'the session commits');
+    const independent = new Database(dbPath, {readonly: true});
+    let marker;
+    try {
+      marker = RaftRsDurableStore.readCommittedEntriesIn(independent,
+        'fai-session').map((record) => record.command).find((command) =>
+        command.type === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT &&
+        command.sessionId === sessionId);
+    } finally {
+      independent.close();
+    }
+    assert.ok(marker, 'the session\'s commit marker is in the durable log');
+    assert.deepEqual(marker.operations.map((operation) =>
+      typeof operation.entryId), ['string'], 'the marker carries exactly ' +
+      'the staged write, keyed by a string entry id ' +
+      `(${JSON.stringify(marker.operations.map((op) => op.entryId))})`);
+    assert.equal(rowOf(dbPath, 'session-minted')?.id, 'session-minted',
+      'the admitted session write applied');
+    for (const [name] of INVALID_ENTRY_IDS) {
+      assert.equal(rowOf(dbPath, `session-${name}`), null,
+        `nothing was staged for the refused write (${name})`);
+    }
+  });
+});
+
 test('B5: a committed entry with an unknown type (proposed straight through ' +
   'the port) fails closed with a typed, named host failure on readStatus ' +
   'and on the restart\'s initialize(), and its sibling is untouched',

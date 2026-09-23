@@ -13,19 +13,39 @@ const ERRORS = Object.freeze({
   WRITE_OUTCOME_UNKNOWN:
     'The proposal was accepted into consensus and its outcome is not known ' +
     'to this replica; a retry with the same entryId is idempotent',
+  // The writes this replica did not propose, by why (the partition write
+  // kernel appends what it knows): its service shut down first, its proposal
+  // queue is at capacity, the consensus port refused the proposal, or the
+  // write was not handed to consensus before its commit deadline.
+  WRITE_SERVICE_SHUTDOWN:
+    'The partition service shut down before the write was proposed; it was ' +
+    'not proposed',
+  WRITE_BACKPRESSURE:
+    'Partition write backpressure: the proposal queue is at capacity and the ' +
+    'write was not proposed',
+  WRITE_CONSENSUS_REFUSED:
+    'The consensus port refused the proposal; the write was not proposed',
+  WRITE_COMMIT_DEADLINE_EXCEEDED:
+    'The write was not proposed before its commit deadline',
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
   NO_HANDLER_FOR_ADDRESS: 'No handler registered for address',
 });
 
-// The answers of a partition write this replica did not take, which a caller
-// may route again (to the current leader, or here once the replica recovers):
-// no leader here, a consensus recovery in progress here, or a released write
-// whose outcome this replica cannot know. Routers classify by these, never by
-// a text of their own.
+// The texts of the partition write answers a caller may route again (to the
+// current leader, or here once the state they name has passed): no leader
+// here, a consensus recovery in progress here, a released write whose outcome
+// this replica cannot know, or a write this replica did not propose. A router
+// that holds the answer branches on its code (the partition write kernel's
+// isReroutableWriteFailureCode); these texts are for the routers that receive
+// only an error text, which classify by them, never by a text of their own.
 const REROUTABLE_WRITE_ERROR_FRAGMENTS = Object.freeze([
   ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
   ERRORS.CONSENSUS_RECOVERY_IN_PROGRESS,
   ERRORS.WRITE_OUTCOME_UNKNOWN,
+  ERRORS.WRITE_SERVICE_SHUTDOWN,
+  ERRORS.WRITE_BACKPRESSURE,
+  ERRORS.WRITE_CONSENSUS_REFUSED,
+  ERRORS.WRITE_COMMIT_DEADLINE_EXCEEDED,
 ]);
 
 /**

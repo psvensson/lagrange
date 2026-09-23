@@ -82,6 +82,11 @@ const RUNTIME_PHASE = Object.freeze({
   DISPATCH: 'dispatch',
   ADMISSION: 'admission',
   PROGRESS_PROBE: 'progress-probe',
+  // The group's durable record could not be read where it is opened or
+  // reconstructed from (a missing table, SQLITE_IOERR, SQLITE_CORRUPT).
+  DURABLE_RECORD_READ: 'durable-record-read',
+  // A throw the runtime did not type, contained by the group's port.
+  UNEXPECTED_THROW: 'unexpected-throw',
 });
 const RUNTIME_REASON = Object.freeze({
   CORE_REFUSED: 'core-refused',

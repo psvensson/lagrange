@@ -1,4 +1,6 @@
 import {isReroutableWriteError} from '../constants/errors.js';
+import {isReroutableWriteFailureCode} from
+  '../partition/partition-write-kernel.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
@@ -235,7 +237,10 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     }
 
     isRetryableOperationPersistError(errorResult) {
-      if (isRetryableControlPlaneError(errorResult)) {
+      // A partition write answer is classified by its code when the result
+      // carries it, by its text when only the text reached the repository.
+      if (isRetryableControlPlaneError(errorResult) ||
+          isReroutableWriteFailureCode(errorResult?.failureCode)) {
         return true;
       }
       const errorMessage = this.getOperationPersistErrorMessage(errorResult);
@@ -374,6 +379,13 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       if (!this.isRetryableOperationPersistError(errorResult)) {
         return false;
       }
+      // A partition write answer that carries its code is routed again by
+      // it; otherwise the error's text and shape decide.
+      return isReroutableWriteFailureCode(errorResult?.failureCode) ||
+        this.hasOperationMutationRouteRepairSignature(errorResult);
+    }
+
+    hasOperationMutationRouteRepairSignature(errorResult) {
       const errorMessage = this.getOperationPersistErrorMessage(errorResult);
       if (
         typeof errorMessage !== 'string' ||

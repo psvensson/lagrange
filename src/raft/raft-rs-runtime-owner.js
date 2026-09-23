@@ -251,6 +251,53 @@ function groupHostFailure(group, phase, error) {
   return groupFailed(group, hostFailure(phase, error, true));
 }
 
+// A durable record the store could not read: its message, and as its detail
+// the record table the store names and SQLite's own code.
+function durableRecordReadFailure(error) {
+  return {
+    message: String(error?.message || error),
+    detail: {
+      ...(typeof error?.table === 'string' ? {table: error.table} : {}),
+      ...(typeof error?.code === 'string' ? {code: error.code} : {}),
+    },
+  };
+}
+
+// What a group's node is opened from: its durable record when the store
+// holds one (restore), its bootstrap voters when it holds none (create). A
+// record that cannot be read - a missing table, SQLITE_IOERR, SQLITE_CORRUPT -
+// is the group's own host failure: the group is held by it (its retry window
+// engages as for any persisting failure), nothing is opened from what could
+// not be read, and no other group is touched.
+function readOpeningRecord(group) {
+  try {
+    const restore = group.store.hasDurableRecord(group.groupId);
+    return {ok: true, restore,
+      record: restore ? group.store.readDurableRecord(group.groupId) : null};
+  } catch (error) {
+    return {ok: false, result: groupHostFailure(group,
+      RUNTIME_PHASE.DURABLE_RECORD_READ, durableRecordReadFailure(error))};
+  }
+}
+
+// A throw the runtime did not type, contained by the group's port: the
+// group's own host failure (phase unexpected-throw), recorded like any other,
+// so the group is held and reconstructed from its durable record at most once
+// per retry window, and answered as the held group's typed status. The record
+// is written before the group's lost role is announced; an announcement that
+// throws in turn leaves that record as written and is the answer's reason, so
+// containing a throw never throws.
+function containUnexpectedThrow(group, error) {
+  const failed = hostFailure(RUNTIME_PHASE.UNEXPECTED_THROW, error, true);
+  try {
+    groupFailed(group, failed);
+  } catch (announcementError) {
+    return recoveryOutcome(group,
+      String(announcementError?.message || announcementError));
+  }
+  return recoveryOutcome(group, failed.reason);
+}
+
 function admissionWaitOutcomes(group) {
   return {
     closed: () => outcome(CORE_REFUSED, {
@@ -333,19 +380,18 @@ function invokeCoreAt(group, expectedGeneration, operation, ...args) {
   return invokeCore(group, operation, ...args);
 }
 
-function createNodeArguments(group, restore) {
+// The core's create_node arguments for what readOpeningRecord read.
+function createNodeArguments(group, {restore, record}) {
   const base = {
     id: group.peerId,
     peers: restore ? [] : group.voters,
     learners: [],
-    applied: restore ? group.store.readDurableRecord(group.groupId).appliedIndex :
-      RAFT_RS_INITIAL_APPLIED,
+    applied: restore ? record.appliedIndex : RAFT_RS_INITIAL_APPLIED,
     ...tuningOf(group.timing),
   };
   if (!restore) {
     return base;
   }
-  const record = group.store.readDurableRecord(group.groupId);
   return {
     ...base,
     bootstrap: {
@@ -357,15 +403,15 @@ function createNodeArguments(group, restore) {
   };
 }
 
-function openGroupInCurrentRuntime(group, restore) {
+function openGroupInCurrentRuntime(group, opening) {
   group.handle = null;
   const created = invokeCore(group, 'create_node',
-    createNodeArguments(group, restore));
+    createNodeArguments(group, opening));
   if (!created.ok) {
     return created.result;
   }
   group.handle = created.value;
-  if (!restore) {
+  if (!opening.restore) {
     const confState = invokeCore(group, CORE_OPERATION.CONF_STATE);
     if (!confState.ok) {
       return confState.result;
@@ -380,7 +426,7 @@ function openGroupInCurrentRuntime(group, restore) {
   }
   group.health = USABLE;
   return outcome(CORE_OK, {
-    reason: restore ? RUNTIME_REASON.RESTORED : RUNTIME_REASON.CREATED,
+    reason: opening.restore ? RUNTIME_REASON.RESTORED : RUNTIME_REASON.CREATED,
   });
 }
 
@@ -411,21 +457,39 @@ function resumeAfterReconstruction(group, expectedGeneration) {
   return outcome(CORE_OK, {reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED});
 }
 
+// What a replaced runtime restores a group from: nothing for a closed group
+// or one without a record; a group whose record cannot be read is held by
+// that failure alone, and the replaced core's handle names nothing in the
+// new one.
+function openingForReplacement(group) {
+  if (group.closed) {
+    return null;
+  }
+  const opening = readOpeningRecord(group);
+  if (!opening.ok) {
+    group.handle = null;
+  }
+  return opening.ok && opening.restore ? opening : null;
+}
+
 // Reconstruct the shared runtime from every group's durable record, then let
 // each restored group resume. Only a core failure (the instance trapped)
 // replaces the runtime. The outcome is the reconstruction's and, for the group
 // whose operation asked for it, that group's resumption: a group that cannot
-// resume is left RECOVERY_REQUIRED for its own next operation.
+// resume is left RECOVERY_REQUIRED for its own next operation. A group whose
+// record cannot be read is held by that failure alone; every other group is
+// restored.
 function replaceRuntime(trigger) {
   core = null;
   runtimeHealth = HEALTHY;
   ensureCore();
   const restoredGroups = [];
   for (const group of groups.values()) {
-    if (group.closed || !group.store.hasDurableRecord(group.groupId)) {
+    const opening = openingForReplacement(group);
+    if (opening === null) {
       continue;
     }
-    const restored = openGroupInCurrentRuntime(group, true);
+    const restored = openGroupInCurrentRuntime(group, opening);
     if (restored.outcome !== CORE_OK) {
       return restored;
     }
@@ -535,7 +599,10 @@ function reconstructGroup(group) {
   if (freed !== null && !freed.ok && freed.result.outcome === CORE_FATAL) {
     return freed.result;
   }
-  const restored = openGroupInCurrentRuntime(group, true);
+  group.handle = null;
+  const opening = readOpeningRecord(group);
+  const restored = opening.ok ? openGroupInCurrentRuntime(group, opening) :
+    opening.result;
   const expectedGeneration = runtimeGeneration;
   const resumed = restored.outcome !== CORE_OK ? restored :
     thenMaybe(drainReady(group, expectedGeneration), (drained) =>
@@ -1220,13 +1287,17 @@ function createRuntimeDispatcher(request) {
     closed: false,
   };
   groups.set(group.key, group);
-  const opened = openGroupInCurrentRuntime(
-    group, store.hasDurableRecord(group.groupId));
-  if (opened.outcome !== CORE_OK) {
+  // A record that cannot be read leaves the group held by that failure: its
+  // port exists and answers typed, and the group's next operation after its
+  // retry window reconstructs it. Any other failure to open refuses the port.
+  const opening = readOpeningRecord(group);
+  const opened = opening.ok ? openGroupInCurrentRuntime(group, opening) :
+    opening.result;
+  if (opening.ok && opened.outcome !== CORE_OK) {
     groups.delete(group.key);
     throw new Error(opened.reason);
   }
-  const first = invokeCore(group, 'status');
+  const first = opening.ok ? invokeCore(group, 'status') : {ok: false};
   if (first.ok) {
     group.lastStatus = first.value;
     recordStatusObservation(group, runtimeGeneration, first.value);
@@ -1263,6 +1334,8 @@ function createRuntimeDispatcher(request) {
       group.timing = deepFreeze({...group.timing, ...timing});
       return true;
     }),
+    containUnexpectedThrow: Object.freeze((error) =>
+      containUnexpectedThrow(group, error)),
     close: Object.freeze(({enterCore}) => {
       group.closed = true;
       groups.delete(group.key);

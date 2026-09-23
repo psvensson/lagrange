@@ -1,5 +1,7 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {isReroutableWriteError} from '../constants/errors.js';
+import {isReroutableWriteFailureCode} from
+  '../partition/partition-write-kernel.js';
 import {
   PARTITION_TRANSITION_STATE,
 } from '../partition/partition-constants.js';
@@ -140,9 +142,12 @@ class CDCRoutedMutationReadiness {
       try {
         const localResult = await partitionService.executeQuery(sql, params);
         const result = this.normalizeLocalSystemTableWriteResult(localResult);
+        // The local partition's own answer: routed on to the next local
+        // service by its code when the write kernel typed it.
         if (!result || result.success === false) {
           const message = result?.error || '';
-          if (this.isTransientCdcError(message)) {
+          if (isReroutableWriteFailureCode(result?.failureCode) ||
+              this.isTransientCdcError(message)) {
             continue;
           }
         }
@@ -682,8 +687,11 @@ class CDCRoutedMutationReadiness {
       typeof errorLike === 'string' ?
         errorLike :
         errorLike?.message || errorLike?.error || '';
+    // A partition write answer is classified by its code when the caller
+    // holds it, by its text when only the text reached the caller.
     return (
       isRetryableControlPlaneError(errorLike) ||
+      isReroutableWriteFailureCode(errorLike?.failureCode) ||
       isReroutableWriteError(message) ||
       message.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
       message === ERRORS.QUERY_FAILED ||

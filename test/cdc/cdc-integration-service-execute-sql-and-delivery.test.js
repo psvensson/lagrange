@@ -263,7 +263,8 @@ async (t) => {
     entryId: 'cdc-entry',
     proposal: proposalQueueConstants.PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED,
     logIndex: null,
-  }, 'cdc-p1');
+  }, 'cdc-p1', {cause:
+    partitionWriteKernel.PARTITION_WRITE_RELEASE_CAUSE?.LEADERSHIP_LOST});
   t.equal(service.isTransientCdcError(released.error), true,
     `a released write whose outcome is unknown is retried (${released.error})`);
   t.end();

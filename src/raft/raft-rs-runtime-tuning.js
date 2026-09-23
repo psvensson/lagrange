@@ -46,7 +46,9 @@ function tuningOf(timing = {}) {
 // once per window, so over any span a persistent failure costs at most
 // ceil(span / window) + 1 reconstructions - never one per operation or per
 // failing Ready. A failure more than one window after the last one starts
-// afresh and is attempted at once.
+// afresh and is attempted at once. The cost is the healed group's: a host
+// that heals inside a window is found only by the first operation after it,
+// so the group's first write after a heal waits up to one window.
 function recoveryRetryWindowMsOf(timing = {}) {
   return tuningOf(timing).electionTick * tickMsOf(timing);
 }

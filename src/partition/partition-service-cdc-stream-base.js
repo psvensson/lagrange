@@ -6,12 +6,15 @@ import {
 import {
   buildPendingProposal, cdcSqlPreview, classifyQuerySqlMutation,
 } from './partition-service-write-path-helpers.js';
+import {
+  PARTITION_WRITE_RELEASE_CAUSE,
+  buildReleasedPendingWriteAnswer,
+} from './partition-write-kernel.js';
 
 const {
   CDC_LIFECYCLE_LOG_MSG,
   CDC_PIPELINE_METRIC,
   CONTROL_PLANE_PARTITION_IDS,
-  ERRORS,
   PARTITION_CDC_EVENT_BUILD_STATE,
   PARTITION_SERVICE_DB,
   PARTITION_SERVICE_DEFAULT,
@@ -258,10 +261,9 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       partitionIds: [this.partitionId],
     });
   }
+  // A pending commit is registered only for a write the admission owner
+  // admitted, so its entryId is a non-empty string.
   waitForCommittedWrite(entryId, options = {}) {
-    if (typeof entryId !== 'string' || entryId.length === 0) {
-      return Promise.reject(new Error(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE));
-    }
     const timeoutMs =
       Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0 ?
         Math.floor(options.timeoutMs) :
@@ -272,12 +274,16 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       resolvePending = resolve;
       rejectPending = reject;
     });
-    // The commit deadline is this replica's, on this replica's clock.
+    // The commit deadline is this replica's, on this replica's clock. A
+    // write still pending at it is released with the write kernel's typed
+    // answer: one handed to consensus may still commit, so its outcome is not
+    // known here; one never handed to it was not proposed.
     const timeoutId = this.timeSource.setTimeout(() => {
-      this.rejectCommittedWrite(
-        entryId,
-        new Error(`Raft write commit timed out after ${timeoutMs}ms`),
-      );
+      this.proposalQueue.releaseEntry(entryId, (pending) =>
+        buildReleasedPendingWriteAnswer(pending, this.partitionId, {
+          cause: PARTITION_WRITE_RELEASE_CAUSE.COMMIT_DEADLINE_EXCEEDED,
+          deadlineMs: timeoutMs,
+        }));
     }, timeoutMs);
     try {
       this.proposalQueue.enqueue(entryId, buildPendingProposal({
@@ -343,11 +349,9 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     }
     return this.proposalQueue.reject(entryId, error);
   }
-  clearPendingCommittedWrites(reason) {
-    this.proposalQueue.clear(reason);
-  }
-  // The one release of pending writes when this replica stops leading: each
-  // is answered by answerOf from what the proposal queue knew of it.
+  // The one release of every pending write (this replica stops leading, or
+  // shuts down): each is answered by answerOf from what the proposal queue
+  // knew of it.
   releasePendingCommittedWrites(answerOf) {
     this.proposalQueue.release(answerOf);
   }

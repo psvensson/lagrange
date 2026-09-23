@@ -721,6 +721,7 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
     `Partition ${partitionId} cannot lead its single-replica group: the ` +
     `consensus port refused its campaign (${campaign?.outcome}: ` +
     `${campaign?.reason}` +
+    `${campaign?.phase ? `, phase ${campaign.phase}` : ''}` +
     `${campaign?.detail ? ` ${JSON.stringify(campaign.detail)}` : ''})`,
   backendSelectionRefused: (option, requested) =>
     `Partition consensus backend selection refused: ${option}=` +

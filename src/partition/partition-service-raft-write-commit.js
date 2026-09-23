@@ -96,10 +96,10 @@ function userTransactionWriteDeferral(service, entryId) {
 // port refused is answered with the port's typed outcome; a write the
 // release answered carries the release's typed answer (its proposal state);
 // any other rejection is the write's failure.
-function unansweredWriteResult(service, proposal, error) {
+function unansweredWriteResult(service, proposal, error, entryId) {
   if (proposal.state === WRITE_PROPOSAL.REFUSED) {
     return buildPartitionWriteProposalRefusal(proposal.error, error,
-      service.partitionId);
+      {partitionId: service.partitionId, entryId});
   }
   if (error?.code === PROPOSAL_QUEUE_RELEASED_CODE) {
     return {...error.answer, partitionId: service.partitionId};
@@ -117,7 +117,9 @@ async function executePartitionRaftWriteCommit(service, options) {
   try {
     // Registered before the proposal: a lone leader commits and applies its
     // own proposal inside propose(), and the application resolves this
-    // pending write with the committed entry's index and witness.
+    // pending write with the committed entry's index and witness. A proposal
+    // queue at capacity refuses it (backpressure) before anything is
+    // proposed.
     commitPromise = service.waitForCommittedWrite(entry.entryId);
   } catch (error) {
     service.recordWritePhaseDuration(
@@ -125,7 +127,8 @@ async function executePartitionRaftWriteCommit(service, options) {
       WRITE_PHASE_FIELD_APPLY_WRITE_MS,
       applyStartMs,
     );
-    return buildPartitionWriteFailureResult(error, service.partitionId);
+    return buildPartitionWriteProposalRefusal(error, null,
+      {partitionId: service.partitionId, entryId: entry.entryId});
   }
   commitPromise.catch(() => {});
   const raftCommandDispatchStartMs = service.timeSource.now();
@@ -204,7 +207,7 @@ async function executePartitionRaftWriteCommit(service, options) {
       WRITE_PHASE_FIELD_APPLY_WRITE_MS,
       applyStartMs,
     );
-    return unansweredWriteResult(service, proposal, error);
+    return unansweredWriteResult(service, proposal, error, entry.entryId);
   }
 }
 

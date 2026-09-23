@@ -6,7 +6,10 @@ import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../raft/raft-rs-durable-store-constants.js';
 import {PARTITION_COMMITTED_COMMAND_ERROR_CODE} from
   './partition-service-constants.js';
-import {PROPOSAL_QUEUE_PROPOSAL_STATE} from './proposal-queue-constants.js';
+import {
+  PROPOSAL_QUEUE_BACKPRESSURE_CODE,
+  PROPOSAL_QUEUE_PROPOSAL_STATE,
+} from './proposal-queue-constants.js';
 
 
 const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
@@ -19,16 +22,77 @@ const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
 // before it was handed to consensus); its group is held by its host failure
 // (the port's typed recovery outcome), or that recovery waits for a user
 // session open on the replica's connection; the port's host failed while it
-// proposed the write; or the write was released after it was handed to
-// consensus, so its outcome is not known to this replica (a retry with the
-// same entryId is idempotent).
+// proposed the write; the write was handed to consensus and released before
+// consensus answered it (its replica stopped leading, its commit deadline
+// passed, its service shut down) or the core failed while it proposed it, so
+// its outcome is not known to this replica (a retry with the same entryId is
+// idempotent); or it was not proposed - the port refused its proposal, its
+// proposal queue was at capacity (retry after the queue's retryAfterMs), its
+// service shut down or its commit deadline passed before it was handed over.
 const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
   NOT_LEADER: 'partition_write_not_leader',
   CONSENSUS_RECOVERY_REQUIRED: 'partition_write_consensus_recovery_required',
   CONSENSUS_SESSION_OPEN: 'partition_write_consensus_session_open',
   CONSENSUS_HOST_FAILURE: 'partition_write_consensus_host_failure',
   OUTCOME_UNKNOWN: 'partition_write_outcome_unknown',
+  CONSENSUS_REFUSED: 'partition_write_consensus_refused',
+  BACKPRESSURE: 'partition_write_backpressure',
+  SERVICE_SHUTDOWN: 'partition_write_service_shutdown',
+  COMMIT_DEADLINE_EXCEEDED: 'partition_write_commit_deadline_exceeded',
 });
+const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
+
+// The answers a caller may route again - to the current leader, or here once
+// the state it names has passed (a retry after an unknown outcome is
+// idempotent only with its entryId). A host failure while proposing is not
+// among them: its retryability is the port's, and the caller decides. Each
+// code's text is one the errors owner lists for the routers that receive
+// only a text (REROUTABLE_WRITE_ERROR_FRAGMENTS).
+const REROUTABLE_WRITE_FAILURE_CODES = Object.freeze([
+  REFUSAL.NOT_LEADER,
+  REFUSAL.CONSENSUS_RECOVERY_REQUIRED,
+  REFUSAL.CONSENSUS_SESSION_OPEN,
+  REFUSAL.OUTCOME_UNKNOWN,
+  REFUSAL.CONSENSUS_REFUSED,
+  REFUSAL.BACKPRESSURE,
+  REFUSAL.SERVICE_SHUTDOWN,
+  REFUSAL.COMMIT_DEADLINE_EXCEEDED,
+]);
+
+// Why pending writes are released without an answer from consensus: their
+// replica stopped leading, their commit deadline passed, or their service is
+// shutting down.
+const PARTITION_WRITE_RELEASE_CAUSE = Object.freeze({
+  LEADERSHIP_LOST: 'leadership-lost',
+  COMMIT_DEADLINE_EXCEEDED: 'commit-deadline-exceeded',
+  SHUTDOWN: 'shutdown',
+});
+
+// A released write never handed to consensus was not proposed; its code and
+// text say why it was released.
+const RELEASED_UNPROPOSED_ANSWER = Object.freeze({
+  [PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST]: Object.freeze({
+    failureCode: REFUSAL.NOT_LEADER,
+    error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+  }),
+  [PARTITION_WRITE_RELEASE_CAUSE.COMMIT_DEADLINE_EXCEEDED]: Object.freeze({
+    failureCode: REFUSAL.COMMIT_DEADLINE_EXCEEDED,
+    error: ERRORS.WRITE_COMMIT_DEADLINE_EXCEEDED,
+  }),
+  [PARTITION_WRITE_RELEASE_CAUSE.SHUTDOWN]: Object.freeze({
+    failureCode: REFUSAL.SERVICE_SHUTDOWN,
+    error: ERRORS.WRITE_SERVICE_SHUTDOWN,
+  }),
+});
+
+/**
+ * Whether a write answer's failureCode names one a caller may route again.
+ * @param {*} code - A write answer's failureCode.
+ * @return {boolean} Whether it is one of REROUTABLE_WRITE_FAILURE_CODES.
+ */
+function isReroutableWriteFailureCode(code) {
+  return REROUTABLE_WRITE_FAILURE_CODES.includes(code);
+}
 
 const PARTITION_WRITE_KERNEL_LITERAL = Object.freeze({
   EMPTY_STRING: '',
@@ -198,19 +262,24 @@ function buildPartitionWriteLeadershipRefusal(status, partitionId) {
   };
 }
 
-// The answer of a pending write released without an answer from consensus
-// (its replica stopped leading), from what the proposal queue knew of it: a
-// write handed to consensus may commit whatever this replica answers, so its
-// outcome is not known here; a write never handed to it was not proposed.
+// The answer of a pending write released without an answer from consensus,
+// from what the proposal queue knew of it and why it was released ({cause},
+// a PARTITION_WRITE_RELEASE_CAUSE, and the deadline for a passed commit
+// deadline): a write handed to consensus may commit whatever this replica
+// answers, so its outcome is not known here; a write never handed to it was
+// not proposed. The one builder of every released write's answer.
 function buildReleasedPendingWriteAnswer({entryId, proposal, logIndex},
-  partitionId) {
+  partitionId, {cause, deadlineMs}) {
   const proposed = proposal === PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED;
+  const unproposed = RELEASED_UNPROPOSED_ANSWER[cause];
   return {
     success: false,
-    error: proposed ? ERRORS.WRITE_OUTCOME_UNKNOWN :
-      ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
-    failureCode: proposed ? PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN :
-      PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
+    error: proposed ? ERRORS.WRITE_OUTCOME_UNKNOWN : unproposed.error,
+    failureCode: proposed ? REFUSAL.OUTCOME_UNKNOWN : unproposed.failureCode,
+    consensus: {
+      reason: cause,
+      ...(deadlineMs === undefined ? {} : {deadlineMs}),
+    },
     partitionId,
     entryId,
     ...(proposed && isValidRaftLogIndex(logIndex) && logIndex > 0 ?
@@ -218,28 +287,71 @@ function buildReleasedPendingWriteAnswer({entryId, proposal, logIndex},
   };
 }
 
-// The answer of a write whose proposal the port refused. A host failure is
-// typed with the port's phase, reason and retryability: the environmental
-// failure of its own application keeps that failure's code and text, any
-// other is CONSENSUS_HOST_FAILURE; a core refusal is the port's text.
-function buildPartitionWriteProposalRefusal(refusal, rejection, partitionId) {
-  const port = refusal?.raftResult;
-  if (port?.outcome !== RAFT_OPERATION_OUTCOME.HOST_FAILURE) {
-    return buildPartitionWriteFailureResult(refusal, partitionId);
-  }
+// A host failure while proposing: the environmental failure of the write's
+// own application keeps that failure's code and text, any other is
+// CONSENSUS_HOST_FAILURE.
+function hostFailureProposalAnswer(refusal, rejection) {
   const environmental = rejection?.code ===
     PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED;
+  return environmental ?
+    {error: rejection.message, failureCode: rejection.code} :
+    {error: refusal.message, failureCode: REFUSAL.CONSENSUS_HOST_FAILURE};
+}
+
+// What each port outcome of a refused proposal answers: a host failure (as
+// hostFailureProposalAnswer types it); a core refusal - the proposal never
+// entered consensus; a core failure - the core failed while it held the
+// proposal, so the write's outcome is not known here.
+const PROPOSAL_REFUSAL_ANSWER = Object.freeze({
+  [RAFT_OPERATION_OUTCOME.HOST_FAILURE]: hostFailureProposalAnswer,
+  [RAFT_OPERATION_OUTCOME.CORE_REFUSED]: (refusal) => ({
+    error: `${ERRORS.WRITE_CONSENSUS_REFUSED}: ${refusal.raftResult.reason}`,
+    failureCode: REFUSAL.CONSENSUS_REFUSED,
+  }),
+  [RAFT_OPERATION_OUTCOME.CORE_FATAL]: () => ({
+    error: ERRORS.WRITE_OUTCOME_UNKNOWN,
+    failureCode: REFUSAL.OUTCOME_UNKNOWN,
+  }),
+});
+
+// The answer of a proposal its proposal queue refused at capacity: nothing
+// was registered or proposed; retry after the queue's retryAfterMs.
+function backpressureProposalAnswer(refusal, {partitionId, entryId}) {
   return {
     success: false,
-    error: (environmental ? rejection : refusal).message,
-    failureCode: environmental ? rejection.code :
-      PARTITION_WRITE_LEADERSHIP_REFUSAL.CONSENSUS_HOST_FAILURE,
+    error: `${ERRORS.WRITE_BACKPRESSURE}; retry after ` +
+      `${refusal.retryAfterMs} ms`,
+    failureCode: REFUSAL.BACKPRESSURE,
+    retryAfterMs: refusal.retryAfterMs,
+    partitionId,
+    entryId,
+  };
+}
+
+// The answer of a write whose proposal was refused - by its proposal queue
+// at capacity, or by the port (typed with the port's reason, phase and
+// retryability, by PROPOSAL_REFUSAL_ANSWER). The one builder of every
+// refused proposal's answer; a failure that is neither is the write's own.
+function buildPartitionWriteProposalRefusal(refusal, rejection,
+  {partitionId, entryId}) {
+  if (refusal?.code === PROPOSAL_QUEUE_BACKPRESSURE_CODE) {
+    return backpressureProposalAnswer(refusal, {partitionId, entryId});
+  }
+  const port = refusal?.raftResult;
+  const answerOf = PROPOSAL_REFUSAL_ANSWER[port?.outcome];
+  if (answerOf === undefined) {
+    return buildPartitionWriteFailureResult(refusal, partitionId);
+  }
+  return {
+    success: false,
+    ...answerOf(refusal, rejection),
     consensus: {
       reason: port.reason,
       phase: port.phase,
       retryable: port.retryable === true,
     },
     partitionId,
+    entryId,
   };
 }
 
@@ -292,6 +404,7 @@ export {
   DURABLE_COMMIT_WITNESS_ERROR,
   PARTITION_WRITE_COMMIT_MODE,
   PARTITION_WRITE_LEADERSHIP_REFUSAL,
+  PARTITION_WRITE_RELEASE_CAUSE,
   buildDurableCommitWitness,
   buildPartitionWriteEntry,
   buildPartitionWriteFailureResult,
@@ -299,5 +412,6 @@ export {
   buildPartitionWriteProposalRefusal,
   buildPartitionWriteSideEffectPlan,
   buildReleasedPendingWriteAnswer,
+  isReroutableWriteFailureCode,
   resolvePartitionWriteCommitMode,
 };

@@ -11,6 +11,10 @@
  */
 const PROPOSAL_QUEUE_DEFAULT = Object.freeze({
   MAX_CAPACITY: 1000,
+  // The queue's backpressure policy: how long a proposer it refused at
+  // capacity waits before it offers the write again - long enough for the
+  // pending commits ahead of it to drain, short against the commit deadline.
+  BACKPRESSURE_RETRY_AFTER_MS: 100,
 });
 
 /**
@@ -31,6 +35,14 @@ const PROPOSAL_QUEUE_ERROR_MSG = Object.freeze({
  * @type {string}
  */
 const PROPOSAL_QUEUE_RELEASED_CODE = 'proposal_released_without_answer';
+
+/**
+ * The code of a proposal the queue refused at capacity: nothing was
+ * registered and nothing proposed; the refusal carries the queue's
+ * retryAfterMs.
+ * @type {string}
+ */
+const PROPOSAL_QUEUE_BACKPRESSURE_CODE = 'proposal_queue_backpressure';
 
 /**
  * Where a pending write stands with consensus. QUEUED: registered, not handed
@@ -55,6 +67,7 @@ const PROPOSAL_QUEUE_LOG_MSG = Object.freeze({
 });
 
 export {
+  PROPOSAL_QUEUE_BACKPRESSURE_CODE,
   PROPOSAL_QUEUE_DEFAULT,
   PROPOSAL_QUEUE_ERROR_MSG,
   PROPOSAL_QUEUE_LOG_MSG,
