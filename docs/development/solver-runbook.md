@@ -177,6 +177,19 @@ is green; the next publish reports a red one first (`publish: !!! the local
 corpus was RED`). The hosted `full-corpus-canary` runs only by hand. Fix one-way
 ratchets rather than raising their baselines.
 
+A head merged through GitHub met neither this hook nor the publisher, so it has
+NO corpus proof until `npm run publish -- --post-merge <sha>` has run for it.
+That arm refuses a sha that is not on the first-parent history of origin/main
+or that already holds the whole-corpus receipt, then starts the same detached
+local corpus - the whole corpus, since no local gate proved a cone - which
+records the receipt when green; it pushes, stages and amends nothing. Prefer
+landing source changes through the publisher. The generated test metadata and
+the owner-debt inventory carry `merge=lagrange-generated` in `.gitattributes`,
+a driver `npm run hooks:install` configures: a merge keeps ours instead of
+conflicting, and the merged tree owes `npm run -s test:metadata:refresh` and
+`node scripts/generate-global-owner-debt-inventory.js` (`--refresh` when its
+inputs are absent) before it is pushed.
+
 `solve land` proves the quest delta, not the branch: its `npm test` runs with
 the change-proof base pinned to `HEAD` (the index it is about to commit
 differs from HEAD by exactly the staged quest scope), and it announces that

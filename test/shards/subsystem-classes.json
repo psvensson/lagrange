@@ -28,7 +28,7 @@
   "censusSize": 2154,
   "digest": "fnv1a32-aec6c8b0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b73f6986",
+  "observationDigest": "fnv1a32-cc64fa35",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7530,6 +7530,7 @@
     "test/scripts/action-authority.test.js": {
       "files": [
         ".githooks/pre-push",
+        "CHANGELOG.md",
         "Dockerfile",
         "data/formation-health/trend.ndjson",
         "package-lock.json",
@@ -7543,12 +7544,15 @@
         "scripts/run-classified-test-files.js",
         "scripts/solve/red-main-exemption.js",
         "src/admin/static/playback-viewer.html",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
         "src/public-api.js",
         "test/distributed/config/local.json",
         "test/shards/primary-classes.json"
       ],
       "directories": [
         "data",
+        "data/releases",
         "scripts",
         "solve",
         "src",
@@ -8488,7 +8492,12 @@
     },
     "test/scripts/install-git-hooks-stdout-purity.test.js": {
       "files": [
-        "scripts/install-git-hooks.js"
+        "scripts/install-git-hooks.js",
+        "solve/changes/global-owner-debt-inventory/inventory.json",
+        "test/shards/impact-graph-seal.json",
+        "test/shards/primary-classes.json",
+        "test/shards/resource-classes.json",
+        "test/shards/subsystem-classes.json"
       ]
     },
     "test/scripts/inventory-ordinal-segments.test.js": {
@@ -8536,6 +8545,7 @@
         ".githooks/pre-push",
         ".github/workflows/full-corpus-canary.yml",
         ".gitignore",
+        "CHANGELOG.md",
         "data/formation-health/trend.ndjson",
         "package-lock.json",
         "package.json",
@@ -8546,11 +8556,15 @@
         "scripts/prune-test-output.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
         "test/shards/primary-classes.json"
       ],
       "directories": [
         ".githooks",
         "data",
+        "data/releases",
+        "solve",
         "solve/quests",
         "src/test-helpers",
         "test"
@@ -8761,18 +8775,23 @@
     "test/scripts/publish-head-workspace-links.test.js": {
       "files": [
         ".githooks/pre-push",
+        "CHANGELOG.md",
         "data/formation-health/trend.ndjson",
+        "package-lock.json",
         "package.json",
         "scripts/checks/push-gate-corpus-worktree.js",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
         "scripts/run-classified-test-files.js",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
         "test/shards/primary-classes.json"
       ],
       "directories": [
         "data",
         "data/releases",
+        "solve",
         "test"
       ]
     },
@@ -8780,19 +8799,25 @@
       "files": [
         ".githooks/pre-push",
         ".gitignore",
+        "CHANGELOG.md",
         "data/formation-health/trend.ndjson",
+        "package-lock.json",
         "package.json",
         "scripts/checks/push-gate-corpus-worktree.js",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
         "scripts/run-classified-test-files.js",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
         "test/shards/primary-classes.json"
       ],
       "directories": [
         ".githooks",
         "data",
         "data/formation-health",
+        "data/releases",
+        "solve",
         "test"
       ]
     },

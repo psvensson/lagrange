@@ -2,17 +2,26 @@ import tap from 'tap';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {execFileSync} from 'node:child_process';
+import {execFileSync, spawn, spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 
 import {
+  POST_MERGE_REFUSAL,
+  proveMergedHead,
   publishExactHead,
   parsePublishArgs,
+  runLocalCorpus,
   validatePublishRequest,
 } from '../../scripts/publish-head.js';
+import {recordProof} from '../../scripts/proof-authority.js';
 
 function git(cwd, args) {
   return execFileSync('git', args, {cwd, encoding: 'utf8'}).trim();
 }
+
+const PROOF_AUTHORITY = path.join(path.dirname(fileURLToPath(import.meta.url)),
+  '..', '..', 'scripts', 'proof-authority.js');
+const CORPUS_REF_ROOT = 'refs/lagrange-proofs/corpus-full-v1/';
 
 function fixture(hookBody = 'cat >/dev/null\nexit 0') {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'publish-head-'));
@@ -389,5 +398,160 @@ tap.test('publish rejects a non-fast-forward HEAD', (t) => {
   t.throws(() => publishExactHead(root, {}, {queryCi: false}),
     /not a fast-forward/u);
   fs.rmSync(parent, {recursive: true, force: true});
+  t.end();
+});
+
+// --- The post-merge arm: a head GitHub merged never met the publisher, so it
+// has no corpus proof until the operator runs the rest of the corpus for it.
+// The fixture's own HEAD lands on origin/main by a plain push (a merge the
+// publisher never saw), and the main checkout then moves on, as it does.
+function mergedFixture() {
+  const fixed = fixture();
+  const merged = git(fixed.root, ['rev-parse', 'HEAD']);
+  git(fixed.root, ['push', '--quiet', 'origin', 'HEAD:refs/heads/main']);
+  fs.writeFileSync(path.join(fixed.root, 'tracked.txt'), 'three\n');
+  git(fixed.root, ['commit', '--quiet', '-am', 'local work after the merge']);
+  const stateDir = path.join(fixed.parent, 'state');
+  const lines = [];
+  const spawned = [];
+  const prove = (sha) => proveMergedHead(fixed.root, sha, {
+    localCorpusDir: stateDir,
+    write: (line) => lines.push(line),
+    wholeCorpus: () => ['a.test.js', 'b.test.js'],
+    spawnProcess: (command, args) => {
+      spawned.push(args.slice(1));
+      return {pid: 777, unref: () => {}};
+    },
+  });
+  const receiptRef = (sha) => git(fixed.remote,
+    ['for-each-ref', '--format=%(objectname)', `${CORPUS_REF_ROOT}${sha}`]);
+  return {...fixed, merged, stateDir, lines, spawned, prove, receiptRef};
+}
+
+function refusalOf(action) {
+  try {
+    action();
+  } catch (error) {
+    return error.refusal || `untyped: ${error.message}`;
+  }
+  return 'not refused';
+}
+
+tap.test('a GitHub-merged head with no receipt gets one from the post-merge arm', (t) => {
+  const merged = mergedFixture();
+  const remoteBefore = git(merged.remote, ['rev-parse', 'refs/heads/main']);
+  const statusBefore = git(merged.root, ['status', '--porcelain']);
+  merged.prove(merged.merged);
+  t.same(merged.spawned, [['--local-corpus', merged.merged]],
+    'the detached local corpus starts for the merged sha');
+  t.equal(fs.readFileSync(path.join(merged.stateDir, `${merged.merged}.files`), 'utf8'),
+    'a.test.js\nb.test.js\n',
+    'no local gate proved a cone for it, so the whole corpus is owed');
+  t.equal(merged.receiptRef(merged.merged), '', 'no receipt before the corpus ran');
+  // The detached half, with the corpus run stubbed green and the REAL proof
+  // authority recording into the fake origin.
+  const status = runLocalCorpus(merged.root, merged.merged, {
+    stateDir: merged.stateDir,
+    run: (command, args, options) => {
+      if (args[0] === 'scripts/proof-authority.js') {
+        return spawnSync(command, [PROOF_AUTHORITY, ...args.slice(1)], options);
+      }
+      return {status: 0};
+    },
+  });
+  t.equal(status, 0);
+  t.match(merged.receiptRef(merged.merged), /^[0-9a-f]{40}$/u,
+    'the fake origin now holds the corpus-full-v1 receipt for the merged sha');
+  t.equal(git(merged.remote, ['rev-parse', 'refs/heads/main']), remoteBefore,
+    'nothing was pushed to main');
+  t.equal(git(merged.root, ['status', '--porcelain']), statusBefore,
+    'nothing was staged or changed in the caller\'s checkout');
+  fs.rmSync(merged.parent, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('the post-merge arm refuses a sha that is not a main head', (t) => {
+  const merged = mergedFixture();
+  const local = git(merged.root, ['rev-parse', 'HEAD']);
+  t.equal(refusalOf(() => merged.prove(local)), POST_MERGE_REFUSAL.NOT_ON_MAIN,
+    'a commit origin/main does not carry is refused, typed');
+  t.equal(refusalOf(() => merged.prove('main')), POST_MERGE_REFUSAL.NOT_A_SHA,
+    'a name is not an exact head');
+  // A side commit reachable from main only through a merge commit was never a
+  // head of main.
+  git(merged.root, ['checkout', '--quiet', '-b', 'side', merged.merged]);
+  fs.writeFileSync(path.join(merged.root, 'side.txt'), 'side\n');
+  git(merged.root, ['add', 'side.txt']);
+  git(merged.root, ['commit', '--quiet', '-m', 'side commit']);
+  const side = git(merged.root, ['rev-parse', 'HEAD']);
+  git(merged.root, ['checkout', '--quiet', '-b', 'trunk', merged.merged]);
+  fs.writeFileSync(path.join(merged.root, 'trunk.txt'), 'trunk\n');
+  git(merged.root, ['add', 'trunk.txt']);
+  git(merged.root, ['commit', '--quiet', '-m', 'trunk commit']);
+  git(merged.root, ['merge', '--quiet', '--no-edit', 'side']);
+  git(merged.root, ['push', '--quiet', 'origin', 'HEAD:refs/heads/main']);
+  t.equal(refusalOf(() => merged.prove(side)), POST_MERGE_REFUSAL.NOT_ON_MAIN,
+    'a branch commit behind a merge commit is not a main head');
+  t.same(merged.spawned, [], 'nothing was started for any refused sha');
+  t.equal(merged.receiptRef(local), '', 'and nothing was recorded');
+  fs.rmSync(merged.parent, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('the post-merge arm never re-mints an existing receipt', (t) => {
+  const merged = mergedFixture();
+  recordProof({proofId: 'corpus-full-v1', sha: merged.merged, cwd: merged.root});
+  const receipt = merged.receiptRef(merged.merged);
+  t.match(receipt, /^[0-9a-f]{40}$/u, 'the head already carries a receipt');
+  t.equal(refusalOf(() => merged.prove(merged.merged)), POST_MERGE_REFUSAL.ALREADY_PROVEN,
+    'a proved head is refused, typed');
+  t.same(merged.spawned, [], 'no corpus is started for it');
+  t.equal(merged.receiptRef(merged.merged), receipt, 'the receipt is the same object');
+  fs.rmSync(merged.parent, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('the post-merge arm runs one local corpus at a time', (t) => {
+  // A live process that looks like a local corpus: its own group, named so.
+  const merged = mergedFixture();
+  const children = [];
+  t.teardown(() => {
+    for (const child of children) {
+      try {
+        process.kill(-child.pid, 'SIGKILL');
+      } catch {
+        // already gone
+      }
+    }
+  });
+  const liveProve = (sha) => proveMergedHead(merged.root, sha, {
+    localCorpusDir: merged.stateDir,
+    write: () => {},
+    wholeCorpus: () => ['a.test.js'],
+    spawnProcess: () => {
+      const child = spawn(process.execPath,
+        ['-e', 'setTimeout(() => {}, 60000)', '--', '--local-corpus'],
+        {detached: true, stdio: 'ignore'});
+      children.push(child);
+      return child;
+    },
+  });
+  // The main checkout's later commit is merged too, so the first head is no
+  // longer the tip.
+  git(merged.root, ['push', '--quiet', 'origin', 'HEAD:refs/heads/main']);
+  const tip = git(merged.root, ['rev-parse', 'HEAD']);
+  liveProve(tip);
+  t.equal(refusalOf(() => liveProve(tip)), POST_MERGE_REFUSAL.ALREADY_RUNNING,
+    'a head whose local corpus is running is not started twice');
+  t.equal(refusalOf(() => liveProve(merged.merged)), POST_MERGE_REFUSAL.CORPUS_BUSY,
+    'an older head does not start beside the newest head\'s run');
+  t.equal(children.length, 1, 'one run was started');
+  fs.rmSync(merged.parent, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('the post-merge arm is a publisher option that takes one sha', (t) => {
+  t.same(parsePublishArgs(['--post-merge', 'a'.repeat(40)]), {postMerge: 'a'.repeat(40)});
+  t.throws(() => parsePublishArgs(['--post-merge']), /requires a value/u);
   t.end();
 });
