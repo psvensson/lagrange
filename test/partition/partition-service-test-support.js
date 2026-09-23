@@ -34,14 +34,24 @@ export class ControllablePartitionRaftProvider {
   constructor(options = {}) {
     this.role = options.role || RAFT_ROLE.FOLLOWER;
     this.term = options.term || 1;
+    this.commitIndex = Number.isFinite(options.commitIndex) ?
+      Math.max(0, Math.floor(options.commitIndex)) :
+      0;
     this.leaderId = options.leaderId || null;
     this.leaderAddress = options.leaderAddress || null;
     this.peers = Array.isArray(options.peers) ?
       options.peers.map((peer) => ({...peer})) :
       [];
     this.confChanges = [];
+    this.followerProgress = {
+      ...(options.followerProgress || {}),
+    };
+    this.peerDurableProgress = {
+      ...(options.peerDurableProgress || {}),
+    };
     this.request = null;
     this.proposeHandler = null;
+    this.probePeerProgressHandler = null;
     this.stepHandler = null;
     this.listeners = new Map();
     this.steps = [];
@@ -85,7 +95,12 @@ export class ControllablePartitionRaftProvider {
         }
         return testCoreOk();
       },
-      probePeerProgress: () => testCoreOk(),
+      probePeerProgress: async (peerAddress) => {
+        const result = this.probePeerProgressHandler ?
+          await this.probePeerProgressHandler(peerAddress) :
+          null;
+        return result?.outcome ? result : testCoreOk();
+      },
       tick: () => testCoreOk(),
       campaign: () => {
         this.setRole(RAFT_ROLE.LEADER);
@@ -93,12 +108,13 @@ export class ControllablePartitionRaftProvider {
       },
       readStatus: () => deepFreeze({
         term: this.term,
-        commitIndex: 0,
+        commitIndex: this.commitIndex,
         role: this.role,
         leaderId: this.leaderId,
         leaderAddress: this.leaderAddress,
         peerCount: this.peers.length,
         peers: this.peers.map((peer) => deepFreeze({...peer})),
+        followerProgress: deepFreeze({...this.followerProgress}),
       }),
       configureTick: () => testCoreOk(),
       startScheduling: () => testCoreOk(),
@@ -109,6 +125,39 @@ export class ControllablePartitionRaftProvider {
 
   setTerm(term) {
     this.term = term;
+  }
+
+  setCommittedIndex(index) {
+    this.commitIndex = Number.isFinite(index) ?
+      Math.max(0, Math.floor(index)) :
+      this.commitIndex;
+  }
+
+  setFollowerProgress(peerAddress, index) {
+    if (typeof peerAddress !== 'string' || peerAddress.length === 0) {
+      return;
+    }
+    if (Number.isFinite(index)) {
+      this.followerProgress[peerAddress] = Math.max(0, Math.floor(index));
+    } else {
+      delete this.followerProgress[peerAddress];
+    }
+  }
+
+  setPeerDurableProgress(peerAddress, index) {
+    if (typeof peerAddress !== 'string' || peerAddress.length === 0) {
+      return;
+    }
+    if (Number.isFinite(index)) {
+      this.peerDurableProgress[peerAddress] = Math.max(0, Math.floor(index));
+    } else {
+      delete this.peerDurableProgress[peerAddress];
+    }
+  }
+
+  getPeerDurableProgress(peerAddress) {
+    const value = this.peerDurableProgress[peerAddress];
+    return Number.isFinite(value) ? value : null;
   }
 
   emitEvent(eventName, ...args) {
@@ -138,6 +187,10 @@ export class ControllablePartitionRaftProvider {
 
   setProposeHandler(handler) {
     this.proposeHandler = handler;
+  }
+
+  setProbePeerProgressHandler(handler) {
+    this.probePeerProgressHandler = handler;
   }
 
   setStepHandler(handler) {
