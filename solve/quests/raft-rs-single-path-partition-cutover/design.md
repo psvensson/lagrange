@@ -59,7 +59,7 @@ that changes the site (section 5).
 
 Construction and selection
 - S1 `partition-service-core-base.js:12,99-103` `options.raftProvider || createRaftProvider(options)`: DELETE selector and injection; fixed rs-raft factory. A1.
-- S2 `src/raft/raft-backend-selection.js`, `raft-backend-constants.js`: DELETE both. A1.
+- S2 `raft-backend-selection.js` (deleted, was src/raft), `raft-backend-constants.js`: DELETE both. A1.
 
 Durable log, term, applied watermark
 - S3 `raft-init-base.js:367-373` constructs SQLiteLogAdapter (creates `_raft_log`/`_raft_state`) and PartitionRaftStorage (loads term/vote, writes appliedGapMarker): DUPLICATE_AUTHORITY, stop constructing. `_transaction_outcomes` DDL (`partition-raft-storage.js:77`, `partition-service-constants.js:69-76`) is participant state: move its DDL to PartitionServiceTransactionBase (its consumer, `transaction-base.js:880-882`). A3.
