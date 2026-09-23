@@ -2,16 +2,33 @@
  * Shared five-node learner-promotion fixture for the dt6 learner-promotion
  * witnesses (quests learner-promotion-progress-proof and
  * learner-promotion-proof-channel-wake): the REAL owners — live
- * PartitionService leader + learner on a loopback transport with real
- * replication through the partition's rs-raft operation port, the real
- * proof RPC over the application-message channel, and the real promotion
- * gate chain.
+ * PartitionService replicas on a loopback transport with real replication
+ * through each partition's rs-raft operation port, the real proof RPC over
+ * the application-message channel, and the real promotion gate chain.
  *
  * FIDELITY: in-process deterministic guard (loopback transport, single
- * process). The three passive voters are authoritative service rows (the
- * quorum-shape gates read the cache, not live sockets); the leader and the
- * learner are fully live. Replication lag is injected by dropping
- * leader->learner deliveries — a one-way partition of the replication path.
+ * process). Every voter the leader's configuration names is a LIVE replica
+ * (design A7.4: the cache-driven membership reconcile proposes every ACTIVE
+ * services row as a voter, so a row without a replica behind it leaves the
+ * leader a configuration it cannot commit in). The topology is a
+ * five-replica recovery: the leader and three live followers, and the
+ * learner that replaces the fifth replica. Each follower is built by
+ * production construction (a multi-replica replica defers its election, as
+ * the replica worker creates it), admitted by the leader through the path it
+ * uses for every peer — the replica's ACTIVE services row lands in the
+ * leader's cache and the leader's membership reconcile proposes it — and
+ * starts its deferred election timer; it is admitted once the leader has
+ * proven its replication.
+ * The services rows the promotion gates count therefore each name a live
+ * voter. A follower hydrates its own control-plane cache independently: the
+ * partition's placement it was created with (see basePlacement).
+ *
+ * Replication lag is injected by LOSING leader->learner deliveries — a
+ * one-way partition of the replication path. A lost message is lost in the
+ * network: the sender's delivery completes and nothing arrives, which is
+ * how raft treats loss. (A delivery that REJECTS is, on the rs-raft runtime,
+ * a host failure of the sending group — RECOVERY_REQUIRED and runtime
+ * reconstruction — not a partition; the fixture never injects that.)
  * Split caches model the seed and the target hydrating the control plane
  * independently (the learner's own services row can be withheld from the
  * leader cache to model the target's deferred status write).
@@ -46,32 +63,51 @@ export const PARTITION_ID = 'progress-proof-p1';
 const TABLE_NAME = 'progress_proof_table';
 export const LEADER_REPLICA = 'replica-1';
 const LEADER_NODE = 'node-1';
-const LEADER_ADDRESS = `${LEADER_NODE}/partition/${LEADER_REPLICA}`;
+const LEADER_ADDRESS = partitionAddress(LEADER_NODE, LEADER_REPLICA);
 export const LEARNER_REPLICA = 'replica-5';
 export const LEARNER_NODE = 'node-5';
-export const LEARNER_ADDRESS = `${LEARNER_NODE}/partition/${LEARNER_REPLICA}`;
-const PASSIVE_VOTERS = [
+export const LEARNER_ADDRESS = partitionAddress(LEARNER_NODE, LEARNER_REPLICA);
+const LIVE_FOLLOWERS = Object.freeze([
   ['replica-2', 'node-2'],
   ['replica-3', 'node-3'],
   ['replica-4', 'node-4'],
-];
+]);
 const TARGET_REPLICA_COUNT = 5;
-export const COMMITTED_ENTRY_COUNT = 3;
+// The committed prefix the proof binds is the core's own log: the leader's
+// election entry, the prefix writes, and one membership entry per replica
+// the leader admitted (three live followers, then the learner). The fixture
+// asserts each stage against the leader's readStatus().commitIndex.
+const LEADER_ELECTION_ENTRY_COUNT = 1;
+const PREFIX_WRITE_COUNT = 2;
+const ADMISSION_ENTRY_COUNT = 1;
+const SOLO_PREFIX_INDEX = LEADER_ELECTION_ENTRY_COUNT + PREFIX_WRITE_COUNT;
+const FOLLOWERS_ADMITTED_INDEX =
+  SOLO_PREFIX_INDEX + LIVE_FOLLOWERS.length * ADMISSION_ENTRY_COUNT;
+export const COMMITTED_ENTRY_COUNT =
+  FOLLOWERS_ADMITTED_INDEX + ADMISSION_ENTRY_COUNT;
+// The leader's core keeps a progress record for every peer its
+// configuration names; a peer that never acknowledged an append (the
+// partitioned learner) reports matched index 0 — no progress evidence.
+export const NO_ACKNOWLEDGED_MATCH_INDEX = 0;
 const RETRY_INTERVAL_MS = 25;
 const POLL_MS = 10;
+const ADMISSION_BUDGET_MS = 5000;
 // The committed prefix is real partition writes into the fixture's table,
-// so the learner applies what it replicates like any production follower.
+// so every replica applies what it replicates like any production follower.
 const TABLE_SCHEMA = Object.freeze({
   columns: [{name: 'seq', type: 'INTEGER', primaryKey: true}],
 });
 const PREFIX_INSERT_SQL = `INSERT INTO ${TABLE_NAME} (seq) VALUES (?)`;
-const PREFIX_SEED_ATTEMPTS = COMMITTED_ENTRY_COUNT + 1;
 const PUBLISHED_STATUS = 'PUBLISHED';
 const LOG_LEVELS = ['info', 'warn', 'error', 'debug', 'trace', 'fatal'];
 const RAFT_HEARTBEAT_INTERVAL_MS = 20;
 const RAFT_ELECTION_TIMEOUT_MIN_MS = 150;
 const RAFT_ELECTION_TIMEOUT_MAX_MS = 300;
 const FIXTURE_LOG_LEVEL = 'error';
+
+function partitionAddress(nodeId, replicaId) {
+  return `${nodeId}/partition/${replicaId}`;
+}
 
 export function configureFixtureRuntime() {
   ConfigurationManager.resetInstance();
@@ -112,21 +148,25 @@ export function waitFor(predicate, timeoutMs, pollMs = POLL_MS) {
   });
 }
 
-// The leader's own replication observable for the learner: the port's
+// The leader's own replication observable for one replica: the port's
 // followerProgress (the proof's learnerMatchIndex input) against the
 // committed prefix the proof's safePromotionIndex is read from — the same
 // owner observable production's proof consumes. A witness that must
-// sequence an injected event AFTER the learner is caught up reads this,
+// sequence an injected event AFTER a replica is caught up reads this,
 // never elapsed time.
-export function readLeaderReplicationToLearner(leader) {
+function readLeaderReplicationTo(leader, address) {
   const status = leader.raft.readStatus();
   const committedIndex = status.commitIndex;
-  const matchIndex = status.followerProgress?.[LEARNER_ADDRESS];
+  const matchIndex = status.followerProgress?.[address];
   return {
     committedIndex,
     matchIndex,
     proven: Number.isFinite(matchIndex) && matchIndex >= committedIndex,
   };
+}
+
+export function readLeaderReplicationToLearner(leader) {
+  return readLeaderReplicationTo(leader, LEARNER_ADDRESS);
 }
 
 // Resolves true once the leader has proven the learner's replication
@@ -173,26 +213,20 @@ export function updateServiceRow(cache, replicaId, nodeId, raftRole) {
   );
 }
 
-// Seeded in two stages: the leader must initialize (and mint its committed
-// prefix) while its raft view is genuinely single-replica; joining the
-// passive voter rows earlier would make its own peer reconcile block the
-// single-replica commit quorum (the same order the proven stable-join
-// fixtures use).
-function seedBootstrapTopology(cache) {
+function seedPartitionPolicy(cache) {
   cache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
     partition_id: PARTITION_ID,
     replica_count: TARGET_REPLICA_COUNT,
   });
-  insertServiceRow(cache, LEADER_REPLICA, LEADER_NODE, RaftRole.LEADER);
 }
 
-function seedRecoveryTopology(cache, options = {}) {
-  for (const [replicaId, nodeId] of PASSIVE_VOTERS) {
-    insertServiceRow(cache, replicaId, nodeId, RaftRole.FOLLOWER);
-  }
-  if (options.learnerRow !== false) {
-    insertServiceRow(cache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER);
-  }
+// Seeded in stages: the leader must initialize (and mint its committed
+// prefix) while its raft view is genuinely single-replica; each follower
+// row lands only once its replica is live (the leader admits a row's
+// replica as a voter the moment the row is visible).
+function seedBootstrapTopology(cache) {
+  seedPartitionPolicy(cache);
+  insertServiceRow(cache, LEADER_REPLICA, LEADER_NODE, RaftRole.LEADER);
 }
 
 export function insertPublishedEpochRow(cache, epoch) {
@@ -222,9 +256,29 @@ export function touchPublishedEpochRow(cache, epoch, touchSeq) {
   );
 }
 
+// The fixture's network. `closed` models the whole network going away at
+// teardown: every delivery is lost, so no replica sees a peer's handler
+// disappear under it while the fixture shuts the replicas down.
+function createFixtureNetwork() {
+  const loopback = createLoopbackTransport();
+  const state = {closed: false};
+  return {
+    state,
+    register: (address, handler) => loopback.register(address, handler),
+    unregister: (address) => loopback.unregister(address),
+    deliver: async (address, payload, options) => {
+      if (state.closed) {
+        return undefined;
+      }
+      return loopback.deliver(address, payload, options);
+    },
+  };
+}
+
 // One-way replication partition: while engaged, every leader->learner
-// delivery is dropped (append fan-out, catch-up batches, probes). The
-// learner->leader direction (proof RPC, acks it cannot send anyway) stays up.
+// delivery is lost (append fan-out, catch-up, heartbeats, probes). The
+// learner->leader direction (proof RPC, acks it cannot send anyway) stays
+// up.
 function createPartitionableTransport(inner) {
   const state = {dropToLearner: false};
   return {
@@ -233,11 +287,30 @@ function createPartitionableTransport(inner) {
     unregister: (address) => inner.unregister(address),
     deliver: async (address, payload, options) => {
       if (state.dropToLearner && address === LEARNER_ADDRESS) {
-        throw new Error('injected replication partition');
+        return undefined;
       }
       return inner.deliver(address, payload, options);
     },
   };
+}
+
+async function proposePrefixWrite(leader, seq) {
+  assertRaftOperationSucceeded(await leader.raft.propose({
+    type: PARTITION_SERVICE_OPERATION.INSERT,
+    sql: PREFIX_INSERT_SQL,
+    params: [seq],
+    entryId: `progress-proof-prefix-${seq}`,
+  }));
+}
+
+function assertLeaderCommitIndex(leader, expected, stage) {
+  const {commitIndex} = leader.raft.readStatus();
+  if (commitIndex !== expected) {
+    throw new Error(
+      `fixture precondition (${stage}): leader commitIndex ${commitIndex}, ` +
+        `expected ${expected}`,
+    );
+  }
 }
 
 async function createLeader(transport, cache) {
@@ -257,27 +330,110 @@ async function createLeader(transport, cache) {
   // How the prefix became committed is a precondition here, not the
   // mechanism under test - the proof consumes committedIndex however it
   // advanced. A solo rs-raft leader commits its own proposals, so the prefix
-  // is seeded by proposing through the port until the core reports exactly
-  // COMMITTED_ENTRY_COUNT committed entries (the leader's own election entry
-  // is one of them).
-  for (let seq = 1; seq <= PREFIX_SEED_ATTEMPTS &&
-      (await leader.raft.readStatus()).commitIndex < COMMITTED_ENTRY_COUNT;
-    seq++) {
-    assertRaftOperationSucceeded(await leader.raft.propose({
-      type: PARTITION_SERVICE_OPERATION.INSERT,
-      sql: PREFIX_INSERT_SQL,
-      params: [seq],
-      entryId: `progress-proof-prefix-${seq}`,
-    }));
+  // writes are proposed through the port and the core must report exactly
+  // the election entry plus those writes committed.
+  for (let seq = 1; seq <= PREFIX_WRITE_COUNT; seq++) {
+    await proposePrefixWrite(leader, seq);
   }
-  const {commitIndex} = await leader.raft.readStatus();
-  if (commitIndex !== COMMITTED_ENTRY_COUNT) {
+  assertLeaderCommitIndex(leader, SOLO_PREFIX_INDEX, 'solo prefix');
+  return leader;
+}
+
+// The partition's placement as every replica is created with it: the
+// policy, the five replicas' services rows, and the replica set (the
+// replica's bootstrap peers and address list). A replica created with the
+// placement already names every peer the leader's configuration will carry,
+// so its own membership reconcile has nothing to propose; a replica that
+// observed a row before the leader's membership entry reached it would
+// propose the same admission itself (forwarded to the leader), and the
+// committed prefix would no longer be the fixture's to state. Placements
+// made later (a surplus voter) are hydrated into every existing cache.
+function basePlacement() {
+  return [
+    [LEADER_REPLICA, LEADER_NODE, RaftRole.LEADER],
+    ...LIVE_FOLLOWERS.map(([replicaId, nodeId]) =>
+      [replicaId, nodeId, RaftRole.FOLLOWER]),
+    [LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER],
+  ];
+}
+
+function placementWith(topology, replicaId, nodeId) {
+  const placement = [...basePlacement(), ...topology.surplusPlacement];
+  if (!placement.some(([placedReplicaId]) => placedReplicaId === replicaId)) {
+    placement.push([replicaId, nodeId, RaftRole.FOLLOWER]);
+  }
+  return placement;
+}
+
+function createPlacementCache(placement) {
+  const cache = new SystemTableCache();
+  seedPartitionPolicy(cache);
+  for (const [placedReplicaId, placedNodeId, raftRole] of placement) {
+    insertServiceRow(cache, placedReplicaId, placedNodeId, raftRole);
+  }
+  return cache;
+}
+
+function placementReplicaIds(placement) {
+  return placement.map(([placedReplicaId]) => placedReplicaId);
+}
+
+function placementAddresses(placement) {
+  return placement.map(([placedReplicaId, placedNodeId]) =>
+    partitionAddress(placedNodeId, placedReplicaId));
+}
+
+// A live voter, admitted by the leader through its production peer path:
+// the replica is constructed and registered first (a peer the leader names
+// is always reachable), then its ACTIVE services row lands in every cache
+// the control plane serves, the leader's membership reconcile proposes it,
+// and the voter starts its deferred election timer (the replica worker's
+// start once the replica is wired). The timer is what drives a replica's
+// port, so the leader's messages are stepped from then on; the admission is
+// complete when the leader has proven the voter's replication.
+async function admitLiveVoter(topology, replicaId, nodeId, options = {}) {
+  const address = partitionAddress(nodeId, replicaId);
+  const placement = placementWith(topology, replicaId, nodeId);
+  const voterCache = createPlacementCache(placement);
+  const voter = new PartitionService({
+    partitionId: PARTITION_ID,
+    tableId: TABLE_NAME,
+    tableName: TABLE_NAME,
+    replicaId,
+    replicaIds: placementReplicaIds(placement),
+    peerAddresses: placementAddresses(placement),
+    nodeId,
+    transport: topology.network,
+    systemTableCache: voterCache,
+    schema: TABLE_SCHEMA,
+    dbPath: ':memory:',
+    deferElection: true,
+  });
+  topology.voters.push(voter);
+  await voter.initialize();
+  const hydratedCaches = options.surplus === true ?
+    [...topology.controlPlaneCaches, ...topology.voterCaches] :
+    topology.controlPlaneCaches;
+  topology.voterCaches.push(voterCache);
+  if (options.surplus === true) {
+    topology.surplusPlacement.push([replicaId, nodeId, RaftRole.FOLLOWER]);
+  }
+  for (const cache of hydratedCaches) {
+    insertServiceRow(cache, replicaId, nodeId, RaftRole.FOLLOWER);
+  }
+  voter.startElection();
+  const admitted = await waitFor(
+    () => readLeaderReplicationTo(topology.leader, address).proven,
+    ADMISSION_BUDGET_MS,
+  );
+  if (!admitted) {
     throw new Error(
-      `fixture precondition: leader commitIndex ${commitIndex}, expected ` +
-        `${COMMITTED_ENTRY_COUNT}`,
+      'fixture precondition: the leader never proved the replication of ' +
+        `live voter ${replicaId} ` +
+        JSON.stringify(readLeaderReplicationTo(topology.leader, address)),
     );
   }
-  return leader;
+  return voter;
 }
 
 // The learner observing a newer term than the proof carries is the "leader
@@ -302,8 +458,8 @@ async function createLearner(transport, cache, options = {}) {
     tableId: TABLE_NAME,
     tableName: TABLE_NAME,
     replicaId: LEARNER_REPLICA,
-    replicaIds: [LEADER_REPLICA, LEARNER_REPLICA],
-    peerAddresses: [LEADER_ADDRESS, LEARNER_ADDRESS],
+    replicaIds: placementReplicaIds(basePlacement()),
+    peerAddresses: placementAddresses(basePlacement()),
     nodeId: LEARNER_NODE,
     transport,
     systemTableCache: cache,
@@ -360,12 +516,19 @@ function recordPromotionDeferrals(learner) {
   return deferrals;
 }
 
+async function shutdownTopology(topology) {
+  topology.network.state.closed = true;
+  const services = [topology.learner, ...topology.voters, topology.leader]
+    .filter(Boolean);
+  await Promise.all(services.map((service) => service.shutdown()));
+}
+
 /**
  * @param {Object} options
  * @param {boolean} [options.splitCaches] leader and learner hydrate
  *   separate caches
  * @param {boolean} [options.startPartitioned] leader->learner replication
- *   dropped from the start
+ *   lost from the start
  * @param {boolean} [options.learnerRow] seed the learner's services row
  *   (default true)
  * @param {boolean} [options.leaderLearnerRow] seed the learner's row in the
@@ -381,50 +544,94 @@ function recordPromotionDeferrals(learner) {
  * @return {Promise<Object>} fixture
  */
 export async function createFiveNodeFixture(options = {}) {
-  const loopback = createLoopbackTransport();
-  const leaderTransport = createPartitionableTransport(loopback);
+  const network = createFixtureNetwork();
+  const leaderTransport = createPartitionableTransport(network);
   const leaderCache = new SystemTableCache();
   const learnerCache = options.splitCaches ?
     new SystemTableCache() :
     leaderCache;
-  seedBootstrapTopology(leaderCache);
-  if (options.splitCaches) {
-    seedBootstrapTopology(learnerCache);
-  }
-  if (Number.isInteger(options.publishedEpoch)) {
-    insertPublishedEpochRow(leaderCache, options.publishedEpoch);
-    if (options.splitCaches) {
-      insertPublishedEpochRow(learnerCache, options.publishedEpoch);
+  const controlPlaneCaches = options.splitCaches ?
+    [leaderCache, learnerCache] :
+    [leaderCache];
+  for (const cache of controlPlaneCaches) {
+    seedBootstrapTopology(cache);
+    if (Number.isInteger(options.publishedEpoch)) {
+      insertPublishedEpochRow(cache, options.publishedEpoch);
     }
   }
   leaderTransport.state.dropToLearner = options.startPartitioned === true;
-  const leader = await createLeader(leaderTransport, leaderCache);
-  seedRecoveryTopology(leaderCache, {
-    learnerRow: options.leaderLearnerRow ?? options.learnerRow,
-  });
-  if (options.splitCaches) {
-    seedRecoveryTopology(learnerCache, options);
-  }
+  const topology = {
+    network,
+    controlPlaneCaches,
+    leader: null,
+    voters: [],
+    voterCaches: [],
+    surplusPlacement: [],
+    learner: null,
+  };
   const learnerTransport =
     typeof options.wrapLearnerTransport === 'function' ?
-      options.wrapLearnerTransport(loopback) :
-      loopback;
-  const learner = await createLearner(learnerTransport, learnerCache, {
-    retryIntervalMs: options.retryIntervalMs,
-    replicaStateMachine: options.replicaStateMachine,
-  });
+      options.wrapLearnerTransport(network) :
+      network;
+  try {
+    topology.leader = await createLeader(leaderTransport, leaderCache);
+    for (const [replicaId, nodeId] of LIVE_FOLLOWERS) {
+      await admitLiveVoter(topology, replicaId, nodeId);
+    }
+    assertLeaderCommitIndex(
+      topology.leader, FOLLOWERS_ADMITTED_INDEX, 'live followers admitted');
+    const learnerRow = options.learnerRow !== false;
+    const leaderLearnerRow = options.leaderLearnerRow ?? learnerRow;
+    // The target's own cache holds its local-only seed row before the
+    // learner starts (split caches); a cache the leader reads gains the row
+    // only once the learner is live, so the leader never admits an
+    // unreachable peer.
+    if (options.splitCaches && learnerRow) {
+      insertServiceRow(
+        learnerCache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER);
+    }
+    topology.learner = await createLearner(learnerTransport, learnerCache, {
+      retryIntervalMs: options.retryIntervalMs,
+      replicaStateMachine: options.replicaStateMachine,
+    });
+    if (leaderLearnerRow) {
+      insertServiceRow(
+        leaderCache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER);
+    }
+    if (leaderLearnerRow) {
+      // The learner's admission is one membership entry; the committed
+      // prefix the proof binds is complete once the core committed it.
+      await waitFor(
+        () => topology.leader.raft.readStatus().commitIndex >=
+          COMMITTED_ENTRY_COUNT,
+        ADMISSION_BUDGET_MS,
+      );
+      assertLeaderCommitIndex(
+        topology.leader, COMMITTED_ENTRY_COUNT, 'learner admitted');
+    }
+  } catch (error) {
+    await shutdownTopology(topology);
+    throw error;
+  }
+  const {leader, learner} = topology;
   const deferrals = recordPromotionDeferrals(learner);
   return {
     leader,
     learner,
+    voters: topology.voters,
     leaderCache,
     learnerCache,
     leaderTransport,
     learnerTransport,
     deferrals,
+    // A surplus ACTIVE voter, live and admitted like every other voter:
+    // its row lands in every cache the control plane serves (the existing
+    // followers' included — it is a placement they were not created with).
+    async admitSurplusVoter(replicaId, nodeId) {
+      return admitLiveVoter(topology, replicaId, nodeId, {surplus: true});
+    },
     async shutdown() {
-      await learner.shutdown();
-      await leader.shutdown();
+      await shutdownTopology(topology);
     },
   };
 }
