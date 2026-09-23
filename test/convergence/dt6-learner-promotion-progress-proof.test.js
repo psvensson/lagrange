@@ -1,16 +1,17 @@
 /**
  * Scenario 'learner-promotion-progress-proof' (quest
  * learner-promotion-progress-proof): a five-node recovery scenario over the
- * REAL owners — live PartitionService leader + learner on a loopback
- * transport with real replication through the partition's Raft operation
- * port (liferaft backend by default), real proof RPC over the
+ * REAL owners — a live PartitionService leader, three live followers and
+ * the learner on a loopback transport with real replication through each
+ * partition's rs-raft operation port, real proof RPC over the
  * application-message channel, and the real promotion gate chain.
  *
  * FIDELITY: in-process deterministic guard (loopback transport, single
- * process). The three passive voters are authoritative service rows (the
- * quorum-shape gates read the cache, not live sockets); the leader and the
- * learner are fully live. Replication lag is injected by dropping
- * leader->learner deliveries — a one-way partition of the replication path.
+ * process). Every voter the leader's configuration names is a live replica
+ * the leader admitted through its production peer path, so the services
+ * rows the quorum-shape gates count each name a live voter. Replication lag
+ * is injected by losing leader->learner deliveries — a one-way partition of
+ * the replication path.
  *
  * Sealed contract exercised end-to-end:
  *  - a deliberately lagging learner is NEVER promoted, no matter how many
@@ -39,10 +40,10 @@ import {
 import {
   COMMITTED_ENTRY_COUNT,
   LEARNER_ADDRESS,
+  NO_ACKNOWLEDGED_MATCH_INDEX,
   configureFixtureRuntime,
   createFiveNodeFixture,
   insertPublishedEpochRow,
-  insertServiceRow,
   observeLearnerTerm,
   resetFixtureRuntime,
   waitFor,
@@ -90,7 +91,7 @@ async (t) => {
     );
     t.equal(
       leader.raft.readStatus().followerProgress[LEARNER_ADDRESS],
-      undefined,
+      NO_ACKNOWLEDGED_MATCH_INDEX,
       'the leader holds no progress evidence for the partitioned learner',
     );
 
@@ -268,14 +269,15 @@ async (t) => {
 test('quorum-shape gates still refuse even when the progress proof would ' +
   'grant', async (t) => {
   const fixture = await createFiveNodeFixture({startPartitioned: true});
-  const {learner, leaderCache, leaderTransport} = fixture;
+  const {learner, leaderTransport} = fixture;
   try {
     // Add two surplus ACTIVE voters while the learner still lags (target 5,
     // 6 active): even the single-replacement-above-target allowance cannot
     // admit a 7th voter, so promotion must defer on the replica-count
-    // ceiling regardless of replication progress.
-    insertServiceRow(leaderCache, 'replica-6', 'node-6', RaftRole.FOLLOWER);
-    insertServiceRow(leaderCache, 'replica-7', 'node-7', RaftRole.FOLLOWER);
+    // ceiling regardless of replication progress. Each surplus voter is a
+    // live replica the leader admits, like every other voter.
+    await fixture.admitSurplusVoter('replica-6', 'node-6');
+    await fixture.admitSurplusVoter('replica-7', 'node-7');
     leaderTransport.state.dropToLearner = false;
 
     const ceilingDeferralSeen = await waitFor(
