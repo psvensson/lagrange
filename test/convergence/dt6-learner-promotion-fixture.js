@@ -2,9 +2,12 @@
  * Shared five-node learner-promotion fixture for the dt6 learner-promotion
  * witnesses (quests learner-promotion-progress-proof and
  * learner-promotion-proof-channel-wake): the REAL owners — live
- * PartitionService leader + learner on a loopback transport with real
- * liferaft replication, the real proof RPC over the application-message
- * channel, and the real promotion gate chain.
+ * PartitionService leader + learner on a loopback transport with a frozen
+ * semantic Raft operation-port test provider, the real proof RPC over the
+ * application-message channel, and the real promotion gate chain. Consensus
+ * implementation mechanics are deliberately outside this fixture; committed
+ * index and follower progress enter only through the same operation-port
+ * status/probe contract production consumes.
  *
  * FIDELITY: in-process deterministic guard (loopback transport, single
  * process). The three passive voters are authoritative service rows (the
@@ -17,6 +20,7 @@
  */
 
 import {
+  ControllablePartitionRaftProvider,
   createLoopbackTransport,
 } from '../partition/partition-service-test-support.js';
 import {
@@ -24,7 +28,6 @@ import {
   RaftRole,
   CDCOperation,
 } from '../../src/partition/partition-service.js';
-import {readFollowerMatchIndex} from '../../src/raft/liferaft.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -58,6 +61,10 @@ const RAFT_HEARTBEAT_INTERVAL_MS = 20;
 const RAFT_ELECTION_TIMEOUT_MIN_MS = 150;
 const RAFT_ELECTION_TIMEOUT_MAX_MS = 300;
 const FIXTURE_LOG_LEVEL = 'error';
+export const REPLICATION_OBSERVATION_STATE = Object.freeze({
+  AVAILABLE: 'available',
+  UNAVAILABLE: 'unavailable',
+});
 
 export function configureFixtureRuntime() {
   ConfigurationManager.resetInstance();
@@ -98,24 +105,31 @@ export function waitFor(predicate, timeoutMs, pollMs = POLL_MS) {
   });
 }
 
-// The leader's own replication observable for the learner: the proof's
-// learnerMatchIndex input (readFollowerMatchIndex) against the committed
-// prefix the proof's safePromotionIndex is read from. A witness that must
-// sequence an injected event AFTER the learner is caught up reads this —
-// the same owner observable the proof consumes — never elapsed time.
+// The leader's own semantic replication observable for the learner: the
+// proof consumes readStatus().followerProgress at the committed prefix. Tests
+// never reach into a backend log/node object.
 export function readLeaderReplicationToLearner(leader) {
-  const committedIndex = leader.raftProvider.getCommittedIndex(leader.raft);
-  const {matchIndex} = readFollowerMatchIndex(leader.raft, LEARNER_ADDRESS);
+  const status = leader.raft.readStatus();
+  const matchIndex = status.followerProgress?.[LEARNER_ADDRESS];
   return {
-    committedIndex,
-    matchIndex,
-    proven: Number.isFinite(matchIndex) && matchIndex >= committedIndex,
+    committedIndex: status.commitIndex,
+    matchIndex: Number.isFinite(matchIndex) ? matchIndex : 0,
+    state: Number.isFinite(matchIndex) ?
+      REPLICATION_OBSERVATION_STATE.AVAILABLE :
+      REPLICATION_OBSERVATION_STATE.UNAVAILABLE,
+    proven:
+      Number.isFinite(matchIndex) &&
+      matchIndex >= status.commitIndex,
   };
 }
 
 // Resolves true once the leader has proven the learner's replication
 // (match index at the committed prefix), false at the budget or when the
 // cancel predicate holds (the fixture shut down first).
+export function seedLearnerDurableProgress(leader, index) {
+  leader.raftProvider.setPeerDurableProgress(LEARNER_ADDRESS, index);
+}
+
 export function waitForLeaderReplicationToLearner(leader, timeoutMs, options = {}) {
   const isCancelled = typeof options.isCancelled === 'function' ?
     options.isCancelled :
@@ -225,6 +239,30 @@ function createPartitionableTransport(inner) {
 }
 
 async function createLeader(transport, cache) {
+  const raftProvider = new ControllablePartitionRaftProvider({
+    role: RaftRole.LEADER,
+    term: 1,
+    leaderId: LEADER_REPLICA,
+    leaderAddress: LEADER_ADDRESS,
+  });
+  raftProvider.setProposeHandler(() => {
+    raftProvider.setCommittedIndex(raftProvider.commitIndex + 1);
+  });
+  raftProvider.setProbePeerProgressHandler((peerAddress) => {
+    if (
+      peerAddress !== LEARNER_ADDRESS ||
+      transport.state.dropToLearner === true
+    ) {
+      return;
+    }
+    const durableProgress =
+      raftProvider.getPeerDurableProgress(peerAddress);
+    const caughtUpIndex = Number.isFinite(durableProgress) ?
+      durableProgress :
+      raftProvider.commitIndex;
+    raftProvider.setPeerDurableProgress(peerAddress, caughtUpIndex);
+    raftProvider.setFollowerProgress(peerAddress, caughtUpIndex);
+  });
   const leader = new PartitionService({
     partitionId: PARTITION_ID,
     tableId: TABLE_NAME,
@@ -235,27 +273,26 @@ async function createLeader(transport, cache) {
     transport,
     systemTableCache: cache,
     dbPath: ':memory:',
+    raftProvider,
   });
   await leader.initialize();
+  raftProvider.setLeaderObservation(LEADER_REPLICA, LEADER_ADDRESS);
   for (let seq = 1; seq <= COMMITTED_ENTRY_COUNT; seq++) {
-    await leader.raftProvider.propose(leader.raft, {
+    await leader.raft.propose({
       type: NOOP_COMMAND_TYPE,
       seq,
     });
   }
-  // Base liferaft only commits on follower acks; a single-replica leader is
-  // its own quorum, so commit the appended prefix explicitly (how the
-  // prefix became committed is a precondition here, not the mechanism under
-  // test — the proof consumes committedIndex however it advanced).
-  const uncommittedEntries = await leader.raft.log.getUncommittedEntriesUpToIndex(
-    COMMITTED_ENTRY_COUNT,
-    leader.raft.term,
-  );
-  await leader.raft.commitEntries(uncommittedEntries);
   return leader;
 }
 
 async function createLearner(transport, cache, options = {}) {
+  const raftProvider = new ControllablePartitionRaftProvider({
+    role: RaftRole.FOLLOWER,
+    term: 1,
+    leaderId: LEADER_REPLICA,
+    leaderAddress: LEADER_ADDRESS,
+  });
   const learner = new PartitionService({
     partitionId: PARTITION_ID,
     tableId: TABLE_NAME,
@@ -272,8 +309,10 @@ async function createLearner(transport, cache, options = {}) {
     learnerCatchUpCheckIntervalMs:
       options.retryIntervalMs || RETRY_INTERVAL_MS,
     replicaStateMachine: options.replicaStateMachine,
+    raftProvider,
   });
   await learner.initialize();
+  raftProvider.setLeaderObservation(LEADER_REPLICA, LEADER_ADDRESS);
   return learner;
 }
 
