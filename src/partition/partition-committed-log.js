@@ -2,8 +2,7 @@
 //
 // The rs-raft durable store is the partition's only durable log. Every
 // consumer of the committed log - HLC warm-up at restart, the split/merge
-// mirror replay cursor, prepared-state reconstruction, recognising a
-// committed statement as a replay of an applied entry - asks here, so the
+// mirror replay cursor, prepared-state reconstruction - asks here, so the
 // consensus group a partition runs (the partition id, as the raft init owner
 // names it in the partition request) and the store it reads are named once.
 //
@@ -28,20 +27,6 @@ function readPartitionCommittedCommands(service) {
 }
 
 /**
- * The partition's most recent applied proposal whose command matches: the
- * applied prefix read newest first, stopping at the first match. Inside the
- * transaction that applies an entry, that entry is not yet applied, so this
- * finds only an EARLIER applied proposal.
- * @param {Object} service - The partition (its open `db` and `partitionId`).
- * @param {Function} matches - Predicate over a decoded command.
- * @return {Object|null} The frozen {index, term, command} record, or null.
- */
-function findPartitionAppliedCommand(service, matches) {
-  return RaftRsDurableStore.findAppliedProposalIn(
-    service.db, service.partitionId, matches);
-}
-
-/**
  * The partition's durable applied index: the last entry its state machine
  * holds, written atomically with the state machine's SQL.
  * @param {Object} service - The partition (its open `db` and `partitionId`).
@@ -53,8 +38,4 @@ function readPartitionAppliedIndex(service) {
     service.db, service.partitionId);
 }
 
-export {
-  findPartitionAppliedCommand,
-  readPartitionAppliedIndex,
-  readPartitionCommittedCommands,
-};
+export {readPartitionAppliedIndex, readPartitionCommittedCommands};

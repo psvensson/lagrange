@@ -28,8 +28,6 @@ test('PartitionService skips replayed committed entries when entryId is stable',
 
     await partition.initialize();
 
-    partition.db.prepare('INSERT INTO dedupe_table (id) VALUES (?)').run('row-1');
-
     const leaderEntry = {
       entryId: 'entry-1',
       type: 'INSERT',
@@ -39,7 +37,8 @@ test('PartitionService skips replayed committed entries when entryId is stable',
       proposedAt: 1,
       timestamp: '1',
     };
-    partition.trackAppliedEntryKey(partition.getCommittedEntryKey(leaderEntry));
+    t.equal(await commitThroughPort(partition, leaderEntry),
+      RAFT_OPERATION_OUTCOME.CORE_OK, 'the entry commits and applies');
 
     t.equal(await commitThroughPort(partition, {
       ...leaderEntry,
@@ -53,6 +52,20 @@ test('PartitionService skips replayed committed entries when entryId is stable',
       .get('row-1')
       .count;
     t.equal(rowCount, 1, 'replayed write should not create a duplicate row');
+
+    // The in-memory replay set is a cache in front of the durable outcome
+    // record, never the authority: a key it holds without a recorded
+    // outcome does not stop the statement from running.
+    const cacheOnlyEntry = {...leaderEntry, entryId: 'entry-cache-only',
+      params: ['row-cache-only']};
+    partition.trackAppliedEntryKey(
+      partition.getCommittedEntryKey(cacheOnlyEntry));
+    t.equal(await commitThroughPort(partition, cacheOnlyEntry),
+      RAFT_OPERATION_OUTCOME.CORE_OK, 'the cache-only key commits');
+    t.equal(partition.db
+      .prepare('SELECT COUNT(*) AS count FROM dedupe_table WHERE id = ?')
+      .get('row-cache-only').count, 1,
+    'a cached key without a recorded outcome is executed');
 
     await partition.shutdown();
   });

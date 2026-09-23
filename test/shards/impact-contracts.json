@@ -480,7 +480,8 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/partition/partition-service-raft-init-base.js",
         "src/partition/partition-service-entry-apply-base.js",
-        "src/partition/partition-committed-statement-failure.js"
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-committed-statement-outcome-constants.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
@@ -889,7 +890,7 @@
             "src/raft/raft-rs-application-transaction-owner.js",
             "src/partition/partition-service-raft-init-base.js",
             "src/partition/partition-service-entry-apply-base.js",
-            "src/partition/partition-committed-statement-failure.js"
+            "src/partition/partition-committed-statement-outcome.js"
           ]
         }
       ],

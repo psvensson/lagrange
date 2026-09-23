@@ -9,8 +9,14 @@ import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
 } from './partition-service-constants.js';
-import {settleFailedCommittedStatement} from
-  './partition-committed-statement-failure.js';
+import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
+  './partition-committed-statement-outcome-constants.js';
+import {
+  readCommittedStatementOutcome,
+  recordCommittedStatementOutcome,
+  settleFailedCommittedStatement,
+  settleRecordedCommittedStatement,
+} from './partition-committed-statement-outcome.js';
 
 const QUERY_RESULT_REQUEST_FIELD = Object.freeze({
   DEADLINE_MS: 'resultDeadlineMs',
@@ -1063,72 +1069,61 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       if (command.sql) {
         const entryKey = this.getCommittedEntryKey(command);
         const identity = this.buildCommittedWriteIdentity(command, index, term);
-        if (entryKey && this.recentlyAppliedEntryKeys.has(entryKey)) {
-          this.logger.debug(
-            PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY,
-            {
-              partitionId: this.partitionId,
-              commandType: command.type,
-              skippedReplay: true,
-            },
-          );
-          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () => {
-            this.resolveCommittedWrite(command.entryId, {
-              success: true,
-              changes: 0,
-              ...identity,
-            });
-            this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
-              partitionId: this.partitionId,
-              command,
-            });
-          });
-          return PARTITION_COMMITTED_COMMAND_OUTCOME.REPLAYED;
+        const afterCommit = (effect) =>
+          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect);
+        // The recorded outcome of this entry key, not the in-memory replay
+        // cache, decides whether the statement runs: a settled key is never
+        // executed again, on any replica, before or after a restart.
+        const recorded = readCommittedStatementOutcome(this, entryKey);
+        if (recorded.state ===
+            PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED) {
+          return settleRecordedCommittedStatement(this, {
+            recorded, command, entryKey, identity, afterCommit});
         }
+        let info;
         try {
-          const stmt = this.db.prepare(command.sql);
-          const info = stmt.run(...(command.params || []));
-          if (
-            command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE
-          ) {
-            scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () =>
-              this.registerMigrationDefaultFromAlterSql(command.sql),
-            );
-          }
-          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () => {
-            this.trackAppliedEntryKey(entryKey, identity.durableCommitWitness);
-            this.resolveCommittedWrite(command.entryId, {
-              success: true,
-              changes: info.changes,
-              lastInsertRowid: info.lastInsertRowid,
-              ...identity,
-            });
-            if (this.isLeader) {
-              this.trackPendingCDCEvent(
-                this.generateCDCEvent({
-                  ...command,
-                  changes: info.changes,
-                }).catch((err) => {
-                  if (this.isShutdown) {
-                    return;
-                  }
-                  this.logger.error(
-                    PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED,
-                    {partitionId: this.partitionId, error: err.message},
-                  );
-                }),
-              );
-            }
-          });
+          info = this.db.prepare(command.sql).run(...(command.params || []));
         } catch (error) {
           return settleFailedCommittedStatement(this, {
-            error, command, entryKey, identity,
-            afterCommit: (effect) =>
-              scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
+            error, command, entryKey, index, term, identity, afterCommit,
             afterRollback: (effect) =>
               scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect),
           });
         }
+        recordCommittedStatementOutcome(this, {
+          entryKey,
+          outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
+          index,
+          term,
+        });
+        if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
+          afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
+        }
+        afterCommit(() => {
+          this.trackAppliedEntryKey(entryKey, identity.durableCommitWitness);
+          this.resolveCommittedWrite(command.entryId, {
+            success: true,
+            changes: info.changes,
+            lastInsertRowid: info.lastInsertRowid,
+            ...identity,
+          });
+          if (this.isLeader) {
+            this.trackPendingCDCEvent(
+              this.generateCDCEvent({
+                ...command,
+                changes: info.changes,
+              }).catch((err) => {
+                if (this.isShutdown) {
+                  return;
+                }
+                this.logger.error(
+                  PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED,
+                  {partitionId: this.partitionId, error: err.message},
+                );
+              }),
+            );
+          }
+        });
       }
     } else if (
       command.type === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT

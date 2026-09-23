@@ -106,19 +106,6 @@ const RAFT_RS_SQL = Object.freeze({
       AND log.log_index <= applied.applied_index
     ORDER BY log.log_index ASC
   `,
-  // The same applied proposals, newest first: a reader looking for the most
-  // recent applied proposal that matches stops at the first one.
-  SELECT_APPLIED_PROPOSAL_ENTRIES_NEWEST_FIRST: `
-    SELECT log.log_index, log.term, log.data
-    FROM ${RAFT_RS_TABLE.LOG} AS log
-    JOIN ${RAFT_RS_TABLE.APPLIED_STATE} AS applied
-      ON applied.group_id = log.group_id
-    WHERE log.group_id = ?
-      AND log.entry_type = ?
-      AND log.data IS NOT NULL
-      AND log.log_index <= applied.applied_index
-    ORDER BY log.log_index DESC
-  `,
   // Whether the tables a read-only reader needs exist, asked of the schema
   // rather than created: a reader never runs DDL.
   COUNT_LOG_AND_APPLIED_STATE_TABLES: `

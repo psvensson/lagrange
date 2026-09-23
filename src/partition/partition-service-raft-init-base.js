@@ -45,6 +45,8 @@ import {
 } from './partition-legacy-consensus-state-constants.js';
 import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
   './partition-service-constants.js';
+import {createCommittedStatementOutcomeTable} from
+  './partition-committed-statement-outcome.js';
 
 const {
   AddressManager,
@@ -390,6 +392,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
           legacyConsensusState, this.partitionId);
       }
       this.createTransactionOutcomeTable();
+      createCommittedStatementOutcomeTable(this.db);
       if (this.schema) {
         this.createTable();
       }
