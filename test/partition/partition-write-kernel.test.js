@@ -8,6 +8,15 @@ import {
   buildPartitionWriteSideEffectPlan,
   resolvePartitionWriteCommitMode,
 } from '../../src/partition/partition-write-kernel.js';
+import * as partitionWriteKernel from
+  '../../src/partition/partition-write-kernel.js';
+import * as errorConstants from '../../src/constants/errors.js';
+import * as proposalQueueConstants from
+  '../../src/partition/proposal-queue-constants.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
+import {RAFT_RS_PERSISTENCE_ADMISSION} from
+  '../../src/raft/raft-rs-durable-store-constants.js';
 
 const TEST_ENTRY_ID = 'entry-1';
 const TEST_PROPOSED_AT = 1234;
@@ -207,3 +216,67 @@ test('partition write kernel separates commit/apply from replayable side effects
       'failed apply should not plan replayable side effects',
     );
   });
+
+// F-ae / F-z: every write this replica did not take is answered with a typed
+// code and a text that names its state, and every such text is one the
+// routers route again (they classify by the fragments the errors owner
+// lists, not by a text of their own).
+test('partition write kernel names the state of every write it did not ' +
+  'take, in a text the routers route again', async (t) => {
+  const {
+    PARTITION_WRITE_LEADERSHIP_REFUSAL: REFUSAL,
+    buildPartitionWriteLeadershipRefusal,
+    buildReleasedPendingWriteAnswer,
+  } = partitionWriteKernel;
+  const {ERRORS, REROUTABLE_WRITE_ERROR_FRAGMENTS} = errorConstants;
+  const {PROPOSAL_QUEUE_PROPOSAL_STATE} = proposalQueueConstants;
+  // Inputs: the port's own recovery outcomes (its outcome vocabulary).
+  const recovering = (reason, retryAfterMs) => ({
+    outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+    recoveryRequired: true,
+    reason,
+    phase: 'application',
+    retryAfterMs,
+  });
+  const recovery = buildPartitionWriteLeadershipRefusal(
+    recovering('recovery-deferred', 250), TEST_PARTITION_ID);
+  t.ok(String(recovery.error).startsWith(
+    ERRORS.CONSENSUS_RECOVERY_IN_PROGRESS) &&
+    String(recovery.error).includes('250'),
+  'a recovery refusal names the recovery and its retry time, not a missing ' +
+    `leader (${recovery.error})`);
+  const answers = {
+    recovery,
+    session: buildPartitionWriteLeadershipRefusal(recovering(
+      RAFT_RS_PERSISTENCE_ADMISSION.USER_TRANSACTION_OPEN, 10),
+    TEST_PARTITION_ID),
+    notLeader: buildPartitionWriteLeadershipRefusal(
+      {outcome: RAFT_OPERATION_OUTCOME.CORE_OK, role: 'follower'},
+      TEST_PARTITION_ID),
+    proposed: buildReleasedPendingWriteAnswer({entryId: TEST_ENTRY_ID,
+      proposal: PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED,
+      logIndex: TEST_LOG_INDEX}, TEST_PARTITION_ID),
+    queued: buildReleasedPendingWriteAnswer({entryId: TEST_ENTRY_ID,
+      proposal: PROPOSAL_QUEUE_PROPOSAL_STATE.QUEUED, logIndex: null},
+    TEST_PARTITION_ID),
+  };
+  t.same(Object.fromEntries(Object.entries(answers).map(([name, answer]) =>
+    [name, answer.failureCode])), {
+    recovery: REFUSAL.CONSENSUS_RECOVERY_REQUIRED,
+    session: REFUSAL.CONSENSUS_SESSION_OPEN,
+    notLeader: REFUSAL.NOT_LEADER,
+    proposed: REFUSAL.OUTCOME_UNKNOWN,
+    queued: REFUSAL.NOT_LEADER,
+  }, 'each state has its own typed code');
+  t.same({entryId: answers.proposed.entryId,
+    logIndex: answers.proposed.logIndex}, {entryId: TEST_ENTRY_ID,
+    logIndex: TEST_LOG_INDEX}, 'a released proposed write names its entry ' +
+    'and its index when known');
+  t.equal(Object.hasOwn(answers.queued, 'logIndex'), false,
+    'an index that is not known is not reported');
+  for (const [name, answer] of Object.entries(answers)) {
+    t.ok(REROUTABLE_WRITE_ERROR_FRAGMENTS.some((fragment) =>
+      answer.error.includes(fragment)), `${name}: routed again by the ` +
+      `routers (${answer.error})`);
+  }
+});

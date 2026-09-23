@@ -22,6 +22,12 @@ import {
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
+import {RAFT_RS_PERSISTENCE_ADMISSION} from
+  '../../src/raft/raft-rs-durable-store-constants.js';
 
 
 beforeEach(() => {
@@ -255,24 +261,25 @@ test(
       'test-timeout',
       'leadership loss should release the write owner without waiting for the 30s commit timer',
     );
-    if (demotionOutcome.kind === 'result') {
-      t.equal(
-        demotionOutcome.result.success,
-        false,
-        'the stale owner should return a retryable failure',
-      );
-      t.equal(
-        demotionOutcome.result.error,
-        'No leader available for write operation',
-        'demotion should surface the canonical leader-unavailable outcome',
-      );
-    } else if (demotionOutcome.kind === 'error') {
-      t.equal(
-        demotionOutcome.error.message,
-        'No leader available for write operation',
-        'demotion should reject with the canonical leader-unavailable outcome',
-      );
-    }
+    // F-z: the write was handed to consensus before the replica stopped
+    // leading, so its outcome is not known here: the answer says so, names
+    // the entry a retry must reuse, and is not a missing-leader refusal.
+    t.equal(demotionOutcome.kind, 'result',
+      'the released write is answered, not thrown');
+    t.equal(
+      demotionOutcome.result?.success,
+      false,
+      'the stale owner does not acknowledge the write',
+    );
+    t.ok(
+      typeof PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN === 'string' &&
+        demotionOutcome.result?.failureCode ===
+          PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+      'a proposed write released on demotion is answered OUTCOME_UNKNOWN ' +
+        `(${JSON.stringify(demotionOutcome.result)})`,
+    );
+    t.equal(demotionOutcome.result?.entryId, proposedEntry?.entryId,
+      'the answer names the proposed entry, so a retry is idempotent');
     t.equal(
       partition.db
         .prepare('SELECT COUNT(*) AS count FROM test_table WHERE id = ?')
@@ -717,6 +724,57 @@ test(
     await partition.shutdown();
   },
 );
+
+// F-z: a write the port deferred (a user session held the connection, so
+// nothing entered the core) is queued again, not proposed. Released on
+// demotion in that state it was never proposed: it is answered NOT_LEADER
+// and never handed to consensus afterwards. With the production runtime a
+// role change cannot happen while a session holds the connection (nothing
+// enters the core), so the port's deferral answer is given by the
+// controllable port.
+test('PartitionService answers a queued write released on demotion ' +
+  'NOT_LEADER and never proposes it afterwards', async (t) => {
+  const replicaIds = ['queued-demotion-r1', 'queued-demotion-r2',
+    'queued-demotion-r3'];
+  const partition = createPartition('queued-demotion', replicaIds);
+  await partition.initialize();
+  partition.controllableProvider.setRole(RAFT_ROLE.LEADER);
+  const proposals = [];
+  // The port's own deferral answer while a user transaction holds the
+  // connection: a retryable host failure that leaves the group usable.
+  partition.controllableProvider.setProposeHandler(async (entry) => {
+    proposals.push(entry.entryId);
+    return {
+      outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+      reason: RAFT_RS_PERSISTENCE_ADMISSION.USER_TRANSACTION_OPEN,
+      retryable: true,
+      recoveryRequired: false,
+    };
+  });
+  const answer = partition.applyWrite({
+    type: PARTITION_SERVICE_OPERATION.INSERT,
+    sql: 'INSERT INTO test_table (id, value) VALUES (?, ?)',
+    params: ['row-queued', 'queued'],
+    entryId: 'queued-entry',
+  });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  t.ok(proposals.length >= 1, 'setup: the port deferred the proposal');
+  partition.controllableProvider.setRole(RAFT_ROLE.FOLLOWER);
+  const proposedBeforeRelease = proposals.length;
+  const result = await Promise.race([answer, new Promise((resolve) =>
+    setTimeout(() => resolve({kind: 'test-timeout'}), 500))]);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  t.ok(
+    typeof PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER === 'string' &&
+      result?.failureCode === PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
+    'a queued write released on demotion is answered NOT_LEADER ' +
+      `(${JSON.stringify(result)})`,
+  );
+  t.equal(result?.entryId, 'queued-entry', 'the answer names the entry');
+  t.equal(proposals.length, proposedBeforeRelease,
+    'a released write is never proposed afterwards');
+  await partition.shutdown();
+});
 
 test('PartitionService rejects multi-replica leader writes when Raft is not leader',
   async (t) => {

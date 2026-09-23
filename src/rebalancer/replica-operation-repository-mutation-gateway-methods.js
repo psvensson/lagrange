@@ -1,3 +1,5 @@
+import {isReroutableWriteError} from '../constants/errors.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
   'replica-operation';
@@ -239,7 +241,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       const errorMessage = this.getOperationPersistErrorMessage(errorResult);
       return (
         typeof errorMessage === 'string' &&
-        (errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
+        (isReroutableWriteError(errorMessage) ||
           errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
           RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS.some((fragment) =>
             errorMessage.includes(fragment),
@@ -381,7 +383,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       }
       return (
         hasControlPlaneMutationRoutingGapFailureSignature(errorResult) ||
-        errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
+        isReroutableWriteError(errorMessage) ||
         errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
         RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS.some((fragment) =>
           errorMessage.includes(fragment),

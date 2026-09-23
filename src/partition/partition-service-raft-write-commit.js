@@ -4,7 +4,11 @@ import {RAFT_OPERATION_OUTCOME} from
   '../raft/raft-operation-port-constants.js';
 import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../raft/raft-rs-durable-store-constants.js';
-import {PROPOSAL_QUEUE_RELEASED_CODE} from './proposal-queue-constants.js';
+import {
+  PROPOSAL_QUEUE_PROPOSAL_STATE,
+  PROPOSAL_QUEUE_RELEASED_CODE,
+} from './proposal-queue-constants.js';
+import {buildPartitionWriteProposalRefusal} from './partition-write-kernel.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -16,23 +20,42 @@ const {
   runRetryableControlPlaneWrite,
 } = PARTITION_SERVICE_SHARED;
 
-// What the port answered a write's proposal: accepted (its answer is the
-// application's), or refused with the port's outcome as an error.
-const PROPOSAL_ACCEPTED = Object.freeze({refused: false});
+// What became of a write's proposal: the port accepted it (its answer is the
+// application's), the port refused it (the port's outcome as an error), or
+// it was never made (the write was released before it was handed to
+// consensus, and the release answered it).
+const WRITE_PROPOSAL = Object.freeze({
+  ACCEPTED: 'accepted',
+  REFUSED: 'refused',
+  NOT_MADE: 'not-made',
+});
+const PROPOSAL_ACCEPTED = Object.freeze({state: WRITE_PROPOSAL.ACCEPTED});
+const PROPOSAL_NOT_MADE = Object.freeze({state: WRITE_PROPOSAL.NOT_MADE});
 
-// The port's typed deferral while a user session holds the partition's
-// connection (nothing entered the core; the group stays usable), as the
-// retryable result the canonical retry owner re-runs.
+// One hand-off of a write to consensus. A write already released (or
+// answered) is never handed over. The port's typed deferral while a user
+// session holds the partition's connection (nothing entered the core; the
+// group stays usable) leaves the write queued, as the retryable result the
+// canonical retry owner re-runs.
 async function proposeUnlessDeferred(service, entry) {
+  if (!service.markCommittedWriteProposal(entry.entryId,
+    PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED)) {
+    return PROPOSAL_NOT_MADE;
+  }
   const proposed = await service.raft.propose(entry);
   const deferred = proposed?.outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
     proposed.recoveryRequired === false &&
     proposed.reason === RAFT_RS_PERSISTENCE_ADMISSION.USER_TRANSACTION_OPEN;
-  return deferred ? {
+  if (!deferred) {
+    return proposed;
+  }
+  service.markCommittedWriteProposal(entry.entryId,
+    PROPOSAL_QUEUE_PROPOSAL_STATE.QUEUED);
+  return {
     success: false,
     deferRetry: true,
     admission: RAFT_RS_PERSISTENCE_ADMISSION.USER_TRANSACTION_OPEN,
-  } : proposed;
+  };
 }
 
 function deferredByUserTransaction(result) {
@@ -69,6 +92,21 @@ function userTransactionWriteDeferral(service, entryId) {
   };
 }
 
+// The answer of a write whose pending answer was rejected: a proposal the
+// port refused is answered with the port's typed outcome; a write the
+// release answered carries the release's typed answer (its proposal state);
+// any other rejection is the write's failure.
+function unansweredWriteResult(service, proposal, error) {
+  if (proposal.state === WRITE_PROPOSAL.REFUSED) {
+    return buildPartitionWriteProposalRefusal(proposal.error, error,
+      service.partitionId);
+  }
+  if (error?.code === PROPOSAL_QUEUE_RELEASED_CODE) {
+    return {...error.answer, partitionId: service.partitionId};
+  }
+  return buildPartitionWriteFailureResult(error, service.partitionId);
+}
+
 async function executePartitionRaftWriteCommit(service, options) {
   const {
     entry,
@@ -99,17 +137,20 @@ async function executePartitionRaftWriteCommit(service, options) {
   let proposal = PROPOSAL_ACCEPTED;
   try {
     const proposed = await proposeWithinDeferralBudget(service, entry);
-    if (deferredByUserTransaction(proposed)) {
+    if (proposed === PROPOSAL_NOT_MADE) {
+      proposal = PROPOSAL_NOT_MADE;
+    } else if (deferredByUserTransaction(proposed)) {
       service.recordWritePhaseDuration(
         phaseTimings,
         WRITE_PHASE_FIELD_APPLY_WRITE_MS,
         applyStartMs,
       );
       return userTransactionWriteDeferral(service, entry.entryId);
+    } else {
+      assertRaftOperationSucceeded(proposed);
     }
-    assertRaftOperationSucceeded(proposed);
   } catch (error) {
-    proposal = Object.freeze({refused: true, error});
+    proposal = Object.freeze({state: WRITE_PROPOSAL.REFUSED, error});
     service.rejectCommittedWrite(entry.entryId, error);
     service.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
       partitionId: service.partitionId,
@@ -163,13 +204,7 @@ async function executePartitionRaftWriteCommit(service, options) {
       WRITE_PHASE_FIELD_APPLY_WRITE_MS,
       applyStartMs,
     );
-    return {
-      success: false,
-      error: (proposal.refused &&
-        error?.code === PROPOSAL_QUEUE_RELEASED_CODE ?
-        proposal.error : error).message,
-      partitionId: service.partitionId,
-    };
+    return unansweredWriteResult(service, proposal, error);
   }
 }
 

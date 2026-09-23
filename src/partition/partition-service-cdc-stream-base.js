@@ -346,6 +346,16 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
   clearPendingCommittedWrites(reason) {
     this.proposalQueue.clear(reason);
   }
+  // The one release of pending writes when this replica stops leading: each
+  // is answered by answerOf from what the proposal queue knew of it.
+  releasePendingCommittedWrites(answerOf) {
+    this.proposalQueue.release(answerOf);
+  }
+  // Where a pending write stands with consensus (a
+  // PROPOSAL_QUEUE_PROPOSAL_STATE); false once it was released or answered.
+  markCommittedWriteProposal(entryId, proposal) {
+    return this.proposalQueue.markProposal(entryId, proposal);
+  }
   /**
    * Build a stable key for identifying a committed write entry replay.
    * @param {Object} command - Write command.

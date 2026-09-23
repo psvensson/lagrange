@@ -14,9 +14,12 @@
 //   sessionId;
 // - MARKER_NOT_ADMISSIBLE: a transaction marker enters consensus only from the
 //   transaction owner, after its local COMMIT or ROLLBACK;
-// - STATEMENT_MISSING: an SQL command type carries no statement;
-// - ENTRY_ID_MISSING: an SQL command carries no entryId, so the outcome row
-//   the application keys it by and the pending answer have no key.
+// - ENTRY_ID_INVALID: a command carries an entryId that is not a non-empty
+//   string. The entryId keys the outcome row the application records and the
+//   pending answer; a replacement minted for it would make the client's retry
+//   a new write, so it is refused. (An absent entryId is minted by the entry
+//   builder before the command is asked about.)
+// - STATEMENT_MISSING: an SQL command type carries no statement.
 //
 // It also answers which recognised types exist (the application's own
 // dispatch asks it): the type lists are frozen arrays in the constants owner,
@@ -51,9 +54,10 @@ const PARTITION_COMMITTED_COMMAND_ADMISSION_MSG = Object.freeze({
   sessionMissing: (type) =>
     `Partition write refused before it was proposed: ${type} is bound to ` +
     'a transaction session and carries no sessionId',
-  ENTRY_ID_MISSING:
-    'Partition write refused before it was proposed: an SQL command carries ' +
-    'no entryId, so its outcome row and its answer have no key',
+  entryIdInvalid: (entryId) =>
+    'Partition write refused before it was proposed: its entryId (a ' +
+    `${typeof entryId}) is not a non-empty string, so its outcome row and ` +
+    'its answer would have no stable key',
 });
 
 const ADMITTED = Object.freeze({admitted: true});
@@ -101,11 +105,14 @@ function sqlCommandRefusal(command) {
     return refused(PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_MISSING,
       PARTITION_SERVICE_ERROR_MSG.WRITE_STATEMENT_MISSING);
   }
-  if (!isNonEmptyString(command.entryId)) {
-    return refused(PARTITION_COMMITTED_COMMAND_ERROR_CODE.ENTRY_ID_MISSING,
-      PARTITION_COMMITTED_COMMAND_ADMISSION_MSG.ENTRY_ID_MISSING);
-  }
   return ADMITTED;
+}
+
+// Present and not a non-empty string. An absent entryId (undefined, or null
+// as a wire caller spells "none") is the entry builder's to mint.
+function isInvalidEntryId(entryId) {
+  return entryId !== undefined && entryId !== null &&
+    !isNonEmptyString(entryId);
 }
 
 /**
@@ -120,6 +127,11 @@ function admitCommittedCommand(command, {origin}) {
   if (!isCommittedCommandType(type)) {
     return refused(PARTITION_COMMITTED_COMMAND_ERROR_CODE.COMMAND_TYPE_UNKNOWN,
       PARTITION_COMMITTED_COMMAND_ADMISSION_MSG.commandTypeUnknown(type));
+  }
+  if (isInvalidEntryId(command.entryId)) {
+    return refused(PARTITION_COMMITTED_COMMAND_ERROR_CODE.ENTRY_ID_INVALID,
+      PARTITION_COMMITTED_COMMAND_ADMISSION_MSG.entryIdInvalid(
+        command.entryId));
   }
   return PARTITION_COMMITTED_MARKER_COMMAND_TYPES.includes(type) ?
     markerRefusal(command, origin) : sqlCommandRefusal(command);

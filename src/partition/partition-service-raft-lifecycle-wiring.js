@@ -1,7 +1,7 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {buildReleasedPendingWriteAnswer} from './partition-write-kernel.js';
 
 const {
-  ERRORS,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_RAFT_EVIDENCE,
   PARTITION_SERVICE_REASON,
@@ -25,6 +25,12 @@ function wirePartitionRaftLifecycleEvents(
       ...fields,
     });
   };
+  // A replica that stops leading releases every pending write at once, each
+  // answered with what this replica knows of it (the write kernel's typed
+  // answer): one handed to consensus has an outcome this replica cannot know;
+  // one never handed to it was not proposed, and this replica does not lead.
+  const releasePendingWrites = () => service.releasePendingCommittedWrites(
+    (pending) => buildReleasedPendingWriteAnswer(pending, service.partitionId));
   // The term is the consensus core's own (readStatus().term); nothing here
   // copies it. Committed entries are applied only by the port's
   // committed-entry application, so COMMIT carries no handler; it stays in
@@ -61,9 +67,7 @@ function wirePartitionRaftLifecycleEvents(
           PARTITION_SERVICE_RAFT_EVIDENCE.TRIGGER_FOLLOWER_EVENT,
         term,
       });
-      service.clearPendingCommittedWrites(
-        ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
-      );
+      releasePendingWrites();
       service.cancelLeaderOwnedActivation();
       service.updateRebalancerLeadership();
     },
@@ -74,9 +78,7 @@ function wirePartitionRaftLifecycleEvents(
         trigger: PARTITION_SERVICE_RAFT_EVIDENCE.TRIGGER_CAMPAIGN_STARTED,
         term,
       });
-      service.clearPendingCommittedWrites(
-        ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
-      );
+      releasePendingWrites();
       service.cancelLeaderOwnedActivation();
       service.updateRebalancerLeadership();
     },

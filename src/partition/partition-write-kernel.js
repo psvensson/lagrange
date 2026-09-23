@@ -2,6 +2,11 @@ import {randomUUID} from 'node:crypto';
 import {ERRORS} from '../constants/errors.js';
 import {isValidRaftLogIndex} from '../raft/log-index.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {RAFT_RS_PERSISTENCE_ADMISSION} from
+  '../raft/raft-rs-durable-store-constants.js';
+import {PARTITION_COMMITTED_COMMAND_ERROR_CODE} from
+  './partition-service-constants.js';
+import {PROPOSAL_QUEUE_PROPOSAL_STATE} from './proposal-queue-constants.js';
 
 
 const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
@@ -9,12 +14,20 @@ const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
   REJECTED: 'rejected',
 });
 
-// A write refused before it is proposed because this replica does not lead:
-// its group is unusable (the port's typed recovery outcome), or another
-// replica leads.
+// A write this replica did not take, typed by what it knows of it: this
+// replica does not lead (another replica leads, or the write was released
+// before it was handed to consensus); its group is held by its host failure
+// (the port's typed recovery outcome), or that recovery waits for a user
+// session open on the replica's connection; the port's host failed while it
+// proposed the write; or the write was released after it was handed to
+// consensus, so its outcome is not known to this replica (a retry with the
+// same entryId is idempotent).
 const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
   NOT_LEADER: 'partition_write_not_leader',
   CONSENSUS_RECOVERY_REQUIRED: 'partition_write_consensus_recovery_required',
+  CONSENSUS_SESSION_OPEN: 'partition_write_consensus_session_open',
+  CONSENSUS_HOST_FAILURE: 'partition_write_consensus_host_failure',
+  OUTCOME_UNKNOWN: 'partition_write_outcome_unknown',
 });
 
 const PARTITION_WRITE_KERNEL_LITERAL = Object.freeze({
@@ -38,16 +51,19 @@ function normalizeCommitWitnessString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+// A write's entryId keys its outcome row and its answer: the caller's when it
+// supplied one (the admission owner refuses one that is not a non-empty
+// string before it is proposed), minted only when none was supplied.
+function resolveEntryId(entryId) {
+  return entryId === undefined || entryId === null ? randomUUID() : entryId;
+}
+
 function buildPartitionWriteEntry(operation, options = {}) {
   const timestamp = options.timestamp;
 
   return {
     ...operation,
-    entryId:
-      typeof operation?.entryId === 'string' &&
-        operation.entryId.length > 0 ?
-        operation.entryId :
-        randomUUID(),
+    entryId: resolveEntryId(operation?.entryId),
     timestamp: timestamp === undefined ? '' : String(timestamp),
     proposedBy:
       typeof options.proposedBy === 'string' ?
@@ -141,23 +157,88 @@ function resolvePartitionWriteCommitMode(options = {}) {
     PARTITION_WRITE_COMMIT_MODE.REJECTED;
 }
 
+// The text of a refusal while this replica's group is held: the recovery,
+// what holds it and when to retry, never a missing leader.
+function recoveryRefusalMessage({reason, phase, retryAfterMs}) {
+  const retry = Number.isFinite(retryAfterMs) ?
+    `; retry after ${retryAfterMs} ms` : '';
+  return `${ERRORS.CONSENSUS_RECOVERY_IN_PROGRESS}: ${reason} ` +
+    `(phase ${phase})${retry}`;
+}
+
 // A write this replica may not propose, typed by what its port reports: a
 // group held by its host failure (the port's recovery outcome, carried as
-// read), or no leadership here. Answered at once; nothing is proposed.
+// read; an open user session that holds the recovery is its own code), or no
+// leadership here. Answered at once; nothing is proposed.
 function buildPartitionWriteLeadershipRefusal(status, partitionId) {
   const recovering = status?.outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
     status.recoveryRequired === true;
+  if (!recovering) {
+    return {
+      success: false,
+      error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+      failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
+      partitionId,
+    };
+  }
+  const consensus = {
+    reason: status.reason,
+    phase: status.phase,
+    retryAfterMs: status.retryAfterMs ?? null,
+  };
   return {
     success: false,
-    error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
-    failureCode: recovering ?
-      PARTITION_WRITE_LEADERSHIP_REFUSAL.CONSENSUS_RECOVERY_REQUIRED :
+    error: recoveryRefusalMessage(consensus),
+    failureCode:
+      status.reason === RAFT_RS_PERSISTENCE_ADMISSION.USER_TRANSACTION_OPEN ?
+        PARTITION_WRITE_LEADERSHIP_REFUSAL.CONSENSUS_SESSION_OPEN :
+        PARTITION_WRITE_LEADERSHIP_REFUSAL.CONSENSUS_RECOVERY_REQUIRED,
+    consensus,
+    partitionId,
+  };
+}
+
+// The answer of a pending write released without an answer from consensus
+// (its replica stopped leading), from what the proposal queue knew of it: a
+// write handed to consensus may commit whatever this replica answers, so its
+// outcome is not known here; a write never handed to it was not proposed.
+function buildReleasedPendingWriteAnswer({entryId, proposal, logIndex},
+  partitionId) {
+  const proposed = proposal === PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED;
+  return {
+    success: false,
+    error: proposed ? ERRORS.WRITE_OUTCOME_UNKNOWN :
+      ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+    failureCode: proposed ? PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN :
       PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
-    ...(recovering ? {consensus: {
-      reason: status.reason,
-      phase: status.phase,
-      retryAfterMs: status.retryAfterMs ?? null,
-    }} : {}),
+    partitionId,
+    entryId,
+    ...(proposed && isValidRaftLogIndex(logIndex) && logIndex > 0 ?
+      {logIndex} : {}),
+  };
+}
+
+// The answer of a write whose proposal the port refused. A host failure is
+// typed with the port's phase, reason and retryability: the environmental
+// failure of its own application keeps that failure's code and text, any
+// other is CONSENSUS_HOST_FAILURE; a core refusal is the port's text.
+function buildPartitionWriteProposalRefusal(refusal, rejection, partitionId) {
+  const port = refusal?.raftResult;
+  if (port?.outcome !== RAFT_OPERATION_OUTCOME.HOST_FAILURE) {
+    return buildPartitionWriteFailureResult(refusal, partitionId);
+  }
+  const environmental = rejection?.code ===
+    PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED;
+  return {
+    success: false,
+    error: (environmental ? rejection : refusal).message,
+    failureCode: environmental ? rejection.code :
+      PARTITION_WRITE_LEADERSHIP_REFUSAL.CONSENSUS_HOST_FAILURE,
+    consensus: {
+      reason: port.reason,
+      phase: port.phase,
+      retryable: port.retryable === true,
+    },
     partitionId,
   };
 }
@@ -215,6 +296,8 @@ export {
   buildPartitionWriteEntry,
   buildPartitionWriteFailureResult,
   buildPartitionWriteLeadershipRefusal,
+  buildPartitionWriteProposalRefusal,
   buildPartitionWriteSideEffectPlan,
+  buildReleasedPendingWriteAnswer,
   resolvePartitionWriteCommitMode,
 };

@@ -473,7 +473,7 @@
       ]
     },
     "raft-rs-runtime-application-transaction": {
-      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; failure scope follows failure class (a core failure replaces the runtime and resumes every group once, a host failure reconstructs its own group at most once per retry window and touches no other group), a group without a usable host announces no role so its partition does not lead, a reconstructed sole voter leads again, a retry is answered from its durable outcome, and the admission owner refuses before consensus every command the application would refuse or never answer.",
+      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; failure scope follows failure class (a core failure replaces the runtime and resumes every group once, a host failure reconstructs its own group and touches no other group; a failure within one retry window of the last instant the previous one held the group is the same persisting failure, whatever its class and whether or not a reconstruction succeeded in between, so the group is reconstructed at most once per window while it persists - at most ceil(span / window) + 1 reconstructions over any span - and a failure more than one window after the last one starts afresh), a group without a usable host announces no role so its partition does not lead, a reconstructed sole voter leads again, a retry is answered from its durable outcome, and the admission owner refuses before consensus every command the application would refuse or never answer.",
       "owners": [
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/raft-rs-runtime-tuning.js",
@@ -493,7 +493,7 @@
       ]
     },
     "partition-raft-operation-port": {
-      "description": "The rs-raft provider is the partition's only consensus backend: PartitionService builds its operation-only port through the fixed rs-raft factory (no selection, no provider injection) and consumes semantic operations, typed outcomes and immutable snapshots without a live node/control graph; a refused campaign or peer admission is the port's typed answer, never reported as done.",
+      "description": "The rs-raft provider is the partition's only consensus backend: PartitionService builds its operation-only port through the fixed rs-raft factory (no selection, no provider injection) and consumes semantic operations, typed outcomes and immutable snapshots without a live node/control graph; a refused campaign or peer admission is the port's typed answer, never reported as done; a pending write released when its replica stops leading is answered with what the replica knows of it (outcome unknown once handed to consensus, not leader otherwise).",
       "owners": [
         "src/raft/raft-operation-port.js",
         "src/raft/raft-rs-provider.js",

@@ -129,12 +129,22 @@ const PERSISTENCE_ADMISSION_WAIT = Object.freeze({
   POLL_INTERVAL_MS: 10,
   BOUND_MS: 120000,
 });
+// A held group's durable progress (commit and applied index) as last read
+// from its durable record: an observation, never a claim that the group is
+// live. Read when a failure is recorded or a reconstruction fails; nothing
+// writes the record while the group is held.
+const DURABLE_PROGRESS_OBSERVATION = Object.freeze({
+  OBSERVED: 'observed',
+  UNREADABLE: 'unreadable',
+  NOT_READ: 'not-read',
+});
 
 export {
   CORE_CALL_WITHOUT_HANDLE,
   FOLLOWER_RAFT_STATE,
   CORE_OPERATION,
   CORE_REFUSAL_KIND,
+  DURABLE_PROGRESS_OBSERVATION,
   HEALTHY,
   INBOUND_DRAIN_DELAY_MS,
   NO_LEADER,

@@ -1,4 +1,5 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {isReroutableWriteError} from '../constants/errors.js';
 import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
@@ -390,7 +391,7 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     }
     return (
       errorMessage &&
-      (errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
+      (isReroutableWriteError(errorMessage) ||
         errorMessage.includes(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT) ||
         errorMessage.includes(ERRORS.NO_HANDLER_FOR_ADDRESS) ||
         (errorMessage.includes(

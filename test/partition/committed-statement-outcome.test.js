@@ -54,6 +54,8 @@ import * as partitionConstants from
   '../../src/partition/partition-service-constants.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
+import {RUNTIME_PHASE} from
+  '../../src/raft/raft-rs-runtime-owner-constants.js';
 import {PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} from
   '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
@@ -544,6 +546,72 @@ for (const shape of B5_SHAPES) {
   });
 }
 
+// F-ad: a write's entryId keys its outcome row and its answer. A supplied
+// entryId that is not a non-empty string is refused before consensus (a
+// minted replacement would turn the client's retry into a new write); an
+// absent one is minted; a supplied string is kept end to end, so a retry
+// with it is answered from its outcome row.
+const INVALID_ENTRY_IDS = Object.freeze([
+  ['number', 42],
+  ['empty', ''],
+  ['object', {id: 'not-a-string'}],
+]);
+
+function forwardWrite(partition, id, entryId) {
+  const operation = {
+    type: PARTITION_SERVICE_OPERATION.INSERT,
+    sql: INSERT_SQL,
+    params: [id, 'v'],
+    ...(entryId === undefined ? {} : {entryId}),
+  };
+  return Promise.race([
+    partition.handleTransportMessage({payload: {
+      type: PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE, operation}}),
+    new Promise((resolve) => setTimeout(() => resolve('pending'),
+      PROMPT_ANSWER_MS)),
+  ]);
+}
+
+test('F-ad: a present-but-invalid entryId is refused before consensus; a ' +
+  'supplied entryId keys the durable outcome end to end; an absent one is ' +
+  'minted', {timeout: TEST_TIMEOUT_MS}, async () => {
+  await withPartition('fad-entry-id', async ({dbPath, open}) => {
+    const partition = await open();
+    assert.equal((await insert(partition, 'row-0', 'setup', 'e-setup'))
+      .success, true, 'setup: the partition serves a write');
+    for (const [name, entryId] of INVALID_ENTRY_IDS) {
+      const before = wholeDurableRecord(dbPath, 'fad-entry-id');
+      const outcomesBefore = outcomeRows(dbPath);
+      const answer = await forwardWrite(partition, `row-${name}`, entryId);
+      assert.equal(answer?.success, false, `a wire entryId (${name}) is ` +
+        `refused (${JSON.stringify(answer)})`);
+      assert.ok(typeof PARTITION_COMMITTED_COMMAND_ERROR_CODE
+        .ENTRY_ID_INVALID === 'string' && answer.failureCode ===
+        PARTITION_COMMITTED_COMMAND_ERROR_CODE.ENTRY_ID_INVALID,
+      `with the typed refusal (${answer.failureCode})`);
+      assert.deepEqual(wholeDurableRecord(dbPath, 'fad-entry-id'), before,
+        'nothing entered consensus');
+      assert.deepEqual(outcomeRows(dbPath), outcomesBefore,
+        'no outcome row was written');
+    }
+    const kept = await forwardWrite(partition, 'row-kept', 'client-entry-7');
+    assert.equal(kept.success, true, 'a supplied entryId is admitted');
+    assert.equal(durableRecord(dbPath, 'fad-entry-id').applied.filter(
+      (entry) => entry.entryId === 'client-entry-7').length, 1,
+    'the committed entry carries the client\'s entryId');
+    assert.equal(outcomeOf(dbPath, partition, 'client-entry-7').length, 1,
+      'its outcome row is keyed by it');
+    const retry = await forwardWrite(partition, 'row-kept', 'client-entry-7');
+    assert.equal(retry.idempotentReplay, true,
+      `a retry with it is answered from its outcome row (${
+        JSON.stringify(retry)})`);
+    const minted = await forwardWrite(partition, 'row-minted', undefined);
+    assert.equal(minted.success, true, 'an absent entryId is minted');
+    assert.equal(rowOf(dbPath, 'row-minted')?.id, 'row-minted',
+      'and the write applied');
+  });
+});
+
 test('B5: a committed entry with an unknown type (proposed straight through ' +
   'the port) fails closed with a typed, named host failure on readStatus ' +
   'and on the restart\'s initialize(), and its sibling is untouched',
@@ -650,6 +718,17 @@ test('F-i: an environmental SQLite failure is never consumed as a failed ' +
     `the failure names the environmental statement outcome (${busy.error})`);
     assert.ok(String(busy.error).includes(ENVIRONMENTAL_SQLITE_CODE),
       'the failure carries the SQLite code the host raised');
+    // F-ae: the environmental answer carries its typed code and the port's
+    // consensus fields, as every other refused write does.
+    assert.equal(busy.failureCode,
+      PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED,
+      `F-ae: the answer carries the environmental failure code (${
+        JSON.stringify(busy)})`);
+    assert.deepEqual({phase: busy.consensus?.phase,
+      retryable: busy.consensus?.retryable}, {
+      phase: RUNTIME_PHASE.APPLICATION,
+      retryable: true,
+    }, 'F-ae: with the phase and retryability the port answered');
     assert.equal(during.appliedIndex, before.appliedIndex,
       'the entry is not consumed: the applied index did not advance ' +
       `(${JSON.stringify({before, during})})`);

@@ -31,6 +31,7 @@ import {
   CORE_CALL_WITHOUT_HANDLE,
   CORE_OPERATION,
   CORE_REFUSAL_KIND,
+  DURABLE_PROGRESS_OBSERVATION,
   FOLLOWER_RAFT_STATE,
   HEALTHY,
   INBOUND_DRAIN_DELAY_MS,
@@ -180,20 +181,68 @@ function announceNoRole(group) {
   }
 }
 
+// The group's durable progress as its durable record holds it now: an
+// observation for a held group's status (nothing writes the record while
+// the group is held), or the named state that it could not be read.
+function durableProgressOf(group) {
+  try {
+    const progress = group.store.readDurableProgress(group.groupId);
+    return deepFreeze({
+      state: DURABLE_PROGRESS_OBSERVATION.OBSERVED,
+      commitIndex: Number(progress.commitIndex),
+      appliedIndex: Number(progress.appliedIndex),
+    });
+  } catch (error) {
+    return deepFreeze({
+      state: DURABLE_PROGRESS_OBSERVATION.UNREADABLE,
+      reason: String(error?.message || error),
+    });
+  }
+}
+
+// A group's recovery record: the failure that holds it (its class: phase,
+// reason, detail), the last instant that failure held the group (when it was
+// recorded, when a reconstruction it caused began, or when that
+// reconstruction restored the group), how many reconstructions it has cost,
+// when the next one is due, and the group's durable progress as last read.
+//
+// Whether a failure persists is decided by time, not by where it recurs: a
+// failure within one retry window of the last instant the previous one held
+// the group is the same failure - whether or not a reconstruction succeeded
+// in between - so its attempts accumulate and the next reconstruction waits
+// one window from it. A failure later than that starts a fresh record,
+// attempted at once; a record no failure renewed for a whole window is
+// cleared.
+function failurePersists(group, now) {
+  return group.recovery !== null &&
+    now - group.recovery.heldAt < recoveryRetryWindowMsOf(group.timing);
+}
+
+// A fresh record's first reconstruction is due at once.
+function freshRecovery(group, failure, now) {
+  return {failure, heldAt: now, attempts: 0, retryNotBefore: now,
+    durableProgress: durableProgressOf(group)};
+}
+
 // A host failure (persistence, application, delivery bookkeeping) is the
 // failing group's alone: the group becomes RECOVERY_REQUIRED and remembers the
 // failure that holds it there; no other group and not the shared core is
 // affected.
 function groupFailed(group, failed) {
-  group.health = RECOVERY_REQUIRED;
+  const now = group.timers.now();
   const failure = deepFreeze({
     phase: failed.phase,
     reason: failed.reason,
     ...(failed.detail === undefined ? {} : {detail: failed.detail}),
   });
-  group.recovery = group.recovery === null ?
-    {failure, attempts: 0, retryNotBefore: null} :
-    {...group.recovery, failure};
+  group.recovery = failurePersists(group, now) ? {
+    ...group.recovery,
+    failure,
+    heldAt: now,
+    retryNotBefore: now + recoveryRetryWindowMsOf(group.timing),
+    durableProgress: durableProgressOf(group),
+  } : freshRecovery(group, failure, now);
+  group.health = RECOVERY_REQUIRED;
   announceNoRole(group);
   return failed;
 }
@@ -399,43 +448,61 @@ function replaceRuntime(trigger) {
   return triggerResumed;
 }
 
+function retryAfterMsOf(group) {
+  return group.recovery === null ? 0 :
+    Math.max(0, group.recovery.retryNotBefore - group.timers.now());
+}
+
 // The typed answer of a group held by its host failure: the failure that
 // holds it, how many reconstructions it has cost, and when the next one is
-// due. The group has no role while it is held.
-function recoveryOutcome(group, reason) {
-  const recovery = group.recovery ||
-    {failure: null, attempts: 0, retryNotBefore: null};
+// due; and what a status has, as observations - the runtime generation and
+// peer it runs under and its durable progress as last read. The group has no
+// role while it is held.
+function recoveryOutcome(group, reason, retryAfterMs = retryAfterMsOf(group)) {
+  const recovery = group.recovery || {failure: null, attempts: 0,
+    durableProgress: {state: DURABLE_PROGRESS_OBSERVATION.NOT_READ}};
   return outcome(HOST_FAILURE, {
     reason,
     phase: recovery.failure?.phase ?? null,
     failure: recovery.failure,
-    retryAfterMs: recovery.retryNotBefore === null ? 0 :
-      Math.max(0, recovery.retryNotBefore - group.timers.now()),
+    retryAfterMs,
     attempts: recovery.attempts,
     retryable: true,
     recoveryRequired: true,
     role: null,
+    groupId: group.groupId,
+    replicaIdentity: group.replicaIdentity,
+    peerId: group.peerId,
+    runtimeGeneration,
+    durableProgress: recovery.durableProgress,
   });
 }
 
 function insideRetryWindow(group) {
-  const retryNotBefore = group.recovery?.retryNotBefore ?? null;
-  return retryNotBefore !== null && group.timers.now() < retryNotBefore;
+  return group.recovery !== null &&
+    group.timers.now() < group.recovery.retryNotBefore;
 }
 
-// A reconstruction's end: a group that is usable again forgets its failure
-// (its real role was announced by its resumption); one that failed again
-// waits one retry window from this attempt.
+// A reconstruction's end. A group usable again keeps its record: its real
+// role was announced by its resumption, and a failure within one window of
+// now is the same failure. One that failed again is held one window from
+// that failure: as recorded when it failed during the attempt, or from now
+// for a failure the core answered.
 function settleReconstruction(group, attemptedAt, result) {
+  const now = group.timers.now();
   if (result.outcome === CORE_OK && group.health !== RECOVERY_REQUIRED) {
-    group.recovery = null;
+    group.recovery = {...group.recovery, heldAt: now};
     return outcome(CORE_OK, {reason: RUNTIME_REASON.GROUP_RECONSTRUCTED});
   }
   group.health = RECOVERY_REQUIRED;
-  group.recovery = {
-    ...group.recovery,
-    retryNotBefore: attemptedAt + recoveryRetryWindowMsOf(group.timing),
-  };
+  if (group.recovery.retryNotBefore <= attemptedAt) {
+    group.recovery = {
+      ...group.recovery,
+      heldAt: now,
+      retryNotBefore: now + recoveryRetryWindowMsOf(group.timing),
+      durableProgress: durableProgressOf(group),
+    };
+  }
   // A core outcome other than a host failure (a refusal, a trap) is answered
   // as it is; otherwise the group is held by the failure it recorded.
   return result.outcome === CORE_OK || result.outcome === HOST_FAILURE ?
@@ -449,14 +516,21 @@ function settleReconstruction(group, attemptedAt, result) {
 // left unapplied are applied first), and resumed - a sole voter campaigns,
 // any other group announces its role. The runtime generation does not change
 // and no other group is touched. Inside the retry window the answer is a
-// typed deferral and nothing enters the core.
+// typed deferral and nothing enters the core; while a user session holds the
+// connection nothing enters the core either, and the answer names the session
+// with the store's admission poll as the time to retry on.
 function reconstructGroup(group) {
-  // A user session holds the connection: nothing enters the core.
-  if (insideRetryWindow(group) || !persistenceAdmitted(group)) {
+  if (insideRetryWindow(group)) {
     return recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED);
   }
+  if (!persistenceAdmitted(group)) {
+    return recoveryOutcome(group, RUNTIME_REASON.USER_TRANSACTION_OPEN,
+      PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS);
+  }
+  // The failure held the group until this attempt began.
   const attemptedAt = group.timers.now();
-  group.recovery = {...group.recovery, attempts: group.recovery.attempts + 1};
+  group.recovery = {...group.recovery, heldAt: attemptedAt,
+    retryNotBefore: attemptedAt, attempts: group.recovery.attempts + 1};
   const freed = group.handle === null ? null : invokeCore(group, 'free');
   if (freed !== null && !freed.ok && freed.result.outcome === CORE_FATAL) {
     return freed.result;
@@ -471,6 +545,15 @@ function reconstructGroup(group) {
     settleReconstruction(group, attemptedAt, result));
 }
 
+// A usable group whose record no failure renewed for a whole window forgets
+// it; a group with no record reads no clock.
+function forgetExpiredRecovery(group) {
+  if (group.recovery !== null &&
+      !failurePersists(group, group.timers.now())) {
+    group.recovery = null;
+  }
+}
+
 // Failure scope follows the failure class: a core failure replaces the shared
 // runtime; a host failure reconstructs its own group.
 function ensureExecution(group) {
@@ -479,10 +562,11 @@ function ensureExecution(group) {
   }
   if (group.health === RECOVERY_REQUIRED) {
     if (group.recovery === null) {
-      group.recovery = {failure: null, attempts: 0, retryNotBefore: null};
+      group.recovery = freshRecovery(group, null, group.timers.now());
     }
     return reconstructGroup(group);
   }
+  forgetExpiredRecovery(group);
   return outcome(CORE_OK, {reason: RUNTIME_REASON.EXECUTION_USABLE});
 }
 

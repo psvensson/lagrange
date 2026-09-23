@@ -331,6 +331,26 @@ class RaftRsDurableStore {
   }
 
   /**
+   * Read one group's durable progress without its log: the commit index of
+   * its hard state and its applied index.
+   * @param {string} groupId - The group.
+   * @return {Object} {commitIndex, appliedIndex} as decimal strings (zero
+   *   when the group has no such row).
+   */
+  readDurableProgress(groupId) {
+    const hardStateRow = this.db.prepare(RAFT_RS_SQL.SELECT_HARD_STATE)
+      .safeIntegers(true).get(groupId);
+    const appliedRow = this.db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE)
+      .safeIntegers(true).get(groupId);
+    return {
+      commitIndex: hardStateRow ?
+        fromExactInteger(hardStateRow.commit_index) : RAFT_RS_ZERO_INDEX,
+      appliedIndex: appliedRow ?
+        fromExactInteger(appliedRow.applied_index) : RAFT_RS_ZERO_INDEX,
+    };
+  }
+
+  /**
    * Read one group's applied proposals from an existing connection: the
    * NORMAL entries that carry a payload, at or below the durable applied
    * index, each decoded through the proposal codec. Configuration changes

@@ -1,4 +1,5 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
+import {isReroutableWriteError} from '../constants/errors.js';
 import {
   PARTITION_TRANSITION_STATE,
 } from '../partition/partition-constants.js';
@@ -683,7 +684,7 @@ class CDCRoutedMutationReadiness {
         errorLike?.message || errorLike?.error || '';
     return (
       isRetryableControlPlaneError(errorLike) ||
-      message.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
+      isReroutableWriteError(message) ||
       message.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
       message === ERRORS.QUERY_FAILED ||
       message.includes(QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE) ||

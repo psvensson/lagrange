@@ -38,10 +38,15 @@ function tuningOf(timing = {}) {
 }
 
 // The retry window of a group whose host failed: one election timeout as the
-// core counts it (its election tick times its tick length). While the failure
-// persists the group is reconstructed at most once per window - the same span
-// a follower waits before it stands for election - so a persistent failure
-// costs one bounded retry per election timeout, never one per operation.
+// core counts it (its election tick times its tick length) - the same span a
+// follower waits before it stands for election. A failure persists while each
+// failure arrives within one window of the last instant the previous one held
+// the group, whatever its class and whether or not a reconstruction
+// succeeded in between; while it persists the group is reconstructed at most
+// once per window, so over any span a persistent failure costs at most
+// ceil(span / window) + 1 reconstructions - never one per operation or per
+// failing Ready. A failure more than one window after the last one starts
+// afresh and is attempted at once.
 function recoveryRetryWindowMsOf(timing = {}) {
   return tuningOf(timing).electionTick * tickMsOf(timing);
 }

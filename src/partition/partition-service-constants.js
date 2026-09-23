@@ -215,7 +215,7 @@ const PARTITION_COMMITTED_COMMAND_ERROR_CODE = Object.freeze({
   COMMAND_TYPE_UNKNOWN: 'partition_write_command_type_unknown',
   MARKER_NOT_ADMISSIBLE: 'partition_write_marker_not_admissible',
   SESSION_MISSING: 'partition_write_session_missing',
-  ENTRY_ID_MISSING: 'partition_write_entry_id_missing',
+  ENTRY_ID_INVALID: 'partition_write_entry_id_invalid',
 });
 
 const PARTITION_CONSENSUS_STARTUP_OUTCOME = Object.freeze({

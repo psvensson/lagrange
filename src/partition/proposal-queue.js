@@ -12,6 +12,7 @@
 import {
   PROPOSAL_QUEUE_DEFAULT,
   PROPOSAL_QUEUE_ERROR_MSG,
+  PROPOSAL_QUEUE_PROPOSAL_STATE,
   PROPOSAL_QUEUE_RELEASED_CODE,
 } from './proposal-queue-constants.js';
 import {resolveTimeSource} from '../time/time-source.js';
@@ -36,6 +37,9 @@ class ProposalQueue {
     this.maxCapacity =
       options.maxCapacity || PROPOSAL_QUEUE_DEFAULT.MAX_CAPACITY;
     this.pendingCommits = new Map();
+    // Each pending write's PROPOSAL_QUEUE_PROPOSAL_STATE, owned here so a
+    // release can say what it knew of the write.
+    this.proposals = new Map();
     // The deadlines in this queue were armed by the owning replica's clock,
     // so they are cleared on the same one. Clearing a non-host handle through
     // the global would miss it, or cancel an unrelated host timer that
@@ -95,6 +99,23 @@ class ProposalQueue {
       throw new Error(PROPOSAL_QUEUE_ERROR_MSG.BACKPRESSURE);
     }
     this.pendingCommits.set(entryId, entry);
+    this.proposals.set(entryId, PROPOSAL_QUEUE_PROPOSAL_STATE.QUEUED);
+  }
+
+  /**
+   * Record where a pending write stands with consensus.
+   *
+   * @param {string} entryId - Unique identifier of the proposal.
+   * @param {string} proposal - A PROPOSAL_QUEUE_PROPOSAL_STATE.
+   * @return {boolean} True if the write is still pending (a released or
+   *   answered write is never handed to consensus afterwards).
+   */
+  markProposal(entryId, proposal) {
+    if (!this.pendingCommits.has(entryId)) {
+      return false;
+    }
+    this.proposals.set(entryId, proposal);
+    return true;
   }
 
   /**
@@ -115,6 +136,7 @@ class ProposalQueue {
       this.timeSource.clearTimeout(pending.timeoutId);
     }
     this.pendingCommits.delete(entryId);
+    this.proposals.delete(entryId);
     if (pending.resolve) {
       pending.resolve(result);
     }
@@ -139,6 +161,7 @@ class ProposalQueue {
       this.timeSource.clearTimeout(pending.timeoutId);
     }
     this.pendingCommits.delete(entryId);
+    this.proposals.delete(entryId);
     if (pending.reject) {
       const err = error instanceof Error ? error : new Error(error);
       pending.reject(err);
@@ -147,23 +170,41 @@ class ProposalQueue {
   }
 
   /**
-   * Clear all pending proposals. Used during shutdown or leadership loss.
-   * Rejects all pending proposals with the given reason.
+   * Release every pending proposal without an answer from consensus. Each is
+   * rejected with a PROPOSAL_QUEUE_RELEASED_CODE error carrying the answer
+   * `answerOf` gives it from what the queue knew of it.
    *
-   * @param {string} reason - Reason for clearing the queue.
+   * @param {Function} answerOf - ({entryId, proposal, logIndex}) => the
+   *   released write's answer ({success: false, error, ...}).
    */
-  clear(reason) {
+  release(answerOf) {
     for (const [entryId, pending] of this.pendingCommits) {
       if (pending.timeoutId) {
         this.timeSource.clearTimeout(pending.timeoutId);
       }
+      const answer = answerOf(Object.freeze({
+        entryId,
+        proposal: this.proposals.get(entryId),
+        logIndex: Number.isFinite(pending.logIndex) ? pending.logIndex : null,
+      }));
+      this.pendingCommits.delete(entryId);
+      this.proposals.delete(entryId);
       if (pending.reject) {
-        const released = new Error(reason);
+        const released = new Error(answer.error);
         released.code = PROPOSAL_QUEUE_RELEASED_CODE;
+        released.answer = answer;
         pending.reject(released);
       }
-      this.pendingCommits.delete(entryId);
     }
+  }
+
+  /**
+   * Release every pending proposal with one plain reason (shutdown).
+   *
+   * @param {string} reason - Reason for clearing the queue.
+   */
+  clear(reason) {
+    this.release(() => ({success: false, error: reason}));
   }
 
   /**
