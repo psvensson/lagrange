@@ -52,5 +52,6 @@
     "admission-gating",
     "recovery-replay",
     "owner-interaction"
-  ]
+  ],
+  "sealedAt": "6e4fe787c175d6da81ecf0540bbb404ee7be95de"
 }
