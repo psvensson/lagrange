@@ -1,6 +1,7 @@
 import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
 import {spawn} from 'node:child_process';
+import {LAB_HOLD, holdLabMachine, labHolderText} from './probe.js';
 import {reserveLocalPort, run, waitForDockerPing} from './process.js';
 
 const DEFAULT_BASE_CONFIG = 'test/distributed/config/local-three-node.json';
@@ -37,6 +38,17 @@ const HARNESS_ARG = Object.freeze({
   SCENARIO: '--scenario',
   VERBOSE: '--verbose',
   NO_FAST_LOCAL: '--no-fast-local',
+});
+// A formation's budget on the lab: how long it waits, altogether, for every
+// node's machine-wide lock, and how long its holder records tell other agents
+// to expect it to hold them. The distributed runner has no overall deadline
+// of its own, so this is the harness's stated one.
+const HARNESS_BUDGET_MS = 30 * 60 * 1000;
+const HARNESS_PURPOSE = 'formation:';
+const HARNESS_REFUSAL = Object.freeze({
+  PREFIX: 'harness: node ',
+  BUSY: ' busy, ',
+  FAILED: ' could not be held: ',
 });
 const ERROR_TEXT = Object.freeze({
   NO_HARNESS_NODES: 'No nodes with the harness role were selected',
@@ -134,6 +146,37 @@ export async function doctorHarnessNodes(nodes) {
   if (failures > 0) throw new Error(`${failures} harness node(s) failed doctor`);
 }
 
+// Every node a formation uses, held under the lab convention before any node
+// starts: one at a time in name order, so two formations cannot each hold
+// half of the other's nodes, within one budget. A node another run holds
+// refuses the whole formation, typed and naming the holder, after releasing
+// every hold already taken - never half a formation.
+async function holdHarnessNodes(nodes, scenarioPart, hold) {
+  const sessions = [];
+  const deadline = Date.now() + HARNESS_BUDGET_MS;
+  const ordered = [...nodes].sort((left, right) => (left.name < right.name ? -1 : 1));
+  for (const node of ordered) {
+    const session = hold({name: node.name, sshTarget: node.ssh}, {
+      waitMs: deadline - Date.now(), purpose: `${HARNESS_PURPOSE}${scenarioPart}`,
+      expectedMs: HARNESS_BUDGET_MS,
+    });
+    sessions.push(session);
+    const outcome = await session.outcome;
+    if (outcome.state !== LAB_HOLD.HELD) {
+      await releaseHolds(sessions);
+      throw new Error(`${HARNESS_REFUSAL.PREFIX}${node.name}` +
+        (outcome.state === LAB_HOLD.BUSY ?
+          `${HARNESS_REFUSAL.BUSY}${labHolderText(outcome.holder)}` :
+          `${HARNESS_REFUSAL.FAILED}${outcome.reason}`));
+    }
+  }
+  return sessions;
+}
+
+function releaseHolds(sessions) {
+  return Promise.all(sessions.map((session) => session.release()));
+}
+
 export async function runHarness({
   nodes,
   scenario,
@@ -142,6 +185,7 @@ export async function runHarness({
   verbose = true,
   extraArgs = [],
   dryRun = false,
+  hold = holdLabMachine,
 }) {
   validateHarnessNodes(nodes);
   if (nodes.length < MIN_PHYSICAL_HOSTS) {
@@ -167,6 +211,7 @@ export async function runHarness({
     return;
   }
 
+  const holds = await holdHarnessNodes(nodes, scenarioPart, hold);
   const tunnels = [];
   try {
     for (let index = 0; index < nodes.length; index += 1) {
@@ -185,5 +230,6 @@ export async function runHarness({
     await run(process.execPath, args);
   } finally {
     await Promise.all(tunnels.map(stopTunnel));
+    await releaseHolds(holds);
   }
 }

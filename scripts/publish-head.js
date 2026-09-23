@@ -15,6 +15,7 @@ import {
   WORKSPACE_INJECTION_ENV,
 } from './checks/change-selection-constants.js';
 import {parseLaneArgs, planLane} from './plan-test-lane.js';
+import {THERMAL_REFUSAL_EXIT} from './checks/wait-for-thermal-headroom.js';
 
 const ZERO_SHA = '0'.repeat(40);
 const PIPE_STDIO = 'pipe';
@@ -44,6 +45,8 @@ const PUBLISH_STAGE_LABEL = Object.freeze({
   PUSH: 'pushing HEAD to origin/main',
   RECEIPT: 'push verified on the remote; writing the publish receipt for ',
   DONE: 'done - pushed and receipted',
+  POST_MERGE: 'post-merge: planning the corpus owed by merged head ',
+  POST_MERGE_DONE: 'done - the local corpus runs detached; nothing was pushed',
 });
 let currentPublishStage = PUBLISH_INITIAL_STAGE;
 function publishElapsedSeconds() {
@@ -74,6 +77,9 @@ const RUNNER_SELF_HOSTED = 'self-hosted';
 const INVALID_RUNNER_ERROR = 'publish: --runner must be github|self-hosted';
 const FAST_FORWARD_ERROR = 'publish: HEAD is not a fast-forward of origin/main';
 const RECEIPT_DIRECTORY = 'publish-receipts';
+// Where the publisher's clean temporary checkouts live (gitignored).
+const PUBLISH_WORKTREE_PARENT = Object.freeze(['test-output', 'publish-worktrees']);
+const PUBLISH_WORKTREE_PREFIX = 'head-';
 const WORKTREE_COMMAND = 'worktree';
 const WORKTREE_ADD = 'add';
 const WORKTREE_REMOVE = 'remove';
@@ -588,8 +594,9 @@ function buildPublishReceipt(observed, args) {
 // its push is verified - as the hosted canary's cancel-in-progress did - so a
 // publish that fails leaves the proof of what is on main running. It runs
 // from the main checkout, never from a quest worktree that may be removed
-// while it runs, and waits for thermal headroom before it starts. None of
-// this can fail a publish.
+// while it runs. Thermal headroom is its runner's to gate, before every batch
+// on every host; a machine that stays too hot is the runner's typed refusal,
+// recorded lost. None of this can fail a publish.
 const LOCAL_CORPUS_ARGUMENT = '--local-corpus';
 const LOCAL_CORPUS_DIRECTORY = 'lagrange-local-corpus';
 const LOCAL_CORPUS_KEEP = 20;
@@ -601,7 +608,6 @@ const LOCAL_CORPUS_STATE = Object.freeze({
 const LOCAL_CORPUS_SCRIPT = 'test:all';
 const LOCAL_CORPUS_RUNNER = 'scripts/run-classified-test-files.js';
 const LOCAL_CORPUS_GATE = 'scripts/checks/push-gate-corpus-worktree.js';
-const LOCAL_CORPUS_THERMAL = 'scripts/checks/wait-for-thermal-headroom.js';
 const LOCAL_CORPUS_GATE_FLAG = '--gate';
 const LOCAL_CORPUS_RUN_FLAG = '--run';
 const LOCAL_CORPUS_SHELL = 'sh';
@@ -609,7 +615,7 @@ const LOCAL_CORPUS_SHELL_COMMAND = '-c';
 // $1 the file list, $2 this node. The convergence probes follow, observed as
 // the hosted canary observed them: their result never decides the verdict.
 const LOCAL_CORPUS_RUN_SCRIPT =
-  `"$2" ${LOCAL_CORPUS_RUNNER} --keep-going --stdin < "$1"; status=$?; ` +
+  `"$2" ${LOCAL_CORPUS_RUNNER} --stdin < "$1"; status=$?; ` +
   'npm run -s test:convergence-probes || ' +
   'echo "local corpus: convergence probes red (observed, never the verdict)"; ' +
   'exit "$status"';
@@ -638,7 +644,7 @@ const LOCAL_CORPUS_TEXT = Object.freeze({
   SUPERSEDED_BY: 'superseded by ',
   NEWER_HEAD: ', a newer head on main',
   LOST: 'its process ended without a verdict',
-  HOT: 'the machine stayed too hot to start it',
+  HOT: 'the machine stayed too hot to run it (thermal-headroom-exhausted)',
   UNRECORDED: 'receipt not recorded: ',
   BOOKKEEPING: 'bookkeeping failed: ',
   NO_RUNNER: ' does not run ',
@@ -771,9 +777,10 @@ export function startLocalCorpus({root, stateDir, head, files, spawnProcess = sp
 }
 
 /**
- * The detached half: after thermal headroom, prove the rest of the corpus for
- * one commit in a fresh exact checkout, and record the whole-corpus receipt
- * only when it is green.
+ * The detached half: prove the rest of the corpus for one commit in a fresh
+ * exact checkout, and record the whole-corpus receipt only when it is green.
+ * Its runner gates thermal headroom before every batch; its refusal - the
+ * machine stayed too hot - reached no verdict and is recorded lost, not red.
  * @param {string} root the main checkout
  * @param {string} head
  * @param {{stateDir: string, run?: Function, now?: Function}} options
@@ -781,12 +788,6 @@ export function startLocalCorpus({root, stateDir, head, files, spawnProcess = sp
  */
 export function runLocalCorpus(root, head, {stateDir, run = spawnSync, now = Date.now}) {
   const current = () => readLocalCorpusRecords(stateDir).find((entry) => entry.sha === head);
-  const cooled = run(process.execPath, [LOCAL_CORPUS_THERMAL], {cwd: root, stdio: INHERIT_STDIO});
-  if (cooled.status !== 0 && current()?.state === LOCAL_CORPUS_STATE.RUNNING) {
-    writeLocalCorpusState(stateDir, {...current(), state: LOCAL_CORPUS_STATE.LOST,
-      reason: LOCAL_CORPUS_TEXT.HOT, finishedAt: now()});
-    return cooled.status ?? 1;
-  }
   const files = path.join(stateDir, `${head}${LOCAL_CORPUS_SUFFIX.FILES}`);
   const gated = run(process.execPath, [LOCAL_CORPUS_GATE, LOCAL_CORPUS_GATE_FLAG, head,
     LOCAL_CORPUS_RUN_FLAG, LOCAL_CORPUS_SHELL, LOCAL_CORPUS_SHELL_COMMAND,
@@ -795,6 +796,11 @@ export function runLocalCorpus(root, head, {stateDir, run = spawnSync, now = Dat
   const state = current();
   // Superseded meanwhile: a newer head on main owns the verdict now.
   if (state?.state !== LOCAL_CORPUS_STATE.RUNNING) return gated.status ?? 1;
+  if (gated.status === THERMAL_REFUSAL_EXIT) {
+    writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.LOST,
+      reason: LOCAL_CORPUS_TEXT.HOT, finishedAt: now()});
+    return gated.status;
+  }
   if (gated.status !== 0) {
     writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.RED,
       status: gated.status, finishedAt: now()});
@@ -943,6 +949,196 @@ function localCorpusBookkeeping(write, action) {
   }
 }
 
+// --- The post-merge arm (owner process change, 2026-09-23) ------------------
+// A head merged through GitHub never met the local gate or this publisher, so
+// no corpus ran for it and it holds no whole-corpus receipt. The operator runs
+// this arm for such a head. It refuses anything that is not a head of
+// origin/main (on its first-parent history) or that already holds a receipt;
+// plans the whole corpus from a clean temporary checkout of that sha - no
+// local gate proved a cone for it, and a local receipt never reads what the
+// hosted run claimed; and starts the same detached local corpus a publish
+// starts, which records the receipt only when green. It pushes, stages and
+// amends nothing. The receipt is its one outward write: the action authority
+// is asked here, before a run that could not record, and again by the proof
+// authority when it writes.
+const POST_MERGE_ARGUMENT = '--post-merge';
+const POST_MERGE_FULL_SHA = /^[0-9a-f]{40}$/u;
+const POST_MERGE_FIRST_PARENT = Object.freeze(['rev-list', '--first-parent']);
+// The proof authority is spawned, never imported, as on the record path: an
+// import would put its whole closure into the push gate's (the gate imports
+// this module). This publisher's own copy answers, for the caller's checkout,
+// through its CLI contract: `check --json` exits 0 proven, 1 unproven, and
+// otherwise could not answer; stdout carries the typed outcome.
+const POST_MERGE_AUTHORITY = fileURLToPath(new URL('./proof-authority.js', import.meta.url));
+const PROOF_CHECK_COMMAND = 'check';
+const PROOF_JSON_FLAG = '--json';
+const PROOF_CHECK = Object.freeze({
+  PROVEN: Object.freeze({status: 0, outcome: 'proven'}),
+  UNPROVEN: Object.freeze({status: 1, outcome: 'unproven'}),
+});
+const PROOF_UNANSWERED = Object.freeze({status: null, outcome: 'unanswered'});
+const PROOF_UNREADABLE = 'unreadable';
+const POST_MERGE_REFUSAL = Object.freeze({
+  NOT_A_SHA: 'not-a-full-sha',
+  NOT_ON_MAIN: 'not-a-main-head',
+  ALREADY_PROVEN: 'already-proven',
+  PROOF_STORE_UNAVAILABLE: 'proof-store-unavailable',
+  RECORD_REFUSED: 'receipt-not-authorized',
+  ALREADY_RUNNING: 'already-running',
+  CORPUS_BUSY: 'another-local-corpus-running',
+});
+const POST_MERGE_TEXT = Object.freeze({
+  REFUSED: 'publish --post-merge: refused (',
+  CLOSE: '): ',
+  NOT_A_SHA: 'name the exact 40-character sha of a head on origin/main',
+  NOT_ON_MAIN: ' is not a head of origin/main (not on its first-parent history)',
+  ALREADY_PROVEN: ` already holds a ${CORPUS_PROOF_ID} receipt; nothing is owed`,
+  UNAVAILABLE: 'the proof store could not answer: ',
+  RECORD_REFUSED: 'recording the receipt is not authorized: ',
+  ALREADY_RUNNING: 'a local corpus is already running for ',
+  BUSY: 'a local corpus is running for ',
+  BUSY_SUFFIX: '; only the newest head on main supersedes it',
+  OWED_PREFIX: 'publish: post-merge corpus owed for ',
+  OWED: ': the whole corpus (no local gate proved a cone for a GitHub-merged head), ',
+  ONLY_OPTION: `publish: ${POST_MERGE_ARGUMENT} takes no other option`,
+});
+
+function postMergeRefusal(refusal, detail) {
+  const error = new Error(
+    `${POST_MERGE_TEXT.REFUSED}${refusal}${POST_MERGE_TEXT.CLOSE}${detail}`);
+  error.refusal = refusal;
+  return error;
+}
+
+// Whether sha is a head of origin/main as the remote holds it now: a commit on
+// its first-parent history, which is what a merge through GitHub leaves. A
+// branch commit reached only through a merge commit was never a main head.
+function isMainHead(run, root, sha) {
+  checked(run, GIT_COMMAND,
+    [FETCH_COMMAND, QUIET_ARGUMENT, ORIGIN_REMOTE, MAIN_BRANCH], {cwd: root});
+  const heads = git(run, root,
+    [...POST_MERGE_FIRST_PARENT, `${ORIGIN_REMOTE}/${MAIN_BRANCH}`]);
+  return heads.split(NEWLINE).includes(sha);
+}
+
+// The whole corpus at sha, read from a clean temporary checkout of it that is
+// always removed.
+function mergedHeadCorpus(run, root, sha, wholeCorpus) {
+  const parent = path.join(root, ...PUBLISH_WORKTREE_PARENT);
+  fs.mkdirSync(parent, {recursive: true});
+  const worktree = fs.mkdtempSync(path.join(parent, PUBLISH_WORKTREE_PREFIX));
+  let added = false;
+  try {
+    checked(run, GIT_COMMAND,
+      [WORKTREE_COMMAND, WORKTREE_ADD, QUIET_ARGUMENT, DETACH_ARGUMENT, worktree, sha],
+      {cwd: root});
+    added = true;
+    return wholeCorpus(worktree);
+  } finally {
+    if (added) {
+      checked(run, GIT_COMMAND, [WORKTREE_COMMAND, WORKTREE_REMOVE, FORCE_ARGUMENT, worktree],
+        {cwd: root, allowFailure: true});
+    } else {
+      fs.rmSync(worktree, {recursive: true, force: true});
+    }
+  }
+}
+
+// The outcome the authority stated on stdout, or UNREADABLE.
+function statedProofOutcome(stdout) {
+  try {
+    return JSON.parse(String(stdout || '')).outcome || PROOF_UNREADABLE;
+  } catch {
+    return PROOF_UNREADABLE;
+  }
+}
+
+// The authority's answer for sha: PROVEN, UNPROVEN, or UNANSWERED with why.
+function corpusProofAnswer(run, root, sha) {
+  let answered = null;
+  try {
+    answered = run(process.execPath,
+      [POST_MERGE_AUTHORITY, PROOF_CHECK_COMMAND, CORPUS_PROOF_ID, sha, PROOF_JSON_FLAG],
+      {cwd: root, encoding: UTF8, timeout: RECORD_TIMEOUT_MS});
+  } catch (error) {
+    return {answer: PROOF_UNANSWERED, because: error.message};
+  }
+  const stated = statedProofOutcome(answered?.stdout);
+  const answer = Object.values(PROOF_CHECK).find((candidate) =>
+    answered?.status === candidate.status && stated === candidate.outcome);
+  return answer ? {answer, because: RECEIPT_NO_REASON} :
+    {answer: PROOF_UNANSWERED, because: String(answered?.stderr || answered?.stdout ||
+      answered?.error?.message || RECEIPT_NO_REASON).trim()};
+}
+
+// Refuse before any work when the head is owed nothing or cannot be proved.
+function assertMergedHeadOwed(run, root, sha) {
+  if (!POST_MERGE_FULL_SHA.test(String(sha))) {
+    throw postMergeRefusal(POST_MERGE_REFUSAL.NOT_A_SHA, POST_MERGE_TEXT.NOT_A_SHA);
+  }
+  if (!isMainHead(run, root, sha)) {
+    throw postMergeRefusal(POST_MERGE_REFUSAL.NOT_ON_MAIN, `${sha}${POST_MERGE_TEXT.NOT_ON_MAIN}`);
+  }
+  const proof = corpusProofAnswer(run, root, sha);
+  if (proof.answer === PROOF_CHECK.PROVEN) {
+    throw postMergeRefusal(POST_MERGE_REFUSAL.ALREADY_PROVEN,
+      `${sha}${POST_MERGE_TEXT.ALREADY_PROVEN}`);
+  }
+  if (proof.answer !== PROOF_CHECK.UNPROVEN) {
+    throw postMergeRefusal(POST_MERGE_REFUSAL.PROOF_STORE_UNAVAILABLE,
+      `${POST_MERGE_TEXT.UNAVAILABLE}${proof.because}`);
+  }
+  const decision = authorizeAction({action: ACTION.RECORD_PROOF});
+  if (!isAuthorized(decision)) {
+    throw postMergeRefusal(POST_MERGE_REFUSAL.RECORD_REFUSED,
+      `${POST_MERGE_TEXT.RECORD_REFUSED}${decision.because || decision.requires}`);
+  }
+}
+
+// One local corpus at a time: a run for this sha already covers it, and a run
+// for another head yields only to the newest head on main, as after a publish.
+function assertLocalCorpusFree(stateDir, sha, isTip) {
+  const running = readLocalCorpusRecords(stateDir)
+    .filter((record) => record.state === LOCAL_CORPUS_STATE.RUNNING);
+  if (running.some((record) => record.sha === sha)) {
+    throw postMergeRefusal(POST_MERGE_REFUSAL.ALREADY_RUNNING,
+      `${POST_MERGE_TEXT.ALREADY_RUNNING}${sha}`);
+  }
+  if (!isTip && running.length > 0) {
+    throw postMergeRefusal(POST_MERGE_REFUSAL.CORPUS_BUSY,
+      `${POST_MERGE_TEXT.BUSY}${running[0].sha}${POST_MERGE_TEXT.BUSY_SUFFIX}`);
+  }
+}
+
+/**
+ * The post-merge arm: start the local corpus for a head already on origin/main
+ * that no publish proved, so its whole-corpus receipt gets recorded.
+ * @param {string} root
+ * @param {string} sha the merged head
+ * @param {{run?: Function, write?: Function, spawnProcess?: Function,
+ *   wholeCorpus?: Function, localCorpusDir?: string}} [options]
+ * @return {{sha: string, files: number, pid: number, log: string}}
+ */
+export function proveMergedHead(root, sha, options = {}) {
+  const run = options.run || spawnSync;
+  const write = options.write || ((line) => process.stdout.write(`${line}${NEWLINE}`));
+  assertMergedHeadOwed(run, root, sha);
+  const places = localCorpusPlaces(run, root);
+  const stateDir = options.localCorpusDir || places.stateDir;
+  reconcileLocalCorpus(stateDir);
+  reportLocalCorpus(stateDir, write);
+  const isTip = git(run, root, [REV_PARSE_COMMAND, `${ORIGIN_REMOTE}/${MAIN_BRANCH}`]) === sha;
+  assertLocalCorpusFree(stateDir, sha, isTip);
+  const files = mergedHeadCorpus(run, root, sha, options.wholeCorpus || wholeCorpusFiles);
+  if (isTip) supersedeLocalCorpus(stateDir, sha, write);
+  const pid = startLocalCorpus({root: places.mainRoot, stateDir, head: sha, files,
+    spawnProcess: options.spawnProcess || spawn});
+  const log = `${path.join(stateDir, sha)}${LOCAL_CORPUS_SUFFIX.LOG}`;
+  write(`${POST_MERGE_TEXT.OWED_PREFIX}${sha}${POST_MERGE_TEXT.OWED}${files.length}` +
+    `${LOCAL_CORPUS_TEXT.FILES}${log}`);
+  return {sha, files: files.length, pid, log};
+}
+
 export function publishExactHead(root, args = {}, options = {}) {
   const run = options.run || spawnSync;
   publishStage(PUBLISH_STAGE_LABEL.RESOLVE_HEAD);
@@ -977,9 +1173,9 @@ export function publishExactHead(root, args = {}, options = {}) {
   });
   publishStage(PUBLISH_STAGE_LABEL.CREATE_WORKTREE);
 
-  const parent = path.join(root, 'test-output', 'publish-worktrees');
+  const parent = path.join(root, ...PUBLISH_WORKTREE_PARENT);
   fs.mkdirSync(parent, {recursive: true});
-  const worktree = fs.mkdtempSync(path.join(parent, 'head-'));
+  const worktree = fs.mkdtempSync(path.join(parent, PUBLISH_WORKTREE_PREFIX));
   let added = false;
   let retained = null;
   try {
@@ -1037,7 +1233,12 @@ function parseArgs(argv) {
       parsed.fixesRed = valueAfter(index++, token);
     } else if (token === REASON_ARGUMENT) parsed.reason = valueAfter(index++, token);
     else if (token === ALLOW_MISSING_DATA_ARGUMENT) parsed.allowMissingData = true;
-    else throw new Error(`publish: unknown argument ${token}`);
+    else if (token === POST_MERGE_ARGUMENT) {
+      parsed.postMerge = valueAfter(index++, token);
+    } else throw new Error(`publish: unknown argument ${token}`);
+  }
+  if (parsed.postMerge && Object.keys(parsed).length > 1) {
+    throw new Error(POST_MERGE_TEXT.ONLY_OPTION);
   }
   return parsed;
 }
@@ -1056,6 +1257,14 @@ function main() {
   }
   try {
     const args = parseArgs(process.argv.slice(2));
+    if (args.postMerge) {
+      publishStage(PUBLISH_STAGE_LABEL.POST_MERGE +
+        args.postMerge.slice(0, PUBLISH_SHORT_SHA_LENGTH));
+      const started = proveMergedHead(process.cwd(), args.postMerge);
+      publishStage(PUBLISH_STAGE_LABEL.POST_MERGE_DONE);
+      process.stdout.write(`${JSON.stringify(started, null, 2)}\n`);
+      return;
+    }
     const receipt = publishExactHead(process.cwd(), args);
     publishStage(PUBLISH_STAGE_LABEL.DONE);
     process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
@@ -1077,6 +1286,7 @@ if (process.argv[1] &&
 
 export {
   LOCAL_CORPUS_OWED,
+  POST_MERGE_REFUSAL,
   GATE_WORKSPACE_DIRECTORIES,
   assertWorkspaceDependencyLinks,
   linkWorkspaceDependencies,

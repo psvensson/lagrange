@@ -14,9 +14,11 @@ import {test} from 'node:test';
 
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 import {
-  PLACEMENT_EXIT, placeTestFiles, placementDeps, placementMachines,
-  recordPlacementMisses, runPlacedTestFiles, startRemoteShard,
+  PLACEMENT_EXIT, formatLabDecision, labTestCommit, labTestDeps, placeLabLanes,
+  placeTestFiles, placementDeps, placementMachines, recordPlacementMisses, runLabTest,
+  runPlacedTestFiles, startRemoteShard,
 } from '../../scripts/lab/probe.js';
+import {runClassifiedTestFiles} from '../../scripts/run-classified-test-files.js';
 
 const MINUTE = 60000;
 const CONTROLLER = Object.freeze({name: '(controller)', controller: true, speed: 1});
@@ -25,6 +27,40 @@ const CONTROLLER = Object.freeze({name: '(controller)', controller: true, speed:
 // (2026-09-18: a repository-scanning file took over a minute there).
 const FAST_TEST = 'test/query/distributed-merge-engine.test.js';
 const SLOW_TEST = 'test/scripts/check-operation-dispatch-completion-owner.test.js';
+const OTHER_FAST_TEST = 'test/query/budget-limit-error.test.js';
+
+// This worktree's own recorded result for each file: a witness that drives
+// the real runner must never write here, where the corpus writes the same
+// path concurrently (a NUL-filled .tap there was a false red, 2026-09-23).
+function worktreeResults(files) {
+  return files.map((file) => {
+    const tap = path.join(process.cwd(), '.tap', 'test-results', `${file}.tap`);
+    return fs.existsSync(tap) ? `${file} ${fs.statSync(tap).mtimeMs}` : `${file} absent`;
+  });
+}
+
+// Fixture test files only a runner fixture has: one that runs until it is
+// stopped (bounded at a minute) and one that passes at once.
+const RUNNER_SLOW_FIXTURE = 'test/scripts/placement-runner-slow.test.js';
+const RUNNER_FAST_FIXTURE = 'test/scripts/placement-runner-fast.test.js';
+const RUNNER_FIXTURE_HEAD = 'import assert from \'node:assert/strict\';\n' +
+  'import {test} from \'node:test\';\n';
+
+// A throwaway checkout of this commit whose own root the real runner runs in
+// and records its results under - never this worktree, never a corpus file.
+function runnerFixture(t) {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'placement-runner-'));
+  t.after(() => fs.rmSync(scratch, {recursive: true, force: true}));
+  const root = path.join(scratch, 'checkout');
+  git(scratch, 'clone', '-q', '--shared', process.cwd(), root);
+  fs.symlinkSync(path.join(process.cwd(), 'node_modules'), path.join(root, 'node_modules'));
+  fs.writeFileSync(path.join(root, RUNNER_SLOW_FIXTURE), `${RUNNER_FIXTURE_HEAD}` +
+    'test(\'runs until stopped\', async () => {\n' +
+    '  await new Promise((resolve) => setTimeout(resolve, 60000));\n  assert.ok(true);\n});\n');
+  fs.writeFileSync(path.join(root, RUNNER_FAST_FIXTURE),
+    `${RUNNER_FIXTURE_HEAD}test('passes', () => assert.ok(true));\n`);
+  return {root, tap: (file) => path.join(root, '.tap', 'test-results', `${file}.tap`)};
+}
 
 function lab(name, speed, extra = {}) {
   return {name, controller: false, speed, avoid: [], gapsKey: 'k', ...extra};
@@ -141,7 +177,7 @@ function fakeDeps(overrides = {}) {
   const deps = {
     env: {},
     write: (line) => calls.lines.push(line),
-    planCosts: (files) => files.map((file) => ({file, ms: 2 * MINUTE, jobs: 1})),
+    planCosts: (files) => files.map((file) => ({file, ms: 2 * MINUTE, jobs: 1, lane: 'ordinary'})),
     runLocal: (files) => {
       calls.order.push('local');
       calls.local.push([...files]);
@@ -169,6 +205,30 @@ function fakeDeps(overrides = {}) {
 }
 
 const MANY = Array.from({length: 8}, (_, index) => `test/f${index}.test.js`);
+
+// Keep-going is the one policy, placed or local: the runner is handed no
+// policy but the explicit fail-fast opt-in, and a fail-fast run is never
+// placed, because a placed run reports the whole plan by construction.
+test('only an explicit fail-fast reaches the runner, and it is never placed', async () => {
+  const policies = [];
+  let run = fakeDeps({runLocal: (files, options) => {
+    policies.push(options);
+    return 0;
+  }});
+  assert.equal(await runPlacedTestFiles(MANY, run.deps), 0);
+  assert.equal(run.calls.remote.length, 1, 'the default run is placed');
+  assert.deepEqual(policies, [{}], 'the controller shard runs the default policy');
+
+  policies.length = 0;
+  run = fakeDeps({failFast: true, runLocal: (files, options) => {
+    policies.push(options);
+    return 0;
+  }});
+  assert.equal(await runPlacedTestFiles(MANY, run.deps), 0);
+  assert.deepEqual(policies, [{failFast: true}]);
+  assert.equal(run.calls.discover, 0, 'a fail-fast run never asks the fleet');
+  assert.match(run.calls.lines[0], /^placement: local - fail-fast asks for the first red/u);
+});
 
 test('a small plan, a tree that is not a commit or an empty fleet runs locally', async () => {
   let run = fakeDeps({env: {LAGRANGE_PLACEMENT: 'local'}});
@@ -343,6 +403,109 @@ test('a shard its machine could not run is run on the controller', async () => {
   assert.equal(retried.calls.local.length, 1, 'nothing runs twice');
 });
 
+// The thermal gate is the runner's, on whichever host it runs (process change
+// 2026-09-23). A lab shard's log is its runner's stream: the gate's lines come
+// back unchanged and are never verdicts, and a host whose runner refused as
+// too hot is a typed placement outcome whose files run once elsewhere.
+const REAL_FILES = Object.freeze([FAST_TEST, SLOW_TEST, OTHER_FAST_TEST]);
+const thermalJson = (cpuCelsius) => ({'coretemp-isa-0000':
+  {'Package id 0': {temp1_input: cpuCelsius}}, 'nvme-pci-0200': {'Sensor 2': {temp3_input: 50}}});
+
+// What a lab machine's runner prints for its shard at a given temperature:
+// the real runner, its batches standing in for tests that pass.
+function labRunnerLog(files, cpuCelsius) {
+  const lines = [];
+  const spawned = [];
+  const status = runClassifiedTestFiles(files, {
+    root: process.cwd(), env: {},
+    write: (text) => lines.push(text),
+    thermalSources: {sensors: () => thermalJson(cpuCelsius)},
+    thermalSleep: () => {},
+    spawn(command, args) {
+      const batch = args.slice(2);
+      spawned.push(...batch);
+      for (const file of batch) lines.push(`ok ${file} (1 assertions, 5ms)\n`);
+      return {status: 0};
+    },
+  });
+  return {status, spawned, log: lines.join('').trimEnd()};
+}
+
+test('a lab runner\'s thermal lines are relayed unchanged and are never verdicts', async () => {
+  let given = null;
+  const run = fakeDeps({
+    runRemote: (shard) => {
+      given = labRunnerLog(shard.files, 61);
+      return {done: Promise.resolve({status: given.status, log: given.log})};
+    },
+  });
+  assert.equal(await runPlacedTestFiles([...REAL_FILES], run.deps), 0);
+  const thermal = given.log.split('\n').filter((line) => line.startsWith('thermal: '));
+  assert.deepEqual(thermal, ['thermal: ok cpu 61C (coretemp/Package id 0) nvme 50C (nvme/Sensor 2)'],
+    'the lab runner gated its one batch');
+  assert.ok(run.calls.lines.includes('[lab] thermal: ok cpu 61C (coretemp/Package id 0) nvme 50C (nvme/Sensor 2)'),
+    'relayed with the machine\'s name and nothing else changed');
+  assert.equal(run.calls.local.length, 1, 'every lab file was proved by its own verdict line');
+
+  // Its thermal lines alone prove nothing: every file falls back.
+  let remoteFiles = [];
+  const gateOnly = fakeDeps({
+    runRemote: (shard) => {
+      remoteFiles = shard.files;
+      return {done: Promise.resolve({status: 0,
+        log: labRunnerLog(shard.files, 61).log.split('\n')
+          .filter((line) => line.startsWith('thermal: ')).join('\n')})};
+    },
+  });
+  assert.equal(await runPlacedTestFiles([...REAL_FILES], gateOnly.deps), 0);
+  assert.deepEqual(gateOnly.calls.local.slice(1).flat().sort(), [...remoteFiles].sort(),
+    'a thermal line never matches a verdict');
+});
+
+test('a lab host too hot to run is reported thermal-unfit and its files run once elsewhere',
+  async () => {
+    let remoteCalls = 0;
+    let given = null;
+    const run = fakeDeps({
+      runRemote: (shard) => {
+        remoteCalls += 1;
+        given = {files: shard.files, ...labRunnerLog(shard.files, 90)};
+        return {done: Promise.resolve({status: given.status,
+          log: `placement-head=${'a'.repeat(40)}\n${given.log}`})};
+      },
+    });
+    assert.equal(await runPlacedTestFiles([...REAL_FILES], run.deps), 0,
+      'green: every file ran, and passed, somewhere cool');
+    assert.deepEqual(given.spawned, [], 'the hot host started no test process');
+    assert.ok(run.calls.lines.includes('placement: host-thermal-unfit lab'),
+      `a typed placement outcome: ${run.calls.lines.join('\n')}`);
+    assert.ok(run.calls.lines.some((line) =>
+      line.startsWith('[lab] thermal: thermal-headroom-exhausted - ')),
+    'the refusal itself is relayed');
+    assert.equal(remoteCalls, 1, 'never retried on the same host in this invocation');
+    assert.deepEqual(run.calls.local.slice(1).flat().sort(), [...given.files].sort(),
+      'with no other ready host, its files are placed once more, here');
+    assert.equal(run.calls.local.length, 2, 'once');
+
+    // One re-placement policy for a host that refused, hot or held: a ready
+    // host this run has not tried, that fits the files, takes them first.
+    const tried = [];
+    const moved = fakeDeps({
+      discover: async () => ({machines: [lab('lab', 1), lab('spare', 2)],
+        record: async () => {}}),
+      runRemote: (shard) => {
+        tried.push({name: shard.machine.name, files: [...shard.files]});
+        const ran = labRunnerLog(shard.files, shard.machine.name === 'lab' ? 90 : 50);
+        return {done: Promise.resolve({status: ran.status, log: ran.log})};
+      },
+    });
+    assert.equal(await runPlacedTestFiles([...REAL_FILES], moved.deps), 0);
+    assert.deepEqual(tried.map((one) => one.name), ['lab', 'spare'],
+      'the unfit host once, then the next ready host');
+    assert.deepEqual(tried[1].files, tried[0].files, 'which takes the files it never ran');
+    assert.equal(moved.calls.local.length, 1, 'the controller runs only its own shard');
+  });
+
 // Git addresses these scratch repositories only, never one a push hook
 // exported GIT_DIR for.
 test('an interrupted placed run stops every machine at once', async (t) => {
@@ -375,6 +538,8 @@ test('an interrupted placed run stops every machine at once', async (t) => {
   // For real: a SIGTERM to a placed run whose controller files are running
   // ends it at once, and nothing either side started survives.
   const probe = path.join(process.cwd(), 'scripts', 'lab', 'probe.js');
+  const fixture = runnerFixture(t);
+  const before = worktreeResults([RUNNER_SLOW_FIXTURE]);
   const child = spawn(process.execPath, ['--input-type=module', '-e', `
     import {spawn} from 'node:child_process';
     import {placementDeps, runPlacedTestFiles} from ${JSON.stringify(probe)};
@@ -383,7 +548,7 @@ test('an interrupted placed run stops every machine at once', async (t) => {
       console.log('group=' + sleeper.pid);
       return sleeper;
     };
-    const real = placementDeps({root: process.cwd()});
+    const real = placementDeps({root: ${JSON.stringify(fixture.root)}});
     await runPlacedTestFiles(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], {
       env: {}, write: () => {},
       planCosts: (files) => files.map((file) => ({file, ms: 120000, jobs: 1})),
@@ -395,7 +560,7 @@ test('an interrupted placed run stops every machine at once', async (t) => {
         return {done: new Promise(() => {}), abort: () => process.kill(-lab.pid, 'SIGKILL')};
       },
       runLocalChild: (files) => {
-        const local = real.runLocalChild(['${SLOW_TEST}']);
+        const local = real.runLocalChild(['${RUNNER_SLOW_FIXTURE}']);
         console.log('local-group=' + local.group);
         console.log('local-started');
         return local;
@@ -435,6 +600,8 @@ test('an interrupted placed run stops every machine at once', async (t) => {
     }
   }
   assert.equal(slowAlive, false, 'and the controller\'s own runner group is gone');
+  assert.deepEqual(worktreeResults([RUNNER_SLOW_FIXTURE]), before,
+    'the worktree\'s results root is untouched');
 });
 
 test('a hang-up stops a placed run like an interrupt', async () => {
@@ -534,9 +701,15 @@ test('an aborted lab shard cleans up before it is cut', async (t) => {
 test('the controller child runs with placement switched off', async (t) => {
   // Its own files are the controller's shard: placing them again would
   // rediscover a fleet that is busy with this very run.
-  const local = placementDeps({root: process.cwd(), env: gitProcessEnvironment()})
-    .runLocalChild([SLOW_TEST]);
+  const fixture = runnerFixture(t);
+  const before = worktreeResults([RUNNER_SLOW_FIXTURE]);
+  const local = placementDeps({root: fixture.root, env: gitProcessEnvironment()})
+    .runLocalChild([RUNNER_SLOW_FIXTURE]);
   t.after(() => local.abort());
+  for (let poll = 0; poll < 1200 && !fs.existsSync(fixture.tap(RUNNER_SLOW_FIXTURE)); poll += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.ok(fs.existsSync(fixture.tap(RUNNER_SLOW_FIXTURE)), 'the fixture root holds the result');
   assert.doesNotThrow(() => process.kill(-local.group, 0), 'it leads its own group');
   if (fs.existsSync(`/proc/${local.group}/environ`)) {
     const environ = fs.readFileSync(`/proc/${local.group}/environ`, 'utf8').split('\0');
@@ -544,6 +717,56 @@ test('the controller child runs with placement switched off', async (t) => {
   }
   local.abort();
   assert.notEqual(await local.done, 0, 'and an abort ends it');
+  assert.deepEqual(worktreeResults([RUNNER_SLOW_FIXTURE]), before,
+    'the worktree\'s results root is untouched');
+});
+
+const GATE_TEST = 'test/scripts/lab-stream-gate.test.js';
+const RESULTS_FILE = 'test-output/reports/test-results.ndjson';
+const RESULTS_TEXT = '{"file":"a","ok":true}\n{"file":"b","ok":false}\n';
+
+// Waits, bounded, for the witness to create the gate file.
+function gateTestSource(gate) {
+  return [
+    'import assert from \'node:assert/strict\';',
+    'import fs from \'node:fs\';',
+    'import {test} from \'node:test\';',
+    'test(\'waits for the witness\', async () => {',
+    `  for (let poll = 0; poll < 2400 && !fs.existsSync(${JSON.stringify(gate)}); poll += 1) {`,
+    '    await new Promise((resolve) => setTimeout(resolve, 50));',
+    '  }',
+    `  assert.ok(fs.existsSync(${JSON.stringify(gate)}));`,
+    '});',
+    '',
+  ].join('\n');
+}
+
+test('the controller child gets its file list even while this process is busy', async (t) => {
+  // Its list used to go down a socket written from this event loop; a child
+  // that read it first - this process blocked after the spawn, as a placed
+  // run is while it bundles and starts lab shards - found the non-blocking
+  // socket empty and died with EAGAIN before running anything (found
+  // 2026-09-23, eight of eight children under a 300 ms block).
+  // Not inside node:test's own stream protocol, as a real controller is not.
+  const env = gitProcessEnvironment();
+  delete env.NODE_TEST_CONTEXT;
+  // Streamed, so its output does not land in this file's own TAP; the list
+  // reaches an inherited-output child the same way.
+  const lines = [];
+  const fixture = runnerFixture(t);
+  const before = worktreeResults([RUNNER_FAST_FIXTURE]);
+  const streamed = labTestDeps({root: fixture.root, env}).runLocalChild([RUNNER_FAST_FIXTURE],
+    {onLine: (line) => lines.push(line)});
+  const until = Date.now() + 300;
+  while (Date.now() < until) {
+    // Busy, as the controller is between starting its child and returning.
+  }
+  assert.equal(await streamed.done, 0, lines.join('\n'));
+  assert.ok(lines.some((line) => line.startsWith(`ok ${RUNNER_FAST_FIXTURE} `)),
+    lines.join('\n'));
+  assert.ok(fs.existsSync(fixture.tap(RUNNER_FAST_FIXTURE)), 'the fixture root holds the result');
+  assert.deepEqual(worktreeResults([RUNNER_FAST_FIXTURE]), before,
+    'the worktree\'s results root is untouched');
 });
 
 function git(cwd, ...args) {
@@ -573,7 +796,8 @@ function exitOf(child) {
 }
 
 // The descriptors a started runner holds, read from /proc once its pid is in
-// the log: the machine lock must not be one of them.
+// the log: neither the machine-wide lock nor the checkout lock may be one of
+// them. Returns the runner's pid.
 async function assertRunnerFreeOfLock(logFile) {
   let runnerPid = null;
   for (let poll = 0; poll < 1200 && !runnerPid; poll += 1) {
@@ -581,7 +805,7 @@ async function assertRunnerFreeOfLock(logFile) {
     runnerPid = /^placement-pid=(\d+)$/mu.exec(fs.readFileSync(logFile, 'utf8'))?.[1];
   }
   assert.ok(runnerPid, 'the runner started');
-  if (!fs.existsSync(`/proc/${runnerPid}/fd`)) return;
+  if (!fs.existsSync(`/proc/${runnerPid}/fd`)) return runnerPid;
   const held = fs.readdirSync(`/proc/${runnerPid}/fd`).map((fd) => {
     try {
       return fs.readlinkSync(`/proc/${runnerPid}/fd/${fd}`);
@@ -589,8 +813,9 @@ async function assertRunnerFreeOfLock(logFile) {
       return '';
     }
   });
-  assert.ok(!held.some((target) => target.endsWith('lagrange-placement.lock')),
-    'the runner does not hold the machine lock');
+  assert.ok(!held.some((target) => target.endsWith('lagrange-placement.lock') ||
+    target.endsWith('machine.lock')), 'the runner holds neither lock');
+  return runnerPid;
 }
 
 function leftovers(repo) {
@@ -601,6 +826,27 @@ function leftovers(repo) {
     refs: git(repo, 'for-each-ref', 'refs/lagrange-placement'),
     files: fs.existsSync(parent) ? fs.readdirSync(parent) : [],
   };
+}
+
+// What a fixture shard tells other agents it is doing, unless a witness says.
+const FIXTURE_HOLDER = Object.freeze({purpose: 'test:ordinary', expectedMs: MINUTE});
+
+// The machine-wide lock in a scratch directory the shard's shell is pointed
+// at, and a `flock` first on its PATH that records how it was called.
+function labLockFixture(scratch, env) {
+  const dir = path.join(scratch, 'lab-lock');
+  const calls = path.join(scratch, 'flock-calls');
+  const real = spawnSync('sh', ['-c', 'command -v flock'], {encoding: 'utf8'}).stdout.trim();
+  const stubs = path.join(scratch, 'stub-bin');
+  fs.mkdirSync(stubs);
+  fs.writeFileSync(path.join(stubs, 'flock'),
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> '${calls}'\nexec '${real}' "$@"\n`, {mode: 0o755});
+  env.PATH = `${stubs}${path.delimiter}${env.PATH}`;
+  env.LAB_LOCK_DIR = dir;
+  env.LAGRANGE_LAB_AGENT = 'claude:placement-witness';
+  return {dir, lock: path.join(dir, 'machine.lock'),
+    holder: path.join(dir, 'machine.holder.json'),
+    calls: () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : [])};
 }
 
 // A lab machine's checkout at this commit, and a controller one commit on,
@@ -627,6 +873,14 @@ function labFixture(t) {
   git(node, 'update-ref', 'refs/lagrange-placement/old-run', basis);
   fs.appendFileSync(path.join(controller, 'README.md'), '\nplacement witness\n');
   git(controller, 'rm', '-q', '-r', 'data/storage-load');
+  // A file that finishes only when the witness releases it, so a line can be
+  // shown to arrive while its shard still runs; and a results ledger at the
+  // path a runner leaves one, which a hand run copies back.
+  const gate = path.join(scratch, 'release-gate');
+  fs.writeFileSync(path.join(controller, GATE_TEST), gateTestSource(gate));
+  fs.mkdirSync(path.join(controller, 'test-output', 'reports'), {recursive: true});
+  fs.writeFileSync(path.join(controller, RESULTS_FILE), RESULTS_TEXT);
+  git(controller, 'add', '-f', GATE_TEST, RESULTS_FILE);
   git(controller, 'commit', '-qam', 'placement witness');
   const sha = git(controller, 'rev-parse', 'HEAD');
   const machine = {name: 'lab', sshTarget: null, repoPath: node, repoHead: basis,
@@ -637,23 +891,45 @@ function labFixture(t) {
   // session carries neither.
   const env = gitProcessEnvironment();
   delete env.NODE_TEST_CONTEXT;
+  // The lab's machine-wide lock lives in the fixture, never in this
+  // machine's own $HOME/.lab, and every flock call is recorded on its way to
+  // the real one.
+  const labLock = labLockFixture(scratch, env);
   const start = (files, options = {}) => startRemoteShard({machine, files},
-    {sha, deadlineMs: 10 * MINUTE, root: controller, env, ...options});
-  return {node, controller, parent, machine, sha, env, start};
+    {sha, deadlineMs: 10 * MINUTE, root: controller, env, holder: FIXTURE_HOLDER, ...options});
+  return {node, controller, parent, machine, sha, env, start, labLock,
+    releaseGate: () => fs.writeFileSync(gate, 'go')};
 }
 
 test('a lab machine proves the exact commit in a throwaway worktree and leaves nothing behind',
   async (t) => {
     const {node, controller, parent, machine, sha, env, start} = labFixture(t);
-    const started = start([FAST_TEST], {forward: {retry: '1', tapTimeout: '900'}});
+    const started = start([FAST_TEST], {runId: 'capped',
+      forward: {retry: '1', tapTimeout: '900'}});
     assert.equal(typeof started.then, 'undefined', 'a shard is started, not awaited');
+    // The lab-side script as sent, read before its shard removes it and
+    // asserted once the shard has settled, so a red leaves nothing running.
+    const sent = fs.readFileSync(path.join(controller, 'test-output', 'placement',
+      'capped-lab.sh'), 'utf8');
     const green = await started.done;
+    // The lane cap comes from the host's own processor count at run time,
+    // never from a host name.
+    assert.match(sent, /^cores="\$\(getconf _NPROCESSORS_ONLN 2>\/dev\/null \|\| nproc 2>\/dev\/null\)"$/mu,
+      'the remote host counts its own processors');
+    // The lab convention's default lock directory is `$HOME/.lab` on every
+    // host; the fixture's machine is also called lab.
+    assert.doesNotMatch(sent.replaceAll('$HOME/.lab', ''), /\blab\b/u,
+      'and no machine is named in what it runs');
     assert.equal(green.status, 0, green.log + green.errors);
     assert.match(green.log, new RegExp(`^placement-head=${sha}$`, 'mu'),
       'the worktree is at the commit the controller holds, sent as a bundle');
     assert.match(green.log, new RegExp(`^ok ${FAST_TEST} `, 'mu'));
-    assert.match(green.log, /^placement-env=factor:1\.5 mode:local retry:1 timeout:900$/mu,
-      'its own budgets scaled, the controller\'s retry and timeout policy, never placed again');
+    const cores = Number(spawnSync('getconf', ['_NPROCESSORS_ONLN'], {encoding: 'utf8'})
+      .stdout.trim());
+    assert.match(green.log, new RegExp('^placement-env=factor:1\\.5 mode:local retry:1 ' +
+      `timeout:900 lanecap:${Math.max(1, cores - 1)}$`, 'mu'),
+    'its own budgets scaled, the controller\'s retry and timeout policy, never placed ' +
+      'again, and its lanes capped at its cores less one');
     assert.match(green.log, /^placement-link=node_modules$/mu);
     assert.match(green.log, /^placement-link=data\/examples$/mu, 'an ignored entry is linked');
     assert.doesNotMatch(green.log, /^placement-link=data\/storage-load$/mu,
@@ -758,7 +1034,432 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
     git(controller, 'commit', '-qam', 'placement witness two');
     const unsent = git(controller, 'rev-parse', 'HEAD');
     const unreachable = await (await startRemoteShard({machine: {...machine, repoHead: unsent},
-      files: [FAST_TEST]}, {sha: unsent, deadlineMs: MINUTE, root: controller, env})).done;
+      files: [FAST_TEST]}, {sha: unsent, deadlineMs: MINUTE, root: controller, env,
+      holder: FIXTURE_HOLDER})).done;
     assert.equal(unreachable.status, PLACEMENT_EXIT.SETUP);
     assert.deepEqual(leftovers(node), {worktrees: 1, refs: '', files: []});
+  });
+
+// ---------------------------------------------------------------------------
+// Sharing the lab (owner directive 2026-09-23): a placed shard takes the one
+// machine-wide lock every agent in every project takes, waits for it no longer
+// than its own budget, and keeps a holder record beside it for as long as it
+// holds it. A host found held is a typed outcome, and its shard goes on to the
+// next ready host before the controller.
+
+const SECOND = 1000;
+// The lab's cap on any lock wait, in seconds.
+const LOCK_WAIT_CAP_SECONDS = 30 * 60;
+const HOLDER_FIELDS = Object.freeze(['project', 'agent', 'controller', 'purpose', 'sha',
+  'startedAt', 'expectedMinutes', 'pid']);
+// Another project's holder of a lab machine.
+const OTHER_HOLDER = Object.freeze({project: 'other-project', agent: 'codex:task-7',
+  controller: 'laptop', purpose: 'formation:rolling-restart', sha: 'e'.repeat(40),
+  startedAt: '2026-09-23T10:00:00Z', expectedMinutes: 25, pid: 4242});
+const HOST_BUSY_LINE = 'placement: host-busy b held-by codex:task-7 since 2026-09-23T10:00:00Z';
+
+// Holds a lock file from a process group of its own until released.
+async function holdLock(t, lock) {
+  const holder = spawn('flock', [lock, 'sleep', '60'], {stdio: 'ignore', detached: true});
+  const release = async () => {
+    try {
+      process.kill(-holder.pid, 'SIGKILL');
+    } catch {
+      // already gone
+    }
+    await exitOf(holder);
+  };
+  t.after(release);
+  for (let poll = 0; poll < 600 && spawnSync('flock', ['-n', lock, 'true']).status === 0;
+    poll += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return {pid: holder.pid, release};
+}
+
+function lockIsFree(lock) {
+  return spawnSync('flock', ['-n', lock, 'true']).status === 0;
+}
+
+test('a lab shard takes the machine-wide lock for its budget and records who holds it',
+  async (t) => {
+    const {start, controller, sha, labLock} = labFixture(t);
+    const running = start([SLOW_TEST], {runId: 'held',
+      holder: {purpose: 'test:cpu-heavy', expectedMs: 90 * SECOND}});
+    const logFile = path.join(controller, 'test-output', 'placement', 'held-lab.log');
+    await assertRunnerFreeOfLock(logFile);
+    assert.deepEqual(labLock.calls(), ['-w 90 9', '-n 8'],
+      'the machine-wide lock, waited for no longer than the shard budget, then the checkout ' +
+        'lock inside it');
+    const shell = Number(/^placement-shell=(\d+)$/mu.exec(fs.readFileSync(logFile, 'utf8'))[1]);
+    const record = JSON.parse(fs.readFileSync(labLock.holder, 'utf8'));
+    assert.deepEqual(Object.keys(record), HOLDER_FIELDS, 'the holder record has all eight fields');
+    assert.deepEqual({...record, startedAt: null}, {project: 'lagrange',
+      agent: 'claude:placement-witness', controller: os.hostname(), purpose: 'test:cpu-heavy',
+      sha, startedAt: null, expectedMinutes: 2, pid: shell},
+    'written by the lab shell that holds the lock, from the shard\'s own estimate');
+    assert.match(record.startedAt, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/u);
+    assert.equal(lockIsFree(labLock.lock), false, 'held while the shard runs');
+    running.stop();
+    assert.equal((await running.done).reason, 'interrupted');
+    assert.equal(fs.existsSync(labLock.holder), false, 'a stopped shard removes its record');
+    assert.equal(lockIsFree(labLock.lock), true, 'and frees the machine');
+
+    const long = await start([FAST_TEST], {runId: 'long',
+      holder: {purpose: 'test:ordinary', expectedMs: 10 * 60 * MINUTE}}).done;
+    assert.equal(long.status, 0, long.log + long.errors);
+    assert.equal(labLock.calls().at(-2), `-w ${LOCK_WAIT_CAP_SECONDS} 9`,
+      'a shard of hours still waits no longer than the lab\'s cap');
+    assert.equal(fs.existsSync(labLock.holder), false, 'a finished shard removes its record');
+  });
+
+test('a lab shard finding the machine held waits its budget, then refuses naming the holder',
+  async (t) => {
+    const {start, node, machine, labLock} = labFixture(t);
+    fs.mkdirSync(labLock.dir, {recursive: true});
+    const other = await holdLock(t, labLock.lock);
+    const record = `${JSON.stringify({...OTHER_HOLDER, pid: other.pid})}\n`;
+    fs.writeFileSync(labLock.holder, record);
+    const startedAt = Date.now();
+    const busy = await start([FAST_TEST], {runId: 'busy',
+      holder: {purpose: 'test:ordinary', expectedMs: 1500}}).done;
+    assert.equal(busy.status, PLACEMENT_EXIT.BUSY, busy.log + busy.errors);
+    assert.equal(labLock.calls()[0], '-w 2 9', 'a budget under two seconds waits two');
+    assert.ok(Date.now() - startedAt >= 1900, 'it waited its budget before refusing');
+    assert.ok(busy.log.split('\n').includes(`machine-lock-busy=${record.trim()}`),
+      `and named who holds the machine: ${busy.log}`);
+    assert.equal(fs.readFileSync(labLock.holder, 'utf8'), record,
+      'the holder\'s own record is left exactly as it was');
+    assert.deepEqual(leftovers(node), {worktrees: 1,
+      refs: `${machine.repoHead} commit\trefs/lagrange-placement/old-run`,
+      files: ['old-run', 'old-run.bundle', 'old-run.files']},
+    'it left nothing of its own, and touched nothing of a run it never held the machine for');
+  });
+
+test('discovery keeps a machine another agent holds out of placement before it is tried', () => {
+  const ready = {ready: true, missing: [], gaps: []};
+  const cap = (machineLock) => ({repoPath: '/srv/lagrange', cpuSampleMs: 260,
+    nodeVersion: 'v22.22.3', repo: {head: 'c'.repeat(40)}, machineLock});
+  const fleet = [
+    {name: '(controller)', controller: true, capability: {cpuSampleMs: 200}, readiness: ready},
+    {name: 'held', capability: cap({state: 'busy', holder: OTHER_HOLDER}), readiness: ready},
+    {name: 'stale', capability: cap({state: 'stale-record', holder: OTHER_HOLDER,
+      holderPidAlive: false}), readiness: ready},
+    {name: 'free', capability: cap({state: 'free', holder: null}), readiness: ready},
+  ];
+  const nodes = Object.fromEntries(fleet.filter((entry) => !entry.controller)
+    .map((entry) => [entry.name, {name: entry.name, ssh: `peer@${entry.name}`}]));
+  assert.deepEqual(placementMachines(fleet, {nodes}).map((machine) => machine.name),
+    ['stale', 'free'], 'a held machine is skipped; a stale record is evidence, not a lock');
+});
+
+// Six one-minute files over the controller, `b` and a slow `c` that the
+// split leaves idle: `c` is the next ready host when `b` is found held.
+function busyFleetDeps(busyHosts) {
+  const tried = [];
+  const run = fakeDeps({
+    planCosts: (files) => files.map((file) => ({file, ms: MINUTE, jobs: 1, lane: 'ordinary'})),
+    discover: async () => ({machines: [lab('b', 1), lab('c', 4)], record: async () => {}}),
+    runRemote: (shard, options) => {
+      tried.push({name: shard.machine.name, files: [...shard.files], options});
+      const holder = busyHosts[shard.machine.name];
+      return {done: Promise.resolve(holder === undefined ?
+        {status: 0, log: shard.files.map((file) => `ok ${file} (1 assertions, 5ms)`).join('\n')} :
+        {status: PLACEMENT_EXIT.BUSY,
+          log: `placement-shell=1\nmachine-lock-busy=${holder ? JSON.stringify(holder) : ''}`})};
+    },
+  });
+  return {...run, tried};
+}
+
+test('a held lab host is reported, and its shard goes to the next ready host, then here',
+  async () => {
+    const six = MANY.slice(0, 6);
+    let run = busyFleetDeps({b: OTHER_HOLDER});
+    assert.equal(await runPlacedTestFiles(six, run.deps), 0);
+    assert.ok(run.calls.lines.includes(HOST_BUSY_LINE),
+      `a typed placement outcome naming the holder: ${run.calls.lines.join('\n')}`);
+    assert.deepEqual(run.tried.map((one) => one.name), ['b', 'c'],
+      'the held host once, then the next ready host');
+    assert.deepEqual(run.tried[1].files, run.tried[0].files, 'which takes its whole shard');
+    assert.deepEqual(run.tried[0].options.holder, {purpose: 'test:ordinary',
+      expectedMs: 3.5 * MINUTE}, 'each shard tells others its lanes and its own estimate');
+    assert.equal(run.calls.local.length, 1, 'the controller runs only its own shard');
+
+    run = busyFleetDeps({b: OTHER_HOLDER, c: null});
+    assert.equal(await runPlacedTestFiles(six, run.deps), 0);
+    assert.ok(run.calls.lines.includes('placement: host-busy c held-by (no holder record)'),
+      run.calls.lines.join('\n'));
+    assert.deepEqual(run.tried.map((one) => one.name), ['b', 'c'],
+      'no held host is tried again in the same invocation');
+    assert.deepEqual(run.calls.local.slice(1).flat().sort(), [...run.tried[0].files].sort(),
+      'with no ready host left, the controller runs the shard');
+  });
+
+test('a hand lab run on a held host reports it and never counts its files as passed',
+  async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-test-busy-'));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    const {fleet} = fakeInventory();
+    const lines = [];
+    let given = null;
+    const status = await runLabTest({
+      plan: [{resourceClass: 'ordinary', files: [FAST_TEST], jobs: 4}],
+      commit: {sha: 'a'.repeat(40), gitRoot: root, release: () => {}},
+      on: 'alpha', root, write: (line) => lines.push(line),
+    }, {
+      discover: async () => ({fleet, machines: [{...lab('alpha', 1), cores: 12, memKiB: 1}]}),
+      commitAt: () => 'a'.repeat(40),
+      runRemote: (shard, options) => {
+        given = options;
+        options.onLine(`machine-lock-busy=${JSON.stringify(OTHER_HOLDER)}`, 'out');
+        return {done: Promise.resolve({status: PLACEMENT_EXIT.BUSY, log: '', errors: ''})};
+      },
+    });
+    assert.ok(lines.includes('placement: host-busy alpha held-by codex:task-7 since ' +
+      '2026-09-23T10:00:00Z'), lines.join('\n'));
+    assert.equal(status, 1, 'a file never run is never a pass');
+    assert.equal(given.holder.purpose, 'test:ordinary', 'the share names its lanes');
+  });
+
+// ---------------------------------------------------------------------------
+// The hand verb: `lab test <profile> --lane <lane> [--on NAME] [--sha COMMIT]
+// [--split]` sends the exact commit through the same shard path, streams each
+// file's verdict as it lands, and prints the runner's own summary.
+
+const LANE = Object.freeze({ORDINARY: 'ordinary', EXCLUSIVE: 'exclusive',
+  BOOTSTRAP: 'bootstrap', EXTERNAL: 'external-toolchain'});
+
+// A fake inventory: the machines, their measured facts and the controller's.
+function fakeInventory() {
+  const ready = {ready: true, missing: [], gaps: []};
+  const cap = (extra = {}) => ({repoPath: '/srv/lagrange', cpuSampleMs: 260, cores: 12,
+    memKiB: 16 * 1024 * 1024, nodeVersion: 'v22.22.3', repo: {head: 'c'.repeat(40)}, ...extra});
+  const fleet = [
+    {name: '(controller)', controller: true,
+      capability: {cpuSampleMs: 200, cores: 20, memKiB: 32 * 1024 * 1024}, readiness: ready},
+    {name: 'alpha', capability: cap(), readiness: ready},
+    {name: 'beta', capability: cap({cpuSampleMs: 150, cores: 8}), readiness: ready},
+    {name: 'gamma', capability: cap(), readiness: {ready: false, missing: ['no-repository'],
+      gaps: []}},
+  ];
+  const nodes = Object.fromEntries(fleet.filter((entry) => !entry.controller)
+    .map((entry) => [entry.name, {name: entry.name, ssh: `peer@${entry.name}`}]));
+  return {fleet, state: {nodes}};
+}
+
+const LANE_PLAN = Object.freeze([
+  {resourceClass: LANE.ORDINARY, files: ['o1', 'o2'], jobs: 4},
+  {resourceClass: LANE.EXTERNAL, files: ['t1'], jobs: 1},
+  {resourceClass: LANE.BOOTSTRAP, files: ['b1'], jobs: 2},
+  {resourceClass: LANE.EXCLUSIVE, files: ['x1'], jobs: 1},
+]);
+
+test('a hand lab run takes its machine from measured facts, never a written host', () => {
+  const {fleet, state} = fakeInventory();
+  const machines = placementMachines(fleet, state);
+  assert.deepEqual(machines.map((machine) => [machine.name, machine.cores, machine.memKiB]),
+    [['alpha', 12, 16 * 1024 * 1024], ['beta', 8, 16 * 1024 * 1024]],
+    'each machine carries its measured capacity');
+  const controller = {name: '(controller)', controller: true, speed: 1, cores: 20,
+    memKiB: 32 * 1024 * 1024};
+  const names = (assignments) => assignments.map((one) =>
+    [one.machine.name, one.lanes.map((lane) => lane.resourceClass)]);
+
+  // One lane, nowhere named: the fastest ready machine, measured this run.
+  assert.deepEqual(names(placeLabLanes([LANE_PLAN[3]], machines, {controller})),
+    [['beta', [LANE.EXCLUSIVE]]]);
+  assert.deepEqual(names(placeLabLanes(LANE_PLAN, machines, {on: 'alpha', controller})),
+    [['alpha', LANE_PLAN.map((lane) => lane.resourceClass)]], '--on names the machine');
+  assert.throws(() => placeLabLanes(LANE_PLAN, machines, {on: 'gamma', controller}),
+    /gamma is not a ready lab machine/u);
+  assert.throws(() => placeLabLanes(LANE_PLAN, [], {controller}), /no lab machine is ready/u);
+
+  // Split: the exclusive lane alone on the fastest lab machine; the rest on
+  // whichever is measured faster of the controller and the next lab machine.
+  assert.deepEqual(names(placeLabLanes(LANE_PLAN, machines, {split: true, controller})),
+    [['beta', [LANE.EXCLUSIVE]],
+      ['(controller)', [LANE.ORDINARY, LANE.EXTERNAL, LANE.BOOTSTRAP]]],
+    'a second machine slower than the controller is not used');
+  const quick = [...machines, {...machines[0], name: 'delta', speed: 0.5}];
+  assert.deepEqual(names(placeLabLanes(LANE_PLAN, quick, {split: true, controller})),
+    [['delta', [LANE.EXCLUSIVE]], ['beta', [LANE.ORDINARY, LANE.EXTERNAL, LANE.BOOTSTRAP]]],
+    'a second lab machine faster than the controller takes the other lanes');
+  assert.deepEqual(names(placeLabLanes(LANE_PLAN, machines,
+    {split: true, on: 'alpha', controller})),
+  [['alpha', [LANE.EXCLUSIVE]], ['beta', [LANE.ORDINARY, LANE.EXTERNAL, LANE.BOOTSTRAP]]],
+  'the next lab machine, measured faster than the controller, takes the rest');
+
+  // The decision is printed with the capacities it was made from.
+  const lines = formatLabDecision(placeLabLanes(LANE_PLAN, machines, {split: true, controller}));
+  assert.deepEqual(lines, [
+    'lab test: beta: exclusive (1 files) cores=8 mem=16.0GiB speed x0.75',
+    'lab test: (controller): ordinary, external-toolchain, bootstrap (4 files) ' +
+      'cores=20 mem=32.0GiB speed x1.00',
+  ]);
+});
+
+test('a lab shard streams its lines while it runs and relays its results ledger', async (t) => {
+  const {start, releaseGate} = labFixture(t);
+  const streamed = [];
+  let settled = false;
+  const shard = start([FAST_TEST, GATE_TEST], {runId: 'streamed',
+    results: RESULTS_FILE, onLine: (line, stream) => streamed.push({line, stream})});
+  shard.done.then(() => {
+    settled = true;
+  });
+  // Hooks run in the order they were added, after the fixture's removal: a
+  // failed witness stops its shard, and the gate file has nowhere to go.
+  t.after(() => shard.stop());
+  const fastVerdict = new RegExp(`^ok ${FAST_TEST} `, 'u');
+  for (let poll = 0; poll < 2400 && !streamed.some(({line}) => fastVerdict.test(line));
+    poll += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.ok(streamed.some(({line}) => fastVerdict.test(line)), 'a file verdict was streamed');
+  assert.equal(settled, false, 'while its shard was still running');
+  releaseGate();
+  const outcome = await shard.done;
+  assert.equal(outcome.status, 0, outcome.log + outcome.errors);
+  const out = streamed.filter(({stream}) => stream === 'out').map(({line}) => line);
+  assert.deepEqual(out, outcome.log.split('\n').filter(Boolean),
+    'every line of the log was streamed, once, in order');
+  const relayed = out.filter((line) => line.startsWith('placement-results='))
+    .map((line) => line.slice('placement-results='.length));
+  assertLedgerCameBack(relayed, [FAST_TEST, GATE_TEST]);
+});
+
+// The ledger in the throwaway worktree came back whole before it was
+// removed: the commit's own records first, then the runner's record of every
+// file the shard ran (the runner appends one per attempt).
+function assertLedgerCameBack(records, files) {
+  const committed = RESULTS_TEXT.trim().split('\n');
+  assert.deepEqual(records.slice(0, committed.length), committed,
+    'the results ledger left in the throwaway worktree comes back before it is removed');
+  const ran = records.slice(committed.length).map((record) => JSON.parse(record));
+  for (const file of files) {
+    assert.ok(ran.some((record) => record.file === file && record.ok === true),
+      `with the runner's own record of ${file}: ${records.join('\n')}`);
+  }
+}
+
+test('a split lab run sends the exclusive lane away, runs the rest here and merges', async (t) => {
+  const {controller, machine, sha, env} = labFixture(t);
+  fs.symlinkSync(path.join(process.cwd(), 'node_modules'),
+    path.join(controller, 'node_modules'));
+  const {fleet} = fakeInventory();
+  const lab = {...machine, controller: false, speed: 0.9, cores: 12, memKiB: 1024 * 1024,
+    avoid: []};
+  const lines = [];
+  const deps = {...labTestDeps({root: controller, env}),
+    discover: async () => ({fleet, machines: [lab]})};
+  const plan = [
+    {resourceClass: LANE.ORDINARY, files: [OTHER_FAST_TEST], jobs: 4},
+    {resourceClass: LANE.EXCLUSIVE, files: [FAST_TEST], jobs: 1},
+  ];
+  const commit = labTestCommit({root: controller});
+  t.after(() => commit.release());
+  assert.equal(commit.sha, sha);
+  const status = await runLabTest({plan, commit, split: true, root: controller,
+    write: (line) => lines.push(line)}, deps);
+  assert.equal(status, 0, lines.join('\n'));
+  assert.ok(lines.includes('lab test: lab: exclusive (1 files) cores=12 mem=1.0GiB speed x0.90'),
+    lines.join('\n'));
+  assert.ok(lines.some((line) => line.startsWith(`[lab] ok ${FAST_TEST} `)), 'streamed there');
+  assert.ok(lines.some((line) => line.startsWith(`[(controller)] ok ${OTHER_FAST_TEST} `)),
+    'and here');
+  assert.ok(!lines.some((line) => line.includes('placement-results=')),
+    'the ledger is copied, not printed');
+  const merged = lines.at(-1);
+  assert.match(merged, /^# test-files total=2 pass=2 fail=0 assertions=\d+$/u,
+    'the local runner\'s own summary, merged over both machines');
+  const assertions = lines.filter((line) => /^\[[^\]]+\] ok /u.test(line))
+    .reduce((sum, line) => sum + Number(/\((\d+) assertions/u.exec(line)[1]), 0);
+  assert.equal(merged, `# test-files total=2 pass=2 fail=0 assertions=${assertions}`);
+  const copied = fs.readFileSync(path.join(controller, 'test-output', 'reports',
+    'test-results-lab.ndjson'), 'utf8');
+  assert.ok(copied.endsWith('\n'), 'copied back under the machine\'s name, whole');
+  assertLedgerCameBack(copied.trim().split('\n'), [FAST_TEST]);
+  commit.release();
+  assert.equal(fs.existsSync(commit.gitRoot), false, 'the planning checkout is gone');
+
+  // A share for the controller needs this tree to be exactly the commit.
+  await assert.rejects(runLabTest({plan, commit: {sha: 'f'.repeat(40), gitRoot: controller,
+    release: () => {}}, split: true, root: controller, write: () => {}}, deps),
+  /the controller runs its lanes in this tree, which is not exactly f{40}/u);
+});
+
+test('a hand lab run sends only a commit, and a named one from any tree', (t) => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-test-commit-'));
+  t.after(() => fs.rmSync(repo, {recursive: true, force: true}));
+  git(repo, 'init', '-q');
+  fs.mkdirSync(path.join(repo, 'test'));
+  fs.writeFileSync(path.join(repo, 'test', 'a.test.js'), 'first\n');
+  fs.writeFileSync(path.join(repo, 'package.json'), '{}\n');
+  fs.writeFileSync(path.join(repo, 'other.txt'), 'x\n');
+  git(repo, 'add', '.');
+  git(repo, 'commit', '-qm', 'one');
+  const first = git(repo, 'rev-parse', 'HEAD');
+  fs.writeFileSync(path.join(repo, 'test', 'a.test.js'), 'second\n');
+  git(repo, 'commit', '-qam', 'two');
+  const head = git(repo, 'rev-parse', 'HEAD');
+  const worktrees = () => git(repo, 'worktree', 'list').split('\n').length;
+
+  const clean = labTestCommit({root: repo});
+  assert.equal(clean.sha, head);
+  assert.equal(git(clean.gitRoot, 'rev-parse', 'HEAD'), head, 'planned at that commit');
+  clean.release();
+  clean.release();
+  assert.equal(worktrees(), 1, 'released once, and again harmlessly');
+
+  fs.writeFileSync(path.join(repo, 'test', 'b.test.js'), 'untracked\n');
+  assert.throws(() => labTestCommit({root: repo}),
+    /the tree is not exactly a commit, and only a commit is sent/u);
+  assert.throws(() => labTestCommit({root: repo, sha: 'no-such-commit'}),
+    /no-such-commit is not a commit here/u);
+  const named = labTestCommit({root: repo, sha: first.slice(0, 10)});
+  t.after(() => named.release());
+  assert.equal(named.sha, first, 'a named commit is resolved in full');
+  assert.equal(fs.readFileSync(path.join(named.gitRoot, 'test', 'a.test.js'), 'utf8'),
+    'first\n', 'and planned from its own test tree, not the working one');
+  assert.equal(fs.existsSync(path.join(named.gitRoot, 'test', 'b.test.js')), false);
+  assert.equal(fs.existsSync(path.join(named.gitRoot, 'other.txt')), false,
+    'only what planning reads is checked out');
+  named.release();
+  assert.equal(worktrees(), 1);
+});
+
+// A hand lab run keeps what ran: the typed outcome is reported, its results
+// ledger comes back, and the files it never ran are failures, never passes.
+test('a hand lab run on a host too hot reports it and keeps the ledger of what ran',
+  async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-test-thermal-'));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    const {fleet} = fakeInventory();
+    const labMachine = {...lab('alpha', 1), cores: 12, memKiB: 1024 * 1024};
+    const lines = [];
+    const status = await runLabTest({
+      plan: [{resourceClass: LANE.ORDINARY, files: [FAST_TEST, OTHER_FAST_TEST], jobs: 4}],
+      commit: {sha: 'a'.repeat(40), gitRoot: root, release: () => {}},
+      on: 'alpha', root, write: (line) => lines.push(line),
+    }, {
+      discover: async () => ({fleet, machines: [labMachine]}),
+      commitAt: () => 'a'.repeat(40),
+      runRemote: (shard, options) => {
+        const ran = labRunnerLog([shard.files[0]], 50).log.split('\n');
+        const refused = labRunnerLog([shard.files[1]], 90).log.split('\n');
+        for (const line of [...ran, ...refused,
+          `placement-results={"file":"${shard.files[0]}","ok":true}`]) {
+          options.onLine(line, 'out');
+        }
+        return {done: Promise.resolve({status: 75, log: '', errors: ''})};
+      },
+    });
+    assert.equal(status, 1, 'a file never run is never a pass');
+    assert.ok(lines.includes('placement: host-thermal-unfit alpha'), lines.join('\n'));
+    const copied = fs.readFileSync(path.join(root, 'test-output', 'reports',
+      'test-results-alpha.ndjson'), 'utf8');
+    assert.equal(copied, `{"file":"${FAST_TEST}","ok":true}\n`, 'the ledger keeps what ran');
+    assert.ok(lines.includes('lab test: alpha: # test-files total=2 pass=1 fail=1 ' +
+      'assertions=1'), lines.join('\n'));
   });
