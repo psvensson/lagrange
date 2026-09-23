@@ -355,12 +355,23 @@ async () => {
       held.shift()();
       await new Promise((resolve) => setImmediate(resolve));
     }
-    await new Promise((resolve) => setTimeout(resolve,
-      runtimeVocabulary.PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS * 5));
+    // Let several admission polls pass without arming a timer of this test:
+    // yield through the check phase, so the ROLLBACK below also runs there
+    // and no expiring timer of ours can carry the loop past it.
+    const pollsElapseAt = Date.now() +
+      runtimeVocabulary.PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS * 5;
+    while (Date.now() < pollsElapseAt) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
     const statusDuring = cluster.node(leader).readStatus();
     const settledDuringSession = settled;
     leaderReplica.db.exec(ROLLBACK);
     holdSends = false;
+    // From here the held Ready is the only pending work: no send is in
+    // flight, no timer of this test is armed and the port schedules no ticks
+    // (the cluster defers election), so only the runtime's own admission wait
+    // can keep the process alive until the Ready completes.
+    assert.equal(held.length, 0, 'no send is still in flight');
     const finished = await ticked;
 
     const converged = cluster.settle(() => {
