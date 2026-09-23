@@ -137,3 +137,20 @@ in `cdc-methods.js:171-172,266`); bridge transport outside MessageRouter.
 10. Deterministic randomness (`randomSource`) carried into rs-raft or dropped?
 11. Transport priority for rs envelopes: read `message.msgType`, and reconcile the two detection sites?
 12. Are message-group services ever demoted through `performTrackedLeaderDemotion` (decides whether F1 blocks R3 or only R4/R5)?
+
+## Owner decisions (2026-09-23)
+
+5. Worker consensus path: DELETE. The owner: the worker path existed to give
+   dispersed but logically coherent code a redis-like place to store context
+   (`ctx.call()`); that context now travels by other means, so the path is
+   not needed in this form. If an ephemeral shared context is wanted later
+   (for example by lagrange-images), it is a normal partition with an
+   ephemeral storage class (a `:memory:`-backed table behind the ordinary
+   write path, consensus and ownership), never a second consensus runtime or
+   a second transport. R4 deletes `PartitionWorkerService`,
+   `MessageGroupWorkerService`, `ReplicaWorkerManager`'s consensus use, the
+   worker message bridge as a consensus transport, and the worker bundles in
+   `scripts/build-sea.js`; R8 item 14 is struck.
+6. WasmServiceReplica / RaftReplicaBase: pending the owner's answer
+   (recommendation on record: delete now, design any future WASM group
+   consensus path against the port).
