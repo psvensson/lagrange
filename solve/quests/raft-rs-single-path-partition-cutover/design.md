@@ -256,3 +256,29 @@ partition-service-transactions-query-routing (deferred joiner campaigns).
   JSON text in `_raft_log.command` with the same Buffer/BigInt lossiness.
 - Q8 afterCommit effect failures are logged by the partition at error level with a
   typed message; the port is not widened.
+
+## 7. Amendments after attempt A1 (lead, 2026-09-23)
+
+- A7.1 `readStatus()` is a synchronous observation, never a Promise. The rs-raft
+  runtime owner returns the fresh core read when the group's queue is idle and the
+  frozen snapshot refreshed after the last completed core entry when the queue is
+  busy. Measured cause: 22-35% of a busy seed's 135 replicas answered a Promise at
+  any instant (F4), which made the sealed seed witness red and left twelve
+  production sites reading undefined. The witness is not changed.
+- A7.2 A failed SQL statement in a committed entry is a deterministic
+  state-machine outcome (STATEMENT_FAILED in PARTITION_COMMITTED_COMMAND_OUTCOME):
+  the entry is consumed, the applied index advances in the same transaction, and
+  the proposer's pending write resolves in afterCommit with success: false (as the
+  deleted DIRECT path reported it). Treating it as a host failure wedged a
+  single-replica partition (RECOVERY_REQUIRED, reconstruction, no re-campaign).
+  UNRECOGNISED types stay fail-closed.
+- A7.3 F6 is no longer deferrable by itself: with the rs-raft store on the
+  partition connection, a session ROLLBACK after a marker proposal erases
+  committed rs-raft rows (log [1,3] with commit 3) and the restart traps in the
+  core. A separate design (session-transaction isolation) decides whether the fix
+  lands inside this quest or as its own quest before the default flip; this quest
+  does not land with the corruption reachable.
+- A7.4 The dt6 learner-promotion witnesses cannot run on rs-raft with cache-only
+  "passive voters": the cache-driven membership reconcile proposes them as voters
+  and the two-voter configuration has no live quorum. That is the R2 deletion
+  target; the fixture is redesigned with live voters after integration.
