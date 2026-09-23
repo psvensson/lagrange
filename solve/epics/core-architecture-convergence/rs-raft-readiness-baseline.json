@@ -1,9 +1,9 @@
 {
   "schema": "core-convergence-rs-raft-readiness-baseline/1",
-  "sourceCommit": "4fc46adfd02b9f1263c2d7f86a31facc9a43a266",
+  "sourceCommit": "8ed8f889cfa817c6d786ca688f581c83bc1573a5",
   "foundationCommit": "f4f5b5a6e9c27d139b3ada85e0aabe38eb526480",
   "result": "BLOCKED_ON_RAFT_CUTOVER",
-  "blockerCount": 3,
+  "blockerCount": 2,
   "unknownCount": 0,
   "blockers": [
     {
@@ -17,24 +17,12 @@
       ]
     },
     {
-      "id": "rs-raft-real-transport-demux",
-      "state": "TRANSPORT_NOT_CUT_OVER",
-      "detail": "The rs-raft runtime emits semantic {groupId,to,message} payloads through the partition send callback, while PartitionService inbound transport still recognizes isRaftPacket(payload); the sealed operation-port regression explicitly keeps raft-rs-partition-transport-demux blocked.",
-      "evidence": [
-        "src/raft/raft-rs-runtime-owner.js",
-        "src/partition/partition-service-raft-init-base.js",
-        "src/partition/partition-service-entry-apply-base.js",
-        "solve/quests/raft-rs-operation-port-boundary/quest.json",
-        "test/raft/raft-rs-backend/operation-port-regression.test.js"
-      ]
-    },
-    {
       "id": "exact-main-release-proof",
       "state": "UNPROVEN_EXACT_SHA",
-      "detail": "GitHub matching-ref lookup for refs/lagrange-proofs/release-full-v1/4fc46adfd02b9f1263c2d7f86a31facc9a43a266 returned no ref at Q0 measurement time.",
+      "detail": "No durable release-full-v1 proof ref exists for 8ed8f889cfa817c6d786ca688f581c83bc1573a5 at re-measure time; the partition backend default is still liferaft, so an exact-main release proof of the rs-raft path is not yet meaningful.",
       "evidence": [
         "scripts/proof-authority.js",
-        "refs/lagrange-proofs/release-full-v1/4fc46adfd02b9f1263c2d7f86a31facc9a43a266"
+        "refs/lagrange-proofs/release-full-v1/8ed8f889cfa817c6d786ca688f581c83bc1573a5"
       ]
     }
   ],
@@ -74,10 +62,20 @@
       ]
     },
     "transport": {
-      "state": "TRANSPORT_NOT_CUT_OVER",
-      "outbound": "raft-rs runtime owner -> sendToPeer -> PartitionService request callback -> MessageRouter.deliver",
-      "inbound": "MessageRouter handler -> PartitionService.handleTransportMessage -> isRaftPacket -> operation-port step only for recognized current packet vocabulary",
-      "transportQuestPresent": false
+      "state": "SATISFIED",
+      "landed": "PR #52",
+      "outbound": "raft-rs runtime owner emits one semantic envelope {protocol: raft-rs, groupId, from, to, message} -> sendToPeer -> PartitionService request callback -> MessageRouter.deliver (direct-consensus path classified by the shared consensus-transport classifier)",
+      "inbound": "MessageRouter handler -> PartitionService.handleTransportMessage -> raft-packet-utils classifies native legacy packet vs semantic rs-raft envelope -> the semantic envelope reaches the frozen operation port step() unchanged; no sender-membership filtering, no placement policy, no fake legacy packet",
+      "transportQuestPresent": true,
+      "evidence": [
+        "src/raft/raft-packet-utils.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/transport/message-router-connection-authority.js",
+        "src/transport/message-router-delivery-behaviors.js",
+        "test/partition/raft-rs-transport-demux.test.js"
+      ],
+      "notCertified": "restart/catch-up over the real transport, learner promotion and removal under real transport, and cold formation on rs-raft remain the hard-cutover epic's certification items (steps 4-5 of the 2026-09-23 handover)"
     },
     "messageGroups": {
       "state": "OUT_OF_SCOPE_ACTIVE_OWNER",
@@ -97,6 +95,16 @@
         "architecture/runtime-components.md"
       ],
       "detail": "Current-state docs now describe the provider/operation-port boundary, Liferaft production default, rs-raft/WASM integrated-but-not-cut-over status, and ConfState-versus-policy ownership distinction."
+    },
+    "fixtureReachThrough": {
+      "state": "PARTIALLY_MIGRATED",
+      "blocker": false,
+      "detail": "Seven test files reached through the frozen port after #46 (red on main, hidden by cone selection). PR #52 migrated the DT6 learner-promotion fixture and witnesses, the snapshot catch-up end-to-end witness, the packet round-trip property and three partition-service suites. Still red on main, outside that cone: test/bootstrap/production-scheduling-defaults.test.js, test/convergence/dt6-ledger-leader-durability-fitness.test.js, test/query/write-path-internal-pacing.test.js."
+    },
+    "pushGateStatics": {
+      "state": "REPAIRED_IN_PR_52",
+      "blocker": false,
+      "detail": "main carried three static reds since #46 that refused every hook-gated push (file-size ratchet 28/27, complexity ratchet 1817/1816, four literal violations in liferaft-provider.js); all three are repaired on this head."
     }
   },
   "adversarialChecks": [
@@ -127,8 +135,8 @@
     },
     {
       "id": "inbound-demux",
-      "outcome": "BLOCKS",
-      "detail": "Current inbound partition demux is not the authorized semantic rs-raft transport cutover."
+      "outcome": "SATISFIED",
+      "detail": "Inbound partition demux hands a semantic rs-raft envelope to the frozen operation port step(); legacy packets keep their native path; the transport validates envelope/routing facts only."
     },
     {
       "id": "message-group-liferaft",
@@ -141,13 +149,17 @@
       "detail": "No exact-SHA durable release-full-v1 receipt was present for the measured main commit."
     }
   ],
-  "generatedBy": "verifying-agent/q0-source-census",
+  "generatedBy": "lead/q0-remeasure-after-pr52",
   "entries": [
     "foundation",
     "operationBoundary",
     "consensusMembership",
     "transport",
     "messageGroups",
-    "documentation"
-  ]
+    "documentation",
+    "fixtureReachThrough",
+    "pushGateStatics"
+  ],
+  "previousSourceCommit": "4fc46adfd02b9f1263c2d7f86a31facc9a43a266",
+  "remeasuredAfter": "PR #52 raft-rs semantic partition transport/demux"
 }
