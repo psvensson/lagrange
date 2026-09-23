@@ -59,9 +59,9 @@ import {
 //     messageTimeoutMs (the router default MESSAGE_TIMEOUT_MS on the
 //     scenario clock) when no bound is given.
 //
-// SCENARIO CLOCK: the promotion cadence and injected transport latency are
-// wall-clock, so the drive runs on a scaled real clock: one scenario second is
-// the learner's proof retry interval in real milliseconds (VIRTUAL_SECOND_MS).
+// SCENARIO CLOCK: liferaft's heartbeat/election timers are wall-clock, so
+// the drive runs on a scaled real clock: one scenario second is the
+// learner's proof retry interval in real milliseconds (VIRTUAL_SECOND_MS).
 // Every injected delay and every bound is a multiple of that interval;
 // timings are reported in scenario seconds. The wake bound is half an
 // interval: an event-driven re-request lands within a few milliseconds,
@@ -71,10 +71,10 @@ import {
 // learner-promotion-proof-channel-witness-determinism): the durable landing
 // of the learner's services row is an explicit fixture schedule, never a
 // wall-clock race. The leader cache gains the row first (INSERT; the leader
-// observes the learner through the semantic progress boundary), the fixture
-// then drives probePeerProgress and waits until the leader has PROVEN that
-// replication (its own followerProgress observable at the committed prefix —
-// the proof's input, never elapsed time), and only then
+// joins the learner as a raft peer and replicates the committed prefix on
+// liferaft's wall-clock heartbeat), the fixture then waits until the leader
+// has PROVEN that replication (its own learnerMatchIndex observable at the
+// committed prefix — the proof's input, never elapsed time), and only then
 // does the target's own cache see its local-only seed row converge
 // (UPDATE, the services_row_visible wake). The wake proof request therefore
 // always meets a caught-up learner: two drives yield the identical
@@ -265,9 +265,9 @@ function createProofChannelTransport(inner, clock, stallPlan, latencyMs) {
 
 // The durable landing of the learner's services row on the fixture's
 // explicit schedule (see ROW LANDING SCHEDULE above): (1) the leader cache
-// gains the row (INSERT, CDC fan-out), (2) the fixture drives the existing
-// semantic progress probe and waits for the leader to PROVE the learner's
-// replication on its own status observable, (3) the target's own
+// gains the row (INSERT, CDC fan-out; the leader joins the learner as a
+// raft peer), (2) the fixture waits for the leader to PROVE the learner's
+// replication on its own match-index observable, (3) the target's own
 // cache sees its local-only seed row converge (UPDATE — the wake).
 // landedAtMs / requestCountAtLanding anchor step 3, the learner-visible
 // landing. Idempotent; never rejects; cancelled by fixture shutdown.
@@ -297,14 +297,10 @@ function createRowLanding(clock) {
     insertServiceRow(
       fixture.leaderCache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER,
     );
-    landing.settled = Promise.resolve(
-      fixture.leader.raft.probePeerProgress(
-        `${LEARNER_NODE}/partition/${LEARNER_REPLICA}`,
-      ),
-    ).then(() => waitForLeaderReplicationToLearner(
+    landing.settled = waitForLeaderReplicationToLearner(
       fixture.leader, DRIVE_BUDGET_S * VIRTUAL_SECOND_MS,
       {isCancelled: () => landing.cancelled},
-    )).then((proven) => {
+    ).then((proven) => {
       landing.replicationProven = proven;
       landing.replicationAtLanding =
         readLeaderReplicationToLearner(fixture.leader);
