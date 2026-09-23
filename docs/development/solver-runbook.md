@@ -177,6 +177,26 @@ is green; the next publish reports a red one first (`publish: !!! the local
 corpus was RED`). The hosted `full-corpus-canary` runs only by hand. Fix one-way
 ratchets rather than raising their baselines.
 
+Thermal headroom is the classified runner's to gate
+(`scripts/run-classified-test-files.js`), on every host it runs on - the
+controller, the local corpus and every placed lab shard alike. Before each lane
+batch it asks the one thermal owner, `scripts/checks/wait-for-thermal-headroom.js`
+(lm-sensors, else the Linux sysfs; Intel or AMD, each temperature named by
+the source that answered), and prints its decision in the run's stream, which
+a placed run relays: `thermal: ok cpu 61C (k10temp/Tctl) nvme 66C
+(nvme/Sensor 2)`, `thermal: hold ... waiting 30s` (the batch waits),
+`thermal: unmeasurable (no sensors)` (said once; the run proceeds). A host
+that measures only one of the two gates on that one. A host still hot after the owner's twenty polls ends
+the run with the typed refusal `thermal-headroom-exhausted`: exit 75, no batch
+started hot, and a summary line naming every file not run. Placement reports
+such a host as `placement: host-thermal-unfit NAME` and runs its unproved
+files once on the controller, never again on that host in the same run; the
+local corpus records the refusal as lost, not red. A lab shard also caps every
+lane at the host's own processor count less one (`LAGRANGE_LANE_JOBS_CAP`,
+shown in its `placement-env` line). `LAGRANGE_SKIP_THERMAL_GATE=1` is the one
+skip, and every gated batch carries it so a runner nested in a test does not
+gate twice.
+
 A head merged through GitHub met neither this hook nor the publisher, so it has
 NO corpus proof until `npm run publish -- --post-merge <sha>` has run for it.
 That arm refuses a sha that is not on the first-parent history of origin/main

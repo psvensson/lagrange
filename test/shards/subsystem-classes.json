@@ -28,7 +28,7 @@
   "censusSize": 2154,
   "digest": "fnv1a32-aec6c8b0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-5f56b8b4",
+  "observationDigest": "fnv1a32-0155fa79",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7134,6 +7134,7 @@
         "package.json",
         "scripts/checks/run-golden-capability-guard-scenarios.js",
         "scripts/release-notes.js",
+        "scripts/run-classified-test-files.js",
         "src/public-api.js",
         "test/manifests/project-hardening-proof-manifest.json",
         "test/manifests/project-hardening-proof-postpush-manifest.json"
@@ -7536,7 +7537,6 @@
         "package.json",
         "scripts/action-authority.js",
         "scripts/checks/push-gate-corpus-worktree.js",
-        "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
         "scripts/publish-head.js",
@@ -7665,6 +7665,7 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -7690,6 +7691,7 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -7729,6 +7731,7 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -8506,6 +8509,7 @@
         ".github/workflows/full-corpus-canary.yml",
         "package-lock.json",
         "package.json",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/run-classified-test-files.js"
       ],
       "env": [
@@ -8521,6 +8525,7 @@
         ".github/workflows/full-corpus-canary.yml",
         "package-lock.json",
         "package.json",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/lab.js",
         "scripts/run-classified-test-files.js"
       ],
@@ -8545,6 +8550,7 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/proof-authority.js",
@@ -8563,6 +8569,7 @@
       "env": [
         "APPDATA",
         "LAGRANGE_LAB_HOME",
+        "PATH",
         "XDG_CONFIG_HOME"
       ]
     },
@@ -8769,7 +8776,6 @@
         "data/formation-health/trend.ndjson",
         "package.json",
         "scripts/checks/push-gate-corpus-worktree.js",
-        "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
         "scripts/run-classified-test-files.js",
@@ -8790,7 +8796,6 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/push-gate-corpus-worktree.js",
-        "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
         "scripts/run-classified-test-files.js",
@@ -8825,6 +8830,7 @@
         "scripts/checks/impact-proof-cone-constants.js",
         "scripts/checks/push-gate-change-proof.js",
         "scripts/checks/test-primary-classification.js",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/checks/test-timeout-declarations.js",
         "scripts/generate-test-primary-classes.js",
         "scripts/generate-test-resource-classes.js",
@@ -8980,6 +8986,7 @@
       "files": [
         "package-lock.json",
         "package.json",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "test/address/address-manager.test.js",
@@ -9109,6 +9116,7 @@
         "package-lock.json",
         "package.json",
         "scripts/check-subsystem.js",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -9137,6 +9145,7 @@
       "files": [
         "package-lock.json",
         "package.json",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -9284,11 +9293,14 @@
         "README.md",
         "package-lock.json",
         "package.json",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/lab/probe.js",
         "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
         "test/query/budget-limit-error.test.js",
         "test/query/distributed-merge-engine.test.js",
-        "test/scripts/check-operation-dispatch-completion-owner.test.js"
+        "test/scripts/check-operation-dispatch-completion-owner.test.js",
+        "test/shards/primary-classes.json"
       ],
       "directories": [
         "data/storage-load",

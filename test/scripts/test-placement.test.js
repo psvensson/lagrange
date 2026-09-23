@@ -18,6 +18,7 @@ import {
   placeTestFiles, placementDeps, placementMachines, recordPlacementMisses, runLabTest,
   runPlacedTestFiles, startRemoteShard,
 } from '../../scripts/lab/probe.js';
+import {runClassifiedTestFiles} from '../../scripts/run-classified-test-files.js';
 
 const MINUTE = 60000;
 const CONTROLLER = Object.freeze({name: '(controller)', controller: true, speed: 1});
@@ -368,6 +369,91 @@ test('a shard its machine could not run is run on the controller', async () => {
   await runPlacedTestFiles(MANY, retried.deps);
   assert.equal(retried.calls.local.length, 1, 'nothing runs twice');
 });
+
+// The thermal gate is the runner's, on whichever host it runs (process change
+// 2026-09-23). A lab shard's log is its runner's stream: the gate's lines come
+// back unchanged and are never verdicts, and a host whose runner refused as
+// too hot is a typed placement outcome whose files run once elsewhere.
+const REAL_FILES = Object.freeze([FAST_TEST, SLOW_TEST, OTHER_FAST_TEST]);
+const thermalJson = (cpuCelsius) => ({'coretemp-isa-0000':
+  {'Package id 0': {temp1_input: cpuCelsius}}, 'nvme-pci-0200': {'Sensor 2': {temp3_input: 50}}});
+
+// What a lab machine's runner prints for its shard at a given temperature:
+// the real runner, its batches standing in for tests that pass.
+function labRunnerLog(files, cpuCelsius) {
+  const lines = [];
+  const spawned = [];
+  const status = runClassifiedTestFiles(files, {
+    root: process.cwd(), env: {},
+    write: (text) => lines.push(text),
+    thermalSources: {sensors: () => thermalJson(cpuCelsius)},
+    thermalSleep: () => {},
+    spawn(command, args) {
+      const batch = args.slice(2);
+      spawned.push(...batch);
+      for (const file of batch) lines.push(`ok ${file} (1 assertions, 5ms)\n`);
+      return {status: 0};
+    },
+  });
+  return {status, spawned, log: lines.join('').trimEnd()};
+}
+
+test('a lab runner\'s thermal lines are relayed unchanged and are never verdicts', async () => {
+  let given = null;
+  const run = fakeDeps({
+    runRemote: (shard) => {
+      given = labRunnerLog(shard.files, 61);
+      return {done: Promise.resolve({status: given.status, log: given.log})};
+    },
+  });
+  assert.equal(await runPlacedTestFiles([...REAL_FILES], run.deps), 0);
+  const thermal = given.log.split('\n').filter((line) => line.startsWith('thermal: '));
+  assert.deepEqual(thermal, ['thermal: ok cpu 61C (coretemp/Package id 0) nvme 50C (nvme/Sensor 2)'],
+    'the lab runner gated its one batch');
+  assert.ok(run.calls.lines.includes('[lab] thermal: ok cpu 61C (coretemp/Package id 0) nvme 50C (nvme/Sensor 2)'),
+    'relayed with the machine\'s name and nothing else changed');
+  assert.equal(run.calls.local.length, 1, 'every lab file was proved by its own verdict line');
+
+  // Its thermal lines alone prove nothing: every file falls back.
+  let remoteFiles = [];
+  const gateOnly = fakeDeps({
+    runRemote: (shard) => {
+      remoteFiles = shard.files;
+      return {done: Promise.resolve({status: 0,
+        log: labRunnerLog(shard.files, 61).log.split('\n')
+          .filter((line) => line.startsWith('thermal: ')).join('\n')})};
+    },
+  });
+  assert.equal(await runPlacedTestFiles([...REAL_FILES], gateOnly.deps), 0);
+  assert.deepEqual(gateOnly.calls.local.slice(1).flat().sort(), [...remoteFiles].sort(),
+    'a thermal line never matches a verdict');
+});
+
+test('a lab host too hot to run is reported thermal-unfit and its files run once elsewhere',
+  async () => {
+    let remoteCalls = 0;
+    let given = null;
+    const run = fakeDeps({
+      runRemote: (shard) => {
+        remoteCalls += 1;
+        given = {files: shard.files, ...labRunnerLog(shard.files, 90)};
+        return {done: Promise.resolve({status: given.status,
+          log: `placement-head=${'a'.repeat(40)}\n${given.log}`})};
+      },
+    });
+    assert.equal(await runPlacedTestFiles([...REAL_FILES], run.deps), 0,
+      'green: every file ran, and passed, somewhere cool');
+    assert.deepEqual(given.spawned, [], 'the hot host started no test process');
+    assert.ok(run.calls.lines.includes('placement: host-thermal-unfit lab'),
+      `a typed placement outcome: ${run.calls.lines.join('\n')}`);
+    assert.ok(run.calls.lines.some((line) =>
+      line.startsWith('[lab] thermal: thermal-headroom-exhausted - ')),
+    'the refusal itself is relayed');
+    assert.equal(remoteCalls, 1, 'never retried on the same host in this invocation');
+    assert.deepEqual(run.calls.local.slice(1).flat().sort(), [...given.files].sort(),
+      'its files are placed once more, elsewhere: here');
+    assert.equal(run.calls.local.length, 2, 'once');
+  });
 
 // Git addresses these scratch repositories only, never one a push hook
 // exported GIT_DIR for.
@@ -722,15 +808,29 @@ function labFixture(t) {
 test('a lab machine proves the exact commit in a throwaway worktree and leaves nothing behind',
   async (t) => {
     const {node, controller, parent, machine, sha, env, start} = labFixture(t);
-    const started = start([FAST_TEST], {forward: {retry: '1', tapTimeout: '900'}});
+    const started = start([FAST_TEST], {runId: 'capped',
+      forward: {retry: '1', tapTimeout: '900'}});
     assert.equal(typeof started.then, 'undefined', 'a shard is started, not awaited');
+    // The lab-side script as sent, read before its shard removes it and
+    // asserted once the shard has settled, so a red leaves nothing running.
+    const sent = fs.readFileSync(path.join(controller, 'test-output', 'placement',
+      'capped-lab.sh'), 'utf8');
     const green = await started.done;
+    // The lane cap comes from the host's own processor count at run time,
+    // never from a host name.
+    assert.match(sent, /^cores="\$\(getconf _NPROCESSORS_ONLN 2>\/dev\/null \|\| nproc 2>\/dev\/null\)"$/mu,
+      'the remote host counts its own processors');
+    assert.doesNotMatch(sent, /\blab\b/u, 'and no machine is named in what it runs');
     assert.equal(green.status, 0, green.log + green.errors);
     assert.match(green.log, new RegExp(`^placement-head=${sha}$`, 'mu'),
       'the worktree is at the commit the controller holds, sent as a bundle');
     assert.match(green.log, new RegExp(`^ok ${FAST_TEST} `, 'mu'));
-    assert.match(green.log, /^placement-env=factor:1\.5 mode:local retry:1 timeout:900$/mu,
-      'its own budgets scaled, the controller\'s retry and timeout policy, never placed again');
+    const cores = Number(spawnSync('getconf', ['_NPROCESSORS_ONLN'], {encoding: 'utf8'})
+      .stdout.trim());
+    assert.match(green.log, new RegExp('^placement-env=factor:1\\.5 mode:local retry:1 ' +
+      `timeout:900 lanecap:${Math.max(1, cores - 1)}$`, 'mu'),
+    'its own budgets scaled, the controller\'s retry and timeout policy, never placed ' +
+      'again, and its lanes capped at its cores less one');
     assert.match(green.log, /^placement-link=node_modules$/mu);
     assert.match(green.log, /^placement-link=data\/examples$/mu, 'an ignored entry is linked');
     assert.doesNotMatch(green.log, /^placement-link=data\/storage-load$/mu,
@@ -1046,3 +1146,38 @@ test('a hand lab run sends only a commit, and a named one from any tree', (t) =>
   named.release();
   assert.equal(worktrees(), 1);
 });
+
+// A hand lab run keeps what ran: the typed outcome is reported, its results
+// ledger comes back, and the files it never ran are failures, never passes.
+test('a hand lab run on a host too hot reports it and keeps the ledger of what ran',
+  async (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-test-thermal-'));
+    t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+    const {fleet} = fakeInventory();
+    const labMachine = {...lab('alpha', 1), cores: 12, memKiB: 1024 * 1024};
+    const lines = [];
+    const status = await runLabTest({
+      plan: [{resourceClass: LANE.ORDINARY, files: [FAST_TEST, OTHER_FAST_TEST], jobs: 4}],
+      commit: {sha: 'a'.repeat(40), gitRoot: root, release: () => {}},
+      on: 'alpha', root, write: (line) => lines.push(line),
+    }, {
+      discover: async () => ({fleet, machines: [labMachine]}),
+      commitAt: () => 'a'.repeat(40),
+      runRemote: (shard, options) => {
+        const ran = labRunnerLog([shard.files[0]], 50).log.split('\n');
+        const refused = labRunnerLog([shard.files[1]], 90).log.split('\n');
+        for (const line of [...ran, ...refused,
+          `placement-results={"file":"${shard.files[0]}","ok":true}`]) {
+          options.onLine(line, 'out');
+        }
+        return {done: Promise.resolve({status: 75, log: '', errors: ''})};
+      },
+    });
+    assert.equal(status, 1, 'a file never run is never a pass');
+    assert.ok(lines.includes('placement: host-thermal-unfit alpha'), lines.join('\n'));
+    const copied = fs.readFileSync(path.join(root, 'test-output', 'reports',
+      'test-results-alpha.ndjson'), 'utf8');
+    assert.equal(copied, `{"file":"${FAST_TEST}","ok":true}\n`, 'the ledger keeps what ran');
+    assert.ok(lines.includes('lab test: alpha: # test-files total=2 pass=1 fail=1 ' +
+      'assertions=1'), lines.join('\n'));
+  });

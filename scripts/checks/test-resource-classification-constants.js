@@ -33,6 +33,12 @@ export const RESOURCE_CLASS_JOBS = Object.freeze({
   [RESOURCE_CLASS_EXCLUSIVE]: 1,
 });
 
+// A host's own ceiling on any lane's workers, handed to the classified runner
+// in this one env: a placed lab run sets it to the remote host's processor
+// count less one, discovered there at run time. A lane is lowered to it,
+// never raised.
+export const LANE_JOBS_CAP_ENV = 'LAGRANGE_LANE_JOBS_CAP';
+
 export const RESOURCE_CLASS_MANIFEST_ID = 'test-resource-classification';
 export const RESOURCE_CLASS_MANIFEST_PATH = 'test/shards/resource-classes.json';
 

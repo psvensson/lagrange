@@ -15,6 +15,7 @@ import {
   WORKSPACE_INJECTION_ENV,
 } from './checks/change-selection-constants.js';
 import {parseLaneArgs, planLane} from './plan-test-lane.js';
+import {THERMAL_REFUSAL_EXIT} from './checks/wait-for-thermal-headroom.js';
 
 const ZERO_SHA = '0'.repeat(40);
 const PIPE_STDIO = 'pipe';
@@ -593,8 +594,9 @@ function buildPublishReceipt(observed, args) {
 // its push is verified - as the hosted canary's cancel-in-progress did - so a
 // publish that fails leaves the proof of what is on main running. It runs
 // from the main checkout, never from a quest worktree that may be removed
-// while it runs, and waits for thermal headroom before it starts. None of
-// this can fail a publish.
+// while it runs. Thermal headroom is its runner's to gate, before every batch
+// on every host; a machine that stays too hot is the runner's typed refusal,
+// recorded lost. None of this can fail a publish.
 const LOCAL_CORPUS_ARGUMENT = '--local-corpus';
 const LOCAL_CORPUS_DIRECTORY = 'lagrange-local-corpus';
 const LOCAL_CORPUS_KEEP = 20;
@@ -606,7 +608,6 @@ const LOCAL_CORPUS_STATE = Object.freeze({
 const LOCAL_CORPUS_SCRIPT = 'test:all';
 const LOCAL_CORPUS_RUNNER = 'scripts/run-classified-test-files.js';
 const LOCAL_CORPUS_GATE = 'scripts/checks/push-gate-corpus-worktree.js';
-const LOCAL_CORPUS_THERMAL = 'scripts/checks/wait-for-thermal-headroom.js';
 const LOCAL_CORPUS_GATE_FLAG = '--gate';
 const LOCAL_CORPUS_RUN_FLAG = '--run';
 const LOCAL_CORPUS_SHELL = 'sh';
@@ -643,7 +644,7 @@ const LOCAL_CORPUS_TEXT = Object.freeze({
   SUPERSEDED_BY: 'superseded by ',
   NEWER_HEAD: ', a newer head on main',
   LOST: 'its process ended without a verdict',
-  HOT: 'the machine stayed too hot to start it',
+  HOT: 'the machine stayed too hot to run it (thermal-headroom-exhausted)',
   UNRECORDED: 'receipt not recorded: ',
   BOOKKEEPING: 'bookkeeping failed: ',
   NO_RUNNER: ' does not run ',
@@ -776,9 +777,10 @@ export function startLocalCorpus({root, stateDir, head, files, spawnProcess = sp
 }
 
 /**
- * The detached half: after thermal headroom, prove the rest of the corpus for
- * one commit in a fresh exact checkout, and record the whole-corpus receipt
- * only when it is green.
+ * The detached half: prove the rest of the corpus for one commit in a fresh
+ * exact checkout, and record the whole-corpus receipt only when it is green.
+ * Its runner gates thermal headroom before every batch; its refusal - the
+ * machine stayed too hot - reached no verdict and is recorded lost, not red.
  * @param {string} root the main checkout
  * @param {string} head
  * @param {{stateDir: string, run?: Function, now?: Function}} options
@@ -786,12 +788,6 @@ export function startLocalCorpus({root, stateDir, head, files, spawnProcess = sp
  */
 export function runLocalCorpus(root, head, {stateDir, run = spawnSync, now = Date.now}) {
   const current = () => readLocalCorpusRecords(stateDir).find((entry) => entry.sha === head);
-  const cooled = run(process.execPath, [LOCAL_CORPUS_THERMAL], {cwd: root, stdio: INHERIT_STDIO});
-  if (cooled.status !== 0 && current()?.state === LOCAL_CORPUS_STATE.RUNNING) {
-    writeLocalCorpusState(stateDir, {...current(), state: LOCAL_CORPUS_STATE.LOST,
-      reason: LOCAL_CORPUS_TEXT.HOT, finishedAt: now()});
-    return cooled.status ?? 1;
-  }
   const files = path.join(stateDir, `${head}${LOCAL_CORPUS_SUFFIX.FILES}`);
   const gated = run(process.execPath, [LOCAL_CORPUS_GATE, LOCAL_CORPUS_GATE_FLAG, head,
     LOCAL_CORPUS_RUN_FLAG, LOCAL_CORPUS_SHELL, LOCAL_CORPUS_SHELL_COMMAND,
@@ -800,6 +796,11 @@ export function runLocalCorpus(root, head, {stateDir, run = spawnSync, now = Dat
   const state = current();
   // Superseded meanwhile: a newer head on main owns the verdict now.
   if (state?.state !== LOCAL_CORPUS_STATE.RUNNING) return gated.status ?? 1;
+  if (gated.status === THERMAL_REFUSAL_EXIT) {
+    writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.LOST,
+      reason: LOCAL_CORPUS_TEXT.HOT, finishedAt: now()});
+    return gated.status;
+  }
   if (gated.status !== 0) {
     writeLocalCorpusState(stateDir, {...state, state: LOCAL_CORPUS_STATE.RED,
       status: gated.status, finishedAt: now()});

@@ -226,16 +226,24 @@ test('the next publish reports the last local corpus result first', (t) => {
   assert.equal(fs.existsSync(path.join(stateDir, `${String(0).padStart(40, 'f')}.log`)), false);
 });
 
+// The runner is the one thermal owner of a runner run (process change
+// 2026-09-23): the local corpus spawns no thermal gate of its own, and a
+// machine that stays too hot is the runner's typed refusal, recorded lost.
+const THERMAL_SCRIPT = 'scripts/checks/wait-for-thermal-headroom.js';
+const CORPUS_GATE = 'scripts/checks/push-gate-corpus-worktree.js';
+// The runner's exit for its thermal-headroom-exhausted refusal.
+const THERMAL_REFUSAL_STATUS = 75;
+
 test('the local corpus records the whole-corpus receipt only when green', (t) => {
   const stateDir = path.join(scratch(t, 'local-corpus-run-'), 'state');
-  const run = ({thermal = 0, gate = 0, record = 0, change = null} = {}) => {
+  const run = ({gate = 0, record = 0, change = null} = {}) => {
     writeState(stateDir, {sha: HEAD, state: 'running', pid: 1, files: 5, startedAt: 1});
     const calls = [];
     const status = runLocalCorpus('/main', HEAD, {stateDir, now: () => 99,
       run: (command, args, options) => {
         calls.push({command, args, options});
-        if (calls.length === 1) return {status: thermal};
-        if (calls.length === 2) {
+        if (args[0] === THERMAL_SCRIPT) return {status: 0};
+        if (args[0] === CORPUS_GATE) {
           if (change) writeState(stateDir, {...stateOf(stateDir, HEAD), ...change});
           return {status: gate};
         }
@@ -245,16 +253,17 @@ test('the local corpus records the whole-corpus receipt only when green', (t) =>
   };
   const green = run();
   assert.equal(green.status, 0);
-  const [cooled, gate, record] = green.calls;
-  assert.deepEqual(cooled.args, ['scripts/checks/wait-for-thermal-headroom.js'],
-    'it waits for thermal headroom first');
+  assert.deepEqual(green.calls.filter((call) => call.args[0] === THERMAL_SCRIPT), [],
+    'no thermal spawn of its own: its runner gates every batch');
+  const [gate, record] = green.calls;
   assert.deepEqual(gate.args.slice(0, 6),
-    ['scripts/checks/push-gate-corpus-worktree.js', '--gate', HEAD, '--run', 'sh', '-c']);
-  assert.match(gate.args[6],
-    /^"\$2" scripts\/run-classified-test-files\.js --stdin < "\$1"; status=\$\?;/u,
-    'the rest of the corpus, in a fresh exact checkout, with this very node');
-  assert.match(gate.args[6], /npm run -s test:convergence-probes \|\|[^;]*; exit "\$status"$/u,
-    'the convergence probes are observed after it, never the verdict');
+    [CORPUS_GATE, '--gate', HEAD, '--run', 'sh', '-c']);
+  const corpusScript = '"$2" scripts/run-classified-test-files.js --stdin < "$1"; ' +
+    'status=$?; npm run -s test:convergence-probes || ' +
+    'echo "local corpus: convergence probes red (observed, never the verdict)"; ' +
+    'exit "$status"';
+  assert.equal(gate.args[6], corpusScript, 'the rest of the corpus, in a fresh exact ' +
+    'checkout, with this very node; the convergence probes observed after, never the verdict');
   assert.deepEqual(gate.args.slice(-2),
     [path.join(stateDir, `${HEAD}.files`), process.execPath]);
   assert.equal(gate.options.cwd, '/main');
@@ -264,21 +273,53 @@ test('the local corpus records the whole-corpus receipt only when green', (t) =>
 
   const red = run({gate: 1});
   assert.equal(red.status, 1);
-  assert.equal(red.calls.length, 2, 'a red run records nothing');
+  assert.equal(red.calls.length, 1, 'a red run records nothing');
   assert.equal(red.state.state, 'red');
 
-  const hot = run({thermal: 2});
-  assert.equal(hot.calls.length, 1, 'a machine that stays hot runs nothing');
+  const hot = run({gate: THERMAL_REFUSAL_STATUS});
+  assert.equal(hot.calls.length, 1, 'a machine that stays hot records nothing');
   assert.deepEqual({state: hot.state.state, reason: hot.state.reason},
-    {state: 'lost', reason: 'the machine stayed too hot to start it'});
+    {state: 'lost', reason: 'the machine stayed too hot to run it (thermal-headroom-exhausted)'},
+    'the runner\'s refusal is lost, never red: no verdict was reached');
 
   const unrecorded = run({record: 1});
   assert.deepEqual({state: unrecorded.state.state, receipt: unrecorded.state.receipt},
     {state: 'green', receipt: 'refused'}, 'the tests passed; the failed recording is named');
 
   const superseded = run({change: {state: 'superseded', supersededBy: 'b'.repeat(40)}});
-  assert.equal(superseded.calls.length, 2, 'a superseded run records nothing');
+  assert.equal(superseded.calls.length, 1, 'a superseded run records nothing');
   assert.equal(superseded.state.state, 'superseded', 'and keeps the newer head\'s word');
+});
+
+// A fake run of the exact corpus script - a one-file list, this node, and an
+// npm that only stands in for the convergence probes - shows the runner's own
+// thermal gate line before its batch: the corpus is covered with no spawn of
+// its own.
+test('the local corpus script is gated by its runner', (t) => {
+  const stateDir = path.join(scratch(t, 'local-corpus-gated-'), 'state');
+  writeState(stateDir, {sha: HEAD, state: 'running', pid: 1, files: 1, startedAt: 1});
+  const calls = [];
+  runLocalCorpus('/main', HEAD, {stateDir, now: () => 99,
+    run: (command, args) => {
+      calls.push(args);
+      return {status: 0};
+    }});
+  assert.equal(calls[0][0], CORPUS_GATE, 'the corpus gate is the first thing it starts');
+  const dir = scratch(t, 'local-corpus-gated-bin-');
+  fs.writeFileSync(path.join(dir, 'npm'), '#!/bin/sh\nexit 0\n', {mode: 0o755});
+  const list = path.join(dir, 'files');
+  fs.writeFileSync(list, 'test/query/budget-limit-error.test.js\n');
+  const env = {...process.env, PATH: `${dir}${path.delimiter}${process.env.PATH}`,
+    LAGRANGE_PLACEMENT: 'local'};
+  delete env.NODE_TEST_CONTEXT;
+  const result = spawnSync('sh', ['-c', calls[0][6], 'sh', list, process.execPath],
+    {cwd: process.cwd(), env, encoding: 'utf8', timeout: 5 * 60000});
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const lines = result.stdout.split('\n');
+  const gateAt = lines.findIndex((line) => /^thermal: (ok|hold|unmeasurable|skipped)\b/u.test(line));
+  assert.ok(gateAt >= 0, `the runner's gate line is in the run: ${result.stdout}`);
+  assert.ok(gateAt < lines.findIndex((line) => line.startsWith('ok test/query/')),
+    'before the batch it gates');
 });
 
 test('the hosted canary runs only when dispatched by hand', () => {

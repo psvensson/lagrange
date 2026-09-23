@@ -5,7 +5,9 @@ import path from 'node:path';
 import {StringDecoder} from 'node:string_decoder';
 
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
-import {RESOURCE_CLASS_EXCLUSIVE} from '../checks/test-resource-classification-constants.js';
+import {LANE_JOBS_CAP_ENV, RESOURCE_CLASS_EXCLUSIVE}
+  from '../checks/test-resource-classification-constants.js';
+import {THERMAL_REFUSAL_LINE} from '../checks/wait-for-thermal-headroom.js';
 import {formatTestFilesSummary} from '../run-test-files.js';
 import {capture, killGroup, run} from './process.js';
 import {loadState, saveState} from './state.js';
@@ -955,6 +957,7 @@ const PLACEMENT_TEXT = Object.freeze({
   OVER_CAP: 'remote reds exceed the rerun cap: breakage, reported red without a rerun',
   MISS: ' passed on the controller: routed away from ',
   FAIL_FAST: 'fail-fast asks for the first red, which a placed run cannot give',
+  THERMAL_UNFIT: 'host-thermal-unfit ',
   DEADLINE: 'deadline',
   INTERRUPTED: 'interrupted',
 });
@@ -1146,6 +1149,13 @@ function shardVerdicts(shard, outcome) {
   return {red: [...red], fallback: unreported};
 }
 
+// A host whose runner refused as too hot is a typed placement outcome: its
+// runner's own refusal line, relayed in its stream.
+function reportThermalUnfit(name, lines, write) {
+  if (!lines.some((line) => THERMAL_REFUSAL_LINE.test(line))) return;
+  write(`${PLACEMENT_TEXT.PREFIX}${PLACEMENT_TEXT.THERMAL_UNFIT}${name}`);
+}
+
 /**
  * Run test files placed across the fleet when that can shorten the run, and
  * on the controller alone otherwise. Every choice is reported on one line.
@@ -1270,6 +1280,10 @@ async function settleRemoteShards(remote, outcomes, {deps, fleet, statuses, writ
         if (line) write(`[${shard.machine.name}] ${line}`);
       }
     }
+    // Its files not proved there are placed once more, on the controller:
+    // never retried on the machine within this run.
+    reportThermalUnfit(shard.machine.name, String(outcome.log || EMPTY).split(PLACEMENT_LINE),
+      write);
     const {red, fallback: back} = shardVerdicts(shard, outcome);
     if (back.length > 0) {
       write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${back.length}` +
@@ -1396,8 +1410,15 @@ const PLACEMENT_SCRIPT_TAIL = [
   `export ${PLACEMENT_MACHINE_FACTOR_ENV}="$factor" ${PLACEMENT_ENV}=${PLACEMENT_LOCAL}`,
   `if [ -n "$retry" ]; then export ${PLACEMENT_FORWARDED_ENV.RETRY}="$retry"; fi`,
   `if [ -n "$tap_timeout" ]; then export ${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}="$tap_timeout"; fi`,
+  // Every lane capped at this host's own processors less one, counted here at
+  // run time: never a per-host constant, never a host's name.
+  `unset ${LANE_JOBS_CAP_ENV}`,
+  'cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null)"',
+  `case "$cores" in ""|*[!0-9]*) ;; 0|1) export ${LANE_JOBS_CAP_ENV}=1;; ` +
+    `*) export ${LANE_JOBS_CAP_ENV}=$((cores - 1));; esac`,
   `echo "placement-env=factor:$${PLACEMENT_MACHINE_FACTOR_ENV} mode:$${PLACEMENT_ENV} ` +
-    `retry:\${${PLACEMENT_FORWARDED_ENV.RETRY}:-} timeout:\${${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}:-}"`,
+    `retry:\${${PLACEMENT_FORWARDED_ENV.RETRY}:-} timeout:\${${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}:-} ` +
+    `lanecap:\${${LANE_JOBS_CAP_ENV}:-}"`,
   // The machine lock (fd 9) stays with this shell: a test process that
   // outlived its run must not hold the machine busy after it.
   'setsid node scripts/run-classified-test-files.js --stdin < "$list" 9>&- &',
@@ -1999,6 +2020,7 @@ async function settleLabShares(shares, {root, write}) {
       failed: red.size + unreported.length,
       assertions: [...assertions.values()].reduce((sum, count) => sum + count, 0),
     };
+    reportThermalUnfit(share.machine.name, share.lines, write);
     write(`${LAB_TEST_TEXT.PREFIX}${share.machine.name}: ${formatTestFilesSummary(summary)}`);
     if (unreported.length > 0) {
       write(`${LAB_TEST_TEXT.PREFIX}${share.machine.name}: ${unreported.length}` +

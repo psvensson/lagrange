@@ -115,6 +115,24 @@ describe('project hardening contracts', () => {
     assert.match(releaseText, /npm run check:release/u);
   });
 
+  // Thermal headroom is gated by the runner on every host it runs on, lab
+  // hosts included (owner directive 2026-09-23): the one classified runner
+  // imports the one thermal owner and asks it before every lane batch, so no
+  // placed, local or corpus run can start a batch on a hot machine.
+  it('gates thermal headroom in the classified runner before every batch', async () => {
+    const runner = await readFile('scripts/run-classified-test-files.js', UTF8);
+    assert.match(runner,
+      /^import \{[^}]*\bwaitForThermalHeadroom\b[^}]*\} from '\.\/checks\/wait-for-thermal-headroom\.js';$/mu,
+      'the runner consumes the thermal owner, never a copy of its thresholds');
+    assert.doesNotMatch(runner, /wait-for-thermal-headroom\.js'\]|spawn[^\n]*wait-for-thermal/u,
+      'it calls the owner, never spawns its script');
+    const batchLoop = /for \(let batchIndex = 0;[\s\S]*?\n {4}\}\n/u.exec(runner)?.[0] ?? '';
+    const gateAt = batchLoop.search(/\bgate\(\)/u);
+    const spawnAt = batchLoop.search(/\bspawn\(process\.execPath/u);
+    assert.ok(gateAt >= 0 && spawnAt > gateAt,
+      'inside the batch loop, the gate is asked before the batch is spawned');
+  });
+
   it('runs the golden-capability guard-scenario tier in every push gate',
     async () => {
       const manifests = await Promise.all(
