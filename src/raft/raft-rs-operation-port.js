@@ -2,11 +2,17 @@ import {resolveTimeSource} from '../time/time-source.js';
 import {createRaftOperationPort, deepFreeze} from './raft-operation-port.js';
 import {
   RAFT_EVENT,
+  RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_MEMBERSHIP_OPERATION,
 } from './raft-operation-port-constants.js';
 import {RAFT_PARTITION_NODE_REQUEST} from
   './raft-provider-contract-constants.js';
 import {RaftRsPeerIdentityRegistry} from './raft-rs-peer-identity.js';
+import {
+  RAFT_RS_PEER_IDENTITY_ERROR_MSG,
+  RAFT_RS_PEER_IDENTITY_RESOLUTION,
+} from './raft-rs-peer-identity-constants.js';
+import {RUNTIME_COMMAND} from './raft-rs-runtime-owner-constants.js';
 import {
   decodeCommittedProposal,
   encodeProposal,
@@ -68,24 +74,33 @@ function tickIntervalOf(timing) {
     timing.heartbeatMs / HEARTBEAT_TICK_DIVISOR));
 }
 
+// {change} in the core's ConfChangeV2 shape, or {refusal} naming how the
+// request missed the canonical {type, replicaIdentity} shape.
 function normalizedConfChange(change, registry) {
   if (Array.isArray(change?.changes)) {
-    return deepFreeze({...change, changes: change.changes.map((item) =>
-      deepFreeze({...item}))});
+    return {change: deepFreeze({...change, changes: change.changes.map(
+      (item) => deepFreeze({...item}))})};
   }
   const changeType = {
     [RAFT_MEMBERSHIP_OPERATION.ADD_PEER]: 0,
     [RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER]: 1,
     [RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER]: 2,
   }[change?.type];
-  const nodeId = registry.raftPeerIdOf(change?.replicaIdentity);
-  if (changeType === undefined || nodeId === null) {
-    return null;
+  if (changeType === undefined) {
+    return {refusal: RAFT_MEMBERSHIP_CHANGE_REFUSAL.UNKNOWN_OPERATION};
   }
-  return deepFreeze({
+  if (typeof change.replicaIdentity !== 'string' ||
+      change.replicaIdentity.length === 0) {
+    return {refusal: RAFT_MEMBERSHIP_CHANGE_REFUSAL.WITHOUT_REPLICA_IDENTITY};
+  }
+  const nodeId = registry.raftPeerIdOf(change.replicaIdentity);
+  if (nodeId === null) {
+    return {refusal: RAFT_MEMBERSHIP_CHANGE_REFUSAL.PEER_UNRESERVED};
+  }
+  return {change: deepFreeze({
     transition: 0,
     changes: [deepFreeze({changeType, nodeId})],
-  });
+  })};
 }
 
 function createRaftRsOperationPort(request) {
@@ -119,6 +134,9 @@ function createRaftRsOperationPort(request) {
   };
   const timers = resolveTimeSource(
     request[RAFT_PARTITION_NODE_REQUEST.SUBSTRATE] || {});
+  let tickIntervalMs = tickIntervalOf(timing);
+  let timer = null;
+  let closed = false;
   const dispatcher = lifecycle.active ? createRuntimeDispatcher({
     database,
     groupId,
@@ -129,29 +147,28 @@ function createRaftRsOperationPort(request) {
     timers,
     sendToPeer: required(
       request, RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER),
+    // An address exists only for a reserved identity; the runtime records
+    // an unreserved peer's delivery as that peer's own outcome.
     resolvePeerAddress: (raftPeerId) => {
-      const identity = registry.replicaIdentityOf(raftPeerId);
-      if (identity === null) {
-        throw new Error(`unknown raft-rs peer identity ${raftPeerId}`);
+      const identity = registry.resolveReplicaIdentity(raftPeerId);
+      if (identity.status === RAFT_RS_PEER_IDENTITY_RESOLUTION.UNRESERVED) {
+        throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.unreserved(raftPeerId));
       }
-      return resolvePeerAddress(identity);
+      return resolvePeerAddress(identity.replicaIdentity);
     },
-    resolvePeerIdentity: (raftPeerId) => {
-      const identity = registry.replicaIdentityOf(raftPeerId);
-      if (identity === null) {
-        throw new Error(`unknown raft-rs peer identity ${raftPeerId}`);
-      }
-      return identity;
-    },
+    resolvePeerIdentity: (raftPeerId) =>
+      registry.resolveReplicaIdentity(raftPeerId),
     applyCommittedEntry: committedEntryApplication(required(
       request, RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY)),
     applyTransactionRolledBack:
       request[RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
+    // A core entry the runtime schedules itself (the drain of delivered
+    // inbound) is admitted by this replica's lifecycle owner like every
+    // operation the port is asked for.
+    admitScheduledEntry: (work) => lifecycle.execute(() => (closed ?
+      deepFreeze({outcome: CORE_REFUSED, reason: 'closed'}) : work())),
     emit,
   }) : null;
-  let tickIntervalMs = tickIntervalOf(timing);
-  let timer = null;
-  let closed = false;
 
   const execute = (command) => lifecycle.execute(() => {
     if (closed || dispatcher === null) {
@@ -210,31 +227,18 @@ function createRaftRsOperationPort(request) {
         return deepFreeze({outcome: CORE_REFUSED, reason: 'closed'});
       }
       const normalized = normalizedConfChange(change, registry);
-      return normalized === null ? deepFreeze({
+      return normalized.refusal === undefined ? dispatcher.execute({
+        type: 'propose-conf-change', change: normalized.change,
+      }) : deepFreeze({
         outcome: CORE_REFUSED,
-        reason: 'unknown-membership-change',
+        reason: normalized.refusal,
         phase: 'membership-admission',
         retryable: false,
         recoveryRequired: false,
-      }) : dispatcher.execute({
-        type: 'propose-conf-change', change: normalized,
       });
     }),
-    probePeerProgress: (peerAddress) => lifecycle.execute(async () => {
-      if (closed || dispatcher === null) {
-        return deepFreeze({outcome: CORE_REFUSED, reason: 'closed'});
-      }
-      const status = await Promise.resolve(
-        dispatcher.execute({type: 'read-status'}),
-      );
-      if (status?.outcome !== CORE_OK) {
-        return status;
-      }
-      const matchIndex = status?.followerProgress?.[peerAddress];
-      if (Number.isFinite(matchIndex)) {
-        return coreOk('progress-observed', {matchIndex});
-      }
-      return dispatcher.execute({type: 'tick'});
+    probePeerProgress: (peerAddress) => execute({
+      type: RUNTIME_COMMAND.PROBE_PEER_PROGRESS, peerAddress,
     }),
     tick: () => execute({type: 'tick'}),
     campaign: () => execute({type: 'campaign'}),

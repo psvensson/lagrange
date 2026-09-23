@@ -297,6 +297,7 @@ function createPartitionServiceDurabilityFitnessMethods() {
 }
 
 export {
+  LEADER_DURABILITY_CONSEQUENCE_OUTCOME,
   LEADER_DURABILITY_UNFIT_REASON,
   createPartitionServiceDurabilityFitnessMethods,
 };
