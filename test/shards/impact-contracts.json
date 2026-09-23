@@ -478,27 +478,44 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-application-transaction-owner.js",
-        "src/partition/partition-service-raft-init-base.js"
+        "src/partition/partition-service-raft-init-base.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-committed-statement-failure.js"
       ],
       "tests": [
-        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js"
+        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+        "test/partition/committed-statement-outcome.test.js"
       ]
     },
     "partition-raft-operation-port": {
-      "description": "Both providers return the same operation-only partition capability while PartitionService consumes semantic operations and immutable snapshots without a live node/control graph.",
+      "description": "The rs-raft provider is the partition's only consensus backend: PartitionService builds its operation-only port through the fixed rs-raft factory (no selection, no provider injection) and consumes semantic operations, typed outcomes and immutable snapshots without a live node/control graph; a refused campaign or peer admission is the port's typed answer, never reported as done.",
       "owners": [
         "src/raft/raft-operation-port.js",
-        "src/raft/raft-provider-contract.js",
-        "src/raft/liferaft-provider.js",
         "src/raft/raft-rs-provider.js",
         "src/raft/raft-rs-operation-port.js",
+        "src/partition/partition-service-core-base.js",
         "src/partition/partition-service-raft-init-base.js",
-        "src/partition/partition-service-raft-lifecycle-wiring.js"
+        "src/partition/partition-service-raft-lifecycle-wiring.js",
+        "src/partition/partition-service-raft-membership-administration.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/partition-construction-seam.test.js",
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
-        "test/raft/raft-provider-contract.test.js"
+        "test/partition/partition-port-refusal-outcomes.test.js"
+      ]
+    },
+    "partition-session-transaction-persistence-admission": {
+      "description": "A user session's SQLite transaction and the rs-raft store share the partition's one connection: the transaction owner ends its session (COMMIT or ROLLBACK) before it proposes a transaction marker and proposes none while staging; the store refuses every durable consensus write inside a transaction it did not open; the runtime asks that admission before it enters the core and before every Ready, and the write path turns the refusal into a bounded deferral, so no consensus row is ever written inside, or erased by, a user session.",
+      "owners": [
+        "src/partition/partition-service-transaction-base.js",
+        "src/partition/partition-service-raft-write-commit.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-persistence-admission.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ],
+      "tests": [
+        "test/transaction/session-transaction-isolation.test.js",
+        "test/raft/raft-rs-backend/persistence-admission.test.js"
       ]
     },
     "spread-cure-transition-authorization": {
@@ -870,24 +887,25 @@
           "id": "application-and-progress-transaction",
           "owners": [
             "src/raft/raft-rs-application-transaction-owner.js",
-            "src/partition/partition-service-raft-init-base.js"
+            "src/partition/partition-service-raft-init-base.js",
+            "src/partition/partition-service-entry-apply-base.js",
+            "src/partition/partition-committed-statement-failure.js"
           ]
         }
       ],
       "contract": "raft-rs-runtime-application-transaction",
       "witnessTests": [
-        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js"
+        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+        "test/partition/committed-statement-outcome.test.js"
       ]
     },
     "partition-raft-operation-port": {
-      "description": "The provider boundary and PartitionService consumer must agree on the exact frozen semantic port, with no node/control fallback on either side.",
+      "description": "The rs-raft provider and the PartitionService consumer must agree on the exact frozen semantic port and its typed outcomes, with no node/control fallback and no second provider on either side.",
       "endpoints": [
         {
           "id": "provider-port-construction",
           "owners": [
             "src/raft/raft-operation-port.js",
-            "src/raft/raft-provider-contract.js",
-            "src/raft/liferaft-provider.js",
             "src/raft/raft-rs-provider.js",
             "src/raft/raft-rs-operation-port.js"
           ]
@@ -895,8 +913,10 @@
         {
           "id": "partition-port-consumer",
           "owners": [
+            "src/partition/partition-service-core-base.js",
             "src/partition/partition-service-raft-init-base.js",
-            "src/partition/partition-service-raft-lifecycle-wiring.js"
+            "src/partition/partition-service-raft-lifecycle-wiring.js",
+            "src/partition/partition-service-raft-membership-administration.js"
           ]
         }
       ],
@@ -904,7 +924,7 @@
       "witnessTests": [
         "test/raft/raft-rs-backend/partition-construction-seam.test.js",
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
-        "test/raft/raft-provider-contract.test.js"
+        "test/partition/partition-port-refusal-outcomes.test.js"
       ]
     },
     "spread-cure-transition-authorization": {
@@ -932,6 +952,30 @@
         "test/rebalancer/spread-cure-transition-authorization.test.js",
         "test/rebalancer/spread-cure-transition-authorization-row.test.js",
         "test/partition/learner-promotion-count-check-inputs.test.js"
+      ]
+    },
+    "partition-session-transaction-store-persistence-admission": {
+      "description": "The transaction owner ends a user session before proposing its marker exactly when the rs-raft store's persistence admission would refuse a consensus write inside that session.",
+      "endpoints": [
+        {
+          "id": "session-transaction",
+          "owners": [
+            "src/partition/partition-service-transaction-base.js"
+          ]
+        },
+        {
+          "id": "store-persistence-admission",
+          "owners": [
+            "src/raft/raft-rs-durable-store.js",
+            "src/raft/raft-rs-persistence-admission.js",
+            "src/raft/raft-rs-runtime-owner.js"
+          ]
+        }
+      ],
+      "contract": "partition-session-transaction-persistence-admission",
+      "witnessTests": [
+        "test/transaction/session-transaction-isolation.test.js",
+        "test/raft/raft-rs-backend/persistence-admission.test.js"
       ]
     }
   }

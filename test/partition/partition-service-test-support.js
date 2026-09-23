@@ -86,6 +86,9 @@ export class ControllablePartitionRaftProvider {
     this.request = null;
     this.proposeHandler = null;
     this.stepHandler = null;
+    this.campaignHandler = null;
+    this.confChangeHandler = null;
+    this.confChangeOutcomes = [];
     this.listeners = new Map();
     this.steps = [];
     this.committedIndex = 0;
@@ -134,6 +137,14 @@ export class ControllablePartitionRaftProvider {
       },
       proposeConfChange: (change) => {
         this.confChanges.push({...change});
+        // A handler answers for the port (a refusal, a deferral, a queued
+        // proposal); the provider records exactly what the port answered.
+        const answered = this.confChangeHandler ?
+          this.confChangeHandler(change) : null;
+        if (answered) {
+          this.confChangeOutcomes.push(answered);
+          return answered;
+        }
         if (change?.type === 'remove-peer') {
           this.peers = this.peers.filter(
             (peer) => peer?.address !== change.peerAddress,
@@ -147,11 +158,17 @@ export class ControllablePartitionRaftProvider {
             },
           ];
         }
-        return testCoreOk();
+        const proposed = testCoreOk();
+        this.confChangeOutcomes.push(proposed);
+        return proposed;
       },
       probePeerProgress: () => testCoreOk(),
       tick: () => testCoreOk(),
       campaign: () => {
+        const answered = this.campaignHandler ? this.campaignHandler() : null;
+        if (answered?.outcome) {
+          return answered;
+        }
         this.setRole(RAFT_ROLE.LEADER);
         return testCoreOk();
       },
@@ -206,6 +223,14 @@ export class ControllablePartitionRaftProvider {
 
   setStepHandler(handler) {
     this.stepHandler = handler;
+  }
+
+  setCampaignHandler(handler) {
+    this.campaignHandler = handler;
+  }
+
+  setConfChangeHandler(handler) {
+    this.confChangeHandler = handler;
   }
 }
 

@@ -98,6 +98,21 @@ function confStateFromRow(row) {
 }
 
 /**
+ * One applied proposal, decoded through the proposal codec (an undecodable
+ * payload fails closed with the codec's typed error).
+ * @param {Object} row - A row of an applied-proposal read.
+ * @return {Object} The frozen {index, term, command} record, index and term
+ *   as decimal strings.
+ */
+function appliedProposalFromRow(row) {
+  return Object.freeze({
+    index: fromExactInteger(row.log_index),
+    term: fromExactInteger(row.term),
+    command: decodeCommittedProposal(Buffer.from(row.data, PAYLOAD_ENCODING)),
+  });
+}
+
+/**
  * The durable Raft record for the raft-rs-wasm backend.
  */
 class RaftRsDurableStore {
@@ -345,19 +360,54 @@ class RaftRsDurableStore {
    *   order, index and term as decimal strings.
    */
   static readCommittedEntriesIn(db, groupId) {
-    const {present} = db.prepare(
-      RAFT_RS_SQL.COUNT_LOG_AND_APPLIED_STATE_TABLES).get();
-    if (present !== LOG_AND_APPLIED_STATE_TABLE_COUNT) {
+    if (!RaftRsDurableStore.hasAppliedProposalTablesIn(db)) {
       return [];
     }
     return db.prepare(RAFT_RS_SQL.SELECT_APPLIED_PROPOSAL_ENTRIES)
       .safeIntegers(true).all(groupId, RAFT_RS_ENTRY_TYPE.NORMAL)
-      .map((row) => Object.freeze({
-        index: fromExactInteger(row.log_index),
-        term: fromExactInteger(row.term),
-        command: decodeCommittedProposal(
-          Buffer.from(row.data, PAYLOAD_ENCODING)),
-      }));
+      .map(appliedProposalFromRow);
+  }
+
+  /**
+   * Find the most recent applied proposal of one group that matches, from an
+   * existing connection: the applied proposals are read newest first and
+   * decoded one at a time, and the read stops at the first match. Read-only
+   * and DDL-free, with readCommittedEntriesIn's boundary (at or below the
+   * durable applied index; an entry being applied in the current transaction
+   * is not yet part of it).
+   * @param {Object} db - An open better-sqlite3 database.
+   * @param {string} groupId - The group.
+   * @param {Function} matches - Predicate over a decoded command.
+   * @return {Object|null} The frozen {index, term, command} record, or null
+   *   when no applied proposal matches.
+   */
+  static findAppliedProposalIn(db, groupId, matches) {
+    if (!RaftRsDurableStore.hasAppliedProposalTablesIn(db)) {
+      return null;
+    }
+    const rows = db.prepare(
+      RAFT_RS_SQL.SELECT_APPLIED_PROPOSAL_ENTRIES_NEWEST_FIRST)
+      .safeIntegers(true).iterate(groupId, RAFT_RS_ENTRY_TYPE.NORMAL);
+    for (const row of rows) {
+      const record = appliedProposalFromRow(row);
+      if (matches(record.command)) {
+        return record;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Whether the tables the applied-proposal readers need exist, asked of the
+   * schema rather than created.
+   * @param {Object} db - An open better-sqlite3 database.
+   * @return {boolean} Whether both tables exist.
+   * @private
+   */
+  static hasAppliedProposalTablesIn(db) {
+    const {present} = db.prepare(
+      RAFT_RS_SQL.COUNT_LOG_AND_APPLIED_STATE_TABLES).get();
+    return present === LOG_AND_APPLIED_STATE_TABLE_COUNT;
   }
 
   /**

@@ -9,6 +9,8 @@ import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
 } from './partition-service-constants.js';
+import {settleFailedCommittedStatement} from
+  './partition-committed-statement-failure.js';
 
 const QUERY_RESULT_REQUEST_FIELD = Object.freeze({
   DEADLINE_MS: 'resultDeadlineMs',
@@ -1119,57 +1121,13 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
             }
           });
         } catch (error) {
-          if (this.isIdempotentInsertReplayConstraint(error, command)) {
-            scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () => {
-              this.trackAppliedEntryKey(entryKey, identity.durableCommitWitness);
-              this.logger.warn(
-                PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY,
-                {
-                  partitionId: this.partitionId,
-                  commandType: command.type,
-                  skippedReplay: true,
-                  replayConstraintSuppressed: true,
-                  error: error.message,
-                },
-              );
-              this.resolveCommittedWrite(command.entryId, {
-                success: true,
-                changes: 0,
-                ...identity,
-              });
-              this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
-                partitionId: this.partitionId,
-                command,
-              });
-            });
-            return PARTITION_COMMITTED_COMMAND_OUTCOME.REPLAYED;
-          }
-          // A failed statement is a deterministic state-machine outcome:
-          // every replica fails it the same way, the entry is consumed
-          // (the applied index advances in this transaction) and the
-          // proposer's write resolves as the failure it is.
-          this.logger.error(
-            PARTITION_SERVICE_ERROR_MSG.APPLY_COMMITTED_FAILED,
-            {
-              partitionId: this.partitionId,
-              error: error.message,
-              sql: command.sql ?
-                command.sql.substring(
-                  0,
-                  PARTITION_SERVICE_VALUE.CDC_REDACTION_LIMIT,
-                ) :
-                null,
-              params: command.params || [],
-            },
-          );
-          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () =>
-            this.resolveCommittedWrite(command.entryId, {
-              success: false,
-              error: error.message,
-              ...identity,
-            }),
-          );
-          return PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED;
+          return settleFailedCommittedStatement(this, {
+            error, command, entryKey, identity,
+            afterCommit: (effect) =>
+              scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
+            afterRollback: (effect) =>
+              scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect),
+          });
         }
       }
     } else if (

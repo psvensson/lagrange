@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2142,
+    "ordinary": 2144,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2159,
-  "digest": "fnv1a32-d4c8a632",
+  "censusSize": 2161,
+  "digest": "fnv1a32-e081706a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1115,6 +1115,7 @@
     "test/partition/cdc-sliding-window-catchup.preservation.test.js": "ordinary",
     "test/partition/cdc-subscriber-registration-timing.test.js": "ordinary",
     "test/partition/child-partition-leader-propagation.test.js": "ordinary",
+    "test/partition/committed-statement-outcome.test.js": "ordinary",
     "test/partition/complete-peer-list.property.test.js": "ordinary",
     "test/partition/contiguous-non-overlapping-ranges.property.test.js": "ordinary",
     "test/partition/default-replica-count.property.test.js": "ordinary",
@@ -1145,6 +1146,7 @@
     "test/partition/partition-leader-row-publication-integrity.test.js": "ordinary",
     "test/partition/partition-legacy-consensus-state.test.js": "ordinary",
     "test/partition/partition-packet-round-trip.property.test.js": "ordinary",
+    "test/partition/partition-port-refusal-outcomes.test.js": "ordinary",
     "test/partition/partition-raft-node-write-preservation.property.test.js": "ordinary",
     "test/partition/partition-raft-storage.test.js": "ordinary",
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": "ordinary",

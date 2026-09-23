@@ -43,6 +43,8 @@ import {
 import {
   LEGACY_PARTITION_CONSENSUS_OUTCOME,
 } from './partition-legacy-consensus-state-constants.js';
+import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
+  './partition-service-constants.js';
 
 const {
   AddressManager,
@@ -75,6 +77,22 @@ const {
   resolveCanonicalPartitionLeaderObservation,
   resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
+
+/**
+ * The typed startup refusal of a single-replica partition whose port refused
+ * its campaign: the partition can never lead its own group.
+ * @param {string} partitionId - The partition.
+ * @param {Object} campaign - What the port answered.
+ * @return {Error} The error, carrying the typed code and the port's answer.
+ */
+function singleReplicaCampaignRefusedError(partitionId, campaign) {
+  const error = new Error(PARTITION_SERVICE_ERROR_MSG
+    .singleReplicaCampaignRefused(partitionId, campaign));
+  error.code = PARTITION_CONSENSUS_STARTUP_OUTCOME
+    .SINGLE_REPLICA_CAMPAIGN_REFUSED;
+  error.campaign = campaign;
+  return error;
+}
 
 // The clock and randomness a replica hands to liferaft. Absent keys mean
 // liferaft keeps its own tick-tock and Math.random, so production is
@@ -569,7 +587,15 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         PARTITION_SERVICE_ERROR_MSG.SINGLE_REPLICA_RAFT_OWNER_REQUIRED,
         {partitionId: this.partitionId, replicaId: this.replicaId},
       );
-      this.raft.campaign();
+      // The campaign's outcome is the port's answer to "can this replica
+      // lead its own group": a refusal is a partition that can never serve a
+      // write, so initialization fails closed with a typed outcome and
+      // releases what it acquired (R11) instead of reporting a leader.
+      const campaign = await this.raft.campaign();
+      if (campaign?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+        await this.shutdown();
+        throw singleReplicaCampaignRefusedError(this.partitionId, campaign);
+      }
       this.logger.info(PARTITION_SERVICE_LOG_MSG.SINGLE_REPLICA_LEADER, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,

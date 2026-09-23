@@ -169,6 +169,7 @@ const PARTITION_COMMITTED_COMMAND_OUTCOME = Object.freeze({
   REPLAYED: 'replayed',
   RECORDED_ONLY: 'recorded_only',
   STATEMENT_FAILED: 'statement_failed',
+  STATEMENT_ENVIRONMENT_FAILED: 'statement_environment_failed',
   UNRECOGNISED: 'unrecognised',
 });
 
@@ -176,10 +177,51 @@ const PARTITION_COMMITTED_COMMAND_OUTCOME = Object.freeze({
 // consensus construction.
 const PARTITION_COMMITTED_COMMAND_ERROR_CODE = Object.freeze({
   UNRECOGNISED: 'partition_committed_command_unrecognised',
+  STATEMENT_ENVIRONMENT_FAILED:
+    'partition_committed_statement_environment_failed',
 });
+
+// Which failed statements are the state machine's own outcome. Only a
+// failure every replica reproduces from the same command over the same state
+// may be consumed as STATEMENT_FAILED: these SQLite primary result codes
+// (better-sqlite3 reports extended codes, whose primary code is their
+// `SQLITE_<NAME>` prefix). Every other SQLite code - busy, locked, I/O,
+// full, out of memory, cannot open, corrupt, read-only, interrupted - is the
+// host's environment, not the statement's: consuming it would let one
+// replica skip an entry the others apply, so it fails the apply closed and
+// the committed entry is delivered again.
+const PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES = Object.freeze(new Set([
+  'SQLITE_CONSTRAINT',
+  'SQLITE_ERROR',
+  'SQLITE_MISMATCH',
+  'SQLITE_RANGE',
+  'SQLITE_TOOBIG',
+]));
+
+// The shape of a SQLite result code: `SQLITE_<PRIMARY>[_<EXTENDED>]`.
+const PARTITION_SQLITE_RESULT_CODE = Object.freeze({
+  PREFIX: 'SQLITE_',
+  SEPARATOR: '_',
+  PRIMARY_SEGMENTS: 2,
+});
+
+// The errors better-sqlite3 raises in JavaScript, without a SQLite result
+// code, when a statement's own parameters cannot be bound (a wrong count or
+// an unbindable value): deterministic in the command, so a statement failure
+// - but only while the connection is open (a closed connection raises a
+// TypeError too, and that is the host's state).
+const PARTITION_DETERMINISTIC_STATEMENT_BINDING_ERRORS = Object.freeze(new Set([
+  'RangeError',
+  'TypeError',
+]));
 
 const PARTITION_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
   BACKEND_SELECTION_REFUSED: 'partition_consensus_backend_selection_refused',
+  // A single-replica partition campaigns for its own group at initialization;
+  // a port that refuses the campaign yields a partition that can never lead,
+  // so initialization fails closed with this outcome (R11).
+  SINGLE_REPLICA_CAMPAIGN_REFUSED:
+    'partition_single_replica_campaign_refused',
 });
 
 const PARTITION_SERVICE_ROLE = Object.freeze({
@@ -666,6 +708,13 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
     'Committed partition command type is not recognised',
   COMMITTED_ENTRY_EFFECT_FAILED:
     'Committed partition entry effect failed after its transaction',
+  COMMITTED_STATEMENT_ENVIRONMENT_FAILED:
+    'Committed partition statement failed in the host environment; the ' +
+    'entry is not consumed and is applied again when the host recovers',
+  singleReplicaCampaignRefused: (partitionId, campaign) =>
+    `Partition ${partitionId} cannot lead its single-replica group: the ` +
+    `consensus port refused its campaign (${campaign?.outcome}: ` +
+    `${campaign?.reason})`,
   backendSelectionRefused: (option, requested) =>
     `Partition consensus backend selection refused: ${option}=` +
     `${JSON.stringify(requested)} names a retired consensus backend; a ` +
@@ -708,6 +757,9 @@ export {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
   PARTITION_CONSENSUS_STARTUP_OUTCOME,
+  PARTITION_DETERMINISTIC_STATEMENT_BINDING_ERRORS,
+  PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES,
+  PARTITION_SQLITE_RESULT_CODE,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
   PARTITION_SERVICE_CDC,

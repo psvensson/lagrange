@@ -52,9 +52,17 @@ const RAFT_PEER_PROGRESS_PROBE_REASON = Object.freeze({
 // A partition's admission of one peer: only the leader proposes it; any
 // other replica that observes the same peer records a typed no-op instead of
 // forwarding a redundant proposal, and a peer the committed configuration
-// already names is not proposed again.
+// already names is not proposed again. A proposal records what the port
+// actually answered: PROPOSED (CORE_OK), REFUSED (the port refused it, with
+// its reason), DEFERRED (a retryable host failure that left the group usable,
+// such as an open user transaction, with its reason), or QUEUED (the port
+// queued it behind the group's in-flight work; its settled outcome is
+// recorded when the port answers).
 const RAFT_MEMBERSHIP_ADMISSION_OUTCOME = Object.freeze({
   PROPOSED: 'PROPOSED',
+  REFUSED: 'REFUSED',
+  DEFERRED: 'DEFERRED',
+  QUEUED: 'QUEUED',
   NOT_LEADER: 'NOT_LEADER',
   ALREADY_MEMBER: 'ALREADY_MEMBER',
 });

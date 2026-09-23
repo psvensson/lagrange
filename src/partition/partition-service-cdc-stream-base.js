@@ -23,7 +23,6 @@ const {
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
   PARTITION_SPLIT_MIRROR_ORIGIN,
-  SQL,
   STRING,
   SYSTEM_TABLE_NAME,
   fs,
@@ -370,42 +369,6 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       command.sql,
       params,
     ].join(PARTITION_SERVICE_LITERAL.VALUE);
-  }
-  /**
-   * Treat duplicate-key INSERT failures as idempotent replay.
-   * Raft recovery can reapply previously-committed INSERT entries after restart.
-   * @param {*} error
-   * @param {Object} command
-   * @return {boolean}
-   * @private
-   */
-  isIdempotentInsertReplayConstraint(error, command) {
-    if (!error || !command?.sql) {
-      return false;
-    }
-    const sqlUpper = String(command.sql).trim().toUpperCase();
-    const isInsertStatement =
-      sqlUpper.startsWith(SQL.INSERT_INTO) ||
-      sqlUpper.startsWith(SQL.INSERT_OR_REPLACE_INTO) ||
-      sqlUpper.startsWith(SQL.INSERT_OR_IGNORE_INTO);
-    if (!isInsertStatement) {
-      return false;
-    }
-    const code = String(error.code || '').toUpperCase();
-    if (code === PARTITION_SERVICE_LITERAL.SQLITE_CONSTRAINT_PRIMARYKEY) {
-      return true;
-    }
-    if (code.startsWith(PARTITION_SERVICE_LITERAL.SQLITE_CONSTRAINT)) {
-      const message = String(error.message || '');
-      if (
-        message
-          .toUpperCase()
-          .includes(PARTITION_SERVICE_LITERAL.UNIQUE_CONSTRAINT_FAILED)
-      ) {
-        return true;
-      }
-    }
-    return false;
   }
   /**
    * Track an applied write key with bounded history for replay dedupe.

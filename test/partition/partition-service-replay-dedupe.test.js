@@ -118,7 +118,7 @@ test(
 );
 
 test(
-  'PartitionService suppresses duplicate-key INSERT failures during committed replay recovery',
+  'PartitionService consumes a duplicate-key INSERT with no applied instance of its entry identity as a failed statement, not a replay',
   async (t) => {
     const partition = new PartitionService({
       partitionId: 'test-partition',
@@ -150,13 +150,17 @@ test(
 
     t.equal(await commitThroughPort(partition, replayedEntry),
       RAFT_OPERATION_OUTCOME.CORE_OK,
-      'replayed duplicate INSERT should not crash partition service');
+      'the failed statement is consumed; the partition keeps serving');
+    t.equal(partition.recentlyAppliedEntryKeys.has(
+      partition.getCommittedEntryKey(replayedEntry)), false,
+    'no applied instance of the entry identity exists, so it is not ' +
+    'recorded as an applied replay');
 
     const rowCount = partition.db
       .prepare('SELECT COUNT(*) AS count FROM dedupe_table WHERE id = ?')
       .get('row-3')
       .count;
-    t.equal(rowCount, 1, 'duplicate replay should preserve single row state');
+    t.equal(rowCount, 1, 'the failed statement preserves single row state');
 
     await partition.shutdown();
   },
