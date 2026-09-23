@@ -9,7 +9,7 @@
 // true, inbound envelopes stay queued) rather than a failure in the middle of
 // a Ready. A Ready already taken holds the core's pending Ready and cannot be
 // abandoned: across an asynchronous send, its remaining writes wait, bounded,
-// until the store admits them again.
+// until the store admits them again, and the wait keeps the process alive.
 
 import {
   RAFT_RS_PERSISTENCE_ADMISSION,
@@ -53,8 +53,12 @@ function whenPersistenceAdmitted(group, continuation, outcomes) {
         } else if (group.timers.now() >= deadline) {
           resolve(outcomes.exceeded());
         } else {
+          // A held Ready is pending work: its poll timer stays referenced so
+          // the process cannot end with the Ready never admitted. One timer
+          // at a time, none once admission returns, the group closes or the
+          // bound trips.
           group.timers.setTimeout(poll,
-            PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS)?.unref?.();
+            PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS);
         }
       } catch (error) {
         reject(error);
