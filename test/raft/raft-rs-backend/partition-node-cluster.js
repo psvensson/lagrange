@@ -3,9 +3,10 @@
 // exactly as `PartitionService` shapes it.
 //
 // Nothing here is a raft-rs concept. The driver hands each peer the group's
-// own requirements - the thirteen names of RAFT_PARTITION_NODE_REQUEST, read
-// off the contract owner so a field added or removed breaks the driver rather
-// than being silently absent - a database file of its own, and a transport
+// own requirements - the RAFT_PARTITION_NODE_REQUEST fields PartitionService
+// hands its backend, read off the contract owner so a field renamed or removed
+// breaks the driver rather than being silently absent - a database file of
+// its own, and a transport
 // that moves envelopes between inboxes. It owns no Raft logic, no peer
 // identity, no configuration and no expectation: the peer ids the core uses
 // are the ones the backend registered, and the driver asks the backend for
@@ -18,11 +19,6 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 import {
-  RAFT_BACKEND,
-  RAFT_BACKEND_OPTION,
-} from '../../../src/raft/raft-backend-constants.js';
-import {createRaftProvider} from '../../../src/raft/raft-backend-selection.js';
-import {
   RAFT_PARTITION_NODE_REQUEST,
 } from '../../../src/raft/raft-provider-contract-constants.js';
 import {raftRsLifecycleAdministration} from
@@ -31,6 +27,7 @@ import {setActualCoreEntryObserver} from
   '../../../src/raft/raft-rs-runtime-owner.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
+import {RaftRsWasmProvider} from '../../../src/raft/raft-rs-provider.js';
 
 const TEMP_PREFIX = 'raft-rs-real-partition-';
 const DB_SUFFIX = '.sqlite';
@@ -99,9 +96,7 @@ class PartitionNodeCluster {
     setActualCoreEntryObserver((observation) => {
       this.coreEntries.push(observation);
     });
-    this.provider = createRaftProvider({
-      [RAFT_BACKEND_OPTION]: RAFT_BACKEND.RAFT_RS_WASM,
-    });
+    this.provider = new RaftRsWasmProvider();
     this.replicas = new Map();
     for (const replicaId of this.replicaIds) {
       this.replicas.set(replicaId, this.buildReplica(replicaId, replicaIds));
@@ -150,9 +145,6 @@ class PartitionNodeCluster {
       [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: replicaId,
       [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: this.addressOf(replicaId),
       [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: bootstrapReplicaIds,
-      [RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG]: {
-        end: () => undefined,
-      },
       [RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE]: db,
       [RAFT_PARTITION_NODE_REQUEST.TIMING]: PARTITION_TIMING,
       [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]:
@@ -177,15 +169,18 @@ class PartitionNodeCluster {
         }
         return this.addressOf(peerReplicaId);
       },
-      [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]: (command) => {
+      // The port hands the application one frozen committed record; the
+      // driver keeps the decoded command, applied only once its transaction
+      // commits.
+      [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]: ({command,
+        effects}) => {
         if (this.applyFor) {
           this.applyFor(replicaId, command);
         }
-        replicaOf().appliedCommands.push(command);
+        effects.afterCommit.push(() =>
+          replicaOf().appliedCommands.push(command));
       },
       [RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
-      [RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK]: () =>
-        undefined,
     };
   }
 
@@ -397,7 +392,7 @@ class PartitionNodeCluster {
   /**
    * Propose one command through the node the backend returned.
    * @param {string} replicaId - The proposing replica.
-   * @param {Uint8Array} command - The command's bytes.
+   * @param {*} command - The command (a JSON value).
    * @return {Object} The node's named outcome.
    */
   propose(replicaId, command) {

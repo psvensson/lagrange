@@ -7,9 +7,10 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   checkLearnerPromotionWithGrantedProof,
+  ControllablePartitionRaftProvider,
+  createControllablePartitionService,
   createLoopbackTransport,
   createTrafficReadinessState,
-  ControllablePartitionRaftProvider,
 } from './partition-service-test-support.js';
 import {
   PartitionService,
@@ -1235,7 +1236,7 @@ test(
   'PartitionService - joining learner ignores candidate and follower demotion events before promotion',
   async (t) => {
     const raftProvider = new ControllablePartitionRaftProvider();
-    const partition = new PartitionService({
+    const partition = createControllablePartitionService({
       partitionId: 'joiner-partition',
       tableId: 'joiner-table',
       replicaId: 'replica-2',
@@ -1245,8 +1246,7 @@ test(
       transport: createLoopbackTransport(),
       dbPath: ':memory:',
       isJoiningExistingGroup: true,
-      raftProvider,
-    });
+    }, raftProvider);
 
     try {
       await partition.initialize();

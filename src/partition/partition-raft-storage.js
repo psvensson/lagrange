@@ -74,7 +74,6 @@ class PartitionRaftStorage {
   initializeRaftTables() {
     // Create Raft state table
     this.db.exec(PARTITION_SERVICE_SQL.CREATE_RAFT_STATE_TABLE);
-    this.db.exec(PARTITION_SERVICE_SQL.CREATE_TRANSACTION_OUTCOME_TABLE);
 
     // Load persisted state
     this.loadPersistedState();

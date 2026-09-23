@@ -473,32 +473,59 @@
       ]
     },
     "raft-rs-runtime-application-transaction": {
-      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress and ConfState coherent across host failure and reconstruction.",
+      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; failure scope follows failure class (a core failure replaces the runtime and resumes every group once, a host failure reconstructs its own group and touches no other group; a failure within one retry window of the last instant the previous one held the group is the same persisting failure, whatever its class and whether or not a reconstruction succeeded in between, so the group is reconstructed at most once per window while it persists - at most ceil(span / window) + 1 reconstructions over any span - and a failure more than one window after the last one starts afresh; a group healed inside a window serves again only after it, so its first write after a heal waits up to one window), a durable record that cannot be read where a group is opened or reconstructed (a missing table, SQLITE_IOERR, SQLITE_CORRUPT) is that group's own typed host failure of phase durable-record-read and never a throw, a record that lost a table is never recreated empty (the record's tables are created in one transaction of the store's own, whole or not at all, so a partial schema only ever comes from outside), a replica whose record cannot be read at open is refused at initialization, typed and naming the phase and the table, whatever its replica count (healing in place is for a group that fails while it runs), a throw the runtime did not type is contained by the port as the group's typed host failure, a group without a usable host announces no role so its partition does not lead, a reconstructed sole voter leads again, a retry is answered from its durable outcome, and the admission owner refuses before consensus (and before a session stages it) every command the application would refuse or never answer.",
       "owners": [
         "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-runtime-tuning.js",
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-application-transaction-owner.js",
-        "src/partition/partition-service-raft-init-base.js"
+        "src/partition/partition-service-raft-init-base.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/partition/partition-committed-command-admission.js",
+        "src/partition/partition-service-write-metrics-base.js"
       ],
       "tests": [
-        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js"
+        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+        "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+        "test/partition/committed-statement-outcome.test.js",
+        "test/partition/partition-runtime-reconstruction-leadership.test.js",
+        "test/partition/partition-unreadable-durable-record.test.js"
       ]
     },
     "partition-raft-operation-port": {
-      "description": "Both providers return the same operation-only partition capability while PartitionService consumes semantic operations and immutable snapshots without a live node/control graph.",
+      "description": "The rs-raft provider is the partition's only consensus backend: PartitionService builds its operation-only port through the fixed rs-raft factory (no selection, no provider injection) and consumes semantic operations, typed outcomes and immutable snapshots without a live node/control graph; a refused campaign or peer admission is the port's typed answer, never reported as done; every write the replica did not take is answered by the write kernel's builders, typed with its entry: a pending write released when its replica stops leading, at its commit deadline or at shutdown with what the replica knows of it (outcome unknown once handed to consensus; not leader, deadline passed or service shut down otherwise), a proposal queue at capacity as backpressure with the queue's retry time, a proposal the port refused with the port's reason, and a router holding the answer routes it again by its code (an unknown outcome only under its own entryId); a group held on a contained unexpected throw is named once in the partition's log at error level with its message, and its end once at info.",
       "owners": [
         "src/raft/raft-operation-port.js",
-        "src/raft/raft-provider-contract.js",
-        "src/raft/liferaft-provider.js",
         "src/raft/raft-rs-provider.js",
         "src/raft/raft-rs-operation-port.js",
+        "src/partition/partition-service-core-base.js",
         "src/partition/partition-service-raft-init-base.js",
-        "src/partition/partition-service-raft-lifecycle-wiring.js"
+        "src/partition/partition-service-raft-lifecycle-wiring.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-consensus-hold-log.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/partition-construction-seam.test.js",
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
-        "test/raft/raft-provider-contract.test.js"
+        "test/partition/partition-port-refusal-outcomes.test.js",
+        "test/partition/partition-write-typed-releases.test.js",
+        "test/partition/partition-consensus-hold-log.test.js"
+      ]
+    },
+    "partition-session-transaction-persistence-admission": {
+      "description": "A user session's SQLite transaction and the rs-raft store share the partition's one connection: the transaction owner ends its session (COMMIT or ROLLBACK) before it proposes a transaction marker and proposes none while staging; the store refuses every durable consensus write inside a transaction it did not open; the runtime asks that admission before it enters the core and before every Ready, and the write path turns the refusal into a bounded deferral, so no consensus row is ever written inside, or erased by, a user session.",
+      "owners": [
+        "src/partition/partition-service-transaction-base.js",
+        "src/partition/partition-service-raft-write-commit.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-persistence-admission.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ],
+      "tests": [
+        "test/transaction/session-transaction-isolation.test.js",
+        "test/raft/raft-rs-backend/persistence-admission.test.js"
       ]
     },
     "spread-cure-transition-authorization": {
@@ -515,6 +542,23 @@
         "test/rebalancer/spread-cure-transition-authorization.test.js",
         "test/rebalancer/spread-cure-transition-authorization-row.test.js",
         "test/partition/learner-promotion-count-check-inputs.test.js"
+      ]
+    },
+    "partition-write-answer-retry-classification": {
+      "description": "The partition write kernel (the answer's code) and the errors owner (its text) are the one owner of what may be done again with a write the partition did not take, and every consumer asks them, never a text of its own: the control plane's retry classification retries every answer but a host failure while proposing (a write whose outcome is unknown did not fail, so it is never recorded as a failed write) - by the kernel's code when it holds the answer, by the errors owner's texts when only a text reached it; a router that sends the write again without its entryId never does so for an unknown outcome - never by its text, and by its code only when it re-proposes under the write's own entryId, where the retry is idempotent.",
+      "owners": [
+        "src/partition/partition-write-kernel.js",
+        "src/constants/errors.js",
+        "src/control-plane/control-plane-error-classification.js",
+        "src/cdc/cdc-routed-mutation-readiness.js",
+        "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
+      ],
+      "tests": [
+        "test/control-plane/control-plane-error-classification.test.js",
+        "test/partition/partition-write-kernel.test.js",
+        "test/partition/partition-write-typed-releases.test.js",
+        "test/query/partition-write-answer-consumers.test.js",
+        "test/query/write-path-internal-pacing.test.js"
       ]
     }
   },
@@ -863,6 +907,7 @@
           "id": "ready-persistence-and-reconstruction",
           "owners": [
             "src/raft/raft-rs-runtime-owner.js",
+            "src/raft/raft-rs-runtime-tuning.js",
             "src/raft/raft-rs-durable-store.js"
           ]
         },
@@ -870,24 +915,30 @@
           "id": "application-and-progress-transaction",
           "owners": [
             "src/raft/raft-rs-application-transaction-owner.js",
-            "src/partition/partition-service-raft-init-base.js"
+            "src/partition/partition-service-raft-init-base.js",
+            "src/partition/partition-service-entry-apply-base.js",
+            "src/partition/partition-committed-statement-outcome.js",
+            "src/partition/partition-committed-command-admission.js",
+            "src/partition/partition-service-write-metrics-base.js"
           ]
         }
       ],
       "contract": "raft-rs-runtime-application-transaction",
       "witnessTests": [
-        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js"
+        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+        "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+        "test/partition/committed-statement-outcome.test.js",
+        "test/partition/partition-runtime-reconstruction-leadership.test.js",
+        "test/partition/partition-unreadable-durable-record.test.js"
       ]
     },
     "partition-raft-operation-port": {
-      "description": "The provider boundary and PartitionService consumer must agree on the exact frozen semantic port, with no node/control fallback on either side.",
+      "description": "The rs-raft provider and the PartitionService consumer must agree on the exact frozen semantic port and its typed outcomes, with no node/control fallback and no second provider on either side.",
       "endpoints": [
         {
           "id": "provider-port-construction",
           "owners": [
             "src/raft/raft-operation-port.js",
-            "src/raft/raft-provider-contract.js",
-            "src/raft/liferaft-provider.js",
             "src/raft/raft-rs-provider.js",
             "src/raft/raft-rs-operation-port.js"
           ]
@@ -895,8 +946,11 @@
         {
           "id": "partition-port-consumer",
           "owners": [
+            "src/partition/partition-service-core-base.js",
             "src/partition/partition-service-raft-init-base.js",
-            "src/partition/partition-service-raft-lifecycle-wiring.js"
+            "src/partition/partition-service-raft-lifecycle-wiring.js",
+            "src/partition/partition-service-raft-membership-administration.js",
+            "src/partition/partition-consensus-hold-log.js"
           ]
         }
       ],
@@ -904,7 +958,9 @@
       "witnessTests": [
         "test/raft/raft-rs-backend/partition-construction-seam.test.js",
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
-        "test/raft/raft-provider-contract.test.js"
+        "test/partition/partition-port-refusal-outcomes.test.js",
+        "test/partition/partition-write-typed-releases.test.js",
+        "test/partition/partition-consensus-hold-log.test.js"
       ]
     },
     "spread-cure-transition-authorization": {
@@ -932,6 +988,58 @@
         "test/rebalancer/spread-cure-transition-authorization.test.js",
         "test/rebalancer/spread-cure-transition-authorization-row.test.js",
         "test/partition/learner-promotion-count-check-inputs.test.js"
+      ]
+    },
+    "partition-session-transaction-store-persistence-admission": {
+      "description": "The transaction owner ends a user session before proposing its marker exactly when the rs-raft store's persistence admission would refuse a consensus write inside that session.",
+      "endpoints": [
+        {
+          "id": "session-transaction",
+          "owners": [
+            "src/partition/partition-service-transaction-base.js"
+          ]
+        },
+        {
+          "id": "store-persistence-admission",
+          "owners": [
+            "src/raft/raft-rs-durable-store.js",
+            "src/raft/raft-rs-persistence-admission.js",
+            "src/raft/raft-rs-runtime-owner.js"
+          ]
+        }
+      ],
+      "contract": "partition-session-transaction-persistence-admission",
+      "witnessTests": [
+        "test/transaction/session-transaction-isolation.test.js",
+        "test/raft/raft-rs-backend/persistence-admission.test.js"
+      ]
+    },
+    "partition-write-answer-retry-classification": {
+      "description": "The write-answer owners and the consumers that retry or re-send a write must agree on one classification of each answer: its code and its text say the same, but for the unknown outcome, which only a caller carrying its entryId routes again.",
+      "endpoints": [
+        {
+          "id": "write-answer-owners",
+          "owners": [
+            "src/partition/partition-write-kernel.js",
+            "src/constants/errors.js"
+          ]
+        },
+        {
+          "id": "retry-and-reroute-consumers",
+          "owners": [
+            "src/control-plane/control-plane-error-classification.js",
+            "src/cdc/cdc-routed-mutation-readiness.js",
+            "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
+          ]
+        }
+      ],
+      "contract": "partition-write-answer-retry-classification",
+      "witnessTests": [
+        "test/control-plane/control-plane-error-classification.test.js",
+        "test/partition/partition-write-kernel.test.js",
+        "test/partition/partition-write-typed-releases.test.js",
+        "test/query/partition-write-answer-consumers.test.js",
+        "test/query/write-path-internal-pacing.test.js"
       ]
     }
   }

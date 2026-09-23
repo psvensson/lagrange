@@ -29,10 +29,19 @@ const RAFT_RS_PEER_IDENTITY_SQL = Object.freeze({
   `,
 });
 
+// What looking up a raft peer id finds: the replica it was reserved for, or
+// no reservation at all (a peer the committed configuration names that this
+// replica's registry never reserved).
+const RAFT_RS_PEER_IDENTITY_RESOLUTION = Object.freeze({
+  RESERVED: 'reserved',
+  UNRESERVED: 'unreserved',
+});
+
 const RAFT_RS_PEER_IDENTITY_ERROR_MSG = Object.freeze({
   invalidIdentity: (value) =>
     'a Lagrange replica identity must be a non-empty string, got ' +
     `${JSON.stringify(value)}`,
+  unreserved: (raftPeerId) => `unknown raft-rs peer identity ${raftPeerId}`,
   collision: (replicaIdentity, holder, raftPeerId) =>
     `raft peer id ${raftPeerId} is already reserved for ${holder}, so ` +
     `${replicaIdentity} cannot take it. Two logical replicas may never ` +
@@ -41,5 +50,6 @@ const RAFT_RS_PEER_IDENTITY_ERROR_MSG = Object.freeze({
 
 export {
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
+  RAFT_RS_PEER_IDENTITY_RESOLUTION,
   RAFT_RS_PEER_IDENTITY_SQL,
 };

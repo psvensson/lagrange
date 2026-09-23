@@ -87,6 +87,8 @@ import {
 import {resolveSystemTableMutationDeliveryPriority} from '../bootstrap/system-partition-classification.js';
 import {getSystemCachePrimaryKeyFieldOrFallback} from '../cache/system-cache-key-descriptor.js';
 import {isTableInternalCachePropagationEnabled} from '../cache/cdc-table-policy.js';
+import {isReroutableWriteFailureCode} from
+  '../partition/partition-write-kernel.js';
 import {CDCEventHandler} from './cdc-event-handler.js';
 import {
   CDC_CONFIG_KEY,
@@ -412,7 +414,10 @@ function isSystemTableOwnerHandoffFailure(errorLike, fallbackTableName = null) {
     return false;
   }
   const errorCode = getControlPlaneErrorCode(errorLike);
-  if (errorCode === QUERY_ERROR_CODE.ROUTER_CONNECTION_CLOSED) {
+  // A partition write answer the caller holds is routed again by its code;
+  // one that reached it only as text, by the fragments below.
+  if (errorCode === QUERY_ERROR_CODE.ROUTER_CONNECTION_CLOSED ||
+      isReroutableWriteFailureCode(errorLike?.failureCode)) {
     return true;
   }
   const errorMessage = getControlPlaneErrorMessage(errorLike);

@@ -1,5 +1,9 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {
+  isPartitionWriteFailureCode,
+  isReroutableWriteFailureCode,
+} from '../partition/partition-write-kernel.js';
+import {
   PARTITION_TRANSITION_STATE,
 } from '../partition/partition-constants.js';
 import {
@@ -139,11 +143,8 @@ class CDCRoutedMutationReadiness {
       try {
         const localResult = await partitionService.executeQuery(sql, params);
         const result = this.normalizeLocalSystemTableWriteResult(localResult);
-        if (!result || result.success === false) {
-          const message = result?.error || '';
-          if (this.isTransientCdcError(message)) {
-            continue;
-          }
+        if (this.isLocalSystemTableWriteRoutedOn(result)) {
+          continue;
         }
         return {
           handled: true,
@@ -163,6 +164,23 @@ class CDCRoutedMutationReadiness {
     return {
       handled: false,
     };
+  }
+
+  /**
+   * Whether the local partition's answer to a system-table write sends it on
+   * to the next local service: a typed answer only when its code says it may
+   * be sent again without its entryId (never an unknown outcome: it may have
+   * committed here), an untyped one by its text.
+   * @param {Object|null} result - The local partition's answer.
+   * @return {boolean} Whether the write is sent on.
+   */
+  isLocalSystemTableWriteRoutedOn(result) {
+    if (result && result.success !== false) {
+      return false;
+    }
+    return isPartitionWriteFailureCode(result?.failureCode) ?
+      isReroutableWriteFailureCode(result.failureCode) :
+      this.isTransientCdcError(result?.error || '');
   }
 
   validateTableName(tableName) {
@@ -681,9 +699,10 @@ class CDCRoutedMutationReadiness {
       typeof errorLike === 'string' ?
         errorLike :
         errorLike?.message || errorLike?.error || '';
+    // A partition write answer: by the control plane's one classifier (its
+    // code when the caller holds it, else its text).
     return (
       isRetryableControlPlaneError(errorLike) ||
-      message.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
       message.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
       message === ERRORS.QUERY_FAILED ||
       message.includes(QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE) ||

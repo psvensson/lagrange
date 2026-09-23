@@ -49,7 +49,10 @@ const TARGET_THRESHOLD = 12;
 // 2026-09-19: tightened 1817 -> 1816 after the learner promotion's in-flight
 // operation read lost its over-threshold method (spread-cure authorization
 // carrier), measured with the hint.
-const BASELINE_COUNT = 1816;
+// 2026-09-23: tightened 1816 -> 1814 on the checker's hint after the rs-raft
+// single-path cutover removed the write path's direct-execution branch and the
+// runtime owner's status shaping moved beside it.
+const BASELINE_COUNT = 1814;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

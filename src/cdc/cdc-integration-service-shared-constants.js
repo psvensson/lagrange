@@ -1,4 +1,5 @@
 import {ERRORS, NUM, TIME_MS} from '../constants/index.js';
+import {REROUTABLE_WRITE_ERROR_FRAGMENTS} from '../constants/errors.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {QUERY_ERROR_MSG} from '../query/query-constants.js';
 
@@ -41,7 +42,7 @@ const CDC_INTEGRATION_SERVICE_LITERAL = Object.freeze({
 });
 const CDC_OWNER_HANDOFF_ROUTING_ERROR_FRAGMENTS = Object.freeze([
   ERRORS.NO_HANDLER_FOR_ADDRESS,
-  ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+  ...REROUTABLE_WRITE_ERROR_FRAGMENTS,
   QUERY_ERROR_MSG.NO_ACTIVE_SERVICE_FOR_PARTITION,
   QUERY_ERROR_MSG.QUERY_ROUTING_FAILED,
   'No connection to node',

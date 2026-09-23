@@ -1,5 +1,18 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {PARTITION_COMMITTED_COMMAND_OUTCOME} from
+  '../../src/partition/partition-service-constants.js';
+import {readCommittedStatementOutcome} from
+  '../../src/partition/partition-committed-statement-outcome.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
+
+// A committed entry reaches the application through the partition's own
+// port: a lone rs-raft leader commits and applies its proposal before
+// propose() returns, and an application failure is a non-OK outcome.
+async function commitThroughPort(partition, command) {
+  return (await partition.raft.propose(command)).outcome;
+}
 
 test('PartitionService skips replayed committed entries when entryId is stable',
   async (t) => {
@@ -19,8 +32,6 @@ test('PartitionService skips replayed committed entries when entryId is stable',
 
     await partition.initialize();
 
-    partition.db.prepare('INSERT INTO dedupe_table (id) VALUES (?)').run('row-1');
-
     const leaderEntry = {
       entryId: 'entry-1',
       type: 'INSERT',
@@ -30,15 +41,15 @@ test('PartitionService skips replayed committed entries when entryId is stable',
       proposedAt: 1,
       timestamp: '1',
     };
-    partition.trackAppliedEntryKey(partition.getCommittedEntryKey(leaderEntry));
+    t.equal(await commitThroughPort(partition, leaderEntry),
+      RAFT_OPERATION_OUTCOME.CORE_OK, 'the entry commits and applies');
 
-    t.doesNotThrow(() => {
-      partition.applyCommittedEntry({
-        ...leaderEntry,
-        proposedAt: 2,
-        timestamp: '2',
-      });
-    }, 'committed replay should be skipped instead of re-inserting');
+    t.equal(await commitThroughPort(partition, {
+      ...leaderEntry,
+      proposedAt: 2,
+      timestamp: '2',
+    }), RAFT_OPERATION_OUTCOME.CORE_OK,
+    'committed replay should be skipped instead of re-inserting');
 
     const rowCount = partition.db
       .prepare('SELECT COUNT(*) AS count FROM dedupe_table WHERE id = ?')
@@ -89,16 +100,15 @@ test(
     t.type(capturedEntry.entryId, 'string',
       'proposeWrite should stamp a stable entryId');
 
-    partition.applyCommittedEntry(capturedEntry);
+    t.equal(await commitThroughPort(partition, capturedEntry),
+      RAFT_OPERATION_OUTCOME.CORE_OK, 'the captured entry commits');
 
-    await t.resolves(
-      () => Promise.resolve(partition.applyCommittedEntry({
-        ...capturedEntry,
-        proposedAt: Number(capturedEntry.proposedAt || 0) + 1,
-        timestamp: String(Number(capturedEntry.timestamp || 0) + 1),
-      })),
-      'replayed committed entry should dedupe even if metadata drifts',
-    );
+    t.equal(await commitThroughPort(partition, {
+      ...capturedEntry,
+      proposedAt: Number(capturedEntry.proposedAt || 0) + 1,
+      timestamp: String(Number(capturedEntry.timestamp || 0) + 1),
+    }), RAFT_OPERATION_OUTCOME.CORE_OK,
+    'replayed committed entry should dedupe even if metadata drifts');
 
     const rowCount = partition.db
       .prepare('SELECT COUNT(*) AS count FROM dedupe_table WHERE id = ?')
@@ -111,7 +121,7 @@ test(
 );
 
 test(
-  'PartitionService suppresses duplicate-key INSERT failures during committed replay recovery',
+  'PartitionService consumes a duplicate-key INSERT with no applied instance of its entry identity as a failed statement, not a replay',
   async (t) => {
     const partition = new PartitionService({
       partitionId: 'test-partition',
@@ -141,15 +151,20 @@ test(
       timestamp: '3',
     };
 
-    t.doesNotThrow(() => {
-      partition.applyCommittedEntry(replayedEntry);
-    }, 'replayed duplicate INSERT should not crash partition service');
+    t.equal(await commitThroughPort(partition, replayedEntry),
+      RAFT_OPERATION_OUTCOME.CORE_OK,
+      'the failed statement is consumed; the partition keeps serving');
+    t.equal(readCommittedStatementOutcome(partition,
+      partition.getCommittedEntryKey(replayedEntry)).outcome,
+    PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
+    'no applied instance of the entry identity exists, so its outcome is ' +
+    'recorded as a failed statement, not an applied replay');
 
     const rowCount = partition.db
       .prepare('SELECT COUNT(*) AS count FROM dedupe_table WHERE id = ?')
       .get('row-3')
       .count;
-    t.equal(rowCount, 1, 'duplicate replay should preserve single row state');
+    t.equal(rowCount, 1, 'the failed statement preserves single row state');
 
     await partition.shutdown();
   },

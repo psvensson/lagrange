@@ -5,9 +5,44 @@
  * Validates: Requirements 21.6
  */
 
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {PartitionService} from '../../src/partition/partition-service.js';
+
+const TEMP_PREFIX = 'transaction-durability-raft-';
+const DB_FILE = 'partition.sqlite';
+
+// A file-backed partition database, so the durable record can be read on an
+// independent connection (an independent connection to ':memory:' is a
+// different database).
+function fileDbPath() {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
+  return path.join(directory, DB_FILE);
+}
+
+function removeDbPath(dbPath) {
+  fs.rmSync(path.dirname(dbPath), {recursive: true, force: true});
+}
+
+// The consensus log's durable length: the commit index of the partition's
+// rs-raft hard state, read on an independent read-only connection so the
+// answer is the bytes on disk rather than the core's memory.
+function committedLogIndex(partition) {
+  const independent = new Database(partition.dbPath, {readonly: true});
+  try {
+    const row = independent.prepare(
+      'SELECT commit_index FROM _raft_rs_hard_state WHERE group_id = ?')
+      .get(partition.partitionId);
+    return row === undefined ? 0 : Number(row.commit_index);
+  } finally {
+    independent.close();
+  }
+}
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -60,14 +95,14 @@ test('Property 48: Committed transactions are replicated to Raft log', async (t)
               {name: 'value', type: 'TEXT'},
             ],
           },
-          dbPath: ':memory:',
+          dbPath: fileDbPath(),
         });
 
         await partition.initialize();
 
         try {
           // Get initial log length
-          const initialLogLength = partition.storage.getLogLength();
+          const initialLogLength = committedLogIndex(partition);
 
           // Begin transaction
           await partition.beginTransaction();
@@ -88,12 +123,13 @@ test('Property 48: Committed transactions are replicated to Raft log', async (t)
           }
 
           // Verify Raft log has grown (transaction commit entry added)
-          const finalLogLength = partition.storage.getLogLength();
+          const finalLogLength = committedLogIndex(partition);
 
           // Log should have at least one new entry for the transaction commit
           return finalLogLength > initialLogLength;
         } finally {
           await partition.shutdown();
+          removeDbPath(partition.dbPath);
         }
       },
     ),
@@ -103,10 +139,10 @@ test('Property 48: Committed transactions are replicated to Raft log', async (t)
   t.pass('Raft log replication property holds');
 });
 
-test('Property 48: Commit returns Raft log index', async (t) => {
+test('Property 48: Commit is committed through consensus', async (t) => {
   /**
-   * Property: For any committed transaction, the commit result should
-   * include the Raft log index for tracking durability.
+   * Property: For any committed transaction, the commit marker is proposed
+   * through the partition's consensus port and committed.
    */
   await fc.assert(
     fc.asyncProperty(
@@ -124,12 +160,13 @@ test('Property 48: Commit returns Raft log index', async (t) => {
               {name: 'value', type: 'TEXT'},
             ],
           },
-          dbPath: ':memory:',
+          dbPath: fileDbPath(),
         });
 
         await partition.initialize();
 
         try {
+          const committedBefore = committedLogIndex(partition);
           // Begin transaction
           await partition.beginTransaction();
 
@@ -141,19 +178,22 @@ test('Property 48: Commit returns Raft log index', async (t) => {
           // Commit transaction
           const commitResult = await partition.commitTransaction();
 
-          // Verify commit was successful and has raft log index
+          // The commit marker is one proposal through consensus; a proposal
+          // has no log index until it commits, so the result carries none.
           return commitResult.success === true &&
                  commitResult.committed === true &&
-                 commitResult.raftLogIndex !== undefined;
+                 !Object.hasOwn(commitResult, 'raftLogIndex') &&
+                 committedLogIndex(partition) === committedBefore + 1;
         } finally {
           await partition.shutdown();
+          removeDbPath(partition.dbPath);
         }
       },
     ),
     {numRuns: 10},
   );
 
-  t.pass('Raft log index in commit result property holds');
+  t.pass('Commit through consensus property holds');
 });
 
 test('Property 48: Data persists after commit', async (t) => {
@@ -177,7 +217,7 @@ test('Property 48: Data persists after commit', async (t) => {
               {name: 'value', type: 'TEXT'},
             ],
           },
-          dbPath: ':memory:',
+          dbPath: fileDbPath(),
         });
 
         await partition.initialize();
@@ -202,6 +242,7 @@ test('Property 48: Data persists after commit', async (t) => {
           return result.rows.length === 1 && result.rows[0].value === value;
         } finally {
           await partition.shutdown();
+          removeDbPath(partition.dbPath);
         }
       },
     ),
@@ -231,14 +272,14 @@ test('Property 48: Rolled back transactions are not in Raft log', async (t) => {
               {name: 'value', type: 'TEXT'},
             ],
           },
-          dbPath: ':memory:',
+          dbPath: fileDbPath(),
         });
 
         await partition.initialize();
 
         try {
           // Get initial log length
-          const initialLogLength = partition.storage.getLogLength();
+          const initialLogLength = committedLogIndex(partition);
 
           // Begin transaction
           await partition.beginTransaction();
@@ -255,7 +296,7 @@ test('Property 48: Rolled back transactions are not in Raft log', async (t) => {
 
           // Rollback may append control entries, but it must not
           // make uncommitted row writes visible.
-          const finalLogLength = partition.storage.getLogLength();
+          const finalLogLength = committedLogIndex(partition);
           let rolledBackRowsVisible = false;
           for (const op of ops) {
             const readResult = await partition.executeQuery(
@@ -267,10 +308,14 @@ test('Property 48: Rolled back transactions are not in Raft log', async (t) => {
             }
           }
 
+          // The durable record holds everything the core committed: a
+          // session's rollback never erases consensus rows.
           return rolledBackRowsVisible === false &&
-            finalLogLength >= initialLogLength;
+            finalLogLength >= initialLogLength &&
+            finalLogLength === partition.raft.readStatus().commitIndex;
         } finally {
           await partition.shutdown();
+          removeDbPath(partition.dbPath);
         }
       },
     ),
@@ -300,13 +345,13 @@ test('Property 48: Multiple commits create multiple Raft entries', async (t) => 
               {name: 'value', type: 'TEXT'},
             ],
           },
-          dbPath: ':memory:',
+          dbPath: fileDbPath(),
         });
 
         await partition.initialize();
 
         try {
-          const initialLogLength = partition.storage.getLogLength();
+          const initialLogLength = committedLogIndex(partition);
 
           // Execute multiple transactions
           for (let i = 0; i < numTransactions; i++) {
@@ -317,12 +362,13 @@ test('Property 48: Multiple commits create multiple Raft entries', async (t) => 
             await partition.commitTransaction();
           }
 
-          const finalLogLength = partition.storage.getLogLength();
+          const finalLogLength = committedLogIndex(partition);
 
           // Each transaction should add at least one entry
           return finalLogLength >= initialLogLength + numTransactions;
         } finally {
           await partition.shutdown();
+          removeDbPath(partition.dbPath);
         }
       },
     ),

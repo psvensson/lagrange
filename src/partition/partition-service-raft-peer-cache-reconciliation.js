@@ -1,10 +1,19 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
+  RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
 } from '../raft/raft-operation-port-constants.js';
-import {reservePartitionRaftPeerIdentity} from
-  './partition-service-raft-membership-administration.js';
+import {
+  admitPartitionRaftPeer,
+  reservePartitionRaftPeerIdentity,
+} from './partition-service-raft-membership-administration.js';
+
+// The admission outcomes that leave a peer outside the configuration.
+const UNADMITTED_PEER_OUTCOMES = Object.freeze(new Set([
+  RAFT_MEMBERSHIP_ADMISSION_OUTCOME.REFUSED,
+  RAFT_MEMBERSHIP_ADMISSION_OUTCOME.DEFERRED,
+]));
 
 const {
   AddressManager,
@@ -272,12 +281,15 @@ function reconcileExpectedRaftPeer({
       RAFT_MEMBERSHIP_RESERVATION_OUTCOME.NOT_MANAGED) {
     return;
   }
-  partitionService.raft.proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
-    peerAddress: expectedAddress,
+  const admission = admitPartitionRaftPeer(partitionService, {
     replicaIdentity: replicaId,
+    peerAddress: expectedAddress,
   });
-  currentAddresses.add(expectedAddress);
+  // A refused or deferred admission left the peer outside the
+  // configuration: this pass does not count its address as current.
+  if (!UNADMITTED_PEER_OUTCOMES.has(admission.outcome)) {
+    currentAddresses.add(expectedAddress);
+  }
 }
 
 function reconcileRaftPeersFromCacheForService(partitionService) {

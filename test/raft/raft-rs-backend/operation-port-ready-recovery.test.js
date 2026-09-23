@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {TextEncoder} from 'node:util';
 
 import Database from 'better-sqlite3';
 
@@ -8,9 +7,10 @@ import {RaftRsDurableStore} from
   '../../../src/raft/raft-rs-durable-store.js';
 import {applyCommittedEntryTransaction} from
   '../../../src/raft/raft-rs-application-transaction-owner.js';
+import {RAFT_RS_ENTRY_TYPE} from
+  '../../../src/raft/raft-rs-ready-loop-constants.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 
-const TEXT = new TextEncoder();
 const HOST_FAILURE = 'HOST_FAILURE';
 const CORE_FATAL = 'CORE_FATAL';
 const CORE_OK = 'CORE_OK';
@@ -19,16 +19,6 @@ function elect(cluster) {
   assert.equal(cluster.settle(() => cluster.leaderReplicaId() !== null), true,
     'the real group elects before its host is faulted');
   return cluster.leaderReplicaId();
-}
-
-async function tickUntilHostFailure(cluster, replicaId, attempts = 12) {
-  for (let index = 0; index < attempts; index += 1) {
-    const result = await cluster.tick(replicaId);
-    if (result?.outcome === HOST_FAILURE) {
-      return result;
-    }
-  }
-  return null;
 }
 
 function lifecycleState(replica) {
@@ -111,11 +101,16 @@ test('Ready snapshot entries and hard state share one SQLite commit point',
     }
   });
 
-test('every Ready host failure reconstructs the group before another core operation',
+// Epic finding F15: a failed delivery to one peer - its address cannot be
+// resolved, the send throws, or no handler takes it - is that peer's
+// transport outcome, never a host failure of the group. The Ready keeps its
+// persistence and application, the leader keeps its role, and the shared
+// runtime is not reconstructed.
+test('every Ready delivery failure is a per-peer outcome and never reconstructs the group',
   async () => {
     const transportFault = {phase: null, armed: false};
     const cluster = new PartitionNodeCluster({
-      partitionId: 'ready-host-failure-reconstruction',
+      partitionId: 'ready-delivery-failure-per-peer',
       replicaIds: ['ready-a', 'ready-b', 'ready-c'],
       resolveFor: (_from, to) => {
         if (transportFault.armed && transportFault.phase ===
@@ -139,29 +134,34 @@ test('every Ready host failure reconstructs the group before another core operat
       },
     });
     try {
-      let leader = elect(cluster);
+      const leader = elect(cluster);
       for (const phase of [
         'send', 'send-no-handler', 'address-resolution',
       ]) {
-        const identityBefore = cluster.raftPeerIdOf(leader);
-        const generationBefore = cluster.node(leader).readStatus()
-          .runtimeGeneration;
+        const before = cluster.node(leader).readStatus();
         transportFault.phase = phase;
         transportFault.armed = true;
-        await cluster.propose(leader, TEXT.encode(`force-${phase}-delivery`));
-        const failed = await tickUntilHostFailure(cluster, leader);
-        assert.equal(failed?.outcome, HOST_FAILURE, `${phase} is a host result`);
-        assert.equal(failed.phase, phase);
-        assert.equal(failed.recoveryRequired, true);
+        const outcomes = [await cluster.propose(leader,
+          `force-${phase}-delivery`)];
+        for (let index = 0; index < 12 && transportFault.armed; index += 1) {
+          outcomes.push(await cluster.tick(leader));
+        }
+        assert.equal(transportFault.armed, false,
+          `the ${phase} fault was reached by a real Ready delivery`);
+        assert.deepEqual(outcomes.filter((result) =>
+          result?.outcome === HOST_FAILURE), [],
+        `${phase} is never a host result of the group`);
         assert.equal(lifecycleState(cluster.replica(leader)), 'active');
-        const recovered = await cluster.node(leader).readStatus();
-        assert.equal(recovered.outcome, CORE_OK);
-        assert.ok(recovered.runtimeGeneration > generationBefore,
-          `${phase} replaces the generation before the next core operation`);
-        assert.equal(recovered.peerId, identityBefore);
-        assert.equal(recovered.runtimeHealth, 'healthy');
-        assert.equal(recovered.groupHealth, 'usable');
-        leader = elect(cluster);
+        const after = await cluster.node(leader).readStatus();
+        assert.equal(after.outcome, CORE_OK);
+        assert.equal(after.runtimeGeneration, before.runtimeGeneration,
+          `${phase} never replaces the runtime generation`);
+        assert.equal(after.role, 'leader', `${phase} keeps the leader`);
+        assert.equal(after.runtimeHealth, 'healthy');
+        assert.equal(after.groupHealth, 'usable');
+        assert.ok(after.peers.some((peer) =>
+          peer.delivery.outcome === 'failed' && peer.delivery.phase === phase),
+        `the failed peer carries the ${phase} delivery outcome`);
       }
     } finally {
       cluster.dispose();
@@ -184,6 +184,7 @@ test('application effects and durable applied progress commit atomically',
         groupId: 'atomic-application',
         entry: {
           index: '1',
+          entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
           data: Buffer.from('application-effect').toString('base64'),
         },
         confState: {
@@ -222,7 +223,7 @@ test('application effects and durable applied progress commit atomically',
         .readStatus().runtimeGeneration;
       applicationFault.armed = true;
       const failed = await cluster.propose(
-        'application-replica', TEXT.encode('apply-exactly-once'));
+        'application-replica', 'apply-exactly-once');
       assert.equal(failed.outcome, HOST_FAILURE);
       assert.equal(failed.phase, 'application');
       assert.equal(replica.appliedCommands.length, 0,
@@ -236,8 +237,11 @@ test('application effects and durable applied progress commit atomically',
       assert.ok(BigInt(appliedIndex(replica)) > BigInt(beforeApplied));
       const generationAfter = cluster.node('application-replica')
         .readStatus().runtimeGeneration;
-      assert.ok(generationAfter > generationBefore,
-        'replay occurs in a reconstructed execution generation');
+      // An application failure is a host failure of this group: the group
+      // is reconstructed alone, in the current core (only a core failure
+      // replaces the shared runtime).
+      assert.equal(generationAfter, generationBefore,
+        'replay occurs in the group reconstructed in the current core');
       assert.equal(lifecycleState(replica), 'active');
     } finally {
       cluster.dispose();
@@ -266,7 +270,7 @@ test('runtime replacement cannot re-enter a Ready generation suspended in host d
       const victim = ['epoch-a', 'epoch-b', 'epoch-c']
         .find((replicaId) => replicaId !== leader);
       const leaderPeerId = cluster.raftPeerIdOf(leader);
-      await cluster.propose(leader, TEXT.encode('suspend-ready'));
+      await cluster.propose(leader, 'suspend-ready');
       suspendDelivery = true;
       let pendingReady = null;
       for (let index = 0; index < 12 && releaseDelivery === null; index += 1) {
@@ -336,7 +340,8 @@ test('runtime traps and temporary host unavailability preserve logical identity'
       assert.equal(afterStorage.peerId, initial.peerId);
       assert.equal(afterStorage.replicaIdentity, initial.replicaIdentity);
       assert.equal(afterStorage.runtimeHealth, 'healthy');
-      assert.ok(afterStorage.runtimeGeneration > initial.runtimeGeneration);
+      assert.equal(afterStorage.runtimeGeneration, initial.runtimeGeneration,
+        'a storage failure reconstructs the group in the current core');
     } finally {
       cluster.dispose();
     }
@@ -384,7 +389,11 @@ test('runtime traps and temporary host unavailability preserve logical identity'
     }
   });
 
-test('closing a recovery-required group never enters its stale RawNode',
+// A group whose host failed keeps its node in the current core (only a core
+// failure discards the core), so closing it frees that node once: the node's
+// lifetime ends with its group (R13). Freeing drops the node with whatever
+// Ready it held; nothing else of the node is entered.
+test('closing a recovery-required group frees its node exactly once',
   async () => {
     const databaseFault = {failNextTransaction: false};
     const cluster = new PartitionNodeCluster({
@@ -402,9 +411,11 @@ test('closing a recovery-required group never enters its stale RawNode',
       const entriesBeforeClose = cluster.coreEntryCount();
       const closed = port.close();
       assert.equal(closed.outcome, CORE_OK);
-      assert.equal(closed.reason, 'closed-without-core-entry');
-      assert.equal(cluster.coreEntryCount(), entriesBeforeClose,
-        'close quarantines rather than frees the unadvanced RawNode');
+      assert.equal(closed.reason, 'closed',
+        'closing the failed group frees its node');
+      assert.equal(cluster.coreEntryCount(), entriesBeforeClose + 1,
+        'close frees the failed group\'s node (one core entry) and ' +
+        'enters nothing else');
     } finally {
       cluster.dispose();
     }

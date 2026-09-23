@@ -30,7 +30,7 @@ function buildService() {
     normalizeLeaderReplicaId(value) {
       return value;
     },
-    clearPendingCommittedWrites() {},
+    releasePendingCommittedWrites() {},
     cancelLeaderOwnedActivation() {},
     updateRebalancerLeadership() {},
     scheduleLeaderOwnedActivation() {},

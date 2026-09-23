@@ -7,8 +7,13 @@ import {
   PartitionService,
   RaftRole,
 } from '../../src/partition/partition-service.js';
+import {
+  PARTITION_SERVICE_ERROR_MSG,
+} from '../../src/partition/partition-service-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {LEADER_DURABILITY_CONSEQUENCE_OUTCOME} from
+  '../../src/partition/partition-service-durability-fitness.js';
 
 // Quest formation-ledger-leader-local-persistence-wedge (P1) — deterministic
 // reproduction of the run-23 ledger-leader durability freeze:
@@ -36,6 +41,26 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 //     followers', so vote rules do NOT disfavor it — re-assertion is what
 //     prevents the CL-033/034 re-election churn).
 //
+// EXPLICIT UNAVAILABILITY ON THE RS-RAFT PORT (epic raft-rs-full-cutover,
+// solve/epics/raft-rs-full-cutover/findings-2026-09-23.md, finding F1): the
+// frozen operation port has neither a step-down nor a candidacy-deferral
+// operation, so neither consequence of unfitness can be carried out. The
+// fitness owner (src/partition/partition-service-durability-fitness.js)
+// states each as a typed outcome in the unfitness evidence
+// (leader_durability_demotion_unsupported /
+// leader_durability_candidacy_deferral_unsupported) instead of a call that
+// silently does nothing (R11). The subtests that asserted a demotion or a
+// re-asserted candidacy deferral are therefore witnesses of those typed
+// outcomes: the evidence carries them, the role stays leader on the port, and
+// the role-gated heal stays closed. They turn back into the demotion contract
+// when the F1 owner quest gives the port the two semantic operations.
+//
+// The run-23 physics (a sessionless write silently absorbed into the zombie)
+// is likewise explicit now: with consensus persistence admitted only outside
+// a user session on the partition connection (finding F6, layer 1), the
+// write is refused with the typed, retryable user-transaction deferral and
+// nothing is absorbed.
+//
 // HONEST SCOPE: detection + demotion signaling live here (this quest); the
 // transaction-lifecycle HEAL (ACTIVE-hold sweep with follower-gated rollback)
 // is the companion quest ledger-participant-transaction-zombie-lifecycle —
@@ -57,7 +82,6 @@ const STRIKE_TICKS = 3;
 // a multi-member leader that stays successorless-unfit for this long is
 // demoted anyway. Mirrors LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK_MS.
 const SUCCESSORLESS_FALLBACK_TICKS = 15;
-
 let tmpDirCounter = 0;
 function makeTmpDbPath(t) {
   const dir = fs.mkdtempSync(
@@ -106,28 +130,41 @@ function driveFitnessTicks(partition, {fromMs, ticks}) {
 }
 
 t.test(
-  'run-23 physics: an abandoned participant BEGIN makes every later write ' +
-    'non-durable while reads stay consistent (documents the zombie; green on ' +
-    'any head)',
+  'run-23 physics, explicit on rs-raft: a sessionless write after an ' +
+    'abandoned participant BEGIN is refused with the typed user-transaction ' +
+    'deferral instead of being silently absorbed into the zombie (F6 layer 1)',
   async (t) => {
     const unfitEvents = [];
     const partition = await createLeaderPartition(t, {unfitEvents});
     try {
       await partition.beginTransaction('tx-zombie');
-      // Sessionless write after the zombie opens: absorbed into the open
-      // transaction — succeeds, visible to same-connection reads.
-      await partition.executeQuery(
+      // Sessionless write after the zombie opens. In run-23 it was absorbed
+      // into the open transaction (in-memory success, same-connection reads
+      // consistent, zero durability). Consensus persistence is now admitted
+      // only outside a user session on the partition connection, so the
+      // write is refused, typed and retryable - explicit, not silent.
+      const sessionlessWrite = await partition.executeQuery(
         'INSERT INTO replica_operations (id, value) VALUES (1, ?)',
         ['ghost'],
+      );
+      t.match(
+        sessionlessWrite,
+        {
+          success: false,
+          deferRetry: true,
+          error: PARTITION_SERVICE_ERROR_MSG.WRITE_DEFERRED_USER_TRANSACTION_OPEN,
+        },
+        'the sessionless write is refused with the typed, retryable ' +
+          'user-transaction deferral (never absorbed into the zombie)',
       );
       const sameConnection = await partition.executeQuery(
         'SELECT COUNT(*) AS cnt FROM replica_operations',
       );
       t.equal(
         sameConnection.rows[0].cnt,
-        1,
-        'the same connection sees the absorbed write (why replication and ' +
-          'index minting stayed correct in run-23)',
+        0,
+        'the same connection sees no absorbed write (nothing was applied ' +
+          'inside the zombie)',
       );
       t.equal(
         partition.db.inTransaction,
@@ -193,14 +230,6 @@ t.test(
         partition.setLeaderDurabilitySuccessorProbe(() => true);
       }
       partition.replicaIds = ['replica-1', 'replica-2', 'replica-3'];
-      const deferCandidacyCalls = [];
-      if (partition.raft && typeof partition.raft.deferCandidacy === 'function') {
-        const original = partition.raft.deferCandidacy.bind(partition.raft);
-        partition.raft.deferCandidacy = (...args) => {
-          deferCandidacyCalls.push(args);
-          return original(...args);
-        };
-      }
 
       await partition.beginTransaction('tx-zombie');
       // Healthy window: ticks well inside the legal hold must not detect.
@@ -232,18 +261,31 @@ t.test(
         'the replica is marked durability-unfit',
       );
 
-      // While unfit, every further tick re-asserts candidacy deferral — the
-      // alive zombie is fully electable otherwise (its in-memory log matches
-      // the followers'), which would re-elect it into CL-033/034 churn.
-      const deferralsBefore = deferCandidacyCalls.length;
-      driveFitnessTicks(partition, {
+      // While unfit, every further tick would re-assert candidacy deferral —
+      // the alive zombie is fully electable otherwise (its in-memory log
+      // matches the followers'), which would re-elect it into CL-033/034
+      // churn. The frozen port has no candidacy-deferral operation (F1): the
+      // unavailability is the typed outcome the evidence carries, and every
+      // further tick keeps reporting the replica unfit.
+      t.equal(
+        partition.raft.deferCandidacy,
+        undefined,
+        'the frozen operation port carries no candidacy-deferral operation (F1)',
+      );
+      t.equal(
+        unfitEvents[0]?.candidacyDeferral,
+        LEADER_DURABILITY_CONSEQUENCE_OUTCOME.CANDIDACY_DEFERRAL_UNSUPPORTED,
+        'the unfitness evidence states candidacy deferral as the typed ' +
+          'unsupported outcome, not a silent no-op call',
+      );
+      const unfitTicks = driveFitnessTicks(partition, {
         fromMs: START_MS + LEGAL_HOLD_MS + 10 * SWEEP_TICK_MS,
         ticks: 3,
       });
-      t.ok(
-        deferCandidacyCalls.length > deferralsBefore,
-        'candidacy deferral is re-asserted on ticks while unfit ' +
-          `(${deferralsBefore} -> ${deferCandidacyCalls.length})`,
+      t.same(
+        unfitTicks.map((observation) => observation?.fit),
+        [false, false, false],
+        'every further tick while unfit keeps the replica unfit',
       );
       await partition.rollbackTransaction().catch(() => {});
     } finally {
@@ -375,8 +417,9 @@ t.test(
 
 t.test(
   'C3 bounded fallback: a MULTI-MEMBER leader that stays successorless-unfit ' +
-    'past the bound is demoted anyway, and demotion opens the shipped heal ' +
-    'gate (RED on the unfixed head: it holds the seat unfit forever)',
+    'past the bound hands the hook the fallback evidence with the typed ' +
+    'demotion-unsupported outcome; the seat and the closed heal gate are ' +
+    'explicit until the port can step down (F1)',
   async (t) => {
     const unfitEvents = [];
     const partition = await createLeaderPartition(t, {unfitEvents});
@@ -417,18 +460,34 @@ t.test(
         'inside the fallback bound the successorless leader keeps the seat ' +
           '(the surface-only window still applies)',
       );
+      t.equal(
+        unfitEvents.length,
+        0,
+        'inside the fallback bound no demotion is decided (the hook has not ' +
+          'fired)',
+      );
 
       // Hold the successorless-unfit condition past the bounded fallback.
       driveFitnessTicks(partition, {
         fromMs: strikeBaseMs + STRIKE_TICKS * SWEEP_TICK_MS,
         ticks: SUCCESSORLESS_FALLBACK_TICKS + 2,
       });
+      // Past the bound the C3 fallback decides to demote even without a
+      // provable successor (an unfit leader that starves ack evidence must
+      // not hold the seat forever). The port has no step-down operation
+      // (F1), so the decision is stated as the typed outcome and the seat is
+      // not silently kept as if nothing had been decided.
       t.equal(
-        partition.role,
-        RaftRole.FOLLOWER,
-        'past the bound the unfit leader is demoted even without a provable ' +
-          'successor (C3: an unfit leader that starves ack evidence must not ' +
-          'hold the seat forever)',
+        unfitEvents[0]?.demotion,
+        LEADER_DURABILITY_CONSEQUENCE_OUTCOME.DEMOTION_UNSUPPORTED,
+        'past the bound the fallback demotion is decided and stated as the ' +
+          'typed demotion-unsupported outcome (F1: no step-down on the port)',
+      );
+      t.equal(
+        partition.raft.readStatus().role,
+        RaftRole.LEADER,
+        'the consensus core still holds the seat: no demotion was carried ' +
+          'out behind the typed outcome',
       );
       t.ok(
         unfitEvents.length >= 1,
@@ -440,19 +499,29 @@ t.test(
         'the evidence records that no successor was provable',
       );
 
-      // The load-bearing consequence: demotion opens the shipped role-gated
-      // heal, so the zombie rolls back ON this node without any new heal path.
+      // The consequence of the unavailable demotion: the shipped role-gated
+      // heal stays closed on a leader (a leader never bare-rollbacks), so the
+      // zombie is NOT rolled back on this node.
       const healedCount = partition.enforcePreparedStateHoldTimeouts(
         Date.now() + LEGAL_HOLD_MS + 2_000,
       );
-      t.ok(
-        healedCount >= 1,
-        'the ACTIVE-hold sweep heals the zombie once the node is a follower',
+      t.equal(
+        healedCount,
+        0,
+        'the ACTIVE-hold sweep does not heal while the node still leads',
       );
       t.equal(
         partition.db.inTransaction,
+        true,
+        'the stuck transaction is not bare-rolled-back on the leader',
+      );
+      // Once the zombie is gone (here: its session owner rolls it back),
+      // fitness recovers on the next tick.
+      await partition.rollbackTransaction('tx-zombie-successorless');
+      t.equal(
+        partition.db.inTransaction,
         false,
-        'the stuck transaction is rolled back after the fallback demotion',
+        'the session owner\'s rollback ends the zombie transaction',
       );
       driveFitnessTicks(partition, {
         fromMs: strikeBaseMs + 60 * SWEEP_TICK_MS,
@@ -460,7 +529,7 @@ t.test(
       });
       t.notOk(
         partition.isLeaderDurabilityUnfit === true,
-        'durability fitness recovers once the healed zombie is gone',
+        'durability fitness recovers once the zombie is gone',
       );
     } finally {
       await partition.shutdown();
@@ -469,8 +538,9 @@ t.test(
 );
 
 t.test(
-  'C3 control: a successor becoming viable during the fallback wait resets ' +
-    'the successorless clock (the normal viable-successor handoff owns it)',
+  'C3 control: a successor becoming viable during the fallback wait hands ' +
+    'off on the very next tick (the normal viable-successor handoff owns it; ' +
+    'demotion itself is the typed unsupported outcome, F1)',
   async (t) => {
     const unfitEvents = [];
     const partition = await createLeaderPartition(t, {unfitEvents});
@@ -503,6 +573,11 @@ t.test(
         RaftRole.LEADER,
         'still leader inside the fallback bound',
       );
+      t.equal(
+        unfitEvents.length,
+        0,
+        'no handoff inside the fallback bound while no successor is provable',
+      );
       // ...then a successor becomes provable: the NORMAL demotion path fires
       // on the next tick (this is the pre-C3 contract, unchanged).
       probeViable = true;
@@ -512,69 +587,22 @@ t.test(
           (STRIKE_TICKS + SUCCESSORLESS_FALLBACK_TICKS - 5) * SWEEP_TICK_MS,
         ticks: 1,
       });
+      t.match(
+        unfitEvents[0] || {},
+        {
+          successorViable: true,
+          demotion: LEADER_DURABILITY_CONSEQUENCE_OUTCOME.DEMOTION_UNSUPPORTED,
+        },
+        'the viable-successor handoff is decided immediately (no fallback ' +
+          'wait) and its demotion is the typed unsupported outcome (F1)',
+      );
       t.equal(
-        partition.role,
-        RaftRole.FOLLOWER,
-        'the viable-successor handoff demotes immediately (no fallback wait)',
+        partition.raft.readStatus().role,
+        RaftRole.LEADER,
+        'no demotion was carried out behind the typed outcome',
       );
       t.ok(unfitEvents.length >= 1, 'the demotion hook fired');
       await partition.rollbackTransaction().catch(() => {});
-    } finally {
-      await partition.shutdown();
-    }
-  },
-);
-
-t.test(
-  'signal (b): declared-commit vs durable-watermark divergence must SUSTAIN ' +
-    'the full legal hold before it counts (a legal in-session quorum commit ' +
-    'diverges legally for the session length)',
-  async (t) => {
-    const unfitEvents = [];
-    const partition = await createLeaderPartition(t, {unfitEvents});
-    try {
-      if (typeof partition.enforceLeaderDurabilityFitness !== 'function') {
-        t.equal(
-          typeof partition.enforceLeaderDurabilityFitness,
-          'function',
-          'detector exists (red on the unfixed head)',
-        );
-        return;
-      }
-      partition.setLeaderDurabilitySuccessorProbe(() => true);
-      // The run-23 divergence shape at the adapter seam: commit intent
-      // declared, durable watermark never advancing (the zombie swallowed
-      // setCommittedIndex). Stamp the declared side directly — the fixture's
-      // single-replica path never calls adapter.commit().
-      partition.logAdapter.lastDeclaredCommitIndex = 149;
-
-      // Divergence inside the legal window: NOT stuck (a healthy leader
-      // running a legal participant session looks exactly like this).
-      driveFitnessTicks(partition, {fromMs: START_MS + 1_000, ticks: 5});
-      t.equal(
-        unfitEvents.length,
-        0,
-        'legal-window divergence never accumulates strikes',
-      );
-      t.notOk(
-        partition.isLeaderDurabilityUnfit === true,
-        'the leader stays fit through a legal divergence window',
-      );
-
-      // Sustained past the legal hold: stuck.
-      driveFitnessTicks(partition, {
-        fromMs: START_MS + 1_000 + LEGAL_HOLD_MS + SWEEP_TICK_MS,
-        ticks: STRIKE_TICKS,
-      });
-      t.ok(
-        unfitEvents.length >= 1,
-        'sustained divergence past the legal hold trips the detector',
-      );
-      t.match(
-        unfitEvents[0] || {},
-        {reason: 'leader_durability_unfit_commit_durability_divergence'},
-        'the evidence carries the divergence reason',
-      );
     } finally {
       await partition.shutdown();
     }

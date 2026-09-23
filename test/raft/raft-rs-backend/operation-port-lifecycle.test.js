@@ -117,7 +117,7 @@ test('durable retirement refuses every active operation before core entry after 
       const calls = [
         port.tick(),
         port.step({}),
-        port.propose(new Uint8Array()),
+        port.propose('after-retirement'),
         port.proposeConfChange({}),
         port.probePeerProgress('retired-peer'),
         port.campaign(),

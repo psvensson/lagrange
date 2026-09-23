@@ -43,9 +43,11 @@ import {
 // event-loop stalls and 5 s transport timeouts, each proof retry a 1 s
 // timer + the round trip.
 //
-// REAL owners: a live PartitionService leader and learner on the loopback
-// transport with split system-table caches (the seed and the target hydrate
-// independently). Injected environment, all on the scenario clock:
+// REAL owners: a live PartitionService leader, three live followers and the
+// learner on the loopback transport (every voter the leader's configuration
+// names is a live replica the leader admitted), with split system-table
+// caches (the seed and the target hydrate independently). Injected
+// environment, all on the scenario clock:
 //   - the learner's SERVICES row is WITHHELD from the leader cache (the
 //     target's deferred status write) and lands on its own only at
 //     ROW_WITHHOLD_S — or earlier when the learner re-asserts it through
@@ -59,7 +61,7 @@ import {
 //     messageTimeoutMs (the router default MESSAGE_TIMEOUT_MS on the
 //     scenario clock) when no bound is given.
 //
-// SCENARIO CLOCK: liferaft's heartbeat/election timers are wall-clock, so
+// SCENARIO CLOCK: rs-raft's heartbeat/election timers are wall-clock, so
 // the drive runs on a scaled real clock: one scenario second is the
 // learner's proof retry interval in real milliseconds (VIRTUAL_SECOND_MS).
 // Every injected delay and every bound is a multiple of that interval;
@@ -71,8 +73,8 @@ import {
 // learner-promotion-proof-channel-witness-determinism): the durable landing
 // of the learner's services row is an explicit fixture schedule, never a
 // wall-clock race. The leader cache gains the row first (INSERT; the leader
-// joins the learner as a raft peer and replicates the committed prefix on
-// liferaft's wall-clock heartbeat), the fixture then waits until the leader
+// admits the learner as a raft peer and replicates the committed prefix on
+// rs-raft's wall-clock heartbeat), the fixture then waits until the leader
 // has PROVEN that replication (its own learnerMatchIndex observable at the
 // committed prefix — the proof's input, never elapsed time), and only then
 // does the target's own cache see its local-only seed row converge
@@ -859,10 +861,7 @@ test(
       // no proof is ever requested: the wake state has no request to
       // anchor on and must track the observed epoch itself.
       for (const [replicaId, nodeId] of SURPLUS_VOTERS) {
-        insertServiceRow(fixture.leaderCache, replicaId, nodeId,
-          RaftRole.FOLLOWER);
-        insertServiceRow(fixture.learnerCache, replicaId, nodeId,
-          RaftRole.FOLLOWER);
+        await fixture.admitSurplusVoter(replicaId, nodeId);
       }
       const capSeen = await waitFor(
         () => learnerDeferrals(fixture.learnerLog).some(
@@ -986,14 +985,12 @@ test(
       assert.ok(deferrals.length > 0, 'the retries were refused');
       assert.ok(deferrals.every((d) => d.proofReason === PROGRESS_BEHIND),
         'every refusal while lagging is typed progress_behind');
-      // Surplus ACTIVE voters (target 5, 6 active) in both caches — the
-      // quorum-shape gates read the learner's own cache — then heal
-      // replication so the progress proof WOULD grant.
+      // Surplus ACTIVE voters (target 5, 6 active), live and admitted by
+      // the leader, their rows in both caches — the quorum-shape gates read
+      // the learner's own cache — then heal replication so the progress
+      // proof WOULD grant.
       for (const [replicaId, nodeId] of SURPLUS_VOTERS) {
-        insertServiceRow(fixture.leaderCache, replicaId, nodeId,
-          RaftRole.FOLLOWER);
-        insertServiceRow(fixture.learnerCache, replicaId, nodeId,
-          RaftRole.FOLLOWER);
+        await fixture.admitSurplusVoter(replicaId, nodeId);
       }
       fixture.leaderTransport.state.dropToLearner = false;
       const capSeen = await waitFor(

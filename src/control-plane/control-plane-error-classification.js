@@ -1,14 +1,17 @@
 import {
   NUM,
 } from '../constants/index.js';
+import {isRetryableWriteError} from '../constants/errors.js';
 import {
   PRESSURE_GOVERNOR_ERROR_CODE,
 } from './pressure-governor.js';
 import {ROUTER_ERROR_MSG} from '../constants/transport.js';
+import {
+  isPartitionWriteFailureCode,
+  isRetryableWriteFailureCode,
+} from '../partition/partition-write-kernel.js';
 
 
-const RETRYABLE_RAFT_WRITE_COMMIT_TIMEOUT_FRAGMENT =
-  'Raft write commit timed out';
 const numberIsSafeInteger = Number.isSafeInteger;
 
 const RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
@@ -26,7 +29,6 @@ const RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
   ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT,
   'Transaction already active on this partition',
   'No active transaction to commit',
-  RETRYABLE_RAFT_WRITE_COMMIT_TIMEOUT_FRAGMENT,
 ]);
 
 const CONTROL_PLANE_FAILURE_REASON = Object.freeze({
@@ -225,29 +227,33 @@ function getControlPlaneRetryAfterMs(value) {
   return retryAfterMs;
 }
 
+// Whether one candidate is retryable by its own text or markers. A partition
+// write answer is classified by its one owner: by the write kernel's code
+// when it carries one (the code decides, whatever its text), by the errors
+// owner's texts when only the text reached here; the fragments above are for
+// the failures that are not partition write answers.
+function isRetryableControlPlaneCandidate(candidate) {
+  if (candidate?.deferRetry === true ||
+      getDirectControlPlaneErrorCode(candidate) ===
+        PRESSURE_GOVERNOR_ERROR_CODE.CONTROL_PLANE_PRESSURE_DEGRADED ||
+      getDirectControlPlaneRetryAfterMs(candidate) > 0) {
+    return true;
+  }
+  if (isPartitionWriteFailureCode(candidate?.failureCode)) {
+    return isRetryableWriteFailureCode(candidate.failureCode);
+  }
+  const message = getDirectControlPlaneErrorMessage(candidate);
+  return isRetryableWriteError(message) ||
+    RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS.some((fragment) =>
+      message.includes(fragment));
+}
+
 function isRetryableControlPlaneError(value) {
   if (!value) {
     return false;
   }
-  for (const candidate of collectLinkedControlPlaneFailures(value)) {
-    if (candidate?.deferRetry === true) {
-      return true;
-    }
-    if (getDirectControlPlaneErrorCode(candidate) ===
-        PRESSURE_GOVERNOR_ERROR_CODE.CONTROL_PLANE_PRESSURE_DEGRADED) {
-      return true;
-    }
-    if (getDirectControlPlaneRetryAfterMs(candidate) > 0) {
-      return true;
-    }
-    const message = getDirectControlPlaneErrorMessage(candidate);
-    if (RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS.some((fragment) =>
-      message.includes(fragment),
-    )) {
-      return true;
-    }
-  }
-  return false;
+  return collectLinkedControlPlaneFailures(value).some(
+    isRetryableControlPlaneCandidate);
 }
 
 function resolveControlPlanePrimaryFailureReason(summary) {

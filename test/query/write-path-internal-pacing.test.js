@@ -1,6 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -14,8 +13,9 @@ import {
   createMockMessageRouter,
   createMockSystemCache,
 } from './sql-query-engine-test-support.js';
-import {ControllablePartitionRaftProvider} from
+import {createControllablePartitionService} from
   '../partition/partition-service-test-support.js';
+import {ERRORS} from '../../src/constants/errors.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -96,7 +96,7 @@ test(
 );
 
 function createRatingsPartition(replicaId, replicaIds) {
-  return new PartitionService({
+  return createControllablePartitionService({
     partitionId: 'ratings-p1',
     tableId: 'ratings',
     tableName: 'ratings',
@@ -112,12 +112,11 @@ function createRatingsPartition(replicaId, replicaIds) {
       ],
     },
     dbPath: ':memory:',
-    raftProvider: new ControllablePartitionRaftProvider(),
   });
 }
 
 function createCounterPartition(replicaId, replicaIds) {
-  return new PartitionService({
+  return createControllablePartitionService({
     partitionId: 'counters-p1',
     tableId: 'counters',
     tableName: 'counters',
@@ -133,12 +132,18 @@ function createCounterPartition(replicaId, replicaIds) {
       ],
     },
     dbPath: ':memory:',
-    raftProvider: new ControllablePartitionRaftProvider(),
   });
 }
 
+// The stale leader proposed the write before it was demoted, so its outcome
+// is not known there: in a real group the proposal may still commit through
+// the new leader. The executor, which holds only the answer's text, answers
+// its client that unknown outcome once and never sends the statement again
+// under a fresh entryId (quest raft-rs-single-path-partition-cutover, F-aj
+// after verification round 6).
 test(
-  'one client write reroutes after stale-leader demotion and commits once',
+  'one client write proposed by a stale leader that is then demoted is ' +
+  'answered its unknown outcome once, never re-sent',
   async (t) => {
     const replicaIds = ['ratings-r1', 'ratings-r2', 'ratings-r3'];
     const staleLeader = createRatingsPartition(replicaIds[0], replicaIds);
@@ -149,15 +154,15 @@ test(
     staleLeader.role = 'leader';
     staleLeader.isLeader = true;
     staleLeader.leaderId = staleLeader.replicaId;
-    staleLeader.raftProvider.setRole(RAFT_ROLE.LEADER);
-    staleLeader.raftProvider.setProposeHandler(async () => {});
+    staleLeader.controllableProvider.setRole(RAFT_ROLE.LEADER);
+    staleLeader.controllableProvider.setProposeHandler(async () => {});
 
     currentLeader.role = 'leader';
     currentLeader.isLeader = true;
     currentLeader.leaderId = currentLeader.replicaId;
-    currentLeader.raftProvider.setRole(RAFT_ROLE.LEADER);
-    currentLeader.raftProvider.setProposeHandler(async (entry) => {
-      currentLeader.applyCommittedEntry(entry);
+    currentLeader.controllableProvider.setRole(RAFT_ROLE.LEADER);
+    currentLeader.controllableProvider.setProposeHandler(async (entry) => {
+      currentLeader.controllableProvider.commit(entry);
     });
 
     const staleAddress = 'node-stale/partition/ratings-r1';
@@ -201,7 +206,7 @@ test(
         const response = service.handleRemoteQuery(message);
         if (address === staleAddress) {
           await Promise.resolve();
-          staleLeader.raftProvider.setRole(RAFT_ROLE.FOLLOWER);
+          staleLeader.controllableProvider.setRole(RAFT_ROLE.FOLLOWER);
         }
         return response;
       },
@@ -229,11 +234,16 @@ test(
     );
 
     t.equal(clientSubmissions, 1, 'the logical write is submitted once');
-    t.equal(result.success, true, 'the write owner should absorb the demotion');
+    t.equal(result.success, false,
+      'the client is not told the write succeeded');
+    t.ok(
+      String(result.error).includes(ERRORS.WRITE_OUTCOME_UNKNOWN),
+      `the client is told its outcome is unknown (${result.error})`,
+    );
     t.same(
       deliveries,
-      [staleAddress, currentAddress],
-      'routing should move from the stale owner to the live leader candidate',
+      [staleAddress],
+      'the statement is not sent again without its entryId',
     );
     t.equal(
       staleLeader.db
@@ -248,8 +258,8 @@ test(
         .prepare('SELECT COUNT(*) AS count FROM ratings')
         .get()
         .count,
-      1,
-      'the live leader should commit the logical row exactly once',
+      0,
+      'the live leader was not handed a second copy under a fresh entryId',
     );
 
     await staleLeader.shutdown();
@@ -406,9 +416,9 @@ test(
     leader.role = 'leader';
     leader.isLeader = true;
     leader.leaderId = leader.replicaId;
-    leader.raftProvider.setRole(RAFT_ROLE.LEADER);
-    leader.raftProvider.setProposeHandler(async (entry) => {
-      leader.applyCommittedEntry(entry);
+    leader.controllableProvider.setRole(RAFT_ROLE.LEADER);
+    leader.controllableProvider.setProposeHandler(async (entry) => {
+      leader.controllableProvider.commit(entry);
     });
 
     const address = 'node-leader/partition/counters-r1';

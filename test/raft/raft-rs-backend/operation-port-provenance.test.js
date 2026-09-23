@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
-import {TextEncoder} from 'node:util';
 import {fileURLToPath} from 'node:url';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
@@ -37,8 +36,7 @@ test('core and host outcomes are separated by execution provenance',
 
       await port.campaign();
       hostFault.armed = true;
-      const hostFailure = await port.propose(
-        new TextEncoder().encode('host-origin-failure'));
+      const hostFailure = await port.propose('host-origin-failure');
       assert.equal(hostFailure.outcome, 'HOST_FAILURE');
       assert.equal(hostFailure.phase, 'application');
       assert.equal(hostFailure.recoveryRequired, true);

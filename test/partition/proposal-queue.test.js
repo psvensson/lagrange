@@ -201,7 +201,8 @@ test('ProposalQueue', async (t) => {
     t.equal(queue.size, 0, 'entry should be removed');
   });
 
-  t.test('clear rejects all pending entries', async (t) => {
+  t.test('release rejects all pending entries with the answer answerOf ' +
+    'gives each', async (t) => {
     const queue = new ProposalQueue({maxCapacity: 10});
     const errors = [];
 
@@ -220,9 +221,9 @@ test('ProposalQueue', async (t) => {
 
     t.equal(queue.size, 3, 'should have 3 entries');
 
-    queue.clear('leadership lost');
+    queue.release(() => ({success: false, error: 'leadership lost'}));
 
-    t.equal(queue.size, 0, 'should be empty after clear');
+    t.equal(queue.size, 0, 'should be empty after release');
     t.equal(errors.length, 3, 'all entries should be rejected');
     for (const err of errors) {
       t.ok(err instanceof Error, 'each rejection should be an Error');
@@ -234,7 +235,7 @@ test('ProposalQueue', async (t) => {
     }
   });
 
-  t.test('clear clears timeouts on all entries', async (t) => {
+  t.test('release clears timeouts on all entries', async (t) => {
     const queue = new ProposalQueue({maxCapacity: 10});
     const timeout1 = setTimeout(() => {}, 10000);
     const timeout2 = setTimeout(() => {}, 10000);
@@ -250,9 +251,9 @@ test('ProposalQueue', async (t) => {
       timeoutId: timeout2,
     });
 
-    queue.clear('shutdown');
+    queue.release(() => ({success: false, error: 'shutdown'}));
 
-    t.equal(queue.size, 0, 'should be empty after clear');
+    t.equal(queue.size, 0, 'should be empty after release');
   });
 
   t.test('getStats returns size and maxCapacity', async (t) => {
@@ -350,8 +351,8 @@ test('ProposalQueue', async (t) => {
       queue.enqueue('entry-3', {});
 
       t.doesNotThrow(
-        () => queue.clear('shutdown'),
-        'clear should not throw without reject callback',
+        () => queue.release(() => ({success: false, error: 'shutdown'})),
+        'release should not throw without reject callback',
       );
     });
 });

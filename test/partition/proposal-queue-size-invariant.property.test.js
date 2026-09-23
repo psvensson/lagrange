@@ -103,11 +103,11 @@ test('Property 6: Proposal queue size invariant', async (t) => {
   );
 
   /**
-   * Property: After a clear() operation, getStats().size is always 0
+   * Property: After a release() of every pending proposal, getStats().size is always 0
    * regardless of how many entries were enqueued before.
    */
   t.test(
-    'getStats().size is 0 after clear for any queue state',
+    'getStats().size is 0 after release for any queue state',
     async (t) => {
       await fc.assert(
         fc.property(
@@ -124,21 +124,21 @@ test('Property 6: Proposal queue size invariant', async (t) => {
               });
             }
 
-            // Verify size before clear
+            // Verify size before release
             if (queue.getStats().size !== count) {
               return false;
             }
 
-            queue.clear('test clear');
+            queue.release(() => ({success: false, error: 'test clear'}));
 
-            // After clear, size must be 0
+            // After release, size must be 0
             return queue.getStats().size === 0;
           },
         ),
         {numRuns: 10},
       );
 
-      t.pass('getStats().size is 0 after clear for any queue state');
+      t.pass('getStats().size is 0 after release for any queue state');
     },
   );
 
