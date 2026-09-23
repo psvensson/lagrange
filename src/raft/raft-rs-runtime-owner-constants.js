@@ -6,10 +6,16 @@
 // Values only. Nothing here reaches the core or the binding; the runtime
 // owner remains the sole importer and invoker of both.
 
-import {RAFT_EVENT} from './raft-operation-port-constants.js';
+import {
+  RAFT_EVENT,
+  RAFT_PEER_PROGRESS_PROBE_REASON,
+} from './raft-operation-port-constants.js';
 import {
   RAFT_RS_PERSISTENCE_ADMISSION,
 } from './raft-rs-durable-store-constants.js';
+import {
+  RAFT_RS_PEER_IDENTITY_RESOLUTION,
+} from './raft-rs-peer-identity-constants.js';
 
 const HEALTHY = 'healthy';
 const UNHEALTHY = 'unhealthy';
@@ -17,10 +23,11 @@ const USABLE = 'usable';
 const RECOVERY_REQUIRED = 'recovery-required';
 const NO_LEADER = '0';
 const CORE_REFUSAL_KIND = 'raft-rs-refusal';
+const ROLE_LEADER = 'leader';
 const ROLE = Object.freeze({
   0: 'follower',
   1: 'candidate',
-  2: 'leader',
+  2: ROLE_LEADER,
   3: 'pre-candidate',
 });
 const CORE_CALL_WITHOUT_HANDLE = new Set([
@@ -31,6 +38,11 @@ const CORE_OPERATION = Object.freeze({CONF_STATE: 'conf_state'});
 const RUNTIME_COMMAND = Object.freeze({
   READ_STATUS: 'read-status',
   CAMPAIGN: 'campaign',
+  // The runtime's own entry for envelopes step() delivered: it drives them
+  // through the core and nothing else - it is not a tick, so a replica whose
+  // scheduling is stopped never campaigns from it.
+  DRAIN_INBOUND: 'drain-inbound',
+  PROBE_PEER_PROGRESS: 'probe-peer-progress',
 });
 const RUNTIME_EVENT = Object.freeze({
   TERM_CHANGE: RAFT_EVENT.TERM_CHANGE,
@@ -39,7 +51,22 @@ const RUNTIME_EVENT = Object.freeze({
 const PEER_ADDRESS_STATUS = Object.freeze({
   RESOLVED: 'resolved',
   UNAVAILABLE: 'unavailable',
+  // A peer the committed configuration names whose identity this replica's
+  // registry never reserved: a typed observation, never a status failure.
+  UNRESERVED: RAFT_RS_PEER_IDENTITY_RESOLUTION.UNRESERVED,
+  NO_LEADER: 'no-leader',
 });
+// What the runtime last observed delivering to one peer. A failed delivery
+// is that peer's transport outcome: raft re-sends on its own schedule, so the
+// message is dropped and the group keeps its Ready, its role and its runtime.
+const PEER_DELIVERY_OUTCOME = Object.freeze({
+  DELIVERED: 'delivered',
+  FAILED: 'failed',
+  NONE_OBSERVED: 'none-observed',
+});
+// The per-peer delivery observations a group keeps: one per peer it sent to,
+// oldest evicted first past the bound.
+const PEER_DELIVERY_OBSERVATION_LIMIT = 256;
 const RUNTIME_PHASE = Object.freeze({
   GENERATION_CHANGED: 'runtime-generation-changed',
   BOOTSTRAP_PERSISTENCE: 'bootstrap-persistence',
@@ -52,6 +79,7 @@ const RUNTIME_PHASE = Object.freeze({
   CAMPAIGN_ELIGIBILITY: 'campaign-eligibility',
   DISPATCH: 'dispatch',
   ADMISSION: 'admission',
+  PROGRESS_PROBE: 'progress-probe',
 });
 const RUNTIME_REASON = Object.freeze({
   CORE_REFUSED: 'core-refused',
@@ -68,6 +96,10 @@ const RUNTIME_REASON = Object.freeze({
   NOT_ACTIVE_VOTER: 'not-an-active-voter',
   UNKNOWN_OPERATION: 'unknown-operation',
   INBOUND_ENQUEUED: 'inbound-enqueued',
+  INBOUND_DRAINED: 'inbound-drained',
+  DELIVERY_FAILED: 'raft delivery failed',
+  // The progress probe's outcomes, owned by the port's contract.
+  ...RAFT_PEER_PROGRESS_PROBE_REASON,
   CLOSED_WITHOUT_CORE_ENTRY: 'closed-without-core-entry',
   CLOSED: 'closed',
   // The store's own admission state, carried as the reason of the typed,
@@ -84,6 +116,8 @@ const RUNTIME_REASON = Object.freeze({
 // on a session (60 s), so a session the transaction owner still admits never
 // costs the group its runtime; beyond it the connection is wedged and the
 // group is reconstructed from its durable record.
+// Delivered inbound is drained on the group's next turn of its own clock.
+const INBOUND_DRAIN_DELAY_MS = 0;
 const PERSISTENCE_ADMISSION_WAIT = Object.freeze({
   POLL_INTERVAL_MS: 10,
   BOUND_MS: 120000,
@@ -94,11 +128,15 @@ export {
   CORE_OPERATION,
   CORE_REFUSAL_KIND,
   HEALTHY,
+  INBOUND_DRAIN_DELAY_MS,
   NO_LEADER,
   PEER_ADDRESS_STATUS,
+  PEER_DELIVERY_OBSERVATION_LIMIT,
+  PEER_DELIVERY_OUTCOME,
   PERSISTENCE_ADMISSION_WAIT,
   RECOVERY_REQUIRED,
   ROLE,
+  ROLE_LEADER,
   RUNTIME_COMMAND,
   RUNTIME_EVENT,
   RUNTIME_PHASE,

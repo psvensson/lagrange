@@ -3,8 +3,10 @@ import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
 } from '../raft/raft-operation-port-constants.js';
-import {reservePartitionRaftPeerIdentity} from
-  './partition-service-raft-membership-administration.js';
+import {
+  admitPartitionRaftPeer,
+  reservePartitionRaftPeerIdentity,
+} from './partition-service-raft-membership-administration.js';
 
 const {
   AddressManager,
@@ -272,10 +274,9 @@ function reconcileExpectedRaftPeer({
       RAFT_MEMBERSHIP_RESERVATION_OUTCOME.NOT_MANAGED) {
     return;
   }
-  partitionService.raft.proposeConfChange({
-    type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
-    peerAddress: expectedAddress,
+  admitPartitionRaftPeer(partitionService, {
     replicaIdentity: replicaId,
+    peerAddress: expectedAddress,
   });
   currentAddresses.add(expectedAddress);
 }

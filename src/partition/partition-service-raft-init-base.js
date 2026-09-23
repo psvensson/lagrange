@@ -1,7 +1,6 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
 import {
-  RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../raft/raft-operation-port-constants.js';
 
@@ -12,6 +11,8 @@ import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   reconcileRaftPeersFromCacheForService,
 } from './partition-service-raft-peer-cache-reconciliation.js';
+import {admitPartitionRaftPeer} from
+  './partition-service-raft-membership-administration.js';
 import {
   wirePartitionRaftLifecycleEvents,
 } from './partition-service-raft-lifecycle-wiring.js';
@@ -543,11 +544,10 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
               PARTITION_SERVICE_ADDRESS.FORMAT_SIMPLE,
           });
         }
-        this.raft.proposeConfChange({
-          type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
-          peerAddress,
-          peerId,
-        });
+        // The bootstrap peers are voters of the core's initial
+        // configuration already; the admission owner proposes only on a
+        // leader and only a peer the configuration does not name.
+        admitPartitionRaftPeer(this, {replicaIdentity: peerId, peerAddress});
         joinedPeerCount += 1;
         this.reportInitializationStage(
           PARTITION_SERVICE_INIT_STAGE.JOINED_PEER,

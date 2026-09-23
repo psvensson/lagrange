@@ -9,32 +9,60 @@ import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {
   NO_LEADER,
   PEER_ADDRESS_STATUS,
+  PEER_DELIVERY_OUTCOME,
   ROLE,
   RUNTIME_REASON,
 } from './raft-rs-runtime-owner-constants.js';
+import {
+  RAFT_RS_PEER_IDENTITY_RESOLUTION,
+} from './raft-rs-peer-identity-constants.js';
+
+const NO_DELIVERY_OBSERVED = Object.freeze({
+  outcome: PEER_DELIVERY_OUTCOME.NONE_OBSERVED,
+});
+
+// One configured peer's identity and address, each a named state. A peer
+// whose identity this replica never reserved is reported, not thrown: its
+// reservation lives on the replica that admitted it.
+function resolvePeerObservation(group, id) {
+  const identity = group.resolvePeerIdentity(id);
+  if (identity.status === RAFT_RS_PEER_IDENTITY_RESOLUTION.UNRESERVED) {
+    return {replicaIdentity: null, address: null,
+      addressStatus: PEER_ADDRESS_STATUS.UNRESERVED};
+  }
+  try {
+    return {replicaIdentity: identity.replicaIdentity,
+      address: group.resolvePeerAddress(id),
+      addressStatus: PEER_ADDRESS_STATUS.RESOLVED};
+  } catch {
+    // Status is an observation. A temporarily unavailable address is not
+    // a Ready failure and must not invalidate the execution container.
+    return {replicaIdentity: identity.replicaIdentity, address: null,
+      addressStatus: PEER_ADDRESS_STATUS.UNAVAILABLE};
+  }
+}
 
 function peerSnapshot(group, confState) {
   return [...confState.voters, ...confState.learners]
     .filter((id) => id !== group.peerId)
-    .map((id) => {
-      const replicaIdentity = group.resolvePeerIdentity(id);
-      let address = null;
-      let addressStatus = PEER_ADDRESS_STATUS.RESOLVED;
-      try {
-        address = group.resolvePeerAddress(id);
-      } catch {
-        // Status is an observation. A temporarily unavailable address is not
-        // a Ready failure and must not invalidate the execution container.
-        addressStatus = PEER_ADDRESS_STATUS.UNAVAILABLE;
-      }
-      return {
-        peerId: id,
-        replicaIdentity,
-        address,
-        addressStatus,
-        learner: confState.learners.includes(id),
-      };
-    });
+    .map((id) => ({
+      peerId: id,
+      ...resolvePeerObservation(group, id),
+      learner: confState.learners.includes(id),
+      delivery: group.peerDelivery.get(String(id)) || NO_DELIVERY_OBSERVED,
+    }));
+}
+
+// The leader a status names: its identity, address and their state. An
+// unreserved leader is the same observation as an unreserved peer.
+function leaderObservation(group, lead) {
+  if (lead === NO_LEADER) {
+    return {leaderId: null, leaderAddress: null,
+      leaderAddressStatus: PEER_ADDRESS_STATUS.NO_LEADER};
+  }
+  const observed = resolvePeerObservation(group, lead);
+  return {leaderId: observed.replicaIdentity, leaderAddress: observed.address,
+    leaderAddressStatus: observed.addressStatus};
 }
 
 function followerProgressSnapshot(group, status) {
@@ -72,22 +100,15 @@ function followerProgressSnapshot(group, status) {
  */
 function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
   const {status, confState} = observation;
-  let leaderId = null;
-  let leaderAddress = null;
+  let leader;
+  let peers;
   try {
-    leaderId = status.lead === NO_LEADER ? null :
-      group.resolvePeerIdentity(status.lead);
+    leader = leaderObservation(group, status.lead);
+    peers = peerSnapshot(group, confState);
   } catch (error) {
+    // The registry itself could not be read: a host failure, not a peer's
+    // reservation state.
     return leaderIdentityUnresolved(error);
-  }
-  if (status.lead !== NO_LEADER) {
-    try {
-      leaderAddress = group.resolvePeerAddress(status.lead);
-    } catch {
-      // A network address can lag membership/identity without invalidating
-      // the consensus runtime. Status reports the identity and a null address.
-      leaderAddress = null;
-    }
   }
   return deepFreeze({
     outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
@@ -97,11 +118,10 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     term: Number(status.term),
     commitIndex: Number(status.commit),
     role: ROLE[status.raftState] || RUNTIME_REASON.UNKNOWN,
-    leaderId,
-    leaderAddress,
+    ...leader,
     peerCount: Math.max(0,
       confState.voters.length + confState.learners.length - 1),
-    peers: peerSnapshot(group, confState),
+    peers,
     followerProgress: followerProgressSnapshot(group, status),
     confState,
     runtimeHealth: observation.runtimeHealth,

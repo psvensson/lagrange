@@ -20,17 +20,26 @@ import {
   RAFT_RS_CONF_CHANGE_ENTRY_TYPES,
 } from './raft-rs-ready-loop-constants.js';
 import {
+  RAFT_RS_GROUP_TUNING,
   RAFT_RS_INITIAL_APPLIED,
   RAFT_RS_READY_DRAIN_MAX_CYCLES,
 } from './raft-rs-group-constants.js';
+import {
+  RAFT_RS_PEER_IDENTITY_RESOLUTION,
+} from './raft-rs-peer-identity-constants.js';
 import {
   CORE_CALL_WITHOUT_HANDLE,
   CORE_OPERATION,
   CORE_REFUSAL_KIND,
   HEALTHY,
+  INBOUND_DRAIN_DELAY_MS,
   NO_LEADER,
+  PEER_DELIVERY_OBSERVATION_LIMIT,
+  PEER_DELIVERY_OUTCOME,
+  PERSISTENCE_ADMISSION_WAIT,
   RECOVERY_REQUIRED,
   ROLE,
+  ROLE_LEADER,
   RUNTIME_COMMAND,
   RUNTIME_EVENT,
   RUNTIME_PHASE,
@@ -324,16 +333,55 @@ function thenMaybe(value, continuation) {
     value.then(continuation) : continuation(value);
 }
 
-function sendMessages(group, messages, index = 0) {
-  if (index >= messages.length) {
-    return null;
+// A delivery to one peer is that peer's transport outcome. Raft re-sends
+// what a peer did not receive (the next append or heartbeat), so a failed
+// delivery drops the message, is recorded against the peer, and leaves the
+// Ready - its persistence, its application and the group's role and runtime -
+// exactly as it was. Later messages of the same batch to a peer that just
+// failed are dropped with it rather than waited on again.
+function recordPeerDelivery(group, raftPeerId, observation) {
+  const key = String(raftPeerId);
+  group.peerDelivery.delete(key);
+  group.peerDelivery.set(key, deepFreeze(observation));
+  if (group.peerDelivery.size > PEER_DELIVERY_OBSERVATION_LIMIT) {
+    group.peerDelivery.delete(group.peerDelivery.keys().next().value);
   }
-  const message = messages[index];
+}
+
+function peerDeliveryFailed(group, raftPeerId, phase, cause, failedPeers) {
+  const previous = group.peerDelivery.get(String(raftPeerId));
+  recordPeerDelivery(group, raftPeerId, {
+    outcome: PEER_DELIVERY_OUTCOME.FAILED,
+    phase,
+    reason: String(cause?.message || cause || RUNTIME_REASON.DELIVERY_FAILED),
+    consecutiveFailures: previous?.outcome === PEER_DELIVERY_OUTCOME.FAILED ?
+      previous.consecutiveFailures + 1 : 1,
+  });
+  failedPeers.add(String(raftPeerId));
+  return null;
+}
+
+function settlePeerDelivery(group, raftPeerId, delivery, failedPeers) {
+  if (delivery && typeof delivery === 'object' &&
+      (delivery.noHandler === true || delivery.deferRetry === true ||
+        delivery.acknowledged === false || delivery.error)) {
+    return peerDeliveryFailed(group, raftPeerId,
+      delivery.noHandler ? RUNTIME_PHASE.SEND_NO_HANDLER : RUNTIME_PHASE.SEND,
+      delivery.error || delivery.reason, failedPeers);
+  }
+  recordPeerDelivery(group, raftPeerId, {
+    outcome: PEER_DELIVERY_OUTCOME.DELIVERED, consecutiveFailures: 0,
+  });
+  return null;
+}
+
+function deliverToPeer(group, message, failedPeers) {
   let address;
   try {
     address = group.resolvePeerAddress(message.to);
   } catch (error) {
-    throw Object.assign(error, {hostPhase: RUNTIME_PHASE.ADDRESS_RESOLUTION});
+    return peerDeliveryFailed(group, message.to,
+      RUNTIME_PHASE.ADDRESS_RESOLUTION, error, failedPeers);
   }
   let delivered;
   try {
@@ -345,20 +393,28 @@ function sendMessages(group, messages, index = 0) {
       message,
     });
   } catch (error) {
-    throw Object.assign(error, {hostPhase: RUNTIME_PHASE.SEND});
+    return peerDeliveryFailed(group, message.to, RUNTIME_PHASE.SEND, error,
+      failedPeers);
   }
-  return thenMaybe(delivered, (delivery) => {
-    if (delivery && typeof delivery === 'object' &&
-        (delivery.noHandler === true || delivery.deferRetry === true ||
-          delivery.acknowledged === false || delivery.error)) {
-      const error = new Error(
-        String(delivery.error || delivery.reason || 'raft delivery failed'));
-      error.hostPhase = delivery.noHandler ? RUNTIME_PHASE.SEND_NO_HANDLER :
-        RUNTIME_PHASE.SEND;
-      throw error;
-    }
-    return sendMessages(group, messages, index + 1);
-  });
+  if (delivered && typeof delivered.then === 'function') {
+    return Promise.resolve(delivered).then(
+      (delivery) => settlePeerDelivery(group, message.to, delivery,
+        failedPeers),
+      (error) => peerDeliveryFailed(group, message.to, RUNTIME_PHASE.SEND,
+        error, failedPeers));
+  }
+  return settlePeerDelivery(group, message.to, delivered, failedPeers);
+}
+
+function sendMessages(group, messages, index = 0, failedPeers = new Set()) {
+  if (index >= messages.length) {
+    return null;
+  }
+  const message = messages[index];
+  const delivered = failedPeers.has(String(message.to)) ? null :
+    deliverToPeer(group, message, failedPeers);
+  return thenMaybe(delivered, () =>
+    sendMessages(group, messages, index + 1, failedPeers));
 }
 
 function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
@@ -417,16 +473,11 @@ function finishReady(group, expectedGeneration, ready) {
   if (!persisted.ok) {
     return persisted.result;
   }
-  let sent;
-  try {
-    sent = sendMessages(group, [
-      ...(ready.messages || []),
-      ...(ready.persistedMessages || []),
-    ]);
-  } catch (error) {
-    group.health = RECOVERY_REQUIRED;
-    return hostFailure(error.hostPhase || RUNTIME_PHASE.SEND, error, true);
-  }
+  // Sends never fail the Ready: each peer's delivery is its own outcome.
+  const sent = sendMessages(group, [
+    ...(ready.messages || []),
+    ...(ready.persistedMessages || []),
+  ]);
   const continuation = thenMaybe(sent, () => whenPersistenceAdmitted(group, () => {
     const applied = applyEntries(
       group, expectedGeneration, ready.committedEntries || []);
@@ -451,13 +502,7 @@ function finishReady(group, expectedGeneration, ready) {
     if (persistedCommit && !persistedCommit.ok) {
       return persistedCommit.result;
     }
-    let lightSent;
-    try {
-      lightSent = sendMessages(group, light.value.messages || []);
-    } catch (error) {
-      group.health = RECOVERY_REQUIRED;
-      return hostFailure(error.hostPhase || RUNTIME_PHASE.SEND, error, true);
-    }
+    const lightSent = sendMessages(group, light.value.messages || []);
     return thenMaybe(lightSent, () => whenPersistenceAdmitted(group, () => {
       const lightApplied = applyEntries(
         group, expectedGeneration, light.value.committedEntries || []);
@@ -471,9 +516,10 @@ function finishReady(group, expectedGeneration, ready) {
     }, admissionWaitOutcomes(group)));
   }, admissionWaitOutcomes(group)));
   if (continuation && typeof continuation.then === 'function') {
+    // Persistence and application failures remain host failures.
     return continuation.catch((error) => {
       group.health = RECOVERY_REQUIRED;
-      return hostFailure(error.hostPhase || RUNTIME_PHASE.SEND, error, true);
+      return hostFailure(RUNTIME_PHASE.READY_DRAIN, error, true);
     });
   }
   return continuation;
@@ -513,12 +559,17 @@ function drainReady(group, expectedGeneration, cycles = 0) {
     drainReady(group, expectedGeneration, cycles + 1) : result);
 }
 
+// The leader a role change announces. A leader this replica's registry never
+// reserved is announced without an identity (the status names it UNRESERVED);
+// only a registry that cannot be read is a host failure.
 function semanticLeaderIdentity(group, lead) {
   if (lead === NO_LEADER) {
     return null;
   }
   try {
-    return group.resolvePeerIdentity(lead);
+    const identity = group.resolvePeerIdentity(lead);
+    return identity.status === RAFT_RS_PEER_IDENTITY_RESOLUTION.RESERVED ?
+      identity.replicaIdentity : null;
   } catch {
     group.health = RECOVERY_REQUIRED;
     return null;
@@ -642,12 +693,93 @@ function campaignGroup(group, expectedGeneration) {
     campaigned.result;
 }
 
+function probeRefusal(reason) {
+  return outcome(CORE_REFUSED, {
+    reason, phase: RUNTIME_PHASE.PROGRESS_PROBE,
+    retryable: false, recoveryRequired: false,
+  });
+}
+
+// The configured peer (other than this replica) whose resolved address is
+// the probed one; an unreserved or unresolvable peer is no match.
+function configuredPeerAt(group, confState, peerAddress) {
+  return [...confState.voters, ...confState.learners].find((id) => {
+    if (id === group.peerId) {
+      return false;
+    }
+    try {
+      return group.resolvePeerAddress(id) === peerAddress;
+    } catch {
+      return false;
+    }
+  });
+}
+
+// One heartbeat interval of the leader: raft-rs broadcasts its heartbeat on
+// the tick that completes the interval, and a peer's heartbeat response is
+// what makes the leader send it the append its matched index lacks. The
+// binding exposes no per-peer send, so this is the one core path to a probe.
+function driveOneHeartbeat(group, expectedGeneration) {
+  for (let tick = 0; tick < RAFT_RS_GROUP_TUNING.HEARTBEAT_TICK; tick += 1) {
+    const ticked = invokeCoreAt(group, expectedGeneration, 'tick');
+    if (!ticked.ok) {
+      return ticked.result;
+    }
+    const hasReady = invokeCoreAt(group, expectedGeneration, 'has_ready');
+    if (!hasReady.ok) {
+      return hasReady.result;
+    }
+    if (hasReady.value) {
+      break;
+    }
+  }
+  return drainReady(group, expectedGeneration);
+}
+
+// The progress probe: a peer whose matched index already reaches the commit
+// index is observed; a peer behind it gets one heartbeat round through the
+// core; an address outside the configuration, or a probe on a replica that is
+// not the leader, is a typed refusal (a non-leader must never tick here).
+function probePeerProgress(group, expectedGeneration, peerAddress) {
+  const observed = readGroupObservation(group, expectedGeneration);
+  if (!observed.ok) {
+    return observed.result;
+  }
+  const {status, confState} = observed.value;
+  const peerId = configuredPeerAt(group, confState, peerAddress);
+  if (peerId === undefined) {
+    return probeRefusal(RUNTIME_REASON.NOT_A_PEER);
+  }
+  if (ROLE[status.raftState] !== ROLE_LEADER) {
+    return probeRefusal(RUNTIME_REASON.NOT_LEADER);
+  }
+  const progress = (status.progress || []).find((item) =>
+    String(item?.id) === String(peerId));
+  const matched = BigInt(progress?.matched ?? RAFT_RS_INITIAL_APPLIED);
+  const matchIndex = Number(matched);
+  if (matched >= BigInt(status.commit)) {
+    return outcome(CORE_OK, {
+      reason: RUNTIME_REASON.PROGRESS_OBSERVED, matchIndex,
+    });
+  }
+  return thenMaybe(driveOneHeartbeat(group, expectedGeneration), (result) =>
+    result.outcome === CORE_OK ? outcome(CORE_OK, {
+      reason: RUNTIME_REASON.PROGRESS_PROBE_SENT, matchIndex,
+    }) : result);
+}
+
 function performCommand(group, command, expectedGeneration) {
   if (command.type === RUNTIME_COMMAND.READ_STATUS) {
     return readGroupStatus(group, expectedGeneration);
   }
   if (command.type === RUNTIME_COMMAND.CAMPAIGN) {
     return campaignGroup(group, expectedGeneration);
+  }
+  if (command.type === RUNTIME_COMMAND.DRAIN_INBOUND) {
+    return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_DRAINED});
+  }
+  if (command.type === RUNTIME_COMMAND.PROBE_PEER_PROGRESS) {
+    return probePeerProgress(group, expectedGeneration, command.peerAddress);
   }
   const primitive = {
     'tick': ['tick', []],
@@ -699,6 +831,58 @@ function perform(group, command) {
     () => performCommand(group, command, expectedGeneration));
 }
 
+// step() hands the runtime an envelope; the runtime drives it through the
+// core itself. The drain is scheduled once per burst of deliveries, on the
+// group's next turn of its own clock (so a delivery never re-enters the core
+// inside its sender's Ready, and an operation already asked for on this turn
+// drains the envelopes first), and enters the core through the group's queue,
+// admitted by the port's lifecycle owner like every other entry. It is not a
+// tick: a replica whose scheduling is stopped never campaigns from it.
+// While a user transaction holds the connection nothing enters the core: the
+// envelopes stay queued and the drain retries on the group's own timers,
+// outside the queue, until the store admits persistence again or the
+// admission bound passes (then the next operation drains them).
+function scheduleInboundDrain(group) {
+  if (group.inboundDrainScheduled) {
+    return;
+  }
+  group.inboundDrainScheduled = true;
+  group.timers.setTimeout(() => runScheduledInboundDrain(group),
+    INBOUND_DRAIN_DELAY_MS)?.unref?.();
+}
+
+function retryInboundDrainWhenAdmitted(group) {
+  if (group.inboundDrainDeadline === null) {
+    group.inboundDrainDeadline =
+      group.timers.now() + PERSISTENCE_ADMISSION_WAIT.BOUND_MS;
+  }
+  if (group.timers.now() >= group.inboundDrainDeadline) {
+    group.inboundDrainDeadline = null;
+    return;
+  }
+  group.inboundDrainScheduled = true;
+  group.timers.setTimeout(() => runScheduledInboundDrain(group),
+    PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS)?.unref?.();
+}
+
+function runScheduledInboundDrain(group) {
+  group.inboundDrainScheduled = false;
+  if (group.closed || group.inbound.length === 0) {
+    group.inboundDrainDeadline = null;
+    return;
+  }
+  if (!persistenceAdmitted(group)) {
+    retryInboundDrainWhenAdmitted(group);
+    return;
+  }
+  group.inboundDrainDeadline = null;
+  const drained = group.admitScheduledEntry(() => enqueue(group, () =>
+    perform(group, {type: RUNTIME_COMMAND.DRAIN_INBOUND})));
+  if (drained && typeof drained.catch === 'function') {
+    drained.catch(() => undefined);
+  }
+}
+
 function snapshotEnvelope(envelope) {
   return deepFreeze({
     ...envelope,
@@ -723,6 +907,7 @@ function createRuntimeDispatcher(request) {
     resolvePeerIdentity: request.resolvePeerIdentity,
     applyCommittedEntry: request.applyCommittedEntry,
     applyTransactionRolledBack: request.applyTransactionRolledBack,
+    admitScheduledEntry: request.admitScheduledEntry,
     emit: request.emit,
     handle: null,
     lastStatus: null,
@@ -730,6 +915,9 @@ function createRuntimeDispatcher(request) {
     health: USABLE,
     tail: null,
     inbound: [],
+    inboundDrainScheduled: false,
+    inboundDrainDeadline: null,
+    peerDelivery: new Map(),
     closed: false,
   };
   groups.set(group.key, group);
@@ -760,6 +948,7 @@ function createRuntimeDispatcher(request) {
         });
       }
       group.inbound.push(snapshotEnvelope(envelope));
+      scheduleInboundDrain(group);
       return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_ENQUEUED});
     }),
     execute: Object.freeze((command) =>

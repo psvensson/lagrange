@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1893,
+    "unit": 1895,
     "integration": 75,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2157,
-  "digest": "fnv1a32-45db92d4",
+  "censusSize": 2159,
+  "digest": "fnv1a32-ecde4874",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1405,6 +1405,7 @@
     "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "unit",
     "test/raft/raft-rs-backend/election-safety.test.js": "unit",
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "unit",
+    "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js": "unit",
     "test/raft/raft-rs-backend/operation-port-boundary.test.js": "unit",
     "test/raft/raft-rs-backend/operation-port-lifecycle.test.js": "unit",
     "test/raft/raft-rs-backend/operation-port-provenance.test.js": "unit",
@@ -1412,6 +1413,7 @@
     "test/raft/raft-rs-backend/operation-port-regression.test.js": "unit",
     "test/raft/raft-rs-backend/operation-port-status-observation.test.js": "unit",
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": "unit",
+    "test/raft/raft-rs-backend/partition-peer-admission.test.js": "unit",
     "test/raft/raft-rs-backend/peer-identity.test.js": "unit",
     "test/raft/raft-rs-backend/persistence-admission.test.js": "unit",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "unit",

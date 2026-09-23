@@ -21,16 +21,6 @@ function elect(cluster) {
   return cluster.leaderReplicaId();
 }
 
-async function tickUntilHostFailure(cluster, replicaId, attempts = 12) {
-  for (let index = 0; index < attempts; index += 1) {
-    const result = await cluster.tick(replicaId);
-    if (result?.outcome === HOST_FAILURE) {
-      return result;
-    }
-  }
-  return null;
-}
-
 function lifecycleState(replica) {
   return replica.db.prepare(
     'SELECT state FROM _raft_rs_replica_lifecycle WHERE group_id = ?',
@@ -111,11 +101,16 @@ test('Ready snapshot entries and hard state share one SQLite commit point',
     }
   });
 
-test('every Ready host failure reconstructs the group before another core operation',
+// Epic finding F15: a failed delivery to one peer - its address cannot be
+// resolved, the send throws, or no handler takes it - is that peer's
+// transport outcome, never a host failure of the group. The Ready keeps its
+// persistence and application, the leader keeps its role, and the shared
+// runtime is not reconstructed.
+test('every Ready delivery failure is a per-peer outcome and never reconstructs the group',
   async () => {
     const transportFault = {phase: null, armed: false};
     const cluster = new PartitionNodeCluster({
-      partitionId: 'ready-host-failure-reconstruction',
+      partitionId: 'ready-delivery-failure-per-peer',
       replicaIds: ['ready-a', 'ready-b', 'ready-c'],
       resolveFor: (_from, to) => {
         if (transportFault.armed && transportFault.phase ===
@@ -139,29 +134,34 @@ test('every Ready host failure reconstructs the group before another core operat
       },
     });
     try {
-      let leader = elect(cluster);
+      const leader = elect(cluster);
       for (const phase of [
         'send', 'send-no-handler', 'address-resolution',
       ]) {
-        const identityBefore = cluster.raftPeerIdOf(leader);
-        const generationBefore = cluster.node(leader).readStatus()
-          .runtimeGeneration;
+        const before = cluster.node(leader).readStatus();
         transportFault.phase = phase;
         transportFault.armed = true;
-        await cluster.propose(leader, `force-${phase}-delivery`);
-        const failed = await tickUntilHostFailure(cluster, leader);
-        assert.equal(failed?.outcome, HOST_FAILURE, `${phase} is a host result`);
-        assert.equal(failed.phase, phase);
-        assert.equal(failed.recoveryRequired, true);
+        const outcomes = [await cluster.propose(leader,
+          `force-${phase}-delivery`)];
+        for (let index = 0; index < 12 && transportFault.armed; index += 1) {
+          outcomes.push(await cluster.tick(leader));
+        }
+        assert.equal(transportFault.armed, false,
+          `the ${phase} fault was reached by a real Ready delivery`);
+        assert.deepEqual(outcomes.filter((result) =>
+          result?.outcome === HOST_FAILURE), [],
+        `${phase} is never a host result of the group`);
         assert.equal(lifecycleState(cluster.replica(leader)), 'active');
-        const recovered = await cluster.node(leader).readStatus();
-        assert.equal(recovered.outcome, CORE_OK);
-        assert.ok(recovered.runtimeGeneration > generationBefore,
-          `${phase} replaces the generation before the next core operation`);
-        assert.equal(recovered.peerId, identityBefore);
-        assert.equal(recovered.runtimeHealth, 'healthy');
-        assert.equal(recovered.groupHealth, 'usable');
-        leader = elect(cluster);
+        const after = await cluster.node(leader).readStatus();
+        assert.equal(after.outcome, CORE_OK);
+        assert.equal(after.runtimeGeneration, before.runtimeGeneration,
+          `${phase} never replaces the runtime generation`);
+        assert.equal(after.role, 'leader', `${phase} keeps the leader`);
+        assert.equal(after.runtimeHealth, 'healthy');
+        assert.equal(after.groupHealth, 'usable');
+        assert.ok(after.peers.some((peer) =>
+          peer.delivery.outcome === 'failed' && peer.delivery.phase === phase),
+        `the failed peer carries the ${phase} delivery outcome`);
       }
     } finally {
       cluster.dispose();

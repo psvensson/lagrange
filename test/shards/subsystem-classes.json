@@ -19,16 +19,16 @@
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 145,
-    "storage-raft": 99,
+    "storage-raft": 101,
     "test-infrastructure": 133,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2157,
-  "digest": "fnv1a32-6c522e4e",
+  "censusSize": 2159,
+  "digest": "fnv1a32-ce54d362",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-048e71e5",
+  "observationDigest": "fnv1a32-c8a51885",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1424,6 +1424,7 @@
     "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "storage-raft",
     "test/raft/raft-rs-backend/election-safety.test.js": "storage-raft",
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-boundary.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-lifecycle.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-provenance.test.js": "storage-raft",
@@ -1431,6 +1432,7 @@
     "test/raft/raft-rs-backend/operation-port-regression.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-status-observation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/partition-peer-admission.test.js": "storage-raft",
     "test/raft/raft-rs-backend/peer-identity.test.js": "storage-raft",
     "test/raft/raft-rs-backend/persistence-admission.test.js": "storage-raft",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "storage-raft",
@@ -6670,6 +6672,14 @@
         "package.json"
       ]
     },
+    "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js": {
+      "files": [
+        "src/raft/raft-rs-group-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
     "test/raft/raft-rs-backend/operation-port-boundary.test.js": {
       "files": [
         "solve/quests/raft-rs-operation-port-boundary/capability-baseline.json",
@@ -6739,6 +6749,16 @@
       ],
       "directories": [
         "src"
+      ]
+    },
+    "test/raft/raft-rs-backend/partition-peer-admission.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/partition-service-test-support.js"
       ]
     },
     "test/raft/raft-rs-backend/peer-identity.test.js": {
