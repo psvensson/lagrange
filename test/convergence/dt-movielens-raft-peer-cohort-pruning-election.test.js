@@ -7,8 +7,9 @@
 // port is built by the controllable provider through the service's
 // createOperationPort seam, so every ADD_PEER / REMOVE_PEER the partition
 // proposes is recorded in the provider's confChanges and the configuration
-// the port reports (readStatus().peers) is exactly what those proposals made
-// it. The election of the resulting three-voter cohort is the consensus
+// the port reports (readStatus().peers) is the bootstrap configuration the
+// production port starts from (the request's bootstrap voters) plus exactly
+// what those proposals made it. The election of the resulting three-voter cohort is the consensus
 // core's, not the partition's: this double cannot witness a real vote, so the
 // witness ends at the configuration the partition proposed. The retired
 // liferaft double's claim that the pruned cohort then elects through real
@@ -23,8 +24,10 @@ import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {RaftRole} from '../../src/partition/partition-service.js';
-import {RAFT_MEMBERSHIP_OPERATION} from
-  '../../src/raft/raft-operation-port-constants.js';
+import {
+  RAFT_MEMBERSHIP_OPERATION,
+  RAFT_OPERATION_OUTCOME,
+} from '../../src/raft/raft-operation-port-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
@@ -156,6 +159,17 @@ async (t) => {
     [ADDRESS_BY_REPLICA[R2], ADDRESS_BY_REPLICA[R3]].sort(),
     'the bootstrap Raft cohort begins at r1/r2/r3',
   );
+  t.same(proposalsSince(provider, 0), [],
+    'the bootstrap voters are the port\'s initial configuration: nothing is ' +
+    'proposed for them');
+
+  // Only the leader proposes membership. The election is the core's and this
+  // double does not witness a vote: r1 campaigns through the port and the
+  // double answers as a core that won it.
+  t.equal(partition.raft.campaign().outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+    'r1 campaigns through the port');
+  t.equal(partition.raft.readStatus().role, RaftRole.LEADER,
+    'r1 leads the bootstrap cohort');
 
   let mark = provider.confChanges.length;
   for (const replicaId of [R4, R5]) {

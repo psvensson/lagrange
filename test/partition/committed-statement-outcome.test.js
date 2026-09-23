@@ -37,23 +37,13 @@ import {test} from 'node:test';
 
 import Database from 'better-sqlite3';
 
-import {
-  createLoopbackTransport,
-} from './partition-service-test-support.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
-import {
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  TABLES,
-} from '../../src/constants/index.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {PartitionService} from '../../src/partition/partition-service.js';
 import {
-  CDCOperation,
-  PartitionService,
-} from '../../src/partition/partition-service.js';
-import {
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_OPERATION,
@@ -78,8 +68,9 @@ const COUNT_ROWS_SQL = `SELECT COUNT(*) AS count FROM ${TABLE_NAME}`;
 // The application owner exports its DDL, not its table name.
 const OUTCOME_TABLE = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE
   .match(/CREATE TABLE IF NOT EXISTS\s+(\w+)/u)[1];
+// Well under the pending-request timeout a proposed write would wait for.
+const PROMPT_ANSWER_MS = 1000;
 const GROUP_BUDGET_MS = 5000;
-const POLL_MS = 10;
 
 function quietEnvironment() {
   ConfigurationManager.resetInstance();
@@ -248,9 +239,8 @@ test('B2: the same entry identity retried after its acknowledgement is an ' +
       'one APPLIED outcome row at the index the write committed at');
     await partition.shutdown();
 
-    // After a restart the partition's in-memory replay cache is empty: the
-    // retry is proposed again, and the recorded outcome of its entry key -
-    // not the statement - answers it.
+    // After a restart the recorded outcome of the entry key - not the
+    // statement, and no in-memory state - answers the retry.
     const restarted = await open();
     const retriedAfterRestart = await insert(restarted, 'row-1', 'first',
       'entry-retried');
@@ -269,9 +259,9 @@ test('B2: the same entry identity retried after its acknowledgement is an ' +
       'the replay names the index the write was applied at');
     assert.deepEqual(outcomeOf(dbPath, restarted, 'entry-retried'),
       recordedApplied, 'the retry left the recorded outcome unchanged');
-    assert.equal(instances.length, 2,
-      'the retry was proposed again and consumed by the applied index ' +
-      `(${JSON.stringify(record)})`);
+    assert.equal(instances.length, 1,
+      'the retry is answered from the durable outcome row: nothing is ' +
+      `proposed again (${JSON.stringify(record)})`);
     assert.deepEqual(rowOf(dbPath, 'row-1'), {id: 'row-1', value: 'first'},
       'the replay wrote no second row and changed no value');
 
@@ -356,78 +346,18 @@ test('B2: the replicas of a three-replica group hold identical outcome rows ' +
   const partitionId = 'b2-group';
   const members = [['b2-group-r1', 'node-1'], ['b2-group-r2', 'node-2'],
     ['b2-group-r3', 'node-3']];
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
-  const dbFileOf = ([replicaId]) => path.join(directory, `${replicaId}.db`);
-  const addressOf = ([replicaId, nodeId]) =>
-    `${nodeId}/partition/${replicaId}`;
-  const serviceRow = ([replicaId, nodeId]) => ({
-    service_id: replicaId, replica_id: replicaId, partition_id: partitionId,
-    service_type: SERVICE_TYPE.PARTITION, node_id: nodeId,
-    status: SERVICE_STATUS.ACTIVE,
+  // The group forms through the production admission path: a lone leader,
+  // then each replica admitted when its services row becomes visible.
+  const group = await formAdmittedGroup({
+    partitionId,
+    members,
+    tempPrefix: TEMP_PREFIX,
+    serviceOptions: partitionOptions(partitionId, null),
+    budgetMs: GROUP_BUDGET_MS,
   });
-  const cacheOf = (visible) => {
-    const cache = new SystemTableCache();
-    cache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT,
-      {partition_id: partitionId, replica_count: members.length});
-    for (const member of visible) {
-      cache.applySystemTableChange(
-        TABLES.SERVICES, CDCOperation.INSERT, serviceRow(member));
-    }
-    return cache;
-  };
-  const network = createLoopbackTransport();
-  const services = [];
-  const caches = [];
-  const build = (member, visible, extra = {}) => {
-    const cache = cacheOf(visible);
-    const service = new PartitionService({
-      ...partitionOptions(partitionId, dbFileOf(member)),
-      replicaId: member[0],
-      replicaIds: visible.map(([replicaId]) => replicaId),
-      peerAddresses: visible.map(addressOf),
-      nodeId: member[1],
-      transport: network,
-      systemTableCache: cache,
-      ...extra,
-    });
-    services.push(service);
-    caches.push(cache);
-    return service;
-  };
-  const waitFor = async (predicate) => {
-    const deadline = Date.now() + GROUP_BUDGET_MS;
-    while (Date.now() < deadline) {
-      if (predicate()) {
-        return true;
-      }
-      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-    }
-    return false;
-  };
+  const {dbFileOf, waitFor} = group;
+  const leader = group.services[0];
   try {
-    // The group forms through the production admission path: a lone leader,
-    // then each replica admitted when its services row becomes visible.
-    const leader = build(members[0], [members[0]]);
-    await leader.initialize();
-    assert.equal(await waitFor(() =>
-      leader.raft.readStatus().role === 'leader'), true,
-    'setup: the first replica leads');
-    for (let joined = 1; joined < members.length; joined += 1) {
-      const visible = members.slice(0, joined + 1);
-      const replica = build(members[joined], visible, {deferElection: true});
-      await replica.initialize();
-      for (const cache of caches.slice(0, joined)) {
-        cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT,
-          serviceRow(members[joined]));
-      }
-      replica.startElection();
-      assert.equal(await waitFor(() => {
-        const status = leader.raft.readStatus();
-        return status.followerProgress[addressOf(members[joined])] ===
-          status.commitIndex;
-      }), true, `setup: replica ${members[joined][0]} is admitted`);
-    }
-
     const applied = await insert(leader, 'row-1', 'first', 'entry-first');
     const failed = await insert(leader, 'row-1', 'second', 'entry-failed');
     const retriedFailure = await insert(leader, 'row-1', 'second',
@@ -459,11 +389,75 @@ test('B2: the replicas of a three-replica group hold identical outcome rows ' +
         `replica ${members[replica][0]} holds the leader's outcome rows`);
     }
   } finally {
-    network.deliver = async () => undefined;
-    await Promise.all(services.map((service) => service.shutdown()));
-    fs.rmSync(directory, {recursive: true, force: true});
+    await group.dispose();
     resetEnvironment();
   }
+});
+
+test('F-o: a retry is answered from the durable outcome row, the same ' +
+  'answer in process and after a restart, for an applied and a failed ' +
+  'statement', {timeout: TEST_TIMEOUT_MS}, async () => {
+  await withPartition('fo-retry-shape', async ({dbPath, open}) => {
+    // The acknowledgement time is when this answer was given; every other
+    // field is the settled outcome's.
+    const settled = ({acknowledgedAtMs, ...answer}) => {
+      assert.equal(typeof acknowledgedAtMs === 'number' ||
+        acknowledgedAtMs === undefined, true, 'a time, when present');
+      return answer;
+    };
+    const partition = await open();
+    const applied = await insert(partition, 'row-1', 'first', 'entry-applied');
+    const failed = await insert(partition, 'row-1', 'second', 'entry-failed');
+    assert.equal(applied.success, true, 'setup: the insert is acknowledged');
+    assert.equal(failed.success, false, 'setup: the duplicate fails');
+    const entriesBefore = durableRecord(dbPath, 'fo-retry-shape').applied
+      .length;
+    const inProcess = {
+      applied: await insert(partition, 'row-1', 'first', 'entry-applied'),
+      failed: await insert(partition, 'row-1', 'second', 'entry-failed'),
+    };
+    await partition.shutdown();
+    const restarted = await open();
+    const afterRestart = {
+      applied: await insert(restarted, 'row-1', 'first', 'entry-applied'),
+      failed: await insert(restarted, 'row-1', 'second', 'entry-failed'),
+    };
+    assert.deepEqual(settled(inProcess.applied),
+      settled(afterRestart.applied),
+      'the applied retry has one answer in process and after a restart');
+    assert.deepEqual(settled(inProcess.failed), settled(afterRestart.failed),
+      'the failed retry has one answer in process and after a restart');
+    assert.equal(inProcess.applied.replayOfLogIndex, applied.logIndex,
+      'the applied answer names the index the write was applied at');
+    assert.equal(inProcess.failed.replayOfLogIndex, failed.logIndex,
+      'the failed answer names the index the failure was recorded at');
+    assert.equal(durableRecord(dbPath, 'fo-retry-shape').applied.length,
+      entriesBefore, 'a retry of a settled entry proposes nothing');
+  });
+});
+
+test('F-p: a write of an SQL command type without its statement is refused ' +
+  'before it is proposed', {timeout: TEST_TIMEOUT_MS}, async () => {
+  await withPartition('fp-no-statement', async ({dbPath, open}) => {
+    const partition = await open();
+    const before = durableRecord(dbPath, 'fp-no-statement');
+    const answer = await Promise.race([
+      partition.applyWrite({
+        type: PARTITION_SERVICE_OPERATION.INSERT,
+        entryId: 'entry-without-statement',
+      }),
+      new Promise((resolve) => setTimeout(() => resolve('pending'),
+        PROMPT_ANSWER_MS)),
+    ]);
+    assert.notEqual(answer, 'pending', 'the write is answered at once, not ' +
+      'left to the pending-request timeout');
+    assert.equal(answer.success, false, 'the write is refused');
+    assert.equal(answer.failureCode,
+      PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_MISSING,
+      'with the typed refusal');
+    const after = durableRecord(dbPath, 'fp-no-statement');
+    assert.deepEqual(after, before, 'nothing entered consensus');
+  });
 });
 
 test('F-i: a schema error is a deterministic statement failure: consumed ' +

@@ -199,12 +199,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.proposalQueue = new ProposalQueue({timeSource: this.timeSource});
     this.pendingWriteOutcomes = /* @__PURE__ */ new Map();
     this.cdcDelivery = new PartitionCDCDelivery(this);
-    this.recentlyAppliedEntryKeys = /* @__PURE__ */ new Set();
-    this.recentlyAppliedEntryOrder = [];
-    this.recentlyAppliedEntryWitnesses = /* @__PURE__ */ new Map();
     this.migrationColumnDefaultsByTable = /* @__PURE__ */ new Map();
-    this.maxTrackedAppliedEntries =
-      PARTITION_SERVICE_DEFAULT.MAX_TRACKED_APPLIED_ENTRIES;
     this.hlcClock = new HLCClockService(this.replicaId, {
       timeSource: this.timeSource,
     });

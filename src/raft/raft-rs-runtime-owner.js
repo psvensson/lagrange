@@ -281,10 +281,42 @@ function openGroupInCurrentRuntime(group, restore) {
   });
 }
 
-function replaceRuntime() {
+// Whether a configuration names this replica as its only voter: no other
+// replica can lead the group, so the replica is its group's leader as soon as
+// it campaigns.
+function isSoleVoter(confState, peerId) {
+  return confState.voters.length === 1 && confState.voters[0] === peerId &&
+    (confState.votersOutgoing || []).length === 0;
+}
+
+// A restored group resumes what it was before its runtime was replaced. The
+// new core starts every group as a follower: a sole voter campaigns again at
+// once (nothing else would ever make it leader, and a partition whose
+// election is deferred has no tick to time out on), and every other group
+// announces the role it now has, so its partition's leadership observation is
+// re-synced from the core rather than left at the pre-failure leader.
+function resumeAfterReconstruction(group, expectedGeneration) {
+  const conf = invokeCoreAt(
+    group, expectedGeneration, CORE_OPERATION.CONF_STATE);
+  if (!conf.ok) {
+    return conf.result;
+  }
+  if (isSoleVoter(conf.value, group.peerId)) {
+    return campaignGroup(group, expectedGeneration);
+  }
+  announce(group, expectedGeneration);
+  return outcome(CORE_OK, {reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED});
+}
+
+// Reconstruct the shared runtime from every group's durable record, then let
+// each restored group resume. The outcome is the reconstruction's and, for
+// the group whose operation asked for it, that group's resumption: a group
+// that cannot resume is left RECOVERY_REQUIRED for its own next operation.
+function replaceRuntime(trigger) {
   core = null;
   runtimeHealth = HEALTHY;
   ensureCore();
+  const restoredGroups = [];
   for (const group of groups.values()) {
     if (group.closed || !group.store.hasDurableRecord(group.groupId)) {
       continue;
@@ -293,13 +325,27 @@ function replaceRuntime() {
     if (restored.outcome !== CORE_OK) {
       return restored;
     }
+    restoredGroups.push(group);
   }
-  return outcome(CORE_OK, {reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED});
+  const expectedGeneration = runtimeGeneration;
+  let triggerResumed = outcome(CORE_OK, {
+    reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED});
+  for (const group of restoredGroups) {
+    const resumed = resumeAfterReconstruction(group, expectedGeneration);
+    if (resumed && typeof resumed.then === 'function') {
+      // Only a Ready waiting for the store's admission resolves later; its
+      // group's own queue observes the result.
+      resumed.catch(() => undefined);
+    } else if (group === trigger && resumed.outcome !== CORE_OK) {
+      triggerResumed = resumed;
+    }
+  }
+  return triggerResumed;
 }
 
 function ensureExecution(group) {
   if (runtimeHealth !== HEALTHY || group.health === RECOVERY_REQUIRED) {
-    return replaceRuntime();
+    return replaceRuntime(group);
   }
   return outcome(CORE_OK, {reason: RUNTIME_REASON.EXECUTION_USABLE});
 }

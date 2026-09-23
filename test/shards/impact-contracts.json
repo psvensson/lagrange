@@ -473,7 +473,7 @@
       ]
     },
     "raft-rs-runtime-application-transaction": {
-      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress and ConfState coherent across host failure and reconstruction.",
+      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; a reconstructed sole voter leads again, every restored group announces its role, and a retry is answered from its durable outcome.",
       "owners": [
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/raft-rs-durable-store.js",
@@ -481,11 +481,13 @@
         "src/partition/partition-service-raft-init-base.js",
         "src/partition/partition-service-entry-apply-base.js",
         "src/partition/partition-committed-statement-outcome.js",
-        "src/partition/partition-committed-statement-outcome-constants.js"
+        "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/partition/partition-service-write-metrics-base.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
-        "test/partition/committed-statement-outcome.test.js"
+        "test/partition/committed-statement-outcome.test.js",
+        "test/partition/partition-runtime-reconstruction-leadership.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -890,14 +892,16 @@
             "src/raft/raft-rs-application-transaction-owner.js",
             "src/partition/partition-service-raft-init-base.js",
             "src/partition/partition-service-entry-apply-base.js",
-            "src/partition/partition-committed-statement-outcome.js"
+            "src/partition/partition-committed-statement-outcome.js",
+            "src/partition/partition-service-write-metrics-base.js"
           ]
         }
       ],
       "contract": "raft-rs-runtime-application-transaction",
       "witnessTests": [
         "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
-        "test/partition/committed-statement-outcome.test.js"
+        "test/partition/committed-statement-outcome.test.js",
+        "test/partition/partition-runtime-reconstruction-leadership.test.js"
       ]
     },
     "partition-raft-operation-port": {

@@ -25,8 +25,10 @@
 // the same entry key - in process, on another replica, or after a restart -
 // is never executed again. It resolves from the row: an APPLIED row as an
 // idempotent replay, a STATEMENT_FAILED row as the original failure, each
-// with `replayOfLogIndex`. The in-memory replay set is only a cache in front
-// of the row (it holds keys whose row is APPLIED); it never decides.
+// with `replayOfLogIndex`. There is no in-memory replay state: a retry is
+// answered from the row before it is proposed, and one that was proposed
+// anyway (its original not yet applied here when it was proposed) is answered
+// from the row when it is applied - the same answer either way.
 
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
@@ -46,6 +48,7 @@ const {
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_VALUE,
+  buildDurableCommitWitness,
 } = PARTITION_SERVICE_SHARED;
 
 /**
@@ -162,50 +165,77 @@ function statementEnvironmentFailure(error) {
 }
 
 /**
- * Settle a committed entry whose entry key already has a recorded outcome:
- * the statement is not executed again. An APPLIED record resolves the
- * proposer's write as an idempotent replay; a STATEMENT_FAILED record
- * resolves it as the original failure. Nothing new is recorded - the first
- * outcome stays the authority.
- * @param {Object} service - The partition.
- * @param {Object} replay - {recorded, command, entryKey, identity,
- *   afterCommit}.
- * @return {string} A PARTITION_COMMITTED_COMMAND_OUTCOME.
+ * The answer to a settled entry key, built from its outcome row alone: the
+ * same answer wherever and whenever it is asked - a retry before it is
+ * proposed, in process or after a restart, or a retry that was proposed and
+ * reached the application. An APPLIED row answers an idempotent replay with
+ * the durable commit witness this replica attests (the entry and the term and
+ * index it was applied at); a STATEMENT_FAILED row answers the original
+ * failure.
+ * @param {Object} service - The partition (its identity).
+ * @param {Object} settled - {recorded, command}: the SETTLED record and the
+ *   command asking.
+ * @return {Object} The write result.
  */
-function settleRecordedCommittedStatement(service, {recorded, command,
-  entryKey, identity, afterCommit}) {
-  const replayOfLogIndex = recorded.logIndex;
+function answerSettledStatement(service, {recorded, command}) {
+  const settledAt = {
+    partitionId: service.partitionId,
+    logIndex: recorded.logIndex,
+    replayOfLogIndex: recorded.logIndex,
+  };
   if (recorded.outcome === PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED) {
-    afterCommit(() => {
-      service.trackAppliedEntryKey(entryKey, identity.durableCommitWitness);
-      service.logger.debug(PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY, {
-        partitionId: service.partitionId,
-        commandType: command.type,
-        skippedReplay: true,
-        replayOfLogIndex,
-      });
-      service.resolveCommittedWrite(command.entryId, {
-        success: true,
-        changes: 0,
-        idempotentReplay: true,
-        replayOfLogIndex,
-        ...identity,
-      });
-      service.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
-        partitionId: service.partitionId,
-        command,
-      });
-    });
-    return PARTITION_COMMITTED_COMMAND_OUTCOME.REPLAYED;
+    return {
+      success: true,
+      changes: 0,
+      idempotentReplay: true,
+      ...settledAt,
+      ...(typeof command.entryId === 'string' && command.entryId.length > 0 ?
+        {durableCommitWitness: buildDurableCommitWitness({
+          partitionId: service.partitionId,
+          leaderNodeId: service.nodeId,
+          leaderReplicaId: service.replicaId,
+          logEntry: {term: recorded.term, index: recorded.logIndex,
+            data: command},
+        })} : {}),
+    };
   }
-  afterCommit(() => service.resolveCommittedWrite(command.entryId, {
+  return {
     success: false,
     error: recorded.failureMessage,
     failureCode: recorded.failureCode,
-    replayOfLogIndex,
-    ...identity,
-  }));
-  return PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED;
+    ...settledAt,
+  };
+}
+
+/**
+ * Settle a committed entry whose entry key already has a recorded outcome:
+ * the statement is not executed again, and the proposer's write resolves to
+ * the settled answer. Nothing new is recorded - the first outcome stays the
+ * authority.
+ * @param {Object} service - The partition.
+ * @param {Object} replay - {recorded, command, afterCommit}.
+ * @return {string} A PARTITION_COMMITTED_COMMAND_OUTCOME.
+ */
+function settleRecordedCommittedStatement(service, {recorded, command,
+  afterCommit}) {
+  afterCommit(() => service.resolveCommittedWrite(command.entryId,
+    answerSettledStatement(service, {recorded, command})));
+  if (recorded.outcome !== PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED) {
+    return PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED;
+  }
+  afterCommit(() => {
+    service.logger.debug(PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY, {
+      partitionId: service.partitionId,
+      commandType: command.type,
+      skippedReplay: true,
+      replayOfLogIndex: recorded.logIndex,
+    });
+    service.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
+      partitionId: service.partitionId,
+      command,
+    });
+  });
+  return PARTITION_COMMITTED_COMMAND_OUTCOME.REPLAYED;
 }
 
 /**
@@ -249,6 +279,7 @@ function settleFailedCommittedStatement(service, {error, command, entryKey,
 }
 
 export {
+  answerSettledStatement,
   createCommittedStatementOutcomeTable,
   readCommittedStatementOutcome,
   recordCommittedStatementOutcome,

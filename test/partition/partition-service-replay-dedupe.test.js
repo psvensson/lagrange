@@ -1,5 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {PARTITION_COMMITTED_COMMAND_OUTCOME} from
+  '../../src/partition/partition-service-constants.js';
+import {readCommittedStatementOutcome} from
+  '../../src/partition/partition-committed-statement-outcome.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 
@@ -52,20 +56,6 @@ test('PartitionService skips replayed committed entries when entryId is stable',
       .get('row-1')
       .count;
     t.equal(rowCount, 1, 'replayed write should not create a duplicate row');
-
-    // The in-memory replay set is a cache in front of the durable outcome
-    // record, never the authority: a key it holds without a recorded
-    // outcome does not stop the statement from running.
-    const cacheOnlyEntry = {...leaderEntry, entryId: 'entry-cache-only',
-      params: ['row-cache-only']};
-    partition.trackAppliedEntryKey(
-      partition.getCommittedEntryKey(cacheOnlyEntry));
-    t.equal(await commitThroughPort(partition, cacheOnlyEntry),
-      RAFT_OPERATION_OUTCOME.CORE_OK, 'the cache-only key commits');
-    t.equal(partition.db
-      .prepare('SELECT COUNT(*) AS count FROM dedupe_table WHERE id = ?')
-      .get('row-cache-only').count, 1,
-    'a cached key without a recorded outcome is executed');
 
     await partition.shutdown();
   });
@@ -164,10 +154,11 @@ test(
     t.equal(await commitThroughPort(partition, replayedEntry),
       RAFT_OPERATION_OUTCOME.CORE_OK,
       'the failed statement is consumed; the partition keeps serving');
-    t.equal(partition.recentlyAppliedEntryKeys.has(
-      partition.getCommittedEntryKey(replayedEntry)), false,
-    'no applied instance of the entry identity exists, so it is not ' +
-    'recorded as an applied replay');
+    t.equal(readCommittedStatementOutcome(partition,
+      partition.getCommittedEntryKey(replayedEntry)).outcome,
+    PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
+    'no applied instance of the entry identity exists, so its outcome is ' +
+    'recorded as a failed statement, not an applied replay');
 
     const rowCount = partition.db
       .prepare('SELECT COUNT(*) AS count FROM dedupe_table WHERE id = ?')

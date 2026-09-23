@@ -8,6 +8,8 @@ import {
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
+  PARTITION_COMMITTED_COMMAND_TYPES,
+  PARTITION_COMMITTED_SQL_COMMAND_TYPES,
 } from './partition-service-constants.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   './partition-committed-statement-outcome-constants.js';
@@ -61,24 +63,6 @@ const {
   resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
 
-// The committed command types the application executes as SQL, and every
-// type it recognises: the transaction markers PREPARE_TRANSACTION and
-// ROLLBACK are recorded in the log only. Anything else is UNRECOGNISED.
-const PARTITION_COMMITTED_SQL_COMMAND_TYPES = new Set([
-  PARTITION_SERVICE_OPERATION.WRITE,
-  PARTITION_SERVICE_OPERATION.INSERT,
-  PARTITION_SERVICE_OPERATION.UPDATE,
-  PARTITION_SERVICE_OPERATION.DELETE,
-  PARTITION_SERVICE_OPERATION.UPSERT,
-  PARTITION_SERVICE_OPERATION.QUERY,
-  PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE,
-]);
-const PARTITION_COMMITTED_COMMAND_TYPES = new Set([
-  ...PARTITION_COMMITTED_SQL_COMMAND_TYPES,
-  PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
-  PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
-  PARTITION_SERVICE_OPERATION.ROLLBACK,
-]);
 
 class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase {
   ensureReplicaOperationsTableColumns() {
@@ -1071,14 +1055,14 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         const identity = this.buildCommittedWriteIdentity(command, index, term);
         const afterCommit = (effect) =>
           scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect);
-        // The recorded outcome of this entry key, not the in-memory replay
-        // cache, decides whether the statement runs: a settled key is never
-        // executed again, on any replica, before or after a restart.
+        // The recorded outcome of this entry key decides whether the
+        // statement runs: a settled key is never executed again, on any
+        // replica, before or after a restart.
         const recorded = readCommittedStatementOutcome(this, entryKey);
         if (recorded.state ===
             PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED) {
           return settleRecordedCommittedStatement(this, {
-            recorded, command, entryKey, identity, afterCommit});
+            recorded, command, afterCommit});
         }
         let info;
         try {
@@ -1100,7 +1084,6 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
           afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
         }
         afterCommit(() => {
-          this.trackAppliedEntryKey(entryKey, identity.durableCommitWitness);
           this.resolveCommittedWrite(command.entryId, {
             success: true,
             changes: info.changes,

@@ -79,7 +79,11 @@ export class ControllablePartitionRaftProvider {
     this.term = options.term || 1;
     this.leaderId = options.leaderId || null;
     this.leaderAddress = options.leaderAddress || null;
-    this.peers = Array.isArray(options.peers) ?
+    // Without explicit peers the configuration is the one the production
+    // port bootstraps: the request's bootstrap voters (see
+    // createPartitionPort).
+    this.peersGiven = Array.isArray(options.peers);
+    this.peers = this.peersGiven ?
       options.peers.map((peer) => ({...peer})) :
       [];
     this.confChanges = [];
@@ -116,6 +120,20 @@ export class ControllablePartitionRaftProvider {
 
   createPartitionPort(request) {
     this.request = request;
+    if (!this.peersGiven) {
+      // The production port's initial configuration: every bootstrap peer
+      // of the request is a voter, reported with its replica identity and
+      // the address the request's own resolver gives it.
+      const localIdentity = request[RAFT_PARTITION_NODE_REQUEST.PEER_ID];
+      const resolveAddress =
+        request[RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS];
+      this.peers = (request[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS] ||
+        []).filter((identity) => identity !== localIdentity)
+        .map((identity) => ({
+          address: resolveAddress(identity),
+          replicaIdentity: identity,
+        }));
+    }
     const subscribe = (eventName, listener) => {
       const listeners = this.listeners.get(eventName) || new Set();
       listeners.add(listener);

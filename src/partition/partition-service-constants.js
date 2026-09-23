@@ -37,7 +37,6 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   // timeout (never bounded below it); the next check is armed from
   // completion, so a timeout never stacks with the cadence.
   LEARNER_PROMOTION_WAKE_DELAY_MS: NUM.ZERO,
-  MAX_TRACKED_APPLIED_ENTRIES: NUM.THOUSAND * NUM.FIVE,
   MAX_COMMITTED_WRITE_LOG_ENTRIES: NUM.THOUSAND,
   PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS: TIME_MS.SECOND,
   // A sessionless write the consensus port defers because a user session
@@ -160,6 +159,27 @@ const PARTITION_SERVICE_OPERATION = Object.freeze({
   TRANSACTION_OUTCOME: 'TRANSACTION_OUTCOME',
 });
 
+// The committed command types the application executes as SQL, and every
+// type it recognises: the transaction markers PREPARE_TRANSACTION and
+// ROLLBACK are recorded in the log only. Anything else is UNRECOGNISED. A
+// write of an SQL type must carry its statement: one without is refused before
+// it is proposed (PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_MISSING).
+const PARTITION_COMMITTED_SQL_COMMAND_TYPES = Object.freeze(new Set([
+  PARTITION_SERVICE_OPERATION.WRITE,
+  PARTITION_SERVICE_OPERATION.INSERT,
+  PARTITION_SERVICE_OPERATION.UPDATE,
+  PARTITION_SERVICE_OPERATION.DELETE,
+  PARTITION_SERVICE_OPERATION.UPSERT,
+  PARTITION_SERVICE_OPERATION.QUERY,
+  PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE,
+]));
+const PARTITION_COMMITTED_COMMAND_TYPES = Object.freeze(new Set([
+  ...PARTITION_COMMITTED_SQL_COMMAND_TYPES,
+  PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
+  PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+  PARTITION_SERVICE_OPERATION.ROLLBACK,
+]));
+
 // What the committed-entry application did with one committed command
 // (R07): a failed statement is a deterministic outcome that consumes the
 // entry; a command type it does not know fails the application closed,
@@ -179,6 +199,7 @@ const PARTITION_COMMITTED_COMMAND_ERROR_CODE = Object.freeze({
   UNRECOGNISED: 'partition_committed_command_unrecognised',
   STATEMENT_ENVIRONMENT_FAILED:
     'partition_committed_statement_environment_failed',
+  STATEMENT_MISSING: 'partition_write_statement_missing',
 });
 
 const PARTITION_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
@@ -674,6 +695,9 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
     'Committed partition command type is not recognised',
   COMMITTED_ENTRY_EFFECT_FAILED:
     'Committed partition entry effect failed after its transaction',
+  WRITE_STATEMENT_MISSING:
+    'Partition write refused before it was proposed: a write of an SQL ' +
+    'command type carries no statement',
   COMMITTED_STATEMENT_ENVIRONMENT_FAILED:
     'Committed partition statement failed in the host environment; the ' +
     'entry is not consumed and is applied again when the host recovers',
@@ -722,6 +746,8 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
 export {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
+  PARTITION_COMMITTED_COMMAND_TYPES,
+  PARTITION_COMMITTED_SQL_COMMAND_TYPES,
   PARTITION_CONSENSUS_STARTUP_OUTCOME,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,

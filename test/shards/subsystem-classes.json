@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
-    "storage-partition": 147,
+    "storage-partition": 148,
     "storage-raft": 101,
     "test-infrastructure": 133,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2161,
-  "digest": "fnv1a32-41ba14aa",
+  "censusSize": 2162,
+  "digest": "fnv1a32-2ae5c545",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-5dc8cb69",
+  "observationDigest": "fnv1a32-a23201f2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1172,6 +1172,7 @@
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": "storage-partition",
     "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js": "storage-partition",
     "test/partition/partition-rebalancer-readiness-edge-gate.test.js": "storage-partition",
+    "test/partition/partition-runtime-reconstruction-leadership.test.js": "storage-partition",
     "test/partition/partition-service-cdc-log-suppression.test.js": "storage-partition",
     "test/partition/partition-service-hlc-monotonicity.test.js": "storage-partition",
     "test/partition/partition-service-learner-promotion-wake.test.js": "storage-partition",
@@ -6181,6 +6182,15 @@
         "src/partition/partition-raft-storage.js"
       ]
     },
+    "test/partition/partition-runtime-reconstruction-leadership.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
+      ]
+    },
     "test/partition/partition-service-hlc-monotonicity.test.js": {
       "files": [
         "src/partition/partition-hlc-warmup.js",
@@ -6220,6 +6230,8 @@
     },
     "test/partition/partition-service-replay-dedupe.test.js": {
       "files": [
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
         "src/raft/raft-operation-port-constants.js"
       ]
     },
@@ -6251,6 +6263,8 @@
     },
     "test/partition/partition-service-write-commit.test.js": {
       "files": [
+        "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-provider-contract-constants.js",
         "src/raft/raft-rs-application-transaction-owner.js",

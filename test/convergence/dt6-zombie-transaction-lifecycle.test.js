@@ -132,10 +132,6 @@ t.test(
       const durableBefore = readDurableRecordIndependently(partition);
       const commitIndexBefore = partition.raft.readStatus().commitIndex;
       await partition.beginTransaction('tx-zombie');
-      // Seed the Z1 poison state: an apply-dedup key that a bare rollback
-      // would strand (the watermark has no JS-memory cache on rs-raft; see
-      // the header).
-      partition.recentlyAppliedEntryKeys.add('poisoned-entry-key');
 
       const swept = partition.enforcePreparedStateHoldTimeouts(
         pastLegalHold(),
@@ -154,11 +150,11 @@ t.test(
         partition.preparedStateLostSessions.has('tx-zombie'),
         'the session is marked lost for late commit/rollback callers',
       );
-      t.equal(
-        partition.recentlyAppliedEntryKeys.size,
-        0,
-        'Z1: the apply-dedup set is cleared so evaporated entries re-execute',
-      );
+      // Z1: there is no JS-memory apply-dedup state for the heal to strand.
+      // Whether a statement re-executes is its durable outcome row's answer
+      // (quest raft-rs-single-path-partition-cutover, B2/F-o), and that row
+      // rolls back with the transaction exactly like the applied watermark
+      // asserted below.
       const durableAfter = readDurableRecordIndependently(partition);
       t.equal(
         readPartitionAppliedIndex(partition),

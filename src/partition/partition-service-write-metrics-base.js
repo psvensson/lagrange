@@ -7,10 +7,19 @@ import {collectBoundedSqliteRows} from
   '../query/query-result-budget.js';
 import {preparePartitionReadStatement} from
   './partition-read-statement-owner.js';
+import {
+  answerSettledStatement,
+  readCommittedStatementOutcome,
+} from './partition-committed-statement-outcome.js';
+import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
+  './partition-committed-statement-outcome-constants.js';
+import {
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
+  PARTITION_COMMITTED_SQL_COMMAND_TYPES,
+} from './partition-service-constants.js';
 
 
 const {
-  DURABLE_COMMIT_WITNESS_ERROR,
   ERRORS,
   METRICS_LOG_TAG,
   PARTITION_SERVICE_ERROR_MSG,
@@ -601,31 +610,29 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
   }
 
   /**
-   * Rebuild the completed-replay response without minting a new log identity.
-   * @param {string} entryKey
-   * @return {Object}
+   * The answer to a write whose entry key is already settled, from its
+   * durable outcome row; undefined when the key is unsettled (or the entry
+   * carries no statement) and the write must be proposed.
+   * @param {Object} entry - The write entry.
+   * @param {string|null} entryKey - Its committed entry key.
+   * @return {Object|undefined} The write result, acknowledged by this node
+   *   when it is a success.
    * @private
    */
-  buildAppliedEntryReplayResult(entryKey) {
-    const durableCommitWitness =
-      this.getAppliedEntryDurableCommitWitness(entryKey);
-    if (!durableCommitWitness) {
-      return {
-        success: false,
-        error: DURABLE_COMMIT_WITNESS_ERROR,
-        partitionId: this.partitionId,
-        idempotentReplay: true,
-      };
+  answerSettledWrite(entry, entryKey) {
+    if (typeof entryKey !== 'string') {
+      return undefined;
     }
-    return {
-      success: true,
-      changes: 0,
-      partitionId: this.partitionId,
-      idempotentReplay: true,
-      durableCommitWitness,
+    const recorded = readCommittedStatementOutcome(this, entryKey);
+    if (recorded.state !== PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED) {
+      return undefined;
+    }
+    const answer = answerSettledStatement(this, {recorded, command: entry});
+    return answer.success ? {
+      ...answer,
       acceptingNodeId: this.nodeId,
       acknowledgedAtMs: this.timeSource.now(),
-    };
+    } : answer;
   }
   /**
    * Apply a write operation (leader only).
@@ -654,13 +661,34 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     if (pendingOutcome) {
       return pendingOutcome;
     }
-    if (entryKey && this.recentlyAppliedEntryKeys.has(entryKey)) {
+    // A write of an SQL command type without its statement would be
+    // consumed as a log-only record and never answer its proposer: it is
+    // refused before it enters consensus.
+    if (PARTITION_COMMITTED_SQL_COMMAND_TYPES.has(entry.type) &&
+        !(typeof entry.sql === 'string' && entry.sql.length > 0)) {
       this.recordWritePhaseDuration(
         phaseTimings,
         WRITE_PHASE_FIELD_APPLY_WRITE_MS,
         applyStartMs,
       );
-      return this.buildAppliedEntryReplayResult(entryKey);
+      return {
+        success: false,
+        error: PARTITION_SERVICE_ERROR_MSG.WRITE_STATEMENT_MISSING,
+        failureCode: PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_MISSING,
+        partitionId: this.partitionId,
+      };
+    }
+    // A settled entry key is answered from its durable outcome row, before
+    // anything is proposed: a retry never adds a log entry, and its answer is
+    // the same in process and after a restart.
+    const settledAnswer = this.answerSettledWrite(entry, entryKey);
+    if (settledAnswer !== undefined) {
+      this.recordWritePhaseDuration(
+        phaseTimings,
+        WRITE_PHASE_FIELD_APPLY_WRITE_MS,
+        applyStartMs,
+      );
+      return settledAnswer;
     }
     // Leadership is the consensus core's own, read through the port.
     const commitMode = resolvePartitionWriteCommitMode({
@@ -686,19 +714,16 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     // applies the write and resolves it with its durable commit witness.
     return startPartitionRaftWriteCommit(this, {
       entry,
-      entryKey,
       phaseTimings,
       applyStartMs,
     });
   }
   async applyWriteSideEffectPlan({
     entry,
-    entryKey,
     result,
     sideEffectPlan,
     commitPromise,
   }) {
-    this.trackAppliedEntryKey(entryKey, result?.durableCommitWitness);
     if (commitPromise) {
       this.setPendingCommittedWriteResult(entry.entryId, result);
     }

@@ -163,9 +163,6 @@ class PartitionServiceLifecycleMethods {
       PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
     this.cdcReplayBufferGrowthCount = 0;
     this.cdcReplayRetryDepth = 0;
-    this.recentlyAppliedEntryKeys.clear();
-    this.recentlyAppliedEntryOrder = [];
-    this.recentlyAppliedEntryWitnesses.clear();
     this.pendingCDCEventDeliveries.clear();
     this.emit(PARTITION_SERVICE_EVENT.SHUTDOWN, {
       partitionId: this.partitionId,

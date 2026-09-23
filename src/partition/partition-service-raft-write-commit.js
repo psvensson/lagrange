@@ -67,7 +67,6 @@ function userTransactionWriteDeferral(service, entryId) {
 async function executePartitionRaftWriteCommit(service, options) {
   const {
     entry,
-    entryKey,
     phaseTimings,
     applyStartMs,
   } = options;
@@ -133,7 +132,6 @@ async function executePartitionRaftWriteCommit(service, options) {
     );
     await service.applyWriteSideEffectPlan({
       entry,
-      entryKey,
       result: acknowledgedResult,
       sideEffectPlan: {
         ...sideEffectPlan,

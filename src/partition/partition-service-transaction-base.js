@@ -354,17 +354,6 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     return expiredActiveSessions;
   }
 
-  // A swept/healed rollback is NOT crash-equivalent for JS memory: the apply
-  // dedup set survives it and would make post-heal catch-up skip
-  // re-execution (verifier finding Z1). The key set and its witnesses MUST be
-  // cleared together so the replica genuinely re-applies what the rollback
-  // evaporated; the applied watermark is the rs-raft store's own and rolls
-  // back with the transaction.
-  clearPostRollbackApplyState() {
-    this.recentlyAppliedEntryKeys?.clear?.();
-    this.recentlyAppliedEntryWitnesses?.clear?.();
-  }
-
   enforcePreparedStateHoldTimeouts(nowMs = Date.now()) {
     // Sync-section attribution (instrumentation-only): this synchronous sweep
     // (and its heal-deferred warn path) runs continuously on the seed; tag it
@@ -413,7 +402,9 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         {partitionId: this.partitionId, error: error.message},
       );
     }
-    this.clearPostRollbackApplyState();
+    // A healed rollback strands no apply state in memory (verifier finding
+    // Z1): the applied watermark and each statement's replay answer (its
+    // outcome row) are durable rows that roll back with the transaction.
     for (const expiredSession of expiredPreparedSessions) {
       this.preparedTransactions.delete(expiredSession.sessionId);
       this.activeTransactions.delete(expiredSession.sessionId);
@@ -836,7 +827,6 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       if (this.isStuckTransactionHealPermitted()) {
         try {
           this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
-          this.clearPostRollbackApplyState();
           stuckStateReleased = true;
         } catch {
           // The connection itself is wedged: leave the session visible.

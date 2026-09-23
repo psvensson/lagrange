@@ -12,6 +12,10 @@ import {
   createControllablePartitionService,
 } from './partition-service-test-support.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {readCommittedStatementOutcome} from
+  '../../src/partition/partition-committed-statement-outcome.js';
+import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
+  '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_SERVICE_ERROR_MSG,
@@ -337,11 +341,10 @@ test(
     t.same(committedEvents, [],
       'no committed event escapes the failed transaction');
     t.equal(
-      partition.recentlyAppliedEntryKeys.has(
-        partition.getCommittedEntryKey(firstCommand),
-      ),
-      false,
-      'the replay marker is not published for rolled-back SQL',
+      readCommittedStatementOutcome(partition,
+        partition.getCommittedEntryKey(firstCommand)).state,
+      PARTITION_COMMITTED_STATEMENT_RECORD_STATE.UNSETTLED,
+      'no outcome is recorded for rolled-back SQL',
     );
 
     partition.db.exec('DROP TRIGGER fail_applied_progress');
