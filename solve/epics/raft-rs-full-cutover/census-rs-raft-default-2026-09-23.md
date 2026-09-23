@@ -139,11 +139,12 @@ separate quest until it is fixed and the census is re-run.
 - `bootstrap/production-scheduling-defaults`, `convergence/dt6-ledger-leader-durability-fitness`,
   `query/write-path-internal-pacing`: frozen-port reach-through since #46,
   recorded in the Q0 re-measure.
-- `packaging/sea-bundle-smoke`: "bundle dry-run exits cleanly" fails; the
-  bundler warns that `import.meta` is empty in the cjs output, and the rs-raft
-  runtime owner resolves the vendored WASM through `import.meta.url`. Whether
-  this is rs-raft-specific needs one run of the smoke on plain main on the same
-  node; if it is, the SEA packaging of the vendored binding is an R6/R8 item.
+- `packaging/sea-bundle-smoke`: "bundle dry-run exits cleanly" fails on plain
+  main `e3ac0514b` on the same node too (re-run 2026-09-23), so it is main debt,
+  not an rs-raft finding. The bundler's warning that `import.meta` is empty in
+  the cjs output still matters for R6/R8: the rs-raft runtime owner resolves
+  the vendored WASM through `import.meta.url`, so the SEA packaging of the
+  binding needs its own witness before deletion certification.
 
 ## What this changes in the epic's order
 
