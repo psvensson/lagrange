@@ -19,16 +19,16 @@
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 147,
-    "storage-raft": 96,
+    "storage-raft": 97,
     "test-infrastructure": 133,
     "transactions": 14,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2155,
-  "digest": "fnv1a32-0ddff89c",
+  "censusSize": 2156,
+  "digest": "fnv1a32-ac943d1d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b0eabb84",
+  "observationDigest": "fnv1a32-a9383551",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1423,6 +1423,7 @@
     "test/raft/raft-rs-backend/backend-seam.test.js": "storage-raft",
     "test/raft/raft-rs-backend/conf-state-authority.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-ready-loop.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "storage-raft",
     "test/raft/raft-rs-backend/election-safety.test.js": "storage-raft",
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-boundary.test.js": "storage-raft",
@@ -6084,7 +6085,9 @@
     },
     "test/partition/durable-replay-cursor.test.js": {
       "files": [
-        "src/partition/partition-service-core-base.js"
+        "src/partition/partition-service-core-base.js",
+        "src/raft/raft-operation-port.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/partition/durable-voter-visibility-role-write.test.js": {
@@ -6107,6 +6110,15 @@
     "test/partition/partition-raft-storage.test.js": {
       "files": [
         "src/partition/partition-raft-storage.js"
+      ]
+    },
+    "test/partition/partition-service-hlc-monotonicity.test.js": {
+      "files": [
+        "src/partition/partition-hlc-warmup.js",
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-operation-port.js",
+        "src/raft/raft-rs-proposal-codec-constants.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/partition/partition-service-learner-promotion.test.js": {
@@ -6164,6 +6176,11 @@
       "files": [
         "examples/service-data-affinity/lagrange-loader.js",
         "src/partition/partition-split-merge-manager.js"
+      ]
+    },
+    "test/partition/partition-transaction.property.test.js": {
+      "files": [
+        "src/raft/raft-operation-port.js"
       ]
     },
     "test/partition/raft-rs-transport-demux.test.js": {
@@ -6569,6 +6586,12 @@
     "test/raft/raft-rs-backend/durable-ready-loop.test.js": {
       "files": [
         "src/raft/raft-rs-host-contract.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": {
+      "files": [
+        "src/raft/raft-rs-proposal-codec-constants.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/raft/raft-rs-backend/election-safety.test.js": {

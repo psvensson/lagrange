@@ -6,17 +6,32 @@
  *    HLC to >= the committed entry's HLC, so a new leader's next write exceeds the
  *    last entry it applied (cross-leader monotonicity).
  *  - Fix 2 (restart high-water-mark): on init the clock is warmed from the max
- *    committed HLC on the durable log, so a restarted node never emits an HLC
- *    below one it previously committed.
+ *    committed HLC in the rs-raft durable store (the only durable log), so a
+ *    restarted node never emits an HLC below one it previously committed.
  */
 
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import Database from 'better-sqlite3';
+
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
+import {PARTITION_SERVICE_OPERATION} from
+  '../../src/partition/partition-service-constants.js';
+import {
+  RS_RAFT_SELECTION_ON_BASE,
+  restartOverCommittedCommands,
+} from './partition-rs-raft-restart-fixture.js';
+import {warmHlcFromDurableWitnesses} from
+  '../../src/partition/partition-hlc-warmup.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {RAFT_RS_PROPOSAL_CODEC_ERROR} from
+  '../../src/raft/raft-rs-proposal-codec-constants.js';
+import {RAFT_RS_ENTRY_TYPE} from
+  '../../src/raft/raft-rs-ready-loop-constants.js';
 
 const SCHEMA = {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]};
 
@@ -81,45 +96,100 @@ test('Fix 1: a missing/unparseable timestamp is skipped, never fatal',
     await partition.shutdown();
   });
 
-test('Fix 2: restart warms the HLC from the max committed log entry',
+// The committed command reaches the rs-raft durable store through the
+// partition's own operation port (see the fixture); the legacy log is never
+// written, so a warm-up that still reads it finds no witness.
+test('Fix 2: restart warms the HLC from the max committed rs-raft command',
+  async (t) => {
+    const highHlc = `${Date.now() + 1_000_000}-3-remote-node`;
+    const {restarted, committed, dispose} = await restartOverCommittedCommands(
+      {
+        partitionId: 'hlc-mono-partition',
+        tableId: 't',
+        tableName: 't',
+        schema: SCHEMA,
+      },
+      [{
+        entryId: 'e-committed',
+        type: PARTITION_SERVICE_OPERATION.INSERT,
+        sql: 'INSERT INTO t (id) VALUES (?)',
+        params: ['x'],
+        timestamp: highHlc,
+      }],
+    );
+    try {
+      // Restart on the same durable DB: a fresh HLC clock seeded from wall
+      // time would be ~16 minutes behind the committed HLC; the warm-up must
+      // lift it above what the rs-raft store holds.
+      const committedHlc = HLCTimestamp.fromString(
+        committed[committed.length - 1].command.timestamp);
+      const next = restarted.hlcClock.now();
+      t.ok(next.compare(committedHlc) > 0,
+        'restarted now() must exceed the max committed HLC in the rs-raft ' +
+        `store (now ${next.toString()}, committed ${committedHlc.toString()})`);
+    } finally {
+      await dispose();
+    }
+  });
+
+// A durable log whose applied prefix holds bytes that are not a proposal, as
+// a corrupted entry would: written through the store's own write API.
+function writeUndecodableAppliedEntry(db, groupId) {
+  const store = new RaftRsDurableStore(db);
+  store.appendEntries(groupId, [{
+    index: '1',
+    term: '1',
+    entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
+    data: Buffer.from('not a proposal').toString('base64'),
+  }]);
+  store.putHardState(groupId, {term: '1', vote: '0', commit: '1'});
+  store.putAppliedState(groupId, '1', {});
+}
+
+const SCHEMA_TABLES_SQL =
+  'SELECT name FROM sqlite_master WHERE type = \'table\' ORDER BY name';
+
+test('Fix 2: warm-up is a no-op without an rs-raft record and fails closed ' +
+  'on an undecodable applied command', async (t) => {
+  const db = new Database(':memory:');
+  try {
+    const updates = [];
+    const hlcClock = {update: (hlc) => updates.push(hlc)};
+    const service = {db, partitionId: 'hlc-mono-partition'};
+    warmHlcFromDurableWitnesses({service, hlcClock});
+    t.strictSame({updates, tables: db.prepare(SCHEMA_TABLES_SQL).all()},
+      {updates: [], tables: []},
+      'no record: nothing to warm from, and the warm-up created no table');
+
+    writeUndecodableAppliedEntry(db, service.partitionId);
+    t.throws(() => warmHlcFromDurableWitnesses({service, hlcClock}),
+      {code: RAFT_RS_PROPOSAL_CODEC_ERROR.UNDECODABLE},
+      'an undecodable applied command propagates the typed codec error');
+  } finally {
+    db.close();
+  }
+});
+
+test('Fix 2: an undecodable applied command fails partition init closed',
   async (t) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hlc-mono-'));
     const dbPath = path.join(dir, 'replica-1.db');
-    const highHlc = `${Date.now() + 1_000_000}-3-remote-node`;
-
+    let partition = null;
     try {
-      const first = buildPartition({dbPath});
-      await first.initialize();
-
-      // Persist a committed log entry carrying a far-future HLC, as if applied
-      // before a crash, then shut down (durable file survives).
-      first.logAdapter.put({
-        index: 1,
-        term: 1,
-        committed: true,
-        responses: [],
-        command: {
-          entryId: 'e-committed',
-          type: 'INSERT',
-          sql: 'INSERT INTO t (id) VALUES (?)',
-          params: ['x'],
-          timestamp: highHlc,
-        },
-      });
-      first.logAdapter.setCommittedIndex(1);
-      await first.shutdown();
-
-      // Restart on the same durable DB: a fresh HLC clock seeded from wall time
-      // would be ~16 minutes behind highHlc; the warm must lift it above.
-      const restarted = buildPartition({dbPath});
-      await restarted.initialize();
-
-      const next = restarted.hlcClock.now();
-      t.ok(next.compare(HLCTimestamp.fromString(highHlc)) > 0,
-        'restarted now() must exceed the max committed HLC on the log');
-
-      await restarted.shutdown();
+      const seeded = new Database(dbPath);
+      writeUndecodableAppliedEntry(seeded, 'hlc-mono-partition');
+      seeded.close();
+      partition = buildPartition({dbPath, ...RS_RAFT_SELECTION_ON_BASE});
+      await t.rejects(partition.initialize(),
+        {code: RAFT_RS_PROPOSAL_CODEC_ERROR.UNDECODABLE},
+        'init rejects with the typed codec error instead of warning and ' +
+        'serving with an unwarmed clock');
     } finally {
+      try {
+        partition?.db?.close();
+      } catch {
+        // The assertion under test already recorded what mattered.
+      }
       fs.rmSync(dir, {recursive: true, force: true});
     }
   });

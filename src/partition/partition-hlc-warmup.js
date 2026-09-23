@@ -2,16 +2,22 @@
 // for the raft-snapshot-atomic-install quest). Restart recovery reloads
 // committed state without re-applying entries, so a fresh HLC clock would
 // not witness already-committed HLCs and could regress below a value this
-// node previously committed. Warm the clock from the max committed HLC over
-// the log AND the snapshot boundary key — after an install the log is
-// compacted-empty and the sealed maxCommittedHlc is the only witness.
+// node previously committed. Warm the clock from the max HLC over the
+// applied commands of the rs-raft durable store, the partition's only
+// durable log, and nothing else. Entries committed but not yet applied are
+// applied (and merged into the clock) by the runtime after restart.
+//
+// Fail closed: a database without the rs-raft record has nothing to warm
+// from (a no-op), but an undecodable applied command means the durable log
+// is not trustworthy, and the codec's typed error propagates out of init.
+//
+// Recorded gap (snapshot/catch-up ownership, epic finding F5): an installed
+// rs-raft snapshot carries no HLC witness yet, so commands compacted into a
+// snapshot boundary are not witnessed here. The legacy `_raft_state`
+// maxCommittedHlc key is not an input: it belongs to the retired log.
 
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
-import {
-  readInstalledMaxCommittedHlc,
-} from '../raft/snapshot-boundary.js';
-
-const FIRST_LOG_INDEX = 1;
+import {readPartitionCommittedCommands} from './partition-committed-log.js';
 
 function maxHlcOf(current, candidate) {
   if (!candidate) return current;
@@ -20,32 +26,18 @@ function maxHlcOf(current, candidate) {
 }
 
 /**
- * Warm a partition HLC clock from every durable committed-HLC witness:
- * the committed log prefix plus the installed snapshot's sealed
- * maxCommittedHlc. Best-effort and never fatal to init (the caller wraps).
+ * Warm a partition HLC clock from the applied commands of its rs-raft
+ * durable store. Throws the codec's typed error on an undecodable entry.
  * @param {Object} options warm-up inputs
- * @param {Object} options.logAdapter SQLiteLogAdapter
+ * @param {Object} options.service the partition (its open db and id)
  * @param {Object} options.hlcClock partition HLC clock
  * @return {void}
  */
-function warmHlcFromDurableWitnesses({logAdapter, hlcClock}) {
-  if (!logAdapter ||
-    typeof logAdapter.getCommittedIndex !== 'function' ||
-    typeof logAdapter.getRange !== 'function') {
-    return;
-  }
+function warmHlcFromDurableWitnesses({service, hlcClock}) {
   let maxHlc = null;
-  const committedIndex = logAdapter.getCommittedIndex();
-  if (Number.isFinite(committedIndex) && committedIndex > 0) {
-    const entries = logAdapter.getRange(FIRST_LOG_INDEX, committedIndex);
-    for (const entry of entries) {
-      maxHlc = maxHlcOf(
-        maxHlc, HLCTimestamp.tryFromString(entry?.command?.timestamp));
-    }
-  }
-  if (logAdapter.isOpen()) {
-    maxHlc = maxHlcOf(maxHlc, HLCTimestamp.tryFromString(
-      readInstalledMaxCommittedHlc(logAdapter.db)));
+  for (const entry of readPartitionCommittedCommands(service)) {
+    maxHlc = maxHlcOf(
+      maxHlc, HLCTimestamp.tryFromString(entry.command?.timestamp));
   }
   if (maxHlc) hlcClock.update(maxHlc);
 }

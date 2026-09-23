@@ -4,6 +4,7 @@ import {
   trackStuckTransactionHeal,
 } from '../diagnostics/raft-churn-sync-sections.js';
 import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
+import {readPartitionCommittedCommands} from './partition-committed-log.js';
 
 
 const {
@@ -51,7 +52,8 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
   }
 
   /**
-   * Reconstruct prepared transaction state from the persisted Raft log.
+   * Reconstruct prepared transaction state from the committed commands of
+   * the rs-raft durable store (the partition's only durable log).
    * @return {{preparedTransactionCount: number, prepareLostCount: number}}
    *   Reconstruction summary.
    */
@@ -59,9 +61,9 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     const reconstructedPreparedTransactions = /* @__PURE__ */ new Map();
     const terminalSessions = /* @__PURE__ */ new Set();
     const prepareLostSessions = /* @__PURE__ */ new Set();
-    const logEntries = this.storage?.getEntriesFrom(1) || [];
-    for (const logEntry of logEntries) {
-      const data = logEntry?.data || null;
+    for (const committedEntry of readPartitionCommittedCommands(this)) {
+      const logIndex = Number(committedEntry.index);
+      const data = committedEntry.command || null;
       if (!data || typeof data !== PARTITION_SERVICE_LITERAL.OBJECT) {
         continue;
       }
@@ -86,9 +88,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
           operations: [],
           writeSet: new Set(data.writeSet),
           readSet: /* @__PURE__ */ new Set(),
-          raftLogIndex: Number.isFinite(logEntry?.index) ?
-            logEntry.index :
-            null,
+          raftLogIndex: Number.isSafeInteger(logIndex) ? logIndex : null,
           preparedAt: Number.isFinite(data.proposedAt) ?
             data.proposedAt :
             Date.now(),
