@@ -14,8 +14,9 @@ import {test} from 'node:test';
 
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 import {
-  PLACEMENT_EXIT, placeTestFiles, placementDeps, placementMachines,
-  recordPlacementMisses, runPlacedTestFiles, startRemoteShard,
+  PLACEMENT_EXIT, formatLabDecision, labTestCommit, labTestDeps, placeLabLanes,
+  placeTestFiles, placementDeps, placementMachines, recordPlacementMisses, runLabTest,
+  runPlacedTestFiles, startRemoteShard,
 } from '../../scripts/lab/probe.js';
 
 const MINUTE = 60000;
@@ -25,6 +26,7 @@ const CONTROLLER = Object.freeze({name: '(controller)', controller: true, speed:
 // (2026-09-18: a repository-scanning file took over a minute there).
 const FAST_TEST = 'test/query/distributed-merge-engine.test.js';
 const SLOW_TEST = 'test/scripts/check-operation-dispatch-completion-owner.test.js';
+const OTHER_FAST_TEST = 'test/query/budget-limit-error.test.js';
 
 function lab(name, speed, extra = {}) {
   return {name, controller: false, speed, avoid: [], gapsKey: 'k', ...extra};
@@ -570,6 +572,48 @@ test('the controller child runs with placement switched off', async (t) => {
   assert.notEqual(await local.done, 0, 'and an abort ends it');
 });
 
+const GATE_TEST = 'test/scripts/lab-stream-gate.test.js';
+const RESULTS_FILE = 'test-output/reports/test-results.ndjson';
+const RESULTS_TEXT = '{"file":"a","ok":true}\n{"file":"b","ok":false}\n';
+
+// Waits, bounded, for the witness to create the gate file.
+function gateTestSource(gate) {
+  return [
+    'import assert from \'node:assert/strict\';',
+    'import fs from \'node:fs\';',
+    'import {test} from \'node:test\';',
+    'test(\'waits for the witness\', async () => {',
+    `  for (let poll = 0; poll < 2400 && !fs.existsSync(${JSON.stringify(gate)}); poll += 1) {`,
+    '    await new Promise((resolve) => setTimeout(resolve, 50));',
+    '  }',
+    `  assert.ok(fs.existsSync(${JSON.stringify(gate)}));`,
+    '});',
+    '',
+  ].join('\n');
+}
+
+test('the controller child gets its file list even while this process is busy', async () => {
+  // Its list used to go down a socket written from this event loop; a child
+  // that read it first - this process blocked after the spawn, as a placed
+  // run is while it bundles and starts lab shards - found the non-blocking
+  // socket empty and died with EAGAIN before running anything (found
+  // 2026-09-23, eight of eight children under a 300 ms block).
+  // Not inside node:test's own stream protocol, as a real controller is not.
+  const env = gitProcessEnvironment();
+  delete env.NODE_TEST_CONTEXT;
+  // Streamed, so its output does not land in this file's own TAP; the list
+  // reaches an inherited-output child the same way.
+  const lines = [];
+  const streamed = labTestDeps({root: process.cwd(), env}).runLocalChild([OTHER_FAST_TEST],
+    {onLine: (line) => lines.push(line)});
+  const until = Date.now() + 300;
+  while (Date.now() < until) {
+    // Busy, as the controller is between starting its child and returning.
+  }
+  assert.equal(await streamed.done, 0, lines.join('\n'));
+  assert.ok(lines.some((line) => line.startsWith(`ok ${OTHER_FAST_TEST} `)), lines.join('\n'));
+});
+
 function git(cwd, ...args) {
   const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
     {cwd, encoding: 'utf8', env: gitProcessEnvironment()});
@@ -651,6 +695,14 @@ function labFixture(t) {
   git(node, 'update-ref', 'refs/lagrange-placement/old-run', basis);
   fs.appendFileSync(path.join(controller, 'README.md'), '\nplacement witness\n');
   git(controller, 'rm', '-q', '-r', 'data/storage-load');
+  // A file that finishes only when the witness releases it, so a line can be
+  // shown to arrive while its shard still runs; and a results ledger at the
+  // path a runner leaves one, which a hand run copies back.
+  const gate = path.join(scratch, 'release-gate');
+  fs.writeFileSync(path.join(controller, GATE_TEST), gateTestSource(gate));
+  fs.mkdirSync(path.join(controller, 'test-output', 'reports'), {recursive: true});
+  fs.writeFileSync(path.join(controller, RESULTS_FILE), RESULTS_TEXT);
+  git(controller, 'add', '-f', GATE_TEST, RESULTS_FILE);
   git(controller, 'commit', '-qam', 'placement witness');
   const sha = git(controller, 'rev-parse', 'HEAD');
   const machine = {name: 'lab', sshTarget: null, repoPath: node, repoHead: basis,
@@ -663,7 +715,8 @@ function labFixture(t) {
   delete env.NODE_TEST_CONTEXT;
   const start = (files, options = {}) => startRemoteShard({machine, files},
     {sha, deadlineMs: 10 * MINUTE, root: controller, env, ...options});
-  return {node, controller, parent, machine, sha, env, start};
+  return {node, controller, parent, machine, sha, env, start,
+    releaseGate: () => fs.writeFileSync(gate, 'go')};
 }
 
 test('a lab machine proves the exact commit in a throwaway worktree and leaves nothing behind',
@@ -786,3 +839,194 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
     assert.equal(unreachable.status, PLACEMENT_EXIT.SETUP);
     assert.deepEqual(leftovers(node), {worktrees: 1, refs: '', files: []});
   });
+
+// ---------------------------------------------------------------------------
+// The hand verb: `lab test <profile> --lane <lane> [--on NAME] [--sha COMMIT]
+// [--split]` sends the exact commit through the same shard path, streams each
+// file's verdict as it lands, and prints the runner's own summary.
+
+const LANE = Object.freeze({ORDINARY: 'ordinary', EXCLUSIVE: 'exclusive',
+  BOOTSTRAP: 'bootstrap', EXTERNAL: 'external-toolchain'});
+
+// A fake inventory: the machines, their measured facts and the controller's.
+function fakeInventory() {
+  const ready = {ready: true, missing: [], gaps: []};
+  const cap = (extra = {}) => ({repoPath: '/srv/lagrange', cpuSampleMs: 260, cores: 12,
+    memKiB: 16 * 1024 * 1024, nodeVersion: 'v22.22.3', repo: {head: 'c'.repeat(40)}, ...extra});
+  const fleet = [
+    {name: '(controller)', controller: true,
+      capability: {cpuSampleMs: 200, cores: 20, memKiB: 32 * 1024 * 1024}, readiness: ready},
+    {name: 'alpha', capability: cap(), readiness: ready},
+    {name: 'beta', capability: cap({cpuSampleMs: 150, cores: 8}), readiness: ready},
+    {name: 'gamma', capability: cap(), readiness: {ready: false, missing: ['no-repository'],
+      gaps: []}},
+  ];
+  const nodes = Object.fromEntries(fleet.filter((entry) => !entry.controller)
+    .map((entry) => [entry.name, {name: entry.name, ssh: `peer@${entry.name}`}]));
+  return {fleet, state: {nodes}};
+}
+
+const LANE_PLAN = Object.freeze([
+  {resourceClass: LANE.ORDINARY, files: ['o1', 'o2'], jobs: 4},
+  {resourceClass: LANE.EXTERNAL, files: ['t1'], jobs: 1},
+  {resourceClass: LANE.BOOTSTRAP, files: ['b1'], jobs: 2},
+  {resourceClass: LANE.EXCLUSIVE, files: ['x1'], jobs: 1},
+]);
+
+test('a hand lab run takes its machine from measured facts, never a written host', () => {
+  const {fleet, state} = fakeInventory();
+  const machines = placementMachines(fleet, state);
+  assert.deepEqual(machines.map((machine) => [machine.name, machine.cores, machine.memKiB]),
+    [['alpha', 12, 16 * 1024 * 1024], ['beta', 8, 16 * 1024 * 1024]],
+    'each machine carries its measured capacity');
+  const controller = {name: '(controller)', controller: true, speed: 1, cores: 20,
+    memKiB: 32 * 1024 * 1024};
+  const names = (assignments) => assignments.map((one) =>
+    [one.machine.name, one.lanes.map((lane) => lane.resourceClass)]);
+
+  // One lane, nowhere named: the fastest ready machine, measured this run.
+  assert.deepEqual(names(placeLabLanes([LANE_PLAN[3]], machines, {controller})),
+    [['beta', [LANE.EXCLUSIVE]]]);
+  assert.deepEqual(names(placeLabLanes(LANE_PLAN, machines, {on: 'alpha', controller})),
+    [['alpha', LANE_PLAN.map((lane) => lane.resourceClass)]], '--on names the machine');
+  assert.throws(() => placeLabLanes(LANE_PLAN, machines, {on: 'gamma', controller}),
+    /gamma is not a ready lab machine/u);
+  assert.throws(() => placeLabLanes(LANE_PLAN, [], {controller}), /no lab machine is ready/u);
+
+  // Split: the exclusive lane alone on the fastest lab machine; the rest on
+  // whichever is measured faster of the controller and the next lab machine.
+  assert.deepEqual(names(placeLabLanes(LANE_PLAN, machines, {split: true, controller})),
+    [['beta', [LANE.EXCLUSIVE]],
+      ['(controller)', [LANE.ORDINARY, LANE.EXTERNAL, LANE.BOOTSTRAP]]],
+    'a second machine slower than the controller is not used');
+  const quick = [...machines, {...machines[0], name: 'delta', speed: 0.5}];
+  assert.deepEqual(names(placeLabLanes(LANE_PLAN, quick, {split: true, controller})),
+    [['delta', [LANE.EXCLUSIVE]], ['beta', [LANE.ORDINARY, LANE.EXTERNAL, LANE.BOOTSTRAP]]],
+    'a second lab machine faster than the controller takes the other lanes');
+  assert.deepEqual(names(placeLabLanes(LANE_PLAN, machines,
+    {split: true, on: 'alpha', controller})),
+  [['alpha', [LANE.EXCLUSIVE]], ['beta', [LANE.ORDINARY, LANE.EXTERNAL, LANE.BOOTSTRAP]]],
+  'the next lab machine, measured faster than the controller, takes the rest');
+
+  // The decision is printed with the capacities it was made from.
+  const lines = formatLabDecision(placeLabLanes(LANE_PLAN, machines, {split: true, controller}));
+  assert.deepEqual(lines, [
+    'lab test: beta: exclusive (1 files) cores=8 mem=16.0GiB speed x0.75',
+    'lab test: (controller): ordinary, external-toolchain, bootstrap (4 files) ' +
+      'cores=20 mem=32.0GiB speed x1.00',
+  ]);
+});
+
+test('a lab shard streams its lines while it runs and relays its results ledger', async (t) => {
+  const {start, releaseGate} = labFixture(t);
+  const streamed = [];
+  let settled = false;
+  const shard = start([FAST_TEST, GATE_TEST], {runId: 'streamed',
+    results: RESULTS_FILE, onLine: (line, stream) => streamed.push({line, stream})});
+  shard.done.then(() => {
+    settled = true;
+  });
+  // Hooks run in the order they were added, after the fixture's removal: a
+  // failed witness stops its shard, and the gate file has nowhere to go.
+  t.after(() => shard.stop());
+  const fastVerdict = new RegExp(`^ok ${FAST_TEST} `, 'u');
+  for (let poll = 0; poll < 2400 && !streamed.some(({line}) => fastVerdict.test(line));
+    poll += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.ok(streamed.some(({line}) => fastVerdict.test(line)), 'a file verdict was streamed');
+  assert.equal(settled, false, 'while its shard was still running');
+  releaseGate();
+  const outcome = await shard.done;
+  assert.equal(outcome.status, 0, outcome.log + outcome.errors);
+  const out = streamed.filter(({stream}) => stream === 'out').map(({line}) => line);
+  assert.deepEqual(out, outcome.log.split('\n').filter(Boolean),
+    'every line of the log was streamed, once, in order');
+  assert.deepEqual(out.filter((line) => line.startsWith('placement-results=')),
+    RESULTS_TEXT.trim().split('\n').map((line) => `placement-results=${line}`),
+    'the results ledger left in the throwaway worktree comes back before it is removed');
+});
+
+test('a split lab run sends the exclusive lane away, runs the rest here and merges', async (t) => {
+  const {controller, machine, sha, env} = labFixture(t);
+  fs.symlinkSync(path.join(process.cwd(), 'node_modules'),
+    path.join(controller, 'node_modules'));
+  const {fleet} = fakeInventory();
+  const lab = {...machine, controller: false, speed: 0.9, cores: 12, memKiB: 1024 * 1024,
+    avoid: []};
+  const lines = [];
+  const deps = {...labTestDeps({root: controller, env}),
+    discover: async () => ({fleet, machines: [lab]})};
+  const plan = [
+    {resourceClass: LANE.ORDINARY, files: [OTHER_FAST_TEST], jobs: 4},
+    {resourceClass: LANE.EXCLUSIVE, files: [FAST_TEST], jobs: 1},
+  ];
+  const commit = labTestCommit({root: controller});
+  t.after(() => commit.release());
+  assert.equal(commit.sha, sha);
+  const status = await runLabTest({plan, commit, split: true, root: controller,
+    write: (line) => lines.push(line)}, deps);
+  assert.equal(status, 0, lines.join('\n'));
+  assert.ok(lines.includes('lab test: lab: exclusive (1 files) cores=12 mem=1.0GiB speed x0.90'),
+    lines.join('\n'));
+  assert.ok(lines.some((line) => line.startsWith(`[lab] ok ${FAST_TEST} `)), 'streamed there');
+  assert.ok(lines.some((line) => line.startsWith(`[(controller)] ok ${OTHER_FAST_TEST} `)),
+    'and here');
+  assert.ok(!lines.some((line) => line.includes('placement-results=')),
+    'the ledger is copied, not printed');
+  const merged = lines.at(-1);
+  assert.match(merged, /^# test-files total=2 pass=2 fail=0 assertions=\d+$/u,
+    'the local runner\'s own summary, merged over both machines');
+  const assertions = lines.filter((line) => /^\[[^\]]+\] ok /u.test(line))
+    .reduce((sum, line) => sum + Number(/\((\d+) assertions/u.exec(line)[1]), 0);
+  assert.equal(merged, `# test-files total=2 pass=2 fail=0 assertions=${assertions}`);
+  assert.equal(fs.readFileSync(path.join(controller, 'test-output', 'reports',
+    'test-results-lab.ndjson'), 'utf8'), RESULTS_TEXT, 'copied back under the machine\'s name');
+  commit.release();
+  assert.equal(fs.existsSync(commit.gitRoot), false, 'the planning checkout is gone');
+
+  // A share for the controller needs this tree to be exactly the commit.
+  await assert.rejects(runLabTest({plan, commit: {sha: 'f'.repeat(40), gitRoot: controller,
+    release: () => {}}, split: true, root: controller, write: () => {}}, deps),
+  /the controller runs its lanes in this tree, which is not exactly f{40}/u);
+});
+
+test('a hand lab run sends only a commit, and a named one from any tree', (t) => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-test-commit-'));
+  t.after(() => fs.rmSync(repo, {recursive: true, force: true}));
+  git(repo, 'init', '-q');
+  fs.mkdirSync(path.join(repo, 'test'));
+  fs.writeFileSync(path.join(repo, 'test', 'a.test.js'), 'first\n');
+  fs.writeFileSync(path.join(repo, 'package.json'), '{}\n');
+  fs.writeFileSync(path.join(repo, 'other.txt'), 'x\n');
+  git(repo, 'add', '.');
+  git(repo, 'commit', '-qm', 'one');
+  const first = git(repo, 'rev-parse', 'HEAD');
+  fs.writeFileSync(path.join(repo, 'test', 'a.test.js'), 'second\n');
+  git(repo, 'commit', '-qam', 'two');
+  const head = git(repo, 'rev-parse', 'HEAD');
+  const worktrees = () => git(repo, 'worktree', 'list').split('\n').length;
+
+  const clean = labTestCommit({root: repo});
+  assert.equal(clean.sha, head);
+  assert.equal(git(clean.gitRoot, 'rev-parse', 'HEAD'), head, 'planned at that commit');
+  clean.release();
+  clean.release();
+  assert.equal(worktrees(), 1, 'released once, and again harmlessly');
+
+  fs.writeFileSync(path.join(repo, 'test', 'b.test.js'), 'untracked\n');
+  assert.throws(() => labTestCommit({root: repo}),
+    /the tree is not exactly a commit, and only a commit is sent/u);
+  assert.throws(() => labTestCommit({root: repo, sha: 'no-such-commit'}),
+    /no-such-commit is not a commit here/u);
+  const named = labTestCommit({root: repo, sha: first.slice(0, 10)});
+  t.after(() => named.release());
+  assert.equal(named.sha, first, 'a named commit is resolved in full');
+  assert.equal(fs.readFileSync(path.join(named.gitRoot, 'test', 'a.test.js'), 'utf8'),
+    'first\n', 'and planned from its own test tree, not the working one');
+  assert.equal(fs.existsSync(path.join(named.gitRoot, 'test', 'b.test.js')), false);
+  assert.equal(fs.existsSync(path.join(named.gitRoot, 'other.txt')), false,
+    'only what planning reads is checked out');
+  named.release();
+  assert.equal(worktrees(), 1);
+});

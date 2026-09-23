@@ -146,6 +146,9 @@ const LANE_ORDER = Object.freeze([
   LANE_BOOTSTRAP,
   RESOURCE_CLASS_EXCLUSIVE,
 ]);
+// Every lane, in the order a run takes them: the names a hand lab run takes
+// with --lane.
+export const CLASSIFIED_LANES = LANE_ORDER;
 // The classes that may never share a machine with anything else.
 const SERIAL_PRIMARY_CLASSES = Object.freeze([
   PRIMARY_CLASS_CONVERGENCE_PROBE,
