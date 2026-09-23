@@ -40,6 +40,23 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   MAX_TRACKED_APPLIED_ENTRIES: NUM.THOUSAND * NUM.FIVE,
   MAX_COMMITTED_WRITE_LOG_ENTRIES: NUM.THOUSAND,
   PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS: TIME_MS.SECOND,
+  // A sessionless write the consensus port defers because a user session
+  // holds the partition's connection is proposed again (from this delay,
+  // backing off to the maximum) until the session ends, within this bound;
+  // past it the write is the typed deferral (deferRetry) and the router's
+  // retry owns it.
+  USER_TRANSACTION_WRITE_RETRY_INTERVAL_MS: NUM.TEN,
+  USER_TRANSACTION_WRITE_RETRY_MAX_DELAY_MS: NUM.HUNDRED,
+  USER_TRANSACTION_WRITE_DEFER_BUDGET_MS: TIME_MS.SECOND * NUM.TWO,
+});
+
+// Where a prepared session's state lives. No PREPARE marker is proposed while
+// a session stages on the partition's connection (consensus persistence
+// never runs inside a user transaction), so a prepared session is local to
+// this replica: its open SQLite transaction and memory, lost on restart.
+// Replicating the prepared write set is the replicated-transaction owner's.
+const PARTITION_TRANSACTION_PREPARED_STATE = Object.freeze({
+  LOCAL_STAGING: 'local-staging',
 });
 
 const PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON = Object.freeze({
@@ -541,6 +558,8 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   APPLY_COMMITTED_FAILED: 'Failed to apply committed entry',
   NOT_INITIALIZED: 'PartitionService not initialized',
   TRANSACTION_ALREADY_ACTIVE: 'Transaction already active on this partition',
+  WRITE_DEFERRED_USER_TRANSACTION_OPEN:
+    'Write deferred: a user transaction holds the partition connection',
   SERVING_ADMISSION_FENCED_FOR_REMOVAL:
     'Serving admission fenced for replica removal',
   BEGIN_TRANSACTION_FAILED: 'Failed to begin transaction',
@@ -714,4 +733,5 @@ export {
   PARTITION_SERVICE_STATUS,
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
+  PARTITION_TRANSACTION_PREPARED_STATE,
 };

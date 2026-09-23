@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2138,
+    "ordinary": 2140,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2155,
-  "digest": "fnv1a32-b32f5657",
+  "censusSize": 2157,
+  "digest": "fnv1a32-4928b7ec",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1412,6 +1412,7 @@
     "test/raft/raft-rs-backend/operation-port-status-observation.test.js": "ordinary",
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": "ordinary",
     "test/raft/raft-rs-backend/peer-identity.test.js": "ordinary",
+    "test/raft/raft-rs-backend/persistence-admission.test.js": "ordinary",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "ordinary",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "ordinary",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "ordinary",
@@ -2006,6 +2007,7 @@
     "test/topology/latency-tree-service.test.js": "ordinary",
     "test/topology/topology-anti-entropy-reconciler.test.js": "ordinary",
     "test/transaction/cross-partition-rejection.property.test.js": "ordinary",
+    "test/transaction/session-transaction-isolation.test.js": "ordinary",
     "test/transaction/single-partition-acid.property.test.js": "ordinary",
     "test/transaction/transaction-durability-raft.property.test.js": "ordinary",
     "test/transaction/transaction-support.test.js": "ordinary",

@@ -1,10 +1,19 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_OPERATION,
+  PARTITION_SERVICE_SQL,
+  PARTITION_TRANSACTION_PREPARED_STATE,
 } from '../../src/partition/partition-service-constants.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
   restartOverCommittedCommands,
@@ -182,59 +191,118 @@ test(
 );
 
 // ---------------------------------------------------------------------------
-// Property 12: Prepare replicates through Raft before returning
+// Property 12: Prepare stages locally; the session's marker follows its commit
+// Consensus persistence never runs inside a user session transaction (F6
+// layer 1): prepare proposes no marker while the session stages on the
+// partition's connection and reports its state as LOCAL_STAGING, and the
+// TRANSACTION_COMMIT marker is proposed only after the SQLite COMMIT. Every
+// observation is read on an independent connection through the rs-raft
+// store's DDL-free committed-entry reader.
 // Validates: Requirements 1.3, 8.1
 // ---------------------------------------------------------------------------
+function readIndependently(dbPath, read) {
+  const independent = new Database(dbPath, {readonly: true});
+  try {
+    return read(independent);
+  } finally {
+    independent.close();
+  }
+}
+
+function sessionMarkerTypes(dbPath, partitionId, sessionId) {
+  return readIndependently(dbPath, (independent) =>
+    RaftRsDurableStore.readCommittedEntriesIn(independent, partitionId)
+      .filter((entry) => entry.command?.sessionId === sessionId)
+      .map((entry) => entry.command.type));
+}
+
+function visibleRowIds(dbPath, rowId) {
+  return readIndependently(dbPath, (independent) => independent
+    .prepare(`SELECT id FROM ${TEST_TABLE_NAME} WHERE id = ?`)
+    .all(rowId).map((row) => row.id));
+}
+
 test(
-  'Property 12: successful prepare proposes its marker through the consensus port',
+  'Property 12: prepare stages locally without a marker and the commit ' +
+  'marker follows the SQLite commit',
   async (t) => {
     await fc.assert(
       fc.asyncProperty(
         rowIdArb,
         valueArb,
         async (rowId, value) => {
-          const partition = createTransactionPartition();
+          const directory = fs.mkdtempSync(
+            path.join(os.tmpdir(), 'tx-partition-prepare-'));
+          const dbPath = path.join(directory, 'partition.sqlite');
+          const partition = createTransactionPartition({dbPath});
           await partition.initialize();
 
           try {
-            const sessionId = 'prepare-durable';
+            const sessionId = 'prepare-local-staging';
             const {commitIndex: committedBefore} =
-              await partition.raft.readStatus();
+              partition.raft.readStatus();
             await partition.beginTransaction(sessionId, 500);
             await partition.executeQuery(
               `INSERT INTO ${TEST_TABLE_NAME} (id, value) VALUES ('${rowId}', '${value}')`,
               [],
               {sessionId},
             );
-
             const prepareResult = await partition.prepareTransaction(sessionId);
-            if (!prepareResult.success ||
-              prepareResult.operation !== PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION) {
-              return false;
-            }
+            const {commitIndex: committedWhileStaging} =
+              partition.raft.readStatus();
 
-            const preparedState = partition.preparedTransactions.get(sessionId);
-            if (!preparedState) {
-              return false;
-            }
+            // At the instant the session's SQLite COMMIT has run: are its
+            // rows visible, and has its marker reached the durable log yet?
+            let atCommit = null;
+            const exec = partition.db.exec.bind(partition.db);
+            partition.db.exec = (sql) => {
+              const executed = exec(sql);
+              if (sql === PARTITION_SERVICE_SQL.COMMIT) {
+                atCommit = {
+                  rows: visibleRowIds(dbPath, rowId),
+                  markers: sessionMarkerTypes(
+                    dbPath, partition.partitionId, sessionId),
+                };
+              }
+              return executed;
+            };
+            const commitResult = await partition.commitTransaction(sessionId);
+            partition.db.exec = exec;
+            const markersAfterCommit = sessionMarkerTypes(
+              dbPath, partition.partitionId, sessionId);
 
-            // The marker is one proposal through the port, committed by the
-            // lone leader; the prepared state carries no log index, since a
-            // proposal has none until it commits.
-            const {commitIndex: committedAfter} =
-              await partition.raft.readStatus();
-            return committedAfter === committedBefore + 1 &&
-              !Object.hasOwn(preparedState, 'raftLogIndex') &&
-              !Object.hasOwn(prepareResult, 'raftLogIndex');
+            assert.deepEqual({
+              prepared: prepareResult.success === true &&
+                prepareResult.operation ===
+                  PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+              preparedState: prepareResult.preparedState,
+              committedWhileStaging,
+              committed: commitResult.success === true &&
+                commitResult.committed === true,
+              atCommit,
+              markersAfterCommit,
+            }, {
+              prepared: true,
+              preparedState: PARTITION_TRANSACTION_PREPARED_STATE.LOCAL_STAGING,
+              committedWhileStaging: committedBefore,
+              committed: true,
+              atCommit: {rows: [rowId], markers: []},
+              markersAfterCommit: [
+                PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
+              ],
+            }, 'no marker while staging; the commit marker lands only after ' +
+              'the session\'s rows are committed');
+            return true;
           } finally {
             await partition.shutdown();
+            fs.rmSync(directory, {recursive: true, force: true});
           }
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('prepare proposes its marker through consensus before success');
+    t.pass('prepare stages locally and the commit marker follows the commit');
   },
 );
 
@@ -443,78 +511,7 @@ test(
   },
 );
 
-// ---------------------------------------------------------------------------
-// Property 13: Prepared state reconstruction after leader election
-// Validates: Requirements 8.2, 8.3, 8.4
-// ---------------------------------------------------------------------------
-test(
-  'Property 13: reconstructed prepared state allows commit/rollback after simulated leader change',
-  async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        rowIdArb,
-        valueArb,
-        fc.boolean(),
-        async (rowId, value, shouldCommit) => {
-          // Reconstruction reads the rs-raft committed log, so the partition
-          // runs on rs-raft (named on this base; the default after the
-          // cutover's A1 attempt, which deletes the selection).
-          const partition = createTransactionPartition();
-          await partition.initialize();
-          const sessionId = 'reconstruct-prepared';
-
-          try {
-            await partition.beginTransaction(sessionId, 1_100);
-            await partition.executeQuery(
-              `INSERT INTO ${TEST_TABLE_NAME} (id, value) VALUES ('${rowId}', '${value}')`,
-              [],
-              {sessionId},
-            );
-            const prepareResult = await partition.prepareTransaction(sessionId);
-            if (!prepareResult.success) {
-              return false;
-            }
-
-            partition.preparedTransactions.clear();
-            partition.syncLegacyTransactionAliases();
-            const reconstruction = partition.reconstructPreparedState();
-            if (reconstruction.preparedTransactionCount < 1) {
-              return false;
-            }
-
-            if (shouldCommit) {
-              const commitResult = await partition.commitTransaction(sessionId);
-              if (!commitResult.success || !commitResult.committed) {
-                return false;
-              }
-              const committedRows = await partition.executeQuery(
-                `SELECT id FROM ${TEST_TABLE_NAME} WHERE id = '${rowId}'`,
-                [],
-              );
-              return committedRows.rows.length === 1;
-            }
-
-            const rollbackResult = await partition.rollbackTransaction(sessionId);
-            if (!rollbackResult.success || !rollbackResult.rolledBack) {
-              return false;
-            }
-            const rolledBackRows = await partition.executeQuery(
-              `SELECT id FROM ${TEST_TABLE_NAME} WHERE id = '${rowId}'`,
-              [],
-            );
-            return rolledBackRows.rows.length === 0;
-          } finally {
-            await partition.shutdown();
-          }
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('prepared state reconstruction preserves commit/rollback behavior');
-  },
-);
-
+// Property 13 (leader change) returns with F6 layer 2 (replicated interactive transactions): layer 1 proposes no PREPARE marker to rebuild from.
 // ---------------------------------------------------------------------------
 // Property 13 across a restart: reconstruction reads the committed PREPARE
 // markers from the rs-raft store (the only durable log). The markers are

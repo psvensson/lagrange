@@ -117,6 +117,8 @@ function createRaftRsOperationPort(request) {
       listener(...args.map((value) => deepFreeze(value)));
     }
   };
+  const timers = resolveTimeSource(
+    request[RAFT_PARTITION_NODE_REQUEST.SUBSTRATE] || {});
   const dispatcher = lifecycle.active ? createRuntimeDispatcher({
     database,
     groupId,
@@ -124,6 +126,7 @@ function createRaftRsOperationPort(request) {
     peerId,
     voters,
     timing,
+    timers,
     sendToPeer: required(
       request, RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER),
     resolvePeerAddress: (raftPeerId) => {
@@ -146,8 +149,6 @@ function createRaftRsOperationPort(request) {
       request[RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
     emit,
   }) : null;
-  const timers = resolveTimeSource(
-    request[RAFT_PARTITION_NODE_REQUEST.SUBSTRATE] || {});
   let tickIntervalMs = tickIntervalOf(timing);
   let timer = null;
   let closed = false;

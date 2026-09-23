@@ -39,12 +39,13 @@ import {
   USABLE,
 } from './raft-rs-runtime-owner-constants.js';
 import {tuningOf} from './raft-rs-runtime-tuning.js';
-import {
-  followerProgressSnapshot,
-  peerSnapshot,
-} from './raft-rs-status-observation.js';
+import {shapeGroupObservation} from './raft-rs-status-observation.js';
 import {applyCommittedEntryTransaction} from
   './raft-rs-application-transaction-owner.js';
+import {
+  persistenceAdmitted,
+  whenPersistenceAdmitted,
+} from './raft-rs-persistence-admission.js';
 import {deepFreeze} from './raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 
@@ -135,6 +136,20 @@ function hostFailure(phase, error, recoveryRequired = false) {
     retryable: true,
     recoveryRequired,
   });
+}
+
+function admissionWaitOutcomes(group) {
+  return {
+    closed: () => outcome(CORE_REFUSED, {
+      reason: RUNTIME_REASON.CLOSED, phase: RUNTIME_PHASE.READY_PERSISTENCE,
+      retryable: false, recoveryRequired: false,
+    }),
+    exceeded: () => {
+      group.health = RECOVERY_REQUIRED;
+      return hostFailure(RUNTIME_PHASE.READY_PERSISTENCE,
+        RUNTIME_REASON.USER_TRANSACTION_OPEN, true);
+    },
+  };
 }
 
 function ensureCore() {
@@ -412,7 +427,7 @@ function finishReady(group, expectedGeneration, ready) {
     group.health = RECOVERY_REQUIRED;
     return hostFailure(error.hostPhase || RUNTIME_PHASE.SEND, error, true);
   }
-  const continuation = thenMaybe(sent, () => {
+  const continuation = thenMaybe(sent, () => whenPersistenceAdmitted(group, () => {
     const applied = applyEntries(
       group, expectedGeneration, ready.committedEntries || []);
     if (applied.outcome !== CORE_OK) {
@@ -443,7 +458,7 @@ function finishReady(group, expectedGeneration, ready) {
       group.health = RECOVERY_REQUIRED;
       return hostFailure(error.hostPhase || RUNTIME_PHASE.SEND, error, true);
     }
-    return thenMaybe(lightSent, () => {
+    return thenMaybe(lightSent, () => whenPersistenceAdmitted(group, () => {
       const lightApplied = applyEntries(
         group, expectedGeneration, light.value.committedEntries || []);
       if (lightApplied.outcome !== CORE_OK) {
@@ -453,8 +468,8 @@ function finishReady(group, expectedGeneration, ready) {
         group, expectedGeneration, 'advance_apply');
       return advanced.ok ? outcome(CORE_OK, {reason: 'ready-advanced'}) :
         advanced.result;
-    });
-  });
+    }, admissionWaitOutcomes(group)));
+  }, admissionWaitOutcomes(group)));
   if (continuation && typeof continuation.then === 'function') {
     return continuation.catch((error) => {
       group.health = RECOVERY_REQUIRED;
@@ -478,6 +493,10 @@ function drainReady(group, expectedGeneration, cycles = 0) {
   if (!hasReady.value) {
     announce(group, expectedGeneration);
     return outcome(CORE_OK, {reason: RUNTIME_REASON.DRAINED});
+  }
+  // Before take_ready: a refused Ready stays whole in the core.
+  if (!persistenceAdmitted(group)) {
+    return outcome(CORE_OK, {reason: RUNTIME_REASON.READY_DEFERRED});
   }
   const taken = invokeCoreAt(group, expectedGeneration, 'take_ready');
   if (!taken.ok) {
@@ -548,43 +567,9 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
 }
 
 function shapeGroupStatus(group, observation) {
-  const {status, confState} = observation;
-  let leaderId = null;
-  let leaderAddress = null;
-  try {
-    leaderId = status.lead === NO_LEADER ? null :
-      group.resolvePeerIdentity(status.lead);
-  } catch (error) {
+  return shapeGroupObservation(group, observation, (error) => {
     group.health = RECOVERY_REQUIRED;
     return hostFailure(RUNTIME_PHASE.ADDRESS_RESOLUTION, error, true);
-  }
-  if (status.lead !== NO_LEADER) {
-    try {
-      leaderAddress = group.resolvePeerAddress(status.lead);
-    } catch {
-      // A network address can lag membership/identity without invalidating
-      // the consensus runtime. Status reports the identity and a null address.
-      leaderAddress = null;
-    }
-  }
-  return deepFreeze({
-    outcome: CORE_OK,
-    groupId: group.groupId,
-    replicaIdentity: group.replicaIdentity,
-    peerId: group.peerId,
-    term: Number(status.term),
-    commitIndex: Number(status.commit),
-    role: ROLE[status.raftState] || RUNTIME_REASON.UNKNOWN,
-    leaderId,
-    leaderAddress,
-    peerCount: Math.max(0,
-      confState.voters.length + confState.learners.length - 1),
-    peers: peerSnapshot(group, confState),
-    followerProgress: followerProgressSnapshot(group, status),
-    confState,
-    runtimeHealth: observation.runtimeHealth,
-    groupHealth: group.health,
-    runtimeGeneration: observation.runtimeGeneration,
   });
 }
 
@@ -607,12 +592,16 @@ function recordStatusObservation(group, expectedGeneration, rawStatus = null) {
 // readStatus answers synchronously: idle with nothing delivered, the fresh
 // core read; otherwise (a read still drives delivered inbound, as before) the
 // status of the last completed core entry.
+function readStatusUndrained(group) {
+  const ready = ensureExecution(group);
+  return ready.outcome === CORE_OK ?
+    readGroupStatus(group, runtimeGeneration) : ready;
+}
+
 function readStatusNow(group) {
   if ((group.tail === null && group.inbound.length === 0) ||
       group.statusObservation === null) {
-    const ready = ensureExecution(group);
-    return ready.outcome === CORE_OK ?
-      readGroupStatus(group, runtimeGeneration) : ready;
+    return readStatusUndrained(group);
   }
   if (group.inbound.length > 0) {
     const read = enqueue(group, () =>
@@ -693,6 +682,14 @@ function drainInbound(group, expectedGeneration, continuation) {
 }
 
 function perform(group, command) {
+  // While a user transaction holds the connection nothing enters the core:
+  // a status is read without draining, and every other command is a typed,
+  // retryable deferral that leaves the group usable.
+  if (!persistenceAdmitted(group)) {
+    return command.type === RUNTIME_COMMAND.READ_STATUS ?
+      readStatusUndrained(group) : hostFailure(
+        RUNTIME_PHASE.READY_PERSISTENCE, RUNTIME_REASON.USER_TRANSACTION_OPEN);
+  }
   const ready = ensureExecution(group);
   if (ready.outcome !== CORE_OK) {
     return ready;
@@ -719,6 +716,7 @@ function createRuntimeDispatcher(request) {
     peerId: request.peerId,
     voters: request.voters,
     timing: request.timing,
+    timers: request.timers,
     store,
     sendToPeer: request.sendToPeer,
     resolvePeerAddress: request.resolvePeerAddress,
