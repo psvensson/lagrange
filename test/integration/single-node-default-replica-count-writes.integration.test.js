@@ -16,9 +16,6 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
-import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
-import {NodeService} from '../../src/node/node-service.js';
-import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -31,6 +28,8 @@ import {
   initializeTestEnvironment,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
+import {createSeedQuerySurface} from
+  './helpers/seed-query-surface.js';
 
 const TABLE_NAME = 'single_node_events';
 const CREATE_TABLE_SQL = `
@@ -79,27 +78,11 @@ test('single node with production default replica_count serves user-table writes
       bootstrapResult = await bootstrapService.bootstrap();
       t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
 
-      const systemTableCache = NodeService.getInstance().getSystemTableCache();
-      const sqlQueryEngine = new SQLQueryEngine({
-        systemCache: systemTableCache,
-        messageRouter: bootstrapResult.messageRouter,
-        cdcIntegrationService: bootstrapService.cdcIntegrationService,
-        nodeId: seedNodeId,
-        rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
-      });
-      seedApi = new BootstrapAPI({
-        seedNodeId,
-        seedNodeAddress: `ws://localhost:${seedWsPort}`,
-        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
-        messageGroupServices: bootstrapResult.messageGroupServices,
-        partitionServices: bootstrapResult.partitionServices,
-        systemTableCache,
-        messageRouter: bootstrapResult.messageRouter,
-        epochManager: bootstrapResult.epochManager,
-        bootstrapService,
-      });
-      await seedApi.initialize(0, {listen: false});
-      seedApi.setSqlQueryEngine(sqlQueryEngine);
+      const seed = createSeedQuerySurface(bootstrapService, bootstrapResult,
+        {seedNodeId, seedWsPort});
+      seedApi = seed.seedApi;
+      await seed.start();
+      const {systemTableCache, sqlQueryEngine} = seed;
 
       const createResult = await sqlQueryEngine.executeQuery(CREATE_TABLE_SQL);
       t.equal(createResult.success, true, 'create table should succeed');

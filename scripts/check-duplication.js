@@ -134,8 +134,11 @@ const RATCHET_TARGETS = [
     // formation-convergence owner/test decomposition (checker hint).
     // 2026-09-10: tightened 795/30561 -> 793/30519 after the publication-owner
     // harnesses converged on one prototype-complete fixture (checker hint).
-    baselineCloneGroupCount: 793,
-    baselineDuplicatedLineCount: 30519,
+    // 2026-09-23: tightened 793/30519 -> 791/30451 after the rs-raft cutover
+    // witnesses moved their escape counter and seed query surface into one
+    // shared fixture each (checker hint).
+    baselineCloneGroupCount: 791,
+    baselineDuplicatedLineCount: 30451,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

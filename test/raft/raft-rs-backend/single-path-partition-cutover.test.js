@@ -27,7 +27,6 @@ import {fileURLToPath} from 'node:url';
 import Database from 'better-sqlite3';
 
 import {BootstrapService} from '../../../src/bootstrap/bootstrap-service.js';
-import {BootstrapAPI} from '../../../src/bootstrap/bootstrap-api.js';
 import {CONFIG_KEY} from '../../../src/config/config-key-constants.js';
 import {ConfigurationManager} from
   '../../../src/config/configuration-manager.js';
@@ -37,14 +36,12 @@ import {
   TABLES,
 } from '../../../src/constants/index.js';
 import {LoggingService} from '../../../src/logging/logging-service.js';
-import {NodeService} from '../../../src/node/node-service.js';
 import {PartitionRaftStorage} from
   '../../../src/partition/partition-raft-storage.js';
 import {PartitionService} from
   '../../../src/partition/partition-service.js';
 import {PARTITION_SERVICE_OPERATION} from
   '../../../src/partition/partition-service-constants.js';
-import {SQLQueryEngine} from '../../../src/query/sql-query-engine.js';
 import {RAFT_RS_SQL} from
   '../../../src/raft/raft-rs-durable-store-constants.js';
 import {SQLiteLogAdapter} from '../../../src/raft/sqlite-log-adapter.js';
@@ -56,6 +53,8 @@ import {
   initializeTestEnvironment,
   waitFor,
 } from '../../integration/helpers/cluster-test-helpers.js';
+import {createSeedQuerySurface} from
+  '../../integration/helpers/seed-query-surface.js';
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -319,27 +318,11 @@ test('seed bootstraps and serves a write on rs-raft by default',
         'run on a port whose readStatus lacks the rs-raft runtime fields; ' +
         `first: ${JSON.stringify(offBackend[0] ?? null)}`);
 
-      const systemTableCache = NodeService.getInstance().getSystemTableCache();
-      const sqlQueryEngine = new SQLQueryEngine({
-        systemCache: systemTableCache,
-        messageRouter: bootstrapResult.messageRouter,
-        cdcIntegrationService: bootstrapService.cdcIntegrationService,
-        nodeId: seedNodeId,
-        rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
-      });
-      seedApi = new BootstrapAPI({
-        seedNodeId,
-        seedNodeAddress: `ws://localhost:${seedWsPort}`,
-        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
-        messageGroupServices: bootstrapResult.messageGroupServices,
-        partitionServices: bootstrapResult.partitionServices,
-        systemTableCache,
-        messageRouter: bootstrapResult.messageRouter,
-        epochManager: bootstrapResult.epochManager,
-        bootstrapService,
-      });
-      await seedApi.initialize(0, {listen: false});
-      seedApi.setSqlQueryEngine(sqlQueryEngine);
+      const seed = createSeedQuerySurface(bootstrapService, bootstrapResult,
+        {seedNodeId, seedWsPort});
+      seedApi = seed.seedApi;
+      await seed.start();
+      const {systemTableCache, sqlQueryEngine} = seed;
 
       const created = await sqlQueryEngine.executeQuery(SEED_CREATE_SQL);
       assert.equal(created.success, true,

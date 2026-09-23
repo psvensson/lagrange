@@ -3,9 +3,9 @@
   "quest": "raft-rs-single-path-partition-cutover",
   "status": "pass",
   "testFileDigests": {
-    "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "0650a3f154ea5f86d93fdf8d1f5ac0448626e07e773aebf8c52e3524a21fc348"
+    "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "ab9a693734512903e37431767d71d89717a1d7212e21234bb5ddd72c9ba3f519"
   },
-  "generatedAt": "2026-09-23T17:55:23.337Z",
+  "generatedAt": "2026-09-23T18:36:41.622Z",
   "receipts": [
     {
       "id": "seed-bootstraps-and-serves-a-write-on-rs-raft-by-default",
