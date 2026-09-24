@@ -36,7 +36,12 @@ import {
   shouldPrintLiveLogEntry,
   formatRunSummary,
 } from '../../run.js';
-import {CLI} from '../constants.js';
+import {
+  CLI,
+  DISTRIBUTED_EXECUTION_ENV,
+  DISTRIBUTED_EXECUTION_TARGET,
+  DISTRIBUTED_MATRIX_PROFILE,
+} from '../constants.js';
 import {DockerProvider} from '../docker-provider.js';
 import {
   computeSourceFingerprint,
@@ -173,6 +178,40 @@ describe('report metadata source fingerprint', () => {
     assert.equal(unstamped.srcFingerprint, '');
     assert.equal(unstamped.srcFingerprintAlgo, '');
   });
+});
+
+
+describe('distributed execution metadata', () => {
+  it('records target profile and physical hosts without adding a raft selector',
+    () => {
+      const metadata = runModule.buildReportMetadata(
+        {config: 'local-three-node.json', scenario: 'rolling-restart'},
+        {raftProvider: 'liferaft'},
+        {enabled: false},
+        {
+          [DISTRIBUTED_EXECUTION_ENV.TARGET]:
+            DISTRIBUTED_EXECUTION_TARGET.LAB,
+          [DISTRIBUTED_EXECUTION_ENV.PROFILE]:
+            DISTRIBUTED_MATRIX_PROFILE.TOPOLOGY,
+          [DISTRIBUTED_EXECUTION_ENV.HOSTS]: 'lab-a,lab-b,lab-c',
+        },
+      );
+
+      assert.equal(
+        metadata.executionTarget,
+        DISTRIBUTED_EXECUTION_TARGET.LAB,
+      );
+      assert.equal(
+        metadata.matrixProfile,
+        DISTRIBUTED_MATRIX_PROFILE.TOPOLOGY,
+      );
+      assert.deepEqual(metadata.executionHosts, [
+        'lab-a',
+        'lab-b',
+        'lab-c',
+      ]);
+      assert.equal(metadata.raftProvider, 'liferaft');
+    });
 });
 
 describe('deterministic debug mode helpers', () => {
