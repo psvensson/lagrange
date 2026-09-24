@@ -3,6 +3,7 @@ import {join} from 'node:path';
 import {
   DISTRIBUTED_EXECUTION_TARGET,
   DISTRIBUTED_MATRIX_PROFILE,
+  DISTRIBUTED_MATRIX_REPORT_ROOT,
 } from './constants.js';
 import {
   CANONICAL_SCENARIO_MATRIX,
@@ -10,8 +11,6 @@ import {
 } from './scenario-registry.js';
 
 const DISTRIBUTED_MATRIX_CONFIG_DIRECTORY = 'test/distributed/config';
-const DISTRIBUTED_MATRIX_REPORT_ROOT =
-  'test-output/reports/distributed-matrix';
 const DISTRIBUTED_MATRIX_REPORT_SUFFIX = '.report.json';
 const DISTRIBUTED_MATRIX_CONFIG_SUFFIX = '.json';
 const DISTRIBUTED_MATRIX_NAME_SEPARATOR = '--';
@@ -148,7 +147,6 @@ function buildGcpTargetConfig(baseConfig, gcpTemplate) {
 }
 
 export {
-  DISTRIBUTED_MATRIX_REPORT_ROOT,
   buildDistributedMatrixExecutionPlan,
   buildGcpTargetConfig,
   listDistributedMatrixEntries,
