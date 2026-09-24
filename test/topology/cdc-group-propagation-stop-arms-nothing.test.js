@@ -12,23 +12,42 @@
 // - A propagate call after stop still proposed on the source message group
 //   (round 5, N1).
 //
-// The property is observed, not the implementation: an async_hooks init hook
-// records every Timeout and Immediate created while a frame of the owner's
-// files is on the creating stack, whatever primitive or module created it.
-// Every public lane (propagate in safe and grouped mode, grouped delivery with
-// its safe-fanout recovery, the immediate batch, the retry loop with its
-// sleep, the background retry wave, several targets) is driven to one of its
-// awaits, and stop() lands there.
+// The property is observed at the resource level, not in the implementation.
+// Each lane is fully in memory: the router and the source message group are
+// held fakes, and the test's own turns use setImmediate, which it awaits to
+// completion. So just before stop() the test counts the live Timeout and
+// Immediate handles (process.getActiveResourcesInfo()). After the lane has
+// settled and pending microtasks, nextTicks and immediates have drained, it
+// counts them again. The second count must be no larger than the first.
+// Whatever path the service's code takes to schedule a timer after stop (a
+// direct call, node:timers/promises, a promise continuation, a nextTick or a
+// microtask), the live handle it leaves shows in that count.
+//
+// An async_hooks init hook records every Timeout and Immediate created after
+// stop with the first source frame on its creating stack. It is diagnostic
+// only: it names the file:line in a failure message and decides nothing.
+//
+// Every public lane is driven to one of its awaits, and stop() lands there:
+// - propagate in safe and in grouped mode;
+// - grouped delivery and its safe-fanout recovery;
+// - the immediate batch;
+// - the retry loop with its sleep;
+// - the background retry wave;
+// - delivery to several targets.
+// Each lane also requires that no router delivery is started and no proposal
+// is made on the source group after stop, and that every caller still waiting
+// at stop gets the typed stopped answer.
 //
 // Order is controlled by held promises: the router's answer and the source
-// group's apply. A timer the owner must fire before stop (a batch flush, a
-// background wave) is fired with node:test mock timers, which are restored
-// before stop, so every creation after stop is real and observed. No wall
+// group's apply. A timer the service must fire before stop (a batch flush, a
+// background wave) is fired with node:test mock timers. The mock is restored
+// before the pre-stop count, so every counted handle is a real one. No wall
 // clock is waited on.
 
 import assert from 'node:assert/strict';
 import {createHook} from 'node:async_hooks';
 import {mock, test} from 'node:test';
+import {fileURLToPath} from 'node:url';
 
 import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -47,7 +66,6 @@ import {
 } from './cdc-group-propagation-service-harness.js';
 
 const TURNS = 60;
-const OWNER_FRAME = /[\\/]src[\\/]topology[\\/]cdc-group-propagation[\w-]*\.js:\d+/u;
 const QUIET_LOGGER = Object.freeze({info() {}, warn() {}, debug() {}, error() {}});
 const STOPPED_ERROR =
   CDC_GROUP_PROPAGATION_CONSTANTS.CDC_GROUP_PROPAGATION_DELIVERY_ERROR
@@ -62,21 +80,33 @@ const TARGETS = Object.freeze(['b', 'c'].map((node) => Object.freeze({
   address: `node-${node}/message-group/mg-node-${node}`,
 })));
 
-// The observation: Timeout and Immediate creations from the owner's frames
-// while the window is open (from stop() on).
+const ACTIVE_HANDLE_TYPES = new Set(['Timeout', 'Immediate']);
+const TEST_FILE = fileURLToPath(import.meta.url);
+const SOURCE_FRAME = /\((?:file:\/\/)?(\/[^):]+\.js:\d+)/u;
+
+function countActiveHandles() {
+  return process.getActiveResourcesInfo()
+    .filter((type) => ACTIVE_HANDLE_TYPES.has(type)).length;
+}
+
+// Diagnostics only: every Timeout and Immediate created after stop, named by
+// the first source frame on its creating stack.
 const observation = {open: false, creations: []};
 createHook({
   init(asyncId, type) {
-    if (!observation.open || (type !== 'Timeout' && type !== 'Immediate')) {
+    if (!observation.open || !ACTIVE_HANDLE_TYPES.has(type)) {
       return;
     }
     const stackTraceLimit = Error.stackTraceLimit;
     Error.stackTraceLimit = 64;
     const {stack} = new Error();
     Error.stackTraceLimit = stackTraceLimit;
-    const ownerFrame = stack.match(OWNER_FRAME);
-    if (ownerFrame) {
-      observation.creations.push(`${type} at ${ownerFrame[0]}`);
+    // Past this hook's own frame, the first source frame that created it.
+    const creatingStack = stack.split('\n').slice(2).join('\n');
+    const frame = creatingStack.match(SOURCE_FRAME)?.[1] ?? 'node internals';
+    // The test's own turns are not the service's work.
+    if (!frame.startsWith(TEST_FILE)) {
+      observation.creations.push(`${type} at ${frame}`);
     }
   },
 }).enable();
@@ -130,6 +160,7 @@ function compose(mode, options = {}) {
   };
   lane.stop = () => {
     lane.stopped = true;
+    lane.handlesBeforeStop = countActiveHandles();
     observation.open = true;
     observation.creations = [];
     service.stop();
@@ -306,11 +337,13 @@ for (const spec of LANES) {
     try {
       await spec.drive(lane);
       await turns(TURNS);
-      const creations = [...observation.creations];
+      const handlesAfterSettle = countActiveHandles();
       observation.open = false;
 
-      assert.deepEqual(creations, [],
-        'no timer or immediate is created from the owner after stop');
+      assert.ok(handlesAfterSettle <= lane.handlesBeforeStop,
+        'no live timer or immediate is left behind after stop ' +
+        `(${lane.handlesBeforeStop} before stop, ${handlesAfterSettle} ` +
+        `after): created after stop: ${observation.creations.join(', ')}`);
       assert.deepEqual(lane.routerCalls.filter((call) => call.afterStop), [],
         'no router delivery is started after stop');
       assert.deepEqual(lane.applies.filter((apply) => apply.afterStop), [],

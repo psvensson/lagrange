@@ -388,7 +388,9 @@ class CDCGroupPropagationService extends EventEmitter {
       success: false,
       strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
       mode: CDC_GROUP_PROPAGATION_STATUS.SAFE,
-      status: CDC_GROUP_PROPAGATION_STATE.STOPPED,
+      // The owner's one result status, carried by its failure results too;
+      // "stopped" is said per target (PROPAGATION_STOPPED), nowhere else.
+      status: CDC_GROUP_PROPAGATION_MESSAGE.STATUS_DELIVERED,
       sourceGroupId,
       targetGroupCount: targets.length,
       deliveryFailures: this.buildStoppedFailures(targets),
