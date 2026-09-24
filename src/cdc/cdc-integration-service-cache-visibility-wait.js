@@ -299,7 +299,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
       }
       cache.onCacheChange(listener);
       stopHoldingUntilShutdown = this.holdUntilShutdown(() =>
-        cleanup(this.buildShutDownAnswer()));
+        cleanup(this.buildUnconfirmedWriteShutDownAnswer()));
     });
   }
   async confirmCacheVisibilityHoleWithinBudget(

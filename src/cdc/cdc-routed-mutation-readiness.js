@@ -42,7 +42,6 @@ const {
   annotateSystemTableMutationError,
   buildPressureAdmissionFailure,
   buildSystemTableMutationError,
-  delayOn,
   getControlPlaneRetryAfterMs,
   hasControlPlaneMutationRoutingGapFailureSignature,
   hasSystemTableOwnerHandoffFailureSignature,
@@ -471,9 +470,9 @@ class CDCRoutedMutationReadiness {
       const remainingBudgetMs = getRemainingQueryExecutionBudgetMs();
       if (remainingBudgetMs === null) {
         if (normalizedDelayMs > 0) {
-          await delayOn(this.timeSource, normalizedDelayMs);
+          await this.delayUntilShutdown(normalizedDelayMs);
         }
-        return true;
+        return this.isShuttingDown !== true;
       }
       if (remainingBudgetMs <= 0) {
         return false;
@@ -482,7 +481,11 @@ class CDCRoutedMutationReadiness {
         return false;
       }
       if (normalizedDelayMs > 0) {
-        await delayOn(this.timeSource, normalizedDelayMs);
+        // Held by the lifecycle owner: shutdown ends the delay at once.
+        await this.delayUntilShutdown(normalizedDelayMs);
+      }
+      if (this.isShuttingDown === true) {
+        return false;
       }
       const nextRemainingBudgetMs = getRemainingQueryExecutionBudgetMs();
       return nextRemainingBudgetMs === null || nextRemainingBudgetMs > 0;

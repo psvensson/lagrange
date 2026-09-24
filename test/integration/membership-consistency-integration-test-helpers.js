@@ -495,9 +495,9 @@ async function waitForPlacementEligible(readinessService, nodeId) {
   });
 }
 
-// Whether the cache holds a settled publication of exactly these members:
-// the latest membership epoch is PUBLISHED (not still collecting its acks)
-// and names them.
+// Whether the cache holds a settled publication: the latest membership epoch
+// is PUBLISHED (not still collecting its acks) and, when expected members are
+// given, names exactly them.
 function isPublishedMembershipSettled(cache, expectedNodeIds) {
   const latestRow = (cache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [])
     .filter((row) => row.publication_kind === MEMBERSHIP_PUBLICATION_KIND)
@@ -505,8 +505,50 @@ function isPublishedMembershipSettled(cache, expectedNodeIds) {
       (!latest || row.publication_epoch > latest.publication_epoch ?
         row : latest), null);
   return latestRow?.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
-    (readPublishedActiveNodeIds(cache) || []).slice().sort().join(',') ===
-      expectedNodeIds;
+    (expectedNodeIds === null ||
+      (readPublishedActiveNodeIds(cache) || []).slice().sort().join(',') ===
+        expectedNodeIds);
+}
+
+/**
+ * Record every PUBLISHED membership epoch the publication owner commits into
+ * the cache, from the cache's own change events (no epoch is missed between
+ * polls): epoch -> its members.
+ * @param {SystemTableCache} cache
+ * @return {object} {hasPublished(nodeId), hasLeftByRepublication(nodeId),
+ *   stop()}
+ */
+function recordPublishedMemberships(cache) {
+  const membersByEpoch = new Map();
+  const listener = (tableName, _operation, row) => {
+    if (
+      tableName === TABLES.CONTROL_PLANE_PUBLICATIONS &&
+      row?.publication_kind === MEMBERSHIP_PUBLICATION_KIND &&
+      row?.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED
+    ) {
+      membersByEpoch.set(row.publication_epoch,
+        [...(row.published_active_node_ids || [])]);
+    }
+  };
+  cache.onCacheChange(listener);
+  return {
+    hasPublished(nodeId) {
+      return [...membersByEpoch.values()].some((members) =>
+        members.includes(nodeId));
+    },
+    // Whether a PUBLISHED epoch named the node and a later PUBLISHED epoch
+    // left it out: it was published, then left by republication.
+    hasLeftByRepublication(nodeId) {
+      const epochs = [...membersByEpoch.keys()].sort((a, b) => a - b);
+      const joinedAt = epochs.find((epoch) =>
+        membersByEpoch.get(epoch).includes(nodeId));
+      return joinedAt !== undefined && epochs.some((epoch) =>
+        epoch > joinedAt && !membersByEpoch.get(epoch).includes(nodeId));
+    },
+    stop() {
+      cache.offCacheChange(listener);
+    },
+  };
 }
 
 // Whether a rebalancer's own readiness read holds the node eligible: the
@@ -520,8 +562,8 @@ function isEligibleForReader(readinessService, reader, nodeId) {
 }
 
 /**
- * Take a synchronous placement read only at a settled point: the published
- * epoch names exactly `publishedNodeIds` and is PUBLISHED, and every reader
+ * Take a synchronous placement read only at a settled point: the latest
+ * epoch is PUBLISHED (naming exactly `publishedNodeIds` when given), and every reader
  * (a rebalancer) holds `eligibleNodeId` eligible through its own readiness
  * read. Every publication write returns the readiness verdict to
  * planning_snapshot_refresh_pending until its next evaluation, so the settled
@@ -533,7 +575,9 @@ function isEligibleForReader(readinessService, reader, nodeId) {
  * @return {Promise<{settled: boolean, value: *}>}
  */
 async function readAtSettledPlacement(owners, settledPoint, read) {
-  const expected = [...settledPoint.publishedNodeIds].sort().join(',');
+  const expected = Array.isArray(settledPoint.publishedNodeIds) ?
+    [...settledPoint.publishedNodeIds].sort().join(',') :
+    null;
   const readinessService = owners.controlPlaneReadinessService;
   const {eligibleNodeId, readers} = settledPoint;
   let value = null;
@@ -541,11 +585,10 @@ async function readAtSettledPlacement(owners, settledPoint, read) {
     if (!isPublishedMembershipSettled(owners.cache, expected)) {
       return false;
     }
-    for (const reader of readers) {
-      await readinessService.getNodeReadiness(eligibleNodeId, {
-        decisionDimension: reader.resolveNodeReadinessDecisionDimension(),
-      });
-    }
+    // The owner's asynchronous evaluation schedules the planning-snapshot
+    // refresh (as waitForPlacementEligible drives it); each reader's own
+    // synchronous read is then checked below.
+    await readinessService.getNodeReadiness(eligibleNodeId);
     if (
       !isPublishedMembershipSettled(owners.cache, expected) ||
       !readers.every((reader) =>
@@ -597,6 +640,7 @@ export {
   initializeTestEnvironment,
   readAtSettledPlacement,
   readPublishedActiveNodeIds,
+  recordPublishedMemberships,
   seedOwners,
   shutdownOrFail,
   waitForCondition,

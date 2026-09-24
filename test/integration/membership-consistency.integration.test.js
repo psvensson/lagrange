@@ -38,6 +38,8 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NODE_STATUS} from '../../src/node/node-constants.js';
 import {STATE, TABLES} from '../../src/constants/index.js';
+import {NODE_LIVENESS_SEMANTIC_THRESHOLD_DEFAULT} from
+  '../../src/control-plane/node-liveness-semantic-projection.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
@@ -59,6 +61,7 @@ import {
   initializeTestEnvironment,
   readAtSettledPlacement,
   readPublishedActiveNodeIds,
+  recordPublishedMemberships,
   seedOwners,
   shutdownOrFail,
   waitForCondition,
@@ -240,20 +243,35 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         owners.controlPlaneReadinessService, seedNodeId);
       t.equal(eligible, true, 'readiness owner should hold the seed placement-eligible');
 
-      // A node row with a short lease. The publication owner witnesses it
-      // READY with a live lease and publishes it (the premise that it stays
-      // unpublished was false on the liferaft base too).
+      // A node row READY on a live ready lease whose heartbeat is already
+      // past the liveness owner's derivation grace (the row supplies the
+      // clock, as the rest of this file does). The publication owner admits
+      // it on its live lease and publishes it. Its lease then passes (a
+      // committed row update, not a wait): nothing holds it any more, and it
+      // leaves by republication.
+      const publications = recordPublishedMemberships(owners.cache);
       const now = Date.now();
-      const shortLeaseExpiresAt = now + 50; // Expires in 50ms
       const shortLeaseNode = createNodeEntry('short-lease-node', {
-        ready_lease_expires_at: shortLeaseExpiresAt,
+        // Live for the whole admission wait below.
+        ready_lease_expires_at: now + TEST_TIMEOUTS.TEST_TIMEOUT,
+        last_heartbeat: now -
+          NODE_LIVENESS_SEMANTIC_THRESHOLD_DEFAULT.derivationGraceMs - 1,
       });
       await owners.cdcIntegrationService.insertSystemTableRow(
         SYSTEM_TABLE_NAME.NODES, shortLeaseNode);
-      const withShortLease = [seedNodeId, 'short-lease-node'];
-      t.equal(await waitForPublishedMembership(owners.cache, withShortLease),
-        true, 'the publication owner publishes the short-lease row it ' +
-        'witnessed READY');
+      t.equal(await waitForCondition(() =>
+        publications.hasPublished('short-lease-node')), true,
+      'the publication owner publishes the row it witnessed READY on a live ' +
+      'lease');
+      await owners.cdcIntegrationService.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES, {node_id: 'short-lease-node'},
+        {ready_lease_expires_at: Date.now() - 1});
+      const leftByRepublication = await waitForCondition(() =>
+        publications.hasLeftByRepublication('short-lease-node'));
+      publications.stop();
+      t.equal(leftByRepublication, true,
+        'once its lease has passed with its heartbeat past the grace, it ' +
+        'leaves by republication');
 
       // The real rebalancer over the seed's real owners
       const rebalancer = new UnifiedRebalancer({
@@ -276,37 +294,6 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
 
       // Record state change to start stabilization
       rebalancer.recordStateChange('test_trigger');
-
-      // Every publication write returns the readiness owner's verdict to
-      // planning_snapshot_refresh_pending until its next evaluation: read
-      // the available set only at a settled published epoch with the seed
-      // eligible through the rebalancer's own readiness read.
-      const settledPoint = {
-        publishedNodeIds: withShortLease,
-        eligibleNodeId: seedNodeId,
-        readers: [rebalancer],
-      };
-      const readAvailableNodeIds = () =>
-        rebalancer.getAvailableNodes().map((node) => node.node_id);
-      const whileLive = await readAtSettledPlacement(
-        owners, settledPoint, readAvailableNodeIds);
-      t.equal(whileLive.settled, true,
-        'the published epoch settles with the seed eligible for the rebalancer');
-      // was: 'should have nodes available initially'
-      t.same(whileLive.value, [seedNodeId],
-        'available nodes are the published members the readiness owner ' +
-        'holds eligible: the seed');
-
-      // The short lease passes (a condition on its expiry, not a sleep).
-      t.equal(await waitForCondition(() => Date.now() > shortLeaseExpiresAt),
-        true, 'the short lease expires');
-      const afterExpiry = await readAtSettledPlacement(
-        owners, settledPoint, readAvailableNodeIds);
-      t.equal(afterExpiry.settled, true,
-        'the published epoch is still settled after the lease expires');
-      // was: 'short-lease node should not be available after lease expiry'
-      t.same(afterExpiry.value, [seedNodeId],
-        'a member whose lease expired is not available for placement');
 
       // Stabilization timing can race with short lease windows under fast tests.
       // Verify API behavior without enforcing a brittle exact timing boundary.

@@ -20,6 +20,7 @@ import {
 } from '../bootstrap-api-constants.js';
 import {
   getControlPlaneRetryAfterMs,
+  isControlPlaneWriterShutDown,
   isRetryableControlPlaneError,
 } from '../../control-plane/control-plane-error-classification.js';
 import {
@@ -374,6 +375,12 @@ class BootstrapRequestOwner {
     if (!error) {
       return false;
     }
+    // This seed's writer shut down under the request: the seed is going
+    // away, which the joiner answers by trying again (another seed), not a
+    // terminal failure of its request.
+    if (isControlPlaneWriterShutDown(error)) {
+      return true;
+    }
     if (Number.isFinite(error?.statusCode) &&
         Math.floor(error.statusCode) === HTTP_STATUS.SERVICE_UNAVAILABLE) {
       return true;
@@ -383,6 +390,24 @@ class BootstrapRequestOwner {
     }
     return isRetryableControlPlaneError(error) ||
       this.isRetryableBootstrapDependencyError(error);
+  }
+
+  /**
+   * The code of a retryable bootstrap failure's not-ready response: its own
+   * typed code, except a shut-down writer, which is the seed going away and
+   * answers the canonical BOOTSTRAP_NOT_READY class.
+   * @param {Error} error
+   * @return {string}
+   */
+  resolveBootstrapNotReadyResponseCode(error) {
+    if (
+      isControlPlaneWriterShutDown(error) ||
+      typeof error?.errorCode !== 'string' ||
+      error.errorCode.length === 0
+    ) {
+      return BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY;
+    }
+    return error.errorCode;
   }
 
   resolveBootstrapRequestRetryAfterMs(error) {

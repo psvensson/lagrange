@@ -24,6 +24,10 @@ const LOCAL_STR_UPDATEDAT = 'updatedAt';
 const LOCAL_STR_UPDATED_AT = 'updated_at';
 
 const MEMBERSHIP_PUBLICATION_KIND = 'cluster_membership';
+const PENDING_MEMBERSHIP_PUBLICATION_STATUSES = new Set([
+  CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+  CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+]);
 const ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE = Object.freeze({
   PUBLISHED_MEMBERSHIP: 'published_membership',
   LOCALLY_ELIGIBLE_PROJECTION: 'locally_eligible_projection',
@@ -247,38 +251,42 @@ function resolveLatestPublishedPublicationRow(options = {}) {
   });
 }
 
+function normalizeMembershipNodeIds(nodeIds) {
+  return Object.freeze([...new Set((Array.isArray(nodeIds) ? nodeIds : [])
+    .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > 0),
+  )].sort());
+}
+
+// The two reads of membership publication rows. (a) The published membership:
+// the members of the latest PUBLISHED row; null when no row is PUBLISHED. An
+// OPEN or ACK_PENDING row never counts as published, and a PUBLISHED row
+// naming nobody reads as [] ("published, nobody"). A caller that requires
+// published membership reads the absent case as [] too.
 function resolvePublishedActiveNodeIds(options = {}) {
-  const latestPublicationRow = resolveLatestPublicationRow(options);
-  const publishedPublicationRow =
-    latestPublicationRow?.status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
-      latestPublicationRow :
-      resolveLatestPublishedPublicationRow(options);
-  const durablePublishedMembershipCandidate = publishedPublicationRow ||
-    buildMembershipPublicationActiveSnapshot(latestPublicationRow);
-  if (!durablePublishedMembershipCandidate) {
+  const publishedPublicationRow = resolveLatestPublishedPublicationRow(options);
+  if (!publishedPublicationRow) {
     return options.requirePublishedMembership === true ?
       Object.freeze([]) :
       null;
   }
-  const publishedActiveNodeIds = Array.isArray(
-    durablePublishedMembershipCandidate.publishedActiveNodeIds,
-  ) ?
-    durablePublishedMembershipCandidate.publishedActiveNodeIds :
-    [];
-  if (publishedActiveNodeIds.length === 0) {
-    return durablePublishedMembershipCandidate
-      .publishedActiveNodeIdsPresent === true ?
-      Object.freeze([]) :
-      (options.requirePublishedMembership === true ?
-        Object.freeze([]) :
-        null);
+  return normalizeMembershipNodeIds(
+    publishedPublicationRow.publishedActiveNodeIds);
+}
+
+// (b) The pending candidate: the latest membership row when it is still
+// collecting acknowledgements (OPEN or ACK_PENDING), with its members, for a
+// writer that targets the candidate; null when the latest row is not pending.
+function resolvePendingMembershipCandidate(options = {}) {
+  const latestPublicationRow = resolveLatestPublicationRow(options);
+  if (!PENDING_MEMBERSHIP_PUBLICATION_STATUSES.has(
+    latestPublicationRow?.status)) {
+    return null;
   }
-  return Object.freeze([...new Set(
-    publishedActiveNodeIds.filter((nodeId) =>
-      typeof nodeId === 'string' &&
-      nodeId.length > 0,
-    ),
-  )].sort());
+  return Object.freeze({
+    publicationRow: latestPublicationRow,
+    nodeIds: normalizeMembershipNodeIds(
+      latestPublicationRow.publishedActiveNodeIds),
+  });
 }
 
 // CL-001 variant C re-admission: the retention grace's "is this an already-
@@ -625,10 +633,14 @@ function buildMembershipPublicationActiveSnapshot(
     typeof membershipPublication.status === 'string' ?
       membershipPublication.status :
       normalizedPublication.status || null;
+  // Read (a): a list is published membership only on a PUBLISHED row that
+  // carries it (an empty one: nobody); an OPEN or ACK_PENDING list never is.
   const publishedActiveNodeIdsPresent =
-    membershipPublication.publishedActiveNodeIdsPresent === true ||
-    Array.isArray(membershipPublication.publishedActiveNodeIds) ||
-    Array.isArray(membershipPublication.published_active_node_ids);
+    String(publicationStatus || '').toUpperCase() ===
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED && (
+      membershipPublication.publishedActiveNodeIdsPresent === true ||
+      Array.isArray(membershipPublication.publishedActiveNodeIds) ||
+      Array.isArray(membershipPublication.published_active_node_ids));
   const pendingAckEvidenceState =
     normalizePendingAckEvidenceState(
       membershipPublication.pendingAckEvidenceState ??
@@ -780,6 +792,7 @@ export {
   buildMembershipPublicationActiveSnapshot,
   resolveLatestPublicationRow,
   resolveLatestPublishedPublicationRow,
+  resolvePendingMembershipCandidate,
   resolvePriorityRecoveryActiveNodeCohort,
   resolvePublishedActiveNodeIds,
   resolveRecentlyPublishedActiveNodeIds,

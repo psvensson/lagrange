@@ -4,12 +4,12 @@
   "counts": {
     "unit": 1905,
     "integration": 75,
-    "bootstrap": 182,
+    "bootstrap": 183,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2169,
-  "digest": "fnv1a32-98f33447",
+  "censusSize": 2170,
+  "digest": "fnv1a32-f32a9430",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -106,6 +106,7 @@
     "test/bootstrap/bootstrap-replica-registration-trace.test.js": "bootstrap",
     "test/bootstrap/bootstrap-request-admission-precheck.test.js": "bootstrap",
     "test/bootstrap/bootstrap-request-execution-timeout.test.js": "bootstrap",
+    "test/bootstrap/bootstrap-request-shut-down-writer-not-ready.test.js": "bootstrap",
     "test/bootstrap/bootstrap-response-completeness.property.test.js": "bootstrap",
     "test/bootstrap/bootstrap-response-performance.test.js": "bootstrap",
     "test/bootstrap/bootstrap-sequence.test.js": "bootstrap",

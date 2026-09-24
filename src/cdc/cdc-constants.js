@@ -162,6 +162,9 @@ const CDC_ERROR_MSG = Object.freeze({
     'CDCIntegrationService shut down before this write was confirmed: its ' +
     'outcome is not known here (see its cause), and no retry through the ' +
     'service can succeed',
+  CDC_SHUT_DOWN_NOT_ROUTED:
+    'CDCIntegrationService is shut down: this write was not routed and was ' +
+    'not applied, and no retry through the service can succeed',
   INSERT_FAILED: 'Insert failed',
   UPDATE_FAILED: 'Update failed',
   DELETE_FAILED: 'Delete failed',
@@ -196,6 +199,14 @@ const CDC_ERROR_CODE = Object.freeze({
   SHUT_DOWN: 'CDC_INTEGRATION_SERVICE_SHUT_DOWN',
 });
 
+// What the SHUT_DOWN answer knows of its write: never routed (a write that
+// arrived after shutdown: definitely not applied), or not confirmed (in
+// flight when shutdown came: its cause says what the write last answered).
+const CDC_SHUT_DOWN_WRITE_OUTCOME = Object.freeze({
+  NOT_ROUTED: 'not_routed',
+  NOT_CONFIRMED: 'not_confirmed',
+});
+
 export {
   CDC_CONFIG_KEY,
   CDC_DEFAULTS,
@@ -208,6 +219,7 @@ export {
   CDC_PRIMARY_KEY,
   CDC_RETRY,
   CDC_SESSION,
+  CDC_SHUT_DOWN_WRITE_OUTCOME,
   CDC_SKIP_REASON,
   CDC_SOURCE,
   CDC_SQL,

@@ -292,11 +292,14 @@ export function registerActiveNodeProjectionMembershipPublicationTests() {
       );
     });
 
-  test('active-node projection preserves explicit published-membership presence even when the node array is absent',
+  // Re-expressed 2026-09-24 (cutover seed parity, the lead's owner
+  // decision): presence is published membership, so it holds only for a
+  // PUBLISHED row; an OPEN row's explicit flag does not make it published.
+  test('active-node projection keeps explicit published-membership presence on a published row even when the node array is absent',
     async (t) => {
       const snapshot = buildMembershipPublicationActiveSnapshot({
         publicationEpoch: 11,
-        status: 'OPEN',
+        status: 'PUBLISHED',
         publishedActiveNodeIdsPresent: true,
         membershipLifecycleSummary: {
           recoveryActiveNodeIds: ['node-a'],
@@ -306,6 +309,12 @@ export function registerActiveNodeProjectionMembershipPublicationTests() {
 
       t.equal(snapshot?.publishedActiveNodeIdsPresent, true);
       t.same(snapshot?.publishedActiveNodeIds, []);
+      t.equal(buildMembershipPublicationActiveSnapshot({
+        publicationEpoch: 11,
+        status: 'OPEN',
+        publishedActiveNodeIdsPresent: true,
+      })?.publishedActiveNodeIdsPresent, false,
+      'an OPEN row is never published membership');
       t.same(snapshot?.recoveryActiveNodeIds, ['node-a']);
       t.equal(
         snapshot?.recoveryActiveNodeSource,

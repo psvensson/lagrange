@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 252,
+    "bootstrap-membership": 253,
     "cdc-metadata": 57,
     "cli-tooling": 96,
     "control-plane": 194,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2169,
-  "digest": "fnv1a32-8f2ede7b",
+  "censusSize": 2170,
+  "digest": "fnv1a32-fac2736d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-62f8c51f",
+  "observationDigest": "fnv1a32-4768e632",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -125,6 +125,7 @@
     "test/bootstrap/bootstrap-replica-registration-trace.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-request-admission-precheck.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-request-execution-timeout.test.js": "bootstrap-membership",
+    "test/bootstrap/bootstrap-request-shut-down-writer-not-ready.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-response-completeness.property.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-response-performance.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-sequence.test.js": "bootstrap-membership",
@@ -2466,6 +2467,13 @@
         "src/control-plane/timeout-budget.js"
       ]
     },
+    "test/bootstrap/bootstrap-request-shut-down-writer-not-ready.test.js": {
+      "files": [
+        "src/bootstrap/bootstrap-api-constants.js",
+        "src/bootstrap/bootstrap-constants.js",
+        "src/bootstrap/phases/contact-seed-failure-signals.js"
+      ]
+    },
     "test/bootstrap/bootstrap-sequence.test.js": {
       "files": [
         "src/bootstrap/shared/control-plane-setup.js"
@@ -3282,11 +3290,66 @@
     },
     "test/control-plane/membership-publication-first-epoch-members.test.js": {
       "files": [
+        "src/admin/admin-control-snapshot-local-build-base.js",
+        "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
+        "src/admin/admin-control-snapshot-node-view-projection.js",
+        "src/admin/admin-control-snapshot-publication-convergence-diagnostics.js",
+        "src/admin/admin-control-snapshot-repair-diagnostics.js",
+        "src/admin/admin-control-snapshot.js",
+        "src/bootstrap/join-cleanup-publication-context.js",
+        "src/bootstrap/system-table-runtime-schema-definitions.js",
         "src/cache/system-table-cache.js",
+        "src/control-plane/active-node-projection.js",
         "src/control-plane/active-node-publication-snapshots.js",
+        "src/control-plane/control-plane-publication-merge.js",
+        "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
+        "src/control-plane/control-plane-readiness-service-node-methods.js",
+        "src/control-plane/current-priority-placement-observation.js",
+        "src/control-plane/formation-release-handoff-publication.js",
+        "src/control-plane/heartbeat-service-lifecycle-methods.js",
+        "src/control-plane/membership-lifecycle-constants.js",
+        "src/control-plane/membership-lifecycle-controller.js",
+        "src/control-plane/membership-publication-acknowledgement.js",
+        "src/control-plane/membership-publication-active-gate-reconcile.js",
+        "src/control-plane/membership-publication-candidate-derivation.js",
+        "src/control-plane/membership-publication-coordinator-queue.js",
         "src/control-plane/membership-publication-coordinator-reconcile.js",
+        "src/control-plane/membership-publication-lifecycle-summary.js",
         "src/control-plane/membership-publication-planning-evidence.js",
-        "src/control-plane/membership-publication-row-contract.js"
+        "src/control-plane/membership-publication-priority-partition-readiness-data.js",
+        "src/control-plane/membership-publication-readiness-repair.js",
+        "src/control-plane/membership-publication-row-helpers.js",
+        "src/control-plane/membership-publication-target-selection.js",
+        "src/control-plane/node-trust-state.js",
+        "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "src/control-plane/priority-recovery-observation-snapshot.js",
+        "src/control-plane/priority-recovery-snapshot-closure.js",
+        "src/control-plane/publication-active-gate-handoff-contract-constants.js",
+        "src/control-plane/publication-active-gate-handoff-contract-decision.js",
+        "src/control-plane/publication-active-gate-handoff-contract-evidence.js",
+        "src/control-plane/publication-active-gate-handoff-contract-fence.js",
+        "src/control-plane/publication-active-gate-handoff-contract-selection.js",
+        "src/control-plane/publication-active-gate-handoff-contract.js",
+        "src/control-plane/publication-recovery-convergence-builder.js",
+        "src/control-plane/publication-recovery-evidence-values.js",
+        "src/control-plane/publication-recovery-handoff-evidence-normalizers.js",
+        "src/control-plane/publication-recovery-observation-evidence-normalizers.js",
+        "src/control-plane/recovery-protocol-snapshot.js",
+        "src/control-plane/replica-dispatch-replay-health-readiness.js",
+        "src/control-plane/replica-dispatch-service.js",
+        "src/control-plane/system-row-normalizers.js",
+        "src/diagnostics/topology-convergence-publication-normalizers.js",
+        "src/diagnostics/topology-convergence-replay.js",
+        "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
+        "src/rebalancer/operation-workflow-remove-safety-membership.js",
+        "src/rebalancer/priority-placement-observation-memo.js",
+        "src/rebalancer/unified-rebalancer-available-nodes.js",
+        "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
+        "src/rebalancer/unified-rebalancer-follow-up-decision.js",
+        "src/rebalancer/unified-rebalancer-priority-readiness.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/control-plane/membership-publication-reconcile-no-race-timeout.test.js": {
@@ -5899,6 +5962,7 @@
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/node-liveness-semantic-projection.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/control-plane/replica-dispatch-service.js",
         "src/diagnostics/formation-turn-attribution.js"

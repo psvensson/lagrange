@@ -257,6 +257,20 @@ function isControlPlaneWriterShutDownCandidate(candidate) {
   return getDirectControlPlaneErrorCode(candidate) === CDC_ERROR_CODE.SHUT_DOWN;
 }
 
+/**
+ * Whether a failure is (or links) the CDC integration service's terminal
+ * shut-down answer: the writer on this node is torn down.
+ * @param {*} value - The failed result or error.
+ * @return {boolean}
+ */
+function isControlPlaneWriterShutDown(value) {
+  if (!value) {
+    return false;
+  }
+  return collectLinkedControlPlaneFailures(value).some(
+    isControlPlaneWriterShutDownCandidate);
+}
+
 function isRetryableControlPlaneError(value) {
   if (!value) {
     return false;
@@ -350,6 +364,7 @@ export {
   getControlPlaneFailureSummary,
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
+  isControlPlaneWriterShutDown,
   isRetryableControlPlaneError,
   normalizeKnownNodeBootIncarnation,
   RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS,

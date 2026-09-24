@@ -1138,7 +1138,9 @@ test('active-node projection retains the latest published membership when a newe
       'strict mode should keep the latest published active-node set while a newer publication remains open',
     );
   });
-test('active-node projection keeps durable published membership from the latest ack-pending publication when published history is unavailable',
+// Re-expressed 2026-09-24 (cutover seed parity, the lead's owner decision):
+// an ACK_PENDING row is the pending candidate, never published membership.
+test('active-node projection reads no published membership when only the latest ack-pending publication is visible',
   async (t) => {
     const activeNodeViews = resolveActiveNodeViews({
       nodeRows: [
@@ -1231,8 +1233,8 @@ test('active-node projection keeps durable published membership from the latest 
 
     t.same(
       activeNodeViews.authoritativeActiveNodeIds,
-      ['node-1', 'node-2'],
-      'projection should retain the durable published membership even when only the latest ack-pending row is visible',
+      [],
+      'an ack-pending row is the pending candidate, not published membership',
     );
     t.same(
       activeNodeViews.projectedActiveNodeIds,
@@ -1241,8 +1243,8 @@ test('active-node projection keeps durable published membership from the latest 
     );
     t.equal(
       activeNodeViews.publishedMembershipAvailable,
-      true,
-      'projection should continue advertising published membership availability from the durable published set',
+      false,
+      'no PUBLISHED row is visible, so no published membership is available',
     );
   });
 test('active-node projection ignores newer non-membership publications in strict mode',

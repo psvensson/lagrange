@@ -1,5 +1,11 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
-import {CDC_ERROR_CODE} from './cdc-constants.js';
+import {
+  CDC_ERROR_CODE,
+  CDC_SHUT_DOWN_WRITE_OUTCOME,
+} from './cdc-constants.js';
+import {ERRORS} from '../constants/errors.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../partition/partition-write-kernel.js';
 
 const {
   CDCEventHandler,
@@ -142,8 +148,9 @@ class CDCIntegrationServiceLifecycleMethods {
   /**
    * Mark the service as shutting down: its terminal lifecycle state. From
    * here every write it routes answers the typed terminal SHUT_DOWN (see
-   * resolveShutDownAnswer), and every wait it holds for a write is released
-   * with that answer now instead of at its budget. Idempotent.
+   * resolveShutDownAnswer), a new write is refused before it is routed, and
+   * every wait or retry delay it holds for a write is released now instead
+   * of at its budget. Idempotent.
    */
   markShuttingDown() {
     this.isShuttingDown = true;
@@ -170,6 +177,29 @@ class CDCIntegrationServiceLifecycleMethods {
   }
 
   /**
+   * A write's retry delay on this service's clock, held until shutdown:
+   * shutdown ends it at once, so no timer outlives the terminal state.
+   * @param {number} delayMs
+   * @return {Promise<void>} Settles at the delay or at shutdown.
+   */
+  delayUntilShutdown(delayMs) {
+    return new Promise((resolve) => {
+      let timer = null;
+      const stopHolding = this.holdUntilShutdown(() => {
+        this.timeSource.clearTimeout(timer);
+        resolve();
+      });
+      if (this.isShuttingDown === true) {
+        return;
+      }
+      timer = this.timeSource.setTimeout(() => {
+        stopHolding();
+        resolve();
+      }, delayMs);
+    });
+  }
+
+  /**
    * The answer a write gets from this service. Before shutdown it is the
    * failure itself. Once the service is shutting down it is the typed
    * terminal SHUT_DOWN, whatever the failure was: no engine will arrive and
@@ -185,16 +215,35 @@ class CDCIntegrationServiceLifecycleMethods {
     ) {
       return failure;
     }
-    return this.buildShutDownAnswer(failure);
+    return this.buildShutDownAnswer(
+      CDC_SHUT_DOWN_WRITE_OUTCOME.NOT_CONFIRMED, failure);
   }
 
   /**
+   * The terminal answer of an accepted write whose visibility shutdown cut
+   * short: accepted into consensus, its outcome not known to this service.
+   * @return {Error}
+   */
+  buildUnconfirmedWriteShutDownAnswer() {
+    const cause = new Error(ERRORS.WRITE_OUTCOME_UNKNOWN);
+    cause.failureCode = PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN;
+    return this.buildShutDownAnswer(
+      CDC_SHUT_DOWN_WRITE_OUTCOME.NOT_CONFIRMED, cause);
+  }
+
+  /**
+   * @param {string} writeOutcome - A CDC_SHUT_DOWN_WRITE_OUTCOME.
    * @param {*} [cause] - What the write last answered, when anything.
    * @return {Error} The typed terminal SHUT_DOWN answer.
    */
-  buildShutDownAnswer(cause = null) {
-    const error = new Error(CDC_ERROR_MSG.CDC_SHUT_DOWN);
+  buildShutDownAnswer(writeOutcome, cause = null) {
+    const error = new Error(
+      writeOutcome === CDC_SHUT_DOWN_WRITE_OUTCOME.NOT_ROUTED ?
+        CDC_ERROR_MSG.CDC_SHUT_DOWN_NOT_ROUTED :
+        CDC_ERROR_MSG.CDC_SHUT_DOWN,
+    );
     error.code = CDC_ERROR_CODE.SHUT_DOWN;
+    error.writeOutcome = writeOutcome;
     if (cause) {
       error.cause = cause;
     }
@@ -217,8 +266,13 @@ class CDCIntegrationServiceLifecycleMethods {
         CDC_INTEGRATION_SERVICE_LITERAL.CDC_WRITE_ROUTER_IS_NOT_CONFIGURED,
       );
     }
-    // One exit for every routed write: after shutdown its answer is the
-    // lifecycle owner's terminal one, thrown or returned alike.
+    // One exit for every routed write. A write that arrives after shutdown
+    // is refused before it reaches an engine (definitely not applied); a
+    // write in flight at shutdown answers the terminal answer carrying its
+    // last failure, thrown or returned alike.
+    if (this.isShuttingDown === true) {
+      throw this.buildShutDownAnswer(CDC_SHUT_DOWN_WRITE_OUTCOME.NOT_ROUTED);
+    }
     let result = null;
     try {
       result = await this.writeRouter.execute(sql, params, options);

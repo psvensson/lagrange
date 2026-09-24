@@ -1,6 +1,6 @@
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
-  isRetryableControlPlaneError,
+  isControlPlaneWriterShutDown,
 } from './control-plane-error-classification.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {publicationRowSatisfiesDesiredState} from './control-plane-publication-merge.js';
@@ -30,11 +30,11 @@ import {
   buildCriticalControlPlaneConvergenceOptions,
 } from './membership-publication-control-plane-convergence.js';
 
-// What a failed publication write leaves to do. A failure the control-plane
-// classifier holds retryable may still have landed or may land on another
-// attempt: read the durable row back, then re-attempt while attempts remain.
-// Any other failure is final (e.g. the CDC service's terminal shut-down
-// answer): nothing is read back or re-attempted through it.
+// What a failed publication write leaves to do. A failed answer does not
+// prove the row is absent (a committed write can answer failed), so while
+// attempts remain the durable row is read back and the write re-attempted.
+// The one exception is the CDC service's terminal shut-down answer: nothing
+// can be read back or re-attempted through a torn-down writer.
 const PUBLICATION_WRITE_FAILURE_NEXT_STEP = Object.freeze({
   VERIFY_AND_REATTEMPT: 'verify_and_reattempt',
   FAIL: 'fail',
@@ -46,7 +46,7 @@ function resolvePublicationWriteFailureNextStep(
   attemptsLeft,
 ) {
   return canVerifyPersistedRow && attemptsLeft > 0 &&
-    isRetryableControlPlaneError(error) ?
+    !isControlPlaneWriterShutDown(error) ?
     PUBLICATION_WRITE_FAILURE_NEXT_STEP.VERIFY_AND_REATTEMPT :
     PUBLICATION_WRITE_FAILURE_NEXT_STEP.FAIL;
 }
