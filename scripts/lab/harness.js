@@ -2,6 +2,10 @@ import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
 import {spawn} from 'node:child_process';
 import {reserveLocalPort, run, waitForDockerPing} from './process.js';
+import {
+  DISTRIBUTED_EXECUTION_ENV,
+  DISTRIBUTED_EXECUTION_TARGET,
+} from '../../test/distributed/harness/constants.js';
 
 const DEFAULT_BASE_CONFIG = 'test/distributed/config/local-three-node.json';
 const DEFAULT_DOCKER_SOCKET = '/var/run/docker.sock';
@@ -30,6 +34,7 @@ const MIN_PHYSICAL_HOSTS = 2;
 const MIN_CONFIG_SIZE = 1;
 const DEFAULT_SCENARIO_PART = 'matrix';
 const NAME_SEPARATOR = '-';
+const HOST_LIST_SEPARATOR = ',';
 const CONFIG_DIR = Object.freeze({ROOT: '.tmp', LEAF: 'home-lab'});
 const HARNESS_RUNNER = 'test/distributed/run.js';
 const HARNESS_ARG = Object.freeze({
@@ -118,6 +123,22 @@ function validateHarnessNodes(nodes) {
   }
 }
 
+export function buildHarnessRunnerArgs({
+  configPath,
+  scenario,
+  verbose = true,
+  extraArgs = [],
+}) {
+  const args = [HARNESS_RUNNER, HARNESS_ARG.CONFIG, configPath];
+  if (scenario) args.push(HARNESS_ARG.SCENARIO, scenario);
+  if (verbose) args.push(HARNESS_ARG.VERBOSE);
+  // Physical-host runs must never be converted back into the single-host
+  // bind-mount path by a passthrough flag. Put the hard invariant last so
+  // the distributed runner's last-option-wins parser cannot override it.
+  args.push(...extraArgs, HARNESS_ARG.NO_FAST_LOCAL);
+  return args;
+}
+
 export async function doctorHarnessNodes(nodes) {
   validateHarnessNodes(nodes);
   let failures = 0;
@@ -142,6 +163,7 @@ export async function runHarness({
   verbose = true,
   extraArgs = [],
   dryRun = false,
+  environment = process.env,
 }) {
   validateHarnessNodes(nodes);
   if (nodes.length < MIN_PHYSICAL_HOSTS) {
@@ -178,11 +200,20 @@ export async function runHarness({
       );
     }
     await buildRemoteConfig(absoluteBase, nodes, ports, configPath, nodesPerHost);
-    const args = [HARNESS_RUNNER, HARNESS_ARG.CONFIG, configPath];
-    if (scenario) args.push(HARNESS_ARG.SCENARIO, scenario);
-    if (verbose) args.push(HARNESS_ARG.VERBOSE);
-    args.push(HARNESS_ARG.NO_FAST_LOCAL, ...extraArgs);
-    await run(process.execPath, args);
+    const args = buildHarnessRunnerArgs({
+      configPath,
+      scenario,
+      verbose,
+      extraArgs,
+    });
+    const childEnvironment = {
+      ...environment,
+      [DISTRIBUTED_EXECUTION_ENV.TARGET]: DISTRIBUTED_EXECUTION_TARGET.LAB,
+      [DISTRIBUTED_EXECUTION_ENV.HOSTS]: nodes
+        .map((node) => node.name)
+        .join(HOST_LIST_SEPARATOR),
+    };
+    await run(process.execPath, args, {env: childEnvironment});
   } finally {
     await Promise.all(tunnels.map(stopTunnel));
   }

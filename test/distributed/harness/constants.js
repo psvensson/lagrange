@@ -767,6 +767,25 @@ const LOG_SUBSCRIPTION_CAPABILITY = Object.freeze({
   LIVE_SELECT_QUERY: 'liveSelectQuery',
 });
 
+// --- Distributed Matrix Execution Constants ---
+const DISTRIBUTED_EXECUTION_TARGET = Object.freeze({
+  LOCAL: 'local',
+  LAB: 'lab',
+  GCP: 'gcp',
+});
+const DISTRIBUTED_MATRIX_PROFILE = Object.freeze({
+  CANONICAL: 'canonical',
+  TOPOLOGY: 'topology',
+});
+const DISTRIBUTED_EXECUTION_ENV = Object.freeze({
+  TARGET: 'DISTRIBUTED_MATRIX_TARGET',
+  PROFILE: 'DISTRIBUTED_MATRIX_PROFILE',
+  HOSTS: 'DISTRIBUTED_MATRIX_HOSTS',
+  CONFIG: 'DISTRIBUTED_MATRIX_CONFIG',
+});
+const DISTRIBUTED_MATRIX_REPORT_ROOT =
+  'test-output/reports/distributed-matrix';
+
 // --- CLI Runner Constants ---
 // Default runs use the local Docker daemon (fast inner loop: warm image reuse,
 // no provisioning/teardown). GCP multi-host runs carry a ~15-minute
@@ -875,6 +894,10 @@ export {
   PLAYBACK,
   PLAYBACK_EVENT_TYPE,
   DETERMINISTIC_DEBUG_DEFAULTS,
+  DISTRIBUTED_EXECUTION_TARGET,
+  DISTRIBUTED_MATRIX_PROFILE,
+  DISTRIBUTED_EXECUTION_ENV,
+  DISTRIBUTED_MATRIX_REPORT_ROOT,
   LOG_SUBSCRIPTION_CAPABILITY,
   CLI,
   EXIT_CODES,

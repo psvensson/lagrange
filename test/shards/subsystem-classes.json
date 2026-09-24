@@ -9,7 +9,7 @@
     "cli-tooling": 96,
     "control-plane": 193,
     "convergence-topology": 91,
-    "distributed-harness": 165,
+    "distributed-harness": 166,
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 240,
@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 147,
     "storage-raft": 95,
-    "test-infrastructure": 133,
+    "test-infrastructure": 135,
     "transactions": 14,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2154,
-  "digest": "fnv1a32-aec6c8b0",
+  "censusSize": 2157,
+  "digest": "fnv1a32-4dcd180e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b73f6986",
+  "observationDigest": "fnv1a32-a750f6d4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -825,6 +825,7 @@
     "test/distributed/harness/__tests__/deterministic-simulator.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/disk-full-under-load-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/distributed-failure-analyzer-load-metrics-fallback.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/distributed-matrix-plan.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/docker-provider.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/examples-catalog-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/failure-bundle-dominant-reason-denoise.test.js": "distributed-harness",
@@ -1869,6 +1870,7 @@
     "test/scripts/dependency-policy-authority.test.js": "test-infrastructure",
     "test/scripts/dependency-policy-classification.test.js": "test-infrastructure",
     "test/scripts/dependency-policy-producer-binding.test.js": "test-infrastructure",
+    "test/scripts/distributed-matrix-cli.test.js": "test-infrastructure",
     "test/scripts/dt-prove.test.js": "test-infrastructure",
     "test/scripts/effective-placement-serial-priority-planner-scenario.test.js": "test-infrastructure",
     "test/scripts/exact-election-evidence-same-turn-model-contract.test.js": "test-infrastructure",
@@ -1913,6 +1915,7 @@
     "test/scripts/release-npm-package.test.js": "test-infrastructure",
     "test/scripts/release-preflight.test.js": "test-infrastructure",
     "test/scripts/release-proof-identity.test.js": "test-infrastructure",
+    "test/scripts/rerun-failed-distributed-scenarios.test.js": "test-infrastructure",
     "test/scripts/rolling-restart-stat-gate-summary.test.js": "test-infrastructure",
     "test/scripts/rule-set-revision.test.js": "test-infrastructure",
     "test/scripts/run-classified-test-files.test.js": "test-infrastructure",
@@ -4668,6 +4671,17 @@
     "test/distributed/harness/__tests__/distributed-failure-analyzer-load-metrics-fallback.test.js": {
       "files": [
         "scripts/summarize-distributed-failure-report.sh"
+      ]
+    },
+    "test/distributed/harness/__tests__/distributed-matrix-plan.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/run.js"
+      ],
+      "directories": [
+        "test/distributed/config"
       ]
     },
     "test/distributed/harness/__tests__/docker-provider.test.js": {
@@ -8234,6 +8248,11 @@
         "test"
       ]
     },
+    "test/scripts/distributed-matrix-cli.test.js": {
+      "files": [
+        "scripts/run-distributed-matrix.js"
+      ]
+    },
     "test/scripts/dt-prove.test.js": {
       "files": [
         "scripts/run-test-files.js",
@@ -8339,9 +8358,14 @@
     },
     "test/scripts/home-lab-cli-guidelines.test.js": {
       "files": [
+        "Dockerfile",
         "scripts/check-guideline-decision-boundaries-baseline.json",
         "scripts/check-guideline-literals-baseline.json",
-        "scripts/lab.js"
+        "scripts/lab.js",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local-three-node.json",
+        "test/distributed/config/local.json",
+        "test/distributed/run.js"
       ],
       "directories": [
         "scripts",
@@ -8912,6 +8936,11 @@
       "directories": [
         "data/releases",
         "solve"
+      ]
+    },
+    "test/scripts/rerun-failed-distributed-scenarios.test.js": {
+      "files": [
+        "scripts/rerun-failed-distributed-scenarios.sh"
       ]
     },
     "test/scripts/rolling-restart-stat-gate-summary.test.js": {

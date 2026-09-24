@@ -58,6 +58,9 @@ import {
   RAFT_PROVIDER_DEFAULTS,
   DETERMINISTIC_DEBUG_DEFAULTS,
   SCENARIO_ARTIFACTS,
+  DISTRIBUTED_EXECUTION_TARGET,
+  DISTRIBUTED_MATRIX_PROFILE,
+  DISTRIBUTED_EXECUTION_ENV,
 } from './harness/constants.js';
 
 const LIVE_LOG_PREFIX = '[live-log] ';
@@ -163,6 +166,9 @@ const SCENARIO_ASSERTION_POLICY = Object.freeze({
   }),
 });
 const SCENARIO_FILTER_ALL = 'all';
+const DISTRIBUTED_EXECUTION_TYPEOF_STRING = 'string';
+const DISTRIBUTED_EXECUTION_HOST_SEPARATOR = ',';
+const DISTRIBUTED_EXECUTION_EMPTY_LENGTH = 0;
 // Stamped on every written report so a release verification (the
 // release-0-2-verification-v3 memory-soak oracle) can bind the report to the
 // exact source bytes the run booted; empty when no fingerprinted launch
@@ -643,12 +649,47 @@ function buildReportSourceFingerprintMetadata(runConfig) {
   };
 }
 
-function buildReportMetadata(args, runConfig, deterministicDebug) {
+function buildDistributedExecutionMetadata(env = process.env) {
+  const metadata = {};
+  const target = env?.[DISTRIBUTED_EXECUTION_ENV.TARGET];
+  const profile = env?.[DISTRIBUTED_EXECUTION_ENV.PROFILE];
+  const hosts = env?.[DISTRIBUTED_EXECUTION_ENV.HOSTS];
+  const matrixConfig = env?.[DISTRIBUTED_EXECUTION_ENV.CONFIG];
+
+  if (typeof target === DISTRIBUTED_EXECUTION_TYPEOF_STRING &&
+      Object.values(DISTRIBUTED_EXECUTION_TARGET).includes(target)) {
+    metadata.executionTarget = target;
+  }
+  if (typeof profile === DISTRIBUTED_EXECUTION_TYPEOF_STRING &&
+      Object.values(DISTRIBUTED_MATRIX_PROFILE).includes(profile)) {
+    metadata.matrixProfile = profile;
+  }
+  if (typeof hosts === DISTRIBUTED_EXECUTION_TYPEOF_STRING &&
+      hosts.trim().length > DISTRIBUTED_EXECUTION_EMPTY_LENGTH) {
+    metadata.executionHosts = hosts
+      .split(DISTRIBUTED_EXECUTION_HOST_SEPARATOR)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  if (typeof matrixConfig === DISTRIBUTED_EXECUTION_TYPEOF_STRING &&
+      matrixConfig.trim().length > DISTRIBUTED_EXECUTION_EMPTY_LENGTH) {
+    metadata.matrixConfig = matrixConfig.trim();
+  }
+  return metadata;
+}
+
+function buildReportMetadata(
+  args,
+  runConfig,
+  deterministicDebug,
+  env = process.env,
+) {
   const metadata = {
     raftProvider: resolveRunRaftProvider(runConfig),
     configPath: String(args?.config || CLI.DEFAULT_CONFIG),
     scenarioFilter: String(args?.scenario || SCENARIO_FILTER_ALL),
     ...buildReportSourceFingerprintMetadata(runConfig),
+    ...buildDistributedExecutionMetadata(env),
   };
   if (deterministicDebug?.enabled === true) {
     metadata.deterministicDebug = {
@@ -1294,6 +1335,7 @@ async function main() {
       ...runStatusContext.base,
       scenarioFilter: String(args.scenario || RUNNER_STAGE_SCENARIO_FILTER_ALL),
       raftProvider: resolveRunRaftProvider(runConfig),
+      ...buildDistributedExecutionMetadata(),
       scenarioCount: scenarios.length,
       scenarioNames: scenarios.map((scenario) => scenario.name),
       // Provenance of the code under test: git hash/dirtiness (image mode) plus
@@ -1488,6 +1530,7 @@ export {
   resolveDeterministicDebugConfig,
   applyDeterministicDebugConfig,
   buildReportMetadata,
+  buildDistributedExecutionMetadata,
   formatScenarioPhaseEventLine,
   deriveRunOutputDir,
   deriveRunStatusPath,
