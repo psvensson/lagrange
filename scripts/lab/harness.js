@@ -2,6 +2,10 @@ import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
 import {spawn} from 'node:child_process';
 import {reserveLocalPort, run, waitForDockerPing} from './process.js';
+import {
+  DISTRIBUTED_EXECUTION_ENV,
+  DISTRIBUTED_EXECUTION_TARGET,
+} from '../../test/distributed/harness/constants.js';
 
 const DEFAULT_BASE_CONFIG = 'test/distributed/config/local-three-node.json';
 const DEFAULT_DOCKER_SOCKET = '/var/run/docker.sock';
@@ -142,6 +146,7 @@ export async function runHarness({
   verbose = true,
   extraArgs = [],
   dryRun = false,
+  environment = process.env,
 }) {
   validateHarnessNodes(nodes);
   if (nodes.length < MIN_PHYSICAL_HOSTS) {
@@ -181,8 +186,18 @@ export async function runHarness({
     const args = [HARNESS_RUNNER, HARNESS_ARG.CONFIG, configPath];
     if (scenario) args.push(HARNESS_ARG.SCENARIO, scenario);
     if (verbose) args.push(HARNESS_ARG.VERBOSE);
-    args.push(HARNESS_ARG.NO_FAST_LOCAL, ...extraArgs);
-    await run(process.execPath, args);
+    // Physical-host runs must never be converted back into the single-host
+    // bind-mount path by a passthrough flag. Put the hard invariant last so
+    // the distributed runner's last-option-wins parser cannot override it.
+    args.push(...extraArgs, HARNESS_ARG.NO_FAST_LOCAL);
+    const childEnvironment = {
+      ...environment,
+      [DISTRIBUTED_EXECUTION_ENV.TARGET]: DISTRIBUTED_EXECUTION_TARGET.LAB,
+      [DISTRIBUTED_EXECUTION_ENV.HOSTS]: nodes
+        .map((node) => node.name)
+        .join(','),
+    };
+    await run(process.execPath, args, {env: childEnvironment});
   } finally {
     await Promise.all(tunnels.map(stopTunnel));
   }
