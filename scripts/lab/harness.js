@@ -122,6 +122,22 @@ function validateHarnessNodes(nodes) {
   }
 }
 
+export function buildHarnessRunnerArgs({
+  configPath,
+  scenario,
+  verbose = true,
+  extraArgs = [],
+}) {
+  const args = [HARNESS_RUNNER, HARNESS_ARG.CONFIG, configPath];
+  if (scenario) args.push(HARNESS_ARG.SCENARIO, scenario);
+  if (verbose) args.push(HARNESS_ARG.VERBOSE);
+  // Physical-host runs must never be converted back into the single-host
+  // bind-mount path by a passthrough flag. Put the hard invariant last so
+  // the distributed runner's last-option-wins parser cannot override it.
+  args.push(...extraArgs, HARNESS_ARG.NO_FAST_LOCAL);
+  return args;
+}
+
 export async function doctorHarnessNodes(nodes) {
   validateHarnessNodes(nodes);
   let failures = 0;
@@ -183,13 +199,12 @@ export async function runHarness({
       );
     }
     await buildRemoteConfig(absoluteBase, nodes, ports, configPath, nodesPerHost);
-    const args = [HARNESS_RUNNER, HARNESS_ARG.CONFIG, configPath];
-    if (scenario) args.push(HARNESS_ARG.SCENARIO, scenario);
-    if (verbose) args.push(HARNESS_ARG.VERBOSE);
-    // Physical-host runs must never be converted back into the single-host
-    // bind-mount path by a passthrough flag. Put the hard invariant last so
-    // the distributed runner's last-option-wins parser cannot override it.
-    args.push(...extraArgs, HARNESS_ARG.NO_FAST_LOCAL);
+    const args = buildHarnessRunnerArgs({
+      configPath,
+      scenario,
+      verbose,
+      extraArgs,
+    });
     const childEnvironment = {
       ...environment,
       [DISTRIBUTED_EXECUTION_ENV.TARGET]: DISTRIBUTED_EXECUTION_TARGET.LAB,
