@@ -191,6 +191,7 @@ describe('distributed execution metadata', () => {
         [DISTRIBUTED_EXECUTION_ENV.PROFILE]:
           DISTRIBUTED_MATRIX_PROFILE.TOPOLOGY,
         [DISTRIBUTED_EXECUTION_ENV.HOSTS]: 'lab-a,lab-b,lab-c',
+        [DISTRIBUTED_EXECUTION_ENV.CONFIG]: 'local-three-node.json',
       });
 
       assert.equal(
@@ -206,6 +207,7 @@ describe('distributed execution metadata', () => {
         'lab-b',
         'lab-c',
       ]);
+      assert.equal(metadata.matrixConfig, 'local-three-node.json');
       assert.equal(Object.hasOwn(metadata, 'raftProvider'), false);
     });
 });
