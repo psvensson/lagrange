@@ -45,10 +45,8 @@ import {
   CONTROL_PLANE_READ_LEADER_MODE,
 } from
   './control-plane-system-table-gateway-constants.js';
-import {
-  resolvePendingMembershipCandidate,
-  resolvePublishedActiveNodeIds,
-} from './active-node-publication-snapshots.js';
+import {buildPublicationActiveGateMembershipConvergence} from
+  './publication-active-gate-handoff-contract-helpers.js';
 
 // Owner-driven membership liveness (Workstream A). A dedicated always-on interval
 // — started UNCONDITIONALLY, independent of metadata-publication readiness so it
@@ -729,22 +727,9 @@ class MembershipPublicationCoordinatorReconcile extends
         });
         return false;
       }
-      const latestPublishedRow = planningSnapshot.latestPublishedPublicationRow;
-      const latestRow = planningSnapshot.latestPublicationRow;
-      const publicationEpoch =
-        latestPublishedRow?.publicationEpoch ??
-        latestRow?.publicationEpoch ??
-        0;
-      // The snapshot owner's reads: the published membership, else the
-      // pending candidate awaiting its acknowledgements, else no member.
-      const publicationReads = {
-        latestPublicationRow: latestRow,
-        latestPublishedPublicationRow: latestPublishedRow,
-      };
-      const publishedActiveNodeIds =
-        resolvePublishedActiveNodeIds(publicationReads) ??
-        resolvePendingMembershipCandidate(publicationReads)?.nodeIds ??
-        [];
+      const publicationConvergence =
+        buildPublicationActiveGateMembershipConvergence(planningSnapshot);
+      const publicationEpoch = publicationConvergence.publicationEpoch;
       // CL-001 variant A: surface still-pending recovery-eligible acks on an
       // OPEN publication so the contract requests a reconcile even when the
       // published set has no deficit; without this the owner skips forever and
@@ -754,7 +739,7 @@ class MembershipPublicationCoordinatorReconcile extends
       const handoffContract = buildPublicationActiveGateHandoffContract({
         nodeRows: planningSnapshot.nodeRows,
         readinessByNodeId: planningSnapshot.readinessByNodeId,
-        publicationConvergence: {publicationEpoch, publishedActiveNodeIds},
+        publicationConvergence,
         ownerAckCompletionPendingNodeIds,
       });
       const missingCount = handoffContract?.missingPublishedCount ?? 0;

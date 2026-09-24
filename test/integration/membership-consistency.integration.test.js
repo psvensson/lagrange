@@ -215,6 +215,9 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
   // --------------------------------------------------------------------------
   // Test 3: Lease Expiration During Stabilization
   // Uses real BootstrapService to create seed node, then tests lease expiration.
+  // It makes no placement claim for the short-lease node: without transport
+  // here it is never placement-eligible, so exclusion would not discriminate
+  // the lease (the readiness owner's own test witnesses that contract).
   // --------------------------------------------------------------------------
   await t.test('lease expires during rebalancer stabilization period', async (t) => {
     // Initialize with fast Raft elections
@@ -245,13 +248,20 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
 
       // A node row READY on a live ready lease whose heartbeat is already
       // past the liveness owner's derivation grace (the row supplies the
-      // clock, as the rest of this file does). Each owner answers its own
-      // question: the publication owner publishes the row it witnessed READY
-      // on a live lease; once the lease has passed (a committed row update,
-      // not a wait) the readiness and placement owners hold it unavailable
-      // for placement. Whether it stays out of published membership is not a
+      // clock, as the rest of this file does). The publication owner
+      // publishes the row it witnessed READY on a live lease. Whether it
+      // stays out of published membership once its lease passes is not a
       // guarantee on any backend (see quest-records/cutover-seed-parity/
       // finding-readiness-lapsed-member-and-planning-oscillation.md).
+      //
+      // No placement claim is made here: this node has no transport in this
+      // composition, so the readiness owner never holds it placement-eligible
+      // even while its lease is live, and an exclusion after expiry would not
+      // discriminate the lease. Lease expiry removing placement eligibility
+      // is the readiness owner's contract, witnessed with transport connected
+      // in test/control-plane/control-plane-readiness-service.test.js
+      // ("fails closed for stale lease rows even when transport is
+      // connected").
       const publications = recordPublishedMemberships(owners.cache);
       const now = Date.now();
       const shortLeaseNode = createNodeEntry('short-lease-node', {
@@ -270,11 +280,6 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       await owners.cdcIntegrationService.updateSystemTableRow(
         SYSTEM_TABLE_NAME.NODES, {node_id: 'short-lease-node'},
         {ready_lease_expires_at: Date.now() - 1});
-      const shortLeaseReadiness = await owners.controlPlaneReadinessService
-        .getNodeReadiness('short-lease-node');
-      t.equal(shortLeaseReadiness?.dimensions?.placementEligible, false,
-        'once its lease has passed, the readiness owner holds it not ' +
-        'placement-eligible');
 
       // The real rebalancer over the seed's real owners
       const rebalancer = new UnifiedRebalancer({
@@ -297,11 +302,6 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
 
       // Record state change to start stabilization
       rebalancer.recordStateChange('test_trigger');
-
-      // was: 'short-lease node should not be available after lease expiry'
-      t.notOk(rebalancer.getAvailableNodes()
-        .some((node) => node.node_id === 'short-lease-node'),
-      'the placement owner does not offer the member whose lease has passed');
 
       // Stabilization timing can race with short lease windows under fast tests.
       // Verify API behavior without enforcing a brittle exact timing boundary.

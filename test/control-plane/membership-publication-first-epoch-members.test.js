@@ -49,6 +49,10 @@ import {buildNodeTrustState} from '../../src/control-plane/node-trust-state.js';
 import {NODE_STATUS} from '../../src/node/node-constants.js';
 import {STATE, TABLES} from '../../src/constants/index.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
+import {JoinCleanupHandler} from '../../src/bootstrap/join-cleanup-handler.js';
+import {HeartbeatService} from '../../src/control-plane/heartbeat-service.js';
+import * as RECOVERY_PROTOCOL from
+  '../../src/control-plane/recovery-protocol-snapshot.js';
 import {
   createMockControlPlaneReadinessService,
   createTestRebalancer,
@@ -239,9 +243,9 @@ test('a membership candidate is pending, not published, until its ' +
   assert.deepEqual(ownerReads(cache).pending, [SEED_NODE_ID],
     'it is the pending candidate');
 
-  // The real publication condition: the member acknowledges it.
-  await coordinator.acknowledgePublication(
-    latestMembershipRow(cache).publication_id, SEED_NODE_ID);
+  // The real publication condition: the member acknowledges it through the
+  // owner's per-node acknowledgement path, which selects the candidate.
+  await coordinator.acknowledgeMembershipPublicationForNode(SEED_NODE_ID);
   assert.deepEqual(ownerReads(cache),
     {published: [SEED_NODE_ID], pending: null},
     'acknowledged, it is published membership and no longer pending');
@@ -249,22 +253,198 @@ test('a membership candidate is pending, not published, until its ' +
   // A later candidate naming a joiner: pending above the published epoch.
   commitNodeRow(cache, JOINER_NODE_ID, STATE.READY);
   await coordinator.reconcileClusterMembership({});
-  const candidate = latestMembershipRow(cache);
   assert.deepEqual(ownerReads(cache), {
     published: [SEED_NODE_ID],
     pending: [JOINER_NODE_ID, SEED_NODE_ID].sort(),
   }, 'the joiner is in the pending candidate, not in published membership');
-  await coordinator.acknowledgePublication(
-    candidate.publication_id, SEED_NODE_ID);
+  await coordinator.acknowledgeMembershipPublicationForNode(SEED_NODE_ID);
   assert.deepEqual(ownerReads(cache).published, [SEED_NODE_ID],
     'with one acknowledgement outstanding it is still not published');
-  await coordinator.acknowledgePublication(
-    candidate.publication_id, JOINER_NODE_ID);
+  await coordinator.acknowledgeMembershipPublicationForNode(JOINER_NODE_ID);
   assert.deepEqual(ownerReads(cache), {
     published: [JOINER_NODE_ID, SEED_NODE_ID].sort(),
     pending: null,
   }, 'every acknowledgement in, the joiner is published membership');
 });
+
+// The join cleanup of a joiner whose join failed after it registered: the
+// real cleanup handler enqueues the owner's reconcile with its retraction
+// context, and the coordinator applies it.
+async function retractFailedJoiner(coordinator) {
+  const cleanup = new JoinCleanupHandler({
+    nodeId: SEED_NODE_ID,
+    delegates: {
+      getRebalanceCoordinator: () => ({
+        controlPlaneReadinessService: {membershipPublicationService: coordinator},
+      }),
+    },
+  });
+  assert.equal(cleanup.enqueueMembershipPublicationReconcile(
+    {registeredNodeId: JOINER_NODE_ID}), true,
+  'the cleanup enqueues the owner\'s reconcile');
+  await yieldTurns(SETTLE_TURNS);
+}
+
+// Each node acknowledges through the owner's per-node path, which selects the
+// candidate that node must acknowledge.
+async function acknowledgeLatest(coordinator, cache, nodeIds) {
+  for (const nodeId of nodeIds) {
+    await coordinator.acknowledgeMembershipPublicationForNode(nodeId);
+  }
+}
+
+// The committed membership rows as written, read without the snapshot owner so
+// the same witness runs on the pre-cutover owner: the latest row and the
+// latest PUBLISHED row, each with its members.
+function committedMembership(cache) {
+  const rows = (cache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [])
+    .map((row) => ({
+      epoch: row.publication_epoch,
+      status: row.status,
+      members: [...row.published_active_node_ids].sort(),
+    }))
+    .sort((left, right) => left.epoch - right.epoch);
+  return {
+    latest: rows.at(-1) || null,
+    published: rows.filter((row) =>
+      row.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED).at(-1) || null,
+  };
+}
+
+// Round-2 B-C: the failed joiner is retracted wherever it is. Published, it
+// is republished out (a new epoch without it); in the pending candidate, the
+// candidate is replaced by one without it. Parity with the pre-cutover owner.
+test('join cleanup retracts a failed joiner that is already published ' +
+  'membership: the next epoch is published without it', async () => {
+  const cache = new SystemTableCache();
+  const coordinator = startPublicationOwner(cache);
+  try {
+    commitNodeRow(cache, SEED_NODE_ID, STATE.READY);
+    commitNodeRow(cache, JOINER_NODE_ID, STATE.READY);
+    await coordinator.reconcileClusterMembership({});
+    await acknowledgeLatest(coordinator, cache, [SEED_NODE_ID, JOINER_NODE_ID]);
+    assert.deepEqual(committedMembership(cache).latest, {
+      epoch: 1,
+      status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
+      members: [JOINER_NODE_ID, SEED_NODE_ID].sort(),
+    }, 'the joiner registered and is published membership');
+
+    await retractFailedJoiner(coordinator);
+
+    assert.deepEqual(committedMembership(cache).latest, {
+      epoch: 2,
+      status: MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
+      members: [SEED_NODE_ID],
+    }, 'the joiner is republished out of membership as the next epoch');
+  } finally {
+    coordinator.stopOwnerMembershipDriver();
+  }
+});
+
+test('join cleanup retracts a failed joiner from the pending candidate: ' +
+  'published membership never names it', async () => {
+  const cache = new SystemTableCache();
+  const coordinator = startPublicationOwner(cache);
+  try {
+    commitNodeRow(cache, SEED_NODE_ID, STATE.READY);
+    await coordinator.reconcileClusterMembership({});
+    await acknowledgeLatest(coordinator, cache, [SEED_NODE_ID]);
+    commitNodeRow(cache, JOINER_NODE_ID, STATE.READY);
+    await coordinator.reconcileClusterMembership({});
+    await acknowledgeLatest(coordinator, cache, [SEED_NODE_ID]);
+    const before = committedMembership(cache);
+    assert.notEqual(before.latest.status,
+      MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
+      'the candidate naming the joiner still awaits its acknowledgement');
+    assert.deepEqual(before.latest.members,
+      [JOINER_NODE_ID, SEED_NODE_ID].sort(),
+      'the joiner is in the pending candidate');
+    assert.deepEqual(before.published.members, [SEED_NODE_ID],
+      'and not in published membership');
+
+    await retractFailedJoiner(coordinator);
+
+    const after = committedMembership(cache);
+    assert.ok(!after.latest.members.includes(JOINER_NODE_ID),
+      'the latest membership row no longer names the joiner');
+    assert.deepEqual(after.published.members, [SEED_NODE_ID],
+      'published membership never names the joiner');
+  } finally {
+    coordinator.stopOwnerMembershipDriver();
+  }
+});
+
+// Round-2 B-B: the active gate's two drivers (the heartbeat's scheduled
+// reconcile tick and the owner membership driver) build a handoff whose
+// published list the gate treats as published and acknowledged. A member of
+// the pending candidate that has not acknowledged it is never acknowledged by
+// that target: it stays unacknowledged until it acknowledges the candidate.
+const THIRD_NODE_ID = 'third-node';
+const ACTIVE_GATE_DRIVERS = Object.freeze([
+  {
+    name: 'the heartbeat scheduled reconcile tick',
+    drive: async (coordinator, cache) => {
+      const heartbeat = Object.create(HeartbeatService.prototype);
+      Object.assign(heartbeat, {
+        membershipPublicationService: coordinator,
+        systemTableCache: cache,
+        nodeId: SEED_NODE_ID,
+        logger: QUIET_LOGGER,
+      });
+      await heartbeat.runScheduledMembershipPublicationReconcileTick();
+    },
+  },
+  {
+    name: 'the owner membership driver',
+    drive: async (coordinator) => {
+      assert.equal(await coordinator.driveOwnerMembershipReconcile(), true,
+        'the seed drives as the publications owner');
+    },
+  },
+]);
+
+for (const driver of ACTIVE_GATE_DRIVERS) {
+  test(`${driver.name} never acknowledges for a pending candidate's ` +
+    'unacknowledged member', async () => {
+    const cache = new SystemTableCache();
+    const coordinator = startPublicationOwner(cache);
+    try {
+      commitNodeRow(cache, SEED_NODE_ID, STATE.READY);
+      await coordinator.reconcileClusterMembership({});
+      await acknowledgeLatest(coordinator, cache, [SEED_NODE_ID]);
+      commitNodeRow(cache, JOINER_NODE_ID, STATE.READY);
+      await coordinator.reconcileClusterMembership({});
+      await acknowledgeLatest(coordinator, cache, [SEED_NODE_ID]);
+      // A third READY node the gate finds missing, and the seed leads the
+      // publications partition.
+      commitNodeRow(cache, THIRD_NODE_ID, STATE.READY);
+      cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATIONS.UPSERT, {
+        partition_id: 'control_plane_publications-p1',
+        table_name: TABLES.CONTROL_PLANE_PUBLICATIONS,
+        leader_node_id: SEED_NODE_ID,
+      });
+      const before = committedMembership(cache);
+      assert.deepEqual(before.latest.members,
+        [JOINER_NODE_ID, SEED_NODE_ID].sort(),
+        'the joiner is a member of the pending candidate');
+      assert.notEqual(before.latest.status,
+        MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
+        'which it has not acknowledged');
+
+      await driver.drive(coordinator, cache);
+
+      const joinerAcknowledged = (cache.getAll(
+        TABLES.CONTROL_PLANE_PUBLICATIONS) || []).filter((row) =>
+        (row.acknowledged_node_ids || []).includes(JOINER_NODE_ID));
+      assert.deepEqual(joinerAcknowledged.map((row) => row.publication_id), [],
+        'no membership row records an acknowledgement the joiner never gave');
+      assert.deepEqual(committedMembership(cache).published.members,
+        [SEED_NODE_ID], 'published membership does not name the joiner');
+    } finally {
+      coordinator.stopOwnerMembershipDriver();
+    }
+  });
+}
 
 function membershipRow(epoch, status, nodeIds) {
   return buildMembershipPublicationRow({
@@ -400,18 +580,94 @@ test('the routed readers give the owner\'s answer on the legacy PUBLISHED [] ' +
   }
 });
 
-// The static census: every source file that reads a membership publication's
-// member list is classified. A reader outside the owner derives from one of
-// the owner's two reads; the producer side, the owner and the evidence that
-// only carries the list are listed with why they are not readers.
+// The semantic census: in each of the four publication states, every routed
+// reader and every projection of the owner gives the owner's answer. The
+// published list anywhere is read (a) only; the pending candidate appears only
+// under its own name, read (b).
+function assertSnapshotsNameEachRead(state) {
+  const latestRow = state.rows.at(-1) || null;
+  const rowPublished = PUBLICATION_SNAPSHOTS.resolvePublishedActiveNodeIds(
+    {latestPublicationRow: latestRow}) ?? [];
+  const rowPending = PUBLICATION_SNAPSHOTS.resolvePendingMembershipCandidate(
+    {latestPublicationRow: latestRow})?.nodeIds ?? [];
+  for (const [name, snapshot] of [
+    ['the owner snapshot',
+      PUBLICATION_SNAPSHOTS.buildMembershipPublicationActiveSnapshot(latestRow)],
+    ['the recovery-protocol snapshot',
+      RECOVERY_PROTOCOL.buildPublicationRecoveryProtocolSnapshot(latestRow)],
+  ]) {
+    assert.deepEqual(snapshot?.publishedActiveNodeIds ?? [], rowPublished,
+      `${state.name}: ${name} names only published membership as published`);
+    assert.deepEqual(snapshot?.pendingCandidateNodeIds ?? [], rowPending,
+      `${state.name}: ${name} names the pending candidate under its own name`);
+  }
+}
+
+function expectedTrustMembership(state) {
+  if (state.rows.length === 0) {
+    return 'unknown';
+  }
+  if (state.published === null) {
+    return 'unpublished';
+  }
+  return state.published.includes(SEED_NODE_ID) ? 'member' : 'removed';
+}
+
+function trustMembershipOf(state) {
+  const latestRow = state.rows.at(-1) || null;
+  return buildNodeTrustState({
+    nodeId: SEED_NODE_ID,
+    membershipPublication: latestRow ? {
+      ...PUBLICATION_SNAPSHOTS.buildMembershipPublicationActiveSnapshot(
+        latestRow),
+      sourceSnapshotVersion: 1,
+    } : null,
+  }, {publicationRows: state.rows}).membership.state;
+}
+
+test('every reader gives the owner\'s answer in each publication state',
+  async () => {
+    for (const state of PUBLICATION_STATES) {
+      const cache = cacheWithRows(state.rows);
+      commitNodeRow(cache, SEED_NODE_ID, STATE.READY);
+      const coordinator = startPublicationOwner(cache);
+      const rebalancer = createTestRebalancer({
+        systemTableCache: cache,
+        controlPlaneReadinessService: {
+          ...createMockControlPlaneReadinessService({systemTableCache: cache}),
+          membershipPublicationService: coordinator,
+        },
+      });
+      try {
+        assertSnapshotsNameEachRead(state);
+        const publishedSet = rebalancer.getPublishedActiveNodeIdSet();
+        assert.deepEqual(publishedSet === null ? null : [...publishedSet].sort(),
+          state.published, `${state.name}: the rebalancer places on ` +
+          'published membership');
+        assert.equal(trustMembershipOf(state), expectedTrustMembership(state),
+          `${state.name}: node trust reads published membership`);
+      } finally {
+        rebalancer.shutdown();
+        coordinator.stopOwnerMembershipDriver();
+      }
+    }
+  });
+
+// The static census: every source file that names a membership publication's
+// member list is classified, so a new one cannot go unexamined. A reader
+// outside the owner derives from one of the owner's two reads; the producer
+// side, the owner and the evidence that only carries the list are listed with
+// why they are not readers. The classification is lexical; what the readers
+// answer is checked dynamically above (the four publication states, the
+// active-gate drivers, the join cleanup) and in the witnesses of the owner's
+// reads.
 const OWNER_READ_CALL = /\b(resolvePublishedActiveNodeIds|resolvePendingMembershipCandidate)\(/u;
 const ROUTED_READERS = Object.freeze([
   'src/bootstrap/join-cleanup-publication-context.js',
   'src/control-plane/active-node-projection.js',
   'src/control-plane/control-plane-readiness-service-node-methods.js',
-  'src/control-plane/heartbeat-service-lifecycle-methods.js',
-  'src/control-plane/membership-publication-coordinator-reconcile.js',
   'src/control-plane/node-trust-state.js',
+  'src/control-plane/publication-active-gate-handoff-contract-helpers.js',
   'src/control-plane/replica-dispatch-replay-health-readiness.js',
   'src/rebalancer/unified-rebalancer-available-nodes.js',
 ]);
@@ -431,6 +687,11 @@ const NOT_READERS = Object.freeze({
   'src/control-plane/membership-publication-candidate-derivation.js':
     'producer',
   'src/control-plane/membership-publication-coordinator-queue.js': 'producer',
+  // The owner's reconcile: defers a candidate with no member and counts the
+  // published row's members in a diagnostic; its driver reads membership
+  // through the handoff helper above.
+  'src/control-plane/membership-publication-coordinator-reconcile.js':
+    'producer',
   'src/control-plane/membership-publication-lifecycle-summary.js': 'producer',
   'src/control-plane/membership-publication-planning-evidence.js': 'producer',
   'src/control-plane/membership-publication-priority-partition-readiness-data.js':

@@ -40,6 +40,7 @@ import {assertProjectionFresh} from './projection-freshness-guard.js';
 import {
   resolvePublicationActiveGateHandoffExpectedNodeIds,
   resolvePublicationActiveGateHandoffMissingPublishedNodeIds,
+  resolvePublicationActiveGateHandoffPendingCandidateNodeIds,
   resolvePublicationActiveGateHandoffPendingReconcileNodeIds,
   resolvePublicationActiveGateHandoffPendingRecoveryNodeIds,
   resolvePublicationActiveGateHandoffPublishedActiveNodeIds,
@@ -205,6 +206,14 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
     resolvePublicationActiveGateHandoffExpectedNodeIds(options);
   const publishedActiveNodeIds =
     resolvePublicationActiveGateHandoffPublishedActiveNodeIds(options);
+  const pendingCandidateNodeIds =
+    resolvePublicationActiveGateHandoffPendingCandidateNodeIds(
+      options.publicationConvergence);
+  const pendingCandidateAcknowledgedNodeIds =
+    resolvePublicationActiveGateHandoffPendingCandidateNodeIds(
+      options.publicationConvergence,
+      PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+        .PENDING_CANDIDATE_ACKNOWLEDGED_NODE_IDS);
   const missingPublishedNodeIds =
     resolvePublicationActiveGateHandoffMissingPublishedNodeIds({
       expectedNodeIds,
@@ -339,6 +348,8 @@ function buildPublicationActiveGateHandoffContract(options = {}) {
     expectedNodeCount: expectedNodeIds.length,
     publishedActiveNodeIds,
     publishedActiveNodeCount: publishedActiveNodeIds.length,
+    pendingCandidateNodeIds,
+    pendingCandidateAcknowledgedNodeIds,
     missingPublishedNodeIds,
     missingPublishedCount: missingPublishedNodeIds.length,
     pendingRecoveryNodeIds,
@@ -384,6 +395,12 @@ function normalizePublicationActiveGateHandoffContract(value) {
         value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLICATION_EPOCH],
       [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLISHED_ACTIVE_NODE_IDS]:
         value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PUBLISHED_ACTIVE_NODE_IDS],
+      [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_CANDIDATE_NODE_IDS]:
+        value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_CANDIDATE_NODE_IDS],
+      [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+        .PENDING_CANDIDATE_ACKNOWLEDGED_NODE_IDS]:
+        value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+          .PENDING_CANDIDATE_ACKNOWLEDGED_NODE_IDS],
       [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_NODE_IDS]:
         value[PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.MISSING_PUBLISHED_NODE_IDS],
       [PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.OPERATION_WORKFLOW_HANDOFF]:

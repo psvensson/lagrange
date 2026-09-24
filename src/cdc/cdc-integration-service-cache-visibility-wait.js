@@ -37,7 +37,6 @@ const {
   canonicalizeSystemTableRow,
   createTimeoutBudget,
   createTimeoutBudgetError,
-  delayOn,
   getControlPlaneRetryAfterMs,
   getRemainingBudgetMs,
   isRetryableControlPlaneError,
@@ -86,9 +85,8 @@ class CDCIntegrationServiceCacheVisibilityWait {
    * @private
    */
   async waitForCacheUpdate(tableName, key, expectPresent, options = {}) {
-    // During seed bootstrap registration, writes intentionally happen before
-    // cache hydration. Waiting for cache visibility in this mode causes
-    // per-write timeout delays and can stall bootstrap readiness.
+    // Seed bootstrap registration writes before cache hydration: waiting for
+    // visibility here adds per-write timeouts and can stall readiness.
     if (this.bootstrapMode) {
       return buildSystemTableVisibilityResult();
     }
@@ -314,7 +312,9 @@ class CDCIntegrationServiceCacheVisibilityWait {
       visibilityState: null,
     });
     const maxAttempts = 2;
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    // Held until shutdown: shutdown ends the retry delay and the repair.
+    for (let attempt = 1; attempt <= maxAttempts &&
+      this.isShuttingDown !== true; attempt += 1) {
       lastResult = normalizeSystemTableVisibilityResult(
         await this.repairCacheVisibilityHole(
           tableName,
@@ -339,7 +339,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
       if (attempt >= maxAttempts || remainingBudgetMs <= 0) {
         break;
       }
-      await delayOn(this.timeSource,
+      await this.delayUntilShutdown(
         Math.min(this.authoritativeFallbackRetryDelayMs, remainingBudgetMs));
     }
     return lastResult;

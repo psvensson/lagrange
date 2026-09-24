@@ -1,8 +1,10 @@
 import {
   JOINING_CLEANUP_STEP,
 } from './node-joining-constants.js';
-import {resolvePendingMembershipCandidate} from
-  '../control-plane/active-node-publication-snapshots.js';
+import {
+  resolvePendingMembershipCandidate,
+  resolvePublishedActiveNodeIds,
+} from '../control-plane/active-node-publication-snapshots.js';
 
 const JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
@@ -63,17 +65,37 @@ function resolveLatestMembershipPublicationRow(membershipPublicationService) {
   return null;
 }
 
-// The failed joiner is retracted from the pending candidate, the snapshot
-// owner's read (b): the latest row still collecting acknowledgements. With
-// no pending candidate there is nothing to retract it from.
-function buildFailedJoinMembershipPublicationContext(options = {}) {
-  const pendingCandidate = resolvePendingMembershipCandidate({
-    latestPublicationRow: resolveLatestMembershipPublicationRow(
-      options.membershipPublicationService),
+// The membership a failed joiner is retracted from, wherever it is: the
+// pending candidate (the snapshot owner's read (b)) while one collects
+// acknowledgements, else the published membership (read (a)), which is then
+// republished without it. Null when neither names anyone.
+function resolveRetractionMembership(membershipPublicationService) {
+  const latestPublicationRow =
+    resolveLatestMembershipPublicationRow(membershipPublicationService);
+  const pendingCandidate =
+    resolvePendingMembershipCandidate({latestPublicationRow});
+  if (pendingCandidate) {
+    return {publicationRow: latestPublicationRow,
+      nodeIds: pendingCandidate.nodeIds};
+  }
+  const publishedPublicationRow = typeof membershipPublicationService
+    ?.getLatestPublishedPublicationRowSync === 'function' ?
+    membershipPublicationService.getLatestPublishedPublicationRowSync() :
+    latestPublicationRow;
+  const publishedNodeIds = resolvePublishedActiveNodeIds({
+    latestPublicationRow: publishedPublicationRow,
   });
-  const latestPublicationRow = pendingCandidate?.publicationRow || null;
+  return publishedNodeIds ?
+    {publicationRow: publishedPublicationRow, nodeIds: publishedNodeIds} :
+    null;
+}
+
+function buildFailedJoinMembershipPublicationContext(options = {}) {
+  const retractionMembership = resolveRetractionMembership(
+    options.membershipPublicationService);
+  const latestPublicationRow = retractionMembership?.publicationRow || null;
   const registeredNodeId = options.registeredNodeId;
-  const publishedActiveNodeIds = (pendingCandidate?.nodeIds || [])
+  const publishedActiveNodeIds = (retractionMembership?.nodeIds || [])
     .filter((nodeId) => nodeId !== registeredNodeId);
   const acknowledgedNodeIds =
     resolvePublicationRowNodeIds(

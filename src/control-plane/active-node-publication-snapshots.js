@@ -289,25 +289,19 @@ function resolvePendingMembershipCandidate(options = {}) {
   });
 }
 
-// CL-001 variant C re-admission: the retention grace's "is this an already-
-// published member" test must NOT ratchet to the LATEST published row only.
-// Otherwise a single transient trim drops the node from the baseline forever (the
-// trimmed set becomes the new latest baseline) and the grace can never re-admit it
-// once its heartbeat recovers — the binding cause of the sticky variant-C trim.
-// Union the published active-node sets across the recent published epochs (a
-// bounded window of the latest published epoch) so a node trimmed in epoch N is
-// still a baseline member via epoch N-1. A node absent from ALL recent published
-// rows (a genuinely new node) is still excluded, and the grace's own liveness
-// conjuncts (status=active + transport + fresh lease/heartbeat) still gate it — so
-// this only un-ratchets re-admission, it never promotes a new or removed node.
-// Returns a SUPERSET of resolvePublishedActiveNodeIds (never a regression).
+// CL-001 variant C re-admission: the retention grace's "already-published
+// member" test must NOT ratchet to the LATEST published row only, or one
+// transient trim drops the node from the baseline forever (the sticky
+// variant-C trim). Union the published sets across a bounded window of recent
+// published epochs, so a node trimmed in epoch N is still a baseline member via
+// epoch N-1. A node absent from ALL recent published rows stays excluded, and
+// the grace's liveness conjuncts still gate it: this only un-ratchets
+// re-admission. Returns a SUPERSET of resolvePublishedActiveNodeIds.
 const RETENTION_BASELINE_EPOCH_WINDOW = 4;
 
 function resolveRecentlyPublishedActiveNodeIds(options = {}) {
-  // Forces requirePublishedMembership:false to match the sole caller
-  // (isPublishedBaselineMember), which always asks for a presence test, not a
-  // required-membership assertion; callers needing the latter must keep using
-  // resolvePublishedActiveNodeIds directly.
+  // A presence test (the sole caller, isPublishedBaselineMember), never a
+  // required-membership assertion: those use resolvePublishedActiveNodeIds.
   const latestBaseline = resolvePublishedActiveNodeIds({
     ...options,
     requirePublishedMembership: false,
@@ -634,13 +628,20 @@ function buildMembershipPublicationActiveSnapshot(
       membershipPublication.status :
       normalizedPublication.status || null;
   // Read (a): a list is published membership only on a PUBLISHED row that
-  // carries it (an empty one: nobody); an OPEN or ACK_PENDING list never is.
+  // carries it (an empty one: nobody); an OPEN or ACK_PENDING list never is,
+  // it is read (b), the pending candidate, under its own name.
+  const normalizedStatus = String(publicationStatus || '').toUpperCase();
   const publishedActiveNodeIdsPresent =
-    String(publicationStatus || '').toUpperCase() ===
-      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED && (
+    normalizedStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED && (
       membershipPublication.publishedActiveNodeIdsPresent === true ||
       Array.isArray(membershipPublication.publishedActiveNodeIds) ||
       Array.isArray(membershipPublication.published_active_node_ids));
+  const publishedActiveNodeIds = publishedActiveNodeIdsPresent ?
+    normalizedPublication.publishedActiveNodeIds : [];
+  const pendingCandidateNodeIds =
+    PENDING_MEMBERSHIP_PUBLICATION_STATUSES.has(normalizedStatus) ?
+      normalizeMembershipNodeIds(normalizedPublication.publishedActiveNodeIds) :
+      Object.freeze([]);
   const pendingAckEvidenceState =
     normalizePendingAckEvidenceState(
       membershipPublication.pendingAckEvidenceState ??
@@ -655,7 +656,7 @@ function buildMembershipPublicationActiveSnapshot(
       PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY);
   const priorityRecoveryPublicationContext =
     buildActiveMembershipSnapshot({
-      publishedActiveNodeIds: normalizedPublication.publishedActiveNodeIds,
+      publishedActiveNodeIds,
       membershipLifecycleSummary,
       projectionDiagnostics,
       targetNodeId:
@@ -737,9 +738,8 @@ function buildMembershipPublicationActiveSnapshot(
       } :
       {}),
     publishedActiveNodeIdsPresent,
-    publishedActiveNodeIds: Object.freeze([
-      ...normalizedPublication.publishedActiveNodeIds,
-    ]),
+    publishedActiveNodeIds: Object.freeze([...publishedActiveNodeIds]),
+    pendingCandidateNodeIds,
     requiredAckNodeIds: Object.freeze([
       ...normalizedPublication.requiredAckNodeIds,
     ]),

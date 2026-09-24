@@ -21,10 +21,8 @@ import {
 import {HEARTBEAT_SERVICE_LITERAL, ONE, ZERO} from './heartbeat-service-runtime-state.js';
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
   './membership-publication-row-contract.js';
-import {
-  resolvePendingMembershipCandidate,
-  resolvePublishedActiveNodeIds,
-} from './active-node-publication-snapshots.js';
+import {buildPublicationActiveGateMembershipConvergence} from
+  './publication-active-gate-handoff-contract-helpers.js';
 
 // Phase 4 (4.1c): the membership-publication reconcile is only ever triggered on
 // recovering nodes, never on the stable leader — so when those nodes defer to the
@@ -361,30 +359,11 @@ class HeartbeatServiceLifecycleMethods {
         return;
       }
 
-      const latestPublishedRow = planningSnapshot.latestPublishedPublicationRow;
-      const latestRow = planningSnapshot.latestPublicationRow;
-      const publicationEpoch =
-        latestPublishedRow?.publicationEpoch ??
-        latestRow?.publicationEpoch ??
-        0;
-      // The snapshot owner's reads: the published membership, else the
-      // pending candidate awaiting its acknowledgements, else no member.
-      const publicationReads = {
-        latestPublicationRow: latestRow,
-        latestPublishedPublicationRow: latestPublishedRow,
-      };
-      const publishedActiveNodeIds =
-        resolvePublishedActiveNodeIds(publicationReads) ??
-        resolvePendingMembershipCandidate(publicationReads)?.nodeIds ??
-        [];
-
       const handoffContract = buildPublicationActiveGateHandoffContract({
         nodeRows: planningSnapshot.nodeRows,
         readinessByNodeId: planningSnapshot.readinessByNodeId,
-        publicationConvergence: {
-          publicationEpoch,
-          publishedActiveNodeIds,
-        },
+        publicationConvergence:
+          buildPublicationActiveGateMembershipConvergence(planningSnapshot),
       });
 
       const missingCount = handoffContract?.missingPublishedCount ?? 0;

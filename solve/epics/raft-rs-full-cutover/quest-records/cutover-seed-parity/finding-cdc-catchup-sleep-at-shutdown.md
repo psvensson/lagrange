@@ -1,0 +1,8 @@
+# Finding: the CDC authoritative catch-up sleep outlives shutdown (round-2 N1)
+
+Recorded 2026-09-24 in the round-3 repair of cutover seed parity. Not fixed in this unit.
+
+- **Where:** `src/cdc/cdc-integration-service-authoritative-catchup.js:303`. The catch-up loop sleeps between attempts on a timer armed on the service clock (`sleep` at lines 162-164). The sleep is not held by the CDC lifecycle owner (`holdUntilShutdown` / `delayUntilShutdown` in `cdc-integration-service-lifecycle.js`).
+- **Effect:** when shutdown lands during that sleep, the timer stays armed. On a deferred answer, the loop can run further authoritative reads after shutdown (verifier probe h: 5 more reads with a deferred stub). The real read after shutdown answers `authoritative_row_source_unavailable`, which is not deferred (probe i), so the loop ends after at most one more read. What remains is one sleep of `retryAfterMs` (uncapped) or `CATCHUP_DEFAULT.RETRY_FALLBACK_DELAY_MS`.
+- **Class:** read path, pre-existing on 4258fdc32, bounded. It contradicts the lifecycle contract ("every wait or retry delay it holds ... ends at once") only for reads. This unit repaired the write-side delays: the routed-mutation retry budget, and in round 3 the cache-visibility repair retry (B-D).
+- **Repair when owned:** use `service.delayUntilShutdown(ms)` as the default `sleep`, and end the attempt loop when `service.isShuttingDown === true`, the same shape as `confirmCacheVisibilityHoleWithinBudget`. Witness: the probe h ordering, with 0 armed CDC timers and no read after shutdown.

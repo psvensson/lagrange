@@ -194,14 +194,14 @@ function track(operation) {
   return box;
 }
 
-function startPublication(composed) {
+function startPublication(composed, persistOptions = undefined) {
   return track(composed.coordinator.persistPublicationRow({
     publication_id: PUBLICATION_ID,
     publication_kind: MEMBERSHIP_PUBLICATION_KIND,
     publication_epoch: 1,
     status: MEMBERSHIP_PUBLICATION_STATUS.OPEN,
     published_active_node_ids: [NODE_ID],
-  }));
+  }, persistOptions));
 }
 
 async function untilWriteInFlight(composed) {
@@ -399,6 +399,51 @@ test('(vi) a write that arrives after shutdown began is refused before any ' +
     'the answer says the write was not routed');
   assert.equal(isRetryableControlPlaneError(box.outcome.error), false,
     'the control-plane classifier holds the answer terminal');
+  await box.done;
+});
+
+test('(vii) shutdown lands while the cache-visibility repair holds its ' +
+  'retry delay: the delay ends at once, no further authoritative read',
+async () => {
+  const composed = composeSeedWriters();
+  // The second seam: the authoritative row source answers the accepted row
+  // not yet visible, so the repair is not confirmed and arms its retry delay.
+  const authoritativeReads = {total: 0, afterShutdown: 0};
+  composed.cdcIntegrationService.executeAuthoritativeSystemTableRead =
+    async () => {
+      authoritativeReads.total += 1;
+      if (composed.cdcIntegrationService.isShuttingDown === true) {
+        authoritativeReads.afterShutdown += 1;
+      }
+      return {success: true, rows: [], count: 0, rowCount: 0};
+    };
+  // The reconcile driver's write: it confirms through the CDC service's own
+  // visibility repair rather than a publication read-back.
+  const box = startPublication(composed, {skipPublicationWriteReadback: true});
+  await untilWriteInFlight(composed);
+  composed.engine.accept();
+  // Move the CDC clock one step at a time until the visibility wait's budget
+  // fires and the repair's first read has answered.
+  for (let step = 0; step < composed.cdcIntegrationService.cacheWaitTimeoutMs &&
+    authoritativeReads.total === 0; step += 1) {
+    composed.timeSource.advance(1);
+    await yieldTurns(2);
+  }
+  await yieldTurns(SETTLE_TURNS);
+  assert.equal(authoritativeReads.total, 1, 'the repair read once');
+  assert.equal(composed.timeSource.pendingTimerCount(), 1,
+    'the repair holds its retry delay on the CDC clock');
+
+  await composed.shutDownSqlQueryEngine();
+  await yieldTurns(SETTLE_TURNS);
+  assertTerminalAfterShutdown(composed, box);
+  // Even a clock that moves on arms no second repair read.
+  composed.timeSource.advance(
+    composed.cdcIntegrationService.authoritativeFallbackRetryDelayMs * 100);
+  await yieldTurns(SETTLE_TURNS);
+  assert.equal(authoritativeReads.afterShutdown, 0,
+    'no authoritative read is issued after shutdown');
+  assertOutcomeUnknownCause(box);
   await box.done;
 });
 
