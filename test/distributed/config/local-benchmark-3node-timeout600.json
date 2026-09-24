@@ -54,7 +54,6 @@
     "failIfBaselineMissing": false,
     "approvedMitigationId": null
   },
-  "raftProvider": "liferaft",
   "memoryLeak": {
     "enabled": false,
     "failOnDetection": false,
