@@ -29,7 +29,7 @@ const REPOSITORY_ROOT_URL = new URL('../../../', import.meta.url);
 const SEALED_LIVE_AB_VEHICLE = Object.freeze({
   config: Object.freeze({
     path: 'test/distributed/config/local-poison-row-ab.json',
-    sha256: '718e7d24ba3540b31aacb8dc92894a3874303a05544236b35dc9d6a083004e0e',
+    sha256: '82ded6a20e5932f38b1767d06d56f234340ce97b1d0af223db6d89e16d9dd0a0',
   }),
   probe: Object.freeze({
     path: 'test/distributed/harness/startup-runtime-handoff-probe.js',
