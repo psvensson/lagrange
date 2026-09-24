@@ -15,6 +15,7 @@ Recorded 2026-09-24 in the round-5 corrective of cutover seed parity. Not change
     - the joiner: `src/bootstrap/node-joining-owner-construction.js:311-316`, called through `node-joining-publication-activation.js:715`;
     - the runtime handoff: `src/bootstrap/shared/startup-sql-runtime-handoff.js:220`.
     All of these run during startup, before the node's teardown.
+  - **Create-if-absent sites** (added in round 7, N-c). `start()` is also called where a topology is created because none exists: `src/bootstrap/owners/seed-runtime-bridge-owner.js:133` and `src/bootstrap/node-joining-publication-activation.js:702`. Both start a freshly created instance, never a stopped one.
   - **The teardown window.** Teardown does not null the topology atomically with stopping it. The seed cleanup (`seed-cleanup-handler.js:562-563`) and the join cleanup (`join-cleanup-handler.js:614-615`) `await LatencyTopologySetup.stop(topology)`, which itself awaits `latencyGroupManager.stop()` before it stops this service, and only then call `setLatencyTopology(null)`. Between this service's `stop()` and the null there is at least a microtask window in which the topology is still reachable, and a `startLatencyTopologyLifecycle` there would restart this stopped instance.
   - **Conclusion (unchanged): not reached today.** No startup entry point runs concurrently with teardown:
     - the deferred seed start checks `isShuttingDown`, which the cleanup sets first;

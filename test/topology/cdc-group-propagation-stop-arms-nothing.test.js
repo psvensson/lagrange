@@ -12,20 +12,22 @@
 // - A propagate call after stop still proposed on the source message group
 //   (round 5, N1).
 //
-// The property is observed at the resource level, not in the implementation.
-// Each lane is fully in memory: the router and the source message group are
-// held fakes, and the test's own turns use setImmediate, which it awaits to
-// completion. So just before stop() the test counts the live Timeout and
-// Immediate handles (process.getActiveResourcesInfo()). After the lane has
-// settled and pending microtasks, nextTicks and immediates have drained, it
-// counts them again. The second count must be no larger than the first.
-// Whatever path the service's code takes to schedule a timer after stop (a
-// direct call, node:timers/promises, a promise continuation, a nextTick or a
-// microtask), the live handle it leaves shows in that count.
+// The deciding check is the creations record. An async_hooks init hook
+// records every Timeout and Immediate created after stop(), from any stack
+// (a direct call, node:timers/promises, a promise continuation, a nextTick, a
+// microtask, an interval or an immediate chain), whether referenced or
+// unref'd. It excludes only the test file's own turns. The record must be
+// empty once the lane has settled and pending microtasks, nextTicks and
+// immediates have drained. Each lane is fully in memory: the router and the
+// source message group are held fakes, so nothing else creates a timer.
 //
-// An async_hooks init hook records every Timeout and Immediate created after
-// stop with the first source frame on its creating stack. It is diagnostic
-// only: it names the file:line in a failure message and decides nothing.
+// The second check counts live handles. The live Timeout and Immediate
+// handles (process.getActiveResourcesInfo()) after the lane settles must be
+// no more than just before stop(). Each record entry names the first source
+// file:line on its creating stack, and the failure message shows it.
+//
+// Residual limit: owner work still waiting on a promise the lane holds at
+// assert time is not observed, and none is pending on the fix.
 //
 // Every public lane is driven to one of its awaits, and stop() lands there:
 // - propagate in safe and in grouped mode;
@@ -41,8 +43,8 @@
 // Order is controlled by held promises: the router's answer and the source
 // group's apply. A timer the service must fire before stop (a batch flush, a
 // background wave) is fired with node:test mock timers. The mock is restored
-// before the pre-stop count, so every counted handle is a real one. No wall
-// clock is waited on.
+// before stop() and its handle count, so every recorded creation and every
+// counted handle is a real one. No wall clock is waited on.
 
 import assert from 'node:assert/strict';
 import {createHook} from 'node:async_hooks';
@@ -340,6 +342,9 @@ for (const spec of LANES) {
       const handlesAfterSettle = countActiveHandles();
       observation.open = false;
 
+      assert.deepEqual([...observation.creations], [],
+        'no timer or immediate is created after stop, from any stack, ' +
+        'referenced or unref\'d (the test\'s own turns excluded)');
       assert.ok(handlesAfterSettle <= lane.handlesBeforeStop,
         'no live timer or immediate is left behind after stop ' +
         `(${lane.handlesBeforeStop} before stop, ${handlesAfterSettle} ` +
