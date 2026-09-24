@@ -205,4 +205,50 @@ function censusDelayedWorkSites(repositoryRoot, files) {
   return {timerSites, forbiddenImports, refreshCalls, text};
 }
 
-export {censusDelayedWorkSites, createOwnerWorkLedger};
+/**
+ * The call sites in the owner's files of the given methods, named by file and
+ * enclosing function.
+ * @param {string} repositoryRoot
+ * @param {string[]} files - Repository-relative paths.
+ * @param {string[]} methods - Method names called as `.name(`.
+ * @return {string[]} `file:enclosingFunction:method`, one per call site.
+ */
+function censusCallSites(repositoryRoot, files, methods) {
+  const call = new RegExp(`\\.(${methods.join('|')})\\s*\\(`, 'gu');
+  const sites = [];
+  for (const file of files) {
+    const source = readFileSync(`${repositoryRoot}/${file}`, 'utf8');
+    const code = blankComments(source);
+    const lines = source.split('\n');
+    for (const match of code.matchAll(call)) {
+      const line = code.slice(0, match.index).split('\n').length - 1;
+      sites.push(`${file}:${enclosingFunction(lines, line)}:${match[1]}`);
+    }
+  }
+  return sites;
+}
+
+/**
+ * Name the owner call site on the current stack: the first frame in the
+ * owner's files, as `file:enclosingFunction`.
+ * @param {string} repositoryRoot
+ * @param {RegExp} ownerFile
+ * @return {string|null}
+ */
+function ownerCallSiteOnStack(repositoryRoot, ownerFile) {
+  const frame = creatingFrames().find((candidate) =>
+    ownerFile.test(candidate.file));
+  if (!frame) {
+    return null;
+  }
+  const lines = readFileSync(frame.file, 'utf8').split('\n');
+  const file = frame.file.slice(repositoryRoot.length).replace(/^\//u, '');
+  return `${file}:${enclosingFunction(lines, frame.line - 1)}`;
+}
+
+export {
+  censusCallSites,
+  censusDelayedWorkSites,
+  createOwnerWorkLedger,
+  ownerCallSiteOnStack,
+};

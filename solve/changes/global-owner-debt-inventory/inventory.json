@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2527069,
-        "sha256": "0736808f2e2c491d55691169ceaca7291df0fd7576f65e687d2f6b3eb46e48c7"
+        "bytes": 2527228,
+        "sha256": "bef9c4648e55a50fedc0cc975e13165695e4c27aef4d7bf28fa658cc70a9f1ee"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "fd87f409140c8aa154434f7d14833d816bd5112fdb936339d6dd4aa28d318bac"
+        "sha256": "d4e931af1d008895d9890802e3a688ebb91615b86e33b5553c195f89cc5b576a"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "5dbe29e12108fb2b657cb09fbfcc4c4970046792a4bb49ce5575bbdb9efaff29"
+    "inputDigest": "c048503acb4c7764eef96f6d9dfa87ff125420b641046df2262d4cf8402fc55d"
   },
   "reconciliation": {
     "complexity": {
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "fd87f409140c8aa154434f7d14833d816bd5112fdb936339d6dd4aa28d318bac"
+          "sha256": "d4e931af1d008895d9890802e3a688ebb91615b86e33b5553c195f89cc5b576a"
         },
         "cloneGroups": 791,
         "duplicatedLines": 30451,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2527069,
-        "sha256": "0736808f2e2c491d55691169ceaca7291df0fd7576f65e687d2f6b3eb46e48c7"
+        "bytes": 2527228,
+        "sha256": "bef9c4648e55a50fedc0cc975e13165695e4c27aef4d7bf28fa658cc70a9f1ee"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "f4aff080fd2a03d993f9191421596e87cd9a72fd9e46cbf2b6e70f2727f2520a",
+      "sourceDigest": "4f7296e00ada29d87d5a416f96ef520308e0e4e7ed8322ab1a5fd39d1cac815b",
       "moduleCount": 4937,
-      "edgeCount": 23143,
+      "edgeCount": 23146,
       "unresolvedCount": 34
     }
   },
@@ -947,7 +947,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 151,
+      "importIn": 152,
       "importOut": 47,
       "score": 129.8,
       "topPaths": [
@@ -3365,12 +3365,12 @@
           "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
           "test/cdc/authoritative-owner-rpc-sql-fallback.test.js",
           "test/cdc/cdc-integration-service-authoritative-reads.test.js",
+          "test/cdc/cdc-shutdown-terminal-owner-write.test.js",
           "test/control-plane/authoritative-control-plane-view.test.js",
           "test/control-plane/control-plane-mutation-outcome-classifier.test.js",
           "test/control-plane/control-plane-read-authority-token.test.js",
           "test/control-plane/formation-release-handoff-witness-fixture.js",
-          "test/control-plane/membership-publication-deferred-catchup.test.js",
-          "test/control-plane/publication-readiness-churn-liveness.test.js"
+          "test/control-plane/membership-publication-deferred-catchup.test.js"
         ],
         "ownerAreas": [
           "scripts/run-owner-complexity-system-table-gateway-owner-control-plane-system-table-gateway-scenarios.js",

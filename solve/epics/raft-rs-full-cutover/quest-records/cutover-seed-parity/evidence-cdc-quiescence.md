@@ -155,3 +155,102 @@ Base: the scratch reference fix, with the catch-up through `delayUntilShutdown` 
 - `npm run -s test:duplication`: 56/1815 and 791/30451.
 - Inventory `--refresh`, then `--verify-import-graph`: rc=0.
 - The regenerated metadata and inventory files were restored afterwards; the lead regenerates on commit.
+
+## Round-8 addendum: in flight at the mark (R8-1, R8-2)
+
+Author: Agent A, 2026-09-24. This addendum is unverified.
+
+- Base: 3dacf4632, whose src is 242da6ca2.
+- Scratch: `scratchpad/verify-seed-parity/r8d/`.
+- The implementer's gate had not landed when these were written. The lanes are validated against my scratch reference gate (`r8d/refgate`, built by `r8d/refgate.py`), which is not production. They must be rerun against the implementer's fix when it lands.
+
+### New legs in `test/cdc/cdc-shutdown-terminal-owner-write.test.js`
+
+The owner's real read flow, visibility repair and routed mutation run. The seams are as low as the composition allows:
+- the owner-RPC transport (`queryExecutor.executeOnPartition`);
+- the engine's routing overlay and SQL entry (`installRecoveryRoutingOverlayEntry`, `executeQuery`);
+- the local partition service (`executeLocalQuery`, `executeQuery`).
+
+Every seam records calls after the mark, and cache mutations are observed synchronously at the cache owner's entry points.
+
+| Test | Ordering | Assertion | On 242da6ca2 | On the reference gate |
+|---|---|---|---|---|
+| 17 | S1: the catch-up's owner-RPC read is in flight at the mark and answers TABLE_NOT_FOUND | no read, reseed, apply or submission after the mark; honest summary (0 caught up, the table failed, typed SHUT_DOWN code) | **red**: `overlayReseeds: 1, ownerRpcReads: 1` after the mark | green |
+| 18 | K5: the catch-up's read is in flight at the mark and answers rows | nothing applied or counted caught up; typed code | green (its post-read break exists) | green; K5 mutant red |
+| 19 | S2: the catch-up's local read is in flight at the mark and answers unusable | no owner-RPC or SQL-fallback read after the mark | **red**: `ownerRpcReads: 1` | green |
+| 20 | S4: the first visibility-repair read is in flight at the mark | no repair applied; the waiter is answered terminal, not visible | **red**: `cacheChanges: 1` | green |
+| 21 | S3: the visibility-repair retry's read is in flight at the mark | as above | **red**: `cacheChanges: 1` | green |
+| 22 | S5, S6: `refreshAuthoritativeCacheRow` and `repairCacheVisibilityHole` called after the mark | no read, no apply, no claimed repair | **red**: `ownerRpcReads: 2, cacheChanges: 1` | green |
+| 23 | S7: the local-leader leg is in flight at the mark; transient failure, thrown | no engine submission after the mark; settles; not a success; terminal | **red**: `engineSubmissions: 1` | green |
+| 24 | S7: the local-leader leg answers a reroutable failure (returned) | as above | **red**: `engineSubmissions: 1` | green |
+| 25 | S7 honesty: the local-leader leg answers an unknown outcome | the unknown outcome stays linked; never reported not routed | green (regression guard) | green |
+| 26 | Routing: only the gate answers terminal | nothing reaches its transport, nothing applied, nothing claimed | **red**: no `refuseIfTerminal` | green |
+| 27 | Routing: owner live | every effect happens in the same synchronous step as a gate consult; every static effect call site in src/cdc (`write-router/` included) is exercised through the gate | **red**: no `refuseIfTerminal` | green |
+
+On 242da6ca2 the witness passes 18/27, red on 17, 19-24, 26 and 27. On the reference gate it passes 27/27, 5 of 5 runs.
+
+### Census corrections (verifier N6)
+
+- The file scan is recursive: `readdirSync(src/cdc, {recursive: true})` now covers `write-router/index.js`.
+- `CDC_OWNER_FILE` matches subdirectories.
+- `DELAY_NAME` is widened to sleep, delay, wait, timer, backoff, schedul(e), defer, later, tick and poll.
+- Default and namespace imports are included, and imports that resolve inside src/cdc are excluded by path, not by the `./` prefix.
+- No new site appears: the timer sites and the classified imported sleeps are unchanged.
+
+The effect call-site census (routing test 27) is the list of `file:function` sites that call `executeOnPartition`, `executeLocalQuery`, `executeQuery`, `installRecoveryRoutingOverlayEntry`, `applySystemTableChange` or `reconcileAgainstAuthoritativeTruth`:
+- `cache-visibility-authority.js:applyAuthoritativeCacheSweep`
+- `cache-visibility-wait.js:applyAuthoritativeCacheRepair`
+- `local-system-table-routing.js:executeSystemTableRead` (both the local-query and the executeQuery read)
+- `owner-rpc-read-execution.js:executeAuthoritativeSqlFallbackRead`
+- `owner-rpc-read-execution.js:maybeReseedBootstrapOverlay`
+- `owner-rpc-read-execution.js:executeAuthoritativeOwnerRpcRead` (the read and the reseed retry)
+- `routed-mutation-readiness.js:tryExecuteLocalSystemTableWrite`
+- `routed-mutation-readiness.js:executeSQLDirectToLocalPartition` (bootstrap select, raft lane and fan-out)
+- `routed-mutation-readiness.js:executeSQLViaQueryEngine`
+
+These are the only two cache-mutation call sites in src/cdc.
+
+### Stated limits (also in the witness header)
+
+- A retry handed as data to a foreign scheduler that existed before `ledger.open()` evades the ledger (verifier probe `r8c/ledger-esc/probe2.out`). No production instance is known.
+- The routing leg's static list covers the effect methods it names (`EFFECT_METHODS`). An effect issued through another method is seen only by the in-flight lanes' seam counts.
+
+### Attack matrix, in-flight class
+
+Mutants of the reference gate, one change each; outputs in `r8d/mut/*.out`.
+
+| Mutation | Leg that caught it | Result |
+|---|---|---|
+| K5: catch-up post-read break removed | in-flight honesty (18: counted caught up) | red |
+| K5 on 242da6ca2 | 18, plus the S lanes | red |
+| M11: catch-up summary `code` removed | honesty (17, 18, 19: typed code) | red; on 242da6ca2 also red (18) |
+| S1: overlay reseed ungated | in flight (17) + routing (27) | red |
+| S1: reseed retry ungated, overlay gate kept | none | green, **equivalent**: the refused overlay means no retry is issued |
+| S2: owner-RPC read ungated | in flight (19) + routing (26, 27) | red |
+| S2: local read ungated | routing (26, 27) | red |
+| S2: SQL-fallback read ungated | routing (27) | red |
+| S3/S4: repair apply ungated | in flight (20, 21) + routing (26, 27) | red |
+| Sweep apply ungated | routing (27) | red |
+| S5: refresh entry ungated | none | green, **equivalent**: the inner read and apply gates refuse |
+| S6: hole-repair entry ungated | none | green, **equivalent**: the same reason |
+| S7: engine hop ungated | in flight (23, 24) + routing (27) | red |
+| S7: local-leader leg ungated | routing (26, 27) | red |
+| S7: bootstrap raft lane / fan-out / select ungated | routing (27) | red, each |
+| Gate bypass: the engine hop checks `isShuttingDown` itself | routing (27) | red |
+| An await between the gate and the owner-RPC read | routing (27) | red |
+| A stage re-issues through a helper outside the choke point (a helper that awaits, then `executeOnPartition`) | routing (27) | red |
+
+**Not run:**
+- **Each S-site guard removed in the implementer's fix:** not landed yet, so these ran on the reference gate. They must be rerun on the landed fix.
+- **A read issued through a transport method outside `EFFECT_METHODS`:** the stated limit.
+- **CDC event ingestion into the cache after the mark:** no src/cdc cache-mutation site other than the two above exists, so it is not a CDC-owner effect in this census.
+- **A MessagePort or I/O delay:** outside the Timeout/Immediate class.
+
+### Gates (tier E0, run in the evidence worktree; generated files restored afterwards)
+
+- eslint on the three touched files: rc=0.
+- `test:metadata:refresh`, then audit:shards: OK, 2174 tests.
+- check-fast-static: ok.
+- `test:duplication`: 56/1815 and 791/30451.
+- Inventory `--refresh`, then `--verify-import-graph`: rc=0.
+- Propagation witness: 16/16.

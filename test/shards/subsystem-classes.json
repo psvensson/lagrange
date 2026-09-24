@@ -28,7 +28,7 @@
   "censusSize": 2175,
   "digest": "fnv1a32-5d436124",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-1556499f",
+  "observationDigest": "fnv1a32-93ba0661",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2817,11 +2817,12 @@
       "files": [
         "src/bootstrap/phases/seed-cleanup-handler.js",
         "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
         "src/partition/proposal-queue-constants.js"
       ],
       "directories": [
-        "src/cdc",
-        "test/cdc"
+        "src/cdc"
       ]
     },
     "test/cdc/cdc-system-table-write-failure-participant-detail.test.js": {
