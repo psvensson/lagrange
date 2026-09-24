@@ -198,6 +198,74 @@ test('every candidate with no member defers, not only the first', async () => {
     'the later reconcile defers for the typed reason');
 });
 
+function latestMembershipRow(cache) {
+  return (cache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [])
+    .reduce((latest, row) =>
+      (!latest || row.publication_epoch > latest.publication_epoch ?
+        row : latest), null);
+}
+
+function ownerReads(cache) {
+  const publicationRows = cache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [];
+  return {
+    published: PUBLICATION_SNAPSHOTS.resolvePublishedActiveNodeIds({
+      publicationRows,
+    }),
+    pending: PUBLICATION_SNAPSHOTS.resolvePendingMembershipCandidate?.({
+      publicationRows,
+    })?.nodeIds ?? null,
+  };
+}
+
+// The owner-state transition: a membership candidate the publication owner
+// has written but that has not crossed the publication boundary (its required
+// acknowledgements are outstanding) is the pending candidate and NOT published
+// membership; once its members acknowledge it through the owner's own
+// acknowledgement path, it is published and no longer pending. Round-1 B2
+// defect: the unpublished first candidate read as published membership.
+test('a membership candidate is pending, not published, until its ' +
+  'acknowledgements publish it', async () => {
+  const cache = new SystemTableCache();
+  const coordinator = startPublicationOwner(cache);
+
+  // The first epoch: written, its acknowledgement outstanding.
+  commitNodeRow(cache, SEED_NODE_ID, STATE.READY);
+  await coordinator.reconcileClusterMembership({});
+  assert.equal(latestMembershipRow(cache).status,
+    MEMBERSHIP_PUBLICATION_STATUS.OPEN,
+    'the first candidate awaits its acknowledgements');
+  assert.equal(ownerReads(cache).published, null,
+    'an unpublished first candidate is not published membership');
+  assert.deepEqual(ownerReads(cache).pending, [SEED_NODE_ID],
+    'it is the pending candidate');
+
+  // The real publication condition: the member acknowledges it.
+  await coordinator.acknowledgePublication(
+    latestMembershipRow(cache).publication_id, SEED_NODE_ID);
+  assert.deepEqual(ownerReads(cache),
+    {published: [SEED_NODE_ID], pending: null},
+    'acknowledged, it is published membership and no longer pending');
+
+  // A later candidate naming a joiner: pending above the published epoch.
+  commitNodeRow(cache, JOINER_NODE_ID, STATE.READY);
+  await coordinator.reconcileClusterMembership({});
+  const candidate = latestMembershipRow(cache);
+  assert.deepEqual(ownerReads(cache), {
+    published: [SEED_NODE_ID],
+    pending: [JOINER_NODE_ID, SEED_NODE_ID].sort(),
+  }, 'the joiner is in the pending candidate, not in published membership');
+  await coordinator.acknowledgePublication(
+    candidate.publication_id, SEED_NODE_ID);
+  assert.deepEqual(ownerReads(cache).published, [SEED_NODE_ID],
+    'with one acknowledgement outstanding it is still not published');
+  await coordinator.acknowledgePublication(
+    candidate.publication_id, JOINER_NODE_ID);
+  assert.deepEqual(ownerReads(cache), {
+    published: [JOINER_NODE_ID, SEED_NODE_ID].sort(),
+    pending: null,
+  }, 'every acknowledgement in, the joiner is published membership');
+});
+
 function membershipRow(epoch, status, nodeIds) {
   return buildMembershipPublicationRow({
     candidate: {

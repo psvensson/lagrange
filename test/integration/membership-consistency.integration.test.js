@@ -245,10 +245,13 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
 
       // A node row READY on a live ready lease whose heartbeat is already
       // past the liveness owner's derivation grace (the row supplies the
-      // clock, as the rest of this file does). The publication owner admits
-      // it on its live lease and publishes it. Its lease then passes (a
-      // committed row update, not a wait): nothing holds it any more, and it
-      // leaves by republication.
+      // clock, as the rest of this file does). Each owner answers its own
+      // question: the publication owner publishes the row it witnessed READY
+      // on a live lease; once the lease has passed (a committed row update,
+      // not a wait) the readiness and placement owners hold it unavailable
+      // for placement. Whether it stays out of published membership is not a
+      // guarantee on any backend (see quest-records/cutover-seed-parity/
+      // finding-readiness-lapsed-member-and-planning-oscillation.md).
       const publications = recordPublishedMemberships(owners.cache);
       const now = Date.now();
       const shortLeaseNode = createNodeEntry('short-lease-node', {
@@ -263,15 +266,15 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         publications.hasPublished('short-lease-node')), true,
       'the publication owner publishes the row it witnessed READY on a live ' +
       'lease');
+      publications.stop();
       await owners.cdcIntegrationService.updateSystemTableRow(
         SYSTEM_TABLE_NAME.NODES, {node_id: 'short-lease-node'},
         {ready_lease_expires_at: Date.now() - 1});
-      const leftByRepublication = await waitForCondition(() =>
-        publications.hasLeftByRepublication('short-lease-node'));
-      publications.stop();
-      t.equal(leftByRepublication, true,
-        'once its lease has passed with its heartbeat past the grace, it ' +
-        'leaves by republication');
+      const shortLeaseReadiness = await owners.controlPlaneReadinessService
+        .getNodeReadiness('short-lease-node');
+      t.equal(shortLeaseReadiness?.dimensions?.placementEligible, false,
+        'once its lease has passed, the readiness owner holds it not ' +
+        'placement-eligible');
 
       // The real rebalancer over the seed's real owners
       const rebalancer = new UnifiedRebalancer({
@@ -294,6 +297,11 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
 
       // Record state change to start stabilization
       rebalancer.recordStateChange('test_trigger');
+
+      // was: 'short-lease node should not be available after lease expiry'
+      t.notOk(rebalancer.getAvailableNodes()
+        .some((node) => node.node_id === 'short-lease-node'),
+      'the placement owner does not offer the member whose lease has passed');
 
       // Stabilization timing can race with short lease windows under fast tests.
       // Verify API behavior without enforcing a brittle exact timing boundary.

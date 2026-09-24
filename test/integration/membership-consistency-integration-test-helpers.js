@@ -495,9 +495,9 @@ async function waitForPlacementEligible(readinessService, nodeId) {
   });
 }
 
-// Whether the cache holds a settled publication: the latest membership epoch
-// is PUBLISHED (not still collecting its acks) and, when expected members are
-// given, names exactly them.
+// Whether the cache holds a settled publication of exactly these members:
+// the latest membership epoch is PUBLISHED (not still collecting its acks)
+// and names them.
 function isPublishedMembershipSettled(cache, expectedNodeIds) {
   const latestRow = (cache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [])
     .filter((row) => row.publication_kind === MEMBERSHIP_PUBLICATION_KIND)
@@ -505,9 +505,8 @@ function isPublishedMembershipSettled(cache, expectedNodeIds) {
       (!latest || row.publication_epoch > latest.publication_epoch ?
         row : latest), null);
   return latestRow?.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
-    (expectedNodeIds === null ||
-      (readPublishedActiveNodeIds(cache) || []).slice().sort().join(',') ===
-        expectedNodeIds);
+    (readPublishedActiveNodeIds(cache) || []).slice().sort().join(',') ===
+      expectedNodeIds;
 }
 
 /**
@@ -515,8 +514,7 @@ function isPublishedMembershipSettled(cache, expectedNodeIds) {
  * the cache, from the cache's own change events (no epoch is missed between
  * polls): epoch -> its members.
  * @param {SystemTableCache} cache
- * @return {object} {hasPublished(nodeId), hasLeftByRepublication(nodeId),
- *   stop()}
+ * @return {object} {hasPublished(nodeId), stop()}
  */
 function recordPublishedMemberships(cache) {
   const membersByEpoch = new Map();
@@ -536,15 +534,6 @@ function recordPublishedMemberships(cache) {
       return [...membersByEpoch.values()].some((members) =>
         members.includes(nodeId));
     },
-    // Whether a PUBLISHED epoch named the node and a later PUBLISHED epoch
-    // left it out: it was published, then left by republication.
-    hasLeftByRepublication(nodeId) {
-      const epochs = [...membersByEpoch.keys()].sort((a, b) => a - b);
-      const joinedAt = epochs.find((epoch) =>
-        membersByEpoch.get(epoch).includes(nodeId));
-      return joinedAt !== undefined && epochs.some((epoch) =>
-        epoch > joinedAt && !membersByEpoch.get(epoch).includes(nodeId));
-    },
     stop() {
       cache.offCacheChange(listener);
     },
@@ -562,8 +551,8 @@ function isEligibleForReader(readinessService, reader, nodeId) {
 }
 
 /**
- * Take a synchronous placement read only at a settled point: the latest
- * epoch is PUBLISHED (naming exactly `publishedNodeIds` when given), and every reader
+ * Take a synchronous placement read only at a settled point: the published
+ * epoch names exactly `publishedNodeIds` and is PUBLISHED, and every reader
  * (a rebalancer) holds `eligibleNodeId` eligible through its own readiness
  * read. Every publication write returns the readiness verdict to
  * planning_snapshot_refresh_pending until its next evaluation, so the settled
@@ -575,9 +564,7 @@ function isEligibleForReader(readinessService, reader, nodeId) {
  * @return {Promise<{settled: boolean, value: *}>}
  */
 async function readAtSettledPlacement(owners, settledPoint, read) {
-  const expected = Array.isArray(settledPoint.publishedNodeIds) ?
-    [...settledPoint.publishedNodeIds].sort().join(',') :
-    null;
+  const expected = [...settledPoint.publishedNodeIds].sort().join(',');
   const readinessService = owners.controlPlaneReadinessService;
   const {eligibleNodeId, readers} = settledPoint;
   let value = null;
