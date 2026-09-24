@@ -14,9 +14,9 @@ import {
   DISTRIBUTED_EXECUTION_ENV,
   DISTRIBUTED_EXECUTION_TARGET,
   DISTRIBUTED_MATRIX_PROFILE,
+  DISTRIBUTED_MATRIX_REPORT_ROOT,
 } from '../test/distributed/harness/constants.js';
 import {
-  DISTRIBUTED_MATRIX_REPORT_ROOT,
   buildDistributedMatrixExecutionPlan,
   buildGcpTargetConfig,
 } from '../test/distributed/harness/distributed-matrix-plan.js';
@@ -45,13 +45,16 @@ const MATRIX_FIRST_POSITION = 0;
 const MATRIX_FLAG_VALUE_OFFSET = 1;
 const MATRIX_MIN_POSITIVE_INTEGER = 1;
 const MATRIX_EMPTY = '';
-const MATRIX_FLAG_PREFIX = '--';
 const MATRIX_PASSTHROUGH_MARKER = '--';
 const MATRIX_STATUS_PASS = 'PASS';
 const MATRIX_STATUS_FAIL = 'FAIL';
 const MATRIX_STATUS_DRY = 'DRY';
 const MATRIX_DEFAULT_GCP_TEMPLATE =
   'test/distributed/config/gcp-default.json';
+const MATRIX_RUNNER_FLAG_CONFIG = '--config';
+const MATRIX_RUNNER_FLAG_SCENARIO = '--scenario';
+const MATRIX_RUNNER_FLAG_OUTPUT = '--output';
+const MATRIX_SUMMARY_FLAG_REPORT_DIR = '--report-dir';
 
 const MATRIX_FLAG = Object.freeze({
   TARGET: '--target',
@@ -64,9 +67,9 @@ const MATRIX_FLAG = Object.freeze({
   HELP: '--help',
 });
 const MATRIX_RESERVED_PASSTHROUGH = Object.freeze([
-  '--config',
-  '--scenario',
-  '--output',
+  MATRIX_RUNNER_FLAG_CONFIG,
+  MATRIX_RUNNER_FLAG_SCENARIO,
+  MATRIX_RUNNER_FLAG_OUTPUT,
 ]);
 const MATRIX_USAGE = [
   'Distributed scenario matrix\n\n',
@@ -228,11 +231,11 @@ function runnerArgs(entry, configPath, passthrough) {
   return [
     MATRIX_RUNNER,
     ...passthrough,
-    '--config',
+    MATRIX_RUNNER_FLAG_CONFIG,
     configPath,
-    '--scenario',
+    MATRIX_RUNNER_FLAG_SCENARIO,
     entry.scenario,
-    '--output',
+    MATRIX_RUNNER_FLAG_OUTPUT,
     entry.outputPath,
   ];
 }
@@ -274,7 +277,7 @@ async function executeLabEntry({
     nodesPerHost: args.nodesPerHost,
     dryRun: args.dryRun,
     extraArgs: [
-      '--output',
+      MATRIX_RUNNER_FLAG_OUTPUT,
       entry.outputPath,
       ...args.passthrough,
     ],
@@ -286,7 +289,7 @@ async function summarize(reportDirectory) {
   try {
     await run(process.execPath, [
       MATRIX_SUMMARIZER,
-      '--report-dir',
+      MATRIX_SUMMARY_FLAG_REPORT_DIR,
       reportDirectory,
     ]);
   } catch (error) {
