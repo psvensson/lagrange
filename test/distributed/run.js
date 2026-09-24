@@ -654,6 +654,7 @@ function buildDistributedExecutionMetadata(env = process.env) {
   const target = env?.[DISTRIBUTED_EXECUTION_ENV.TARGET];
   const profile = env?.[DISTRIBUTED_EXECUTION_ENV.PROFILE];
   const hosts = env?.[DISTRIBUTED_EXECUTION_ENV.HOSTS];
+  const matrixConfig = env?.[DISTRIBUTED_EXECUTION_ENV.CONFIG];
 
   if (typeof target === DISTRIBUTED_EXECUTION_TYPEOF_STRING &&
       Object.values(DISTRIBUTED_EXECUTION_TARGET).includes(target)) {
@@ -669,6 +670,10 @@ function buildDistributedExecutionMetadata(env = process.env) {
       .split(DISTRIBUTED_EXECUTION_HOST_SEPARATOR)
       .map((entry) => entry.trim())
       .filter(Boolean);
+  }
+  if (typeof matrixConfig === DISTRIBUTED_EXECUTION_TYPEOF_STRING &&
+      matrixConfig.trim().length > DISTRIBUTED_EXECUTION_EMPTY_LENGTH) {
+    metadata.matrixConfig = matrixConfig.trim();
   }
   return metadata;
 }
