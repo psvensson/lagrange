@@ -11,6 +11,9 @@ import {
 import {
   collectDecisionBoundaryViolationsWithBaseline,
 } from '../../scripts/check-guideline-decision-boundaries.js';
+import {
+  buildHarnessRunnerArgs,
+} from '../../scripts/lab/harness.js';
 
 // The home-lab CLI (scripts/lab/*) landed on main past the guideline audits:
 // 197 raw literals outside a named constant owner and one decision boundary
@@ -54,6 +57,10 @@ const USAGE = [
 const PROTOTYPE_NAMED_COMMANDS = ['constructor', 'toString', 'hasOwnProperty', '__proto__'];
 const EXIT_FAILURE = 1;
 const UTF8 = 'utf8';
+const HARNESS_CONFIG = 'test/distributed/config/local-three-node.json';
+const HARNESS_SCENARIO = 'rolling-restart';
+const HARNESS_FAST_LOCAL = '--fast-local';
+const HARNESS_NO_FAST_LOCAL = '--no-fast-local';
 
 function lab(...args) {
   return spawnSync(process.execPath, [LAB_CLI, ...args], {encoding: UTF8});
@@ -112,4 +119,14 @@ test('a hand lab run refuses what it cannot run before it looks at anything', ()
     assert.equal(refused.stderr, `${refusal}\n`, args.join(' '));
     assert.equal(refused.stdout, '', 'and runs nothing');
   }
+});
+
+test('physical lab harness makes no-fast-local non-overridable', () => {
+  const args = buildHarnessRunnerArgs({
+    configPath: HARNESS_CONFIG,
+    scenario: HARNESS_SCENARIO,
+    extraArgs: [HARNESS_FAST_LOCAL],
+  });
+  assert.equal(args[args.length - 1], HARNESS_NO_FAST_LOCAL);
+  assert.ok(args.indexOf(HARNESS_FAST_LOCAL) < args.indexOf(HARNESS_NO_FAST_LOCAL));
 });
