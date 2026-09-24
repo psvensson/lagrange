@@ -86,6 +86,11 @@ class CDCGroupPropagationDeliveryMethods {
       if (deliveryFailures.length === 0) {
         return [];
       }
+      // Stopped while the attempt was in flight: answer now, arm no delay.
+      if (this.state === CDC_GROUP_PROPAGATION_STATE.STOPPED) {
+        return this.buildStoppedFailures(
+          this.convertFailuresToRetryTargets(deliveryFailures));
+      }
       if (attempt >= maxAttempts) {
         break;
       }

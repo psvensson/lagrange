@@ -219,3 +219,51 @@ test('stop() during a delivery\'s retry delay ends the delay at once with ' +
     teardownConfig();
   }
 });
+
+// Round-3 R3-1: stop() lands while a delivery attempt is in flight at the
+// router; the router then answers "not acknowledged". The loop answers the
+// stopped outcome at once: no retry delay is armed, no further attempt made.
+for (const maxAttempts of [3, 1]) {
+  test('stop() while an attempt is in flight at the router (maxAttempts ' +
+    `${maxAttempts}): the delivery settles stopped, no retry delay armed`,
+  async () => {
+    const service = startService();
+    const router = {calls: 0, answer: null};
+    service.messageRouter = {
+      deliver() {
+        router.calls += 1;
+        return new Promise((resolve) => {
+          router.answer = resolve;
+        });
+      },
+    };
+    service.deliveryRetryMaxAttempts = maxAttempts;
+    try {
+      const box = track(service.deliverToTargetsWithRetry({
+        tableName: TABLES.STORAGE_RESERVATIONS,
+        operation: 'UPDATE',
+        data: {reservation_id: 'res-1', status: 'released'},
+        sourceGroupId: 'mg-node-a',
+        targets: [{...TARGET}],
+        allowBatching: false,
+      }));
+      for (let turn = 0; turn < SETTLE_TURNS && !router.answer; turn += 1) {
+        await yieldTurns(1);
+      }
+      assert.equal(router.calls, 1, 'the first attempt is in flight');
+
+      service.stop();
+      router.answer({acknowledged: false, error: 'refused'});
+      await yieldTurns(SETTLE_TURNS);
+
+      assertStoppedOutcome(box);
+      assert.equal(service.retrySleepReleases?.size ?? 0, 0,
+        'no retry delay is held after stop');
+      assert.equal(router.calls, 1, 'no delivery attempt is made after stop');
+      assertHoldsNothing(service);
+    } finally {
+      service.stop();
+      teardownConfig();
+    }
+  });
+}
