@@ -545,7 +545,7 @@
       ]
     },
     "partition-write-answer-retry-classification": {
-      "description": "The partition write kernel (the answer's code) and the errors owner (its text) are the one owner of what may be done again with a write the partition did not take, and every consumer asks them, never a text of its own: the control plane's retry classification retries every answer but a host failure while proposing (a write whose outcome is unknown, or whose committed application failed in the host's environment, did not fail, so it is never recorded as a failed write) - by the kernel's code when it holds the answer, by the errors owner's texts only when nothing but a text reached it; a write answer crosses every boundary whole (its code, retry time, consensus, entry, replay, index and affected rows), and a router sends the write again by the kernel's code alone, never by its text - an unknown outcome only when it re-proposes under the write's own entryId, where the retry is idempotent; every carrier of a write answer between the partition and its caller (the transport query reply, the executor's builders, failures and renderers, the coordinator, the parallel outcomes) passes the kernel's typed fields as the partition answered them, and every loop that sends one logical mutation again (the CDC routed mutation, its local lane, the rebalancer's mutation gateway through the control-plane gateway and the CDC row mutations) carries the mutation's one identity, minted once outside its attempts.",
+      "description": "The partition write kernel (the answer's code) and the errors owner (its text) are the one owner of what may be done again with a write the partition did not take, and every consumer asks them, never a text of its own: the control plane's retry classification retries every answer but a host failure while proposing (a write whose outcome is unknown, or whose committed application failed in the host's environment, did not fail, so it is never recorded as a failed write) - by the kernel's code when it holds the answer, by the errors owner's texts only when nothing but a text reached it; a write answer crosses every boundary whole (its code, retry time, consensus, entry, replay, index and affected rows), and a router sends the write again by the kernel's code alone, never by its text - an unknown outcome only when it re-proposes under the write's own entryId, where the retry is idempotent; every carrier of a write answer between the partition and its caller (the transport query reply, the executor's builders, failures and renderers, the coordinator, the parallel outcomes) passes the kernel's typed fields as the partition answered them, and every loop that sends one logical mutation again (the CDC routed mutation, its local lane, the rebalancer's mutation gateway through the control-plane gateway and the CDC row mutations) carries the mutation's one identity, minted once outside its attempts; the engine passes a client's idempotency key unchanged into the write plan; a replay names how its outcome row binds the statement asking (the same statement, or unrecorded for a row recorded before the binding was) and a write reaching a pending write under its entryId joins that write's answer only for the same statement (another is refused, typed), both decided by the committed-statement outcome owner; and the admin envelope and write receipt read a replayed answer as the partition answered it (its replay flag, entry, replayed index, affected-row state and statement binding).",
       "owners": [
         "src/partition/partition-write-kernel.js",
         "src/constants/errors.js",
@@ -566,7 +566,12 @@
         "src/query/query-executor-sql-command-rendering.js",
         "src/cdc/cdc-routed-system-write-selection.js",
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
-        "src/control-plane/control-plane-system-table-gateway-options.js"
+        "src/control-plane/control-plane-system-table-gateway-options.js",
+        "src/query/sql-query-engine-write-execution.js",
+        "src/admin/admin-query-result-message-envelope.js",
+        "src/admin/admin-write-receipt.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-cdc-stream-base.js"
       ],
       "tests": [
         "test/control-plane/control-plane-error-classification.test.js",
@@ -1034,7 +1039,7 @@
       ]
     },
     "partition-write-answer-retry-classification": {
-      "description": "The write-answer owners and the consumers that retry or re-send a write must agree on one classification of each answer: its code and its text say the same on retrying it, a consumer re-sends it by its code alone, and the unknown outcome is routed again only by a caller carrying its entryId.",
+      "description": "The write-answer owners and the consumers that retry or re-send a write must agree on one classification of each answer: its code and its text say the same on retrying it, a consumer re-sends it by its code alone, the unknown outcome is routed again only by a caller carrying its entryId, every re-sending path carries the one identity minted for its logical write (the engine's client key, the CDC selection and row mutations, the control-plane gateway options), and the admin envelope and write receipt read a replayed answer by the fields the partition answered it with.",
       "endpoints": [
         {
           "id": "write-answer-owners",
@@ -1052,7 +1057,15 @@
             "src/cdc/cdc-integration-service-shared.js",
             "src/cdc/cdc-integration-service-shared-constants.js",
             "src/query/query-executor-write-retry-routing.js",
-            "src/cdc/cdc-local-system-table-write-lane.js"
+            "src/cdc/cdc-local-system-table-write-lane.js",
+            "src/cdc/cdc-routed-system-write-selection.js",
+            "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+            "src/control-plane/control-plane-system-table-gateway-options.js",
+            "src/query/query-executor-partition-delivery.js",
+            "src/query/query-executor-partition-failure.js",
+            "src/query/sql-query-engine-write-execution.js",
+            "src/admin/admin-query-result-message-envelope.js",
+            "src/admin/admin-write-receipt.js"
           ]
         }
       ],

@@ -27,11 +27,17 @@
 // idempotent replay, a STATEMENT_FAILED row as the original failure, each
 // with `replayOfLogIndex`. The row binds the statement it settled (its
 // digest): the key asked for by another statement is refused, typed
-// (ENTRY_ID_STATEMENT_MISMATCH), and that statement is never applied. There
-// is no in-memory replay state: a retry is answered from the row before it is
-// proposed, and one that was proposed anyway (its original not yet applied
-// here when it was proposed) is answered from the row when it is applied -
-// the same answer either way.
+// (ENTRY_ID_STATEMENT_MISMATCH), and that statement is never applied; a
+// replay names how the row binds the statement asking (`statementBinding`:
+// the same statement, or a row recorded before the binding was - it cannot
+// know that statement, so it marks the replay rather than refusing it). The
+// same binding decides a write that reaches the partition while a write
+// under its entryId is still pending there, before any row exists: it joins
+// that write's answer only for the same statement. There is no in-memory
+// replay state: a retry is answered from the row before it is proposed, and
+// one that was proposed anyway (its original not yet applied here when it
+// was proposed) is answered from the row when it is applied - the same
+// answer either way.
 
 import {createHash} from 'node:crypto';
 
@@ -95,18 +101,53 @@ function statementDigestOf(command) {
 }
 
 /**
- * Whether a settled record binds the statement asking for its entry key.
- * @param {Object} recorded - The SETTLED record.
+ * Whether a statement digest binds the statement asking for its entry key.
+ * @param {string|null} statementDigest - The digest of the statement the key
+ *   was taken by; null when none was recorded.
  * @param {Object} command - The command asking.
  * @return {string} A PARTITION_COMMITTED_STATEMENT_BINDING.
  */
-function statementBindingOf(recorded, command) {
-  if (recorded.statementDigest === null) {
+function statementBindingOf(statementDigest, command) {
+  if (statementDigest === null) {
     return PARTITION_COMMITTED_STATEMENT_BINDING.UNRECORDED;
   }
-  return recorded.statementDigest === statementDigestOf(command) ?
+  return statementDigest === statementDigestOf(command) ?
     PARTITION_COMMITTED_STATEMENT_BINDING.SAME_STATEMENT :
     PARTITION_COMMITTED_STATEMENT_BINDING.OTHER_STATEMENT;
+}
+
+/**
+ * The refusal of an entryId asked for by another statement than the one it
+ * was taken by: typed, naming the entry; that statement is not applied.
+ * @param {Object} service - The partition (its identity).
+ * @param {string|null} entryId - The entry asked for.
+ * @return {Object} The write result.
+ */
+function statementMismatchAnswer(service, entryId) {
+  return {
+    success: false,
+    error: PARTITION_STATEMENT_MISMATCH_ERROR_MSG,
+    failureCode:
+      PARTITION_COMMITTED_COMMAND_ERROR_CODE.ENTRY_ID_STATEMENT_MISMATCH,
+    partitionId: service.partitionId,
+    ...(entryId === null ? {} : {entryId}),
+  };
+}
+
+/**
+ * The answer of a write that reaches the partition while a write under its
+ * entryId is pending there: the pending write's own answer when both carry
+ * the same statement, the typed refusal when they carry different ones (the
+ * binding a settled row enforces, before the row exists).
+ * @param {Object} service - The partition (its identity).
+ * @param {Object} join - {pending: {command, outcome}, command}: the pending
+ *   write (its command and its answer's promise) and the command asking.
+ * @return {Promise<Object>|Object} The pending answer or the refusal.
+ */
+function joinPendingStatement(service, {pending, command}) {
+  return statementBindingOf(statementDigestOf(pending.command), command) ===
+    PARTITION_COMMITTED_STATEMENT_BINDING.SAME_STATEMENT ?
+    pending.outcome : statementMismatchAnswer(service, command.entryId);
 }
 
 const UNSETTLED_RECORD = Object.freeze({
@@ -276,8 +317,10 @@ function replayedCommitWitness(service, recorded, entryId) {
  * the affected-row count the write had (unknown - `changesKnown` false - for
  * a row that recorded none) and the durable commit witness of the committed
  * entry (its proposer, term and index, from the durable log); a
- * STATEMENT_FAILED row answers the original failure. Both name the entry. A
- * row settled for another statement answers neither: the key is refused.
+ * STATEMENT_FAILED row answers the original failure. Both name the entry and
+ * how the row binds the statement asking (`statementBinding`: the same
+ * statement, or unrecorded for a row recorded before the binding was). A row
+ * settled for another statement answers neither: the key is refused.
  * @param {Object} service - The partition (its identity).
  * @param {Object} settled - {recorded, command}: the SETTLED record and the
  *   command asking.
@@ -286,21 +329,17 @@ function replayedCommitWitness(service, recorded, entryId) {
 function answerSettledStatement(service, {recorded, command}) {
   const entryId = typeof command.entryId === 'string' &&
     command.entryId.length > 0 ? command.entryId : null;
-  if (statementBindingOf(recorded, command) ===
+  const statementBinding = statementBindingOf(recorded.statementDigest,
+    command);
+  if (statementBinding ===
       PARTITION_COMMITTED_STATEMENT_BINDING.OTHER_STATEMENT) {
-    return {
-      success: false,
-      error: PARTITION_STATEMENT_MISMATCH_ERROR_MSG,
-      failureCode:
-        PARTITION_COMMITTED_COMMAND_ERROR_CODE.ENTRY_ID_STATEMENT_MISMATCH,
-      partitionId: service.partitionId,
-      ...(entryId === null ? {} : {entryId}),
-    };
+    return statementMismatchAnswer(service, entryId);
   }
   const settledAt = {
     partitionId: service.partitionId,
     logIndex: recorded.logIndex,
     replayOfLogIndex: recorded.logIndex,
+    statementBinding,
     ...(entryId === null ? {} : {entryId}),
   };
   if (recorded.outcome === PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED) {
@@ -399,6 +438,7 @@ function settleFailedCommittedStatement(service, {error, command, entryKey,
 export {
   answerSettledStatement,
   createCommittedStatementOutcomeTable,
+  joinPendingStatement,
   readCommittedStatementOutcome,
   recordCommittedStatementOutcome,
   settleFailedCommittedStatement,

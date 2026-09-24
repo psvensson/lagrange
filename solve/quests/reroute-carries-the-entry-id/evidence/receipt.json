@@ -5,7 +5,7 @@
   "testFileDigests": {
     "test/query/write-identity-end-to-end.test.js": "ac727c1365f655b53638827e593620896087a86ad3dbe7997f68545a86c1d459"
   },
-  "generatedAt": "2026-09-23T21:04:11.516Z",
+  "generatedAt": "2026-09-23T21:54:14.273Z",
   "receipts": [
     {
       "id": "rerouted-write-after-outcome-unknown-applies-once-and-answers-success",

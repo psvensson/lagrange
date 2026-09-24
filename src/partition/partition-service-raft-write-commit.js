@@ -221,7 +221,7 @@ function startPartitionRaftWriteCommit(service, options) {
     reject: rejectOutcome,
   } = Promise.withResolvers();
   service.setPendingCommittedWriteOutcome(
-    options.entry.entryId,
+    options.entry,
     outcomePromise,
   );
   executePartitionRaftWriteCommit(service, options).then(

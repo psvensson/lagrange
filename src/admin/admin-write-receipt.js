@@ -115,8 +115,17 @@ function buildParticipantReceipt(participant, resultIdentity) {
       isValidTimestamp(acknowledgedAtMs) ? acknowledgedAtMs : null,
     durableCommitWitness: witness,
     idempotentReplay: participant?.idempotentReplay === true,
+    ...replayStatementBinding(participant),
     complete,
   };
+}
+
+// How a replayed answer's row binds the statement it answered, as the
+// partition named it (the same statement, or a row recorded before its
+// binding was); an answer that names none carries none.
+function replayStatementBinding(participant) {
+  return typeof participant?.statementBinding === 'string' ?
+    {statementBinding: participant.statementBinding} : {};
 }
 
 function buildAdminWriteReceipt(result) {

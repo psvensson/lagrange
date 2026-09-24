@@ -18,6 +18,14 @@
 // answered with the first statement's replay; a committed entry whose key is
 // settled for a different statement is consumed without being reported
 // committed.
+// Verification round 2: F14, a submission that reaches the partition while a
+// write under its entryId is still pending there joins that write's answer
+// only when it carries the same statement - another statement is refused,
+// typed, as a settled row refuses it; F16, a replay names how its row binds
+// the statement asking (the same statement, or a row that recorded no
+// binding), on the partition's answer, across the wire, at the engine and in
+// the admin receipt; F18, the engine's summary of a write with one
+// participant carries that participant's failure code and entry.
 //
 // Every expectation is read from production: the engine's answers, the
 // envelope, the replica's rows and what it applied. The literals are inputs
@@ -36,8 +44,10 @@ import {
 } from './write-identity-attempt-harness.js';
 import {createAdminQueryResultMessageEnvelope} from
   '../../src/admin/admin-query-result-message-envelope.js';
-import {PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} from
-  '../../src/partition/partition-committed-statement-outcome-constants.js';
+import {
+  PARTITION_COMMITTED_STATEMENT_BINDING,
+  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
+} from '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_OPERATION,
@@ -50,6 +60,11 @@ const STATEMENT_MISMATCH_CODE = 'partition_write_entry_id_statement_mismatch';
 // The owner exports its DDL; the table is named from it.
 const OUTCOME_TABLE = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE
   .match(/CREATE TABLE IF NOT EXISTS\s+(\w+)/u)[1];
+// The column of the statement digest: the owner's widening that is not the
+// affected-row count.
+const DIGEST_COLUMN = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.WIDENING_COLUMNS
+  .map((column) => column.name).find((name) =>
+    name !== PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CHANGES_COLUMN);
 
 function participantOf(answer) {
   return [...(answer?.participantResults ?? []),
@@ -58,6 +73,46 @@ function participantOf(answer) {
 
 function receiptOf(answer, queryId) {
   return createAdminQueryResultMessageEnvelope(queryId, answer).writeReceipt;
+}
+
+// The outcome row at a log index as a replica holds one recorded before a
+// widening: the column is NULL.
+function unrecordColumn(replica, column, logIndex) {
+  const writer = new Database(replica.dbPath);
+  try {
+    writer.prepare(`UPDATE ${OUTCOME_TABLE} SET ${column} = NULL ` +
+      'WHERE log_index = ?').run(logIndex);
+  } finally {
+    writer.close();
+  }
+}
+
+// The writes a replica's write path was handed, and whether a write under
+// the same entryId was pending there when each arrived (observed; every
+// write goes through unchanged).
+function observeArrivals(service) {
+  const arrivals = [];
+  const applyWrite = service.applyWrite.bind(service);
+  service.applyWrite = (entry, phaseTimings) => {
+    arrivals.push({params: entry?.params,
+      pending: service.pendingWriteOutcomes.has(entry?.entryId)});
+    return applyWrite(entry, phaseTimings);
+  };
+  return arrivals;
+}
+
+// Two writes submitted at once under one key: their answers, and whether the
+// second reached the partition while the first was pending there.
+async function submitConcurrently(client, replica, writes, idempotencyKey) {
+  const arrivals = observeArrivals(replica.service);
+  const answers = await Promise.all(writes.map((write) =>
+    client.engine.executeQuery(write.sql, write.params, {idempotencyKey})));
+  assert.deepEqual(arrivals.map((arrival) => ({params: arrival.params,
+    pending: arrival.pending})), writes.map((write, index) => ({params:
+    write.params, pending: index > 0})),
+  'setup: the second reached the partition while the first was pending ' +
+    'under the same entryId');
+  return answers;
 }
 
 async function withClient(partitionId, body, options = {}) {
@@ -144,14 +199,9 @@ test('F3: a replay of an outcome row without an affected-row count answers ' +
       update.params, {idempotencyKey});
     assert.equal(applied.affectedRows, 1, 'setup: the update changed a row');
     // The row as a replica holds one recorded before the count was.
-    const writer = new Database(replica.dbPath);
-    try {
-      writer.prepare(`UPDATE ${OUTCOME_TABLE} SET ` +
-        `${PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CHANGES_COLUMN} = NULL ` +
-        'WHERE log_index = ?').run(participantOf(applied).logIndex);
-    } finally {
-      writer.close();
-    }
+    unrecordColumn(replica,
+      PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CHANGES_COLUMN,
+      participantOf(applied).logIndex);
     const replayed = await client.engine.executeQuery(update.sql,
       update.params, {idempotencyKey});
     const participant = participantOf(replayed);
@@ -196,6 +246,12 @@ test('F4: a key reused for a different statement is refused, typed, and ' +
       'the refusal is typed');
     assert.notEqual(participant?.idempotentReplay, true,
       'it is not answered as the first statement\'s replay');
+    assert.equal(typeof participant?.entryId, 'string',
+      'setup: the participant names its entry');
+    assert.deepEqual({failureCode: reused.failureCode,
+      entryId: reused.entryId}, {failureCode: STATEMENT_MISMATCH_CODE,
+      entryId: participant?.entryId},
+    'the engine\'s summary of its one participant carries its code and entry');
     assert.deepEqual({value: replica.valueOf('op-reused'),
       second: replica.applications(second), first:
         replica.applications(first)}, {value: 'first', second: 0, first: 1},
@@ -229,4 +285,81 @@ test('F4: a committed entry whose key is settled for a different statement ' +
       command.params?.[0] === second.params[0]), [],
     'the second statement is never reported committed');
   }, {releasable: true});
+});
+
+test('F14: a submission under a pending write\'s key with another statement ' +
+  'is refused, typed, and never joined to its answer; the same statement ' +
+  'joins it', {timeout: TEST_TIMEOUT_MS}, async () => {
+  await withClient('identity-concurrent-key', async ({replica, client}) => {
+    await client.engine.executeQuery(INSERT_ROW_SQL, ['op-concurrent', 'seed']);
+    const first = {sql: UPDATE_ROW_SQL, params: ['first', 'op-concurrent']};
+    const second = {sql: UPDATE_ROW_SQL, params: ['second', 'op-concurrent']};
+    const [applied, other] = await submitConcurrently(client, replica,
+      [first, second], 'client-key-concurrent');
+    assert.equal(applied.success, true, 'setup: the first update applied');
+    const refused = participantOf(other);
+    assert.deepEqual({success: other.success,
+      failureCode: refused?.failureCode}, {success: false,
+      failureCode: STATEMENT_MISMATCH_CODE},
+    `the other statement is refused, typed (${JSON.stringify(refused)})`);
+    assert.deepEqual({value: replica.valueOf('op-concurrent'),
+      first: replica.applications(first),
+      second: replica.applications(second)},
+    {value: 'first', first: 1, second: 0},
+    'only the first statement is applied, once');
+    const same = {sql: UPDATE_ROW_SQL, params: ['same', 'op-concurrent']};
+    const [once, joined] = await submitConcurrently(client, replica,
+      [same, same], 'client-key-concurrent-same');
+    assert.deepEqual({success: joined.success,
+      logIndex: participantOf(joined)?.logIndex}, {success: true,
+      logIndex: participantOf(once)?.logIndex},
+    'the same statement joins the pending write\'s answer');
+    assert.equal(replica.applications(same), 1, 'and is applied once');
+  });
+});
+
+test('F16: a replay names how its outcome row binds the statement asking, ' +
+  'from the partition to the admin receipt', {timeout: TEST_TIMEOUT_MS},
+async () => {
+  await withClient('identity-replay-binding', async ({replica, client}) => {
+    await client.engine.executeQuery(INSERT_ROW_SQL, ['op-binding', 'seed']);
+    const first = {sql: UPDATE_ROW_SQL, params: ['first', 'op-binding']};
+    const other = {sql: UPDATE_ROW_SQL, params: ['other', 'op-binding']};
+    const idempotencyKey = 'client-key-binding';
+    const applied = await client.engine.executeQuery(first.sql, first.params,
+      {idempotencyKey});
+    const [entryId] = replica.entryIdsSentFor(first);
+    // What a replay is answered with: on the wire, at the engine, in the
+    // admin receipt, and by the partition itself asked for the statement the
+    // wire carried.
+    const bindingsOf = async (statement, queryId) => {
+      const answer = await client.engine.executeQuery(statement.sql,
+        statement.params, {idempotencyKey});
+      const delivered = client.router.deliveries.at(-1);
+      const direct = await replica.service.executeQuery(delivered.sql,
+        delivered.params, {entryId});
+      return {
+        replay: participantOf(answer)?.idempotentReplay,
+        partition: direct?.statementBinding,
+        wire: delivered.answer?.statementBinding,
+        engine: participantOf(answer)?.statementBinding,
+        receipt: receiptOf(answer, queryId).participantReceipts[0]
+          ?.statementBinding,
+      };
+    };
+    const bound = PARTITION_COMMITTED_STATEMENT_BINDING.SAME_STATEMENT;
+    assert.deepEqual(await bindingsOf(first, 'q-bound'), {replay: true,
+      partition: bound, wire: bound, engine: bound, receipt: bound},
+    'a replay of the statement its row bound names the same statement');
+    // The row as a replica holds one recorded before the digest was.
+    unrecordColumn(replica, DIGEST_COLUMN, participantOf(applied).logIndex);
+    const unrecorded = PARTITION_COMMITTED_STATEMENT_BINDING.UNRECORDED;
+    assert.deepEqual(await bindingsOf(other, 'q-unrecorded'), {replay: true,
+      partition: unrecorded, wire: unrecorded, engine: unrecorded,
+      receipt: unrecorded},
+    'a replay of a row that recorded no binding says so, at every layer');
+    assert.deepEqual({value: replica.valueOf('op-binding'),
+      other: replica.applications(other)}, {value: 'first', other: 0},
+    'the replay applied nothing');
+  });
 });

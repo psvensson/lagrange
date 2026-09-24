@@ -1,5 +1,6 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceWriteMetricsBase} from './partition-service-write-metrics-base.js';
+import {joinPendingStatement} from './partition-committed-statement-outcome.js';
 import {
   startPartitionSizeCadence, stopPartitionSizeCadence,
 } from './partition-service-size-cadence.js';
@@ -304,10 +305,19 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       result && typeof result === 'object' ? {...result} : null;
     return true;
   }
-  getPendingCommittedWriteOutcome(entryId) {
-    return this.pendingWriteOutcomes.get(entryId) || null;
+  // The answer of a write under the entryId of a write pending here: the
+  // pending write's answer for the same statement, the typed refusal for
+  // another (the outcome owner's statement binding); null when none is
+  // pending.
+  getPendingCommittedWriteOutcome(entry) {
+    const pending = this.pendingWriteOutcomes.get(entry.entryId);
+    return pending === undefined ? null :
+      joinPendingStatement(this, {pending, command: entry});
   }
-  setPendingCommittedWriteOutcome(entryId, outcomePromise) {
+  // A pending write: its command (the statement a later write under its
+  // entryId must carry to join it) and its answer's promise.
+  setPendingCommittedWriteOutcome(entry, outcomePromise) {
+    const entryId = entry?.entryId;
     if (
       typeof entryId !== 'string' ||
       entryId.length === 0 ||
@@ -315,9 +325,10 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     ) {
       return false;
     }
-    this.pendingWriteOutcomes.set(entryId, outcomePromise);
+    this.pendingWriteOutcomes.set(entryId,
+      {command: entry, outcome: outcomePromise});
     const clearOwnedOutcome = () => {
-      if (this.pendingWriteOutcomes.get(entryId) === outcomePromise) {
+      if (this.pendingWriteOutcomes.get(entryId)?.outcome === outcomePromise) {
         this.pendingWriteOutcomes.delete(entryId);
       }
     };

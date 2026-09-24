@@ -43,7 +43,7 @@ function createRecordingLogger() {
   };
 }
 
-function createCoordinator({failPartitionId}) {
+function createCoordinator({failPartitionId, failureFields = {}}) {
   return new DistributedWriteCoordinator({
     partitionResolver: {},
     queryExecutor: {
@@ -61,6 +61,7 @@ function createCoordinator({failPartitionId}) {
             failedTable: FAILED_TABLE,
             affectedRows: 0,
             rows: [],
+            ...failureFields,
           };
         }
         return {success: true, affectedRows: 1, rows: [{id: 1}]};
@@ -145,4 +146,26 @@ test('DistributedWriteCoordinator logs nothing for a fan-out where every ' +
     0,
     'a successful fan-out emits no participant-failure line',
   );
+});
+
+// Verification round 2, F18: a summary names one participant's failure code
+// and entry at its top level only when the write had that one participant; a
+// write with several keeps each failure in its participant list.
+test('DistributedWriteCoordinator keeps a failed participant\'s code and ' +
+  'entry in its list, not its top level, when the write had several',
+async (t) => {
+  const failureFields = {failureCode: 'participant-failure-code',
+    entryId: 'participant-failure-entry'};
+  const coordinator = createCoordinator({
+    failPartitionId: FAILING_PARTITION_ID, failureFields,
+  });
+  coordinator.logger = createRecordingLogger();
+  const {result} = await executeUpdate(coordinator);
+  t.equal(result.participantResults.length, 2, 'setup: two participants');
+  t.same({failureCode: result.failureCode, entryId: result.entryId},
+    {failureCode: undefined, entryId: undefined},
+    'the summary names no one participant\'s code or entry');
+  t.same(result.participantFailures.map((failure) => ({
+    failureCode: failure.failureCode, entryId: failure.entryId})),
+  [failureFields], 'its participant list names the failure\'s own');
 });

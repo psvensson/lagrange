@@ -2,6 +2,7 @@ import {createHash, randomUUID} from 'node:crypto';
 import {LoggingService} from '../../logging/logging-service.js';
 import {
   pickPartitionWriteAnswerFields,
+  pickSingleAnswerFields,
   sumAffectedRows,
 } from '../../partition/partition-write-kernel.js';
 import {
@@ -327,6 +328,8 @@ class DistributedWriteCoordinator {
         0,
       );
       return {
+        // A write with one participant keeps its failure's code and entry.
+        ...pickSingleAnswerFields(participantResults),
         success: false,
         operation: plan.statementType,
         ...affectedRows,

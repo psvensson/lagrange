@@ -477,8 +477,9 @@ test('F2: the environmental application failure agrees by code and text ' +
 // F12: the typed fields of a write answer are the kernel's exported
 // contract; the sealed end-to-end witness names its eight fields as literals
 // (it is sealed and stays unchanged), so they are compared here with the
-// kernel's list: every sealed name is in it, and the only field the kernel
-// carries beyond them is the replay's affected-row state (F3, recorded).
+// kernel's list: every sealed name is in it, and the only fields the kernel
+// carries beyond them are the replay's affected-row state (F3, recorded) and
+// how the replayed row binds the statement asking (F16, recorded).
 test('F12: the sealed witness\'s write-answer fields are the kernel\'s ' +
   'exported contract', async (t) => {
   const sealedWitness = fs.readFileSync(new URL(
@@ -493,6 +494,7 @@ test('F12: the sealed witness\'s write-answer fields are the kernel\'s ' +
   t.same(sealedFields.filter((field) => !kernelFields?.includes(field)), [],
     'every field the sealed witness names is in the kernel\'s contract');
   t.same((kernelFields ?? []).filter((field) =>
-    !sealedFields.includes(field)), ['changesKnown'],
-  'the kernel carries beyond them only the replay\'s affected-row state');
+    !sealedFields.includes(field)), ['changesKnown', 'statementBinding'],
+  'the kernel carries beyond them only the replay\'s affected-row state ' +
+    'and its statement binding');
 });

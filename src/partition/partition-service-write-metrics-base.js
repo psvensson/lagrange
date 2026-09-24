@@ -672,7 +672,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       entryType: entry.type,
     });
     const entryKey = this.getCommittedEntryKey(entry);
-    const pendingOutcome = this.getPendingCommittedWriteOutcome(entry.entryId);
+    const pendingOutcome = this.getPendingCommittedWriteOutcome(entry);
     if (pendingOutcome) {
       return pendingOutcome;
     }

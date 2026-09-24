@@ -2,6 +2,7 @@ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {renderSqliteIdentifier} from './sqlite-identifier.js';
 import {
   pickPartitionWriteAnswerFields,
+  pickSingleAnswerFields,
   sumAffectedRows,
 } from '../partition/partition-write-kernel.js';
 
@@ -29,13 +30,6 @@ function renderWriteAnswerIdentity(result) {
 // answered it.
 function renderSinglePartitionIdentity(results) {
   return results.length === 1 ? renderWriteAnswerIdentity(results[0]) : {};
-}
-
-// A statement's failure keeps the typed fields of its one partition's answer
-// (its code, its entry) when one partition answered it.
-function renderSinglePartitionFailure(results) {
-  return results.length === 1 ? pickPartitionWriteAnswerFields(results[0]) :
-    {};
 }
 
 const {
@@ -526,7 +520,7 @@ const queryExecutorSqlCommandMethods = {
       result.success && Array.isArray(result.rows) ? result.rows : []);
     if (failedResults.length > 0) {
       return {
-        ...renderSinglePartitionFailure(results),
+        ...pickSingleAnswerFields(results),
         success: false,
         operation,
         ...affectedRows,

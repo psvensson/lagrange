@@ -83,7 +83,10 @@ const ENTRY_ID_BOUND_RETRY_CODES = Object.freeze([
 // (the transport query reply, the query executor's results and errors) as
 // the partition answered them (quest reroute-carries-the-entry-id, C3).
 // `changesKnown` is false on the replay of an outcome row recorded before its
-// affected-row count was (its `changes` is then null, never 0).
+// affected-row count was (its `changes` is then null, never 0);
+// `statementBinding` names how a replayed row binds the statement asking
+// (the outcome owner's PARTITION_COMMITTED_STATEMENT_BINDING: the same
+// statement, or unrecorded for a row recorded before its binding was).
 const PARTITION_WRITE_ANSWER_FIELDS = Object.freeze([
   'failureCode',
   'retryAfterMs',
@@ -94,6 +97,7 @@ const PARTITION_WRITE_ANSWER_FIELDS = Object.freeze([
   'replayOfLogIndex',
   'changes',
   'changesKnown',
+  'statementBinding',
 ]);
 
 /**
@@ -110,6 +114,18 @@ function pickPartitionWriteAnswerFields(answer) {
     }
   }
   return fields;
+}
+
+/**
+ * The typed fields a statement's summary keeps from its answers: those of
+ * its one answer when one partition answered it (its code, its entry), none
+ * when several did (each keeps its own).
+ * @param {Array<Object>} answers - The statement's partition answers.
+ * @return {Object} The PARTITION_WRITE_ANSWER_FIELDS of its one answer, or {}.
+ */
+function pickSingleAnswerFields(answers) {
+  return answers.length === 1 ? pickPartitionWriteAnswerFields(answers[0]) :
+    {};
 }
 
 // The affected rows of a write whose count is not known (a replay of an
@@ -548,6 +564,7 @@ export {
   isReroutableWriteFailureCode,
   isRetryableWriteFailureCode,
   pickPartitionWriteAnswerFields,
+  pickSingleAnswerFields,
   resolvePartitionWriteCommitMode,
   sumAffectedRows,
 };
