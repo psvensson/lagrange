@@ -351,12 +351,16 @@ async function main() {
         `${entry.scenario} (${entry.config})${MATRIX_NEWLINE}`,
       );
       try {
+        const entryEnvironment = {
+          ...environment,
+          [DISTRIBUTED_EXECUTION_ENV.CONFIG]: entry.config,
+        };
         if (args.target === DISTRIBUTED_EXECUTION_TARGET.LAB) {
           await executeLabEntry({
             entry,
             args,
             nodes: labNodes,
-            environment,
+            environment: entryEnvironment,
           });
         } else {
           const configPath =
@@ -367,7 +371,7 @@ async function main() {
             entry,
             configPath,
             args,
-            environment,
+            environment: entryEnvironment,
           });
         }
         passed += MATRIX_MIN_POSITIVE_INTEGER;
