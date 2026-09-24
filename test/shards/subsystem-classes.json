@@ -4,11 +4,11 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 253,
+    "bootstrap-membership": 254,
     "cdc-metadata": 57,
     "cli-tooling": 96,
     "control-plane": 194,
-    "convergence-topology": 91,
+    "convergence-topology": 92,
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2170,
-  "digest": "fnv1a32-fac2736d",
+  "censusSize": 2172,
+  "digest": "fnv1a32-8212bef8",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-99d85a69",
+  "observationDigest": "fnv1a32-0c432376",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -260,6 +260,7 @@
     "test/bootstrap/seed-registration-phase.test.js": "bootstrap-membership",
     "test/bootstrap/seed-restart-recovery-gate.test.js": "bootstrap-membership",
     "test/bootstrap/seed-startup-session-store.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": "bootstrap-membership",
     "test/bootstrap/shared/cdc-integration-setup.test.js": "bootstrap-membership",
     "test/bootstrap/shared/control-plane-setup.test.js": "bootstrap-membership",
     "test/bootstrap/shared/message-router-setup.test.js": "bootstrap-membership",
@@ -2033,6 +2034,7 @@
     "test/topology/cdc-group-propagation-closure-memory.property.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-closure-preservation.property.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-service.test.js": "convergence-topology",
+    "test/topology/cdc-group-propagation-stop-settles-deliveries.test.js": "convergence-topology",
     "test/topology/group-selection-service.test.js": "convergence-topology",
     "test/topology/latency-group-manager.test.js": "convergence-topology",
     "test/topology/latency-measurement-service.test.js": "convergence-topology",
@@ -2656,6 +2658,14 @@
     "test/bootstrap/seed-infrastructure-runtime-identity.test.js": {
       "files": [
         "src/bootstrap/phases/seed-infrastructure-phase.js"
+      ]
+    },
+    "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": {
+      "files": [
+        "src/bootstrap/owners/seed-runtime-bridge-owner.js",
+        "src/bootstrap/shared/latency-topology-setup.js",
+        "src/topology/cdc-group-propagation-service.js",
+        "src/topology/latency-topology-constants.js"
       ]
     },
     "test/bootstrap/shared/control-plane-setup.test.js": {
@@ -10131,6 +10141,14 @@
       ],
       "env": [
         "TEST_FILE_ID"
+      ]
+    },
+    "test/topology/cdc-group-propagation-stop-settles-deliveries.test.js": {
+      "files": [
+        "src/bootstrap/shared/latency-topology-setup.js",
+        "src/topology/cdc-group-propagation-constants.js",
+        "src/topology/cdc-group-propagation-service.js",
+        "src/topology/latency-topology-constants.js"
       ]
     },
     "test/topology/topology-anti-entropy-reconciler.test.js": {

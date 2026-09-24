@@ -99,6 +99,7 @@ class CDCGroupPropagationService extends EventEmitter {
     this.backgroundRetryEntriesByKey = new Map();
     this.immediateBatchTimers = new Set();
     this.immediateBatchEntriesByKey = new Map();
+    this.retrySleepReleases = new Set();
     this.immediateBatchDelayMs = this.resolvePositiveInteger(
       options.immediateBatchDelayMs,
       IMMEDIATE_BATCH_DELAY_MS,
@@ -172,7 +173,29 @@ class CDCGroupPropagationService extends EventEmitter {
     this.state = CDC_GROUP_PROPAGATION_STATE.STOPPED;
     this.clearBackgroundRetryTimers();
     this.clearImmediateBatchTimers();
+    for (const releaseSleep of [...this.retrySleepReleases]) {
+      releaseSleep();
+    }
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.STOPPED, {nodeId: this.nodeId});
+  }
+  /**
+   * A delivery's retry delay, held until stop: stop() ends it at once and
+   * clears its timer (the delivery then answers the stopped outcome).
+   * @param {number} delayMs
+   * @return {Promise<void>}
+   * @private
+   */
+  sleep(delayMs) {
+    return new Promise((resolve) => {
+      let timer = null;
+      const release = () => {
+        clearTimeout(timer);
+        this.retrySleepReleases.delete(release);
+        resolve();
+      };
+      timer = setTimeout(release, delayMs);
+      this.retrySleepReleases.add(release);
+    });
   }
   /**
    * Propagate one CDC event through grouped mode or safe mode.

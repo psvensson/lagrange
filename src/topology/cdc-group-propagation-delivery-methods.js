@@ -8,6 +8,7 @@ import {resolveCdcPropagationDeliveryProfile} from '../cache/cdc-propagation-del
 import {PRESSURE_GOVERNOR_ACTION, PressureGovernor} from '../control-plane/pressure-governor.js';
 import {LATENCY_TOPOLOGY_MESSAGE_TYPE} from './latency-topology-constants.js';
 import {
+  CDC_GROUP_PROPAGATION_DELIVERY_ERROR,
   CDC_GROUP_PROPAGATION_LOG_MSG,
   CDC_GROUP_PROPAGATION_REASON,
   CDC_GROUP_PROPAGATION_STATE,
@@ -20,7 +21,6 @@ const CDC_GROUP_PROPAGATION_SERVICE_LITERAL = Object.freeze({
   CDC_RETRY: 'cdc:retry',
 });
 const DELIVERY_ERROR_UNKNOWN = 'unknown delivery error';
-const BACKGROUND_RETRY_PENDING_ERROR = 'background_retry_pending';
 const CDC_GROUP_PROPAGATION_TRAFFIC_GATE_STATE = Object.freeze({
   ALLOW_DELIVERY: 'allow_delivery',
   DEFER_RETRY_WAVE: 'defer_retry_wave',
@@ -55,6 +55,9 @@ class CDCGroupPropagationDeliveryMethods {
     const events = this.normalizeDeliveryEvents(options);
     const deliveryLabel = this.describeDeliveryEvents(events);
     const retryKey = !options?.events ? this.buildBackgroundRetryKey(options) : null;
+    if (this.state === CDC_GROUP_PROPAGATION_STATE.STOPPED) {
+      return this.buildStoppedFailures(options.targets);
+    }
     const allowDeferToExistingRetry = options?.allowDeferToExistingRetry !== false;
     const trafficGate = this.resolvePropagationTrafficGate(events, {
       replayOnly: options?.replayOnly === true,
@@ -97,6 +100,10 @@ class CDCGroupPropagationDeliveryMethods {
         failureCount: deliveryFailures.length,
       });
       await this.sleep(retryDelayMs);
+      if (this.state === CDC_GROUP_PROPAGATION_STATE.STOPPED) {
+        return this.buildStoppedFailures(
+          this.convertFailuresToRetryTargets(deliveryFailures));
+      }
       pendingTargets = this.convertFailuresToRetryTargets(deliveryFailures);
       attempt += 1;
     }
@@ -434,7 +441,20 @@ class CDCGroupPropagationDeliveryMethods {
       clearTimeout(timer);
     }
     this.immediateBatchTimers.clear();
+    // Every waiter of a batch that will not run gets the stopped answer.
+    for (const entry of this.immediateBatchEntriesByKey.values()) {
+      this.resolveImmediateBatch(entry, this.buildStoppedFailures(entry.targets));
+    }
     this.immediateBatchEntriesByKey.clear();
+  }
+  /**
+   * The typed stopped answer for targets that were not delivered to.
+   * @param {Array<Object>} targets
+   * @return {Array<Object>}
+   * @private
+   */ buildStoppedFailures(targets) {
+    return this.buildDeferredFailures(
+      targets, CDC_GROUP_PROPAGATION_DELIVERY_ERROR.PROPAGATION_STOPPED);
   }
   /**
    * Build a canonical key for one background retry wave.
@@ -606,12 +626,15 @@ class CDCGroupPropagationDeliveryMethods {
    * @param {Array<Object>} targets
    * @return {Array<Object>}
    * @private
-   */ buildDeferredFailures(targets) {
+   */ buildDeferredFailures(
+    targets,
+    error = CDC_GROUP_PROPAGATION_DELIVERY_ERROR.BACKGROUND_RETRY_PENDING,
+  ) {
     return (Array.isArray(targets) ? targets : []).map((target) => ({
       targetGroupId: target?.groupId || null,
       coordinatorNodeId: target?.coordinatorNodeId || null,
       address: target?.address || null,
-      error: BACKGROUND_RETRY_PENDING_ERROR,
+      error,
     }));
   }
   /**
@@ -646,16 +669,6 @@ class CDCGroupPropagationDeliveryMethods {
     const exponentialFactor = Math.pow(this.deliveryRetryBackoffMultiplier, safeAttempt - 1);
     const delayMs = this.deliveryRetryDelayMs * exponentialFactor;
     return Math.min(this.deliveryRetryMaxDelayMs, Math.max(1, Math.floor(delayMs)));
-  }
-
-  /**
-   * Sleep helper for retry delay.
-   * @param {number} delayMs
-   * @return {Promise<void>}
-   * @private
-   */
-  async sleep(delayMs) {
-    return new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 
   /**
