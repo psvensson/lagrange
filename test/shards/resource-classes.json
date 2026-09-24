@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2156,
+    "ordinary": 2157,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2173,
-  "digest": "fnv1a32-e6c8946f",
+  "censusSize": 2174,
+  "digest": "fnv1a32-8a1bcfce",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -297,6 +297,7 @@
     "test/cdc/bootstrap-direct-write-raft-routing.test.js": "ordinary",
     "test/cdc/bootstrap-mode-routing.property.test.js": "ordinary",
     "test/cdc/cdc-authoritative-catchup-hydration.test.js": "ordinary",
+    "test/cdc/cdc-authoritative-catchup-terminal.test.js": "ordinary",
     "test/cdc/cdc-confirmation-tracker.property.test.js": "ordinary",
     "test/cdc/cdc-confirmation-tracker.test.js": "ordinary",
     "test/cdc/cdc-confirmation-wiring.test.js": "ordinary",

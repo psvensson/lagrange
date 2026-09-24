@@ -5,7 +5,7 @@
     "admin-diagnostics": 113,
     "architecture-governance": 19,
     "bootstrap-membership": 254,
-    "cdc-metadata": 57,
+    "cdc-metadata": 58,
     "cli-tooling": 96,
     "control-plane": 194,
     "convergence-topology": 93,
@@ -25,8 +25,8 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2173,
-  "digest": "fnv1a32-5a30165b",
+  "censusSize": 2174,
+  "digest": "fnv1a32-b8530220",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-7ddf1975",
   "classes": {
@@ -317,6 +317,7 @@
     "test/cdc/bootstrap-direct-write-raft-routing.test.js": "cdc-metadata",
     "test/cdc/bootstrap-mode-routing.property.test.js": "cdc-metadata",
     "test/cdc/cdc-authoritative-catchup-hydration.test.js": "cdc-metadata",
+    "test/cdc/cdc-authoritative-catchup-terminal.test.js": "cdc-metadata",
     "test/cdc/cdc-confirmation-tracker.property.test.js": "cdc-metadata",
     "test/cdc/cdc-confirmation-tracker.test.js": "cdc-metadata",
     "test/cdc/cdc-confirmation-wiring.test.js": "cdc-metadata",
