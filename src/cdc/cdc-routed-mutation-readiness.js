@@ -391,6 +391,15 @@ class CDCRoutedMutationReadiness {
   }
 
   async executeSQLViaQueryEngine(sql, params = [], options = {}) {
+    const buildMissingSqlQueryEngineError = () => {
+      const error = new Error(
+        `${CDC_ERROR_MSG.CDC_ENGINE_MISSING_PREFIX}` +
+          `${CDC_ERROR_MSG.CDC_ENGINE_MISSING_DETAIL}`,
+      );
+      error.deferRetry = true;
+      error.retryAfterMs = Math.max(1, this.retryDelayMs || 1);
+      return error;
+    };
     const maxAttempts = Math.max(
       CDC_RETRY.MIN_ATTEMPTS,
       Number(this.retryMaxAttempts) || CDC_DEFAULTS.RETRY_MAX_ATTEMPTS,
@@ -577,7 +586,7 @@ class CDCRoutedMutationReadiness {
         }
         const sqlQueryEngine = this.sqlQueryEngine;
         if (typeof sqlQueryEngine?.executeQuery !== 'function') {
-          throw this.buildMissingSqlQueryEngineError();
+          throw buildMissingSqlQueryEngineError();
         }
         const result = await sqlQueryEngine.executeQuery(
           sql,
@@ -671,18 +680,6 @@ class CDCRoutedMutationReadiness {
     }
 
     throw new Error(ERRORS.QUERY_FAILED);
-  }
-
-  async executeSQL(sql, params = [], options = {}) {
-    if (
-      !this.writeRouter ||
-      typeof this.writeRouter.execute !== 'function'
-    ) {
-      throw new Error(
-        CDC_INTEGRATION_SERVICE_LITERAL.CDC_WRITE_ROUTER_IS_NOT_CONFIGURED,
-      );
-    }
-    return this.writeRouter.execute(sql, params, options);
   }
 
   isTransientCdcError(errorLike) {

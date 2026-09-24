@@ -249,24 +249,12 @@ function isRetryableControlPlaneCandidate(candidate) {
       message.includes(fragment));
 }
 
+// The CDC integration service's terminal lifecycle answer: its writer is shut
+// down, so no retry through it can succeed. It decides whatever else is linked
+// to it (its cause may be a retryable answer, e.g. a released write whose
+// outcome is unknown).
 function isControlPlaneWriterShutDownCandidate(candidate) {
   return getDirectControlPlaneErrorCode(candidate) === CDC_ERROR_CODE.SHUT_DOWN;
-}
-
-/**
- * Whether a write failed because this node's writer (its CDC integration
- * service) was torn down: the service's typed SHUT_DOWN answer, on the
- * failure or on any failure linked to it. Terminal: no retry through a
- * torn-down writer can succeed, so it decides whatever else is linked.
- * @param {*} value - The failed result or error.
- * @return {boolean} Whether the writer answered that it was shut down.
- */
-function isControlPlaneWriterShutDown(value) {
-  if (!value) {
-    return false;
-  }
-  return collectLinkedControlPlaneFailures(value).some(
-    isControlPlaneWriterShutDownCandidate);
 }
 
 function isRetryableControlPlaneError(value) {
@@ -362,7 +350,6 @@ export {
   getControlPlaneFailureSummary,
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
-  isControlPlaneWriterShutDown,
   isRetryableControlPlaneError,
   normalizeKnownNodeBootIncarnation,
   RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS,

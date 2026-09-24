@@ -5,6 +5,7 @@ const {
   CDCEventHandler,
   CDC_LOG_MSG,
   CDC_ERROR_MSG,
+  CDC_INTEGRATION_SERVICE_LITERAL,
   createBootstrapDirectWriteRouter,
   createSqlWriteRouter,
   resolveNodeWebSocketAddress,
@@ -139,35 +140,95 @@ class CDCIntegrationServiceLifecycleMethods {
   }
 
   /**
-   * Mark the service as shutting down. The routed-mutation retry-budget loop
-   * checks this and stops re-arming instead of retrying control-plane writes
-   * forever once the sqlQueryEngine is being torn down on teardown. Idempotent.
+   * Mark the service as shutting down: its terminal lifecycle state. From
+   * here every write it routes answers the typed terminal SHUT_DOWN (see
+   * resolveShutDownAnswer), and every wait it holds for a write is released
+   * with that answer now instead of at its budget. Idempotent.
    */
   markShuttingDown() {
     this.isShuttingDown = true;
+    const releases = [...this.shutdownReleases];
+    this.shutdownReleases.clear();
+    for (const release of releases) {
+      release();
+    }
   }
 
   /**
-   * The answer of a write that finds no engine. Not wired yet is the startup
-   * answer, retryable once the engine arrives. Torn down (marked shutting
-   * down, the engine released) is the terminal typed SHUT_DOWN answer: no
-   * engine will arrive, and a retry would only re-arm against the released
-   * service.
-   * @return {Error}
+   * Hold a suspended write-side wait until shutdown: `release` runs once when
+   * the service is marked shutting down, at once when it already is.
+   * @param {Function} release
+   * @return {Function} Stops holding the wait (the wait settled first).
    */
-  buildMissingSqlQueryEngineError() {
+  holdUntilShutdown(release) {
     if (this.isShuttingDown === true) {
-      const error = new Error(CDC_ERROR_MSG.CDC_SHUT_DOWN);
-      error.code = CDC_ERROR_CODE.SHUT_DOWN;
-      return error;
+      release();
+      return () => {};
     }
-    const error = new Error(
-      `${CDC_ERROR_MSG.CDC_ENGINE_MISSING_PREFIX}` +
-        `${CDC_ERROR_MSG.CDC_ENGINE_MISSING_DETAIL}`,
-    );
-    error.deferRetry = true;
-    error.retryAfterMs = Math.max(1, this.retryDelayMs || 1);
+    this.shutdownReleases.add(release);
+    return () => this.shutdownReleases.delete(release);
+  }
+
+  /**
+   * The answer a write gets from this service. Before shutdown it is the
+   * failure itself. Once the service is shutting down it is the typed
+   * terminal SHUT_DOWN, whatever the failure was: no engine will arrive and
+   * no retry through the service can succeed. The failure stays its cause,
+   * so a released write whose outcome is unknown stays unknown.
+   * @param {*} failure - The failed result or error.
+   * @return {*} The failure, or the terminal answer carrying it.
+   */
+  resolveShutDownAnswer(failure) {
+    if (
+      this.isShuttingDown !== true ||
+      failure?.code === CDC_ERROR_CODE.SHUT_DOWN
+    ) {
+      return failure;
+    }
+    return this.buildShutDownAnswer(failure);
+  }
+
+  /**
+   * @param {*} [cause] - What the write last answered, when anything.
+   * @return {Error} The typed terminal SHUT_DOWN answer.
+   */
+  buildShutDownAnswer(cause = null) {
+    const error = new Error(CDC_ERROR_MSG.CDC_SHUT_DOWN);
+    error.code = CDC_ERROR_CODE.SHUT_DOWN;
+    if (cause) {
+      error.cause = cause;
+    }
     return error;
+  }
+
+  /**
+   * Route one write through the current write-router strategy.
+   * @param {string} sql
+   * @param {Array} [params=[]]
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
+   */
+  async executeSQL(sql, params = [], options = {}) {
+    if (
+      !this.writeRouter ||
+      typeof this.writeRouter.execute !== 'function'
+    ) {
+      throw new Error(
+        CDC_INTEGRATION_SERVICE_LITERAL.CDC_WRITE_ROUTER_IS_NOT_CONFIGURED,
+      );
+    }
+    // One exit for every routed write: after shutdown its answer is the
+    // lifecycle owner's terminal one, thrown or returned alike.
+    let result = null;
+    try {
+      result = await this.writeRouter.execute(sql, params, options);
+    } catch (error) {
+      throw this.resolveShutDownAnswer(error);
+    }
+    if (result?.success === false && this.isShuttingDown === true) {
+      throw this.resolveShutDownAnswer(result);
+    }
+    return result;
   }
 
   /**

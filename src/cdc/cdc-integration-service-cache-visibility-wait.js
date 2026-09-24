@@ -48,6 +48,7 @@ const {
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
 const CDC_INTEGRATION_SERVICE_CACHE_VISIBILITY_CONSTRUCTOR = 'constructor';
+const buildCacheWaitTimeoutMessage = CDC_ERROR_MSG.CACHE_WAIT_TIMEOUT;
 
 /**
  * Post-write cache visibility methods for the CDC integration service. Owns
@@ -142,6 +143,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
     const timeSource = this.timeSource;
     return new Promise((resolve, reject) => {
       let settled = false;
+      let stopHoldingUntilShutdown = null; // shutdown ends the wait at once
       const timeoutBudget = createTimeoutBudget({
         configuredBudgetMs: timeoutMs,
         now: () => timeSource.now(),
@@ -237,12 +239,8 @@ class CDCIntegrationServiceCacheVisibilityWait {
             );
             return;
           }
-          const buildCacheWaitTimeoutMessage = CDC_ERROR_MSG.CACHE_WAIT_TIMEOUT;
-          const timeoutMessage = buildCacheWaitTimeoutMessage(
-            tableName,
-            key,
-            timeoutMs,
-          );
+          const timeoutMessage =
+            buildCacheWaitTimeoutMessage(tableName, key, timeoutMs);
           const timeoutError = createTimeoutBudgetError({
             message: timeoutMessage,
             budget: timeoutBudget,
@@ -286,6 +284,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
           return;
         }
         settled = true;
+        stopHoldingUntilShutdown?.();
         if (typeof cache.offCacheChange === 'function') {
           cache.offCacheChange(listener);
         }
@@ -299,6 +298,8 @@ class CDCIntegrationServiceCacheVisibilityWait {
         resolve(result);
       }
       cache.onCacheChange(listener);
+      stopHoldingUntilShutdown = this.holdUntilShutdown(() =>
+        cleanup(this.buildShutDownAnswer()));
     });
   }
   async confirmCacheVisibilityHoleWithinBudget(

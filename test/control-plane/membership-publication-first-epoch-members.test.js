@@ -1,5 +1,5 @@
-// The first membership publication names its first members, and what a
-// published member list means has one owner.
+// A membership epoch names at least one member, and what a published member
+// list means has one owner.
 //
 // Witnessed on the rs-raft cutover (membership-consistency test 2): the seed's
 // first reconcile ran before its READY heartbeat committed, derived a
@@ -9,12 +9,18 @@
 // publication snapshot owner (resolvePublishedActiveNodeIds) read "no
 // published membership" (null).
 //
-// The publication owner defers an empty FIRST candidate with a typed reason;
-// the READY heartbeat wakes the reconcile, and epoch 1 names the seed. An
-// empty candidate once an epoch exists is a real departure and is published.
-// The rebalancer picks the published row and asks the snapshot owner what its
-// member list means. Every collaborator here is the real owner over a real
-// cache; the planning snapshot is the reconcile's own input seam.
+// The publication owner defers a candidate with no member (a typed reason)
+// until its prerequisite, the member's READY heartbeat, has committed; the
+// heartbeat is a reconcile wake. The rebalancer picks the published row and
+// asks the snapshot owner what its member list means.
+//
+// Composition: the real membership publication coordinator over a real
+// system-table cache; the commit order is controlled by applying each commit
+// (a node row, a publication) to the cache, never by racing a clock. The
+// publications owner is the in-memory table the coordinator persists through
+// (its rows are the cache's rows). Red on the pre-fix tree: the first
+// reconcile publishes an empty epoch, and the rebalancer reads an empty
+// published row as "published, nobody".
 
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -24,9 +30,8 @@ import {SystemTableCache, CDC_OPERATIONS} from
 import {
   MembershipPublicationCoordinator,
 } from '../../src/control-plane/membership-publication-coordinator.js';
-import {
-  EMPTY_FIRST_PUBLICATION_CANDIDATE_REASON,
-} from '../../src/control-plane/membership-publication-coordinator-reconcile.js';
+import * as MEMBERSHIP_RECONCILE from
+  '../../src/control-plane/membership-publication-coordinator-reconcile.js';
 import {buildMembershipPublicationRow} from
   '../../src/control-plane/membership-publication-planning-evidence.js';
 import {MEMBERSHIP_PUBLICATION_STATUS} from
@@ -41,110 +46,111 @@ import {
 } from '../rebalancer/test-helpers.js';
 
 const SEED_NODE_ID = 'seed-node';
+const JOINER_NODE_ID = 'joiner-node';
 const DEPARTED_NODE_ID = 'departed-node';
 const READY_LEASE_MS = 10000;
 const NOW_MS = 1000;
 const QUIET_LOGGER = Object.freeze({warn() {}, info() {}, debug() {}, error() {}});
 
-function seedPlanningSnapshot(connectionState) {
-  const ready = connectionState === STATE.READY;
+// A node row as its owner commits it: registered (connected), then READY
+// once its heartbeat takes the ready lease.
+function nodeRow(nodeId, connectionState) {
   return {
-    nodeRows: [{
-      node_id: SEED_NODE_ID,
-      status: NODE_STATUS.ACTIVE,
-      connection_state: connectionState,
-      ready_lease_expires_at: ready ? NOW_MS + READY_LEASE_MS : null,
-    }],
-    readinessEntries: ready ? [{
-      nodeId: SEED_NODE_ID,
-      dimensions: {
-        clusterMemberHealthy: true,
-        controlPlaneRecoveryEligible: true,
-        controlPlaneWritable: true,
-        controlPlanePublished: false,
-      },
-    }] : [],
-    serviceRows: [],
-    replicaOperationRows: [],
+    node_id: nodeId,
+    node_address: `ws://${nodeId}`,
+    status: NODE_STATUS.ACTIVE,
+    connection_state: connectionState,
+    ready_lease_expires_at:
+      connectionState === STATE.READY ? NOW_MS + READY_LEASE_MS : null,
+    last_heartbeat: NOW_MS,
   };
 }
 
-// The publications owner over an in-memory table: the reconcile reads its
-// rows and persists through it.
-function composePublicationOwner() {
-  const rows = [];
-  const writes = [];
-  const owner = {
+function commitNodeRow(cache, nodeId, connectionState) {
+  cache.applySystemTableChange(
+    TABLES.NODES, CDC_OPERATIONS.UPSERT, nodeRow(nodeId, connectionState));
+}
+
+function publicationRows(cache) {
+  return (cache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [])
+    .map((row) => ({
+      epoch: row.publication_epoch,
+      members: [...row.published_active_node_ids].sort(),
+    }))
+    .sort((left, right) => left.epoch - right.epoch);
+}
+
+// The publications table the coordinator reads and persists through; a
+// persisted row is a committed row of the cache.
+function createPublicationsOwner(cache) {
+  return {
     async listPublicationsFromCache() {
-      return rows.slice();
-    },
-    async listPublications() {
-      return rows.slice();
+      return cache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [];
     },
     async getPublication(publicationId) {
-      return rows.find((row) => row.publication_id === publicationId) || null;
+      return cache.get(TABLES.CONTROL_PLANE_PUBLICATIONS, publicationId) ||
+        null;
     },
     async upsertPublication(row) {
-      writes.push(row);
-      const index = rows.findIndex((existing) =>
-        existing.publication_id === row.publication_id);
-      if (index >= 0) {
-        rows[index] = row;
-      } else {
-        rows.push(row);
-      }
+      cache.applySystemTableChange(
+        TABLES.CONTROL_PLANE_PUBLICATIONS, CDC_OPERATIONS.UPSERT, row);
       return {success: true};
     },
   };
-  const coordinator = new MembershipPublicationCoordinator({
+}
+
+// One node process's publication owner over the cluster's durable rows; a
+// restart is a new coordinator over the same rows.
+function startPublicationOwner(cache) {
+  return new MembershipPublicationCoordinator({
     nodeId: SEED_NODE_ID,
-    systemTableCache: new SystemTableCache(),
-    controlPlanePublicationsOwner: owner,
+    systemTableCache: cache,
+    controlPlanePublicationsOwner: createPublicationsOwner(cache),
     logger: QUIET_LOGGER,
     now: () => NOW_MS,
   });
-  return {coordinator, writes};
 }
 
-test('the first publication defers while its candidate has no member, and ' +
-  'names the seed once its READY heartbeat is visible', async () => {
-  const {coordinator, writes} = composePublicationOwner();
+test('no epoch is published without a member: formation defers until the ' +
+  'READY heartbeat commits, restart does not reintroduce it, later changes ' +
+  'publish', async () => {
+  const cache = new SystemTableCache();
+  const coordinator = startPublicationOwner(cache);
 
-  const beforeReady = await coordinator.reconcileClusterMembership({
-    planningSnapshot: seedPlanningSnapshot(STATE.CONNECTED),
-  });
-  assert.equal(writes.length, 0,
-    'no epoch is published with an empty member set');
+  // Formation: the seed is registered, its READY heartbeat not committed.
+  commitNodeRow(cache, SEED_NODE_ID, STATE.CONNECTED);
+  const beforeReady = await coordinator.reconcileClusterMembership({});
+  assert.deepEqual(publicationRows(cache), [],
+    'no epoch is published before the seed\'s READY heartbeat commits');
   assert.equal(beforeReady.deferred, true,
     'the reconcile answers a typed deferral');
-  assert.equal(beforeReady.reason, EMPTY_FIRST_PUBLICATION_CANDIDATE_REASON,
-    'the deferral names why: the first candidate has no member');
+  assert.equal(beforeReady.reason,
+    MEMBERSHIP_RECONCILE.EMPTY_PUBLICATION_CANDIDATE_REASON,
+    'the deferral names why: the candidate has no member');
 
-  const afterReady = await coordinator.reconcileClusterMembership({
-    planningSnapshot: seedPlanningSnapshot(STATE.READY),
-  });
-  assert.equal(afterReady.deferred, undefined,
-    'a candidate with a member is not deferred');
-  assert.deepEqual(writes.map((row) => row.published_active_node_ids),
-    [[SEED_NODE_ID]], 'epoch 1 names the seed');
-  assert.equal(afterReady.publicationRow.publicationEpoch, 1,
-    'the seed\'s publication is the first epoch');
-});
+  // The READY heartbeat commits; its wake runs the reconcile.
+  commitNodeRow(cache, SEED_NODE_ID, STATE.READY);
+  await coordinator.reconcileClusterMembership({});
+  assert.deepEqual(publicationRows(cache),
+    [{epoch: 1, members: [SEED_NODE_ID]}], 'the first epoch names the seed');
 
-test('an empty candidate once an epoch exists is a departure and is ' +
-  'published', async () => {
-  const {coordinator, writes} = composePublicationOwner();
-  await coordinator.reconcileClusterMembership({
-    planningSnapshot: seedPlanningSnapshot(STATE.READY),
-  });
+  // Restart: a new publication owner over the same durable rows, the seed
+  // registered again and its READY heartbeat not yet committed.
+  commitNodeRow(cache, SEED_NODE_ID, STATE.CONNECTED);
+  const restarted = startPublicationOwner(cache);
+  await restarted.reconcileClusterMembership({});
+  assert.deepEqual(publicationRows(cache),
+    [{epoch: 1, members: [SEED_NODE_ID]}],
+    'a restart does not publish an epoch without a member');
 
-  const afterDeparture = await coordinator.reconcileClusterMembership({
-    planningSnapshot: seedPlanningSnapshot(STATE.CONNECTED),
-  });
-  assert.equal(afterDeparture.deferred, undefined,
-    'only the first publication defers an empty candidate');
-  assert.deepEqual(writes.at(-1).published_active_node_ids, [],
-    'the departure is published');
+  // The restarted seed's READY heartbeat and a joiner's commit: a
+  // membership change, published as the next epoch.
+  commitNodeRow(cache, SEED_NODE_ID, STATE.READY);
+  commitNodeRow(cache, JOINER_NODE_ID, STATE.READY);
+  await restarted.reconcileClusterMembership({});
+  assert.deepEqual(publicationRows(cache).at(-1),
+    {epoch: 2, members: [JOINER_NODE_ID, SEED_NODE_ID].sort()},
+    'a later membership change is published as the next epoch');
 });
 
 function publishedRow(epoch, nodeIds) {
@@ -165,17 +171,15 @@ function publishedRow(epoch, nodeIds) {
 // One cache, read by the rebalancer (through the real publication
 // coordinator's synchronous accessors) and by the snapshot owner over the
 // cache's rows: the two must give one answer.
-function readBothReaders(publicationRows) {
+function readBothReaders(rows) {
   const cache = new SystemTableCache();
-  for (const row of publicationRows) {
+  for (const row of rows) {
     cache.applySystemTableChange(
       TABLES.CONTROL_PLANE_PUBLICATIONS, CDC_OPERATIONS.INSERT, row);
   }
   const controlPlaneReadinessService = {
     ...createMockControlPlaneReadinessService({systemTableCache: cache}),
-    membershipPublicationService: new MembershipPublicationCoordinator({
-      nodeId: SEED_NODE_ID, systemTableCache: cache, logger: QUIET_LOGGER,
-    }),
+    membershipPublicationService: startPublicationOwner(cache),
   };
   const rebalancer = createTestRebalancer({
     systemTableCache: cache, controlPlaneReadinessService,
@@ -193,20 +197,19 @@ function readBothReaders(publicationRows) {
 
 test('the rebalancer and the publication snapshot owner agree on every ' +
   'publication state', () => {
-  const none = readBothReaders([]);
-  assert.deepEqual(none, {rebalancer: null, owner: null},
-    'no publication: both read no published membership');
-
-  const members = readBothReaders([publishedRow(1, [SEED_NODE_ID])]);
-  assert.deepEqual(members,
-    {rebalancer: [SEED_NODE_ID], owner: [SEED_NODE_ID]},
-    'published members: both read the members');
-
-  const emptiedByDeparture = readBothReaders([
+  // An empty published row is durable state a pre-fix owner could write, so
+  // a replay can still present it.
+  const emptied = readBothReaders([
     publishedRow(1, [DEPARTED_NODE_ID]),
     publishedRow(2, []),
   ]);
-  assert.deepEqual(emptiedByDeparture.rebalancer, emptiedByDeparture.owner,
-    'published empty after a real departure: the rebalancer gives the ' +
-    'snapshot owner\'s answer');
+  assert.deepEqual(emptied.rebalancer, emptied.owner,
+    'a published empty member list: the rebalancer gives the snapshot ' +
+    'owner\'s answer');
+
+  assert.deepEqual(readBothReaders([]), {rebalancer: null, owner: null},
+    'no publication: both read no published membership');
+  assert.deepEqual(readBothReaders([publishedRow(1, [SEED_NODE_ID])]),
+    {rebalancer: [SEED_NODE_ID], owner: [SEED_NODE_ID]},
+    'published members: both read the members');
 });

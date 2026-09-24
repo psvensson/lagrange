@@ -1,6 +1,6 @@
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
-  isControlPlaneWriterShutDown,
+  isRetryableControlPlaneError,
 } from './control-plane-error-classification.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {publicationRowSatisfiesDesiredState} from './control-plane-publication-merge.js';
@@ -29,6 +29,27 @@ import {
   CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION,
   buildCriticalControlPlaneConvergenceOptions,
 } from './membership-publication-control-plane-convergence.js';
+
+// What a failed publication write leaves to do. A failure the control-plane
+// classifier holds retryable may still have landed or may land on another
+// attempt: read the durable row back, then re-attempt while attempts remain.
+// Any other failure is final (e.g. the CDC service's terminal shut-down
+// answer): nothing is read back or re-attempted through it.
+const PUBLICATION_WRITE_FAILURE_NEXT_STEP = Object.freeze({
+  VERIFY_AND_REATTEMPT: 'verify_and_reattempt',
+  FAIL: 'fail',
+});
+
+function resolvePublicationWriteFailureNextStep(
+  error,
+  canVerifyPersistedRow,
+  attemptsLeft,
+) {
+  return canVerifyPersistedRow && attemptsLeft > 0 &&
+    isRetryableControlPlaneError(error) ?
+    PUBLICATION_WRITE_FAILURE_NEXT_STEP.VERIFY_AND_REATTEMPT :
+    PUBLICATION_WRITE_FAILURE_NEXT_STEP.FAIL;
+}
 
 class MembershipPublicationCoordinatorPersist extends
   MembershipPublicationCoordinatorPlanning {
@@ -92,12 +113,12 @@ class MembershipPublicationCoordinatorPersist extends
             publicationOptions,
           );
         } catch (error) {
-          // A torn-down writer is terminal: no read-back or re-attempt
-          // through it can land the row.
           if (
-            !canVerifyPersistedRow ||
-            attempt + 1 >= maxAttempts ||
-            isControlPlaneWriterShutDown(error)
+            resolvePublicationWriteFailureNextStep(
+              error,
+              canVerifyPersistedRow,
+              maxAttempts - attempt - 1,
+            ) === PUBLICATION_WRITE_FAILURE_NEXT_STEP.FAIL
           ) {
             throw error;
           }

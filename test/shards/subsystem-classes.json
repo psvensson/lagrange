@@ -5,9 +5,9 @@
     "admin-diagnostics": 113,
     "architecture-governance": 19,
     "bootstrap-membership": 252,
-    "cdc-metadata": 56,
+    "cdc-metadata": 57,
     "cli-tooling": 96,
-    "control-plane": 193,
+    "control-plane": 194,
     "convergence-topology": 91,
     "distributed-harness": 165,
     "examples-e2e": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2167,
-  "digest": "fnv1a32-0dde07c1",
+  "censusSize": 2169,
+  "digest": "fnv1a32-8f2ede7b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-40ab787c",
+  "observationDigest": "fnv1a32-62f8c51f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -338,6 +338,7 @@
     "test/cdc/cdc-pipeline-readiness-gate.test.js": "cdc-metadata",
     "test/cdc/cdc-propagation-metrics.test.js": "cdc-metadata",
     "test/cdc/cdc-refresh-authoritative-cache-row.test.js": "cdc-metadata",
+    "test/cdc/cdc-shutdown-terminal-owner-write.test.js": "cdc-metadata",
     "test/cdc/cdc-sql-builder.test.js": "cdc-metadata",
     "test/cdc/cdc-system-table-write-failure-participant-detail.test.js": "cdc-metadata",
     "test/cdc/current-epoch-propagation.integration.test.js": "cdc-metadata",
@@ -546,6 +547,7 @@
     "test/control-plane/membership-publication-coordinator.test.js": "control-plane",
     "test/control-plane/membership-publication-deferred-catchup.test.js": "control-plane",
     "test/control-plane/membership-publication-epoch-status-probe.test.js": "control-plane",
+    "test/control-plane/membership-publication-first-epoch-members.test.js": "control-plane",
     "test/control-plane/membership-publication-leader-driven-gate.test.js": "control-plane",
     "test/control-plane/membership-publication-reconcile-no-race-timeout.test.js": "control-plane",
     "test/control-plane/membership-swim-consume.test.js": "control-plane",
@@ -2790,6 +2792,12 @@
         "src/node/node-lifecycle-state-machine.js"
       ]
     },
+    "test/cdc/cdc-shutdown-terminal-owner-write.test.js": {
+      "files": [
+        "src/bootstrap/phases/seed-cleanup-handler.js",
+        "src/partition/proposal-queue-constants.js"
+      ]
+    },
     "test/cdc/cdc-system-table-write-failure-participant-detail.test.js": {
       "files": [
         "src/cdc/cdc-integration-service-shared.js"
@@ -3267,6 +3275,15 @@
         "src/cdc/cdc-integration-service-shared-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
+        "src/control-plane/membership-publication-coordinator-reconcile.js",
+        "src/control-plane/membership-publication-planning-evidence.js",
+        "src/control-plane/membership-publication-row-contract.js"
+      ]
+    },
+    "test/control-plane/membership-publication-first-epoch-members.test.js": {
+      "files": [
+        "src/cache/system-table-cache.js",
+        "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/membership-publication-coordinator-reconcile.js",
         "src/control-plane/membership-publication-planning-evidence.js",
         "src/control-plane/membership-publication-row-contract.js"

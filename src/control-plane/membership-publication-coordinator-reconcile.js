@@ -45,6 +45,7 @@ import {
   CONTROL_PLANE_READ_LEADER_MODE,
 } from
   './control-plane-system-table-gateway-constants.js';
+import {resolvePublishedActiveNodeIds} from './active-node-publication-snapshots.js';
 
 // Owner-driven membership liveness (Workstream A). A dedicated always-on interval
 // — started UNCONDITIONALLY, independent of metadata-publication readiness so it
@@ -72,16 +73,16 @@ const MEMBERSHIP_MULTI_PARTITION_MSG =
 const MEMBERSHIP_RECONCILE_DEFERRED_NOT_WRITE_LEADER_MSG =
   'Membership reconcile deferred: not the control_plane_publications write-leader';
 const NOT_PUBLICATIONS_WRITE_LEADER_REASON = 'not_publications_write_leader';
-// The first publication of a cluster names its first members. A candidate
-// with no member yet (the seed's READY heartbeat has not committed) defers
-// instead of publishing an epoch with an empty member set: that row would
-// read as "published, nobody" to every reader until the next epoch. The READY
-// heartbeat is itself a reconcile wake (the priority-recovery visibility
-// listener enqueues on a published node ready lease), so the first epoch
-// names the seed. Once any epoch exists, an empty candidate is a real
-// departure and is published like any other change.
-const EMPTY_FIRST_PUBLICATION_CANDIDATE_REASON =
-  'first_publication_candidate_has_no_members';
+// A membership epoch names at least one member. A candidate with no member
+// is not a valid epoch: at formation it means the seed's READY heartbeat has
+// not committed yet, after a restart that the publisher's own heartbeat has
+// not; published, it would read as "no members" to every reader until the
+// next epoch, and drop the members the latest epoch names. It defers with a
+// typed reason instead. The READY heartbeat is itself a reconcile wake (the
+// priority-recovery visibility listener enqueues on a published node ready
+// lease), so the next reconcile names the member.
+const EMPTY_PUBLICATION_CANDIDATE_REASON =
+  'publication_candidate_has_no_members';
 
 // CL-001 variant D: a non-write-leader's control_plane_publications cache is fed
 // ONLY by the leader's point-in-time CDC fan-out (leader-gated emission, no replay
@@ -173,7 +174,7 @@ const CONVERGENCE_REASON = Object.freeze({
   IN_FLIGHT: 'reconcile-in-flight',
   ERROR: 'error',
   NOT_WRITE_LEADER: 'not-publications-write-leader',
-  EMPTY_FIRST_CANDIDATE: 'empty-first-publication-candidate',
+  EMPTY_CANDIDATE: 'empty-publication-candidate',
 });
 const CONVERGENCE_OUTCOME = Object.freeze({
   RECONCILE_COMMITTED: 'reconcile-committed',
@@ -474,19 +475,17 @@ class MembershipPublicationCoordinatorReconcile extends
             latestPublishedPublicationRow,
           });
           if (
-            !latestPublicationRow &&
             normalizeNodeIdList(candidate.publishedActiveNodeIds).length === 0
           ) {
             this._emitConvergenceDecisionTrace({
               decision: CONVERGENCE_DECISION.DEFER,
-              reason: CONVERGENCE_REASON.EMPTY_FIRST_CANDIDATE,
+              reason: CONVERGENCE_REASON.EMPTY_CANDIDATE,
               ownerKey,
             });
             return {
               deferred: true,
-              reason: EMPTY_FIRST_PUBLICATION_CANDIDATE_REASON,
+              reason: EMPTY_PUBLICATION_CANDIDATE_REASON,
               ownerKey,
-              candidate,
             };
           }
           const workflow = await this.ensureWorkflow(ownerKey, candidate);
@@ -733,10 +732,11 @@ class MembershipPublicationCoordinatorReconcile extends
         latestPublishedRow?.publicationEpoch ??
         latestRow?.publicationEpoch ??
         0;
-      const publishedActiveNodeIds =
-        latestPublishedRow?.publishedActiveNodeIds ??
-        latestRow?.publishedActiveNodeIds ??
-        [];
+      // The snapshot owner's published set; none reads as no member.
+      const publishedActiveNodeIds = resolvePublishedActiveNodeIds({
+        latestPublicationRow: latestRow,
+        latestPublishedPublicationRow: latestPublishedRow,
+      }) ?? [];
       // CL-001 variant A: surface still-pending recovery-eligible acks on an
       // OPEN publication so the contract requests a reconcile even when the
       // published set has no deficit; without this the owner skips forever and
@@ -953,6 +953,6 @@ export {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
   MembershipPublicationCoordinatorReconcile,
   shouldDeferMembershipReconcileToWriteLeader,
-  EMPTY_FIRST_PUBLICATION_CANDIDATE_REASON,
+  EMPTY_PUBLICATION_CANDIDATE_REASON,
   NOT_PUBLICATIONS_WRITE_LEADER_REASON,
 };

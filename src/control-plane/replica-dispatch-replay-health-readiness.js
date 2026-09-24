@@ -1,5 +1,6 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 import {ReplicaDispatchOperationExecution} from './replica-dispatch-operation-execution.js';
+import {resolvePublishedActiveNodeIds} from './active-node-publication-snapshots.js';
 import {
   DISPATCH_PENDING_WORKFLOW_STEPS,
   isActiveReplaceSourceRemovalPhase,
@@ -41,7 +42,6 @@ const READY_NODE_PUBLICATION_RECONCILE_FIELD = Object.freeze({
   ALLOW_PENDING_VISIBILITY: 'allowPendingVisibility',
   LATEST_PUBLICATION_ROW: 'latestPublicationRow',
   PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
-  PUBLISHED_ACTIVE_NODE_IDS_SNAKE: 'published_active_node_ids',
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
   SKIP_PUBLICATION_WRITE_READBACK: 'skipPublicationWriteReadback',
 });
@@ -533,15 +533,11 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
       latestPublicationStatus,
       nodePublicationStatus,
       advancementState,
-      publishedActiveNodeIds: normalizeReadyNodePublicationReconcileNodeIds(
-        latestPublicationRow?.[
-          READY_NODE_PUBLICATION_RECONCILE_FIELD.PUBLISHED_ACTIVE_NODE_IDS
-        ] ||
-          latestPublicationRow?.[
-            READY_NODE_PUBLICATION_RECONCILE_FIELD
-              .PUBLISHED_ACTIVE_NODE_IDS_SNAKE
-          ],
-      ),
+      // What the row's member list means is the snapshot owner's answer
+      // (null: no published membership to extend).
+      publishedActiveNodeIds: resolvePublishedActiveNodeIds({
+        latestPublicationRow,
+      }),
       needsAcknowledgement,
       needsReconcile,
     });
@@ -561,7 +557,8 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
       publicationAdvancement.advancementState !==
         READY_NODE_PUBLICATION_ADVANCEMENT_STATE.PUBLISHED_NODE_MISSING ||
       publicationAdvancement.latestPublicationStatus !==
-        MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED
+        MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ||
+      !Array.isArray(publicationAdvancement.publishedActiveNodeIds)
     ) {
       return context;
     }

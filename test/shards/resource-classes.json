@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2150,
+    "ordinary": 2152,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2167,
-  "digest": "fnv1a32-f120b221",
+  "censusSize": 2169,
+  "digest": "fnv1a32-c9e5cb99",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -318,6 +318,7 @@
     "test/cdc/cdc-pipeline-readiness-gate.test.js": "ordinary",
     "test/cdc/cdc-propagation-metrics.test.js": "ordinary",
     "test/cdc/cdc-refresh-authoritative-cache-row.test.js": "ordinary",
+    "test/cdc/cdc-shutdown-terminal-owner-write.test.js": "ordinary",
     "test/cdc/cdc-sql-builder.test.js": "ordinary",
     "test/cdc/cdc-system-table-write-failure-participant-detail.test.js": "ordinary",
     "test/cdc/current-epoch-propagation.integration.test.js": "ordinary",
@@ -526,6 +527,7 @@
     "test/control-plane/membership-publication-coordinator.test.js": "ordinary",
     "test/control-plane/membership-publication-deferred-catchup.test.js": "ordinary",
     "test/control-plane/membership-publication-epoch-status-probe.test.js": "ordinary",
+    "test/control-plane/membership-publication-first-epoch-members.test.js": "ordinary",
     "test/control-plane/membership-publication-leader-driven-gate.test.js": "ordinary",
     "test/control-plane/membership-publication-reconcile-no-race-timeout.test.js": "ordinary",
     "test/control-plane/membership-swim-consume.test.js": "ordinary",
