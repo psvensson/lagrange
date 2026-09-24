@@ -43,6 +43,8 @@ import {ReplicaOperationRepository} from
   '../../src/rebalancer/replica-operation-repository.js';
 
 const TEST_TIMEOUT_MS = 60000;
+const SETTLE_POLLS = 400;
+const SETTLE_POLL_MS = 5;
 // The refusal code the quest names (the name of the contract).
 const STATEMENT_MISMATCH_CODE = 'partition_write_entry_id_statement_mismatch';
 const NODE_ID = 'identity-node';
@@ -266,6 +268,51 @@ test('B4 V3: the rebalancer\'s row mutation whose lane attempt was answered ' +
         }, {}));
       assertEngineResendIsReplay(owners, run, 'V3');
     });
+});
+
+// Verification round 4, B6: a node leading two partitions of the table
+// offers the lane both. The first answers the write "outcome unknown" (it
+// may have applied there: it commits afterwards), so the lane never sends it
+// on to the second partition, whose entryId is another; the write is sent
+// again only under the entryId the unknown answer was given for, and the
+// loop answers the truth. What each partition was sent and applied is read
+// from the partitions themselves.
+test('B6: the CDC local lane never sends a write whose outcome is unknown ' +
+  'on to another local partition', {timeout: TEST_TIMEOUT_MS}, async () => {
+  const second = await openReplica('identity-loop-lane-second-partition',
+    {releasable: true});
+  try {
+    await withLoopOwners('identity-loop-lane-first-partition',
+      {cdcAttempts: 6}, async (owners) => {
+        owners.cdc.resolveLocalSystemTableServices = () =>
+          [owners.replica.service, second.service];
+        const insert = {sql: INSERT_ROW_SQL, params: ['op-lane-b6', 'new']};
+        const run = await afterAnUnknownOutcome(owners, () =>
+          owners.cdc.executeSQLViaQueryEngine(insert.sql, insert.params,
+            {queryTimeoutMs: 6000}));
+        // The released proposal commits after its unknown answer.
+        for (let polls = 0; owners.replica.valueOf(insert.params[0]) ===
+          null && polls < SETTLE_POLLS; polls += 1) {
+          await new Promise((resume) => setTimeout(resume, SETTLE_POLL_MS));
+        }
+        const partitions = [owners.replica, second];
+        const entryIds = partitions.flatMap((partition) =>
+          partition.entryIdsSentFor(insert));
+        assert.equal(owners.replica.release.released, 1,
+          'setup: the first partition released the write unknown');
+        assert.deepEqual(partitions.map((partition) =>
+          partition.applications(insert)), [1, 0],
+        'the write applied once, in the partition that answered unknown');
+        assert.deepEqual(second.entryIdsSentFor(insert), [],
+          'the write is never sent to the second partition');
+        assert.equal(new Set(entryIds).size, 1, 'the write is sent under ' +
+          `one entryId only (${JSON.stringify(entryIds)})`);
+        assert.equal(run.answer?.success, true, 'the loop answers the ' +
+          `write's success (${JSON.stringify(run.answer)})`);
+      });
+  } finally {
+    await second.close();
+  }
 });
 
 // Verification round 3, F22: a partition's refusal of a key reused for

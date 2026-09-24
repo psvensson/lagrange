@@ -200,13 +200,26 @@ function enqueueLinkedFailureSources(queue, candidate) {
   }
 }
 
-function collectLinkedControlPlaneFailures(value) {
+// How far a walk of a failure's linked failures reads (R07): a fixed window
+// (the text, marker and delay reads), or every failure the value links - each
+// linked object once, so the walk is bounded by the value's own causes and
+// participant lists - for the partition write answers that decide a retry or
+// a reroute by their codes (verification round 4, F23: a failed-for-good
+// answer beyond a window must still decide).
+const LINKED_FAILURE_WALK = Object.freeze({
+  WINDOW: 'window',
+  EVERY_LINKED_FAILURE: 'every_linked_failure',
+});
+
+function collectLinkedControlPlaneFailures(value,
+  walk = LINKED_FAILURE_WALK.WINDOW) {
   const queue = [value];
   const visited = new Set();
   const collected = [];
+  const withinWalk = () => walk === LINKED_FAILURE_WALK.EVERY_LINKED_FAILURE ||
+    collected.length < MAX_LINKED_CONTROL_PLANE_FAILURES;
 
-  while (queue.length > 0 &&
-      collected.length < MAX_LINKED_CONTROL_PLANE_FAILURES) {
+  while (queue.length > 0 && withinWalk()) {
     const candidate = queue.shift();
     if (!admitLinkedFailureCandidate(candidate, visited)) {
       continue;
@@ -273,12 +286,14 @@ const PARTITION_WRITE_RETRY_DECISION = Object.freeze({
  * summary text (the coordinator's generic one, a retryable text for a
  * failure that is not a partition answer) never retries a participant that
  * failed for good, whether the write had one participant or several (quest
- * reroute-carries-the-entry-id, verification round 3, F22 and F21).
+ * reroute-carries-the-entry-id, verification round 3, F22 and F21). It
+ * reads every partition answer the failure links (round 4, F23).
  * @param {*} value - A failure, a failed result, or an error.
  * @return {string} A PARTITION_WRITE_RETRY_DECISION.
  */
 function decidePartitionWriteRetry(value) {
-  const codes = collectLinkedControlPlaneFailures(value)
+  const codes = collectLinkedControlPlaneFailures(value,
+    LINKED_FAILURE_WALK.EVERY_LINKED_FAILURE)
     .map((candidate) => candidate?.failureCode)
     .filter(isPartitionWriteFailureCode);
   if (codes.length === 0) {
@@ -326,7 +341,8 @@ function hasReroutableWriteFailure(value, {carriesEntryId = false} = {}) {
   if (!value) {
     return false;
   }
-  return collectLinkedControlPlaneFailures(value).some((candidate) =>
+  return collectLinkedControlPlaneFailures(value,
+    LINKED_FAILURE_WALK.EVERY_LINKED_FAILURE).some((candidate) =>
     isReroutableWriteFailureCode(candidate?.failureCode, {carriesEntryId}));
 }
 

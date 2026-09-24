@@ -65,14 +65,16 @@ function parseStatement(text, params, {dialect, parses} = {}) {
  * renders it, and its parameters as the engine binds them.
  * @param {string} sql - The caller's statement.
  * @param {Array} [params] - Its parameters.
- * @param {Object} [options] - {dialect}: the caller's SQL dialect.
+ * @param {Object} [options] - {dialect, parses}: the caller's SQL dialect,
+ *   and the engine's parse cache to parse it through (the one parse cache).
  * @return {Object} {state: RENDERED, sql, params}, or {state: UNPARSEABLE,
  *   error} or {state: NOT_A_WRITE}.
  */
-function renderPartitionWriteStatement(sql, params = [], {dialect} = {}) {
+function renderPartitionWriteStatement(sql, params = [],
+  {dialect, parses} = {}) {
   let parsed;
   try {
-    parsed = parseStatement(sql, params, {dialect});
+    parsed = parseStatement(sql, params, {dialect, parses});
   } catch (error) {
     return {state: PARTITION_WRITE_STATEMENT_RENDERING.UNPARSEABLE,
       error: error.message};
