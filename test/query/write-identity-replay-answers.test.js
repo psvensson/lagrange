@@ -54,8 +54,13 @@ import {
 } from '../../src/partition/partition-service-constants.js';
 import {buildPartitionWriteEntry} from
   '../../src/partition/partition-write-kernel.js';
+import {QUERY_EXECUTOR_SHARED} from '../../src/query/query-executor-shared.js';
+import {RAFT_RS_PROPOSAL_CODEC_ERROR} from
+  '../../src/raft/raft-rs-proposal-codec-constants.js';
 
 const TEST_TIMEOUT_MS = 60000;
+const {QUERY_MESSAGE_FIELD_ENTRY_ID, QUERY_MESSAGE_TYPE} =
+  QUERY_EXECUTOR_SHARED;
 const STATEMENT_MISMATCH_CODE = 'partition_write_entry_id_statement_mismatch';
 // The owner exports its DDL; the table is named from it.
 const OUTCOME_TABLE = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE
@@ -361,5 +366,57 @@ async () => {
     assert.deepEqual({value: replica.valueOf('op-binding'),
       other: replica.applications(other)}, {value: 'first', other: 0},
     'the replay applied nothing');
+  });
+});
+
+// Verification round 3, F19: a statement whose parameters the proposal codec
+// cannot encode never enters consensus: it is refused, typed with the
+// codec's own code, before it is joined to a write pending under its
+// entryId - in process and over the wire (the replica's transport handler)
+// alike, pending or not - and nothing of it is applied.
+async function answerOrThrow(call) {
+  try {
+    return {threw: false, answer: await call()};
+  } catch (error) {
+    return {threw: true, answer: {error: error.message, code: error.code}};
+  }
+}
+
+test('F19: an unencodable statement is refused, typed, before the pending ' +
+  'join, in process and over the wire', {timeout: TEST_TIMEOUT_MS},
+async () => {
+  await withClient('identity-unencodable', async ({replica, client}) => {
+    await client.engine.executeQuery(INSERT_ROW_SQL, ['op-bigint', 'seed']);
+    const unencodable = [BigInt(10), 'op-bigint'];
+    const direct = (entryId) => replica.service.executeQuery(UPDATE_ROW_SQL,
+      unencodable, {entryId});
+    const overTheWire = (entryId) => replica.network.deliver(replica.address,
+      {type: QUERY_MESSAGE_TYPE.QUERY, sql: UPDATE_ROW_SQL,
+        params: unencodable, [QUERY_MESSAGE_FIELD_ENTRY_ID]: entryId});
+    const arrivals = observeArrivals(replica.service);
+    const pendingEntryId = 'identity-unencodable-pending';
+    const pending = replica.service.executeQuery(UPDATE_ROW_SQL,
+      ['applied', 'op-bigint'], {entryId: pendingEntryId});
+    const answers = {
+      pendingDirect: await answerOrThrow(() => direct(pendingEntryId)),
+      pendingWire: await answerOrThrow(() => overTheWire(pendingEntryId)),
+    };
+    assert.equal((await pending).success, true,
+      'setup: the pending write applied');
+    answers.direct = await answerOrThrow(() =>
+      direct('identity-unencodable-direct'));
+    answers.wire = await answerOrThrow(() =>
+      overTheWire('identity-unencodable-wire'));
+    assert.deepEqual(arrivals.slice(1, 3).map((arrival) => arrival.pending),
+      [true, true], 'setup: the first two arrived while the write under ' +
+      'their entryId was pending');
+    for (const [name, {threw, answer}] of Object.entries(answers)) {
+      assert.deepEqual({threw, success: answer.success,
+        failureCode: answer.failureCode}, {threw: false, success: false,
+        failureCode: RAFT_RS_PROPOSAL_CODEC_ERROR.UNENCODABLE},
+      `${name}: refused, typed (${JSON.stringify(answer)})`);
+    }
+    assert.equal(replica.valueOf('op-bigint'), 'applied',
+      'nothing of the unencodable statement was applied');
   });
 });

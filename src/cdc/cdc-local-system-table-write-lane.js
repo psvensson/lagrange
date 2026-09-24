@@ -7,9 +7,20 @@
 // answer that did not fail it for good; without a key it is sent on only
 // after an answer that never proposed it. A thrown answer is decided as a
 // returned one: by its code, never by its text.
+//
+// The lane sends the statement as the routed engine path sends it, never its
+// caller's text (verification round 3, B4): the partition binds the entryId
+// to the statement it settled, so the engine's re-send of a lane attempt
+// must be the same statement. A statement the rendering owner does not
+// render (it does not parse, or it is not a write) is not the lane's: the
+// routed engine path answers it.
 
 import {routedMutationLocalWriteOptions} from
   './cdc-routed-system-write-selection.js';
+import {
+  PARTITION_WRITE_STATEMENT_RENDERING,
+  renderPartitionWriteStatement,
+} from '../query/partition-write-statement-rendering.js';
 import {
   isPartitionWriteFailureCode,
   isReroutableWriteFailureCode,
@@ -42,18 +53,24 @@ function isLocalSystemTableWriteFailureRoutedOn(cdc, failure,
  * Send a system-table write to the local leader replicas in turn.
  * @param {Object} cdc - The CDC integration.
  * @param {Array<Object>} localServices - The local leader replicas.
- * @param {Object} write - {sql, params, idempotencyKey (or null)}.
- * @return {Promise<Object>} {handled, result?}.
+ * @param {Object} write - {sql, params, idempotencyKey (or null)}: the
+ *   caller's statement, sent as the rendering owner renders it.
+ * @return {Promise<Object>} {handled, result?}; not handled when no local
+ *   service took it or the statement is not one the lane sends.
  */
 async function sendLocalSystemTableWrite(cdc, localServices,
   {sql, params, idempotencyKey}) {
+  const statement = renderPartitionWriteStatement(sql, params);
+  if (statement.state !== PARTITION_WRITE_STATEMENT_RENDERING.RENDERED) {
+    return {handled: false};
+  }
   for (const partitionService of localServices) {
     if (typeof partitionService?.executeQuery !== 'function') {
       continue;
     }
     try {
-      const localResult = await partitionService.executeQuery(sql, params,
-        routedMutationLocalWriteOptions(idempotencyKey,
+      const localResult = await partitionService.executeQuery(statement.sql,
+        statement.params, routedMutationLocalWriteOptions(idempotencyKey,
           partitionService.partitionId));
       const result = cdc.normalizeLocalSystemTableWriteResult(localResult);
       if (result?.success === false &&

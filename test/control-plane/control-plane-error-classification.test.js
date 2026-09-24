@@ -7,15 +7,24 @@ import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } from '../../src/control-plane/control-plane-error-classification.js';
+import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {ROUTER_ERROR_MSG} from '../../src/constants/transport.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_SERVICE_DEFAULT,
 } from '../../src/partition/partition-service-constants.js';
+import {joinPendingStatement} from
+  '../../src/partition/partition-committed-statement-outcome.js';
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
 import {PROPOSAL_QUEUE_PROPOSAL_STATE} from
   '../../src/partition/proposal-queue-constants.js';
+import {DistributedWriteCoordinator} from
+  '../../src/query/distributed/distributed-write-coordinator.js';
+import {QUERY_ERROR_MSG} from '../../src/query/query-constants.js';
+import {SQLParser} from '../../src/query/sql-parser.js';
 import {assertRaftOperationSucceeded} from
   '../../src/raft/raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from
@@ -259,4 +268,92 @@ test('getControlPlaneFailureSummary prioritizes authoritative source gaps over '
   t.equal(summary.distributedParticipantFailureCount, 1);
   t.equal(summary.reconnectDeliveryFailureCount, 1);
   t.equal(summary.retryable, true);
+});
+
+// Verification round 3, F22 and F21: a partition answer's code decides the
+// retry before any summary text. The distributed write coordinator summarizes
+// a failed write with its generic text (a retryable text for failures that
+// are not partition answers); a participant's code that failed for good -
+// the key reused for another statement, a host failure while proposing - is
+// never retried for that text, whether the write had one participant or
+// several, by the classifier or by the CDC routed mutation's retry test. A
+// participant whose code did not fail for good is still retried.
+async function coordinatorSummaryOf(participant, partitionIds, failing) {
+  const coordinator = new DistributedWriteCoordinator({
+    partitionResolver: {},
+    queryExecutor: {
+      async executeUpdate(_ast, [partitionId]) {
+        return failing.includes(partitionId) ? {...participant} :
+          {success: true, changes: 1, rows: []};
+      },
+    },
+    getTableInfo: () => ({primaryKey: 'id'}),
+  });
+  coordinator.logger = {debug() {}, info() {}, warn() {}, error() {}};
+  const plan = coordinator.createWritePlan(
+    new SQLParser('UPDATE t SET v = ? WHERE id = ?').parse(), ['v', 'id'],
+    {partitionIds, idempotencyKey: 'classification-key'});
+  return coordinator.executePlan(plan, ['v', 'id']);
+}
+
+test('F22/F21: a participant\'s failed-for-good code is never retried for ' +
+  'the coordinator\'s summary text', async (t) => {
+  const {
+    buildPartitionWriteLeadershipRefusal,
+    buildPartitionWriteProposalRefusal,
+  } = partitionWriteKernel;
+  // Inputs: each participant answer as its owner builds it - a write reaching
+  // a pending write under its entryId with another statement, the port's
+  // host failure raised as the write path raises it, and a replica that
+  // does not lead.
+  let portRefusal = null;
+  try {
+    assertRaftOperationSucceeded({outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+      reason: 'database or disk is full', phase: 'ready-persistence',
+      retryable: true, recoveryRequired: false});
+  } catch (error) {
+    portRefusal = error;
+  }
+  const failedForGood = {
+    statementMismatch: joinPendingStatement({partitionId: TEST_PARTITION_ID},
+      {pending: {command: {sql: 'UPDATE t SET v = ?', params: ['a']},
+        outcome: null},
+      command: {sql: 'UPDATE t SET v = ?', params: ['b'],
+        entryId: TEST_ENTRY_ID}}),
+    hostFailure: buildPartitionWriteProposalRefusal(portRefusal, null,
+      {partitionId: TEST_PARTITION_ID, entryId: TEST_ENTRY_ID}),
+  };
+  const notFailedForGood = {
+    notLeader: buildPartitionWriteLeadershipRefusal({}, TEST_PARTITION_ID)};
+  const shapes = {
+    single: [[TEST_PARTITION_ID], [TEST_PARTITION_ID]],
+    oneOfTwo: [['classification-p0', TEST_PARTITION_ID], [TEST_PARTITION_ID]],
+    bothOfTwo: [['classification-p0', TEST_PARTITION_ID],
+      ['classification-p0', TEST_PARTITION_ID]],
+  };
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+  ConfigurationManager.getInstance().initialize({node: {id: 'classifier'}});
+  LoggingService.getInstance().initialize({level: 'fatal'});
+  try {
+    const cdc = new CDCIntegrationService({nodeId: 'classifier'});
+    for (const [expected, answers] of [[false, failedForGood],
+      [true, notFailedForGood]]) {
+      for (const [name, answer] of Object.entries(answers)) {
+        for (const [shape, [partitionIds, failing]] of Object.entries(shapes)) {
+          const summary = await coordinatorSummaryOf(answer, partitionIds,
+            failing);
+          t.equal(summary.error, QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+            `setup: ${name} ${shape}: the coordinator's summary text`);
+          t.equal(isRetryableControlPlaneError(summary), expected,
+            `${name} ${shape}: the classifier decides by the code`);
+          t.equal(cdc.isTransientCdcError(summary), expected,
+            `${name} ${shape}: the CDC routed mutation's retry test too`);
+        }
+      }
+    }
+  } finally {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  }
 });

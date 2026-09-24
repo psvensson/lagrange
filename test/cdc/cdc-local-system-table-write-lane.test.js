@@ -13,6 +13,7 @@
 // code are inputs chosen so that the text alone would decide the other way.
 
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {test} from 'node:test';
 
 import {SYSTEM_TABLE_NAME} from
@@ -127,3 +128,74 @@ test('B3: the local lane decides a thrown partition answer by its code with ' +
     thrown_unknownText_withoutKey: 'rethrown',
   }, 'each thrown answer is decided by its code and the routed key');
 });
+
+// Verification round 3, B4 (static): every carrier of a partition write's
+// entryId sends the statement in the one rendering the engine path sends,
+// never its caller's text, so the partition's statement binding sees one
+// statement per logical mutation. The census reads src: the sites that
+// derive an entryId (the coordinator's participant options and the lane's
+// local options), the one caller of the lane's options, and the files that
+// stamp or relay an entryId on a partition request. The coordinator's
+// participants are rendered by the executor's one renderer; the lane sends
+// what the rendering owner renders from its caller's statement; the relays
+// carry the text they received. A new carrier fails the census until it is
+// classified here.
+const SRC_ROOT = new URL('../../src/', import.meta.url);
+
+function sourceFiles(directory = SRC_ROOT) {
+  return fs.readdirSync(directory, {withFileTypes: true}).flatMap((entry) =>
+    entry.isDirectory() ? sourceFiles(new URL(`${entry.name}/`, directory)) :
+      (entry.name.endsWith('.js') ? [new URL(entry.name, directory)] : []));
+}
+
+function codeOf(file) {
+  return fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//gu, '')
+    .replace(/^\s*\/\/.*$/gmu, '');
+}
+
+function filesMatching(sources, pattern) {
+  return sources.filter(({code}) => pattern.test(code))
+    .map(({name}) => name).sort();
+}
+
+test('B4: no carrier of an entryId sends its caller\'s statement text',
+  () => {
+    const sources = sourceFiles().map((file) => ({code: codeOf(file),
+      name: file.pathname.slice(SRC_ROOT.pathname.length)}));
+    const code = (name) => sources.find((source) => source.name === name)
+      ?.code ?? '';
+    assert.deepEqual(filesMatching(sources,
+      /(?<!function )deriveParticipantEntryId\(/u), [
+      'cdc/cdc-routed-system-write-selection.js',
+      'query/distributed/distributed-write-coordinator.js',
+    ], 'the entryId is derived by the coordinator and the lane\'s options');
+    assert.deepEqual(filesMatching(sources,
+      /(?<!function )routedMutationLocalWriteOptions\(/u),
+    ['cdc/cdc-local-system-table-write-lane.js'],
+    'the lane is the one carrier of its options');
+    assert.deepEqual(filesMatching(sources, /QUERY_(MESSAGE|PAYLOAD)_FIELD_ENTRY_ID|SPLIT_MIRROR_IDENTITY_FIELD\.ENTRY_ID/u), [
+      'partition/partition-service-entry-apply-base.js',
+      'partition/partition-service-shared.js',
+      'partition/partition-split-routing.js',
+      'query/query-executor-partition-request-builders.js',
+      'query/query-executor-shared.js',
+      'query/query-executor-write-retry-routing.js',
+    ], 'the relays of an entryId: the request builder stamps it on the ' +
+      'text it was given, the transport handler and the split mirror carry ' +
+      'what they received');
+    const rendering = code('query/query-executor-sql-command-rendering.js');
+    for (const method of ['executeInsert', 'executeUpdate', 'executeDelete']) {
+      const body = rendering.split(`async ${method}(`)[1]?.split('\n  },')[0];
+      assert.match(body ?? '', /const sql = renderWriteStatementSql\(ast\);/u,
+        `the coordinator's participant text is ${method}'s one rendering`);
+    }
+    assert.deepEqual(filesMatching(sources,
+      /\.build(Insert|Update|Delete)SQL\(/u), [],
+    'no path renders a write statement outside the one renderer');
+    const lane = code('cdc/cdc-local-system-table-write-lane.js');
+    assert.match(lane, /renderPartitionWriteStatement\(sql, params\)/u,
+      'the lane renders its caller\'s statement through the rendering owner');
+    assert.deepEqual([...lane.matchAll(/executeQuery\(([^,]+),/gu)]
+      .map((match) => match[1]), ['statement.sql'],
+    'the lane sends the rendered statement, never its caller\'s text');
+  });

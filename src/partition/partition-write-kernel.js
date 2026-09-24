@@ -2,6 +2,8 @@ import {randomUUID} from 'node:crypto';
 import {ERRORS} from '../constants/errors.js';
 import {isValidRaftLogIndex} from '../raft/log-index.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {RAFT_RS_PROPOSAL_CODEC_ERROR} from
+  '../raft/raft-rs-proposal-codec-constants.js';
 import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../raft/raft-rs-durable-store-constants.js';
 import {PARTITION_COMMITTED_COMMAND_ERROR_CODE} from
@@ -77,6 +79,18 @@ const RETRYABLE_WRITE_FAILURE_CODES = Object.freeze([
 const ENTRY_ID_BOUND_RETRY_CODES = Object.freeze([
   REFUSAL.OUTCOME_UNKNOWN,
   STATEMENT_ENVIRONMENT_FAILED,
+]);
+// The answers of a write the partition refused for good, before it was
+// proposed (quest reroute-carries-the-entry-id, verification round 3, F22
+// and F19): its entryId is settled, or pending, for another statement (the
+// committed-statement outcome owner's binding), or its statement is one the
+// proposal codec cannot encode. No attempt of the same statement under the
+// same entryId can succeed, so they are never retried and never routed
+// again, and a caller decides them by this code before any text a summary
+// of them carries.
+const FAILED_FOR_GOOD_WRITE_FAILURE_CODES = Object.freeze([
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE.ENTRY_ID_STATEMENT_MISMATCH,
+  RAFT_RS_PROPOSAL_CODEC_ERROR.UNENCODABLE,
 ]);
 
 // The typed fields of a partition write answer, which cross every boundary
@@ -178,12 +192,14 @@ const RELEASED_UNPROPOSED_ANSWER = Object.freeze({
 /**
  * Whether a code is one the write kernel answers a failed write with.
  * @param {*} code - A failureCode.
- * @return {boolean} Whether it is a PARTITION_WRITE_LEADERSHIP_REFUSAL or
- *   the environmental failure of a committed write's application.
+ * @return {boolean} Whether it is a PARTITION_WRITE_LEADERSHIP_REFUSAL, the
+ *   environmental failure of a committed write's application, or a refusal
+ *   that failed for good (FAILED_FOR_GOOD_WRITE_FAILURE_CODES).
  */
 function isPartitionWriteFailureCode(code) {
   return Object.values(REFUSAL).includes(code) ||
-    code === STATEMENT_ENVIRONMENT_FAILED;
+    code === STATEMENT_ENVIRONMENT_FAILED ||
+    FAILED_FOR_GOOD_WRITE_FAILURE_CODES.includes(code);
 }
 
 /**

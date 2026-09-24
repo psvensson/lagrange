@@ -1,5 +1,7 @@
-import {hasReroutableWriteFailure} from
-  '../control-plane/control-plane-error-classification.js';
+import {
+  hasReroutableWriteFailure,
+  linksPartitionWriteAnswer,
+} from '../control-plane/control-plane-error-classification.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
@@ -243,8 +245,13 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
 
     isRetryableOperationPersistError(errorResult) {
       // A partition write answer is classified by the control plane's one
-      // classifier (by its code; its text only when nothing but the text
-      // reached the repository); the texts below are not write answers.
+      // classifier: by its code alone when the failure links one (the texts
+      // below never retry a participant that failed for good), by its text
+      // only when nothing but the text reached the repository; the texts
+      // below are not write answers.
+      if (linksPartitionWriteAnswer(errorResult)) {
+        return isRetryableControlPlaneError(errorResult);
+      }
       if (isRetryableControlPlaneError(errorResult)) {
         return true;
       }

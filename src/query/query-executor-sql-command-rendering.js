@@ -285,7 +285,7 @@ const queryExecutorSqlCommandMethods = {
    * @return {Promise<Object>} Insert result.
    */
   async executeInsert(ast, partitionId, params = [], executionOptions = {}) {
-    const sql = this.buildInsertSQL(ast);
+    const sql = renderWriteStatementSql(ast);
     this.logger.debug(QUERY_EXECUTOR_LITERAL.STRING_EXECUTING_INSERT, {
       table: ast.table,
       partitionId,
@@ -439,7 +439,7 @@ const queryExecutorSqlCommandMethods = {
    * @return {Promise<Object>} Update result.
    */
   async executeUpdate(ast, partitionIds, params = [], executionOptions = {}) {
-    const sql = this.buildUpdateSQL(ast);
+    const sql = renderWriteStatementSql(ast);
     this.logger.debug(QUERY_EXECUTOR_LITERAL.STRING_EXECUTING_UPDATE, {
       table: ast.table,
       partitionCount: partitionIds.length,
@@ -475,7 +475,7 @@ const queryExecutorSqlCommandMethods = {
    * @return {Promise<Object>} Delete result.
    */
   async executeDelete(ast, partitionIds, params = [], executionOptions = {}) {
-    const sql = this.buildDeleteSQL(ast);
+    const sql = renderWriteStatementSql(ast);
     this.logger.debug(QUERY_EXECUTOR_LITERAL.STRING_EXECUTING_DELETE, {
       table: ast.table,
       partitionCount: partitionIds.length,
@@ -564,6 +564,38 @@ const queryExecutorSqlCommandMethods = {
   },
 };
 
+// The one rendering of a write statement's partition text (quest
+// reroute-carries-the-entry-id, verification round 3, B4): the text every
+// carrier of a write's entryId sends its partition - the executor for the
+// coordinator's participants, the CDC local lane for its local replicas
+// (through partition-write-statement-rendering.js) - so the partition's
+// statement binding sees one statement per logical write.
+const WRITE_STATEMENT_RENDERERS = Object.freeze({
+  [QUERY_AST_TYPE.INSERT]: queryExecutorSqlCommandMethods.buildInsertSQL,
+  [QUERY_AST_TYPE.UPDATE]: queryExecutorSqlCommandMethods.buildUpdateSQL,
+  [QUERY_AST_TYPE.DELETE]: queryExecutorSqlCommandMethods.buildDeleteSQL,
+});
+
+/**
+ * Render a parsed INSERT, UPDATE or DELETE as the text its partition is
+ * sent.
+ * @param {Object} ast - The statement's AST.
+ * @return {string} Its partition text.
+ */
+function renderWriteStatementSql(ast) {
+  return WRITE_STATEMENT_RENDERERS[ast.type].call(
+    queryExecutorSqlCommandMethods, ast);
+}
+
+/**
+ * Whether a parsed statement is one the partition write rendering renders.
+ * @param {Object} ast - A statement's AST.
+ * @return {boolean} Whether it is an INSERT, UPDATE or DELETE.
+ */
+function isRenderedWriteStatement(ast) {
+  return Object.hasOwn(WRITE_STATEMENT_RENDERERS, ast?.type);
+}
+
 function installQueryExecutorSqlCommandHelpers(target) {
   for (const [name, value] of Object.entries(queryExecutorSqlCommandMethods)) {
     Object.defineProperty(target.prototype, name, {
@@ -574,4 +606,8 @@ function installQueryExecutorSqlCommandHelpers(target) {
   }
 }
 
-export {installQueryExecutorSqlCommandHelpers};
+export {
+  installQueryExecutorSqlCommandHelpers,
+  isRenderedWriteStatement,
+  renderWriteStatementSql,
+};

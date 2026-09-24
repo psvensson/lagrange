@@ -6,6 +6,7 @@ import {RUNTIME_ACCESS_POLICY_DECISION} from
   '../control-plane/owners/runtime-access-policy-owner.js';
 import {enforceApplicationDatabaseStatementPolicy} from
   './application-database-statement-policy.js';
+import {parseStatement} from './partition-write-statement-rendering.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
@@ -39,13 +40,11 @@ const {
   QUERY_LOG_MSG,
   QUERY_OPERATION,
   QUERY_SESSION,
-  SQLParser,
   WRITE_ACTIVITY_SPLIT_EVALUATION_MIN_INTERVAL_MS,
   buildPressureAdmissionFailure,
   executePlan,
   executeStage,
   parseCallbackModuleArtifact,
-  reorderParams,
 } = SQL_QUERY_ENGINE_SHARED;
 
 class SQLQueryEngineStatementExecution extends
@@ -369,21 +368,13 @@ class SQLQueryEngineStatementExecution extends
 
     const queryStartMs = Date.now();
 
-    // Parse the SQL (check cache first)
+    // Parse the SQL through the parse cache, as every carrier of a write
+    // parses it (the one rendering of a partition write:
+    // partition-write-statement-rendering).
     let ast;
     try {
-      const dialect = options.dialect;
-      ast = this.parseCache.get(sql, dialect);
-      if (!ast) {
-        const parser = new SQLParser(sql, {dialect});
-        ast = parser.parse();
-        this.parseCache.set(sql, dialect, ast);
-        ast = this.parseCache.cloneAst(ast);
-      }
-      // If PG mode produced param mapping, reorder params
-      if (ast._paramMapping && ast._paramMapping.length > 0) {
-        params = reorderParams(params, ast._paramMapping);
-      }
+      ({ast, params} = parseStatement(sql, params, {
+        dialect: options.dialect, parses: this.parseCache}));
     } catch (parseError) {
       this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
         sql: sql.substring(0, LOCAL_NUM_ONE_HUNDRED),
@@ -629,13 +620,10 @@ class SQLQueryEngineStatementExecution extends
     }
 
     let ast;
-    let normalizedParams = params;
+    let normalizedParams;
     try {
-      const parser = new SQLParser(statement, {dialect: options.dialect});
-      ast = parser.parse();
-      if (ast._paramMapping && ast._paramMapping.length > 0) {
-        normalizedParams = reorderParams(params, ast._paramMapping);
-      }
+      ({ast, params: normalizedParams} = parseStatement(statement, params,
+        {dialect: options.dialect}));
     } catch (error) {
       return {
         success: false,

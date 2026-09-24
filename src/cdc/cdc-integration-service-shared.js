@@ -61,6 +61,7 @@ import {
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
+  linksPartitionWriteAnswer,
 } from '../control-plane/control-plane-error-classification.js';
 import {
   READ_MODEL_DIVERGENCE_TYPE,
@@ -753,6 +754,7 @@ export const CDC_INTEGRATION_SERVICE_SHARED = {
   isRetryableControlPlaneError,
   isSystemTableOwnerHandoffFailure,
   isTableInternalCachePropagationEnabled,
+  linksPartitionWriteAnswer,
   logSystemTableWriteFailure,
   materializeNormalizedDefaultValue,
   normalizeAuthoritativeFallbackOutcome,

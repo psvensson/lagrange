@@ -239,11 +239,11 @@ function getControlPlaneRetryAfterMs(value) {
   return retryAfterMs;
 }
 
-// Whether one candidate is retryable by its own text or markers. A partition
-// write answer is classified by its one owner: by the write kernel's code
-// when it carries one (the code decides, whatever its text), by the errors
-// owner's texts when only the text reached here; the fragments above are for
-// the failures that are not partition write answers.
+// Whether one candidate of a failure that links no partition write code is
+// retryable by its own text or markers (a failure linking one is decided by
+// its codes: decidePartitionWriteRetry). A partition write answer that
+// reached here as text alone is classified by the errors owner's texts; the
+// fragments above are for the failures that are not partition write answers.
 function isRetryableControlPlaneCandidate(candidate) {
   if (candidate?.deferRetry === true ||
       getDirectControlPlaneErrorCode(candidate) ===
@@ -251,18 +251,63 @@ function isRetryableControlPlaneCandidate(candidate) {
       getDirectControlPlaneRetryAfterMs(candidate) > 0) {
     return true;
   }
-  if (isPartitionWriteFailureCode(candidate?.failureCode)) {
-    return isRetryableWriteFailureCode(candidate.failureCode);
-  }
   const message = getDirectControlPlaneErrorMessage(candidate);
   return isRetryableWriteError(message) ||
     RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS.some((fragment) =>
       message.includes(fragment));
 }
 
+// How the partition write answers a failure links decide its retry (R07):
+// they did not fail for good (every linked partition answer's code is
+// retryable), one failed for good, or the failure links none - it is then
+// decided by what it carries besides a partition code.
+const PARTITION_WRITE_RETRY_DECISION = Object.freeze({
+  RETRYABLE: 'retryable',
+  FAILED_FOR_GOOD: 'failed_for_good',
+  NO_PARTITION_ANSWER: 'no_partition_answer',
+});
+
+/**
+ * How the partition write answers a failure links decide its retry, by the
+ * write kernel's codes alone and before any text: a distributed write's
+ * summary text (the coordinator's generic one, a retryable text for a
+ * failure that is not a partition answer) never retries a participant that
+ * failed for good, whether the write had one participant or several (quest
+ * reroute-carries-the-entry-id, verification round 3, F22 and F21).
+ * @param {*} value - A failure, a failed result, or an error.
+ * @return {string} A PARTITION_WRITE_RETRY_DECISION.
+ */
+function decidePartitionWriteRetry(value) {
+  const codes = collectLinkedControlPlaneFailures(value)
+    .map((candidate) => candidate?.failureCode)
+    .filter(isPartitionWriteFailureCode);
+  if (codes.length === 0) {
+    return PARTITION_WRITE_RETRY_DECISION.NO_PARTITION_ANSWER;
+  }
+  return codes.every(isRetryableWriteFailureCode) ?
+    PARTITION_WRITE_RETRY_DECISION.RETRYABLE :
+    PARTITION_WRITE_RETRY_DECISION.FAILED_FOR_GOOD;
+}
+
+/**
+ * Whether a failure links a partition write answer the write kernel codes:
+ * its retry is then decided by those codes alone (isRetryableControlPlaneError),
+ * and a retry loop's own texts never decide it.
+ * @param {*} value - A failure, a failed result, or an error.
+ * @return {boolean} Whether a linked partition answer carries a kernel code.
+ */
+function linksPartitionWriteAnswer(value) {
+  return Boolean(value) && decidePartitionWriteRetry(value) !==
+    PARTITION_WRITE_RETRY_DECISION.NO_PARTITION_ANSWER;
+}
+
 function isRetryableControlPlaneError(value) {
   if (!value) {
     return false;
+  }
+  const decision = decidePartitionWriteRetry(value);
+  if (decision !== PARTITION_WRITE_RETRY_DECISION.NO_PARTITION_ANSWER) {
+    return decision === PARTITION_WRITE_RETRY_DECISION.RETRYABLE;
   }
   return collectLinkedControlPlaneFailures(value).some(
     isRetryableControlPlaneCandidate);
@@ -369,6 +414,7 @@ export {
   getControlPlaneRetryAfterMs,
   hasReroutableWriteFailure,
   isRetryableControlPlaneError,
+  linksPartitionWriteAnswer,
   normalizeKnownNodeBootIncarnation,
   RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS,
 };

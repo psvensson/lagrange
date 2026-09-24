@@ -45,6 +45,7 @@ const {
   hasControlPlaneMutationRoutingGapFailureSignature,
   hasSystemTableOwnerHandoffFailureSignature,
   isRetryableControlPlaneError,
+  linksPartitionWriteAnswer,
   normalizeDeliveryPriority,
   resolveSystemTableMutationDeliveryPriority,
   shouldEmitTableWriteMetric,
@@ -655,12 +656,19 @@ class CDCRoutedMutationReadiness {
   }
 
   isTransientCdcError(errorLike) {
+    // A failure linking a partition write answer is decided by its code, by
+    // the control plane's one classifier, before any text below - the
+    // coordinator's summary text never retries a participant that failed
+    // for good (verification round 3, F22).
+    if (linksPartitionWriteAnswer(errorLike)) {
+      return isRetryableControlPlaneError(errorLike);
+    }
     const message =
       typeof errorLike === 'string' ?
         errorLike :
         errorLike?.message || errorLike?.error || '';
-    // A partition write answer: by the control plane's one classifier (its
-    // code when the caller holds it, else its text).
+    // A partition write answer that reached here as text: by the control
+    // plane's one classifier (its text).
     return (
       isRetryableControlPlaneError(errorLike) ||
       message.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||

@@ -33,22 +33,33 @@ import {formAdmittedGroup} from
   '../partition/partition-admitted-group-fixture.js';
 import {createControllablePartitionService} from
   '../partition/partition-service-test-support.js';
+import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
+import {sendLocalSystemTableWrite} from
+  '../../src/cdc/cdc-local-system-table-write-lane.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {ERRORS} from '../../src/constants/errors.js';
+import {TABLES} from '../../src/constants/index.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
+import {CDCOperation} from '../../src/partition/partition-service.js';
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
 import {PROPOSAL_QUEUE_PROPOSAL_STATE} from
   '../../src/partition/proposal-queue-constants.js';
+import {deriveParticipantEntryId} from
+  '../../src/query/distributed/distributed-write-coordinator.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RAFT_RS_SQL} from '../../src/raft/raft-rs-durable-store-constants.js';
+import {decodeCommittedProposal} from
+  '../../src/raft/raft-rs-proposal-codec.js';
+import {RAFT_RS_ENTRY_TYPE} from
+  '../../src/raft/raft-rs-ready-loop-constants.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 
 const TEMP_PREFIX = 'partition-write-answer-consumers-';
@@ -391,5 +402,84 @@ test('F-aj: the query executor answers an unknown outcome to its client ' +
     assert.equal(await waitFor(() => values('row-1').every((value) =>
       value === 'v+')), true, 'B applied once on every replica ' +
       `(${values('row-1')})`);
+  });
+});
+
+// The commands of a replica's durable log proposed under an entryId.
+function proposalsUnder(dbPath, groupId, entryId) {
+  const independent = new Database(dbPath, {readonly: true});
+  try {
+    return independent.prepare(RAFT_RS_SQL.SELECT_LOG_ENTRIES).all(groupId)
+      .filter((row) => Number(row.entry_type) === RAFT_RS_ENTRY_TYPE.NORMAL &&
+        typeof row.data === 'string' && row.data.length > 0)
+      .map((row) => decodeCommittedProposal(Buffer.from(row.data, 'base64')))
+      .filter((command) => command?.entryId === entryId);
+  } finally {
+    independent.close();
+  }
+}
+
+// Quest reroute-carries-the-entry-id, verification round 3 (B4): one logical
+// mutation reaches its partition in one rendering, whichever carrier sends
+// it. A client's keyed UPDATE goes through the SQL engine to the group's
+// leader while the CDC local lane sends the same UPDATE under the same key
+// to a follower, which forwards it to the leader: both carry the entryId the
+// coordinator derives for the partition and the statement as the engine
+// renders it, so the later arrival joins the earlier one's pending answer -
+// neither is refused as another statement - and the UPDATE is proposed and
+// applied once.
+test('B4: the engine and the CDC lane sending one keyed UPDATE at once are ' +
+  'one statement at the partition', {timeout: TEST_TIMEOUT_MS}, async () => {
+  await withPartitionedLeader(async ({services, members, partitionId,
+    dbFileOf, addressOf, waitFor}) => {
+    const [r1, r2] = services;
+    assert.equal((await r1.applyWrite({type: PARTITION_SERVICE_OPERATION
+      .INSERT, sql: INSERT_SQL, params: ['row-0', 'v'], entryId: 'b4-seed'}))
+      .success, true, 'setup: the group serves a write');
+    // The table's catalogue row at its partition epoch, as every replica
+    // and the engine read it (the engine fences the write by the epoch).
+    const tableRow = {table_id: TABLE_NAME, table_name: TABLE_NAME,
+      primaryKey: 'id', active_partition_version: 1};
+    for (const service of services) {
+      service.systemTableCache.applySystemTableChange(TABLES.TABLES,
+        CDCOperation.INSERT, {...tableRow});
+    }
+    const systemCache = systemCacheOf({partitionId,
+      leaderNodeId: members[0][1], services: members.map((member, index) =>
+        serviceRow({replicaId: member[0], nodeId: member[1],
+          address: addressOf(member),
+          role: index === 0 ? 'leader' : 'follower'}))});
+    systemCache.tables = [tableRow];
+    const engine = new SQLQueryEngine({systemCache, messageRouter: {
+      deliver: (address, message) => services[members.findIndex((member) =>
+        addressOf(member) === address)].handleRemoteQuery(message),
+    }});
+    const arrivals = [];
+    const applyWrite = r1.applyWrite.bind(r1);
+    r1.applyWrite = (entry, phaseTimings) => {
+      arrivals.push(r1.pendingWriteOutcomes.has(entry?.entryId));
+      return applyWrite(entry, phaseTimings);
+    };
+    const key = 'b4-one-statement-key';
+    const update = {sql: `UPDATE ${TABLE_NAME} SET value = ? WHERE id = ?`,
+      params: ['b4', 'row-0']};
+    const [routed, laned] = await Promise.all([
+      engine.executeQuery(update.sql, update.params, {idempotencyKey: key}),
+      sendLocalSystemTableWrite(new CDCIntegrationService({
+        nodeId: members[1][1]}), [r2], {...update, idempotencyKey: key}),
+    ]);
+    assert.deepEqual(arrivals, [false, true], 'setup: the second reached ' +
+      'the leader while the first was pending under the same entryId');
+    assert.equal(routed.success, true, 'the engine\'s send is answered ' +
+      `success (${JSON.stringify(routed.participantResults?.map(
+        (participant) => participant.failureCode))})`);
+    assert.equal(laned.result?.success, true, 'the lane\'s send is answered ' +
+      `success (${JSON.stringify(laned.result)})`);
+    const entryId = deriveParticipantEntryId(key, partitionId);
+    assert.equal(await waitFor(() => members.every((member) =>
+      rowValue(dbFileOf(member), 'row-0') === 'b4')), true,
+    'every replica applied it');
+    assert.equal(proposalsUnder(dbFileOf(members[0]), partitionId, entryId)
+      .length, 1, 'it was proposed once under the entryId');
   });
 });

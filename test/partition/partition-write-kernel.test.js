@@ -15,6 +15,8 @@ import * as partitionWriteKernel from
 import * as errorConstants from '../../src/constants/errors.js';
 import {settleFailedCommittedStatement} from
   '../../src/partition/partition-committed-statement-outcome.js';
+import {PARTITION_COMMITTED_COMMAND_ERROR_CODE} from
+  '../../src/partition/partition-service-constants.js';
 import * as proposalQueueConstants from
   '../../src/partition/proposal-queue-constants.js';
 import {ProposalQueue} from '../../src/partition/proposal-queue.js';
@@ -24,6 +26,7 @@ import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../../src/raft/raft-rs-durable-store-constants.js';
+import {encodeProposal} from '../../src/raft/raft-rs-proposal-codec.js';
 
 const TEST_ENTRY_ID = 'entry-1';
 const TEST_PROPOSED_AT = 1234;
@@ -497,4 +500,41 @@ test('F12: the sealed witness\'s write-answer fields are the kernel\'s ' +
     !sealedFields.includes(field)), ['changesKnown', 'statementBinding'],
   'the kernel carries beyond them only the replay\'s affected-row state ' +
     'and its statement binding');
+});
+
+// Verification round 3, F22 and F19: a key reused for another statement,
+// and a statement the proposal codec cannot encode, are answers the
+// partition refused for good - no attempt under the same key and statement
+// can succeed - so they are the kernel's own codes, never retried and never
+// routed again, with or without the write's entryId; the kernel's failure
+// builder keeps them as the answer's failureCode.
+test('F22/F19: the statement mismatch and an unencodable statement are ' +
+  'kernel codes that failed for good', async (t) => {
+  const {
+    buildPartitionWriteFailureResult: answerOf,
+    isPartitionWriteFailureCode,
+    isReroutableWriteFailureCode,
+    isRetryableWriteFailureCode,
+  } = partitionWriteKernel;
+  // Inputs: each refusal as its owner raises it.
+  const mismatch = Object.assign(new Error('refused'), {code:
+    PARTITION_COMMITTED_COMMAND_ERROR_CODE.ENTRY_ID_STATEMENT_MISMATCH});
+  let unencodable = null;
+  try {
+    encodeProposal([TEST_ENTRY_ID, [BigInt(1)]]);
+  } catch (error) {
+    unencodable = error;
+  }
+  for (const [name, raised] of Object.entries({mismatch, unencodable})) {
+    const answer = answerOf(raised, TEST_PARTITION_ID);
+    t.equal(answer.failureCode, raised?.code,
+      `${name}: the kernel keeps its code (${JSON.stringify(answer)})`);
+    t.equal(isPartitionWriteFailureCode(raised?.code), true,
+      `${name}: it is a partition write code`);
+    t.equal(isRetryableWriteFailureCode(raised?.code), false,
+      `${name}: it failed for good`);
+    t.equal(isReroutableWriteFailureCode(raised?.code,
+      {carriesEntryId: true}), false,
+    `${name}: it is never routed again, even under its entryId`);
+  }
 });

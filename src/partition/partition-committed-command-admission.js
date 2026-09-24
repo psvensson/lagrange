@@ -20,6 +20,11 @@
 //   a new write, so it is refused. (An absent entryId is minted by the entry
 //   builder before the command is asked about.)
 // - STATEMENT_MISSING: an SQL command type carries no statement.
+// - the proposal codec's UNENCODABLE (its own code, quest
+//   reroute-carries-the-entry-id, verification round 3, F19): an SQL
+//   command's statement - its text and parameters - is not one the codec
+//   can encode (a parameter JSON cannot carry), so it could never be
+//   proposed, bound to its entryId or joined to a pending write.
 //
 // It also answers which recognised types exist (the application's own
 // dispatch asks it): the type lists are frozen arrays in the constants owner,
@@ -32,6 +37,7 @@ import {
   PARTITION_COMMITTED_SQL_COMMAND_TYPES,
   PARTITION_SERVICE_ERROR_MSG,
 } from './partition-service-constants.js';
+import {encodeProposal} from '../raft/raft-rs-proposal-codec.js';
 
 // Who asks to propose a committed command. A transaction marker enters
 // consensus only from the transaction owner, after its local COMMIT or
@@ -104,6 +110,11 @@ function sqlCommandRefusal(command) {
   if (!isNonEmptyString(command.sql)) {
     return refused(PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_MISSING,
       PARTITION_SERVICE_ERROR_MSG.WRITE_STATEMENT_MISSING);
+  }
+  try {
+    encodeProposal([command.sql, command.params ?? []]);
+  } catch (error) {
+    return refused(error.code, error.message);
   }
   return ADMITTED;
 }

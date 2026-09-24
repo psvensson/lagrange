@@ -28,7 +28,7 @@
   "censusSize": 2171,
   "digest": "fnv1a32-f5bdefd2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-028f217a",
+  "observationDigest": "fnv1a32-cb6e74c7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2782,6 +2782,9 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/cdc/cdc-local-system-table-write-lane.js",
         "src/partition/proposal-queue-constants.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/cdc/cdc-pipeline-readiness-gate.property.test.js": {
@@ -3084,8 +3087,10 @@
     },
     "test/control-plane/control-plane-error-classification.test.js": {
       "files": [
+        "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-write-kernel.js",
         "src/partition/proposal-queue-constants.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port.js"
       ]
@@ -6353,6 +6358,7 @@
     "test/partition/partition-write-kernel.test.js": {
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
         "src/partition/partition-write-kernel.js",
         "src/partition/proposal-queue-constants.js",
         "src/raft/raft-operation-port-constants.js",
@@ -6569,12 +6575,15 @@
     },
     "test/query/partition-write-answer-consumers.test.js": {
       "files": [
+        "src/cdc/cdc-local-system-table-write-lane.js",
         "src/config/configuration-manager.js",
         "src/partition/partition-write-kernel.js",
         "src/partition/proposal-queue-constants.js",
+        "src/query/distributed/distributed-write-coordinator.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-provider-contract-constants.js",
         "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-proposal-codec.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/partition/partition-admitted-group-fixture.js",
         "test/partition/partition-service-test-support.js"
@@ -6719,6 +6728,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-shared.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-service-constants.js",
         "src/partition/proposal-queue-constants.js",
         "src/raft/raft-operation-port-constants.js",
@@ -6739,6 +6749,7 @@
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-provider-contract-constants.js",
         "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-proposal-codec-constants.js",
         "src/raft/raft-rs-proposal-codec.js",
         "src/raft/raft-rs-ready-loop-constants.js"
       ]

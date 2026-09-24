@@ -672,13 +672,11 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       entryType: entry.type,
     });
     const entryKey = this.getCommittedEntryKey(entry);
-    const pendingOutcome = this.getPendingCommittedWriteOutcome(entry);
-    if (pendingOutcome) {
-      return pendingOutcome;
-    }
-    // A command the application would refuse, or consume without answering
-    // its proposer, is refused before it enters consensus (the admission
-    // owner decides; a forwarded write arrives here too).
+    // A command the application would refuse, consume without answering its
+    // proposer, or could not propose (a statement the proposal codec cannot
+    // encode) is refused before it enters consensus, and before it is
+    // joined to a write pending under its entryId (the admission owner
+    // decides; a forwarded write arrives here too).
     const admission = admitCommittedCommand(entry, {
       origin: PARTITION_COMMITTED_COMMAND_ORIGIN.WRITE_PATH});
     if (!admission.admitted) {
@@ -688,6 +686,10 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         applyStartMs,
       );
       return committedCommandRefusalResult(admission, this.partitionId);
+    }
+    const pendingOutcome = this.getPendingCommittedWriteOutcome(entry);
+    if (pendingOutcome) {
+      return pendingOutcome;
     }
     // A settled entry key is answered from its durable outcome row, before
     // anything is proposed: a retry never adds a log entry, and its answer is

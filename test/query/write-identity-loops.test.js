@@ -37,10 +37,14 @@ import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {CONTROL_PLANE_MUTATION_OPERATION} from
   '../../src/control-plane/control-plane-system-table-gateway-shared.js';
+import {PARTITION_COMMITTED_STATEMENT_BINDING} from
+  '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {ReplicaOperationRepository} from
   '../../src/rebalancer/replica-operation-repository.js';
 
 const TEST_TIMEOUT_MS = 60000;
+// The refusal code the quest names (the name of the contract).
+const STATEMENT_MISMATCH_CODE = 'partition_write_entry_id_statement_mismatch';
 const NODE_ID = 'identity-node';
 const ROW_ID = 'op-identity';
 const SEED = Object.freeze({sql: INSERT_ROW_SQL, params: [ROW_ID, 'pending']});
@@ -193,5 +197,130 @@ async () => {
         'S4: the repository made a second attempt after the unknown outcome');
       assertAppliedOnceUnderOneIdentity(owners.replica, run, 'S4 row');
       assertOneIdempotencyKey(run.engineCalls, 'S4');
+    });
+});
+
+// Verification round 3, B4: every carrier of a mutation's entryId sends the
+// statement in the one rendering the engine path sends, so the partition
+// sees one statement per logical mutation. The lane is offered its local
+// replica on the first attempt only (the replica stops being a local leader
+// after the unknown outcome - the usual cause of one), so the routed engine
+// path sends the mutation again under the entryId the lane's attempt
+// settled: the partition answers it as a replay of the same statement, and
+// the loop answers success.
+function offerTheLaneOnce(owners) {
+  let offers = 0;
+  owners.cdc.resolveLocalSystemTableServices = () => {
+    offers += 1;
+    return offers === 1 ? [owners.replica.service] : [];
+  };
+}
+
+// The engine's deliveries of a statement to the replica, and their answers.
+function deliveriesOf(client, statement) {
+  const params = JSON.stringify(statement.params);
+  return client.router.deliveries.filter((delivery) =>
+    JSON.stringify(delivery.params) === params);
+}
+
+function assertEngineResendIsReplay(owners, run, loop) {
+  const deliveries = deliveriesOf(owners.client, MUTATION);
+  assert.equal(deliveries.length, 1, `${loop}: the engine path sent the ` +
+    `mutation once (${JSON.stringify(deliveries.map((d) => d.answer))})`);
+  assert.equal(deliveries[0].answer?.idempotentReplay, true,
+    `${loop}: the engine's re-send is answered from the lane attempt's ` +
+    `outcome row (${JSON.stringify(deliveries[0].answer)})`);
+  assert.equal(deliveries[0].answer?.statementBinding,
+    PARTITION_COMMITTED_STATEMENT_BINDING.SAME_STATEMENT,
+    `${loop}: as a replay of the same statement`);
+  assert.equal(run.engineCalls.length, 1,
+    `${loop}: the loop called the engine once after the lane`);
+  assertAppliedOnceUnderOneIdentity(owners.replica, run, loop);
+}
+
+test('B4 V2: the CDC routed mutation whose lane attempt was answered ' +
+  'unknown is answered a replay by the engine path, and succeeds once',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await withLoopOwners('identity-loop-lane-once', {cdcAttempts: 6},
+    async (owners) => {
+      offerTheLaneOnce(owners);
+      const run = await afterAnUnknownOutcome(owners, () =>
+        owners.cdc.executeSQLViaQueryEngine(MUTATION.sql, MUTATION.params,
+          {queryTimeoutMs: 6000}));
+      assertEngineResendIsReplay(owners, run, 'V2');
+    });
+});
+
+test('B4 V3: the rebalancer\'s row mutation whose lane attempt was answered ' +
+  'unknown is answered a replay by the engine path, and succeeds once',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await withLoopOwners('identity-loop-lane-once-row', {cdcAttempts: 1},
+    async (owners) => {
+      offerTheLaneOnce(owners);
+      const run = await afterAnUnknownOutcome(owners, () =>
+        owners.repository.executeReplicaOperationGatewayMutationWithRetry({
+          operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+          tableName: IDENTITY_TABLE,
+          whereClause: {operation_id: ROW_ID},
+          data: {status: MUTATION.params[0]},
+        }, {}));
+      assertEngineResendIsReplay(owners, run, 'V3');
+    });
+});
+
+// Verification round 3, F22: a partition's refusal of a key reused for
+// another statement failed for good - no attempt can succeed under it - so
+// a loop sends that statement once and answers the refusal, whatever the
+// coordinator's summary text says. The key is settled for MUTATION first;
+// the loop is then handed the key with another statement (the CDC mutation
+// takes its caller's key; the rebalancer's repository is made to mint it).
+const OTHER = Object.freeze({sql: UPDATE_ROW_SQL, params: ['other', ROW_ID]});
+const REUSED_KEY = 'identity-loop-reused-key';
+
+async function sentOnceUnderASettledKey(owners, runLoop, loop) {
+  const settled = await owners.client.engine.executeQuery(MUTATION.sql,
+    MUTATION.params, {idempotencyKey: REUSED_KEY});
+  assert.equal(settled.success, true, `setup: ${loop}: the key is settled`);
+  const engineCalls = [];
+  const execute = owners.client.engine.executeQuery.bind(owners.client.engine);
+  owners.client.engine.executeQuery = (sql, params, options) => {
+    engineCalls.push(options?.idempotencyKey ?? null);
+    return execute(sql, params, options);
+  };
+  let answer;
+  try {
+    answer = await runLoop();
+  } catch (error) {
+    answer = error;
+  }
+  const deliveries = deliveriesOf(owners.client, OTHER);
+  assert.deepEqual(deliveries.map((delivery) => delivery.answer?.failureCode),
+    [STATEMENT_MISMATCH_CODE], `${loop}: the partition refused the other ` +
+    'statement under the settled key, and it was sent once');
+  assert.deepEqual(engineCalls, [REUSED_KEY],
+    `${loop}: the loop attempted it once`);
+  assert.notEqual(answer?.success, true, `${loop}: the loop does not answer ` +
+    'success');
+  assert.equal(owners.replica.valueOf(ROW_ID), MUTATION.params[0],
+    `${loop}: the other statement was not applied`);
+}
+
+test('F22: the CDC routed mutation sends a statement refused under its ' +
+  'settled key once', {timeout: TEST_TIMEOUT_MS}, async () => {
+  await withLoopOwners('identity-loop-mismatch-cdc', {cdcAttempts: 6},
+    (owners) => sentOnceUnderASettledKey(owners, () =>
+      owners.cdc.executeSQLViaQueryEngine(OTHER.sql, OTHER.params,
+        {queryTimeoutMs: 6000, idempotencyKey: REUSED_KEY}), 'CDC'));
+});
+
+test('F22: the rebalancer\'s mutation retry sends a statement refused ' +
+  'under its settled key once', {timeout: TEST_TIMEOUT_MS}, async () => {
+  await withLoopOwners('identity-loop-mismatch-rebalancer', {cdcAttempts: 1},
+    (owners) => {
+      owners.repository.mintOperationMutationIdempotencyKey = () =>
+        REUSED_KEY;
+      return sentOnceUnderASettledKey(owners, () =>
+        owners.repository.executeOperationMutationWithRetry(OTHER.sql,
+          OTHER.params, {}), 'rebalancer');
     });
 });

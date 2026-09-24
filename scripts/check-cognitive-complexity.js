@@ -33,7 +33,10 @@ const TARGET_THRESHOLD = 20;
 // 2026-09-15: tightened 161 -> 160 after the remove-safety planning-read
 // split replaced the generic reader's branching with two named contracts.
 // 2026-09-23: tightened 160 -> 159 after A11 of raft-rs-single-path-partition-cutover
-const BASELINE_COUNT = 159;
+// 2026-09-24: tightened 159 -> 158 after reroute-carries-the-entry-id A4 moved
+// the engine's statement parse to the one partition-write rendering owner
+// (measured with the checker's tightening hint).
+const BASELINE_COUNT = 158;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';
