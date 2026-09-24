@@ -184,18 +184,13 @@ describe('report metadata source fingerprint', () => {
 describe('distributed execution metadata', () => {
   it('records target profile and physical hosts without adding a raft selector',
     () => {
-      const metadata = runModule.buildReportMetadata(
-        {config: 'local-three-node.json', scenario: 'rolling-restart'},
-        {raftProvider: 'liferaft'},
-        {enabled: false},
-        {
-          [DISTRIBUTED_EXECUTION_ENV.TARGET]:
-            DISTRIBUTED_EXECUTION_TARGET.LAB,
-          [DISTRIBUTED_EXECUTION_ENV.PROFILE]:
-            DISTRIBUTED_MATRIX_PROFILE.TOPOLOGY,
-          [DISTRIBUTED_EXECUTION_ENV.HOSTS]: 'lab-a,lab-b,lab-c',
-        },
-      );
+      const metadata = runModule.buildDistributedExecutionMetadata({
+        [DISTRIBUTED_EXECUTION_ENV.TARGET]:
+          DISTRIBUTED_EXECUTION_TARGET.LAB,
+        [DISTRIBUTED_EXECUTION_ENV.PROFILE]:
+          DISTRIBUTED_MATRIX_PROFILE.TOPOLOGY,
+        [DISTRIBUTED_EXECUTION_ENV.HOSTS]: 'lab-a,lab-b,lab-c',
+      });
 
       assert.equal(
         metadata.executionTarget,
@@ -210,7 +205,7 @@ describe('distributed execution metadata', () => {
         'lab-b',
         'lab-c',
       ]);
-      assert.equal(metadata.raftProvider, 'liferaft');
+      assert.equal(Object.hasOwn(metadata, 'raftProvider'), false);
     });
 });
 
