@@ -20,6 +20,12 @@ const DISTRIBUTED_MATRIX_INDEX_FILL = '0';
 const DISTRIBUTED_MATRIX_FIRST_INDEX = 1;
 const DISTRIBUTED_MATRIX_MIN_SIZE = 1;
 const DISTRIBUTED_MATRIX_GCP_NODES_PER_HOST = 1;
+const DISTRIBUTED_MATRIX_ERROR_RUN_ID =
+  'Distributed matrix execution plan requires runId';
+const DISTRIBUTED_MATRIX_ERROR_GCP_SIZE =
+  'Distributed matrix GCP target requires a valid cluster size';
+const DISTRIBUTED_MATRIX_ERROR_GCP_TEMPLATE =
+  'Distributed matrix GCP target requires template.gcp';
 
 function normalizeProfile(profile) {
   const normalized = profile || DISTRIBUTED_MATRIX_PROFILE.CANONICAL;
@@ -81,7 +87,7 @@ function buildDistributedMatrixExecutionPlan({
   const normalizedTarget = normalizeTarget(target);
   const normalizedProfile = normalizeProfile(profile);
   if (typeof runId !== 'string' || runId.length === 0) {
-    throw new Error('Distributed matrix execution plan requires runId');
+    throw new Error(DISTRIBUTED_MATRIX_ERROR_RUN_ID);
   }
 
   const entries = listDistributedMatrixEntries(normalizedProfile);
@@ -120,10 +126,10 @@ function buildDistributedMatrixExecutionPlan({
 function buildGcpTargetConfig(baseConfig, gcpTemplate) {
   const size = Number(baseConfig?.size);
   if (!Number.isSafeInteger(size) || size < DISTRIBUTED_MATRIX_MIN_SIZE) {
-    throw new Error('Distributed matrix GCP target requires a valid cluster size');
+    throw new Error(DISTRIBUTED_MATRIX_ERROR_GCP_SIZE);
   }
   if (!gcpTemplate?.gcp || typeof gcpTemplate.gcp !== 'object') {
-    throw new Error('Distributed matrix GCP target requires template.gcp');
+    throw new Error(DISTRIBUTED_MATRIX_ERROR_GCP_TEMPLATE);
   }
 
   const docker = {
