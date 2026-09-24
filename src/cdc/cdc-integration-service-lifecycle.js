@@ -1,4 +1,5 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
+import {CDC_ERROR_CODE} from './cdc-constants.js';
 
 const {
   CDCEventHandler,
@@ -144,6 +145,29 @@ class CDCIntegrationServiceLifecycleMethods {
    */
   markShuttingDown() {
     this.isShuttingDown = true;
+  }
+
+  /**
+   * The answer of a write that finds no engine. Not wired yet is the startup
+   * answer, retryable once the engine arrives. Torn down (marked shutting
+   * down, the engine released) is the terminal typed SHUT_DOWN answer: no
+   * engine will arrive, and a retry would only re-arm against the released
+   * service.
+   * @return {Error}
+   */
+  buildMissingSqlQueryEngineError() {
+    if (this.isShuttingDown === true) {
+      const error = new Error(CDC_ERROR_MSG.CDC_SHUT_DOWN);
+      error.code = CDC_ERROR_CODE.SHUT_DOWN;
+      return error;
+    }
+    const error = new Error(
+      `${CDC_ERROR_MSG.CDC_ENGINE_MISSING_PREFIX}` +
+        `${CDC_ERROR_MSG.CDC_ENGINE_MISSING_DETAIL}`,
+    );
+    error.deferRetry = true;
+    error.retryAfterMs = Math.max(1, this.retryDelayMs || 1);
+    return error;
   }
 
   /**

@@ -158,6 +158,9 @@ const CDC_ERROR_MSG = Object.freeze({
   UPSERT_VALID_COLUMNS_PREFIX: 'UPSERT requires data with valid columns for ',
   CDC_ENGINE_MISSING_PREFIX: 'CDCIntegrationService not properly initialized: ',
   CDC_ENGINE_MISSING_DETAIL: 'sqlQueryEngine not provided',
+  CDC_SHUT_DOWN:
+    'CDCIntegrationService shut down: its sqlQueryEngine was released and ' +
+    'the write was not routed',
   INSERT_FAILED: 'Insert failed',
   UPDATE_FAILED: 'Update failed',
   DELETE_FAILED: 'Delete failed',
@@ -183,11 +186,21 @@ const CDC_ERROR_MSG = Object.freeze({
     'Cannot re-enable bootstrap mode after it has been cleared',
 });
 
+// The service's typed answers. A write that reaches the service after it was
+// marked shutting down, with its engine released, answers SHUT_DOWN: the
+// service is torn down, not waiting to be wired, so no retry through it can
+// succeed and the answer is terminal. An engine missing before the service is
+// wired stays the retryable startup answer.
+const CDC_ERROR_CODE = Object.freeze({
+  SHUT_DOWN: 'CDC_INTEGRATION_SERVICE_SHUT_DOWN',
+});
+
 export {
   CDC_CONFIG_KEY,
   CDC_DEFAULTS,
   CDC_EPOCH_CONFIG_KEY,
   CDC_EVENT,
+  CDC_ERROR_CODE,
   CDC_ERROR_MSG,
   CDC_LOG_MSG,
   CDC_OPERATION_LABEL,

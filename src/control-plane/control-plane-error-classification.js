@@ -6,6 +6,7 @@ import {
   PRESSURE_GOVERNOR_ERROR_CODE,
 } from './pressure-governor.js';
 import {ROUTER_ERROR_MSG} from '../constants/transport.js';
+import {CDC_ERROR_CODE} from '../cdc/cdc-constants.js';
 import {
   isPartitionWriteFailureCode,
   isRetryableWriteFailureCode,
@@ -248,12 +249,35 @@ function isRetryableControlPlaneCandidate(candidate) {
       message.includes(fragment));
 }
 
-function isRetryableControlPlaneError(value) {
+function isControlPlaneWriterShutDownCandidate(candidate) {
+  return getDirectControlPlaneErrorCode(candidate) === CDC_ERROR_CODE.SHUT_DOWN;
+}
+
+/**
+ * Whether a write failed because this node's writer (its CDC integration
+ * service) was torn down: the service's typed SHUT_DOWN answer, on the
+ * failure or on any failure linked to it. Terminal: no retry through a
+ * torn-down writer can succeed, so it decides whatever else is linked.
+ * @param {*} value - The failed result or error.
+ * @return {boolean} Whether the writer answered that it was shut down.
+ */
+function isControlPlaneWriterShutDown(value) {
   if (!value) {
     return false;
   }
   return collectLinkedControlPlaneFailures(value).some(
-    isRetryableControlPlaneCandidate);
+    isControlPlaneWriterShutDownCandidate);
+}
+
+function isRetryableControlPlaneError(value) {
+  if (!value) {
+    return false;
+  }
+  const linkedFailures = collectLinkedControlPlaneFailures(value);
+  if (linkedFailures.some(isControlPlaneWriterShutDownCandidate)) {
+    return false;
+  }
+  return linkedFailures.some(isRetryableControlPlaneCandidate);
 }
 
 function resolveControlPlanePrimaryFailureReason(summary) {
@@ -338,6 +362,7 @@ export {
   getControlPlaneFailureSummary,
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
+  isControlPlaneWriterShutDown,
   isRetryableControlPlaneError,
   normalizeKnownNodeBootIncarnation,
   RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS,

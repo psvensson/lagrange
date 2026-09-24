@@ -14,6 +14,9 @@ import {
   isEvidenceAbsentReadinessDenialSnapshot,
 } from '../control-plane/readiness-denial-classification.js';
 import {
+  resolvePublishedActiveNodeIds,
+} from '../control-plane/active-node-publication-snapshots.js';
+import {
   AVAILABLE_PLANNING_SURFACE_ORDER,
   hasAvailablePriorityRecoveryPlanningProvider as hasAvailablePlanningProvider,
   readAvailablePriorityRecoveryPlanningSnapshot as readAvailablePlanningSnapshot,
@@ -169,28 +172,19 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
   }
 
   /**
-   * Resolve the steady-state published active-node set when available.
+   * Resolve the steady-state published active-node set when available. What
+   * a published row's member list means (none, or which nodes) is the
+   * publication snapshot owner's answer; this reader only picks the row.
    * @return {Set<string>|null}
    * @private
    */
   getPublishedActiveNodeIdSet() {
-    const publicationRow = this.getLatestPublishedMembershipRow();
-    if (!publicationRow) {
-      return null;
-    }
-
-    const nodeIds = Array.isArray(publicationRow.publishedActiveNodeIds) ?
-      publicationRow.publishedActiveNodeIds :
-      Array.isArray(publicationRow.published_active_node_ids) ?
-        publicationRow.published_active_node_ids :
-        [];
-    return new Set(
-      nodeIds.filter(
-        (nodeId) =>
-          typeof nodeId === 'string' &&
-          nodeId.length > UNIFIED_REBALANCER_LITERAL.ZERO,
-      ),
-    );
+    const publishedActiveNodeIds = resolvePublishedActiveNodeIds({
+      latestPublishedPublicationRow: this.getLatestPublishedMembershipRow(),
+    });
+    return publishedActiveNodeIds === null ?
+      null :
+      new Set(publishedActiveNodeIds);
   }
 
   /**

@@ -72,6 +72,16 @@ const MEMBERSHIP_MULTI_PARTITION_MSG =
 const MEMBERSHIP_RECONCILE_DEFERRED_NOT_WRITE_LEADER_MSG =
   'Membership reconcile deferred: not the control_plane_publications write-leader';
 const NOT_PUBLICATIONS_WRITE_LEADER_REASON = 'not_publications_write_leader';
+// The first publication of a cluster names its first members. A candidate
+// with no member yet (the seed's READY heartbeat has not committed) defers
+// instead of publishing an epoch with an empty member set: that row would
+// read as "published, nobody" to every reader until the next epoch. The READY
+// heartbeat is itself a reconcile wake (the priority-recovery visibility
+// listener enqueues on a published node ready lease), so the first epoch
+// names the seed. Once any epoch exists, an empty candidate is a real
+// departure and is published like any other change.
+const EMPTY_FIRST_PUBLICATION_CANDIDATE_REASON =
+  'first_publication_candidate_has_no_members';
 
 // CL-001 variant D: a non-write-leader's control_plane_publications cache is fed
 // ONLY by the leader's point-in-time CDC fan-out (leader-gated emission, no replay
@@ -163,6 +173,7 @@ const CONVERGENCE_REASON = Object.freeze({
   IN_FLIGHT: 'reconcile-in-flight',
   ERROR: 'error',
   NOT_WRITE_LEADER: 'not-publications-write-leader',
+  EMPTY_FIRST_CANDIDATE: 'empty-first-publication-candidate',
 });
 const CONVERGENCE_OUTCOME = Object.freeze({
   RECONCILE_COMMITTED: 'reconcile-committed',
@@ -462,6 +473,22 @@ class MembershipPublicationCoordinatorReconcile extends
             latestPublicationRow,
             latestPublishedPublicationRow,
           });
+          if (
+            !latestPublicationRow &&
+            normalizeNodeIdList(candidate.publishedActiveNodeIds).length === 0
+          ) {
+            this._emitConvergenceDecisionTrace({
+              decision: CONVERGENCE_DECISION.DEFER,
+              reason: CONVERGENCE_REASON.EMPTY_FIRST_CANDIDATE,
+              ownerKey,
+            });
+            return {
+              deferred: true,
+              reason: EMPTY_FIRST_PUBLICATION_CANDIDATE_REASON,
+              ownerKey,
+              candidate,
+            };
+          }
           const workflow = await this.ensureWorkflow(ownerKey, candidate);
           if (latestPublicationRow && candidate.changed !== true) {
             const shouldRefreshPriorityMetadata =
@@ -926,5 +953,6 @@ export {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
   MembershipPublicationCoordinatorReconcile,
   shouldDeferMembershipReconcileToWriteLeader,
+  EMPTY_FIRST_PUBLICATION_CANDIDATE_REASON,
   NOT_PUBLICATIONS_WRITE_LEADER_REASON,
 };

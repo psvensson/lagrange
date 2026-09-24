@@ -1,5 +1,6 @@
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
+  isControlPlaneWriterShutDown,
 } from './control-plane-error-classification.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {publicationRowSatisfiesDesiredState} from './control-plane-publication-merge.js';
@@ -91,7 +92,13 @@ class MembershipPublicationCoordinatorPersist extends
             publicationOptions,
           );
         } catch (error) {
-          if (!canVerifyPersistedRow || attempt + 1 >= maxAttempts) {
+          // A torn-down writer is terminal: no read-back or re-attempt
+          // through it can land the row.
+          if (
+            !canVerifyPersistedRow ||
+            attempt + 1 >= maxAttempts ||
+            isControlPlaneWriterShutDown(error)
+          ) {
             throw error;
           }
           const durableRow = await this.controlPlanePublicationsOwner.getPublication(
