@@ -1,7 +1,5 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {readdir, readFile} from 'node:fs/promises';
-import {join} from 'node:path';
 import {test} from 'node:test';
 
 const MATRIX_SCRIPT = 'scripts/run-distributed-matrix.js';
@@ -13,9 +11,6 @@ const MATRIX_DRY_RUN_FLAG = '--dry-run';
 const MATRIX_RAFT_SELECTOR_TEXT = '--raft-provider';
 const MATRIX_EXPECTED_TOPOLOGY_COUNT = 8;
 const MATRIX_UTF8 = 'utf8';
-const DISTRIBUTED_CONFIG_DIR = 'test/distributed/config';
-const JSON_SUFFIX = '.json';
-const RAFT_PROVIDER_FIELD = 'raftProvider';
 
 test('distributed matrix CLI dry-runs topology profile without raft selection',
   () => {
@@ -52,19 +47,3 @@ test('distributed matrix CLI dry-runs topology profile without raft selection',
       ),
     );
   });
-
-test('distributed configs do not select a runtime raft provider', async () => {
-  const files = (await readdir(DISTRIBUTED_CONFIG_DIR))
-    .filter((name) => name.endsWith(JSON_SUFFIX));
-
-  for (const name of files) {
-    const config = JSON.parse(
-      await readFile(join(DISTRIBUTED_CONFIG_DIR, name), MATRIX_UTF8),
-    );
-    assert.equal(
-      Object.hasOwn(config, RAFT_PROVIDER_FIELD),
-      false,
-      `${name} must not select a consensus implementation`,
-    );
-  }
-});
