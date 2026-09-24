@@ -34,6 +34,7 @@ const MIN_PHYSICAL_HOSTS = 2;
 const MIN_CONFIG_SIZE = 1;
 const DEFAULT_SCENARIO_PART = 'matrix';
 const NAME_SEPARATOR = '-';
+const HOST_LIST_SEPARATOR = ',';
 const CONFIG_DIR = Object.freeze({ROOT: '.tmp', LEAF: 'home-lab'});
 const HARNESS_RUNNER = 'test/distributed/run.js';
 const HARNESS_ARG = Object.freeze({
@@ -210,7 +211,7 @@ export async function runHarness({
       [DISTRIBUTED_EXECUTION_ENV.TARGET]: DISTRIBUTED_EXECUTION_TARGET.LAB,
       [DISTRIBUTED_EXECUTION_ENV.HOSTS]: nodes
         .map((node) => node.name)
-        .join(','),
+        .join(HOST_LIST_SEPARATOR),
     };
     await run(process.execPath, args, {env: childEnvironment});
   } finally {
