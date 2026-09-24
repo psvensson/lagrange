@@ -124,8 +124,13 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## distributed
 
-- `distributed:all` — Run all distributed scenarios with verbose output.
-- `distributed:rerun-failed` — Re-run only the distributed scenarios that failed in the last run.
+- `distributed:all` — Run the canonical distributed scenario matrix locally with verbose output.
+- `distributed:gcp` — Run the canonical distributed scenario matrix on provisioned GCP Docker hosts.
+- `distributed:gcp:topology` — Run the real topology/failure scenario profile on provisioned GCP Docker hosts.
+- `distributed:lab` — Run the canonical distributed scenario matrix on registered lab Docker hosts.
+- `distributed:lab:topology` — Run the real topology/failure scenario profile on registered lab Docker hosts.
+- `distributed:matrix` — Run the distributed scenario matrix on a selected local, lab, or GCP target and canonical or topology profile.
+- `distributed:rerun-failed` — Re-run only scenarios whose latest local-target distributed report still fails.
 - `distributed:stop-containers` — Stop local Docker containers and Node processes created by the distributed harness.
 
 ## docs
@@ -293,4 +298,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-191 scripts indexed; 31 have a curated description, 160 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+196 scripts indexed; 36 have a curated description, 160 fall back to their raw command. Improve coverage in the two sources named in the header comment.
