@@ -35,6 +35,7 @@ import {
   loadScenarioModule,
   shouldPrintLiveLogEntry,
   formatRunSummary,
+  buildDistributedExecutionMetadata,
 } from '../../run.js';
 import {
   CLI,
@@ -184,7 +185,7 @@ describe('report metadata source fingerprint', () => {
 describe('distributed execution metadata', () => {
   it('records target profile and physical hosts without adding a raft selector',
     () => {
-      const metadata = runModule.buildDistributedExecutionMetadata({
+      const metadata = buildDistributedExecutionMetadata({
         [DISTRIBUTED_EXECUTION_ENV.TARGET]:
           DISTRIBUTED_EXECUTION_TARGET.LAB,
         [DISTRIBUTED_EXECUTION_ENV.PROFILE]:
