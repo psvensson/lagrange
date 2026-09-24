@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1908,
+    "unit": 1909,
     "integration": 75,
     "bootstrap": 184,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2174,
-  "digest": "fnv1a32-5f5f4b7c",
+  "censusSize": 2175,
+  "digest": "fnv1a32-9689c8e4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -325,6 +325,7 @@
     "test/cdc/cdc-shutdown-terminal-owner-write.test.js": "unit",
     "test/cdc/cdc-sql-builder.test.js": "unit",
     "test/cdc/cdc-system-table-write-failure-participant-detail.test.js": "unit",
+    "test/cdc/cdc-terminal-gate-inflight.test.js": "unit",
     "test/cdc/current-epoch-propagation.integration.test.js": "integration",
     "test/cdc/endpoint-cdc-propagation.property.test.js": "unit",
     "test/cdc/node-address-default-bug.test.js": "unit",

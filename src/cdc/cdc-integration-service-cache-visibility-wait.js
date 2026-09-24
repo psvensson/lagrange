@@ -11,14 +11,12 @@ import {
 } from './cdc-integration-service-cache-divergence.js';
 import {
   CACHE_REPAIR_READ_AUTHORITY,
+  applyAuthoritativeCacheRepair,
   applyAuthoritativeCacheSweep,
   authoritativeReadRowsAreValid,
-  cacheRepairSatisfiedAfterApply,
   cacheRecordChangedDuringAuthoritativeAbsenceRead,
   captureAuthoritativeCacheSweepSnapshot,
   captureCacheRecordBeforeAbsenceRepair,
-  doesCachedRowSatisfyAuthoritativeRepair,
-  resolveAuthoritativeCacheRepairMutationMode,
   resolveCacheVisibilityRepairReadAuthority,
 } from './cdc-integration-service-cache-visibility-authority.js';
 
@@ -691,68 +689,9 @@ class CDCIntegrationServiceCacheVisibilityWait {
    * @return {boolean}
    * @private
    */
-  applyAuthoritativeCacheRepair(
-    tableName,
-    operation,
-    row,
-    key,
-    options = {},
-  ) {
-    if (
-      !this.cacheMutationTarget ||
-      typeof this.cacheMutationTarget.applySystemTableChange !==
-        'function' ||
-      !row ||
-      typeof row !== 'object'
-    ) {
-      return false;
-    }
-    const canonicalRow = canonicalizeSystemTableRow(tableName, row);
-    const mutationMode = resolveAuthoritativeCacheRepairMutationMode(
-      operation,
-      options?.mutationMode,
-    );
-    const currentRow =
-      typeof this.cacheMutationTarget.get === 'function' ?
-        this.cacheMutationTarget.get(tableName, key) :
-        null;
-    const currentRowSatisfiesRepair =
-      doesCachedRowSatisfyAuthoritativeRepair({
-        tableName,
-        operation,
-        currentRow,
-        authoritativeRow: canonicalRow,
-        mutationMode,
-      });
-    if (currentRowSatisfiesRepair) {
-      // A complete authoritative observation is already the cache state. Keep
-      // reconciliation idempotent at the cache boundary: reapplying the row
-      // would mint a mutation generation and wake every readiness/publication
-      // consumer even though no semantic state changed.
-      return true;
-    }
-    const causeId = `authoritative-repair:${tableName}:${key}`;
-    const mutationOptions = {
-      causeId,
-      mutationMode,
-      authoritativeObservedAtMs: options?.authoritativeObservedAtMs,
-      authoritativeReadStartedAtMs:
-        options?.authoritativeReadStartedAtMs,
-    };
-    this.cacheMutationTarget.applySystemTableChange(
-      tableName,
-      operation,
-      canonicalRow,
-      mutationOptions,
-    );
-    return cacheRepairSatisfiedAfterApply({
-      cacheMutationTarget: this.cacheMutationTarget,
-      tableName,
-      operation,
-      authoritativeRow: canonicalRow,
-      mutationMode,
-      key,
-    });
+  applyAuthoritativeCacheRepair(tableName, operation, row, key, options = {}) {
+    return applyAuthoritativeCacheRepair(
+      this, tableName, operation, row, key, options);
   }
 
   /** Apply a leader-observed absence sweep through the cache owner. */

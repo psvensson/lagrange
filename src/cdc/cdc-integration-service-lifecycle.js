@@ -200,6 +200,30 @@ class CDCIntegrationServiceLifecycleMethods {
   }
 
   /**
+   * The owner's one terminal gate. Every CDC-owned operation class passes it
+   * at its choke point, before it issues work (cdc-terminal-gate.js): an
+   * authoritative read stage, an authoritative cache repair or sweep, a routed
+   * mutation hop. While the service is live it answers nothing (null). Once
+   * terminal, it answers the typed SHUT_DOWN: NOT_ROUTED when nothing was
+   * issued before, or, when an earlier hop of the same operation was issued
+   * (`priorAnswer`, its answer), resolveShutDownAnswer's NOT_CONFIRMED with
+   * that answer as the cause, since that hop's outcome is not known here.
+   * @param {string} stage - A CDC_TERMINAL_STAGE.
+   * @param {*} [priorAnswer] - The answer of an earlier hop, when one ran.
+   * @return {Error|null} The terminal answer, or null while live.
+   */
+  refuseIfTerminal(stage, priorAnswer = undefined) {
+    if (this.isShuttingDown !== true) {
+      return null;
+    }
+    const answer = priorAnswer === undefined ?
+      this.buildShutDownAnswer(CDC_SHUT_DOWN_WRITE_OUTCOME.NOT_ROUTED) :
+      this.resolveShutDownAnswer(priorAnswer);
+    answer.stage = stage;
+    return answer;
+  }
+
+  /**
    * The answer a write gets from this service. Before shutdown it is the
    * failure itself. Once the service is shutting down it is the typed
    * terminal SHUT_DOWN, whatever the failure was: no engine will arrive and

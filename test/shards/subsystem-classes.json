@@ -5,7 +5,7 @@
     "admin-diagnostics": 113,
     "architecture-governance": 19,
     "bootstrap-membership": 254,
-    "cdc-metadata": 58,
+    "cdc-metadata": 59,
     "cli-tooling": 96,
     "control-plane": 194,
     "convergence-topology": 93,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2174,
-  "digest": "fnv1a32-b8530220",
+  "censusSize": 2175,
+  "digest": "fnv1a32-5d436124",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-97112c9a",
+  "observationDigest": "fnv1a32-1556499f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -344,6 +344,7 @@
     "test/cdc/cdc-shutdown-terminal-owner-write.test.js": "cdc-metadata",
     "test/cdc/cdc-sql-builder.test.js": "cdc-metadata",
     "test/cdc/cdc-system-table-write-failure-participant-detail.test.js": "cdc-metadata",
+    "test/cdc/cdc-terminal-gate-inflight.test.js": "cdc-metadata",
     "test/cdc/current-epoch-propagation.integration.test.js": "cdc-metadata",
     "test/cdc/endpoint-cdc-propagation.property.test.js": "cdc-metadata",
     "test/cdc/node-address-default-bug.test.js": "cdc-metadata",
@@ -2826,6 +2827,11 @@
     "test/cdc/cdc-system-table-write-failure-participant-detail.test.js": {
       "files": [
         "src/cdc/cdc-integration-service-shared.js"
+      ]
+    },
+    "test/cdc/cdc-terminal-gate-inflight.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
       ]
     },
     "test/cli/core/base-view-model.test.js": {

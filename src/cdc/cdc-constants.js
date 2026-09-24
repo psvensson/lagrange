@@ -207,8 +207,26 @@ const CDC_SHUT_DOWN_WRITE_OUTCOME = Object.freeze({
   NOT_CONFIRMED: 'not_confirmed',
 });
 
+// The stages the owner's terminal gate (refuseIfTerminal) names: each is one
+// operation class's choke point, where CDC-owned work is issued.
+const CDC_TERMINAL_STAGE = Object.freeze({
+  // (a) issuing an authoritative read, at every stage of the read flow.
+  LOCAL_READ: 'authoritative_local_read',
+  OWNER_RPC_READ: 'authoritative_owner_rpc_read',
+  OVERLAY_RESEED: 'authoritative_read_overlay_reseed',
+  SQL_FALLBACK_READ: 'authoritative_sql_fallback_read',
+  // (b) applying an authoritative cache repair or sweep.
+  CACHE_REPAIR: 'authoritative_cache_repair',
+  CACHE_SWEEP: 'authoritative_cache_sweep',
+  // (c) submitting a routed mutation to a partition or an engine.
+  LOCAL_LEADER_WRITE: 'routed_local_leader_write',
+  ENGINE_WRITE: 'routed_engine_write',
+  BOOTSTRAP_DIRECT: 'routed_bootstrap_direct',
+});
+
 export {
   CDC_CONFIG_KEY,
+  CDC_TERMINAL_STAGE,
   CDC_DEFAULTS,
   CDC_EPOCH_CONFIG_KEY,
   CDC_EVENT,

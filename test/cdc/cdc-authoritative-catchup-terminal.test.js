@@ -8,17 +8,16 @@
 // began after terminal also read every table.
 //
 // The owner's terminal answer: the catch-up's retry delay is the owner's
-// delayUntilShutdown, which markShuttingDown releases at once. The attempt
-// loop and the table loop end on isShuttingDown (at entry, after each sleep
-// and after each read). Every table not caught up is reported failed, with
-// the owner's typed SHUT_DOWN code, never as hydrated. No read is made after
-// terminal.
+// delayUntilShutdown, which markShuttingDown releases at once, and the
+// owner's terminal gate refuses every read stage after terminal. Every table
+// not caught up is reported failed, with the owner's typed SHUT_DOWN code,
+// never as hydrated. No read is issued after terminal.
 //
-// Composition: the real CDCIntegrationService on a virtual clock. The one
-// seam is the authoritative row source (executeAuthoritativeSystemTableRead),
-// which answers deferred, as under pressure, and records whether each read
-// ran after terminal. Order is controlled by awaiting turns; the virtual
-// clock never moves.
+// Composition: the real CDCIntegrationService, with its real authoritative
+// read flow, on a virtual clock. The one seam is the owner-RPC transport (the
+// query executor's executeOnPartition), which answers deferred, as under
+// pressure, and records whether each read was issued after terminal. Order is
+// controlled by awaiting turns; the virtual clock never moves.
 
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -40,10 +39,13 @@ function composeCatchupOwner() {
   });
   service.logger = QUIET_LOGGER;
   const reads = [];
-  service.executeAuthoritativeSystemTableRead = async (tableName) => {
-    reads.push({tableName, afterTerminal: service.isShuttingDown === true});
-    return {success: false, deferRetry: true, retryAfterMs: 500, rows: []};
-  };
+  service.messageRouter = {getConnectedNodes: () => []};
+  service.sqlQueryEngine = {queryExecutor: {
+    executeOnPartition: async (partitionId) => {
+      reads.push({partitionId, afterTerminal: service.isShuttingDown === true});
+      return {success: false, deferRetry: true, retryAfterMs: 500, rows: []};
+    },
+  }};
   return {service, timeSource, reads};
 }
 
