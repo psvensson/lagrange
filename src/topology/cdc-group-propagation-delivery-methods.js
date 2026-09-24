@@ -515,7 +515,9 @@ class CDCGroupPropagationDeliveryMethods {
         activeEntry.timer = null;
       }
     }
-    if (this.state !== CDC_GROUP_PROPAGATION_STATE.RUNNING) {
+    // One guard for the wave, at its start and after its attempt: a wave
+    // exists only once the service ran, so "stopped" is the only exit.
+    if (this.isPropagationStopped()) {
       return;
     }
     const pendingEvents = [...entry.pendingEventsByKey.values()].map((pendingEvent) => ({

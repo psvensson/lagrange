@@ -21,8 +21,10 @@ import {
   defineCDCGroupPropagationDeliveryMethods,
 } from './cdc-group-propagation-delivery-methods.js';
 import {
+  defineCDCGroupPropagationLifecycleMethods,
+} from './cdc-group-propagation-lifecycle-methods.js';
+import {
   CDC_GROUP_PUBLICATION_MODE,
-  CDC_GROUP_PROPAGATION_DELIVERY_ERROR,
   CDC_GROUP_PROPAGATION_ERROR_MSG,
   CDC_GROUP_PROPAGATION_EVENT,
   CDC_GROUP_PROPAGATION_LOG_MSG,
@@ -180,84 +182,6 @@ class CDCGroupPropagationService extends EventEmitter {
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.STOPPED, {nodeId: this.nodeId});
   }
   /**
-   * Clear all pending background retry timers.
-   * @private
-   */
-  clearBackgroundRetryTimers() {
-    for (const retryTimer of this.backgroundRetryTimers) {
-      clearTimeout(retryTimer);
-    }
-    this.backgroundRetryTimers.clear();
-    this.backgroundRetryEntriesByKey.clear();
-  }
-  /**
-   * Clear all pending immediate publication batch timers; every waiter of a
-   * batch that will not run gets the stopped answer.
-   * @private
-   */
-  clearImmediateBatchTimers() {
-    for (const timer of this.immediateBatchTimers) {
-      clearTimeout(timer);
-    }
-    this.immediateBatchTimers.clear();
-    for (const entry of this.immediateBatchEntriesByKey.values()) {
-      this.resolveImmediateBatch(entry, this.buildStoppedFailures(entry.targets));
-    }
-    this.immediateBatchEntriesByKey.clear();
-  }
-  /**
-   * The typed stopped answer for targets that were not delivered to.
-   * @param {Array<Object>} targets
-   * @return {Array<Object>}
-   * @private
-   */
-  buildStoppedFailures(targets) {
-    return this.buildDeferredFailures(
-      targets, CDC_GROUP_PROPAGATION_DELIVERY_ERROR.PROPAGATION_STOPPED);
-  }
-  /**
-   * The one guard every arm site and post-attempt path checks.
-   * @return {boolean}
-   */
-  isPropagationStopped() {
-    return this.state === CDC_GROUP_PROPAGATION_STATE.STOPPED;
-  }
-  /**
-   * The owner's one timer primitive: every retry delay, batch window and
-   * background retry wave arms through it, and it refuses once stopped.
-   * @param {Function} callback
-   * @param {number} delayMs
-   * @return {*} The timer, or null when the service is stopped.
-   * @private
-   */
-  armPropagationTimer(callback, delayMs) {
-    return this.isPropagationStopped() ? null : setTimeout(callback, delayMs);
-  }
-  /**
-   * A delivery's retry delay, held until stop: stop() ends it at once and
-   * clears its timer (the delivery then answers the stopped outcome); a
-   * stopped service arms none.
-   * @param {number} delayMs
-   * @return {Promise<void>}
-   * @private
-   */
-  sleep(delayMs) {
-    return new Promise((resolve) => {
-      let timer = null;
-      const release = () => {
-        clearTimeout(timer);
-        this.retrySleepReleases.delete(release);
-        resolve();
-      };
-      timer = this.armPropagationTimer(release, delayMs);
-      if (timer === null) {
-        resolve();
-        return;
-      }
-      this.retrySleepReleases.add(release);
-    });
-  }
-  /**
    * Propagate one CDC event through grouped mode or safe mode.
    * @param {Object} options
    * @param {string} options.tableName
@@ -271,15 +195,12 @@ class CDCGroupPropagationService extends EventEmitter {
     const operation = options.operation;
     const data = options.data;
     const sourceMessageGroupService = options.sourceMessageGroupService;
-    assertCritical(
-      sourceMessageGroupService &&
-        typeof sourceMessageGroupService.applyCDCEvent === 'function',
-      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_MESSAGE_GROUP_SERVICE,
-    );
-    assertCritical(
-      tableName && operation && data,
-      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CDC_PAYLOAD,
-    );
+    this.assertPropagationRequest(options);
+    // A stopped service proposes nothing on the source group and delivers
+    // nothing: it answers every target stopped.
+    if (this.isPropagationStopped()) {
+      return this.buildStoppedPropagationResult(sourceMessageGroupService);
+    }
     this.refreshConfig();
     if (this.propagationMode !== LATENCY_PROPAGATION_MODE.GROUPED) {
       this.setPublicationMode(
@@ -432,6 +353,48 @@ class CDCGroupPropagationService extends EventEmitter {
     );
   }
 
+  /**
+   * The caller's contract: a source message group and a complete payload.
+   * @param {Object} options
+   * @private
+   */
+  assertPropagationRequest(options) {
+    const sourceMessageGroupService = options.sourceMessageGroupService;
+    assertCritical(
+      sourceMessageGroupService &&
+        typeof sourceMessageGroupService.applyCDCEvent === 'function',
+      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_MESSAGE_GROUP_SERVICE,
+    );
+    assertCritical(
+      options.tableName && options.operation && options.data,
+      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CDC_PAYLOAD,
+    );
+  }
+  /**
+   * The stopped answer of propagateCDCEvent: nothing was applied or
+   * delivered, and every safe-fanout target is answered stopped.
+   * @param {Object} sourceMessageGroupService
+   * @return {Object}
+   * @private
+   */
+  buildStoppedPropagationResult(sourceMessageGroupService) {
+    const sourceGroupId = resolveSourceMessageGroupId(sourceMessageGroupService);
+    const targets = buildSafeTargets({
+      sourceGroupId,
+      systemTableCache: this.systemTableCache,
+      messageGroupReplicaSuffix: MESSAGE_GROUP_REPLICA_SUFFIX,
+    });
+    return {
+      success: false,
+      strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
+      mode: CDC_GROUP_PROPAGATION_STATUS.SAFE,
+      status: CDC_GROUP_PROPAGATION_STATE.STOPPED,
+      sourceGroupId,
+      targetGroupCount: targets.length,
+      deliveryFailures: this.buildStoppedFailures(targets),
+      timestamp: this.now(),
+    };
+  }
   /**
    * Apply canonical safe propagation path.
    * @param {Object} options
@@ -791,5 +754,6 @@ class CDCGroupPropagationService extends EventEmitter {
 }
 
 defineCDCGroupPropagationDeliveryMethods(CDCGroupPropagationService.prototype);
+defineCDCGroupPropagationLifecycleMethods(CDCGroupPropagationService.prototype);
 
 export {CDCGroupPropagationService};

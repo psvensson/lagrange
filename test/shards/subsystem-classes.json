@@ -28,7 +28,7 @@
   "censusSize": 2173,
   "digest": "fnv1a32-5a30165b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-42689d9e",
+  "observationDigest": "fnv1a32-7ddf1975",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -10147,8 +10147,6 @@
     "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": {
       "files": [
         "src/topology/cdc-group-propagation-constants.js",
-        "src/topology/cdc-group-propagation-delivery-methods.js",
-        "src/topology/cdc-group-propagation-routing.js",
         "src/topology/cdc-group-propagation-service.js",
         "src/topology/latency-topology-constants.js"
       ]
