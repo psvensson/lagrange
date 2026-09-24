@@ -8,7 +8,7 @@
     "cdc-metadata": 57,
     "cli-tooling": 96,
     "control-plane": 194,
-    "convergence-topology": 92,
+    "convergence-topology": 93,
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2172,
-  "digest": "fnv1a32-8212bef8",
+  "censusSize": 2173,
+  "digest": "fnv1a32-5a30165b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-0c432376",
+  "observationDigest": "fnv1a32-42689d9e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2034,6 +2034,7 @@
     "test/topology/cdc-group-propagation-closure-memory.property.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-closure-preservation.property.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-service.test.js": "convergence-topology",
+    "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-stop-settles-deliveries.test.js": "convergence-topology",
     "test/topology/group-selection-service.test.js": "convergence-topology",
     "test/topology/latency-group-manager.test.js": "convergence-topology",
@@ -10141,6 +10142,15 @@
       ],
       "env": [
         "TEST_FILE_ID"
+      ]
+    },
+    "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": {
+      "files": [
+        "src/topology/cdc-group-propagation-constants.js",
+        "src/topology/cdc-group-propagation-delivery-methods.js",
+        "src/topology/cdc-group-propagation-routing.js",
+        "src/topology/cdc-group-propagation-service.js",
+        "src/topology/latency-topology-constants.js"
       ]
     },
     "test/topology/cdc-group-propagation-stop-settles-deliveries.test.js": {

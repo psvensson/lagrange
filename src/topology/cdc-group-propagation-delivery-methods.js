@@ -55,7 +55,7 @@ class CDCGroupPropagationDeliveryMethods {
     const events = this.normalizeDeliveryEvents(options);
     const deliveryLabel = this.describeDeliveryEvents(events);
     const retryKey = !options?.events ? this.buildBackgroundRetryKey(options) : null;
-    if (this.state === CDC_GROUP_PROPAGATION_STATE.STOPPED) {
+    if (this.isPropagationStopped()) {
       return this.buildStoppedFailures(options.targets);
     }
     const allowDeferToExistingRetry = options?.allowDeferToExistingRetry !== false;
@@ -87,7 +87,7 @@ class CDCGroupPropagationDeliveryMethods {
         return [];
       }
       // Stopped while the attempt was in flight: answer now, arm no delay.
-      if (this.state === CDC_GROUP_PROPAGATION_STATE.STOPPED) {
+      if (this.isPropagationStopped()) {
         return this.buildStoppedFailures(
           this.convertFailuresToRetryTargets(deliveryFailures));
       }
@@ -105,7 +105,7 @@ class CDCGroupPropagationDeliveryMethods {
         failureCount: deliveryFailures.length,
       });
       await this.sleep(retryDelayMs);
-      if (this.state === CDC_GROUP_PROPAGATION_STATE.STOPPED) {
+      if (this.isPropagationStopped()) {
         return this.buildStoppedFailures(
           this.convertFailuresToRetryTargets(deliveryFailures));
       }
@@ -209,7 +209,10 @@ class CDCGroupPropagationDeliveryMethods {
         timer: null,
       };
       this.immediateBatchEntriesByKey.set(batchKey, entry);
-      this.armImmediateBatchEntry(batchKey, entry);
+      if (!this.armImmediateBatchEntry(batchKey, entry)) {
+        this.immediateBatchEntriesByKey.delete(batchKey);
+        return Promise.resolve(this.buildStoppedFailures(options.targets));
+      }
     }
     const eventKey = this.buildBackgroundRetryEventKey(options);
     entry.pendingEventsByKey.set(eventKey, {
@@ -259,13 +262,17 @@ class CDCGroupPropagationDeliveryMethods {
    * @private
    */ armImmediateBatchEntry(batchKey, entry) {
     if (entry?.timer) {
-      return;
+      return true;
     }
-    const timer = setTimeout(async () => {
+    const timer = this.armPropagationTimer(async () => {
       await this.runImmediateBatchEntry(batchKey, entry);
     }, this.immediateBatchDelayMs);
+    if (timer === null) {
+      return false;
+    }
     entry.timer = timer;
     this.immediateBatchTimers.add(timer);
+    return true;
   }
   /**
    * Drain one immediate publication batch.
@@ -419,47 +426,19 @@ class CDCGroupPropagationDeliveryMethods {
       failureCount: entry.pendingEventsByKey.size,
       background: true,
     });
-    const retryTimer = setTimeout(async () => {
-      await this.runBackgroundRetryEntry(retryKey, retryTimer, entry);
+    const arming = {};
+    arming.retryTimer = this.armPropagationTimer(async () => {
+      await this.runBackgroundRetryEntry(retryKey, arming.retryTimer, entry);
     }, retryDelayMs);
-    entry.timer = retryTimer;
-    this.backgroundRetryTimers.add(retryTimer);
+    if (!arming.retryTimer) {
+      this.backgroundRetryEntriesByKey.delete(retryKey);
+      return;
+    }
+    entry.timer = arming.retryTimer;
+    this.backgroundRetryTimers.add(arming.retryTimer);
     if (retryKey) {
       this.backgroundRetryEntriesByKey.set(retryKey, entry);
     }
-  }
-  /**
-   * Clear all pending background retry timers.
-   * @private
-   */ clearBackgroundRetryTimers() {
-    for (const retryTimer of this.backgroundRetryTimers) {
-      clearTimeout(retryTimer);
-    }
-    this.backgroundRetryTimers.clear();
-    this.backgroundRetryEntriesByKey.clear();
-  }
-  /**
-   * Clear all pending immediate publication batch timers.
-   * @private
-   */ clearImmediateBatchTimers() {
-    for (const timer of this.immediateBatchTimers) {
-      clearTimeout(timer);
-    }
-    this.immediateBatchTimers.clear();
-    // Every waiter of a batch that will not run gets the stopped answer.
-    for (const entry of this.immediateBatchEntriesByKey.values()) {
-      this.resolveImmediateBatch(entry, this.buildStoppedFailures(entry.targets));
-    }
-    this.immediateBatchEntriesByKey.clear();
-  }
-  /**
-   * The typed stopped answer for targets that were not delivered to.
-   * @param {Array<Object>} targets
-   * @return {Array<Object>}
-   * @private
-   */ buildStoppedFailures(targets) {
-    return this.buildDeferredFailures(
-      targets, CDC_GROUP_PROPAGATION_DELIVERY_ERROR.PROPAGATION_STOPPED);
   }
   /**
    * Build a canonical key for one background retry wave.
@@ -566,6 +545,11 @@ class CDCGroupPropagationDeliveryMethods {
       sourceGroupId: entry.sourceGroupId,
       targets: entry.targets,
     });
+    // Stopped while the wave was in flight: the wave ends, nothing re-arms.
+    if (this.isPropagationStopped()) {
+      this.backgroundRetryEntriesByKey.delete(retryKey);
+      return;
+    }
     if (deliveryFailures.length > 0) {
       for (const pendingEvent of pendingEvents) {
         this.recordBackgroundRetryEvent(entry, pendingEvent.eventKey, pendingEvent.data);
@@ -696,6 +680,11 @@ class CDCGroupPropagationDeliveryMethods {
     }
     const deliveryFailures = [];
     for (const target of options.targets) {
+      // A stopped service reaches no further target.
+      if (this.isPropagationStopped()) {
+        deliveryFailures.push(...this.buildStoppedFailures([target]));
+        continue;
+      }
       if (!this.messageRouter || typeof this.messageRouter.deliver !== 'function') {
         deliveryFailures.push({
           targetGroupId: target.groupId,

@@ -22,6 +22,7 @@ import {
 } from './cdc-group-propagation-delivery-methods.js';
 import {
   CDC_GROUP_PUBLICATION_MODE,
+  CDC_GROUP_PROPAGATION_DELIVERY_ERROR,
   CDC_GROUP_PROPAGATION_ERROR_MSG,
   CDC_GROUP_PROPAGATION_EVENT,
   CDC_GROUP_PROPAGATION_LOG_MSG,
@@ -179,8 +180,63 @@ class CDCGroupPropagationService extends EventEmitter {
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.STOPPED, {nodeId: this.nodeId});
   }
   /**
+   * Clear all pending background retry timers.
+   * @private
+   */
+  clearBackgroundRetryTimers() {
+    for (const retryTimer of this.backgroundRetryTimers) {
+      clearTimeout(retryTimer);
+    }
+    this.backgroundRetryTimers.clear();
+    this.backgroundRetryEntriesByKey.clear();
+  }
+  /**
+   * Clear all pending immediate publication batch timers; every waiter of a
+   * batch that will not run gets the stopped answer.
+   * @private
+   */
+  clearImmediateBatchTimers() {
+    for (const timer of this.immediateBatchTimers) {
+      clearTimeout(timer);
+    }
+    this.immediateBatchTimers.clear();
+    for (const entry of this.immediateBatchEntriesByKey.values()) {
+      this.resolveImmediateBatch(entry, this.buildStoppedFailures(entry.targets));
+    }
+    this.immediateBatchEntriesByKey.clear();
+  }
+  /**
+   * The typed stopped answer for targets that were not delivered to.
+   * @param {Array<Object>} targets
+   * @return {Array<Object>}
+   * @private
+   */
+  buildStoppedFailures(targets) {
+    return this.buildDeferredFailures(
+      targets, CDC_GROUP_PROPAGATION_DELIVERY_ERROR.PROPAGATION_STOPPED);
+  }
+  /**
+   * The one guard every arm site and post-attempt path checks.
+   * @return {boolean}
+   */
+  isPropagationStopped() {
+    return this.state === CDC_GROUP_PROPAGATION_STATE.STOPPED;
+  }
+  /**
+   * The owner's one timer primitive: every retry delay, batch window and
+   * background retry wave arms through it, and it refuses once stopped.
+   * @param {Function} callback
+   * @param {number} delayMs
+   * @return {*} The timer, or null when the service is stopped.
+   * @private
+   */
+  armPropagationTimer(callback, delayMs) {
+    return this.isPropagationStopped() ? null : setTimeout(callback, delayMs);
+  }
+  /**
    * A delivery's retry delay, held until stop: stop() ends it at once and
-   * clears its timer (the delivery then answers the stopped outcome).
+   * clears its timer (the delivery then answers the stopped outcome); a
+   * stopped service arms none.
    * @param {number} delayMs
    * @return {Promise<void>}
    * @private
@@ -193,7 +249,11 @@ class CDCGroupPropagationService extends EventEmitter {
         this.retrySleepReleases.delete(release);
         resolve();
       };
-      timer = setTimeout(release, delayMs);
+      timer = this.armPropagationTimer(release, delayMs);
+      if (timer === null) {
+        resolve();
+        return;
+      }
       this.retrySleepReleases.add(release);
     });
   }

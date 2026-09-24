@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1906,
+    "unit": 1907,
     "integration": 75,
     "bootstrap": 184,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2172,
-  "digest": "fnv1a32-300ec2b1",
+  "censusSize": 2173,
+  "digest": "fnv1a32-7ca6520f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2015,6 +2015,7 @@
     "test/topology/cdc-group-propagation-closure-memory.property.test.js": "unit",
     "test/topology/cdc-group-propagation-closure-preservation.property.test.js": "unit",
     "test/topology/cdc-group-propagation-service.test.js": "unit",
+    "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": "unit",
     "test/topology/cdc-group-propagation-stop-settles-deliveries.test.js": "unit",
     "test/topology/group-selection-service.test.js": "unit",
     "test/topology/latency-group-manager.test.js": "unit",
