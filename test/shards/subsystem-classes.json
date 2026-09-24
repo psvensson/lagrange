@@ -28,7 +28,7 @@
   "censusSize": 2174,
   "digest": "fnv1a32-b8530220",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7ddf1975",
+  "observationDigest": "fnv1a32-97112c9a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2815,7 +2815,12 @@
     "test/cdc/cdc-shutdown-terminal-owner-write.test.js": {
       "files": [
         "src/bootstrap/phases/seed-cleanup-handler.js",
+        "src/cdc/cdc-integration-service-cache-visibility-wait.js",
         "src/partition/proposal-queue-constants.js"
+      ],
+      "directories": [
+        "src/cdc",
+        "test/cdc"
       ]
     },
     "test/cdc/cdc-system-table-write-failure-participant-detail.test.js": {
@@ -10148,6 +10153,9 @@
     "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": {
       "files": [
         "src/topology/cdc-group-propagation-constants.js",
+        "src/topology/cdc-group-propagation-delivery-methods.js",
+        "src/topology/cdc-group-propagation-lifecycle-methods.js",
+        "src/topology/cdc-group-propagation-routing.js",
         "src/topology/cdc-group-propagation-service.js",
         "src/topology/latency-topology-constants.js"
       ]

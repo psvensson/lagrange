@@ -26,6 +26,40 @@
 // answer. Order is controlled by resolving that write or by the owner's retry
 // sleep, never by a sleep; timers are read from the owners' own state (the CDC
 // time source, the owner's retry sleep), never waited for.
+//
+// The CDC integration service's terminal boundary, witnessed as the owner's
+// properties:
+//
+// - P-Q (quiescence). Once a CDC lifecycle owner has reached its terminal
+//   state, no CDC-owned retry or publication work may remain pending, be
+//   newly scheduled, or execute.
+// - P-L (process liveness), kept distinct from P-Q. Terminal shutdown leaves
+//   no referenced CDC-owned handle capable of keeping the process alive.
+//
+// The terminal boundary is markShuttingDown()'s first statement,
+// `isShuttingDown = true` (cdc-integration-service-lifecycle.js). The service
+// has no other lifecycle flag. The seed and join cleanups mark it before they
+// shut the engine down and before the partitions release their writes. The
+// owner's delayed-work primitives are delayUntilShutdown (a delay held until
+// the mark) and holdUntilShutdown (a wait released at the mark).
+//
+// The proof has four owner-scoped legs. None of them counts global Node
+// handles.
+// - Census (structural). Every site in src/cdc that can create delayed work
+//   is the primitive, a wait held by the primitive, or classified outside
+//   P-Q and P-L with its reason. There is no bypass route: no delayOn, no
+//   node:timers or timers/promises import, and no timer refresh.
+// - Semantic. After the mark, the primitive arms nothing and resolves at once,
+//   a hold is released at once, and every caller gets the terminal answer
+//   instead of a retry.
+// - State. After the mark the owner holds no pending timer on its clock and no
+//   hold, and every waiter has settled with the terminal answer. On the real
+//   clock, the owner work ledger (test/helpers/owner-work-ledger.js) holds no
+//   pending owner handle (P-Q) and no referenced one (P-L).
+// - Execution. No retry callback runs after the mark: the clock is moved past
+//   every delay, and no engine write and no authoritative read follows.
+// The end-to-end corroboration is seed-node-bootstrap (graceful shutdown
+// within its accepted budget).
 
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -62,7 +96,13 @@ import {
   INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {NODE_STATUS} from '../../src/node/node-constants.js';
-import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {readdirSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {RealTimeSource, VirtualTimeSource} from '../../src/time/time-source.js';
+import {
+  censusDelayedWorkSites,
+  createOwnerWorkLedger,
+} from '../helpers/owner-work-ledger.js';
 import {ERRORS} from '../../src/constants/errors.js';
 
 const NODE_ID = 'shutdown-node';
@@ -75,6 +115,12 @@ const PUBLICATIONS_PARTITION_ID =
 // settles; a settled outcome needs few.
 const SETTLE_TURNS = 50;
 const QUIET_LOGGER = Object.freeze({warn() {}, info() {}, debug() {}, error() {}});
+// Further than any delay the owner arms (retry delays, visibility budgets,
+// the catch-up's retry-after answers).
+const PAST_EVERY_DELAY_MS = 24 * 60 * 60 * 1000;
+const REPOSITORY_ROOT = fileURLToPath(new URL('../../', import.meta.url));
+const TEST_FILE = fileURLToPath(import.meta.url);
+const CDC_OWNER_FILE = /[\\/]src[\\/]cdc[\\/][\w-]+\.js$/u;
 
 function releasedWriteAnswer() {
   return buildReleasedPendingWriteAnswer({
@@ -121,9 +167,10 @@ function createInFlightEngine(shutdownState) {
   return engine;
 }
 
-function composeSeedWriters({withEngine = true, onOwnerSleep = null} = {}) {
+function composeSeedWriters({
+  withEngine = true, onOwnerSleep = null, timeSource = new VirtualTimeSource(),
+} = {}) {
   const shutdownState = {begun: false};
-  const timeSource = new VirtualTimeSource();
   const cdcIntegrationService = new CDCIntegrationService({
     nodeId: NODE_ID, systemTableCache: new SystemTableCache(), timeSource,
   });
@@ -240,6 +287,19 @@ function assertTerminalAfterShutdown(composed, box) {
   assert.ok(typeof CDC_CONSTANTS.CDC_ERROR_CODE?.SHUT_DOWN === 'string' &&
     box.outcome.error.code === CDC_CONSTANTS.CDC_ERROR_CODE.SHUT_DOWN,
   'the answer is the CDC service\'s typed shut-down code');
+  assertOwnerQuiescent(composed);
+}
+
+// State and execution legs on the owner's clock: no hold is left, no timer
+// is pending, and moving the clock past every delay runs no engine write.
+function assertOwnerQuiescent(composed) {
+  assert.equal(composed.cdcIntegrationService.shutdownReleases.size, 0,
+    'the owner holds no wait or delay after the mark');
+  assert.equal(composed.timeSource.pendingTimerCount(), 0,
+    'no owner timer is pending after the mark (P-Q)');
+  composed.timeSource.advance(PAST_EVERY_DELAY_MS);
+  assert.equal(composed.engine.writesAfterShutdown, 0,
+    'no engine write runs after the mark, however far the clock moves');
 }
 
 // A write the engine held or accepted before shutdown is indeterminate: never
@@ -502,4 +562,223 @@ test('an ordinary failure while the service is live is still read back: ' +
     'the durable read-back finds the committed row');
   assert.deepEqual(committedThenFailed.counts, {upserts: 1, reads: 2},
     'one write, the pre-write read and the durable read-back');
+});
+
+// Semantic leg: after the mark, the owner's primitives arm nothing.
+test('semantic: after the mark the delayed-work primitive arms nothing and ' +
+  'resolves at once, and a hold is released at once', async () => {
+  const composed = composeSeedWriters();
+  const service = composed.cdcIntegrationService;
+  service.markShuttingDown();
+  let delayed = false;
+  service.delayUntilShutdown(PAST_EVERY_DELAY_MS).then(() => {
+    delayed = true;
+  });
+  let released = false;
+  service.holdUntilShutdown(() => {
+    released = true;
+  });
+  await yieldTurns(SETTLE_TURNS);
+  assert.equal(delayed, true, 'the delay resolves at once, holding nothing');
+  assert.equal(released, true, 'a hold taken after the mark is released at once');
+  assertOwnerQuiescent(composed);
+});
+
+// The catch-up: CDC-owned repair work (it re-reads the CDC-propagated tables
+// from the authoritative owner and applies them to the local cache), retried
+// on deferred answers. After the mark it reads nothing, holds nothing, runs
+// no retry, settles, and reports no table it did not catch up as caught up.
+const CATCHUP_TABLES = Object.freeze(['nodes', 'services']);
+
+function deferAuthoritativeReads(composed) {
+  const reads = {beforeMark: 0, afterMark: 0};
+  composed.cdcIntegrationService.executeAuthoritativeSystemTableRead =
+    async () => {
+      if (composed.cdcIntegrationService.isShuttingDown === true) {
+        reads.afterMark += 1;
+      } else {
+        reads.beforeMark += 1;
+      }
+      // Deferred by pressure: the catch-up retries after a delay.
+      return {success: false, deferRetry: true, retryAfterMs: 500, rows: []};
+    };
+  return reads;
+}
+
+function assertCatchupAnsweredTerminal(box) {
+  assert.notEqual(box.outcome, null,
+    'the catch-up settles once the owner is marked, without any clock moving');
+  const summary = box.outcome.value;
+  if (summary) {
+    assert.equal(summary.tablesHydrated, 0,
+      'no table is reported caught up that was not');
+    assert.equal(summary.rowsApplied, 0, 'no row is applied after the mark');
+  } else {
+    assert.ok(box.outcome.error instanceof Error,
+      'a catch-up that does not answer a summary answers an error');
+  }
+}
+
+test('catch-up: the mark lands while it sleeps between deferred reads: no ' +
+  'further read, no pending timer, no retry runs', async () => {
+  const composed = composeSeedWriters();
+  const reads = deferAuthoritativeReads(composed);
+  const box = track(composed.cdcIntegrationService
+    .hydrateCdcPropagatedTablesFromAuthority({tables: [...CATCHUP_TABLES]}));
+  for (let turn = 0; turn < SETTLE_TURNS &&
+    composed.timeSource.pendingTimerCount() === 0; turn += 1) {
+    await yieldTurns(1);
+  }
+  assert.equal(reads.beforeMark, 1, 'the first read was deferred');
+  assert.equal(composed.timeSource.pendingTimerCount(), 1,
+    'the catch-up sleeps before its retry');
+
+  await composed.shutDownSqlQueryEngine();
+  await yieldTurns(SETTLE_TURNS);
+
+  assert.equal(composed.timeSource.pendingTimerCount(), 0,
+    'the catch-up holds no timer after the mark (P-Q)');
+  assert.equal(reads.afterMark, 0, 'no authoritative read after the mark');
+  assertCatchupAnsweredTerminal(box);
+  composed.timeSource.advance(PAST_EVERY_DELAY_MS);
+  await yieldTurns(SETTLE_TURNS);
+  assert.equal(reads.afterMark, 0,
+    'no authoritative read runs after the mark, however far the clock moves');
+  assert.equal(composed.cdcIntegrationService.shutdownReleases.size, 0,
+    'the owner holds nothing after the mark');
+});
+
+test('catch-up: started after the mark, it reads nothing and settles at once',
+  async () => {
+    const composed = composeSeedWriters();
+    const reads = deferAuthoritativeReads(composed);
+    await composed.shutDownSqlQueryEngine();
+    const box = track(composed.cdcIntegrationService
+      .hydrateCdcPropagatedTablesFromAuthority());
+    await yieldTurns(SETTLE_TURNS);
+
+    assert.equal(reads.afterMark, 0, 'no authoritative read after the mark');
+    assert.equal(composed.timeSource.pendingTimerCount(), 0,
+      'no timer is armed after the mark');
+    assertCatchupAnsweredTerminal(box);
+    composed.timeSource.advance(PAST_EVERY_DELAY_MS);
+    await yieldTurns(SETTLE_TURNS);
+    assert.equal(reads.afterMark, 0,
+      'no authoritative read runs after the mark, however far the clock moves');
+  });
+
+// P-L and the ledger's P-Q legs on the owner's real clock: each kind of
+// delayed work the owner holds when the mark lands leaves no pending and no
+// referenced owner handle, runs no owner callback, and creates nothing.
+const REAL_CLOCK_LANES = [
+  {name: 'the routed-mutation retry delay', async drive(composed) {
+    const box = startPublication(composed);
+    await untilWriteInFlight(composed);
+    composed.engine.release();
+    return box;
+  }},
+  {name: 'the catch-up sleep', async drive(composed) {
+    deferAuthoritativeReads(composed);
+    return track(composed.cdcIntegrationService
+      .hydrateCdcPropagatedTablesFromAuthority({tables: [...CATCHUP_TABLES]}));
+  }},
+];
+
+for (const lane of REAL_CLOCK_LANES) {
+  test(`real clock: ${lane.name} at the mark leaves no pending or ` +
+    'referenced owner handle (P-Q, P-L)', async () => {
+    const ledger = createOwnerWorkLedger({
+      ownerFile: CDC_OWNER_FILE, testFile: TEST_FILE,
+    });
+    ledger.open();
+    try {
+      const composed = composeSeedWriters({timeSource: new RealTimeSource()});
+      const box = await lane.drive(composed);
+      await yieldTurns(SETTLE_TURNS);
+      assert.ok(ledger.report().pending.length > 0,
+        'the owner holds its delayed work on the real clock before the mark');
+
+      ledger.markTerminal();
+      await composed.shutDownSqlQueryEngine();
+      await yieldTurns(SETTLE_TURNS);
+
+      const report = ledger.report();
+      assert.deepEqual(report.referenced, [],
+        'no referenced owner handle keeps the process alive (P-L)');
+      assert.deepEqual(report.pending, [],
+        'no owner timer is pending after the mark (P-Q)');
+      assert.deepEqual(report.executedAfterTerminal, [],
+        'no owner callback runs after the mark');
+      assert.deepEqual(report.createdAfterTerminal, [],
+        'nothing is scheduled after the mark, from any stack');
+      assert.notEqual(box.outcome, null, 'the work settles at the mark');
+    } finally {
+      ledger.close();
+    }
+  });
+}
+
+// Census leg: every site in the owner that can create delayed work.
+const CDC_OWNER_FILES = Object.freeze(
+  readdirSync(new URL('../../src/cdc/', import.meta.url))
+    .filter((name) => name.endsWith('.js'))
+    .sort()
+    .map((name) => `src/cdc/${name}`));
+// (a) the primitive, and the one wait it holds; (c) outside P-Q and P-L.
+const CLASSIFIED_TIMER_SITES = Object.freeze([
+  // (c) A caller's confirmation wait, not CDC retry or publication work: its
+  // timer only rejects the waiter. The tracker has its own shutdown() that
+  // clears every timer, and no production code constructs it (PartitionService
+  // takes it as an option).
+  'src/cdc/cdc-confirmation-tracker.js:awaitConfirmation:setTimeout',
+  // (a) The visibility wait's budget timer, held by holdUntilShutdown: the
+  // mark releases the wait and its cleanup clears the timer.
+  'src/cdc/cdc-integration-service-cache-visibility-wait.js:' +
+    'waitForCacheUpdate:setTimeout',
+  // (a) The primitive.
+  'src/cdc/cdc-integration-service-lifecycle.js:delayUntilShutdown:setTimeout',
+]);
+// (c) Delayed-work helpers a src/cdc module imports from elsewhere.
+const CLASSIFIED_IMPORTED_SLEEPS = Object.freeze([
+  // A caller-owned startup readiness wait (seed and joiner), not CDC retry or
+  // publication work; the callers inject their own sleep.
+  'src/cdc/cdc-pipeline-readiness-gate.js:CDC_PIPELINE_READINESS_SLEEP',
+]);
+const IMPORT_CLAUSE = /import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/gu;
+const DELAY_NAME = /sleep|delay(?!ms)|wait(?!for)/iu;
+
+test('census: every CDC delayed-work site is the primitive or classified, ' +
+  'with no bypass route', () => {
+  const census = censusDelayedWorkSites(REPOSITORY_ROOT, CDC_OWNER_FILES);
+  assert.deepEqual(census.timerSites, [...CLASSIFIED_TIMER_SITES],
+    'no CDC timer outside the owner\'s primitive and the classified sites');
+  const visibilityWait = census.text.get(
+    'src/cdc/cdc-integration-service-cache-visibility-wait.js');
+  assert.match(visibilityWait, /holdUntilShutdown\(/u,
+    'the visibility wait is held by the owner\'s primitive');
+  assert.deepEqual(census.forbiddenImports, [],
+    'no node:timers or timers/promises import in the owner');
+  assert.deepEqual(census.refreshCalls, [],
+    'no timer is re-armed with refresh()');
+  const bypass = [...census.text].filter(([, source]) =>
+    /\bdelayOn\b/u.test(source)).map(([file]) => file);
+  assert.deepEqual(bypass, [],
+    'no delayOn: a sleep on the time source that bypasses the primitive');
+  const importedSleeps = [];
+  for (const [file, source] of census.text) {
+    for (const [, names, from] of source.matchAll(IMPORT_CLAUSE)) {
+      if (from.startsWith('./')) {
+        continue;
+      }
+      for (const name of names.split(',').map((entry) =>
+        entry.trim().split(/\s+as\s+/u).at(-1)).filter(Boolean)) {
+        if (DELAY_NAME.test(name)) {
+          importedSleeps.push(`${file}:${name}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(importedSleeps.sort(), [...CLASSIFIED_IMPORTED_SLEEPS],
+    'no delayed-work helper imported from outside the owner, but the ' +
+    'classified ones');
 });

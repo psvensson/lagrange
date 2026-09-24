@@ -1,7 +1,17 @@
-// Once the CDC group propagation service stops, the service starts no further
-// work: no timer or immediate is created from its code, no router delivery is
-// started and no proposal is made on the source message group. Every awaiting
-// caller gets the typed stopped answer.
+// The CDC group propagation service's terminal boundary, witnessed as the
+// owner's properties:
+//
+// - P-Q (quiescence). Once a CDC lifecycle owner has reached its terminal
+//   state, no CDC-owned retry or publication work may remain pending, be
+//   newly scheduled, or execute.
+// - P-L (process liveness), kept distinct from P-Q. Terminal shutdown leaves
+//   no referenced CDC-owned handle capable of keeping the process alive.
+//
+// The terminal boundary is stop()'s first statement, `state = STOPPED`. stop()
+// is synchronous and the service has no STOPPING state (CREATED,
+// INITIALIZED, RUNNING, STOPPED), so stop requested and terminal coincide.
+// The owner's one delayed-work primitive is armPropagationTimer, and the sleep
+// built on it, both in cdc-group-propagation-lifecycle-methods.js.
 //
 // Witnessed on the rs-raft cutover:
 // - A delivery waiting in a batch window never settled at stop (the seed
@@ -12,42 +22,41 @@
 // - A propagate call after stop still proposed on the source message group
 //   (round 5, N1).
 //
-// The deciding check is the creations record. An async_hooks init hook
-// records every Timeout and Immediate created after stop(), from any stack
-// (a direct call, node:timers/promises, a promise continuation, a nextTick, a
-// microtask, an interval or an immediate chain), whether referenced or
-// unref'd. It excludes only the test file's own turns. The record must be
-// empty once the lane has settled and pending microtasks, nextTicks and
-// immediates have drained. Each lane is fully in memory: the router and the
-// source message group are held fakes, so nothing else creates a timer.
+// The proof has four owner-scoped legs. None of them counts global Node
+// handles.
+// - Census (structural). The only site in the owner's files that can create
+//   delayed work is the primitive: no other setTimeout, setInterval or
+//   setImmediate reference, no node:timers or timers/promises import, and no
+//   timer refresh.
+// - Semantic. After stop the primitive refuses (it answers null and arms
+//   nothing), the held sleep resolves at once, and a caller arriving after
+//   stop gets the typed stopped answer at once.
+// - State. After stop the owner's bookkeeping is empty (batch timers and
+//   entries, background timers and waves, held sleeps), and every waiter has
+//   settled with the typed stopped answer. The owner work ledger
+//   (test/helpers/owner-work-ledger.js) holds no pending owner timer or
+//   immediate: P-Q's "remain pending". It holds none that is referenced: P-L.
+//   The ledger attributes a timer to the owner by its creating stack, or by
+//   the owner resource that triggered it, so the owner's own continuations
+//   count.
+// - Execution. No owner callback runs after stop: the ledger records none,
+//   and nothing is created after stop from any stack (P-Q's "newly
+//   scheduled"). Then time is moved past every delay by running every
+//   pending owner callback, and no router delivery and no source proposal
+//   follow.
+// The end-to-end corroboration is test/bootstrap/
+// seed-teardown-pending-cdc-delivery.test.js.
 //
-// The second check counts live handles. The live Timeout and Immediate
-// handles (process.getActiveResourcesInfo()) after the lane settles must be
-// no more than just before stop(). Each record entry names the first source
-// file:line on its creating stack, and the failure message shows it.
+// Each lane is fully in memory: the router and the source message group are
+// held fakes, driven by held promises. A timer the service must fire before
+// stop (a batch flush, a background wave) is fired with node:test mock
+// timers. The mock is restored before stop, so the ledger sees every real
+// timer. No wall clock is waited on.
 //
-// Residual limit: owner work still waiting on a promise the lane holds at
-// assert time is not observed, and none is pending on the fix.
-//
-// Every public lane is driven to one of its awaits, and stop() lands there:
-// - propagate in safe and in grouped mode;
-// - grouped delivery and its safe-fanout recovery;
-// - the immediate batch;
-// - the retry loop with its sleep;
-// - the background retry wave;
-// - delivery to several targets.
-// Each lane also requires that no router delivery is started and no proposal
-// is made on the source group after stop, and that every caller still waiting
-// at stop gets the typed stopped answer.
-//
-// Order is controlled by held promises: the router's answer and the source
-// group's apply. A timer the service must fire before stop (a batch flush, a
-// background wave) is fired with node:test mock timers. The mock is restored
-// before stop() and its handle count, so every recorded creation and every
-// counted handle is a real one. No wall clock is waited on.
+// Residual limit: owner work still waiting, at assert time, on a promise the
+// lane holds is not observed. None is pending on the fix.
 
 import assert from 'node:assert/strict';
-import {createHook} from 'node:async_hooks';
 import {mock, test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
@@ -59,6 +68,10 @@ import * as CDC_GROUP_PROPAGATION_CONSTANTS from
   '../../src/topology/cdc-group-propagation-constants.js';
 import {CDCGroupPropagationService} from
   '../../src/topology/cdc-group-propagation-service.js';
+import {
+  censusDelayedWorkSites,
+  createOwnerWorkLedger,
+} from '../helpers/owner-work-ledger.js';
 import {
   createGroupRow,
   createMessageGroupServiceRow,
@@ -81,37 +94,15 @@ const TARGETS = Object.freeze(['b', 'c'].map((node) => Object.freeze({
   coordinatorNodeId: `node-${node}`,
   address: `node-${node}/message-group/mg-node-${node}`,
 })));
-
-const ACTIVE_HANDLE_TYPES = new Set(['Timeout', 'Immediate']);
+const REPOSITORY_ROOT = fileURLToPath(new URL('../../', import.meta.url));
+const OWNER_FILES = Object.freeze([
+  'src/topology/cdc-group-propagation-service.js',
+  'src/topology/cdc-group-propagation-delivery-methods.js',
+  'src/topology/cdc-group-propagation-lifecycle-methods.js',
+  'src/topology/cdc-group-propagation-routing.js',
+]);
+const OWNER_FILE = /[\\/]src[\\/]topology[\\/]cdc-group-propagation[\w-]*\.js$/u;
 const TEST_FILE = fileURLToPath(import.meta.url);
-const SOURCE_FRAME = /\((?:file:\/\/)?(\/[^):]+\.js:\d+)/u;
-
-function countActiveHandles() {
-  return process.getActiveResourcesInfo()
-    .filter((type) => ACTIVE_HANDLE_TYPES.has(type)).length;
-}
-
-// Diagnostics only: every Timeout and Immediate created after stop, named by
-// the first source frame on its creating stack.
-const observation = {open: false, creations: []};
-createHook({
-  init(asyncId, type) {
-    if (!observation.open || !ACTIVE_HANDLE_TYPES.has(type)) {
-      return;
-    }
-    const stackTraceLimit = Error.stackTraceLimit;
-    Error.stackTraceLimit = 64;
-    const {stack} = new Error();
-    Error.stackTraceLimit = stackTraceLimit;
-    // Past this hook's own frame, the first source frame that created it.
-    const creatingStack = stack.split('\n').slice(2).join('\n');
-    const frame = creatingStack.match(SOURCE_FRAME)?.[1] ?? 'node internals';
-    // The test's own turns are not the service's work.
-    if (!frame.startsWith(TEST_FILE)) {
-      observation.creations.push(`${type} at ${frame}`);
-    }
-  },
-}).enable();
 
 async function turns(count) {
   for (let turn = count; turn > 0; turn -= 1) {
@@ -122,6 +113,9 @@ async function turns(count) {
 function compose(mode, options = {}) {
   setupConfig(mode);
   const lane = {stopped: false, routerCalls: [], applies: [], heldApply: null};
+  // Open before the service exists, so every timer it arms is attributed.
+  lane.ledger = createOwnerWorkLedger({ownerFile: OWNER_FILE, testFile: TEST_FILE});
+  lane.ledger.open();
   const service = new CDCGroupPropagationService({
     nodeId: 'node-a',
     systemTableCache: createTopologyCache({
@@ -160,11 +154,11 @@ function compose(mode, options = {}) {
       }) : Promise.resolve();
     },
   };
+  // The terminal boundary is stop()'s first statement: whatever stop() itself
+  // arms is after it.
   lane.stop = () => {
     lane.stopped = true;
-    lane.handlesBeforeStop = countActiveHandles();
-    observation.open = true;
-    observation.creations = [];
+    lane.ledger.markTerminal();
     service.stop();
   };
   return lane;
@@ -317,6 +311,7 @@ const LANES = [
   }},
 ];
 
+
 function assertStoppedAnswer(lane) {
   assert.notEqual(lane.box?.answer ?? null, null,
     'the awaiting caller settles once the service stops');
@@ -329,8 +324,49 @@ function assertStoppedAnswer(lane) {
   'success or a pending retry');
 }
 
+// State leg, bookkeeping half: nothing the owner holds for later.
+function assertOwnerBookkeepingEmpty(service) {
+  assert.deepEqual({
+    immediateBatchTimers: service.immediateBatchTimers.size,
+    immediateBatchEntries: service.immediateBatchEntriesByKey.size,
+    backgroundRetryTimers: service.backgroundRetryTimers.size,
+    backgroundRetryWaves: service.backgroundRetryEntriesByKey.size,
+    heldSleeps: service.retrySleepReleases.size,
+  }, {
+    immediateBatchTimers: 0, immediateBatchEntries: 0,
+    backgroundRetryTimers: 0, backgroundRetryWaves: 0, heldSleeps: 0,
+  }, 'the owner holds no batch, wave, timer or sleep after stop');
+}
+
+// The four legs for one lane, once the lane has settled.
+async function assertQuiescentAfterStop(lane) {
+  const {ledger} = lane;
+  const report = ledger.report();
+  // Execution leg, first half: nothing ran or was created after stop.
+  assert.deepEqual(report.executedAfterTerminal, [],
+    'no owner timer or immediate callback runs after stop');
+  assert.deepEqual(report.createdAfterTerminal, [],
+    'no timer or immediate is created after stop, from any stack, ' +
+    'referenced or unref\'d (P-Q: newly scheduled)');
+  // State leg.
+  assert.deepEqual(report.pending, [],
+    'no owner timer or immediate is still pending after stop (P-Q)');
+  assert.deepEqual(report.referenced, [],
+    'no referenced owner handle is left to keep the process alive (P-L)');
+  assertOwnerBookkeepingEmpty(lane.service);
+  // Execution leg, second half: move time past every delay by running any
+  // owner callback still pending, then require that none did owner work.
+  ledger.runPending();
+  await turns(TURNS);
+  assert.deepEqual(lane.routerCalls.filter((call) => call.afterStop), [],
+    'no router delivery is started after stop, however far time moves');
+  assert.deepEqual(lane.applies.filter((apply) => apply.afterStop), [],
+    'no proposal is made on the source message group after stop, however ' +
+    'far time moves');
+}
+
 for (const spec of LANES) {
-  test(`${spec.name}: the service starts nothing after stop`, async () => {
+  test(`${spec.name}: the owner is quiescent after stop`, async () => {
     if (spec.mockTimers) {
       mock.timers.enable({apis: ['setTimeout']});
     }
@@ -339,25 +375,12 @@ for (const spec of LANES) {
     try {
       await spec.drive(lane);
       await turns(TURNS);
-      const handlesAfterSettle = countActiveHandles();
-      observation.open = false;
-
-      assert.deepEqual([...observation.creations], [],
-        'no timer or immediate is created after stop, from any stack, ' +
-        'referenced or unref\'d (the test\'s own turns excluded)');
-      assert.ok(handlesAfterSettle <= lane.handlesBeforeStop,
-        'no live timer or immediate is left behind after stop ' +
-        `(${lane.handlesBeforeStop} before stop, ${handlesAfterSettle} ` +
-        `after): created after stop: ${observation.creations.join(', ')}`);
-      assert.deepEqual(lane.routerCalls.filter((call) => call.afterStop), [],
-        'no router delivery is started after stop');
-      assert.deepEqual(lane.applies.filter((apply) => apply.afterStop), [],
-        'no proposal is made on the source message group after stop');
+      await assertQuiescentAfterStop(lane);
       if (!spec.answeredBeforeStop) {
         assertStoppedAnswer(lane);
       }
     } finally {
-      observation.open = false;
+      lane.ledger.close();
       lane.service.stop();
       mock.timers.reset();
       for (const call of lane.routerCalls) {
@@ -367,3 +390,42 @@ for (const spec of LANES) {
     }
   });
 }
+
+// Semantic leg: after stop the primitive refuses and arms nothing, and the
+// sleep built on it resolves at once.
+test('semantic: after stop the delayed-work primitive refuses, arms ' +
+  'nothing, and its sleep resolves at once', async () => {
+  const lane = compose(LATENCY_PROPAGATION_MODE.SAFE);
+  try {
+    lane.stop();
+    let ran = false;
+    assert.equal(lane.service.armPropagationTimer(() => {
+      ran = true;
+    }, 1), null, 'the primitive answers refused (null) once stopped');
+    let slept = false;
+    lane.service.sleep(3600000).then(() => {
+      slept = true;
+    });
+    await turns(TURNS);
+    assert.equal(slept, true, 'the sleep resolves at once, holding nothing');
+    assert.equal(ran, false, 'the refused callback never runs');
+    await assertQuiescentAfterStop(lane);
+  } finally {
+    lane.ledger.close();
+    teardownConfig();
+  }
+});
+
+// Census leg: the only delayed-work site in the owner is its primitive.
+test('census: the owner creates delayed work only through its primitive', () => {
+  const census = censusDelayedWorkSites(REPOSITORY_ROOT, OWNER_FILES);
+  assert.deepEqual(census.timerSites, [
+    'src/topology/cdc-group-propagation-lifecycle-methods.js:' +
+      'armPropagationTimer:setTimeout',
+  ], 'no setTimeout, setInterval or setImmediate reference outside ' +
+    'armPropagationTimer');
+  assert.deepEqual(census.forbiddenImports, [],
+    'no node:timers or timers/promises import in the owner');
+  assert.deepEqual(census.refreshCalls, [],
+    'no timer is re-armed with refresh()');
+});
