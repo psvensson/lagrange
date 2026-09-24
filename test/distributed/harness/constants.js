@@ -782,6 +782,8 @@ const DISTRIBUTED_EXECUTION_ENV = Object.freeze({
   PROFILE: 'DISTRIBUTED_MATRIX_PROFILE',
   HOSTS: 'DISTRIBUTED_MATRIX_HOSTS',
 });
+const DISTRIBUTED_MATRIX_REPORT_ROOT =
+  'test-output/reports/distributed-matrix';
 
 // --- CLI Runner Constants ---
 // Default runs use the local Docker daemon (fast inner loop: warm image reuse,
@@ -894,6 +896,7 @@ export {
   DISTRIBUTED_EXECUTION_TARGET,
   DISTRIBUTED_MATRIX_PROFILE,
   DISTRIBUTED_EXECUTION_ENV,
+  DISTRIBUTED_MATRIX_REPORT_ROOT,
   LOG_SUBSCRIPTION_CAPABILITY,
   CLI,
   EXIT_CODES,
