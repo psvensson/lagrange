@@ -208,14 +208,14 @@ Production (`PROD`) is rc 0 on all ten files.
 | MH1 | In-progress without the role check | write-path 1 | killed |
 | **MH2** | **In-progress without the membership check** | **decision-inputs 1 (R2.3)** | survived |
 | **MI1** | **Deferral answered success in the retry loop** | **committed 1 (R2.4)** | survived |
-| MI2 | Deferral answered success at budget exhaustion | survives: unreachable (below) | survived |
+| MI2 | Deferral answered success at budget exhaustion | survives: unreachable (below). **Corrected in round 3: reachable, and now killed by R3.10** | survived |
 | MJ1 | Handler bypasses the partition authority | h-already, h-main, census 1 | killed |
 | MJ2 | Target branch uses `campaign` | h-already, h-main | killed |
 | MK | Liferaft answers a silent Ok | attack-matrix 1, census 1 | killed |
 
 Every blocking mutant is now red, and each is killed on the property assertion named in the table of new legs, not on setup.
 
-**MI2 is recorded, not chased.**
+**MI2 is recorded, not chased.** *(Corrected in round 3. The reasoning below is wrong for production's default timing: see "Round 3, correction: MI2 is reachable".)*
 - It changes only the site where a write is still deferred once the whole deferral budget has run out.
 - A single transfer's window is at most one election timeout (the core aborts it). The implementer's `partition-write-leadership-transfer.test.js` (pwrite) asserts that this timeout is less than `USER_TRANSACTION_WRITE_DEFER_BUDGET_MS`.
 - So no single-transfer scenario reaches the site.
@@ -257,4 +257,170 @@ The ten mutants of my round-1 scratch reference were re-run on the three raft-le
 - `npm run -s test:duplication`: OK. src+scripts 56/56 groups and 1815/1815 lines; test 791/791 groups and 30451/30451 lines.
 - `node scripts/check-fast-static.js`, after `npm run -s test:metadata:refresh`: ok. Both new files classify as `unit`.
 - The four `test/shards/*.json` files were then put back to HEAD for the lead to regenerate on commit.
-- As committed, without the refresh, `audit:shards` reports the two new files as unclassified, as in round 1.
+- As committed, without the refresh, `audit:shards` reports the two new files as unclassified, as in round 1. *(Stale; corrected in round 3. The round-2 commit d9fa5284e carries the regenerated `test/shards`, and `check-fast-static` is ok on it.)*
+
+## Round 3 (evidence only, class repair), 2026-09-25
+
+Author: Agent A (the evidence author). This section responds to `verification-round-2.md` (REJECT on the evidence only). Rounds 1 and 2 above stay as written; their two wrong statements are marked inline as corrected here.
+
+- **Frozen production:** bc8e1118d. The evidence worktree is at bdfc049c2, whose src is identical to bc8e1118d.
+- **Nothing under `src/` changed, and I made no git writes.**
+- **Scratch material:** the session scratchpad under `f1/evidence/`:
+  - `r3/prod/`: an export of bdfc049c2 with the round-3 witnesses;
+  - `r3/mutants/`: the verifier's `mutate.py` and `mutate2.py` with only `V` changed, my own `mutate3.py`, and `run3.sh`;
+  - `r3/catalogue-round1.txt` and `r3/catalogue-round2-and-own.txt`: the runs;
+  - `r3-prod-repeat/`: the 5 runs on production.
+
+### Why this is a class repair
+
+Round 1's MD, and round 2's X1 and X4, are one mechanism: a decision input read before the turn's drain of delivered messages. Two same-root rejections forbid another single leg (protocol item 10). So round 3 witnesses the class:
+
+> In a turn that begins with delivered-but-unprocessed messages, every decision is taken on the core as those messages left it.
+
+This covers both decisions the port makes from the core's facts: the transfer decision, and the classification of a dropped proposal or configuration change.
+
+### Files
+
+- **New: `test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js`.** The class witness, R3.1 to R3.7.
+- **Changed: `test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js`.** Adds R3.8 and R3.9, the drop causes on a replica that does not lead. `'leader'` is now read through `RAFT_ROLE.LEADER`.
+- **Changed: `test/partition/partition-write-leadership-transfer-committed.test.js`.**
+  - Adds R3.10.
+  - The shared setup moves into one helper, `withTransferToCutOffVoter`. R2.4's assertions are unchanged.
+  - The raft table names come from `RAFT_RS_TABLE`; only normal entries are decoded (`RAFT_RS_ENTRY_TYPE.NORMAL`).
+
+### The class witness: every case pairs a structural leg with a semantic leg
+
+**The structural leg is read by order within the turn, not by count.**
+- The source is the actual-core-entry observer: every binding call of the turn, in order.
+- Delivered messages are handed to the port's `step()` and left unprocessed on the never-advanced virtual clock (`stepUndrained`).
+- Two rules apply:
+  1. **The turn's first core entry is `step`, the first delivered message.** Nothing, not a `status` and not a `conf_state`, is read before the drain.
+  2. **The decision's reads come after the last delivered message's `step`.**
+     - For a transfer, the last `status` and the last `conf_state` before the transfer's own `step` both follow it, and nothing but reads lies between them and that step.
+     - For a dropped proposal, a `status` and a `conf_state` follow the refused `propose` or `propose_conf_change_v2`: the classification is read after the refusal.
+     - For a refused transfer, the last `status` and `conf_state` of the turn follow the last delivered step.
+
+**Observed order on production.** For a named transfer with 2 delivered acknowledgements the turn is:
+`step,has_ready,take_ready,persist_ready,conf_state,advance_append,advance_apply,has_ready,status,conf_state,step,has_ready,status,conf_state,status,conf_state,step,…`
+
+The final `status,conf_state,step` is the decision followed by the transfer's step. For a dropped proposal in a transfer window with 1 delivered response it is:
+`step,has_ready,status,conf_state,propose,status,conf_state`
+
+| Leg | Input class | Pending (delivered, unprocessed) | Semantic assertion | Structural rule |
+|---|---|---|---|---|
+| R3.1 | configuration, role | acknowledgements of a write | named C: `transfer-requested` | transfer |
+| R3.2 | progress (most-caught-up) | acknowledgements of a write | `transfer-requested` | transfer |
+| R3.3 | configuration | acknowledgements of a write | named reserved non-member: `target-not-voter` | refused transfer |
+| R3.4 | **role, term, leader** | B's higher-term vote request | not CORE_OK: `no-known-leader`, `retryable: true`. A no longer leads, and its term advanced in that turn | refused transfer |
+| R3.5 | drop classification (transfer cause) | B's heartbeat responses inside a transfer window | `propose` answers HOST_FAILURE `leadership-transfer-in-progress` | refused proposal |
+| R3.6 | drop classification, conf change | the same | `proposeConfChange` answers the same | refused proposal |
+| R3.7 | **drop classification (removal cause)** | acknowledgements that commit A's own removal in the proposal's turn | CORE_REFUSED, not in-progress, `retryable: false`. The removal committed in that turn | refused proposal |
+
+Precondition reads (for example "A leads", or "the removal is not yet committed at A") are taken before the hand-over, because a port's `readStatus` drains delivered messages itself.
+
+### The drop causes on a replica that does not lead (X3)
+
+The route is bounded by raft-rs's own drop causes on a non-leader:
+- `step_candidate` drops a proposal;
+- `step_follower` drops one when it knows no leader, and forwards it when it knows one;
+- a pre-candidate cannot arise, because production tuning leaves pre-vote off.
+
+| Leg | Scenario | Assertion |
+|---|---|---|
+| R3.8 | B is cut off and campaigns (precondition: `role` is `RAFT_ROLE.CANDIDATE`) | its dropped proposal is CORE_REFUSED, not in-progress, `retryable: false` |
+| R3.9 | a fresh group, with no leader known (precondition: `leaderId` is null) | the same |
+
+A removed leader (R2.3) and a leader in a transfer window (W3.10) cover the leader side.
+
+### Round 3, correction: MI2 is reachable (R3.10)
+
+Round 2 said that no single transfer reaches the budget-exhaustion site. That holds only for the test timing. Under production's defaults the window is longer than the budget:
+- the election timeout floor is `LIFERAFT_ELECTION_MIN_DEFAULT_MS` (1000 ms);
+- `ELECTION_JITTER_PER_REPLICA_MS` (2500 ms) is added per replica index;
+- the deferral budget is `USER_TRANSACTION_WRITE_DEFER_BUDGET_MS` (2000 ms).
+
+**R3.10's setup:**
+- The leader's timing is derived by `computeReplicaElectionTimeouts` from those owner constants for a replica at index 1: 3500 to 5500 ms. No literal is used.
+- Precondition: `recoveryRetryWindowMsOf(leader.raftTimingConfig)` exceeds the budget.
+- The transfer targets a voter that is cut off, so it can only abort, one election timeout later.
+
+**R3.10's assertions:**
+- A write issued in the window answers `success !== true` and `deferRetry: true`.
+- Its row is not in the leader's table, and no normal entry of the leader's durable raft log carries its `entryId`.
+- It met the window: it was proposed more than once.
+- Once the leader takes writes again (a later write is served after the abort), the deferred write's row and log entry are still absent, so it was not proposed again behind its answer.
+- The leader and term are unchanged.
+
+On production it answers deferRetry after about 2 s, and the test takes about 3.7 s. On MI2 it answers `{"success":true,…}`, which is red.
+
+### Catalogue 1: round 1's 16 mutants, with the 11 witness files
+
+- **Planting:** the verifier's `mutate.py`, with only `V` changed.
+- **Run:** `run3.sh`, which is the verifier's round-2 `run2.sh` with `V` changed and its probe file replaced by `transfer-leadership-drain-order.test.js`. So no column below is the verifier's probe.
+- **Production** is rc 0 on all 11 files.
+- **Columns:** the 11 files are h-already, h-main, property, attack-matrix, handler, write-path, pwrite, census, decin (decision-inputs), committed and drain (drain-order).
+
+| Mutant | Killed by (rc 1, failures) |
+|---|---|
+| MA | property 5, attack-matrix 7, handler 2, write-path 1, decin 1, committed 2, drain 4 |
+| MB | property 4, attack-matrix 7, handler 1, write-path 1, decin 1, committed 2, drain 2 |
+| MC1 | attack-matrix 2, decin 1, drain 1 |
+| MC2 | h-already, h-main |
+| MD | decin 1, drain 4 (rule 1: the turn opens with `status,conf_state`) |
+| ME1 | property 1 |
+| ME2 | decin 1 |
+| MF | attack-matrix 1 |
+| MG | attack-matrix 1 |
+| MH1 | write-path 1, decin 2 (R3.8, R3.9) |
+| MH2 | decin 1, drain 1 |
+| MI1 | committed 2 |
+| **MI2** | **committed 1 (R3.10: `a write never committed is not served ({"success":true,…})`)** |
+| MJ1 | h-already, h-main, census 1 |
+| MJ2 | h-already, h-main |
+| MK | attack-matrix 1, census 1 |
+
+All 16 are red.
+
+### Catalogue 2: the verifier's round-2 route mutants (`mutate2.py`) and my own
+
+| Mutant | Route | Killed by | Failing assertion |
+|---|---|---|---|
+| X1 (MD2) | status read before the drain (configuration fresh) | drain 4 | R3.1 to R3.3 on rule 1 (the turn opens with `status`); R3.4 semantically (`{"outcome":"CORE_OK","reason":"transfer-requested"}`) |
+| X2 (ME3) | non-learner judged against `learnersNext` | decin 1 | R2.2 |
+| X3 (MH6) | a candidate's drop counted as a leader's | decin 1 | R3.8 |
+| X4 (MH5) | classification inputs read before the drain | drain 3 | R3.5 and R3.6 on rule 1 (`status,conf_state,step,…`); R3.7 semantically (`HOST_FAILURE leadership-transfer-in-progress`) |
+| X5 (MI3) | the served answer names another log index | committed 1 | R2.4 |
+| X6 (MI4) | served before commit, at a predicted index | committed 1 | R2.4 |
+| **X7 (mine)** | **a different input through a core read:** most-caught-up ranks the `progress` of a `status` read before the drain; role, term and configuration stay fresh | drain 1 | R3.2 on rule 1 (the turn opens with `status`). No semantic leg sees it: equally acknowledged voters rank the same either way |
+| **X8 (mine)** | **the same class with no core entry:** the transfer is decided on the runtime's cached `lastStatus`, captured before the drain | drain 1 | R3.4 semantically (`{"outcome":"CORE_OK","reason":"transfer-requested"}`). No structural rule can see it, because nothing is read from the core before the drain |
+
+- **Every mutant is red.** None was judged equivalent.
+- **X7 and X8 are why the pairing is needed.** X7 is visible only structurally, and X8 only semantically.
+- **My first plant of X7 was inert.** It tested `command.successor` where the runtime command carries `command.transfer.successor`, so it survived as a no-op. After the fix (`mutate3.py`) it is red. It is recorded because an inert plant can look like a surviving mutant.
+
+### Round-1 reference mutants
+
+These were not re-run in round 3. The round-3 witnesses need the partition write path and production's runtime vocabulary, which my round-1 scratch reference does not have. Their round-2 result stands: all ten were red on the raft-level files. Round 3 changed only additively the files those results were measured on (property and attack-matrix are unchanged; decision-inputs gains two tests).
+
+### Determinism
+
+- On production (the bdfc049c2 worktree), 5 of 5 runs were green, one process at a time and thermal-gated, with no red to stop at. Each run was property 6, attack-matrix 18, decision-inputs 5, drain-order 7 and committed 2 (`r3-prod-repeat/`).
+- R3.1 to R3.9 run on the never-advanced virtual clock.
+- R3.10 runs on the replicas' own clocks, like R2.4. It adds no sleep, and its outcome assertions hold for any schedule.
+
+### Limits (round 3)
+
+- **The structural rule sees core reads only.** A decision taken on state cached before the drain, with no core entry (my X8), passes it. The semantic legs carry that route: R3.4 for role, term and leader; R3.7 and R2.1 for configuration. There is no semantic leg for cached progress, because most-caught-up would need unequal progress created by the pending messages themselves. That route is witnessed structurally only (X7).
+- **The structural rule identifies the decision's reads by position**, as the reads right before the transfer's step or right after the refused proposal. An implementation that legitimately interleaved other core calls there would need the rule restated. Production's order is recorded above.
+- **The rule pins order within one turn.** It does not cover a decision spread over two turns (for example, a read in one command and a step in a later one). No such path exists in production, where decide and step are one synchronous block.
+- **R3.4 covers one higher-term message** (a vote request). An append or heartbeat of a higher term takes the same drain-then-decide path and was not constructed.
+- **Pre-candidate drops are unreachable** under production tuning (pre-vote off), and are not witnessed.
+- **R3.10 covers one timing derivation**, production's replica at index 1. The adaptive IDLE profile (a 3000 ms minimum) was not constructed. It covers a single write; the router's retry after the deferral is outside the port.
+- **N1 is unchanged** (recorded in round 2): a stale delivered-message refusal can answer a queued command. The round-3 legs keep clear of it: no removed peer's message is pending in them.
+
+### E0 gates (round 3)
+
+- `eslint` on the five evidence test files and the driver: clean.
+- `npm run -s test:duplication`: OK. src+scripts 56/56 groups and 1815/1815 lines; test 791/791 groups and 30451/30451 lines.
+- `node scripts/check-fast-static.js`, after `npm run -s test:metadata:refresh`: ok. The new drain-order file classifies as `unit`.
+- The four regenerated `test/shards/*.json` files were then put back to HEAD, for the lead to regenerate on commit.

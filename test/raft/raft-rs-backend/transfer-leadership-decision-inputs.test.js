@@ -24,6 +24,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
+import {RAFT_ROLE} from '../../../src/raft/constants.js';
 import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
@@ -154,7 +155,7 @@ async () => {
     const status = driver.status(A);
     assert.equal(status.confState.voters.includes(selfId), false,
       'precondition: the removal of the leader is committed');
-    assert.equal(status.role, 'leader',
+    assert.equal(status.role, RAFT_ROLE.LEADER,
       'precondition: raft-rs keeps the removed leader leading');
     const answer = driver.propose(A, {on: 'removed-leader'});
     assert.equal(answer.outcome, CORE_REFUSED, JSON.stringify(answer));
@@ -162,6 +163,48 @@ async () => {
       'no transfer runs: the drop is the removal\'s');
     assert.equal(answer.retryable, false,
       'the removal\'s drop does not end within an election timeout');
+  } finally {
+    driver.dispose();
+  }
+});
+
+// Round 3: the drop causes on a replica that does not lead. raft-rs drops a
+// proposal on a candidate (step_candidate) and on a follower that knows no
+// leader (step_follower); a follower that knows its leader forwards it, and a
+// pre-candidate cannot arise (the production tuning leaves pre-vote off). No
+// transfer runs on a non-leader, so no such drop is the retryable
+// in-progress answer.
+function assertNotTransferDrop(answer) {
+  assert.equal(answer.outcome, CORE_REFUSED, JSON.stringify(answer));
+  assert.notEqual(answer.reason, IN_PROGRESS_REASON,
+    'no transfer runs on a replica that does not lead');
+  assert.equal(answer.retryable, false);
+}
+
+test('a candidate answers its dropped proposal as the core\'s refusal, ' +
+  'never as a transfer in progress', async () => {
+  const driver = formedGroup('inputs-candidate-drop');
+  try {
+    driver.isolate(B);
+    driver.port(B).campaign();
+    driver.deliver();
+    assert.equal(driver.status(B).role, RAFT_ROLE.CANDIDATE,
+      'precondition: B stands for election and cannot win cut off');
+    assertNotTransferDrop(driver.propose(B, {on: 'candidate'}));
+  } finally {
+    driver.dispose();
+  }
+});
+
+test('a follower that knows no leader answers its dropped proposal as the ' +
+  'core\'s refusal, never as a transfer in progress', async () => {
+  const driver = new TransferLeadershipDriver({
+    partitionId: 'inputs-leaderless-drop', replicaIds: REPLICAS});
+  try {
+    const status = driver.status(B);
+    assert.equal(status.role, RAFT_ROLE.FOLLOWER);
+    assert.equal(status.leaderId, null, 'precondition: no leader is known');
+    assertNotTransferDrop(driver.propose(B, {on: 'leaderless'}));
   } finally {
     driver.dispose();
   }

@@ -18,6 +18,12 @@
 //   - the row is in the leader's table and in the table of the follower the
 //     group still reaches.
 //
+// Round 3 adds the other end of the window: a leader whose election timeout
+// (the window's length) exceeds the write deferral budget, as production's
+// default timing gives a leader at replica index 1. The write then meets the
+// budget's end inside the window: it must be answered as the typed deferral
+// the router retries, never as success, and nothing of it may be stored.
+//
 // Real PartitionServices on rs-raft, formed the way production forms a group
 // (partition-admitted-group-fixture.js), on the replicas' own clocks. The
 // transfer is asked for through the port's own transferLeadership, naming a
@@ -33,18 +39,29 @@ import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PARTITION_SERVICE_OPERATION} from
-  '../../src/partition/partition-service-constants.js';
+import {
+  PARTITION_SERVICE_DEFAULT,
+  PARTITION_SERVICE_OPERATION,
+  PARTITION_SERVICE_VALUE,
+} from '../../src/partition/partition-service-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   RAFT_LEADERSHIP_TRANSFER_REASON,
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
   RAFT_OPERATION_OUTCOME,
 } from '../../src/raft/raft-operation-port-constants.js';
+import {RAFT_RS_TABLE} from
+  '../../src/raft/raft-rs-durable-store-constants.js';
 import {decodeCommittedProposal} from
   '../../src/raft/raft-rs-proposal-codec.js';
+import {RAFT_RS_ENTRY_TYPE} from
+  '../../src/raft/raft-rs-ready-loop-constants.js';
+import {computeReplicaElectionTimeouts} from
+  '../../src/raft/replica-election-timeouts.js';
 import {setActualCoreEntryObserver} from
   '../../src/raft/raft-rs-runtime-owner.js';
+import {recoveryRetryWindowMsOf} from
+  '../../src/raft/raft-rs-runtime-tuning.js';
 
 const PARTITION_ID = 'transfer-committed-write';
 const TEMP_PREFIX = 'partition-write-transfer-committed-';
@@ -55,11 +72,28 @@ const PROPOSE_OPERATION = 'propose';
 const PAYLOAD_ENCODING = 'base64';
 const TEST_TIMEOUT_MS = 60000;
 const FORMATION_BUDGET_MS = 10000;
+const HEARTBEAT_INTERVAL_MS = 20;
 const RAFT_TIMING = Object.freeze({
-  heartbeatIntervalMs: 20,
+  heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
   electionTimeoutMinMs: 150,
   electionTimeoutMaxMs: 300,
 });
+// Production's default election timeout for a replica at index 1 of its
+// group, derived by the owner that derives it for every partition replica.
+const INDEX_ONE_TIMEOUTS = computeReplicaElectionTimeouts({
+  replicaId: 'second', replicaIds: ['first', 'second'],
+  baseElectionMinMs: PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MIN_DEFAULT_MS,
+  baseElectionMaxMs: PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MAX_DEFAULT_MS,
+  electionJitterPerReplicaMs:
+    PARTITION_SERVICE_VALUE.ELECTION_JITTER_PER_REPLICA_MS,
+});
+const PRODUCTION_INDEX_ONE_TIMING = Object.freeze({
+  heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
+  electionTimeoutMinMs: INDEX_ONE_TIMEOUTS.electionMinMs,
+  electionTimeoutMaxMs: INDEX_ONE_TIMEOUTS.electionMaxMs,
+});
+const DEFERRED_ROW_ID = 'row-past-budget';
+const DEFERRED_ENTRY_ID = 'write-past-deferral-budget';
 const MEMBERS = Object.freeze([
   ['committed-r1', 'committed-node-1'],
   ['committed-r2', 'committed-node-2'],
@@ -81,18 +115,38 @@ function rowOf(service, id) {
 
 // The leader's durable raft record, on a connection of the test's own: the
 // command at one log position, and the commit index.
+function decodeEntry(data) {
+  return data ? decodeCommittedProposal(Buffer.from(data, PAYLOAD_ENCODING)) :
+    null;
+}
+
+// Every entry id the normal entries of the leader's durable raft log hold.
+function durableEntryIds(dbFile) {
+  const independent = new Database(dbFile, {readonly: true});
+  try {
+    return independent.prepare(
+      `SELECT data FROM ${RAFT_RS_TABLE.LOG} ` +
+      'WHERE group_id = ? AND entry_type = ?')
+      .all(PARTITION_ID, RAFT_RS_ENTRY_TYPE.NORMAL)
+      .map((row) => decodeEntry(row.data)?.entryId);
+  } finally {
+    independent.close();
+  }
+}
+
 function durableEntryAt(dbFile, logIndex) {
   const independent = new Database(dbFile, {readonly: true});
   try {
     const entry = independent.prepare(
-      'SELECT data FROM _raft_rs_log WHERE group_id = ? AND log_index = ?')
+      `SELECT data FROM ${RAFT_RS_TABLE.LOG} ` +
+      'WHERE group_id = ? AND log_index = ?')
       .get(PARTITION_ID, logIndex);
     const hard = independent.prepare(
-      'SELECT commit_index FROM _raft_rs_hard_state WHERE group_id = ?')
+      `SELECT commit_index FROM ${RAFT_RS_TABLE.HARD_STATE} ` +
+      'WHERE group_id = ?')
       .get(PARTITION_ID);
     return {
-      command: entry?.data ? decodeCommittedProposal(
-        Buffer.from(entry.data, PAYLOAD_ENCODING)) : null,
+      command: decodeEntry(entry?.data),
       commitIndex: Number(hard?.commit_index ?? 0),
     };
   } finally {
@@ -100,13 +154,16 @@ function durableEntryAt(dbFile, logIndex) {
   }
 }
 
-test('a write the leader serves during a leadership transfer is committed: ' +
-  'its row is stored and the log position it names holds it',
-{timeout: TEST_TIMEOUT_MS}, async () => {
+// A formed group whose leader runs a transfer to a voter cut off from it
+// (nothing is delivered to it and its clock is stopped), so the transfer can
+// only abort, one election timeout after the leader accepted it. `body` gets
+// the leader, the follower the group reaches, and the proposals the core was
+// asked for while `body` issues its write.
+async function withTransferToCutOffVoter(raftTiming, body) {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   ConfigurationManager.getInstance().initialize({
-    node: {id: MEMBERS[0][1]}, raft: RAFT_TIMING});
+    node: {id: MEMBERS[0][1]}, raft: raftTiming});
   LoggingService.getInstance().initialize({level: 'fatal'});
   const group = await formAdmittedGroup({
     partitionId: PARTITION_ID, members: MEMBERS, tempPrefix: TEMP_PREFIX,
@@ -142,6 +199,21 @@ test('a write the leader serves during a leadership transfer is committed: ' +
         proposals.push(entry);
       }
     });
+    await body({group, leader, reached, termBefore, proposals});
+  } finally {
+    setActualCoreEntryObserver(null);
+    network.deliver = transportDeliver;
+    await group.dispose();
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  }
+}
+
+test('a write the leader serves during a leadership transfer is committed: ' +
+  'its row is stored and the log position it names holds it',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await withTransferToCutOffVoter(RAFT_TIMING, async ({group, leader,
+    reached, termBefore, proposals}) => {
     const answer = await writeRow(leader, ROW_ID, ENTRY_ID);
     setActualCoreEntryObserver(null);
     assert.equal(answer.success, true,
@@ -168,11 +240,39 @@ test('a write the leader serves during a leadership transfer is committed: ' +
     const after = leader.raft.readStatus();
     assert.equal(after.role, RAFT_ROLE.LEADER, 'the leader stays in place');
     assert.equal(after.term, termBefore, 'no term moved');
-  } finally {
+  });
+});
+
+test('a write still deferred when its budget ends inside a transfer window ' +
+  'is answered as the typed deferral, never success, and nothing of it is ' +
+  'stored', {timeout: TEST_TIMEOUT_MS}, async () => {
+  await withTransferToCutOffVoter(PRODUCTION_INDEX_ONE_TIMING, async ({group,
+    leader, termBefore, proposals}) => {
+    assert.ok(recoveryRetryWindowMsOf(leader.raftTimingConfig) >
+      PARTITION_SERVICE_DEFAULT.USER_TRANSACTION_WRITE_DEFER_BUDGET_MS,
+    'precondition: the transfer window outlasts the write deferral budget');
+    const answer = await writeRow(leader, DEFERRED_ROW_ID, DEFERRED_ENTRY_ID);
     setActualCoreEntryObserver(null);
-    network.deliver = transportDeliver;
-    await group.dispose();
-    ConfigurationManager.resetInstance();
-    LoggingService.resetInstance();
-  }
+    assert.notEqual(answer.success, true,
+      `a write never committed is not served (${JSON.stringify(answer)})`);
+    assert.equal(answer.deferRetry, true,
+      'it is the typed deferral the router retries');
+    const leaderDb = group.dbFileOf(MEMBERS[0]);
+    assert.equal(rowOf(leader, DEFERRED_ROW_ID), undefined,
+      'nothing of the deferred write is in the leader\'s table');
+    assert.equal(durableEntryIds(leaderDb).includes(DEFERRED_ENTRY_ID), false,
+      'nothing of the deferred write is in the leader\'s raft log');
+    assert.ok(proposals.length > 1,
+      'the write met the transfer window and was proposed again ' +
+      `(${proposals.length} proposal(s))`);
+    assert.equal(await group.waitFor(async () =>
+      (await writeRow(leader, 'row-after', 'after-window')).success === true),
+    true, 'the leader takes writes again once the transfer aborted');
+    assert.equal(rowOf(leader, DEFERRED_ROW_ID), undefined,
+      'the deferred write was not proposed again behind its answer');
+    assert.equal(durableEntryIds(leaderDb).includes(DEFERRED_ENTRY_ID), false);
+    const after = leader.raft.readStatus();
+    assert.equal(after.role, RAFT_ROLE.LEADER, 'the leader stays in place');
+    assert.equal(after.term, termBefore, 'no term moved');
+  });
 });
