@@ -50,6 +50,9 @@ const USAGE = [
   '  lab test changed|smoke|gate|postpush|all\n',
   '  lab test changed|all --lane ordinary|cpu-heavy|external-toolchain|bootstrap|exclusive|all ',
   '[--on NAME] [--sha COMMIT] [--split]\n',
+  '  lab test changed --lane LANE [--sha COMMIT] --base-sha COMMIT\n',
+  '      (--base-sha: the commit the change cone is measured from; ',
+  'default the merge base with origin/main)\n',
   '  lab fleet [--json]\n',
   '  lab provision [--output FILE] [--copy NAME]\n',
 ].join('');
@@ -113,6 +116,10 @@ test('a hand lab run refuses what it cannot run before it looks at anything', ()
     [['test', 'all', '--lane', 'exclusive', '--split'],
       'lab: --split divides the whole corpus: it takes --lane all'],
     [['test', 'all', '--lane', 'all', '--split', '--on'], 'lab: --on needs a machine name'],
+    [['test', 'changed', '--lane', 'all', '--base-sha'], 'lab: --base-sha needs a commit'],
+    [['test', 'all', '--lane', 'all', '--base-sha', 'main'],
+      'lab: --base-sha measures the change cone: it takes the changed profile'],
+    [['test', 'changed', '--base-sha', 'main'], 'lab: a lab test run names its lane with --lane'],
   ]) {
     const refused = labWithoutInventory(...args);
     assert.equal(refused.status, EXIT_FAILURE, `${args.join(' ')} exits non-zero`);

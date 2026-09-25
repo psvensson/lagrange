@@ -2291,6 +2291,27 @@ function resolveCommit(root, name) {
   return result.stdout.trim();
 }
 
+// The change cone of a hand run is the selector's own plan of the commit,
+// measured from the base the operator named with --base-sha. With none named
+// the selector applies its own default - the merge base with the publication
+// remote, origin/main - so the lab never restates that decision. The named
+// base reaches the one owner of the changed set, which is also what decides a
+// release-surface refusal: a path changed only before the base is not part
+// of the change.
+const LAB_TEST_SELECTOR = Object.freeze({SCRIPT: 'scripts/select-change-tests.js',
+  LIST: '--list', HEAD: '--head', BASE: '--base'});
+
+/**
+ * The selector invocation that lists the change cone of `sha` against
+ * `baseSha`, or against the selector's default base when none is named.
+ * @param {{sha: string, baseSha?: string|null}} input
+ * @return {string[]}
+ */
+export function labTestSelectorArgs({sha, baseSha = null}) {
+  const base = baseSha ? [LAB_TEST_SELECTOR.BASE, baseSha] : [];
+  return [LAB_TEST_SELECTOR.SCRIPT, LAB_TEST_SELECTOR.LIST, LAB_TEST_SELECTOR.HEAD, sha, ...base];
+}
+
 function bySpeed(left, right) {
   return left.speed - right.speed;
 }
