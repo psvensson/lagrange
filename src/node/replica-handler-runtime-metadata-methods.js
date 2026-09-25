@@ -211,33 +211,15 @@ function assignReplicaHandlerRuntimeMetadataMethods(
           REPLICA_HANDLER_TYPEOF.STRING &&
         options.explicitOperationType.trim().toUpperCase() ===
           EXPLICIT_ADD_OPERATION_TYPE;
-      // A REPLACE operation's dispatched cohort is the placement owner's
-      // closed-world membership decision. Local and hydrated service rows are
-      // still useful for leader/voter readiness, but they cannot add a voter
-      // that the owner excluded (for example, a just-retired source whose CDC
-      // removal has not reached this target yet).
-      const explicitReplaceReplicaIds = isExplicitReplaceJoin ?
-        new Set(requestedReplicaIds) :
-        null;
-      const hasExplicitReplaceCohort =
-        explicitReplaceReplicaIds?.size > 0;
-      const services = hasExplicitReplaceCohort ?
-        observedServices.filter((service) =>
-          explicitReplaceReplicaIds.has(
-            service?.service_id || service?.replica_id,
-          ),
-        ) :
-        observedServices;
-      const replicaIds = hasExplicitReplaceCohort ?
-        [...requestedReplicaIds] :
-        [];
-      const peerAddresses =
-        hasExplicitReplaceCohort && requestedPeerAddresses.length > 0 ?
-          [...requestedPeerAddresses] :
-          [];
-      const seenReplicaIds = new Set(replicaIds);
-      const hasExplicitReplacePeerAddresses =
-        hasExplicitReplaceCohort && requestedPeerAddresses.length > 0;
+      // One bootstrap membership for every join (owner decision D1): the
+      // services this node observes, the dispatched stamp, and this replica.
+      // No operation type narrows it to an intended end state - a REPLACE
+      // source stays in it while it is a member, and only the group's
+      // committed removal takes it out of the new replica's configuration.
+      const services = observedServices;
+      const replicaIds = [];
+      const peerAddresses = [];
+      const seenReplicaIds = new Set();
       // Count only established voters from sibling services. Freshly staged
       // rows in pending/creating/syncing states do not imply an existing group.
       const establishedExistingReplicaIds = new Set();
@@ -292,10 +274,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
             REPLICA_HANDLER_SERVICE.TYPE,
             serviceReplicaId,
           );
-        if (
-          !hasExplicitReplacePeerAddresses &&
-          !peerAddresses.includes(peerAddress)
-        ) {
+        if (!peerAddresses.includes(peerAddress)) {
           peerAddresses.push(peerAddress);
         }
       }

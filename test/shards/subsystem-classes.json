@@ -12,23 +12,23 @@
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 242,
+    "placement-rebalance": 243,
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 153,
-    "storage-raft": 112,
+    "storage-raft": 113,
     "test-infrastructure": 133,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2190,
-  "digest": "fnv1a32-9017689c",
+  "censusSize": 2192,
+  "digest": "fnv1a32-61536f48",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-43a4b9fe",
+  "observationDigest": "fnv1a32-a3246391",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1436,6 +1436,7 @@
     "test/raft/raft-provider-control.test.js": "storage-raft",
     "test/raft/raft-replica-base.test.js": "storage-raft",
     "test/raft/raft-rs-backend/backend-seam.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js": "storage-raft",
     "test/raft/raft-rs-backend/conf-state-authority.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-ready-loop.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "storage-raft",
@@ -1660,6 +1661,7 @@
     "test/rebalancer/replace-owner-lease-causal.test.js": "placement-rebalance",
     "test/rebalancer/replace-owner-lease-verdict-property.test.js": "placement-rebalance",
     "test/rebalancer/replace-replica-workflow.test.js": "placement-rebalance",
+    "test/rebalancer/replace-temporary-extra-voter-planner.test.js": "placement-rebalance",
     "test/rebalancer/replica-inventory.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-confirmation-authority-read.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-insert-retry-idempotency.test.js": "placement-rebalance",
@@ -6962,6 +6964,18 @@
     "test/raft/raft-rs-backend/backend-seam.test.js": {
       "directories": [
         "src/raft/spike"
+      ]
+    },
+    "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-progress.js",
+        "test/partition/partition-service-test-support.js"
       ]
     },
     "test/raft/raft-rs-backend/conf-state-authority.test.js": {
