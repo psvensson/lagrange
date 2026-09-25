@@ -13,7 +13,15 @@ const SANCTIONED_APPLY_CALL_COUNTS = Object.freeze({
   'bootstrap/node-joining-cdc-subscription-and-backfill.js': 1,
   'bootstrap/phases/create-message-group-phase.js': 1,
   'bootstrap/phases/query-system-state-phase.js': 2,
-  'cdc/cdc-integration-service-cache-visibility-wait.js': 1,
+  // The CDC authoritative cache-repair owner. 55a42ef57 (one CDC terminal
+  // gate at the owner) extracted the repair body out of
+  // cdc-integration-service-cache-visibility-wait.js into the module-private
+  // applyAuthoritativeCacheRepairRow, reachable only through the exported
+  // applyAuthoritativeCacheRepair terminal-gate choke point; the wait
+  // service's method now delegates and no longer writes directly. Same owner,
+  // same single write, so the entry moves with it (as the d07505a1f
+  // decomposition moved it from the segment file) rather than adding a site.
+  'cdc/cdc-integration-service-cache-visibility-authority.js': 1,
   'control-plane/control-plane-system-table-gateway-cache-reconciliation.js': 2,
   'message-group/cdc-handler.js': 1,
   // Documented local-only-truth seed writes (CL-016 priority local-commit
