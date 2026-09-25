@@ -12,7 +12,7 @@
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 242,
+    "placement-rebalance": 243,
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
@@ -25,8 +25,8 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2190,
-  "digest": "fnv1a32-9017689c",
+  "censusSize": 2191,
+  "digest": "fnv1a32-28285598",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-43a4b9fe",
   "classes": {
@@ -1655,6 +1655,7 @@
     "test/rebalancer/recent-completed-replace-target-visibility.test.js": "placement-rebalance",
     "test/rebalancer/recovery-handles-incomplete-operations.property.test.js": "placement-rebalance",
     "test/rebalancer/remove-active-dispatch-redrive.test.js": "placement-rebalance",
+    "test/rebalancer/remove-safety-readiness-wake.test.js": "placement-rebalance",
     "test/rebalancer/remove-workflow-step-progression.property.test.js": "placement-rebalance",
     "test/rebalancer/removed-replica-cleanup-debt-owner.test.js": "placement-rebalance",
     "test/rebalancer/replace-owner-lease-causal.test.js": "placement-rebalance",

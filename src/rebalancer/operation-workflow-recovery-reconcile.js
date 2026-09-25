@@ -1,5 +1,9 @@
 import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OperationWorkflowRecoveryDrain} from './operation-workflow-recovery-drain.js';
+import {
+  clearRemoveSafetyReadinessWaiter,
+  shutdownRemoveSafetyReadinessWake,
+} from './operation-workflow-remove-safety-readiness-wake.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
   applyPriorityRecoveryDispatchPendingOwnerProgress,
@@ -384,7 +388,17 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
       return;
     }
     this.clearSafetyDeferredRetry(operationId);
+    clearRemoveSafetyReadinessWaiter(this, operationId);
     this.safetyDeferredLogStateByOperationId.delete(operationId);
+  }
+
+  /**
+   * Release owner-local deferred retry state, including the remove-safety
+   * readiness wake's subscription and waiters.
+   */
+  shutdown() {
+    shutdownRemoveSafetyReadinessWake(this);
+    super.shutdown();
   }
 
   logDeferredSafetyBlockedRemove(

@@ -1,6 +1,10 @@
 import {REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
+  captureRemoveSafetyReadinessLevel,
+  registerRemoveSafetyReadinessWaiter,
+} from './operation-workflow-remove-safety-readiness-wake.js';
+import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
 import {
@@ -258,6 +262,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         await this.updateStep(operation, WORKFLOW_STEP.SENDING);
       }
     }
+    // Captured before the evaluation reads readiness (R-2 lost-wakeup rule).
+    const readinessEntryLevel =
+      captureRemoveSafetyReadinessLevel(this, operation);
     let removeSafetyEvaluation = await this.evaluateRemoveSafety(operation);
     if (removeSafetyEvaluation?.error) {
       if (
@@ -318,6 +325,11 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
             operation,
             removeSafetyEvaluation.deferReason,
             removeSafetyEvaluation.error,
+          );
+          registerRemoveSafetyReadinessWaiter(
+            this,
+            operation,
+            readinessEntryLevel,
           );
           return this.buildSkippedOperationResult(
             REBALANCER_SKIP_REASON.SAFETY_BLOCKED,

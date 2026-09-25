@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1924,
+    "unit": 1925,
     "integration": 75,
     "bootstrap": 184,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2190,
-  "digest": "fnv1a32-d53de3b7",
+  "censusSize": 2191,
+  "digest": "fnv1a32-45165188",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1636,6 +1636,7 @@
     "test/rebalancer/recent-completed-replace-target-visibility.test.js": "unit",
     "test/rebalancer/recovery-handles-incomplete-operations.property.test.js": "unit",
     "test/rebalancer/remove-active-dispatch-redrive.test.js": "unit",
+    "test/rebalancer/remove-safety-readiness-wake.test.js": "unit",
     "test/rebalancer/remove-workflow-step-progression.property.test.js": "unit",
     "test/rebalancer/removed-replica-cleanup-debt-owner.test.js": "unit",
     "test/rebalancer/replace-owner-lease-causal.test.js": "unit",
