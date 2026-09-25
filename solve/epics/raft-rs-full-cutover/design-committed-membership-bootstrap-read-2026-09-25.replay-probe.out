@@ -1,0 +1,6 @@
+H1 genesis bootstrap {1} (real)              bootstrap [1] -> {1,2} {1} {1,2} {2} 
+H1 current committed {2}, target excluded    bootstrap [2] -> {2} ERROR -2: apply_conf_change: removed all voters
+H1 current committed {2} + self 9            bootstrap [2,9] -> {2,9} {9} {2,9} {2,9} 
+H2 genesis {1,2,3}                           bootstrap [1,2,3] -> {1,2,3,4} {2,3,4} 
+H2 current {2,3,4}                           bootstrap [2,3,4] -> {2,3,4} {2,3,4} 
+H2 rows omit founder 2: {3,4}                bootstrap [3,4] -> {3,4} {3,4} 
