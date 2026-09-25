@@ -28,7 +28,6 @@ import {
   EXECUTOR_OUTCOME_TYPE,
 } from '../../src/rebalancer/executor-outcome-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import LifeRaft from '../../src/raft/liferaft.js';
 import {
   registerReplicaHandlerCreateAdmissionTests,
 } from './replica-handler-create-admission-test-cases.js';
@@ -43,7 +42,6 @@ const TEST_STEP_DOWN_REPLICA_ID = 'leader-replica';
 const TEST_STEP_DOWN_REASON = 'replace_source_leader_handoff';
 const TEST_STEP_DOWN_TARGET_ELECTION_REASON = 'replace_target_leader_election';
 const TEST_STEP_DOWN_CORRELATION_ID = 'corr-step-down';
-const TEST_STEP_DOWN_EMPTY_LEADER_ID = '';
 const TEST_STATUS_RETRY_PARTITION_ID = 'partition-status-retry';
 const TEST_STATUS_RETRY_REPLICA_ID = 'partition-status-retry-r2';
 const TEST_STATUS_RETRY_OPERATION_ID = 'partition-status-retry-op';
@@ -1133,14 +1131,12 @@ test('ReplicaHandler', async (t) => {
     ReplicaOperationMessageType,
     ReplicaOperationResponseStatus,
     RAFT_ROLE,
-    LifeRaft,
     TEST_STEP_DOWN_OPERATION_ID,
     TEST_STEP_DOWN_PARTITION_ID,
     TEST_STEP_DOWN_REPLICA_ID,
     TEST_STEP_DOWN_REASON,
     TEST_STEP_DOWN_TARGET_ELECTION_REASON,
     TEST_STEP_DOWN_CORRELATION_ID,
-    TEST_STEP_DOWN_EMPTY_LEADER_ID,
     TEST_STATUS_RETRY_PARTITION_ID,
     TEST_STATUS_RETRY_REPLICA_ID,
     TEST_STATUS_RETRY_OPERATION_ID,

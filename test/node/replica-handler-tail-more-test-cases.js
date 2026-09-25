@@ -1,3 +1,12 @@
+import {deepFreeze} from '../../src/raft/raft-operation-port.js';
+import {
+  RAFT_LEADERSHIP_TRANSFER_REASON,
+  RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
+  RAFT_OPERATION_OUTCOME,
+} from '../../src/raft/raft-operation-port-constants.js';
+import {REPLICA_HANDLER_LEADER_HANDOFF_BRANCH} from
+  '../../src/node/replica-handler-leader-handoff-methods.js';
+
 export async function registerReplicaHandlerTailMoreTests({
   t,
   fs,
@@ -11,14 +20,12 @@ export async function registerReplicaHandlerTailMoreTests({
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
   RAFT_ROLE,
-  LifeRaft,
   TEST_STEP_DOWN_OPERATION_ID,
   TEST_STEP_DOWN_PARTITION_ID,
   TEST_STEP_DOWN_REPLICA_ID,
   TEST_STEP_DOWN_REASON,
   TEST_STEP_DOWN_TARGET_ELECTION_REASON,
   TEST_STEP_DOWN_CORRELATION_ID,
-  TEST_STEP_DOWN_EMPTY_LEADER_ID,
   TEST_STATUS_RETRY_PARTITION_ID,
   TEST_STATUS_RETRY_REPLICA_ID,
   TEST_STATUS_RETRY_OPERATION_ID,
@@ -1214,217 +1221,123 @@ export async function registerReplicaHandlerTailMoreTests({
       }
     });
 
-  t.test('handleMessage routes STEP_DOWN_REPLICA through tracked leader handoff',
+  // The two STEP_DOWN_REPLICA handoffs reach the partition's one transfer
+  // issuer (requestLeadershipTransfer) and answer what its port answered:
+  // acceptance, with the branch it names and the port's record. The real
+  // core's behaviour on real partitions is witnessed in
+  // replica-handler-leadership-transfer.test.js.
+  const buildTransferTrackedService = (role, answer) => {
+    const trackedService = {
+      role,
+      transfers: [],
+      getRole() {
+        return this.role;
+      },
+      async requestLeadershipTransfer(request) {
+        trackedService.transfers.push(request);
+        return answer;
+      },
+    };
+    return trackedService;
+  };
+  const stepDownThroughHandler = async (trackedService, reason) => {
+    const cache = createSeededCache({
+      partitionId: TEST_STEP_DOWN_PARTITION_ID,
+      leaderReplicaId: TEST_STEP_DOWN_REPLICA_ID,
+    });
+    const handler = new ReplicaHandler({
+      nodeId: 'test-node',
+      dataDir: tempDir,
+      systemTableCache: cache,
+      cdcIntegrationService: createMockCDCService(cache),
+      createPartitionService: createMockPartitionServiceFactory(),
+    });
+    handler.localServices.set(TEST_STEP_DOWN_REPLICA_ID, trackedService);
+    handler.setLocalReplica(TEST_STEP_DOWN_REPLICA_ID, {
+      replicaId: TEST_STEP_DOWN_REPLICA_ID,
+      partitionId: TEST_STEP_DOWN_PARTITION_ID,
+      service: trackedService,
+    });
+    handler.initialize();
+    try {
+      return await handler.handleMessage({
+        correlationId: TEST_STEP_DOWN_CORRELATION_ID,
+        payload: {
+          type: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
+          operationId: TEST_STEP_DOWN_OPERATION_ID,
+          partitionId: TEST_STEP_DOWN_PARTITION_ID,
+          replicaId: TEST_STEP_DOWN_REPLICA_ID,
+          reason,
+        },
+      });
+    } finally {
+      await handler.shutdown();
+    }
+  };
+
+  t.test('handleMessage routes STEP_DOWN_REPLICA through the partition leadership transfer',
     async (t) => {
-      const cache = createSeededCache({
-        partitionId: TEST_STEP_DOWN_PARTITION_ID,
-        leaderReplicaId: TEST_STEP_DOWN_REPLICA_ID,
-      });
-      const mockCDC = createMockCDCService(cache);
-      const handler = new ReplicaHandler({
-        nodeId: 'test-node',
-        dataDir: tempDir,
-        systemTableCache: cache,
-        cdcIntegrationService: mockCDC,
-        createPartitionService: createMockPartitionServiceFactory(),
-      });
-
-      let cancelCount = 0;
-      let clearTimerCount = 0;
-      let electionTimerStartCount = 0;
-      let raftChangePayload = null;
-      const trackedService = {
-        role: RAFT_ROLE.LEADER,
-        getRole() {
-          return this.role;
-        },
-        cancelLeaderOwnedActivation() {
-          cancelCount += 1;
-        },
-        raft: {
-          change(payload) {
-            raftChangePayload = payload;
-            trackedService.role = RAFT_ROLE.FOLLOWER;
-          },
-        },
-        raftProvider: {
-          clearTimers(raft) {
-            clearTimerCount += 1;
-            t.equal(
-              raft,
-              trackedService.raft,
-              'timer clearing should target the demoted raft instance',
-            );
-          },
-          startElectionTimer(raft) {
-            electionTimerStartCount += 1;
-            t.equal(
-              raft,
-              trackedService.raft,
-              'election rearm should target the demoted raft instance',
-            );
-          },
-        },
-      };
-
-      handler.localServices.set(TEST_STEP_DOWN_REPLICA_ID, trackedService);
-      handler.setLocalReplica(TEST_STEP_DOWN_REPLICA_ID, {
-        replicaId: TEST_STEP_DOWN_REPLICA_ID,
-        partitionId: TEST_STEP_DOWN_PARTITION_ID,
-        service: trackedService,
-      });
-      handler.initialize();
-
-      try {
-        const response = await handler.handleMessage({
-          correlationId: TEST_STEP_DOWN_CORRELATION_ID,
-          payload: {
-            type: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
-            operationId: TEST_STEP_DOWN_OPERATION_ID,
-            partitionId: TEST_STEP_DOWN_PARTITION_ID,
-            replicaId: TEST_STEP_DOWN_REPLICA_ID,
-            reason: TEST_STEP_DOWN_REASON,
-          },
-        });
-
-        t.equal(
-          response.correlationId,
-          TEST_STEP_DOWN_CORRELATION_ID,
-          'correlationId should be preserved for step-down requests',
-        );
-        t.equal(
-          response.status,
-          ReplicaOperationResponseStatus.COMPLETED,
-          'step-down requests should complete after tracked leader demotion',
-        );
-        t.same(
-          raftChangePayload,
-          {
-            state: LifeRaft.FOLLOWER,
-            leader: TEST_STEP_DOWN_EMPTY_LEADER_ID,
-          },
-          'tracked raft should be demoted with an empty leader handoff target',
-        );
-        t.equal(
-          trackedService.role,
-          RAFT_ROLE.FOLLOWER,
-          'tracked service role should move to follower after handoff',
-        );
-        t.equal(
-          cancelCount,
-          1,
-          'leader-owned activation should be cancelled before demotion',
-        );
-        t.equal(
-          clearTimerCount,
-          0,
-          'handoff should not clear the follower election timer after demotion',
-        );
-        t.equal(
-          electionTimerStartCount,
-          1,
-          'follower election progress should be rearmed after demotion',
-        );
-      } finally {
-        await handler.shutdown();
-      }
+      const accepted = deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+        reason: RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_REQUESTED});
+      const trackedService = buildTransferTrackedService(
+        RAFT_ROLE.LEADER, accepted);
+      const response = await stepDownThroughHandler(
+        trackedService, TEST_STEP_DOWN_REASON);
+      t.equal(
+        response.correlationId,
+        TEST_STEP_DOWN_CORRELATION_ID,
+        'correlationId should be preserved for step-down requests',
+      );
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.COMPLETED,
+        'a transfer the port accepted completes the step-down request',
+      );
+      t.same(trackedService.transfers, [{
+        successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP,
+      }], 'the source leader asks exactly once for its most caught-up voter');
+      t.equal(response.handoffBranch,
+        REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REQUESTED,
+        'the response names the requested transfer');
+      t.same(response.handoffTransfer, accepted,
+        'the port record rides along');
     });
 
-  t.test('handleMessage re-arms follower election when STEP_DOWN_REPLICA carries replacement leader election intent',
+  t.test('handleMessage asks for leadership named to the replacement when STEP_DOWN_REPLICA carries replacement leader election intent',
     async (t) => {
-      const cache = createSeededCache({
-        partitionId: TEST_STEP_DOWN_PARTITION_ID,
-        leaderReplicaId: TEST_STEP_DOWN_REPLICA_ID,
-      });
-      const mockCDC = createMockCDCService(cache);
-      const handler = new ReplicaHandler({
-        nodeId: 'test-node',
-        dataDir: tempDir,
-        systemTableCache: cache,
-        cdcIntegrationService: mockCDC,
-        createPartitionService: createMockPartitionServiceFactory(),
-      });
+      const forwarded = deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+        reason: RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_FORWARDED});
+      const trackedService = buildTransferTrackedService(
+        RAFT_ROLE.FOLLOWER, forwarded);
+      const response = await stepDownThroughHandler(
+        trackedService, TEST_STEP_DOWN_TARGET_ELECTION_REASON);
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.COMPLETED,
+        'replacement leader election should complete through the tracked handoff lane',
+      );
+      t.same(trackedService.transfers, [{
+        successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+        replicaIdentity: TEST_STEP_DOWN_REPLICA_ID,
+      }], 'the follower asks exactly once for leadership named to itself');
+      t.equal(response.handoffBranch,
+        REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_FORWARDED);
+    });
 
-      let electionTimerStartCount = 0;
-      let immediateElectionRequestCount = 0;
-      let raftChangePayload = null;
-      const trackedService = {
-        role: RAFT_ROLE.FOLLOWER,
-        getRole() {
-          return this.role;
-        },
-        raft: {
-          change(payload) {
-            raftChangePayload = payload;
-          },
-        },
-        raftProvider: {
-          requestElectionNow(raft) {
-            immediateElectionRequestCount += 1;
-            t.equal(
-              raft,
-              trackedService.raft,
-              'replacement leader election should target the tracked follower raft instance',
-            );
-          },
-          startElectionTimer(raft) {
-            electionTimerStartCount += 1;
-            t.equal(
-              raft,
-              trackedService.raft,
-              'replacement leader election should rearm the tracked follower raft instance',
-            );
-          },
-        },
-      };
-
-      handler.localServices.set(TEST_STEP_DOWN_REPLICA_ID, trackedService);
-      handler.setLocalReplica(TEST_STEP_DOWN_REPLICA_ID, {
-        replicaId: TEST_STEP_DOWN_REPLICA_ID,
-        partitionId: TEST_STEP_DOWN_PARTITION_ID,
-        service: trackedService,
-      });
-      handler.initialize();
-
-      try {
-        const response = await handler.handleMessage({
-          correlationId: TEST_STEP_DOWN_CORRELATION_ID,
-          payload: {
-            type: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
-            operationId: TEST_STEP_DOWN_OPERATION_ID,
-            partitionId: TEST_STEP_DOWN_PARTITION_ID,
-            replicaId: TEST_STEP_DOWN_REPLICA_ID,
-            reason: TEST_STEP_DOWN_TARGET_ELECTION_REASON,
-          },
-        });
-
-        t.equal(
-          response.status,
-          ReplicaOperationResponseStatus.COMPLETED,
-          'replacement leader election should complete through the tracked handoff lane',
-        );
-        t.equal(
-          trackedService.role,
-          RAFT_ROLE.FOLLOWER,
-          'replacement leader election should not demote an already-follower replica again',
-        );
-        t.equal(
-          raftChangePayload,
-          null,
-          'replacement leader election should not force another raft state transition on a follower',
-        );
-        t.equal(
-          electionTimerStartCount,
-          0,
-          'replacement leader election should not wait on a normal follower election timer',
-        );
-        t.equal(
-          immediateElectionRequestCount,
-          1,
-          'replacement leader election should request immediate follower promotion',
-        );
-      } finally {
-        await handler.shutdown();
-      }
+  t.test('handleMessage answers ERROR with the typed reason when the port refuses the transfer',
+    async (t) => {
+      const refused = deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+        reason: RAFT_LEADERSHIP_TRANSFER_REASON.NO_KNOWN_LEADER,
+        retryable: true, recoveryRequired: false});
+      const trackedService = buildTransferTrackedService(
+        RAFT_ROLE.FOLLOWER, refused);
+      const response = await stepDownThroughHandler(
+        trackedService, TEST_STEP_DOWN_TARGET_ELECTION_REASON);
+      t.equal(response.status, ReplicaOperationResponseStatus.ERROR,
+        'a refused transfer changed nothing and is not reported completed');
+      t.equal(response.handoffBranch,
+        REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REFUSED);
+      t.same(response.handoffTransfer, refused,
+        'the typed refusal rides along for the caller\'s retry decision');
     });
 }

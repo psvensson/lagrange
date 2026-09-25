@@ -8,6 +8,7 @@
 
 import {
   RAFT_EVENT,
+  RAFT_LEADERSHIP_TRANSFER_REASON,
   RAFT_PEER_PROGRESS_PROBE_REASON,
 } from './raft-operation-port-constants.js';
 import {
@@ -45,6 +46,9 @@ const RUNTIME_COMMAND = Object.freeze({
   // scheduling is stopped never campaigns from it.
   DRAIN_INBOUND: 'drain-inbound',
   PROBE_PEER_PROGRESS: 'probe-peer-progress',
+  // Leadership moved to one voter through the core's own MsgTransferLeader,
+  // validated against the core's status and configuration in the same turn.
+  TRANSFER_LEADERSHIP: 'transfer-leadership',
 });
 const RUNTIME_EVENT = Object.freeze({
   TERM_CHANGE: RAFT_EVENT.TERM_CHANGE,
@@ -82,6 +86,7 @@ const RUNTIME_PHASE = Object.freeze({
   DISPATCH: 'dispatch',
   ADMISSION: 'admission',
   PROGRESS_PROBE: 'progress-probe',
+  LEADERSHIP_TRANSFER: 'leadership-transfer',
   // The group's durable record could not be read where it is opened or
   // reconstructed from (a missing table, SQLITE_IOERR, SQLITE_CORRUPT).
   DURABLE_RECORD_READ: 'durable-record-read',
@@ -112,6 +117,8 @@ const RUNTIME_REASON = Object.freeze({
   DELIVERY_FAILED: 'raft delivery failed',
   // The progress probe's outcomes, owned by the port's contract.
   ...RAFT_PEER_PROGRESS_PROBE_REASON,
+  // The leadership transfer's outcomes, owned by the port's contract.
+  ...RAFT_LEADERSHIP_TRANSFER_REASON,
   CLOSED_WITHOUT_CORE_ENTRY: 'closed-without-core-entry',
   CLOSED: 'closed',
   // The store's own admission state, carried as the reason of the typed,

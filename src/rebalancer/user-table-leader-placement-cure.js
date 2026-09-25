@@ -22,19 +22,17 @@
  * and dispatch retries ride PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.
  * No new timers.
  *
- * Every handoff PAIRS local source demotion with the target election
- * (quest user-table-leader-handoff-demotion-pairing): the directed
- * election alone is a race — requestElectionNow arms a 1ms draw on the
- * same timer every packet from a healthy leader re-arms with a fresh
- * >=1s draw, and once clobbered the [election-min, election-max] window
- * never beats the leader's heartbeat cadence again (run
- * 20260810T221340Z: two completed dispatches, zero campaigns in 420s).
- * Demoting the own leader replica FIRST (through the replica-handler's
- * flap-safe tracked demotion: candidacy deferred, heartbeats stopped)
- * removes the re-arm source, so the target's 1ms arm wins
- * near-deterministically; a lost election dispatch falls back to the
- * bounded ordinal-staggered election and census re-shed keeps the
- * actuator convergent.
+ * Every handoff PAIRS the source handoff with the target election
+ * (quest user-table-leader-handoff-demotion-pairing). On the rs-raft
+ * port both are one leader-mediated leadership transfer
+ * (PartitionService.requestLeadershipTransfer): the target names itself,
+ * the source hands leadership to its most caught-up voter, and the core
+ * moves it without a leaderless timer race. The pairing was introduced
+ * for the retired directed election, which a healthy leader's heartbeat
+ * re-armed away (run 20260810T221340Z: two completed dispatches, zero
+ * campaigns in 420s); a lost dispatch falls back to the bounded
+ * ordinal-staggered election and census re-shed keeps the actuator
+ * convergent.
  */
 
 import {

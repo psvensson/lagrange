@@ -38,6 +38,14 @@ const RAFT_RS_MESSAGE_TYPE_RANGE = Object.freeze({
   MAX: 18,
 });
 
+// The message types the host itself steps into its own core, by the number
+// the binding's `num_to_msg_type` maps them from. MsgTransferLeader is what
+// raft-rs's own RawNode::transfer_leader steps (from = the transferee); the
+// binding exports no transfer call, so the runtime owner steps this message.
+const RAFT_RS_MESSAGE_TYPE = Object.freeze({
+  TRANSFER_LEADER: 13,
+});
+
 // The message fields the binding parses as a 64-bit decimal string.
 const RAFT_RS_POSITION_FIELDS = Object.freeze([
   'term', 'logTerm', 'index', 'commit', 'rejectHint',
@@ -53,6 +61,7 @@ export {
   RAFT_RS_ENTRY_POSITION_FIELDS,
   RAFT_RS_INGRESS_OUTCOME,
   RAFT_RS_INGRESS_REFUSAL,
+  RAFT_RS_MESSAGE_TYPE,
   RAFT_RS_MESSAGE_TYPE_RANGE,
   RAFT_RS_PEER_ID_FIELDS,
   RAFT_RS_POSITION_FIELDS,

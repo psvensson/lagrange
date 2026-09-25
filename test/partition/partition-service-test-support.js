@@ -93,6 +93,8 @@ export class ControllablePartitionRaftProvider {
     this.campaignHandler = null;
     this.confChangeHandler = null;
     this.confChangeOutcomes = [];
+    this.transferRequests = [];
+    this.transferHandler = null;
     this.listeners = new Map();
     this.steps = [];
     this.committedIndex = 0;
@@ -179,6 +181,12 @@ export class ControllablePartitionRaftProvider {
         const proposed = testCoreOk();
         this.confChangeOutcomes.push(proposed);
         return proposed;
+      },
+      transferLeadership: (request) => {
+        this.transferRequests.push(request);
+        const answered = this.transferHandler ?
+          this.transferHandler(request) : null;
+        return answered?.outcome ? answered : testCoreOk();
       },
       probePeerProgress: () => testCoreOk(),
       tick: () => testCoreOk(),

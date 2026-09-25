@@ -20,6 +20,7 @@ import {
   decodeCommittedProposal,
   encodeProposal,
 } from './raft-rs-proposal-codec.js';
+import {normalizedTransferRequest} from './raft-rs-leadership-transfer.js';
 import {RaftRsReplicaLifecycleOwner} from
   './raft-rs-replica-lifecycle-owner.js';
 import {registerPeerIdentityReservationOwner} from
@@ -251,6 +252,16 @@ function createRaftRsOperationPort(request) {
         retryable: false,
         recoveryRequired: false,
       });
+    }),
+    // One named request shape ({successor, replicaIdentity?}); the target
+    // is resolved through this replica's own registry, and a request that
+    // misses the shape or names an unreserved identity is refused typed.
+    transferLeadership: (transferRequest) => dispatch(() => {
+      const normalized = normalizedTransferRequest(transferRequest, registry);
+      return normalized.refusal === undefined ? dispatcher.execute({
+        type: RUNTIME_COMMAND.TRANSFER_LEADERSHIP,
+        transfer: normalized.command,
+      }) : normalized.refusal;
     }),
     probePeerProgress: (peerAddress) => execute({
       type: RUNTIME_COMMAND.PROBE_PEER_PROGRESS, peerAddress,

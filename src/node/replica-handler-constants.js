@@ -61,6 +61,7 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   STEP_DOWN_NOT_FOUND: 'Replica not found for leader handoff',
   STEP_DOWN_COMPLETED: 'Replica leader handoff completed',
   STEP_DOWN_FAILED: 'Replica leader handoff failed',
+  STEP_DOWN_REFUSED: 'Replica leader handoff refused',
   ASYNC_REMOVE_FAILED: 'Async replica removal failed',
   GRACEFUL_SHUTDOWN: 'Initiating graceful shutdown',
   DELETE_SERVICE_ROW_FAILED: 'Failed to delete service row',
@@ -111,6 +112,8 @@ const REPLICA_HANDLER_ERROR_MSG = Object.freeze({
     'STEP_DOWN_REPLICA requires operationId, partitionId, and replicaId',
   STEP_DOWN_NOT_SUPPORTED:
     'STEP_DOWN_REPLICA requires a tracked partition service with raft ownership',
+  stepDownTransferRefused: (reason) =>
+    `STEP_DOWN_REPLICA leadership transfer refused: ${reason}`,
   CACHE_NOT_AVAILABLE: 'System table cache not available',
   CACHE_MISSING_FILTER: 'System table cache missing filter',
   PARTITION_METADATA_MISSING: (partitionId) =>

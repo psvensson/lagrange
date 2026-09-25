@@ -49,6 +49,44 @@ const RAFT_PEER_PROGRESS_PROBE_REASON = Object.freeze({
   NOT_LEADER: 'not-leader',
 });
 
+// What transferLeadership(request) is asked for: leadership moved to one
+// named Lagrange replica ({successor: NAMED, replicaIdentity}), or - raft-rs
+// has no "step down to nobody" - to the voter other than the leader whose log
+// its leader's own progress reports most caught up ({successor:
+// MOST_CAUGHT_UP}; ties go to the lowest raft id).
+const RAFT_LEADERSHIP_TRANSFER_SUCCESSOR = Object.freeze({
+  NAMED: 'named',
+  MOST_CAUGHT_UP: 'most-caught-up',
+});
+
+// What transferLeadership answers, decided from the core's own status and
+// configuration in the same queued turn as the step, because the core
+// answers Ok even when it ignores the request. CORE_OK: the leader stepped
+// the transfer (TRANSFER_REQUESTED), a follower that knows its leader
+// forwarded it (TRANSFER_FORWARDED), or the named target already leads
+// (ALREADY_LEADER); none of them implies completion, which the port's role
+// and leader events report. CORE_REFUSED, nothing stepped: no known leader
+// (retryable), a target that is not a voter or whose identity has no
+// reserved raft id, no other voter to succeed, a most-caught-up transfer
+// asked of a replica that does not lead, or a request that misses the
+// canonical shape. TRANSFER_IN_PROGRESS is the retryable answer of a
+// proposal the leader drops while a transfer it accepted is running; the
+// backend that cannot transfer refuses with UNSUPPORTED_BACKEND.
+const RAFT_LEADERSHIP_TRANSFER_REASON = Object.freeze({
+  TRANSFER_REQUESTED: 'transfer-requested',
+  TRANSFER_FORWARDED: 'transfer-forwarded',
+  ALREADY_LEADER: 'already-leader',
+  NO_KNOWN_LEADER: 'no-known-leader',
+  TARGET_NOT_VOTER: 'target-not-voter',
+  TARGET_UNRESERVED: 'target-unreserved',
+  NO_ELIGIBLE_SUCCESSOR: 'no-eligible-successor',
+  NOT_LEADER: 'not-leader',
+  UNKNOWN_SUCCESSOR: 'transfer-unknown-successor',
+  WITHOUT_REPLICA_IDENTITY: 'transfer-without-replica-identity',
+  TRANSFER_IN_PROGRESS: 'leadership-transfer-in-progress',
+  UNSUPPORTED_BACKEND: 'leadership-transfer-unsupported-backend',
+});
+
 // A partition's admission of one peer: only the leader proposes it; any
 // other replica that observes the same peer records a typed no-op instead of
 // forwarding a redundant proposal, and a peer the committed configuration
@@ -69,6 +107,8 @@ const RAFT_MEMBERSHIP_ADMISSION_OUTCOME = Object.freeze({
 
 export {
   RAFT_EVENT,
+  RAFT_LEADERSHIP_TRANSFER_REASON,
+  RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
   RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_MEMBERSHIP_OPERATION,

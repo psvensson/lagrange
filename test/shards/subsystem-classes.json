@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 254,
+    "bootstrap-membership": 255,
     "cdc-metadata": 59,
     "cli-tooling": 96,
     "control-plane": 194,
@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
-    "storage-partition": 151,
-    "storage-raft": 102,
+    "storage-partition": 152,
+    "storage-raft": 104,
     "test-infrastructure": 133,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2175,
-  "digest": "fnv1a32-5d436124",
+  "censusSize": 2179,
+  "digest": "fnv1a32-5ee778c0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-93ba0661",
+  "observationDigest": "fnv1a32-da28fa2a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1101,6 +1101,7 @@
     "test/node/replica-creation-idempotency.property.test.js": "bootstrap-membership",
     "test/node/replica-handler-cache-state.test.js": "bootstrap-membership",
     "test/node/replica-handler-idempotency.property.test.js": "bootstrap-membership",
+    "test/node/replica-handler-leadership-transfer.test.js": "bootstrap-membership",
     "test/node/replica-handler-owner-path-bypass.test.js": "bootstrap-membership",
     "test/node/replica-handler-replacement-election-already-leader.test.js": "bootstrap-membership",
     "test/node/replica-handler.test.js": "bootstrap-membership",
@@ -1209,6 +1210,7 @@
     "test/partition/partition-transition-projection.test.js": "storage-partition",
     "test/partition/partition-unreadable-durable-record.test.js": "storage-partition",
     "test/partition/partition-write-kernel.test.js": "storage-partition",
+    "test/partition/partition-write-leadership-transfer.test.js": "storage-partition",
     "test/partition/partition-write-typed-releases.test.js": "storage-partition",
     "test/partition/pending-request-round-trip.property.test.js": "storage-partition",
     "test/partition/pending-request-tracker.test.js": "storage-partition",
@@ -1407,6 +1409,7 @@
     "test/raft/leader-activation-gate.test.js": "storage-raft",
     "test/raft/leader-activation-scheduler.test.js": "storage-raft",
     "test/raft/leader-election-completion.property.test.js": "storage-raft",
+    "test/raft/leadership-transfer-single-path.test.js": "storage-raft",
     "test/raft/learner-promotion-progress-proof-contract.test.js": "storage-raft",
     "test/raft/liferaft-append-fail-recovery.test.js": "storage-raft",
     "test/raft/liferaft-catchup-batching.test.js": "storage-raft",
@@ -1453,6 +1456,7 @@
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "storage-raft",
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": "storage-raft",
     "test/raft/raft-timing-utils.test.js": "storage-raft",
     "test/raft/raft-transport-backpressure-mute.test.js": "storage-raft",
     "test/raft/remote-peer-representation.test.js": "storage-raft",
@@ -6202,6 +6206,17 @@
         "NODE_ENV"
       ]
     },
+    "test/node/replica-handler-leadership-transfer.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/node/replica-handler-leader-handoff-methods.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-tuning.js"
+      ]
+    },
     "test/node/replica-handler-owner-path-bypass.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -6211,6 +6226,11 @@
     "test/node/replica-handler-replacement-election-already-leader.test.js": {
       "files": [
         "src/rebalancer/replica-operation-constants.js"
+      ]
+    },
+    "test/node/replica-handler.test.js": {
+      "files": [
+        "src/node/replica-handler-leader-handoff-methods.js"
       ]
     },
     "test/node/replica-state-machine.test.js": {
@@ -6465,6 +6485,18 @@
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port.js",
         "src/raft/raft-rs-durable-store-constants.js"
+      ]
+    },
+    "test/partition/partition-write-leadership-transfer.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-tuning.js"
       ]
     },
     "test/partition/partition-write-typed-releases.test.js": {
@@ -6825,6 +6857,21 @@
         "data"
       ]
     },
+    "test/raft/leadership-transfer-single-path.test.js": {
+      "files": [
+        "src/node/replica-handler-leader-handoff-methods.js",
+        "src/partition/partition-service-leadership-transfer.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ],
+      "directories": [
+        "src"
+      ]
+    },
     "test/raft/liferaft-append-fail-recovery.test.js": {
       "directories": [
         "data"
@@ -7069,6 +7116,16 @@
       ],
       "directories": [
         "src"
+      ]
+    },
+    "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
       ]
     },
     "test/raft/snapshot-catchup-dispatch.test.js": {

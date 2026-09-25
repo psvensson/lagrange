@@ -18,7 +18,15 @@ import {
 } from './raft-rs-core-constants.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {admitRaftRsMessage} from './raft-rs-ingress.js';
-import {RAFT_RS_TRANSPORT_PROTOCOL} from './raft-rs-ingress-constants.js';
+import {
+  RAFT_RS_MESSAGE_TYPE,
+  RAFT_RS_TRANSPORT_PROTOCOL,
+} from './raft-rs-ingress-constants.js';
+import {
+  decideLeadershipTransfer,
+  droppedByLeadershipTransfer,
+  leadershipTransferInProgress,
+} from './raft-rs-leadership-transfer.js';
 import {
   RAFT_RS_CONF_CHANGE_ENTRY_TYPES,
 } from './raft-rs-ready-loop-constants.js';
@@ -1142,18 +1150,65 @@ function probePeerProgress(group, expectedGeneration, peerAddress) {
     }) : result);
 }
 
+// The leadership transfer: the core's status and configuration are read,
+// the request is decided against them (a request the core would ignore is a
+// typed refusal and nothing is stepped), and the accepted one is stepped as
+// the MsgTransferLeader raft-rs's own transfer_leader steps - a local message
+// whose sender is the transferee - and its Ready drained, all in this one
+// queued turn. The answer is acceptance; completion is the role and leader
+// events the drains announce.
+function transferLeadership(group, expectedGeneration, command) {
+  const observed = readGroupObservation(group, expectedGeneration);
+  if (!observed.ok) {
+    return observed.result;
+  }
+  const decision = decideLeadershipTransfer(
+    group.peerId, observed.value, command);
+  if (decision.answer !== undefined) {
+    return decision.answer;
+  }
+  const stepped = invokeCoreAt(group, expectedGeneration, 'step', {
+    msgType: RAFT_RS_MESSAGE_TYPE.TRANSFER_LEADER,
+    from: decision.transferee,
+    to: group.peerId,
+  });
+  if (!stepped.ok) {
+    return stepped.result;
+  }
+  return thenMaybe(drainReady(group, expectedGeneration), (drained) =>
+    drained.outcome === CORE_OK ? decision.accepted : drained);
+}
+
+// A proposal the core refused: dropped by a running leadership transfer (read
+// from the core in the same turn) it is the retryable transfer-in-progress
+// answer; any other refusal is answered as the core gave it.
+function answerRefusedProposal(group, expectedGeneration, refused) {
+  if (refused.outcome !== CORE_REFUSED) {
+    return refused;
+  }
+  const observed = readGroupObservation(group, expectedGeneration);
+  return observed.ok &&
+    droppedByLeadershipTransfer(refused, group.peerId, observed.value) ?
+    leadershipTransferInProgress(refused.phase) : refused;
+}
+
+const COMMAND_OPERATION = Object.freeze({
+  [RUNTIME_COMMAND.READ_STATUS]: (group, command, generation) =>
+    readGroupStatus(group, generation),
+  [RUNTIME_COMMAND.CAMPAIGN]: (group, command, generation) =>
+    campaignGroup(group, generation),
+  [RUNTIME_COMMAND.DRAIN_INBOUND]: () =>
+    outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_DRAINED}),
+  [RUNTIME_COMMAND.PROBE_PEER_PROGRESS]: (group, command, generation) =>
+    probePeerProgress(group, generation, command.peerAddress),
+  [RUNTIME_COMMAND.TRANSFER_LEADERSHIP]: (group, command, generation) =>
+    transferLeadership(group, generation, command.transfer),
+});
+const PROPOSAL_COMMANDS = new Set(['propose', 'propose-conf-change']);
+
 function performCommand(group, command, expectedGeneration) {
-  if (command.type === RUNTIME_COMMAND.READ_STATUS) {
-    return readGroupStatus(group, expectedGeneration);
-  }
-  if (command.type === RUNTIME_COMMAND.CAMPAIGN) {
-    return campaignGroup(group, expectedGeneration);
-  }
-  if (command.type === RUNTIME_COMMAND.DRAIN_INBOUND) {
-    return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_DRAINED});
-  }
-  if (command.type === RUNTIME_COMMAND.PROBE_PEER_PROGRESS) {
-    return probePeerProgress(group, expectedGeneration, command.peerAddress);
+  if (Object.hasOwn(COMMAND_OPERATION, command.type)) {
+    return COMMAND_OPERATION[command.type](group, command, expectedGeneration);
   }
   const primitive = {
     'tick': ['tick', []],
@@ -1169,7 +1224,12 @@ function performCommand(group, command, expectedGeneration) {
   }
   const invoked = invokeCoreAt(
     group, expectedGeneration, primitive[0], ...primitive[1]);
-  return invoked.ok ? drainReady(group, expectedGeneration) : invoked.result;
+  if (invoked.ok) {
+    return drainReady(group, expectedGeneration);
+  }
+  return PROPOSAL_COMMANDS.has(command.type) ?
+    answerRefusedProposal(group, expectedGeneration, invoked.result) :
+    invoked.result;
 }
 
 function drainInbound(group, expectedGeneration, continuation) {
