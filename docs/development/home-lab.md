@@ -347,6 +347,32 @@ These map to the existing change selector, smoke manifest, project-hardening
 acceptance gate, post-push gate, and classified full test suite. The lab does
 not maintain a second test list.
 
+### Measure the change cone from a named commit
+
+`lab test changed --lane LANE` runs the change selector's plan of the commit
+(`--sha`, default this checkout's clean `HEAD`). By default the selector
+measures the change from the merge base with `origin/main`, which is what a
+push would carry. A long unpublished branch - several merged quests waiting for one
+publish - then looks like the whole branch changed, and a release-surface file
+such as `Dockerfile` changed anywhere on it refuses the run with
+`RELEASE_PROOF_REQUIRED`.
+
+Name the comparison commit with `--base-sha` to verify only what changed since
+it:
+
+```bash
+node scripts/lab.js test changed --lane all --sha HEAD --base-sha <commit>
+```
+
+The lab passes the commit to the selector's own `--base`, so the one owner of
+the changed set decides it: the cone, and the release-surface check, cover
+`<commit>..<sha>` only, and a release-surface file changed before
+`<commit>` does not refuse. The flag is `--base-sha` rather than `--base`
+because `lab harness run --base CONFIG` already names a harness base
+configuration; `--base-sha` pairs with `--sha` as the other end of the range.
+It applies only to the `changed` profile. It narrows what the lab runs; the
+push gate still proves the full range against `origin/main`.
+
 ## Run the distributed matrix on local, lab, or GCP targets
 
 The canonical scenario matrix has one owner:
