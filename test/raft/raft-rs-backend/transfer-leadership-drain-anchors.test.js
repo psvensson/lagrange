@@ -180,15 +180,12 @@ test('per-index timing: a transfer the core cannot complete holds ' +
   }
 });
 
-// Recorded for the lead: reachable through the canonical request
-// (ADD_LEARNER naming the sitting leader), and red on production; the
-// classification owner decides. Marked todo so the red is reported without
-// failing the suite.
+// Reachable through the canonical request (ADD_LEARNER naming the sitting
+// leader): raft-rs keeps a demoted leader leading, and it drops proposals
+// only on "no progress for self" or a transfer, so this drop is the
+// transfer's (raft.rs step_leader MsgPropose).
 test('CA9: a leader demoted to learner answers its transfer\'s dropped ' +
-  'proposal as the transfer\'s retryable window', {todo: 'CA9: ' +
-  'droppedByLeadershipTransfer keys on "transferable voter" where raft-rs ' +
-  'keys on "has progress"; recorded for the classification owner'},
-async () => {
+  'proposal as the transfer\'s retryable window', async () => {
   const run = await formed('anchor-ca9');
   try {
     const {driver} = run;

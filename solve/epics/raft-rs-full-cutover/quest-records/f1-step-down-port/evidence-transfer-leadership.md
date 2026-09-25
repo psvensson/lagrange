@@ -449,7 +449,7 @@ Author: Agent A (the evidence author). This section builds the evidence for `cov
 | `test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js` | The property: 3 census tests and 144 generated cells, each run PENDING and PROCESSED and compared |
 | `test/raft/raft-rs-backend/transfer-leadership-drain-oracle-cells.js` | The cell generator: the event axis (type × receiver predicate), the decision axis D1-D6 × harness modes, the pairs, and the special cells |
 | `test/raft/raft-rs-backend/transfer-leadership-drain-oracle-harness.js` | `OracleRun` (the send, timing and re-entry axes; the outbound, event-stream, durable and crash-recover readings) and `runCell` |
-| `test/raft/raft-rs-backend/transfer-leadership-drain-anchors.test.js` | Direct anchors: CA1, D7/CA5, B1/F9b, per-index window, F6 one-turn, and CA9 (todo) |
+| `test/raft/raft-rs-backend/transfer-leadership-drain-anchors.test.js` | Direct anchors: CA1, D7/CA5, B1/F9b, per-index window, F6 one-turn, and CA9 (todo at 79d81621c; active since 895034825) |
 | `test/raft/raft-rs-backend/partition-node-cluster.js` | Adds an optional `timingFor(replicaId)` hook. Default unchanged |
 | `test/raft/raft-rs-backend/transfer-leadership-driver.js` | Passes through the `timingFor`, `sendFor` and `wrapDatabase` hooks, adds `electionTickOf`, and de-exports `SUCCESSOR` |
 
@@ -591,7 +591,7 @@ The cells run in these harness modes:
 | B1/F9b | After a send await with a `BEGIN` opened meanwhile, nothing enters the core until `ROLLBACK`. The turn then resumes on the admission poll |
 | Per-index timing | A transfer the core cannot complete holds proposals for exactly the leader's own election tick (20). The other replicas' ticks differ |
 | F6 | An accepted transfer's MsgTransferLeader is stepped before the port answers |
-| CA9 (todo) | A leader demoted to learner answers its transfer's dropped proposal as in-progress. See the findings below |
+| CA9 (active since 895034825) | A leader demoted to learner answers its transfer's dropped proposal as in-progress. See the findings below |
 
 ### Red on bc8e1118d, green on 79d81621c
 
@@ -662,12 +662,12 @@ The cells run in these harness modes:
 
 ### Findings
 
-- **CA9 is reachable, and red on 79d81621c.**
+- **CA9 is reachable, and was red on 79d81621c. Fixed in 895034825, with the anchor active** (see "Update, 895034825" below).
   - The canonical request `proposeConfChange({type: ADD_LEARNER, replicaIdentity: <the sitting leader>})` demotes the leader, and raft-rs keeps it leading (`post_conf_change`).
   - Its transfer then drops proposals, and `droppedByLeadershipTransfer` answers the raw `CORE_REFUSED ... proposal dropped`, `retryable:false`. The drop is the transfer's.
   - This is because the classification keys on "transferable voter" where raft-rs keys on "has progress".
   - It is not reachable through the current production callers: admission skips existing members (ALREADY_MEMBER).
-  - The anchor is committed as `todo`, so the red is reported without failing the suite. The lead or owner decides whether it is F1's to fix, or a record for the classification owner.
+  - At 79d81621c the anchor was committed as `todo`. It is now an active anchor: red on 79d81621c, green on 895034825.
 - **A crafted MsgTransferLeader at a follower with a leader is CORE_FATAL**, because raft-rs `send()` is fatal on a set term. It is unreachable from a raft-rs peer (term rules), and it falls under exclusion 4. Recorded.
 
 ### Limits
@@ -697,3 +697,31 @@ The cells run in these harness modes:
 - `npm run -s test:duplication`: OK. src+scripts 56/56 groups and 1815/1815 lines; test 791/791 groups and 30451/30451 lines.
 - `npm run -s test:unused:ratchet`: OK, 1437/1437. `SUCCESSOR` is de-exported.
 - `node scripts/check-fast-static.js`, after `npm run -s test:metadata:refresh`: ok. The oracle and anchors files classify as `unit`. The four `test/shards/*.json` files were restored to HEAD afterwards, for the lead to regenerate on commit.
+
+### Update, 895034825 (CA9 fixed)
+
+- **New production_sha: 895034825.**
+  - Its only src change is `droppedByLeadershipTransfer` (`src/raft/raft-rs-leadership-transfer.js`).
+  - The function now keys on raft-rs's own predicate, "the leader has progress for itself", instead of "transferable voter".
+  - I did not read the implementer's new witness.
+- **The CA9 anchor is active:** the `todo` marker has been removed from `transfer-leadership-drain-anchors.test.js`.
+  - Red on 79d81621c, with the raw refusal `{"outcome":"CORE_REFUSED","reason":"propose: raft: proposal dropped","retryable":false}`.
+  - Green on 895034825.
+- **5 of 5 runs green on 895034825**, one process at a time, with no red to stop at:
+  - oracle: 147 pass, 0 fail;
+  - anchors: 11 pass, 0 fail, 0 todo.
+- **Mutation families on 895034825** (scratch `r6/`; the same 13 files; PROD is rc 0 on all of them).
+
+  The F8 members were re-expressed against the new predicate (`mutate7.py`):
+
+  | Mutant | Change | Result |
+  |---|---|---|
+  | MH2 | membership check removed | red: decision-inputs R2.3 and drain R3.7 |
+  | MH7 (new; CA9 reintroduced) | member check keyed on transferable voters | red: the CA9 anchor |
+  | MH1 | role check removed | survives. **Equivalent** on 895034825 |
+  | X3 | role check widened to candidates | survives. **Equivalent** on 895034825 |
+
+  **Why MH1 and X3 are equivalent:** raft-rs's `Status::new` fills `progress` only for a leader (`raft-0.7.0/src/status.rs:48-50`). So "has progress for self" already implies the leader role, the role check in the classification is redundant, and removing or widening it cannot change an answer. The follower and candidate drop anchors, R3.8 and R3.9, stay green on both mutants.
+
+  **The other families still in `raft-rs-leadership-transfer.js`**, and F12/F13, are unchanged: MC1, ME1, ME2, X2, F12 (oracle 27 cells, anchors 5) and F13 (oracle 20 cells, anchors 2). Every other family plants outside the changed function, and its result from the 79d81621c table stands.
+- **The F8 row above is replaced by:** MH2 → decision-inputs and drain; MH7 → the CA9 anchor; MH1 and X3 → equivalent under raft-rs's status contract.
