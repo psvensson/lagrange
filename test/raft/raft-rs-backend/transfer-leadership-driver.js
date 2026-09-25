@@ -243,6 +243,38 @@ class TransferLeadershipDriver {
     throw new Error('delivery did not quiesce');
   }
 
+  /**
+   * Deliver to some replicas only, draining each: the others keep what the
+   * transport holds for them.
+   * @param {Array<string>} replicaIds - Who receives.
+   */
+  deliverOnly(replicaIds) {
+    for (const replicaId of replicaIds) {
+      const replica = this.cluster.replica(replicaId);
+      const pending = replica.inbox.splice(0, replica.inbox.length);
+      for (const envelope of pending) {
+        replica.node.step(envelope);
+      }
+      replica.node.readStatus();
+    }
+  }
+
+  /**
+   * Hand a replica what the transport holds for it through step(), and stop
+   * there: the envelopes are delivered to its runtime but not yet processed,
+   * as when a request reaches the port before the runtime's next turn.
+   * @param {string} replicaId - The recipient.
+   * @return {number} Envelopes handed over.
+   */
+  stepUndrained(replicaId) {
+    const replica = this.cluster.replica(replicaId);
+    const pending = replica.inbox.splice(0, replica.inbox.length);
+    for (const envelope of pending) {
+      replica.node.step(envelope);
+    }
+    return pending.length;
+  }
+
   /** One tick length: every live replica ticks once, then delivery. */
   round() {
     for (const replicaId of this.cluster.replicas.keys()) {

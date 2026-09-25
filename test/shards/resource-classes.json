@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2164,
+    "ordinary": 2166,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2181,
-  "digest": "fnv1a32-406ab5ca",
+  "censusSize": 2183,
+  "digest": "fnv1a32-40fbf0e5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1190,6 +1190,7 @@
     "test/partition/partition-transition-projection.test.js": "ordinary",
     "test/partition/partition-unreadable-durable-record.test.js": "ordinary",
     "test/partition/partition-write-kernel.test.js": "ordinary",
+    "test/partition/partition-write-leadership-transfer-committed.test.js": "ordinary",
     "test/partition/partition-write-leadership-transfer.test.js": "ordinary",
     "test/partition/partition-write-typed-releases.test.js": "ordinary",
     "test/partition/pending-request-round-trip.property.test.js": "ordinary",
@@ -1437,6 +1438,7 @@
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "ordinary",
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "ordinary",
     "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js": "ordinary",
+    "test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js": "ordinary",
     "test/raft/raft-rs-backend/transfer-leadership-property.test.js": "ordinary",
     "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": "ordinary",
     "test/raft/raft-timing-utils.test.js": "ordinary",

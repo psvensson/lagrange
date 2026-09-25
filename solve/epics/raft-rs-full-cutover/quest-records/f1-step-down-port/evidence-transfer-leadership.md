@@ -147,3 +147,114 @@ The lead's six required mutants are M1 to M6. M7 to M10 are further semantic rou
   - **With the generated metadata as committed:** FAIL. `audit:shards` reports the two new test files as unclassified, and `audit:impact-contracts` fails its primary-classification check as a result.
   - **After `npm run -s test:metadata:refresh`:** ok. Both new test files classify as `unit`, and `audit:shards` and `audit:impact-contracts` pass.
   - **Restored.** The four generated files (`test/shards/{impact-graph-seal,primary-classes,resource-classes,subsystem-classes}.json`) were put back to HEAD, for the lead to regenerate on commit.
+
+## Round 2 (evidence only), 2026-09-25
+
+Author: Agent A (the evidence author). This section responds to `verification-round-1.md` (REJECT on the evidence only). Round 1 above stays as written.
+
+- **Frozen production:** bc8e1118d. The evidence worktree is at 88b1bfb22, and `git diff bc8e1118d 88b1bfb22 -- src` is empty.
+- **The implementation is now visible.** I read it to name the sites. The new witnesses are still written from the property.
+- **Nothing under `src/` changed, and I made no git writes.**
+- **Scratch material:** the session scratchpad under `f1/evidence/`:
+  - `r2/prod/`: an export of 88b1bfb22 with the round-2 witnesses;
+  - `r2/mutants/`: the verifier's `mutate.py` and `run.sh`, one `<M>.<witness>.out` per mutant, and `catalogue.txt`;
+  - `r2-prod-repeat/`: the 5 runs on production;
+  - `r2-ref-mutants/`: the round-1 reference mutants.
+
+### Files
+
+- **New: `test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js`.** Three legs on what the port decides from.
+- **New: `test/partition/partition-write-leadership-transfer-committed.test.js`.** A write served during a transfer is a committed write. The implementer's `partition-write-leadership-transfer.test.js` is not edited.
+- **Changed: `test/raft/raft-rs-backend/transfer-leadership-driver.js`.** It adds `deliverOnly(replicaIds)` and `stepUndrained(replicaId)`. The second hands envelopes to a port's `step()` without the runtime processing them, so a request can meet delivered but unprocessed messages. Every existing method is unchanged.
+
+### New legs
+
+| Leg | Semantic route | What it asserts | Production (bc8e1118d) | Kills |
+|---|---|---|---|---|
+| R2.1: a transfer meets delivered but unprocessed messages | The check and the step in different turns | 1. C is cut off and the leader A proposes REMOVE_PEER C. 2. B processes the append, and its acknowledgement is handed to A's `step()` but not processed (precondition: A's ConfState still names C). 3. `transferLeadership(named C)` answers `target-not-voter`. 4. The core's `step` entries during the call equal the delivered count, so nothing but the delivered messages was stepped. 5. A's ConfState now lacks C, so the removal committed in that turn. 6. A still leads, the term is unchanged, and an immediate write commits | green | MD: `{"outcome":"CORE_OK","reason":"transfer-requested"}` |
+| R2.2: most-caught-up with a learner ahead of every voter | Most-caught-up picks a learner | 1. A real learner replica is committed. 2. The voters B and C are cut off while A appends three entries only the learner receives (precondition: the learner's `followerProgress` exceeds every voter's). 3. `most-caught-up` answers `transfer-requested`. 4. A write then answers HOST_FAILURE `leadership-transfer-in-progress`, so the core really runs a transfer. 5. After B and C heal, a voter leads within one election timeout in a later term. 6. The learner never leads, and A has stepped down | green | ME2: the write answers `{"outcome":"CORE_OK","reason":"drained"}`, meaning no transfer runs |
+| R2.3: a self-removed leader drops a proposal | The in-progress answer given for a drop with another cause | 1. A's REMOVE_PEER A commits (precondition: A has left the voters and raft-rs keeps it leading). 2. A write on A answers CORE_REFUSED, its reason is not `leadership-transfer-in-progress`, and it has `retryable: false` | green | MH2: `{"outcome":"HOST_FAILURE","reason":"leadership-transfer-in-progress","retryable":true}` |
+| R2.4: a write served during a transfer is committed | The deferral answered as success without a commit | 1. Real PartitionServices on rs-raft (`formAdmittedGroup`). 2. The leader asks its own port `transferLeadership(named r3)`, with r3 cut off and unscheduled, so the transfer can only abort. 3. A write is issued in the window. 4. The answer has `success: true`. 5. The row is in the leader's table. 6. `answer.logIndex` names a position in the leader's durable `_raft_rs_log`, read on the test's own connection, that decodes to this write's `entryId` and is at or below the durable commit index. 7. The reached follower applies the row. 8. The write was proposed more than once (the actual-core-entry observer), so it did meet the window. 9. The leader and term are unchanged | green | MI1: `the served row is in the leader's table` fails, with `undefined` |
+
+On e148c13e6 (`r2-base-*.out`):
+
+- R2.1 and R2.2 fail on the missing method.
+- R2.4 fails at module link, because `RAFT_LEADERSHIP_TRANSFER_REASON` is not exported.
+- **R2.3 is green.** It is a negative leg for a classification that e148c13e6 does not have: its raw `retryable:false` refusal is already the correct answer. R2.3 is not red-first. Its discriminating power is shown by MH2.
+
+### The verifier's catalogue, all 16 mutants
+
+The run is `r2/mutants/run.sh`. It is the verifier's run.sh with only `V` changed and the two round-2 files appended to its FILES. The mutants were planted in an export of 88b1bfb22 with the verifier's own `mutate.py`, whose substitutions are unchanged.
+
+Labels in the "Killed by" column:
+- h-already, h-main: the two rewritten replica-handler test files;
+- handler, write-path, pwrite, census: the implementer's new witnesses;
+- property, attack-matrix: my round-1 files;
+- decision-inputs, committed: my round-2 files.
+
+Production (`PROD`) is rc 0 on all ten files.
+
+| Mutant | Route | Killed by (rc 1, failures) | Round 1 |
+|---|---|---|---|
+| MA | Ok without a step | property 5, attack-matrix 7, handler 2, write-path 1, decision-inputs 1, committed 1 | killed |
+| MB | Wrong `from` | property 4, attack-matrix 7, handler 1, write-path 1, decision-inputs 1, committed 1 | killed |
+| MC1 | Refusal answered Ok (decision) | attack-matrix 2, decision-inputs 1 | killed |
+| MC2 | Refusal answered Ok (handler) | h-already, h-main | killed |
+| **MD** | **Validation before the inbound drain** | **decision-inputs 1 (R2.1)** | survived |
+| ME1 | Most-caught-up picks the least caught up | property 1 | killed |
+| **ME2** | **Most-caught-up includes learners** | **decision-inputs 1 (R2.2)** | survived |
+| MF | Closed-port bypass | attack-matrix 1 | killed |
+| MG | User-transaction bypass | attack-matrix 1 | killed |
+| MH1 | In-progress without the role check | write-path 1 | killed |
+| **MH2** | **In-progress without the membership check** | **decision-inputs 1 (R2.3)** | survived |
+| **MI1** | **Deferral answered success in the retry loop** | **committed 1 (R2.4)** | survived |
+| MI2 | Deferral answered success at budget exhaustion | survives: unreachable (below) | survived |
+| MJ1 | Handler bypasses the partition authority | h-already, h-main, census 1 | killed |
+| MJ2 | Target branch uses `campaign` | h-already, h-main | killed |
+| MK | Liferaft answers a silent Ok | attack-matrix 1, census 1 | killed |
+
+Every blocking mutant is now red, and each is killed on the property assertion named in the table of new legs, not on setup.
+
+**MI2 is recorded, not chased.**
+- It changes only the site where a write is still deferred once the whole deferral budget has run out.
+- A single transfer's window is at most one election timeout (the core aborts it). The implementer's `partition-write-leadership-transfer.test.js` (pwrite) asserts that this timeout is less than `USER_TRANSACTION_WRITE_DEFER_BUDGET_MS`.
+- So no single-transfer scenario reaches the site.
+- Reaching it would take back-to-back transfers for longer than the budget, or a changed budget. That is a question for the write-path owner, not an F1 route.
+
+### Round-1 reference mutants with the round-2 witnesses
+
+The ten mutants of my round-1 scratch reference were re-run on the three raft-level files (property, attack-matrix, decision-inputs):
+- The reference itself: 27/27 green.
+- Every mutant is still red: M1 13, M2 12, M3 1, M4 6, M5 4, M6 5, M7 1, M8 1, M9 1, M10 1 failing tests.
+- R2.1 and R2.2 additionally kill M1, M2, M4 and M5.
+- The partition file (R2.4) cannot run on that reference, because the reference has no partition write-path deferral. It is exercised only on production and on the verifier's catalogue.
+
+### Determinism
+
+- Production (the 88b1bfb22 worktree, src identical to bc8e1118d): 5 of 5 runs green, one process at a time and thermal-gated, with no red to stop at. Each run is property 6, attack-matrix 18, decision-inputs 3 and committed 1 (`r2-prod-repeat/`).
+- R2.1 to R2.3 run on the driver's never-advanced virtual clock.
+- R2.4 runs on the replicas' own clocks: formation, the scheduled ticks that abort the transfer, and the write path's deferral retry. It adds no sleep and raises no timeout (the test budget is 60 s, as the implementer's sibling uses). Its outcome assertions hold for any schedule. The window precondition (proposed more than once) depends on the first proposal landing inside a window of one election timeout, which it did in 5 of 5 runs.
+
+### Limits (round 2)
+
+- **R2.1 covers one pending-message shape.** The delivered message is an acknowledgement that commits a removal of the transferee. Other messages that would change the decision in the same turn were not constructed, for example a vote or heartbeat of a higher term that demotes the leader, or an append that tells a follower its leader. They go through the same drain-then-decide order, which the leg pins by the count of `step` entries.
+- **R2.1 cuts C off on purpose.** A late acknowledgement from the removed C would instead trigger the pre-existing N1 behaviour below.
+- **R2.2 accepts either voter.** B and C are equally caught up. The tie rule is pinned only by W1d (round 1).
+- **R2.3 checks one other cause of a drop:** a self-removed leader. raft-rs's third cause, the uncommitted-size limit, cannot occur (the binding sets `NO_LIMIT`). The no-leader drop is the implementer's write-path test 3.
+- **R2.4 is a single write on real timers.** It does not cover budget exhaustion (MI2), writes on the follower that is cut off, or the membership admission's DEFERRED answer, which the implementer's sibling covers.
+
+### Finding recorded as a limit: the verifier's non-blocking N1 (not F1-specific; owner: the rs-raft runtime owner, R17)
+
+- **Behaviour.** `drainInbound` (`raft-rs-runtime-owner.js:1235-1247`) processes delivered envelopes at the start of a queued command's turn. When the core refuses one of them, it returns that envelope's refusal as the answer to the queued command, and the command never runs.
+- **Observed** by the verifier on production: C's acknowledgement arrived after C was removed, and a `transferLeadership` then answered CORE_REFUSED `step: raft: cannot step as peer not found` (phase `step`, not retryable), with nothing stepped.
+- **Why it does not violate F1's property.** That answer is still a typed refusal that changed nothing.
+- **Why it matters beyond F1.** A queued command can be answered by a refusal that is not its own, and a write can meet a non-retryable refusal for a transient condition.
+- **Scope.** It is unchanged by F1: e148c13e6 has the identical code. None of the round-2 legs asserts it, and R2.1 cuts C off to stay clear of it.
+
+### E0 gates (round 2)
+
+- `eslint` on the four evidence test files and the driver: clean.
+- `npm run -s test:duplication`: OK. src+scripts 56/56 groups and 1815/1815 lines; test 791/791 groups and 30451/30451 lines.
+- `node scripts/check-fast-static.js`, after `npm run -s test:metadata:refresh`: ok. Both new files classify as `unit`.
+- The four `test/shards/*.json` files were then put back to HEAD for the lead to regenerate on commit.
+- As committed, without the refresh, `audit:shards` reports the two new files as unclassified, as in round 1.
