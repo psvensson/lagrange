@@ -32,7 +32,10 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-09-25: tightened 1437 -> 1436 per checker hint (quest
 // replace-source-removal-owner: the live-lease verdict witnesses consume a
 // previously unimported export).
-const BASELINE_UNUSED_EXPORT_COUNT = 1436;
+// 2026-09-25: tightened 1436 -> 1435 per checker hint (quest
+// replace-source-removal-owner: the independent lease-verdict evidence consumes
+// another previously unimported export).
+const BASELINE_UNUSED_EXPORT_COUNT = 1435;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';
