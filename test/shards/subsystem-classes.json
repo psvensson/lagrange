@@ -19,16 +19,16 @@
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 153,
-    "storage-raft": 108,
+    "storage-raft": 109,
     "test-infrastructure": 133,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2184,
-  "digest": "fnv1a32-19adf566",
+  "censusSize": 2185,
+  "digest": "fnv1a32-ded2efe4",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-1d863dbb",
+  "observationDigest": "fnv1a32-c2157a86",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1456,6 +1456,7 @@
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/runtime-turn-integrity.test.js": "storage-raft",
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js": "storage-raft",
@@ -7122,6 +7123,14 @@
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": {
       "files": [
         "src/raft/raft-rs-host-contract.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/runtime-turn-integrity.test.js": {
+      "files": [
+        "src/raft/raft-rs-core-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
       ]
     },
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": {

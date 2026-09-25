@@ -73,6 +73,9 @@ const PEER_DELIVERY_OUTCOME = Object.freeze({
 // The per-peer delivery observations a group keeps: one per peer it sent to,
 // oldest evicted first past the bound.
 const PEER_DELIVERY_OBSERVATION_LIMIT = 256;
+// The per-sender refusals of delivered envelopes a group keeps, under the
+// same bound as its per-peer delivery observations.
+const INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT = PEER_DELIVERY_OBSERVATION_LIMIT;
 const RUNTIME_PHASE = Object.freeze({
   GENERATION_CHANGED: 'runtime-generation-changed',
   BOOTSTRAP_PERSISTENCE: 'bootstrap-persistence',
@@ -159,6 +162,7 @@ export {
   DURABLE_PROGRESS_OBSERVATION,
   HEALTHY,
   INBOUND_DRAIN_DELAY_MS,
+  INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT,
   NO_LEADER,
   PEER_ADDRESS_STATUS,
   PEER_DELIVERY_OBSERVATION_LIMIT,

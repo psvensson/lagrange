@@ -123,6 +123,9 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
       confState.voters.length + confState.learners.length - 1),
     peers,
     followerProgress: followerProgressSnapshot(group, status),
+    // Delivered envelopes the core refused to step, per sender (the runtime
+    // owner's observation; each was dropped and answered nothing).
+    inboundStepRefusals: [...group.inboundStepRefusals.values()],
     confState,
     runtimeHealth: observation.runtimeHealth,
     groupHealth: group.health,

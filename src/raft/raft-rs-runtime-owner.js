@@ -46,6 +46,7 @@ import {
   FOLLOWER_RAFT_STATE,
   HEALTHY,
   INBOUND_DRAIN_DELAY_MS,
+  INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT,
   NO_LEADER,
   PEER_DELIVERY_OBSERVATION_LIMIT,
   PEER_DELIVERY_OUTCOME,
@@ -668,29 +669,43 @@ function withinGroup(group, work) {
   }
 }
 
+function releaseTurn(group, turn) {
+  if (group.tail === turn) {
+    group.tail = null;
+  }
+}
+
+// One turn at a time. A turn owns the group's queue from its first instant,
+// including while it runs synchronously, so work asked for during it - a
+// role listener inside its announcement reading status, or asking for a
+// command - queues behind it and runs on the state the turn leaves; it never
+// nests inside it. Only work asked for while no turn runs starts at once.
 function enqueue(group, work) {
   const run = () => withinGroup(group, work);
-  if (group.tail === null) {
-    const result = run();
-    if (result && typeof result.then === 'function') {
-      const token = Promise.resolve(result).finally(() => {
-        if (group.tail === token) {
-          group.tail = null;
-        }
-      });
-      group.tail = token;
-      return token;
-    }
-    return result;
+  if (group.tail !== null) {
+    const queued = group.tail.then(run, run);
+    const token = queued.finally(() => releaseTurn(group, token));
+    group.tail = token;
+    return token;
   }
-  const queued = group.tail.then(run, run);
-  const token = queued.finally(() => {
-    if (group.tail === token) {
-      group.tail = null;
-    }
-  });
-  group.tail = token;
-  return token;
+  const {promise: turn, resolve: endTurn} = Promise.withResolvers();
+  const finishTurn = () => {
+    endTurn();
+    releaseTurn(group, turn);
+  };
+  group.tail = turn;
+  let result;
+  try {
+    result = run();
+  } catch (error) {
+    finishTurn();
+    throw error;
+  }
+  if (result && typeof result.then === 'function') {
+    return Promise.resolve(result).finally(finishTurn);
+  }
+  finishTurn();
+  return result;
 }
 
 function thenMaybe(value, continuation) {
@@ -710,6 +725,30 @@ function recordPeerDelivery(group, raftPeerId, observation) {
   group.peerDelivery.set(key, deepFreeze(observation));
   if (group.peerDelivery.size > PEER_DELIVERY_OBSERVATION_LIMIT) {
     group.peerDelivery.delete(group.peerDelivery.keys().next().value);
+  }
+}
+
+// A delivered envelope the core refused to step (a response from a peer it
+// holds no progress for, a proposal it drops, a local-only message type): the
+// core's own refusal record, kept per sender with how many of that sender's
+// envelopes it has refused, oldest sender evicted first past the
+// bound. An observation for the group's status; it answers nothing.
+function recordInboundStepRefusal(group, envelope, refused) {
+  const sender = String(envelope.message?.from ?? envelope.from);
+  const previous = group.inboundStepRefusals.get(sender);
+  group.inboundStepRefusals.delete(sender);
+  group.inboundStepRefusals.set(sender, deepFreeze({
+    from: sender,
+    msgType: envelope.message?.msgType ?? null,
+    outcome: refused.outcome,
+    reason: refused.reason,
+    phase: refused.phase,
+    refusalCount: (previous?.refusalCount ?? 0) + 1,
+  }));
+  if (group.inboundStepRefusals.size >
+      INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT) {
+    group.inboundStepRefusals.delete(
+      group.inboundStepRefusals.keys().next().value);
   }
 }
 
@@ -1239,8 +1278,16 @@ function drainInbound(group, expectedGeneration, continuation) {
   const envelope = group.inbound.shift();
   const stepped = invokeCoreAt(
     group, expectedGeneration, 'step', envelope.message);
+  // The core refusing a delivered envelope is that envelope's outcome, not
+  // the turn's: it is recorded against its sender and dropped (raft re-sends
+  // what a peer still needs), and the drain goes on to the rest of the
+  // delivered envelopes and then the command, on the state they leave. A
+  // failure of the core or of the group is the turn's.
   if (!stepped.ok) {
-    return stepped.result;
+    if (stepped.result.outcome !== CORE_REFUSED) {
+      return stepped.result;
+    }
+    recordInboundStepRefusal(group, envelope, stepped.result);
   }
   return thenMaybe(drainReady(group, expectedGeneration), (result) =>
     result.outcome === CORE_OK ?
@@ -1355,6 +1402,7 @@ function createRuntimeDispatcher(request) {
     inboundDrainScheduled: false,
     inboundDrainDeadline: null,
     peerDelivery: new Map(),
+    inboundStepRefusals: new Map(),
     closed: false,
   };
   groups.set(group.key, group);
