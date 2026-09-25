@@ -140,13 +140,19 @@ const DELIVERY_BOUND = 1000;
 
 class TransferLeadershipDriver {
   /**
-   * @param {Object} shape - {partitionId, replicaIds}.
+   * @param {Object} shape - {partitionId, replicaIds, timingFor?, sendFor?,
+   *   wrapDatabase?}: the optional per-replica timing, send and database
+   *   hooks of the cluster.
    */
-  constructor({partitionId, replicaIds}) {
+  constructor({partitionId, replicaIds, timingFor = null, sendFor = null,
+    wrapDatabase = null}) {
     this.clock = new VirtualTimeSource();
     this.cluster = new PartitionNodeCluster({
       partitionId,
       replicaIds,
+      timingFor,
+      sendFor,
+      wrapDatabase,
       substrateFor: () => ({timeSource: this.clock}),
     });
     this.crashed = new Set();
@@ -156,7 +162,15 @@ class TransferLeadershipDriver {
   /** @return {number} The election timeout in ticks, as the core is tuned. */
   electionTick() {
     const [first] = this.cluster.replicaIds;
-    return tuningOf(this.cluster.replica(first)
+    return this.electionTickOf(first);
+  }
+
+  /**
+   * @param {string} replicaId - The replica.
+   * @return {number} Its own election timeout in ticks.
+   */
+  electionTickOf(replicaId) {
+    return tuningOf(this.cluster.replica(replicaId)
       .request[RAFT_PARTITION_NODE_REQUEST.TIMING]).electionTick;
   }
 
@@ -273,6 +287,15 @@ class TransferLeadershipDriver {
       replica.node.step(envelope);
     }
     return pending.length;
+  }
+
+  /**
+   * Lose what the transport holds for a replica, as a network drops it.
+   * @param {string} replicaId - The recipient.
+   * @return {number} Envelopes lost.
+   */
+  loseInTransit(replicaId) {
+    return this.cluster.replica(replicaId).inbox.splice(0).length;
   }
 
   /** One tick length: every live replica ticks once, then delivery. */
@@ -413,7 +436,6 @@ class TransferLeadershipDriver {
 
 export {
   IN_PROGRESS_REASON,
-  SUCCESSOR,
   TRANSFER_REASON,
   TransferLeadershipDriver,
   UNSUPPORTED_BACKEND_REASON,

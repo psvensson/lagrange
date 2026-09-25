@@ -410,10 +410,10 @@ These were not re-run in round 3. The round-3 witnesses need the partition write
 
 ### Limits (round 3)
 
-- **The structural rule sees core reads only.** A decision taken on state cached before the drain, with no core entry (my X8), passes it. The semantic legs carry that route: R3.4 for role, term and leader; R3.7 and R2.1 for configuration. There is no semantic leg for cached progress, because most-caught-up would need unequal progress created by the pending messages themselves. That route is witnessed structurally only (X7).
+- **The structural rule sees core reads only.** A decision taken on state cached before the drain, with no core entry (my X8), passes it. The semantic legs carry that route: R3.4 for role, term and leader; R3.7 and R2.1 for configuration. There is no semantic leg for cached progress, because most-caught-up would need unequal progress created by the pending messages themselves. That route is witnessed structurally only (X7). *(Wrong; corrected after round 3. A semantic leg for cached progress is constructible: one follower's acknowledgement pending at the leader creates the unequal progress, as the verifier's P-a showed, and the verifier's Y1, cached progress with no core read, survived. The differential oracle below has that cell: the most-caught-up × MsgAppendResponse unequal-progress cell kills Y1.)*
 - **The structural rule identifies the decision's reads by position**, as the reads right before the transfer's step or right after the refused proposal. An implementation that legitimately interleaved other core calls there would need the rule restated. Production's order is recorded above.
 - **The rule pins order within one turn.** It does not cover a decision spread over two turns (for example, a read in one command and a step in a later one). No such path exists in production, where decide and step are one synchronous block.
-- **R3.4 covers one higher-term message** (a vote request). An append or heartbeat of a higher term takes the same drain-then-decide path and was not constructed.
+- **R3.4 covers one higher-term message** (a vote request). An append or heartbeat of a higher term takes the same drain-then-decide path and was not constructed. *(Y2, which drains an append or heartbeat only after the decision, survived. The oracle's MsgAppend and MsgHeartbeat stale-leader cells now kill it.)*
 - **Pre-candidate drops are unreachable** under production tuning (pre-vote off), and are not witnessed.
 - **R3.10 covers one timing derivation**, production's replica at index 1. The adaptive IDLE profile (a 3000 ms minimum) was not constructed. It covers a single write; the router's retry after the deferral is outside the port.
 - **N1 is unchanged** (recorded in round 2): a stale delivered-message refusal can answer a queued command. The round-3 legs keep clear of it: no removed peer's message is pending in them.
@@ -424,3 +424,276 @@ These were not re-run in round 3. The round-3 witnesses need the partition write
 - `npm run -s test:duplication`: OK. src+scripts 56/56 groups and 1815/1815 lines; test 791/791 groups and 30451/30451 lines.
 - `node scripts/check-fast-static.js`, after `npm run -s test:metadata:refresh`: ok. The new drain-order file classifies as `unit`.
 - The four regenerated `test/shards/*.json` files were then put back to HEAD, for the lead to regenerate on commit.
+
+## Evidence against the amended model (2026-09-25)
+
+Author: Agent A (the evidence author). This section builds the evidence for `coverage-model.md` **as amended by `coverage-model-amendment-1.md`**; where the two differ, the amendment wins. Both are committed at 7298af46b. Rounds 1 to 3 above stand as written, apart from the two corrections marked there.
+
+- **Production.**
+  - bc8e1118d is the frozen head before the P1 fix. It is the red side.
+  - 79d81621c is the P1 runtime-turn-integrity fix (CA1 and CA5) and the new production_sha. It is the green side.
+  - The only src difference between them is in `raft-rs-runtime-owner.js`, `raft-rs-runtime-owner-constants.js` and `raft-rs-status-observation.js`.
+- **Worktree.** At 1e64d5a57, whose src equals bc8e1118d. The green runs use a scratch export of 79d81621c carrying these test files.
+- **Constraints kept.**
+  - No src edits and no git writes.
+  - I did not read the implementer's direct witness (`runtime-turn-integrity.test.js`).
+- **Scratch.** The session scratchpad under `f1/evidence/`:
+  - `r5/prod/`: the 79d81621c export;
+  - `r5/mutants/`: the catalogue mutate scripts, with `V` changed; `mutate6.py`, the new families; `run5.sh`, the round-3 verifier's run.sh with the oracle and anchors files added; one `.out` per mutant and file; and `catalogue-*.txt`;
+  - `r5-bc8e1118d-*.out` and `r5-fix-*.out`.
+
+### Files
+
+| File | What |
+|---|---|
+| `test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js` | The property: 3 census tests and 144 generated cells, each run PENDING and PROCESSED and compared |
+| `test/raft/raft-rs-backend/transfer-leadership-drain-oracle-cells.js` | The cell generator: the event axis (type × receiver predicate), the decision axis D1-D6 × harness modes, the pairs, and the special cells |
+| `test/raft/raft-rs-backend/transfer-leadership-drain-oracle-harness.js` | `OracleRun` (the send, timing and re-entry axes; the outbound, event-stream, durable and crash-recover readings) and `runCell` |
+| `test/raft/raft-rs-backend/transfer-leadership-drain-anchors.test.js` | Direct anchors: CA1, D7/CA5, B1/F9b, per-index window, F6 one-turn, and CA9 (todo) |
+| `test/raft/raft-rs-backend/partition-node-cluster.js` | Adds an optional `timingFor(replicaId)` hook. Default unchanged |
+| `test/raft/raft-rs-backend/transfer-leadership-driver.js` | Passes through the `timingFor`, `sendFor` and `wrapDatabase` hooks, adds `electionTickOf`, and de-exports `SUCCESSOR` |
+
+The round-4 scaffolding in the oracle file was replaced.
+
+### The oracle
+
+**Construction.** Each cell builds one cluster state and leaves envelopes in the requester's inbox. It then runs twice from scratch, with the same identities and the same delivery order:
+
+- **PENDING:** the envelopes are handed to the requester's `step()`, unprocessed, and the request is made.
+- **PROCESSED:** the envelopes are processed first by the requester's own `readStatus`, a drain that never ticks, and then the same request is made.
+
+This is the amendment's definition: "pending" means delivered to `group.inbound` and not yet stepped.
+
+**Compared, PENDING against PROCESSED, never against a literal:**
+
+| Output | How |
+|---|---|
+| Answer record | every field, exactly |
+| Outbound | the requester's (type, to) sends, in order, from hand-over to the end of the request's turn. Admission-closed cells compare only the request turn's sends: both are empty, because the gate refused before any drain |
+| Leader, term and ConfState | every connected replica's role, term, leaderId, voters, learners and `inboundStepRefusals` (P1's per-sender refusal record; null before P1), at the smallest election tick − 1 rounds, exactly |
+| Settled outcome | only for declared timeout-driven cells: at twice the largest election tick, by class (how many lead). Exact instead when the answer names a transferee |
+| Event stream | every replica's role, term and leader events with payloads, in order |
+| Durable record | per connected replica: hard state (term, vote, commit), applied state (index, voters, learners), and the log (index, term, type, data), read on an independent connection |
+
+**Direct anchors checked inside every cell, in both runs:**
+
+- **D7:** the subscriber projection built from the event stream equals the core after the request's turn, and again at the observation.
+- **Crash and recover:** the requester is restarted from its durable record and must report the term and ConfState it reported running.
+
+**Closed nondeterminism.**
+
+- The core's only random input is the follower election timeout (raft.rs 2810). FxHasher makes iteration order deterministic.
+- The harness adds none: a virtual clock that is never advanced, and a deterministic delivery loop.
+- So any A/B difference is a red, except in the one declared place: the settled observation of timeout-driven cells. Those are the candidate receiver and the leaderless-follower receiver of a forwarded proposal.
+
+**Anti-vacuity:**
+
+- The PROCESSED reference drain's own answer must be a status record, and its core-entry log must show one `step` per delivered envelope.
+- The PENDING request's turn must begin with a `step` and step every delivered envelope. The PROCESSED request must meet nothing pending.
+- Processing must have moved something:
+  - a decision input, or an outbound send, or both, as the cell declares;
+  - or, for the refused-step cells, the build asserts the receiver predicate under which raft-rs refuses the step: local type, sender without progress, or a MsgPropose drop state.
+- Every observation and every input read rejects a refusal-shaped status.
+
+**Cost.** The harness sets `PRAGMA synchronous = OFF` on the cluster's files through the `wrapDatabase` hook. The durable readings are unaffected, since they are read back through the OS cache. One whole run of the property file takes about 5 s.
+
+### Coverage the test ranges over
+
+**Census, generated from authorities; each fails visibly on a new member.**
+
+- The message types are parsed from `num_to_msg_type` in `lib.rs`.
+- The local-only and response sets are parsed from `raw_node.rs` `is_local_msg` and `is_response_msg`.
+- The parsed maximum must equal `RAFT_RS_MESSAGE_TYPE_RANGE.MAX`, and the types must run contiguously from 0 to that maximum.
+- Every type has a cell or a recorded reason.
+- Every non-local response type has a sender-without-progress cell.
+- The pairs are generated as movers × readers per predicate and must include the challengers' P1, P2, P3, P5, P6 and P7. Every generated pair must have a construction.
+- D1-D6 and every harness mode must be exercised.
+
+**Event axis: 46 cells, message type × receiver predicate.** The decision in brackets is the one run.
+
+| Type | Receiver predicate [decision] |
+|---|---|
+| MsgHup, MsgBeat, MsgUnreachable, MsgSnapStatus, MsgCheckQuorum (local-only, parsed) | local-only, crafted from a peer [D1, D3] |
+| MsgPropose | leader (forwarded) [D1, D3]; leader with a transfer in progress [D3]; leader removed from its configuration [D3]; candidate (timeout-driven) [D3]; follower with a leader [D1]; follower without a leader (timeout-driven) [D3] |
+| MsgAppend | stale leader, higher term [D1, D2] |
+| MsgAppendResponse | sender without progress [D1, D3]; unequal progress [D2]; commits the target's removal [D1]; commits the leader's own removal [D3, D4] |
+| MsgRequestVote | leader, higher term [D1, D2] |
+| MsgRequestVoteResponse | sender without progress [D1, D3]; candidate collects the votes [D1 named self] |
+| MsgHeartbeat | stale leader, higher term [D1, D2] |
+| MsgHeartbeatResponse | sender without progress [D1, D3]; lagging follower [D1] |
+| MsgTransferLeader | leader, a transfer to another voter [D1 different target, D1 same target, D2, D3, D4]. These are the second-transfer cells |
+| MsgTimeoutNow | the transferee, a follower [D1] |
+| MsgRequestPreVote | leader, higher term (crafted; pre-vote is off) [D1] |
+| MsgRequestPreVoteResponse | sender without progress [D1, D3]; higher-term rejection (crafted) [D1] |
+| MsgReadIndex | leader (crafted; the port never reads by index) [D1] |
+
+**Types and predicates with no cell, each with its recorded reason:**
+
+- **MsgSnapshot:** no production sender, because the binding exports no compaction. A crafted snapshot would fabricate a log prefix and configuration.
+- **MsgReadIndexResp:** no sender. A crafted one would fabricate a commit index.
+- **MsgTimeoutNow at a leader** and **MsgTransferLeader at a candidate:** raft-rs ignores them, so nothing moves.
+- **MsgTransferLeader at a follower with a leader:** unreachable from a raft-rs peer, by the term rules.
+  - A lower term is ignored, and a higher term resets the leader.
+  - Crafted, it makes `step_follower` re-forward it, and raft-rs `send()` is fatal on a set term (raft.rs 647-653). The result is CORE_FATAL, which falls under exclusion 4.
+  - It is recorded as a finding of the crafted census, not as a production path.
+
+**Decision axis: 78 cells.** The decisions are:
+- D1: named transfer, target C;
+- D2: most-caught-up;
+- D3: `propose`;
+- D4: `proposeConfChange` add-learner;
+- D5: `campaign`;
+- D6: `probePeerProgress(C)`.
+
+Each is crossed with one pending event per decision input, all at the leader A:
+- a higher-term vote request;
+- a new leader's append at a stale leader;
+- a new leader's heartbeat at a stale leader;
+- unequal acknowledgements (progress);
+- an acknowledgement committing C's removal (configuration);
+- a forwarded MsgTransferLeader (transfer in progress).
+
+The cells run in these harness modes:
+
+| Mode | Decisions | Cells |
+|---|---|---|
+| Synchronous sends, listener re-entry on (the default) | D1-D6 | 36 |
+| Asynchronous sends (every send a promise released next microtask) | D1-D3 | 18 |
+| Production per-index timing (`computeReplicaElectionTimeouts` over the owner's defaults: election ticks 20/70/120) | D1-D3 | 18 |
+| Listener re-entry off | D1 | 6 |
+
+**Pairs: 10 cells, generated.** One predicate row gives no pair: pending-conf, P4, is CA3 and out of the claim.
+
+| Predicate | Movers × readers |
+|---|---|
+| Transfer in progress | MsgTransferLeader × MsgPropose (P1) |
+| Sender has progress | MsgAppendResponse (commits C's removal) × {MsgAppendResponse (P2), MsgHeartbeatResponse} from C |
+| Follower without a leader | MsgRequestVote × {MsgPropose (P6), MsgTransferLeader} |
+| Candidate | MsgTimeoutNow × {MsgPropose (P7), MsgTransferLeader} |
+| Leader identity (announcement) | MsgRequestVote × {MsgAppend (P3), MsgHeartbeat} |
+| Transferee caught up | MsgTransferLeader × MsgAppendResponse (P5) |
+
+**Special cells:**
+
+- **Window (1 cell):** D1 with the acknowledgements of an uncommitted add-learner conf entry pending.
+- **Admission (6 cells):** D1-D6 with a vote request pending and a real `BEGIN` on the requester's database at the request.
+- **Mid-turn (3 cells):** D1-D3.
+  - The request's turn awaits a send the test holds.
+  - A higher-term vote request is delivered during the await.
+  - The decision must equal the one taken after both envelopes are processed.
+
+**Anchors: 11 tests, each with a direct expectation.**
+
+| Anchor | Expectation |
+|---|---|
+| CA1 (×5) | Each parsed local-only type pending does not answer the proposal queued behind it. The proposal commits |
+| D7/CA5 (×2) | A vote request then the new leader's append pending: the projection equals the core after the turn. Listener re-entry on and off |
+| B1/F9b | After a send await with a `BEGIN` opened meanwhile, nothing enters the core until `ROLLBACK`. The turn then resumes on the admission poll |
+| Per-index timing | A transfer the core cannot complete holds proposals for exactly the leader's own election tick (20). The other replicas' ticks differ |
+| F6 | An accepted transfer's MsgTransferLeader is stepped before the port answers |
+| CA9 (todo) | A leader demoted to learner answers its transfer's dropped proposal as in-progress. See the findings below |
+
+### Red on bc8e1118d, green on 79d81621c
+
+| File | bc8e1118d | 79d81621c |
+|---|---|---|
+| Oracle (147) | 102 pass, **45 fail** | **147 pass**, 5 of 5 runs |
+| Anchors (11) | 4 pass, **6 fail**, 1 todo | **10 pass**, 1 todo (CA9), 5 of 5 runs |
+
+**The 45 red oracle cells on bc8e1118d are the CA1 and CA5 cells.**
+
+- **CA1, 25 cells.** Failure: the reference drain's answer is a refusal record, not a status; a refused inbound step answered the read. The cells:
+  - 10 local-only type cells;
+  - 10 sender-without-progress cells (4 response types, D1 and D3);
+  - the four MsgPropose drop states: transfer in progress, self-removed leader, candidate, leaderless follower;
+  - P1, P2 and P2'.
+- **CA5, 20 cells.** Failure: the event projection differs from the core; a nested drain inside an announce emitted a stale leader. Every cell where a replica processes a higher-term vote request followed by the new leader's append in one drain:
+  - the vote-request decision cells (sync, and per-index);
+  - the MsgRequestVote event cells;
+  - P3 and P3';
+  - P6 and P6';
+  - the 6 admission cells.
+
+**The 6 red anchors on bc8e1118d** are the 5 CA1 local-type anchors and D7/CA5 with re-entry on. The re-entry-off D7 anchor is green on both heads, which shows the re-entry axis is the one that matters.
+
+### Mutation families (planted on 79d81621c; `r5/mutants`)
+
+- Every mutant was run against the round-3 verifier's 11 witness files plus the oracle and anchors files (13 files).
+- PROD is rc 0 on all 13.
+- The table names the leg that catches each family, and which members are killed where.
+
+| Family (dimension) | Members | Caught by |
+|---|---|---|
+| F1: pending event not processed before the decision | MD, X1, X4, Y2, Y5, Z1 (own) | **Oracle:** MD 78 cells, X1 78, X4 48, Y2 20, Y5 3, Z1 4. The drain-order structural legs also catch MD, X1, X4 and Y5 |
+| F2: decision on cached pre-event state | X8, Y1, X7 | **Oracle:** X8 40, Y1 4, X7 24. drain-order catches X7 and X8 |
+| F3: higher term ignored | X1, Y2, X8 | Oracle, as F1/F2 |
+| F4: progress ignored or misranked | ME1, ME2, X2, Y1 | **Anchors:** ME1 by property W1c; ME2 and X2 by decision-inputs R2.2. **Oracle:** Y1 (unequal-progress cell). ME1, ME2 and X2 are wrong the same way in both runs, so the oracle is blind to them by design |
+| F5: membership ignored | MC1, MH2, MD | **Anchors:** MC1 by attack-matrix and decision-inputs; MH2 by decision-inputs R2.3 and drain R3.7. **Oracle:** MD |
+| F6: decision split across processing steps | Y4 | **Anchor:** F6 one-turn (new). The oracle is blind: both runs split alike. It is unreachable as a false answer (verifier round 3, non-blocking 2), but the anchor pins it |
+| F7: success or retryable without the durable effect | MA, MB, MI1, MI2, X5, X6 | **Anchors:** committed (R2.4, R3.10) for MI1, MI2, X5, X6; property, attack-matrix, handler and write-path for MA and MB. **Oracle:** MA 24 cells, MB 3 |
+| F8: drop cause misattributed | MH1, MH2, X3 | **Anchors:** decision-inputs (R2.3, R3.8, R3.9) and write-path |
+| F9: gates bypassed | MF, MG | **Anchors:** attack-matrix W3.15/16. **Oracle:** MG 2 cells (admission) |
+| F9b: admission re-check after an in-turn await removed (new) | `F9b_admission_recheck_removed` | **Anchor:** B1/F9b. The oracle's admission cells close admission before the request, not mid-turn |
+| F10: second authority or path | MC2, MJ1, MJ2, MK | **Anchors:** handler and census tests (h-already, h-main, census, attack-matrix) |
+| F11: stale registry (Y3) | Y3 | Survives, recorded. It is out of the claim: only a stale refusal is possible (verifier round 3, non-blocking 1) |
+| **F12: a refused inbound step answers the command (new; CA1 reintroduced)** | `F12_refused_step_answers_command` | **Oracle:** 27 cells. **Anchors:** 5 (CA1) |
+| **F13: nested announce, stale diff (new; CA5 reintroduced)** | `F13_nested_announce` | **Oracle:** 20 cells. **Anchors:** 2 (D7/CA5, plus the B1/F9b anchor) |
+| Async-send axis: no inbound re-check after an awaited Ready | `AX_async_no_inbound_recheck` | **Oracle:** the 3 mid-turn cells only |
+| Per-index timing axis: the core built with the constant election tick | `AX_timing_constant_election_tick` | **Anchor:** per-index window. Also write-path 2, committed 1 and oracle 11 cells. The oracle kills here come from follower timeouts inside the exact window once the core's tick is shorter than the configured one. They are nondeterministic, so the anchor is the designed leg |
+| Equivalent under the claim: MsgHeartbeatResponse processed after the decision | Z2 (own) | Oracle: 2 cells, through the structural anti-vacuity only ("the turn begins with a delivered step"). Its semantic outputs are equal, since it moves no decision input |
+
+- **Every family is red.** Its designed leg is noted in the table.
+- **Y3 is the only survivor**, and it is recorded as out of the claim.
+- **Y4 is red only through the new F6 anchor.**
+
+### Exclusions (from amendment 1; not built)
+
+| Item | Owner or disposition |
+|---|---|
+| CA3, lost conf change (`has_pending_conf` or joint nulls a conf change answered CORE_OK) | Its own membership-admission quest after the publish. No F1 anchor |
+| A1, the handler's branch from the tracked role | Projection and readiness owner |
+| A2's cached path (the membership admission pre-check) | Projection and readiness owner. A2's substituted path is covered through D8's substitution, which is CA1 |
+| A5, the partition write gate `this.role === LEADER` | Projection and readiness owner |
+| B13, a transferee held by a host failure | Exclusion 4 (host failure) |
+| B5, the alternating-retarget loop | The REPLACE single-source-removal owner quest |
+| B4, the unbounded tick queue | Runtime owner |
+| B6, a host failure answered after the effect | Write path and runtime owners |
+| Also recorded | the draft's exclusions (handler tracked role, Y3, Liferaft, CORE_FATAL, pre-vote and check-quorum); CA7's shared `runtimeHealth` under exclusion 4; B14 |
+
+### Findings
+
+- **CA9 is reachable, and red on 79d81621c.**
+  - The canonical request `proposeConfChange({type: ADD_LEARNER, replicaIdentity: <the sitting leader>})` demotes the leader, and raft-rs keeps it leading (`post_conf_change`).
+  - Its transfer then drops proposals, and `droppedByLeadershipTransfer` answers the raw `CORE_REFUSED ... proposal dropped`, `retryable:false`. The drop is the transfer's.
+  - This is because the classification keys on "transferable voter" where raft-rs keys on "has progress".
+  - It is not reachable through the current production callers: admission skips existing members (ALREADY_MEMBER).
+  - The anchor is committed as `todo`, so the red is reported without failing the suite. The lead or owner decides whether it is F1's to fix, or a record for the classification owner.
+- **A crafted MsgTransferLeader at a follower with a leader is CORE_FATAL**, because raft-rs `send()` is fatal on a set term. It is unreachable from a raft-rs peer (term rules), and it falls under exclusion 4. Recorded.
+
+### Limits
+
+- **Blind spot to shared bugs.** The oracle is blind, by design, to a bug that is the same in both runs: F4's ME1/ME2/X2, F8, F10, F7's commit legs, and F6.
+  - Those families are carried by the anchors named in the table.
+  - The oracle's own anchors (D7 projection, crash-recover) are per-run checks, not comparisons.
+- **Reference processing is the harness B.** The envelopes are processed by the requester's own status read, with nothing between it and the request. A production "processed earlier" with ticks or commands in between is not what the claim compares.
+- **Crafted envelopes stand in for types a peer never sends here:**
+  - the five local types;
+  - responses from a non-member;
+  - MsgPropose at a candidate or at a leaderless follower;
+  - the pre-vote pair;
+  - MsgReadIndex.
+
+  They are shaped as the runtime's own sends: a forwarded proposal carries term 0, like raft-rs's `send()`. They are admissible by ingress. Their semantics are raft-rs's own.
+- **The asynchronous mode releases every send on the next microtask.** Mid-turn arrival is exercised only through held sends, in the three mid-turn cells and the B1/F9b anchor. A slow-peer mode (one peer never acknowledging) was not built.
+- **Per-index timing is built through the harness hook** with production's defaults and jitter (ticks 20/70/120, at a 50 ms tick from the default heartbeat). The adaptive IDLE profile was not built.
+- **Clock mode (lockstep) is not a separate axis.** Time moves only by explicit ticks, one round being one tick of every live replica. The recovery window and the admission bound are therefore pinned at t = 0, except in the B1/F9b anchor, which advances the virtual clock by one admission poll.
+- **The settled observation is a class count**, and only for the three declared timeout-driven cells. All other cells are compared exactly at the smallest election tick − 1 rounds, and never at the settled time.
+- **The durable comparison reads the files through the OS cache** (`synchronous = OFF`). It compares content, not crash durability across a power loss. The crash-and-recover anchor is a process restart.
+- **The event-axis decision choice is one or two decisions per cell** (see the table), not all six. The decision axis crosses all six only with the six representative events.
+
+### E0 gates
+
+- `eslint` on the five new or changed test files, the cluster harness and the driver: clean.
+- `npm run -s test:duplication`: OK. src+scripts 56/56 groups and 1815/1815 lines; test 791/791 groups and 30451/30451 lines.
+- `npm run -s test:unused:ratchet`: OK, 1437/1437. `SUCCESSOR` is de-exported.
+- `node scripts/check-fast-static.js`, after `npm run -s test:metadata:refresh`: ok. The oracle and anchors files classify as `unit`. The four `test/shards/*.json` files were restored to HEAD afterwards, for the lead to regenerate on commit.

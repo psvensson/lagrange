@@ -82,7 +82,7 @@ class PartitionNodeCluster {
    */
   constructor({partitionId, replicaIds, substrateFor = null,
     sendFor = null, resolveFor = null, applyFor = null,
-    wrapDatabase = null}) {
+    wrapDatabase = null, timingFor = null}) {
     this.partitionId = partitionId;
     this.replicaIds = [...replicaIds];
     this.substrateFor = substrateFor;
@@ -90,6 +90,7 @@ class PartitionNodeCluster {
     this.resolveFor = resolveFor;
     this.applyFor = applyFor;
     this.wrapDatabase = wrapDatabase;
+    this.timingFor = timingFor;
     this.coreEntries = [];
     this.isolated = new Set();
     this.directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
@@ -146,7 +147,8 @@ class PartitionNodeCluster {
       [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: this.addressOf(replicaId),
       [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: bootstrapReplicaIds,
       [RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE]: db,
-      [RAFT_PARTITION_NODE_REQUEST.TIMING]: PARTITION_TIMING,
+      [RAFT_PARTITION_NODE_REQUEST.TIMING]: this.timingFor === null ?
+        PARTITION_TIMING : this.timingFor(replicaId),
       [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]:
         this.substrateFor === null ? {} : this.substrateFor(replicaId),
       [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: true,

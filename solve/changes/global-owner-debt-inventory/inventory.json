@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2537688,
-        "sha256": "1479b997e6b76d2f05e033251679c7f60688b2e3202f610ffdc6bc62ccf47b26"
+        "bytes": 2541034,
+        "sha256": "f81d6febbeea17c77e3d8cdb08e8c8292dd05cebfb349826006bb7ca138d114b"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "001c59c084f25afe5e4e12479b96b3f14a1c78245740e438c09de73f90445b21"
+        "sha256": "941418a80947b8acb3da30fd7df1169e435c4904a483ad6a7e6fd4113abbf4ea"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "0a156215501cb10fe24d458d4e2db2a68f4f28c71f0879268e2d1047a6961338"
+    "inputDigest": "34a805aea9cac1f9812b9430e0686fe06adb7ab2bdf275f349d4a75997dfa16c"
   },
   "reconciliation": {
     "complexity": {
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "001c59c084f25afe5e4e12479b96b3f14a1c78245740e438c09de73f90445b21"
+          "sha256": "941418a80947b8acb3da30fd7df1169e435c4904a483ad6a7e6fd4113abbf4ea"
         },
         "cloneGroups": 791,
         "duplicatedLines": 30451,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2537688,
-        "sha256": "1479b997e6b76d2f05e033251679c7f60688b2e3202f610ffdc6bc62ccf47b26"
+        "bytes": 2541034,
+        "sha256": "f81d6febbeea17c77e3d8cdb08e8c8292dd05cebfb349826006bb7ca138d114b"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "591597264b5c3230aad31ee420b525c0a2d7e8e8eb33261093ba10e3a5af6510",
-      "moduleCount": 4949,
-      "edgeCount": 23264,
+      "sourceDigest": "75be3684e794079fbb1c7f8d381d16e66672803142d9b6eb88a7b88010a181e0",
+      "moduleCount": 4953,
+      "edgeCount": 23294,
       "unresolvedCount": 34
     }
   },
@@ -1227,7 +1227,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 202,
+      "importIn": 205,
       "importOut": 74,
       "score": 72,
       "topPaths": [

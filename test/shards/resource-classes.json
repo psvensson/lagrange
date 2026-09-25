@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2168,
+    "ordinary": 2170,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2185,
-  "digest": "fnv1a32-d349e3c2",
+  "censusSize": 2187,
+  "digest": "fnv1a32-10359018",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1440,6 +1440,8 @@
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "ordinary",
     "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js": "ordinary",
     "test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js": "ordinary",
+    "test/raft/raft-rs-backend/transfer-leadership-drain-anchors.test.js": "ordinary",
+    "test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js": "ordinary",
     "test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js": "ordinary",
     "test/raft/raft-rs-backend/transfer-leadership-property.test.js": "ordinary",
     "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": "ordinary",
