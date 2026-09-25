@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1913,
+    "unit": 1915,
     "integration": 75,
     "bootstrap": 184,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2179,
-  "digest": "fnv1a32-3c34f6b1",
+  "censusSize": 2181,
+  "digest": "fnv1a32-7c4fdbf4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1437,6 +1437,8 @@
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "unit",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "unit",
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "unit",
+    "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js": "unit",
+    "test/raft/raft-rs-backend/transfer-leadership-property.test.js": "unit",
     "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": "unit",
     "test/raft/raft-timing-utils.test.js": "unit",
     "test/raft/raft-transport-backpressure-mute.test.js": "unit",

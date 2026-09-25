@@ -19,16 +19,16 @@
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 152,
-    "storage-raft": 104,
+    "storage-raft": 106,
     "test-infrastructure": 133,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2179,
-  "digest": "fnv1a32-5ee778c0",
+  "censusSize": 2181,
+  "digest": "fnv1a32-5d6b8da9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-da28fa2a",
+  "observationDigest": "fnv1a32-5f586f6d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1456,6 +1456,8 @@
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "storage-raft",
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/transfer-leadership-property.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": "storage-raft",
     "test/raft/raft-timing-utils.test.js": "storage-raft",
     "test/raft/raft-transport-backpressure-mute.test.js": "storage-raft",
@@ -7116,6 +7118,25 @@
       ],
       "directories": [
         "src"
+      ]
+    },
+    "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js": {
+      "files": [
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/transfer-leadership-property.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
       ]
     },
     "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": {
