@@ -901,3 +901,24 @@ Items that need the owner are marked **DECISION**. Everything else is autonomous
 - S10 (scope, for the lead): pre-repair ghost rows.
 
 Everything else proceeds under the 2026-09-25 decision.
+
+## 8. Owner decisions (2026-09-25) and lead decisions
+
+**Owner decisions (binding):**
+- **S1, lease polarity.** Corrected. A live owner lease means the owner is available, and it fences remote settlement, as the module contract at `operation-owner-availability-policy.js:7-15` states.
+  - The locking assertions in `operation-ownership-lease-fencing.test.js:318-323` and `:371-380` are superseded under R09, never weakened.
+  - All three callers change behaviour: the release, the stale-FAIL remote settle, and the re-entry wake. Each one needs a witness.
+- **S2, re-driving an uncommitted removal.** The REPLACE re-drives it (R-1f in this quest). At STOPPING, the REPLACE re-proposes REMOVE_PEER through its own target replica until the committed ConfState no longer holds the source.
+  - CA3, the lost/swapped conf change, stays its own quest.
+  - R-1a must not land without R-1f (T-7 quorum hazard).
+- **S5.2, the port event.** The operation-only port from PR #46 gains a membership-changed event. It is emitted when the committed/applied ConfState changes, and it carries the new ConfState as data, never as an object. It stays an operation and an event: no handle, no reach-through.
+  - This updates the port's event set, and the literal method/event-list witnesses must be updated with it.
+  - The REPLACE owner completes on this event, with a level-triggered re-read. The low-frequency reconciliation remains the backstop.
+- **S9, ACTIVE bound.** No time bound. An ACTIVE REPLACE may wait while removal is unsafe. The wait must be observable: the operation reports why it is waiting and since when, through the existing diagnostics. No timer may force an outcome.
+
+**Lead decisions:**
+- **S10, pre-repair ghost rows.** Out of scope. The owner's hard-cutover rule is a fail-closed reseed with no in-place legacy migration, so no row written by the pre-repair early close can survive into a cluster that runs this code.
+  - The restore helper (`restoreLedgerSurplusDrainActiveVoters`) and the "completed REPLACE can leave a 3-1" branch exist only for that state. The implementer deletes them if the census confirms no other dependent. If one exists, it is reported, not kept silently.
+  - Constraint 3's idempotence still holds for live states: the source is already out of membership, or an operator intervened.
+- **S4, B5 beyond the REPLACE** (the cure's two-leg handoff). Recorded as a finding for its owner, not in scope.
+- **S3, S5 items 1/3/4, S6, S7, S8.** Handled as the design states. The new owner interactions each need their `coupledPairs` entry and witness. The formation lanes go in the wide net (the join-core coupling directive).
