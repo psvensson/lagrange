@@ -9,9 +9,11 @@
  * :7-15) and the owner-lease record (replica-operation-owner-lease.js). Cells
  * are built from the lease record's own stamping rule and classified by its
  * own state resolver, so the universe covers the lease enumeration by
- * construction. The routing heuristic is driven through its authority (the
- * readiness service the owner's isNodeReadyForRouting reads), never by
- * stubbing the verdict.
+ * construction. Workflow steps, operation types and step statuses are
+ * imported from their enums and the per-type workflow authority; the
+ * recorded owner comes from the repository's owner resolution. The routing
+ * heuristic is driven through its authority (the readiness service the
+ * owner's isNodeReadyForRouting reads), never by stubbing the verdict.
  */
 
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -19,11 +21,19 @@ import {
   OPERATION_DRAIN_OWNER_AVAILABILITY,
 } from '../../src/rebalancer/operation-owner-availability-policy.js';
 import {
+  OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED,
+} from '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
+import {
   REPLICA_OPERATION_OWNER_LEASE_STATE,
   REPLICA_OPERATION_OWNER_LEASE_TTL_MS,
   resolveOperationOwnerLeaseExpiryForPersist,
   resolveOperationOwnerLeaseState,
 } from '../../src/rebalancer/replica-operation-owner-lease.js';
+import {
+  WORKFLOW_STEP_TO_STATUS,
+  isTerminalStep,
+  isValidWorkflowStep,
+} from '../../src/rebalancer/replica-status.js';
 import {
   OperationType,
   ReplicaOperationResponseStatus,
@@ -37,9 +47,11 @@ import {
 // re-entry wake only act on this class (H3 of the design census).
 const LEASE_VERDICT_PARTITION_ID = 'sql_write_operations-p1';
 const LEASE_VERDICT_OPERATION_ID = 'replace-owner-lease-verdict-op';
+// Row roles, not owners: the recorded owner is whatever the repository's
+// owner resolution answers for the row (the target for a priority REPLACE).
 const LEASE_VERDICT_NODE = Object.freeze({
   SOURCE: 'lease-verdict-source',
-  OWNER: 'lease-verdict-owner',
+  TARGET: 'lease-verdict-target',
   SEED: 'lease-verdict-seed',
   OTHER: 'lease-verdict-other',
 });
@@ -55,6 +67,9 @@ const LEASE_VERDICT_EDGE_MS = 1;
 const LEASE_VERDICT_ENTITY_TYPE = 'partition';
 const LEASE_VERDICT_VOTER_ROLE = 'follower';
 const LEASE_VERDICT_NO_UNAVAILABLE_NODE = 'lease-verdict-nobody';
+const LEASE_VERDICT_SOURCE_UNAVAILABLE =
+  OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED
+    .STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE;
 
 // The lease cells, each defined by the lease record's own stamping rule
 // (expiry = updatedAt + TTL) and checked against its own state resolver.
@@ -93,100 +108,120 @@ const LEASE_CELL_UPDATED_AT_MS = Object.freeze(new Map([
   [LEASE_CELL.LIVE, LEASE_VERDICT_NOW_MS - LEASE_VERDICT_SETTLE_OFFSET_MS],
 ]));
 
-// The three REPLACE phases the release decision admits (design census H1):
-// ACTIVE, STOPPING, and SYNCING with the target observed ACTIVE.
-const REPLACE_PHASES = Object.freeze([
-  WORKFLOW_STEP.ACTIVE,
-  WORKFLOW_STEP.STOPPING,
-  WORKFLOW_STEP.SYNCING,
-]);
+/**
+ * Every (operation type, workflow step) pair from the two enums, classified
+ * by the per-type workflow authority: a step the type never takes is not a
+ * row that can exist and is reported as excluded, never silently dropped.
+ * @return {{rows: Array, excluded: Array}}
+ */
+function enumerateOperationTypeSteps() {
+  const rows = [];
+  const excluded = [];
+  for (const type of Object.values(OperationType)) {
+    for (const step of Object.values(WORKFLOW_STEP)) {
+      const terminal = isTerminalStep(type, step);
+      if (isValidWorkflowStep(type, step) || terminal) {
+        rows.push({type, step, terminal});
+      } else {
+        excluded.push({type, step});
+      }
+    }
+  }
+  return {rows, excluded};
+}
 
-const REPLACE_PHASE_STATUS = Object.freeze(new Map([
-  [WORKFLOW_STEP.ACTIVE, ReplicaStatus.ACTIVE],
-  [WORKFLOW_STEP.STOPPING, ReplicaStatus.REMOVING],
-  [WORKFLOW_STEP.SYNCING, ReplicaStatus.SYNCING],
-]));
-
-// A present source: an ACTIVE voter, or REMOVING once STOPPING has issued it.
-const REPLACE_PHASE_PRESENT_SOURCE_STATUS = Object.freeze(new Map([
-  [WORKFLOW_STEP.ACTIVE, ReplicaStatus.ACTIVE],
-  [WORKFLOW_STEP.STOPPING, ReplicaStatus.REMOVING],
-  [WORKFLOW_STEP.SYNCING, ReplicaStatus.ACTIVE],
-]));
-
-function stampLeaseCell(row, leaseCell, holderNodeId) {
+function stampLeaseCell(row, leaseCell, writerNodeId) {
   const updatedAt = LEASE_CELL_UPDATED_AT_MS.get(leaseCell);
   row.updated_at = updatedAt;
   if (leaseCell !== LEASE_CELL.UNFENCED) {
     row.lease_expires_at = resolveOperationOwnerLeaseExpiryForPersist(
       {updatedAt},
-      holderNodeId,
+      writerNodeId,
     );
   }
   return row;
 }
 
 /**
- * Build a durable REPLACE row with its lease stamped by the lease record.
- * @param {Object} options
+ * Build a durable operation row whose lease is stamped by the lease record's
+ * rule. The harness pre-stamps it; production stamps only on the insert
+ * touch and the gateway UPDATE payload (record, limits).
+ * @param {Object} options - {type, step, leaseCell, stepEnteredAtMs}
  * @return {Object} replica_operations row
  */
-function buildLeaseVerdictReplaceRow(options) {
+function buildLeaseVerdictOperationRow(options) {
+  const type = options.type || OperationType.REPLACE;
   const step = options.step;
   const updatedAt = LEASE_CELL_UPDATED_AT_MS.get(options.leaseCell);
   const stepEnteredAtMs = Number.isFinite(options.stepEnteredAtMs) ?
     options.stepEnteredAtMs :
     Math.min(updatedAt, LEASE_VERDICT_NOW_MS - LEASE_VERDICT_SETTLE_OFFSET_MS);
+  const createdAt = stepEnteredAtMs - LEASE_VERDICT_EDGE_MS;
+  const history = [{
+    step: WORKFLOW_STEP.PENDING,
+    timestamp: createdAt,
+    sourceReplicaId: LEASE_VERDICT_REPLICA.SOURCE,
+  }];
+  if (step !== WORKFLOW_STEP.PENDING) {
+    history.push({step, timestamp: stepEnteredAtMs});
+  }
   const row = {
     operation_id: LEASE_VERDICT_OPERATION_ID,
-    type: OperationType.REPLACE,
+    type,
     partition_id: LEASE_VERDICT_PARTITION_ID,
     replica_id: LEASE_VERDICT_REPLICA.TARGET,
     source_node_id: LEASE_VERDICT_NODE.SOURCE,
-    target_node_id: LEASE_VERDICT_NODE.OWNER,
-    status: REPLACE_PHASE_STATUS.get(step),
+    target_node_id: LEASE_VERDICT_NODE.TARGET,
+    status: WORKFLOW_STEP_TO_STATUS[step] ?? ReplicaStatus[step],
     workflow_step: step,
-    created_at: stepEnteredAtMs - LEASE_VERDICT_EDGE_MS,
-    completed_at: null,
+    created_at: createdAt,
+    completed_at: isTerminalStep(type, step) ? stepEnteredAtMs : null,
     error_message: null,
     entity_type: LEASE_VERDICT_ENTITY_TYPE,
     entity_id: LEASE_VERDICT_PARTITION_ID,
-    steps_history: JSON.stringify([
-      {
-        step: WORKFLOW_STEP.PENDING,
-        timestamp: stepEnteredAtMs - LEASE_VERDICT_EDGE_MS,
-        sourceReplicaId: LEASE_VERDICT_REPLICA.SOURCE,
-      },
-      {step, timestamp: stepEnteredAtMs},
-    ]),
+    steps_history: JSON.stringify(history),
   };
-  return stampLeaseCell(row, options.leaseCell, LEASE_VERDICT_NODE.OWNER);
+  return stampLeaseCell(row, options.leaseCell, LEASE_VERDICT_NODE.TARGET);
 }
 
-function buildLeaseVerdictServiceRows(sourceStatus) {
-  const rows = [{
-    service_id: LEASE_VERDICT_REPLICA.TARGET,
-    replica_id: LEASE_VERDICT_REPLICA.TARGET,
+function buildServiceRow(replicaId, nodeId, status) {
+  return {
+    service_id: replicaId,
+    replica_id: replicaId,
     service_type: LEASE_VERDICT_ENTITY_TYPE,
     partition_id: LEASE_VERDICT_PARTITION_ID,
-    node_id: LEASE_VERDICT_NODE.OWNER,
+    node_id: nodeId,
     raft_role: LEASE_VERDICT_VOTER_ROLE,
-    status: ReplicaStatus.ACTIVE,
-    address: `${LEASE_VERDICT_NODE.OWNER}/partition/` +
+    status,
+    address: `${nodeId}/partition/${replicaId}`,
+  };
+}
+
+/**
+ * Service rows: the target replica in `targetStatus` and the source replica
+ * in `sourceStatus` (null: absent).
+ * @param {string|null} sourceStatus
+ * @param {string|null} [targetStatus]
+ * @return {Array<Object>}
+ */
+function buildLeaseVerdictServiceRows(
+  sourceStatus,
+  targetStatus = ReplicaStatus.ACTIVE,
+) {
+  const rows = [];
+  if (targetStatus !== null) {
+    rows.push(buildServiceRow(
       LEASE_VERDICT_REPLICA.TARGET,
-  }];
+      LEASE_VERDICT_NODE.TARGET,
+      targetStatus,
+    ));
+  }
   if (sourceStatus !== null) {
-    rows.push({
-      service_id: LEASE_VERDICT_REPLICA.SOURCE,
-      replica_id: LEASE_VERDICT_REPLICA.SOURCE,
-      service_type: LEASE_VERDICT_ENTITY_TYPE,
-      partition_id: LEASE_VERDICT_PARTITION_ID,
-      node_id: LEASE_VERDICT_NODE.SOURCE,
-      raft_role: LEASE_VERDICT_VOTER_ROLE,
-      status: sourceStatus,
-      address: `${LEASE_VERDICT_NODE.SOURCE}/partition/` +
-        LEASE_VERDICT_REPLICA.SOURCE,
-    });
+    rows.push(buildServiceRow(
+      LEASE_VERDICT_REPLICA.SOURCE,
+      LEASE_VERDICT_NODE.SOURCE,
+      sourceStatus,
+    ));
   }
   return rows;
 }
@@ -194,26 +229,43 @@ function buildLeaseVerdictServiceRows(sourceStatus) {
 /**
  * The readiness service whose answers ARE the routing heuristic's input.
  * @param {boolean} ownerRoutingReady
+ * @param {string} ownerNodeId
  * @return {Object}
  */
-function buildLeaseVerdictReadinessService(ownerRoutingReady) {
+function buildLeaseVerdictReadinessService(ownerRoutingReady, ownerNodeId) {
   return buildPriorityDrainOwnerUnavailableReadinessService(
     LEASE_VERDICT_PARTITION_ID,
-    ownerRoutingReady ?
-      LEASE_VERDICT_NO_UNAVAILABLE_NODE :
-      LEASE_VERDICT_NODE.OWNER,
+    ownerRoutingReady ? LEASE_VERDICT_NO_UNAVAILABLE_NODE : ownerNodeId,
+  );
+}
+
+function installSourceObservation(coordinator, sourceObservation) {
+  if (sourceObservation === LEASE_VERDICT_SOURCE_UNAVAILABLE) {
+    coordinator.repository.getActualReplicaObservation = async () =>
+      Object.freeze({state: LEASE_VERDICT_SOURCE_UNAVAILABLE});
+    return;
+  }
+  // A lifecycle status (present) or null (absent), answered authoritatively.
+  installActualReplicaObservationResolver(
+    coordinator,
+    async () => sourceObservation,
   );
 }
 
 /**
- * A remote (non-owner) coordinator holding one durable REPLACE row, on a
- * controlled owner clock. Deliveries are recorded; the source observation is
- * answered from `sourceObservation` (the source node's authoritative row).
- * @param {Object} cell
+ * A remote (non-owner) coordinator holding one durable operation row, on a
+ * controlled owner clock. Deliveries are recorded.
+ * @param {Object} cell - {type, step, leaseCell, stepEnteredAtMs,
+ *   observerNodeId, recordedOwnerNodeId, ownerRoutingReady, sourceObservation,
+ *   targetStatus}
  * @return {Object}
  */
 function createLeaseVerdictRemoteCoordinator(cell) {
   const deliveries = [];
+  const sourceRowStatus =
+    cell.sourceObservation === LEASE_VERDICT_SOURCE_UNAVAILABLE ?
+      ReplicaStatus.ACTIVE :
+      cell.sourceObservation;
   const coordinator = createTestCoordinator({
     nodeId: cell.observerNodeId,
     enableTimeouts: false,
@@ -226,25 +278,20 @@ function createLeaseVerdictRemoteCoordinator(cell) {
         };
       },
     },
-    controlPlaneReadinessService:
-      buildLeaseVerdictReadinessService(cell.ownerRoutingReady),
+    controlPlaneReadinessService: buildLeaseVerdictReadinessService(
+      cell.ownerRoutingReady,
+      cell.recordedOwnerNodeId,
+    ),
     cacheData: {
       services: buildLeaseVerdictServiceRows(
-        REPLACE_PHASE_PRESENT_SOURCE_STATUS.get(cell.step),
+        sourceRowStatus,
+        cell.targetStatus === undefined ? ReplicaStatus.ACTIVE : cell.targetStatus,
       ),
-      replicaOperations: [buildLeaseVerdictReplaceRow(cell)],
+      replicaOperations: [buildLeaseVerdictOperationRow(cell)],
     },
   });
   coordinator.workflowOwner.timeSource = {now: () => LEASE_VERDICT_NOW_MS};
-  if (cell.sourceObservation) {
-    coordinator.repository.getActualReplicaObservation =
-      async () => cell.sourceObservation;
-  } else {
-    installActualReplicaObservationResolver(
-      coordinator,
-      async () => REPLACE_PHASE_PRESENT_SOURCE_STATUS.get(cell.step),
-    );
-  }
+  installSourceObservation(coordinator, cell.sourceObservation);
   return {coordinator, deliveries};
 }
 
@@ -296,11 +343,12 @@ export {
   LEASE_VERDICT_OPERATION_ID,
   LEASE_VERDICT_PARTITION_ID,
   LEASE_VERDICT_REPLICA,
-  REPLACE_PHASES,
+  LEASE_VERDICT_SOURCE_UNAVAILABLE,
+  buildLeaseVerdictOperationRow,
   buildLeaseVerdictReadinessService,
-  buildLeaseVerdictReplaceRow,
   buildLeaseVerdictServiceRows,
   createLeaseVerdictRemoteCoordinator,
+  enumerateOperationTypeSteps,
   resolveContractOwnerAvailability,
   stampLeaseCell,
 };

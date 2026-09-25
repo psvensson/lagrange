@@ -3,8 +3,13 @@
  * replace-source-removal-owner, narrowed scope 2026-09-25; record
  * quest-records/replace-source-removal-owner/evidence-lease-verdict.md).
  *
- * The owner (the REPLACE's target node) is alive and holds the live lease its
- * own ACTIVE write stamped. A remote drain sweep (the seed) lands while the
+ * The owner (the REPLACE's target node) is alive and its ACTIVE row carries
+ * a live lease. The harness pre-stamps that lease with the lease record's
+ * rule (updatedAt + TTL); it is NOT a lease the owner's own ACTIVE write
+ * renewed: renewOperationOwnerLeaseAfterCommittedTransition has no caller,
+ * and only the insert touch and the gateway UPDATE payload stamp a lease
+ * (the raw-SQL fallback UPDATE does not). The STOPPING-phase fence below
+ * rests on the same pre-stamped lease. A remote drain sweep (the seed) lands while the
  * REPLACE is ACTIVE, and again while it is STOPPING. The REPLACE must reach
  * its terminal through its own STOPPING step: the owner dispatches the
  * source removal (REMOVE_REPLICA, reason replace_source_removal), the source
@@ -44,7 +49,7 @@ import {
   LEASE_VERDICT_PARTITION_ID,
   LEASE_VERDICT_REPLICA,
   buildLeaseVerdictReadinessService,
-  buildLeaseVerdictReplaceRow,
+  buildLeaseVerdictOperationRow,
   buildLeaseVerdictServiceRows,
 } from './replace-owner-lease-verdict-harness.js';
 
@@ -86,7 +91,7 @@ function createCausalCluster(seedOwnerRoutingReady) {
   const seedDispatches = [];
   let sourceNode = null;
   const owner = createTestCoordinator({
-    nodeId: LEASE_VERDICT_NODE.OWNER,
+    nodeId: LEASE_VERDICT_NODE.TARGET,
     enableTimeouts: false,
     messageRouter: {
       async deliver(target, payload) {
@@ -103,7 +108,7 @@ function createCausalCluster(seedOwnerRoutingReady) {
       buildPriorityDrainReadinessService(LEASE_VERDICT_PARTITION_ID),
     cacheData: {
       services: buildLeaseVerdictServiceRows(ReplicaStatus.ACTIVE),
-      replicaOperations: [buildLeaseVerdictReplaceRow({
+      replicaOperations: [buildLeaseVerdictOperationRow({
         step: WORKFLOW_STEP.ACTIVE,
         leaseCell: LEASE_CELL.LIVE,
       })],
@@ -128,7 +133,10 @@ function createCausalCluster(seedOwnerRoutingReady) {
       },
     },
     controlPlaneReadinessService:
-      buildLeaseVerdictReadinessService(seedOwnerRoutingReady),
+      buildLeaseVerdictReadinessService(
+        seedOwnerRoutingReady,
+        LEASE_VERDICT_NODE.TARGET,
+      ),
   });
   for (const coordinator of [owner, seed]) {
     coordinator.workflowOwner.timeSource = clock;

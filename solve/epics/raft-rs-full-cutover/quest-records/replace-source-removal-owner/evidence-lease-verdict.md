@@ -166,3 +166,100 @@ Gates (E0) on the evidence worktree:
 - `npm run -s test:duplication`: OK (test 791/791, src+scripts 56/56);
 - `check-fast-static`: ok, after `test:metadata:refresh`; the four refreshed `test/shards/*.json` files were then restored from HEAD;
 - `test:unused:ratchet`: 1435 (1436 or fewer).
+
+## 10. Amendment after verification round 1 (N1, N2, N4), 2026-09-25
+
+This section is appended; the sections above stay as recorded. Where they differ, this section supersedes them. The source is `verification-round-1.md`. There are no `src/` changes; production_sha stays `bfbf7692e`.
+
+### 10.1 N1: census of entry points (supersedes §2)
+
+The three call sites in §2 are complete. Call sites 1 (release) and 2 (stale-FAIL settle) have **two** entry points, not one:
+- **E1, the periodic sweep:** `checkTimeouts` (`operation-workflow-recovery-timeout.js:231-241`) → `buildPriorityRecoveryOperationDrainSnapshot` → wake, skip or lifecycle.
+- **E2, the dispatch-pending drain:** `reconcilePriorityRecoveryDispatchPendingDrain` → `buildPriorityRecoveryDispatchPendingDrainSnapshot` (`operation-workflow-recovery-reconcile-dispatch-pending.js:793-817`) → `reconcilePriorityRecoveryOperationDrain`. Its completion comes from the priority-recovery decision snapshot, not from the planning snapshot.
+
+Call site 3 (re-entry) is reached by the snapshot builders (`getPriorityRecoveryDecisionSnapshotForPartitionOperations`, `buildPriorityRecoveryDecisionSnapshotForOperations`) through `schedulePriorityRecoveryTargetProgressReentry`.
+
+E2 can be driven in the harness. It runs on the production decision snapshot that `buildPriorityRecoveryDecisionSnapshotForOperations` produces for the same operation, and it is now witnessed by caller cells of its own (§10.2).
+
+### 10.2 N2: the caller grids range over the enums (supersedes the C1/C2/C3 rows of §4)
+
+**The grid.**
+- The (operation type, workflow step) universe is `Object.values(OperationType)` × `Object.values(WORKFLOW_STEP)`.
+- It is filtered only by the per-type workflow authority (`isValidWorkflowStep`, `isTerminalStep`): 19 rows, with 5 pairs excluded (ADD/STOPPING, ADD/REMOVED, REMOVE/CREATING, REMOVE/SYNCING, REMOVE/ACTIVE).
+- Terminal rows carry `completed_at`.
+- The status comes from `WORKFLOW_STEP_TO_STATUS`.
+- The recorded owner is `repository.resolveOperationOwnerNodeId(row)`: the target for a priority REPLACE, the source for ADD and REMOVE.
+- The step budget is `getTimeoutForStep`.
+- The observers are the seed plus whichever named node is not the owner.
+
+**Coverage anchors.** They come from the drain's own admission sets:
+- Release: REPLACE × (`PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_REPLACE_WORKFLOW_STEPS` ∪ `…_RELEASE_TARGET_OBSERVED_WORKFLOW_STEPS`) = REPLACE/{ACTIVE, STOPPING, SYNCING}.
+- Stale-FAIL: `PRIORITY_RECOVERY_OPERATION_DRAIN_OPERATION_TYPES` × `PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS`, restricted to valid non-terminal steps, which gives 13 pairs:
+  - ADD: PENDING, SENDING, CREATING, SYNCING;
+  - REMOVE: PENDING, SENDING, STOPPING;
+  - REPLACE: all six drain steps.
+- A closure test fails if an admitted pair is not a grid row, or a drain type is not an `OperationType`.
+
+**The outcome** is now `{decision: {state, action, ownerAction}, workflowStep, status, errorMessage, terminal, deliveries}`. The decision is the one each entry builds first. There are two anchor levels:
+- **Decision.** The verdict must decide the route at **every** admitted pair, per entry. With no lease, the unready heuristic gives `owner_unavailable_released`, or `fail_priority_recovery_drain_stale` with `allow_reconcile`; the ready heuristic does not.
+- **Effect (the durable REMOVED or FAILED write).** L1-direct applies wherever the verdict decides the effect. Effect coverage is required over the union of entry points E1 and E2:
+  - release: REPLACE/{ACTIVE, STOPPING, SYNCING} at both E1 and E2;
+  - stale-FAIL at E1: REMOVE/STOPPING and REPLACE/{PENDING, SENDING, CREATING, SYNCING, ACTIVE, STOPPING};
+  - stale-FAIL at E2: ADD/{PENDING, SENDING, CREATING, SYNCING}, REMOVE/{PENDING, SENDING, STOPPING} and REPLACE/{PENDING, SENDING, CREATING, ACTIVE, STOPPING};
+  - the union covers all 13 pairs.
+
+  At E1 the stale-FAIL decision is taken for ADD and for REMOVE PENDING/SENDING, but the sweep does not write it. ADD needs the target unsatisfied, which the new target axis provides.
+
+| Witness | Axes | Cells |
+|---|---|---|
+| C1 release, E1 and E2 | 19 type×step rows × observer (2) × source present {ACTIVE, REMOVING} × lease (5) × heuristic (2) | 760 per entry |
+| C2 stale-FAIL, E1 and E2 | 19 rows × observer (2) × source {unavailable, absent} × target {ACTIVE, absent} × lease (5) × heuristic (2); step age = budget + 1 | 1520 per entry |
+| U union | the effect coverage of C1 and C2 over E1 ∪ E2 equals the admitted pairs | – |
+| C3 re-entry | 19 rows × observer (2) × target visibility {as built, `ACTIVE_OPERATIONAL`} × lease (5) × heuristic (2) | 760 |
+| closure | admitted pairs ⊆ grid; drain types ⊆ `OperationType` | – |
+
+**Timing.** Every budget of the 19 rows is at least the lease TTL. PENDING and SENDING equal it at 30000, like ACTIVE, and the rest are 60000. So every lease cell is consistent on a stale step, and the test asserts this per cell.
+
+The verdict (V1), its anchors (V2) and the causal witness (K1, K2) are unchanged.
+
+### 10.3 N4: lease provenance (corrects §1 and the causal witness's description)
+
+§1 says the owner "holds the live lease that its own ACTIVE write stamped". **That is inaccurate:**
+- `renewOperationOwnerLeaseAfterCommittedTransition` (`operation-workflow-owner-execution-lane.js:563`) has no caller, and no caller passes `renewOwnerLease: true`.
+- Only two writes stamp a lease: the insert touch, and the gateway UPDATE payload (`buildReplicaOperationUpdateData`). The raw-SQL fallback `UPDATE_OPERATION` does not.
+- In the causal witness the ACTIVE row's lease is **pre-stamped by the harness** with the lease record's rule (`updatedAt + TTL`).
+- The owner's STOPPING write (the mock's raw-SQL UPDATE) leaves `lease_expires_at` unchanged, so the STOPPING-phase fence also rests on that pre-stamped lease.
+
+The causal test's header now says this. K1 and K2 therefore prove the verdict and its callers **given** a live lease on the row. They do not prove that production keeps a live lease across ACTIVE and STOPPING.
+
+### 10.4 Results (E0)
+
+**The widened witnesses.** Columns: V1, V2, closure, C1-E1, C2-E1, C1-E2, C2-E2, U, C3, K1, K2.
+
+| Head | Result |
+|---|---|
+| `bfbf7692e` (exact `git archive` src) | P×11, 5 of 5 runs; there was no red run to stop at |
+| `b0fd15184` | F F P F F F F P F F F. Closure and U are structural and pass on both heads. Violating live-lease cells per relation list: C1 48 per entry, C2 336 per entry, C3 96 |
+
+**Mutation families, re-run against the widened suite** in scratch copies of `bfbf7692e` (same plants as §7):
+
+| Id | V1 | V2 | cl | C1-E1 | C2-E1 | C1-E2 | C2-E2 | U | C3 | K1 | K2 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| M1 polarity reverted | F | F | P | F | F | F | F | P | F | F | F |
+| M2a release bypass | P | P | P | F | P | F | P | P | P | F | P |
+| M2b stale-FAIL bypass | P | P | P | P | F | P | F | P | P | P | P |
+| M2c re-entry bypass | P | P | P | F | F | F | F | P | F | P | P |
+| M3a expired treated live | F | F | P | F | F | F | F | P | F | P | P |
+| M3b boundary `>=` (lease record) | F | F | P | P | P | P | P | P | P | P | P |
+| M3c absent treated live | F | P | P | F | F | F | F | F | F | P | P |
+| M4 wrong-owner lease accepted | F | P | P | P | P | P | P | P | P | P | P |
+| M5 ambient clock | F | F | P | F | F | F | F | P | F | F | P |
+
+Every family is red on at least one witness. M2b, which was red only on C2 before, is now red on C2 at both entry points. M3c additionally reddens U: an absent lease treated as live removes the verdict-decided un-wedge everywhere.
+
+### 10.5 Limits added
+
+10. **Lease renewal belongs to the epic (A5), not to this claim.** Production renews the owner lease only on the insert touch and the gateway UPDATE; the raw-SQL fallback does not, and the post-transition renewal has no caller. So a live lease at ACTIVE or STOPPING entry is not guaranteed. Without one, the callers act by the heuristic (L2), and the SLO path can return through the heuristic. The causal witness assumes the lease; the next epic's lease-renewal and A5 decisions own this. If the A2 SLO run still shows the tail, check first whether the ACTIVE write took the raw-SQL fallback (verifier N4).
+11. **E1 does not durably write stale-FAIL** for ADD, or for REMOVE at PENDING and SENDING, in this harness; the lifecycle routes those steps elsewhere. The decision is still witnessed at E1 for every admitted pair, and E2 writes the effect for those pairs.
+12. **SYNCING re-entry is not written by E2.** REPLACE/SYNCING stale-FAIL is written only through E1 in this harness. Both entries decide it.
+13. **Limit 2 still applies.** The re-entry target visibility remains an overlay from the snapshot contract enum; it is now an axis over every row rather than a SYNCING-only patch.
