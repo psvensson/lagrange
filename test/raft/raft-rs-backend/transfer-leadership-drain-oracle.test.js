@@ -54,8 +54,9 @@ import {
 } from './transfer-leadership-drain-oracle-harness.js';
 import {
   CATALOGUE,
+  HIDDEN_INPUTS,
+  INPUT,
   KNOWN_PAIRS,
-  MOVES,
   NO_CELL,
   NO_MOVE,
   PAIR_BUILDS,
@@ -110,6 +111,16 @@ test('census: the pairs are generated as movers x readers per predicate, ' +
     [], 'every generated pair has a construction');
 });
 
+test('census: every cell\'s event moves an input its decision reads, or ' +
+  'the core refuses the envelope\'s step, or it is a declared control', () => {
+  for (const cell of CELLS) {
+    const read = cell.moves.filter((input) =>
+      cell.decisionInputs.includes(input));
+    assert.ok(read.length > 0 || cell.refusedFrom !== null ||
+      cell.control !== null, `${cell.id} reads nothing its event moves`);
+  }
+});
+
 test('census: the decision axis covers D1-D6 in every harness mode', () => {
   for (const decision of ['D1', 'D2', 'D3', 'D4', 'D5', 'D6']) {
     assert.ok(CELLS.some((cell) => cell.family === 'decision' &&
@@ -121,19 +132,51 @@ test('census: the decision axis covers D1-D6 in every harness mode', () => {
   }
 });
 
+// How each decision input is read off the core's status; the hidden ones
+// (a transfer in progress, the transferee's catch-up) move only through what
+// the requester sends.
+const OBSERVED = Object.freeze({
+  [INPUT.ROLE]: ({role, term, leaderId}) => ({role, term, leaderId}),
+  [INPUT.CONF]: ({voters, learners}) => ({voters, learners}),
+  [INPUT.PROGRESS]: ({progress}) => progress,
+  [INPUT.SELF]: ({self}) => self,
+});
+
+function refusalsFrom(inputs, raftId) {
+  return (inputs.inboundStepRefusals || []).filter((refusal) =>
+    String(refusal.from) === raftId)
+    .reduce((total, refusal) => total + refusal.refusalCount, 0);
+}
+
+// Anti-vacuity per decision: processing moved an input THIS decision reads,
+// or the core refused the envelope's own step and recorded it against the
+// sender the cell names, or the cell is a declared control that was
+// answered.
 function assertMoved(cell, processed) {
-  const inputMoved = JSON.stringify(processed.processed.inputsAfter) !==
-    JSON.stringify(processed.inputsBefore);
+  const before = processed.inputsBefore;
+  const after = processed.processed.inputsAfter;
+  if (cell.refusedFrom !== null) {
+    assert.ok(refusalsFrom(after, processed.refusedFromId) >
+      refusalsFrom(before, processed.refusedFromId),
+    `precondition: a refused step is recorded against ${cell.refusedFrom} ` +
+    `(${JSON.stringify(after.inboundStepRefusals)})`);
+    return;
+  }
   const sent = processed.processed.outbound.length > 0;
-  const moved = {
-    [MOVES.INPUT]: inputMoved,
-    [MOVES.OUTBOUND]: sent,
-    [MOVES.EITHER]: inputMoved || sent,
-    // The build asserted the predicate; the step outcome is the core's.
-    [MOVES.REFUSED]: true,
-  }[cell.moves];
-  assert.equal(moved, true,
-    `precondition: processing the pending envelopes moved ${cell.moves}`);
+  if (cell.control !== null) {
+    assert.ok(sent, `precondition: the control was answered (${cell.control})`);
+    return;
+  }
+  const read = cell.moves.filter((input) =>
+    cell.decisionInputs.includes(input));
+  assert.ok(read.length > 0,
+    `the event moves an input ${cell.decision} reads (model D x I)`);
+  const moved = read.filter((input) => (HIDDEN_INPUTS.includes(input) ? sent :
+    JSON.stringify(OBSERVED[input](after)) !==
+      JSON.stringify(OBSERVED[input](before))));
+  assert.ok(moved.length > 0,
+    `precondition: processing moved an input ${cell.decision} reads ` +
+    `(${read.join(', ')})`);
 }
 
 function assertNotVacuous(cell, pending, processed) {

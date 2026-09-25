@@ -492,7 +492,7 @@ This is the amendment's definition: "pending" means delivered to `group.inbound`
 - The PENDING request's turn must begin with a `step` and step every delivered envelope. The PROCESSED request must meet nothing pending.
 - Processing must have moved something:
   - a decision input, or an outbound send, or both, as the cell declares;
-  - or, for the refused-step cells, the build asserts the receiver predicate under which raft-rs refuses the step: local type, sender without progress, or a MsgPropose drop state.
+  - or, for the refused-step cells, the build asserts the receiver predicate under which raft-rs refuses the step: local type, sender without progress, or a MsgPropose drop state. *(Superseded by the G1 repair: a refused-step cell now asserts that the refusal was recorded against the expected sender in `inboundStepRefusals`. The pair cells cannot assert the predicate at build, since it arises only after the mover.)*
 - Every observation and every input read rejects a refusal-shaped status.
 
 **Cost.** The harness sets `PRAGMA synchronous = OFF` on the cluster's files through the `wrapDatabase` hook. The durable readings are unaffected, since they are read back through the OS cache. One whole run of the property file takes about 5 s.
@@ -545,7 +545,7 @@ This is the amendment's definition: "pending" means delivered to `group.inbound`
 - D5: `campaign`;
 - D6: `probePeerProgress(C)`.
 
-Each is crossed with one pending event per decision input, all at the leader A:
+Each is crossed with one pending event per decision input, all at the leader A *(false for D5, corrected by the G1 repair below: none of these events moves an input D5 reads, so every D5 cell answered CORE_OK and the `not-an-active-voter` branch was never reached; each decision is now crossed with the events that move an input it reads)*:
 - a higher-term vote request;
 - a new leader's append at a stale leader;
 - a new leader's heartbeat at a stale leader;
@@ -625,7 +625,7 @@ The cells run in these harness modes:
 | Family (dimension) | Members | Caught by |
 |---|---|---|
 | F1: pending event not processed before the decision | MD, X1, X4, Y2, Y5, Z1 (own) | **Oracle:** MD 78 cells, X1 78, X4 48, Y2 20, Y5 3, Z1 4. The drain-order structural legs also catch MD, X1, X4 and Y5 |
-| F2: decision on cached pre-event state | X8, Y1, X7 | **Oracle:** X8 40, Y1 4, X7 24. drain-order catches X7 and X8 |
+| F2: decision on cached pre-event state | X8, Y1, X7 | **Oracle:** X8 40, Y1 4, X7 24. drain-order catches X7 and X8. *(Incomplete, corrected by the G1 repair below: "F2 is caught by the oracle" did not hold for D5, where the verifier's F2c2 survived every file.)* |
 | F3: higher term ignored | X1, Y2, X8 | Oracle, as F1/F2 |
 | F4: progress ignored or misranked | ME1, ME2, X2, Y1 | **Anchors:** ME1 by property W1c; ME2 and X2 by decision-inputs R2.2. **Oracle:** Y1 (unequal-progress cell). ME1, ME2 and X2 are wrong the same way in both runs, so the oracle is blind to them by design |
 | F5: membership ignored | MC1, MH2, MD | **Anchors:** MC1 by attack-matrix and decision-inputs; MH2 by decision-inputs R2.3 and drain R3.7. **Oracle:** MD |
@@ -637,7 +637,7 @@ The cells run in these harness modes:
 | F10: second authority or path | MC2, MJ1, MJ2, MK | **Anchors:** handler and census tests (h-already, h-main, census, attack-matrix) |
 | F11: stale registry (Y3) | Y3 | Survives, recorded. It is out of the claim: only a stale refusal is possible (verifier round 3, non-blocking 1) |
 | **F12: a refused inbound step answers the command (new; CA1 reintroduced)** | `F12_refused_step_answers_command` | **Oracle:** 27 cells. **Anchors:** 5 (CA1) |
-| **F13: nested announce, stale diff (new; CA5 reintroduced)** | `F13_nested_announce` | **Oracle:** 20 cells. **Anchors:** 2 (D7/CA5, plus the B1/F9b anchor) |
+| **F13: nested announce, stale diff (new; CA5 reintroduced)** | `F13_nested_announce` | **Oracle:** 20 cells. **Anchors:** 2 (D7/CA5, plus the B1/F9b anchor). *(Corrected: this plant only drops `group.tail = turn`. Reintroducing the old `enqueue` exactly is caught by the D7/CA5 anchor alone, not B1/F9b: verifier round 4, which also found oracle 20 and rti 1.)* |
 | Async-send axis: no inbound re-check after an awaited Ready | `AX_async_no_inbound_recheck` | **Oracle:** the 3 mid-turn cells only |
 | Per-index timing axis: the core built with the constant election tick | `AX_timing_constant_election_tick` | **Anchor:** per-index window. Also write-path 2, committed 1 and oracle 11 cells. The oracle kills here come from follower timeouts inside the exact window once the core's tick is shorter than the configured one. They are nondeterministic, so the anchor is the designed leg |
 | Equivalent under the claim: MsgHeartbeatResponse processed after the decision | Z2 (own) | Oracle: 2 cells, through the structural anti-vacuity only ("the turn begins with a delivered step"). Its semantic outputs are equal, since it moves no decision input |
@@ -725,3 +725,77 @@ The cells run in these harness modes:
 
   **The other families still in `raft-rs-leadership-transfer.js`**, and F12/F13, are unchanged: MC1, ME1, ME2, X2, F12 (oracle 27 cells, anchors 5) and F13 (oracle 20 cells, anchors 2). Every other family plants outside the changed function, and its result from the 79d81621c table stands.
 - **The F8 row above is replaced by:** MH2 → decision-inputs and drain; MH7 → the CA9 anchor; MH1 and X3 → equivalent under raft-rs's status contract.
+
+## G1 repair (round 4, protocol Phase 9; evidence only)
+
+The round-4 verifier approved and found one generic-evidence defect, G1 (`verification-round-4.md`). The decision axis crossed every decision with the same six events, and none of them moves an input D5 reads. Anti-vacuity accepted any moved input, not one the decision reads. The verifier's F2c2 (campaign eligibility decided on the pre-drain observation) survived every file.
+
+This is fixed in the generator, not with a D5 special case. Production stays at 895034825, and the worktree's src is identical to it.
+
+### What changed
+
+**The model's D × I mapping is now data** (`transfer-leadership-drain-oracle-cells.js`).
+- `INPUT` names the model's decision inputs:
+  - role, term and leader;
+  - configuration;
+  - progress;
+  - own membership;
+  - transfer in progress, which is hidden;
+  - transferee catch-up, which is hidden.
+- Each decision declares what it reads:
+
+  | Decision | Reads |
+  |---|---|
+  | D1 | role, configuration, transfer, catch-up |
+  | D2 | role, configuration, progress, transfer |
+  | D3, D4 | role, own membership, transfer |
+  | D5 | own membership |
+  | D6 | role, configuration, progress |
+
+- Every event declares what it moves.
+- The decision axis crosses each decision only with the events that move an input it reads. The admission cells pick, per decision, the first event that moves an input it reads.
+- Two events join the axis:
+  - the leader's own removal, committed by pending acknowledgements;
+  - a follower's own removal, committed by the pending append that carries the commit (the requester is C).
+- The catalogue entries declare `moves`, `refusedFrom` or a `control` reason. The MsgPropose-at-leader cell no longer runs D3, which reads nothing that event moves. The pre-vote request, the read-index request and MsgPropose at a follower are declared controls, with reasons.
+
+**Anti-vacuity is per decision** (`transfer-leadership-drain-oracle.test.js`).
+- A new census test fails for any cell whose event moves nothing its decision reads, unless the cell is a refused-step cell or a declared control.
+- The processed run must show one of the following:
+  - that an input the decision reads moved. Role, configuration, progress and own membership are read off the status; the hidden inputs are read off the requester's outbound;
+  - for a refused-step cell, that `inboundStepRefusals` gained a refusal against the expected sender. This closes the verifier's non-blocking 2, including for the five pair cells;
+  - for a control, that it was answered.
+- `inputsOf` now also reports the requester's own membership: voter or learner in its own ConfState.
+
+**The refusal-record bound has an anchor** (`transfer-leadership-drain-anchors.test.js`, R13).
+- It refuses one response from each of `INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT` senders that have no progress, refuses the first sender again, then adds one more sender.
+- The record must then hold exactly the limit. The sender refused longest ago (the second one) must be evicted, and the renewed first sender and the newest must both be present.
+- This closes the verifier's non-blocking 1.
+
+### Results on 895034825
+
+- **5 of 5 runs green, with no red to stop at:**
+  - oracle: 155 pass (4 census and 151 cells: event 46, decision 85, pair 10, window 1, admission 6, mid-turn 3);
+  - anchors: 12 pass.
+- **The D5 cells now reach the refusal branch.** The three D5 cells (the event-axis self-removal, and the decision-axis leader and follower self-removal) answer `CORE_REFUSED not-an-active-voter` in both runs. The admission D5 cell answers `user-transaction-open`.
+- **Decision-axis cells per decision:** D1 28, D2 24, D3 18, D4 6, D5 2, D6 7.
+
+**Mutants.** The verifier's patches, planted on this head (scratch `r7/`), each run against the 15 F1 witness files. prod is rc 0 on all 15.
+
+| Mutant | Result |
+|---|---|
+| F2c2 (D5 on the full pre-drain observation) | **red**: oracle 3 (the three D5 cells) |
+| F2a (transfer on the pre-drain observation) | red: oracle 85, decision-inputs 1, drain 1 |
+| F2b (classification on the pre-drain observation) | red: oracle 12, drain 3 |
+| F2d (probe on the pre-drain observation) | red: oracle 6 |
+| F2c (only `promotable` read pre-drain) | survives. Near-equivalent, as the verifier judged: `campaignGroup` also reads the ConfState fresh, and the self-voter check subsumes `promotable` |
+| Q2 (refusal record unbounded) | **red**: the R13 anchor |
+
+**The F2 row of the family table now reads:** X8, Y1, X7, F2a, F2b, F2c2 and F2d are caught by the oracle; F2c is near-equivalent.
+
+### E0 gates
+
+- `eslint` on the changed test files: clean.
+- `npm run -s test:duplication`: OK. src+scripts 56/56 and 1815/1815; test 791/791 and 30451/30451.
+- `npm run -s test:unused:ratchet`: at or below 1437.
+- `node scripts/check-fast-static.js`, after `npm run -s test:metadata:refresh`: ok. The `test/shards/*.json` files were then restored to HEAD.
