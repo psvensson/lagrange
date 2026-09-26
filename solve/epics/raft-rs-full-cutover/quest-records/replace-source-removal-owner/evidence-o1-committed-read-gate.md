@@ -446,3 +446,74 @@ pass, 0 fail, 4673 assertions - controller 185/185 (ordinary,
 external-toolchain, bootstrap), tv-dator exclusive 3/3. Every evidence file,
 the implementer's V1a/V2 witnesses and every file importing the edited
 harness are in the cone and green.
+
+## 9. Round 3 (2026-09-28, production FROZEN at `659b7db95`, evidence branch `evidence/evidence-o1-r3-2026-09-28`)
+
+After verification O1 round 2 (APPROVE WITH RECORDED DEFECTS) and the fixes
+merged into `659b7db95`: F-1 (conf changes leader-only at the port, typed
+NOT_LEADER naming the leader; NOT_LEADER admissions and retirements
+remembered and re-proposed on settlement or leadership gain; a leader source
+proposes its own RemoveNode; the `admissible` flag removed), the durable
+REMOVING-row rule, F-7 (the completion authority's currentness: applied =
+commit and corroboration by a majority of its voters), F-6 readiness.
+`git diff 659b7db95..HEAD -- src` is empty.
+
+### 9.1 What changed in the evidence (verifier items F-2, F-4, F-5; lead tasks 1-4)
+
+| Task | Where | What |
+| --- | --- | --- |
+| 1 F-2 | `evidence-o1-admission-liveness.test.js` "F-2" x2 | A REMOVING target below its gate (its RemoveNode proposed the moment the leader applied its AddNode, before it applied anything; c isolated so the removal needs its ack): its own read below the gate is VOTER (its bootstrap names it), the exit waits, the removal commits at the leader on its ack, then GATE_OPENED, MEMBERSHIP_CHANGED, exit REMOVAL_APPLIED in that order, a_self durable. The gate clause's discriminator: a GENESIS whose founders omit self (applied view ABSENT, gate closed forever) holds its exit to the BACKSTOP. Mutation "exit ignores the gate" -> the second cell red; the first cell green (VOTER below the gate under O2: the clause is defence in depth there), the implementer's exit witness 17/17 green (recorded). |
+| 2 F-4 | `committed-membership-census.test.js` "V1a census" (rewritten) | Counts construction SITES (every `new PartitionService(` / `createPartitionService(` / `createJoinLocalPartitionService(` call, the method definition excluded), one evidence regex per site: 10 sites in 7 files (two each in `snapshot-catchup-wiring.js` and `node-joining-publication-activation.js`), and the declared total equals the total found in `src`. Mutation "a second stamp-less site in a declared file" (`bootstrap-service-replica-registration-methods.js`) -> red. |
+| 3 F-1 dimension | `evidence-o1-proposal-ingress.test.js` (new) | PROPOSER = every core role of `ROLE`, classified (leader proposes; follower / candidate / pre-candidate refused NOT_LEADER); ranged at runtime over {leader, follower} x the crate's five pending kinds: the leader's AddNode(t) is deferred typed (CONF_CHANGE_PENDING, retryable), the follower's is refused CORE_REFUSED NOT_LEADER naming the leader, the leader's log gains no empty entry, and the AddNode is taken and commits at the leader once the pending change settled. Production admission path: a follower's remembered NOT_LEADER admission (its row reaching the follower only; nothing admitted for 600 ms) is proposed when it gains leadership (a transfer) and the target is admitted; a founder then retired by its REMOVING row is never re-admitted by the wakes that follow. Mutations: "follower forwards" (NOT_LEADER branch removed) -> 5 red + the implementer's F-1 red; "NOT_LEADER not remembered" -> the production-path cell red. |
+| 4 F-5 wakes | `test/partition/partition-admission-redrive-wakes.test.js` (rewritten) | LATCH {in flight, deferred, NOT_LEADER remembered, deferred retirement} x WAKE, the wakes classified out of the production `RAFT_EVENT` enumeration (CONF_CHANGE_APPLIED with payloads produced by the production `confChangeSettlement` for an applied conf-change entry and for the post-election window close; LEADER) with every other member classified as not a wake - 13 tests, 25 assertions; a NOT_LEADER latch is re-driven to nothing by a settlement while the replica still follows and to one proposal by leadership gain. Still the one witness that discriminates the re-drive wiring: mutation "re-drive on MEMBERSHIP_CHANGED only" -> red (table below). |
+| B12 | `evidence-o1-anchors.test.js` | Under corroboration (F-7) the below-gate verdict is exactly STILL_VOTER from the leader's answer: asserted that the deciding answer has applied = commit and names the below-gate target among the voters it asked. |
+| amendment | `committed-read-amendment-1-2026-09-26.md` section 8, items 5-8 | leader-only proposals replace "the deferral covers every path"; the durable REMOVING-row rule; corroboration as the completion authority's currentness proof, read-index recorded as the R5 follow-up; the F-2 evidence and the O2 reachability note. |
+
+### 9.2 The property files on `659b7db95` (`node --test`, one at a time)
+
+static 8/8, gate histories 6/6, restart equivalence 16/16, admission
+liveness 3/3 (two F-2 cells added), anchors 8/8 (B12 corroboration
+assertions added), real chain 7/7, proposal ingress 6/6 (new); census 8/8
+(rewritten); wakes 13/13 (rewritten).
+
+### 9.3 Mutation matrix re-run on `659b7db95`
+
+Scratch copies of `659b7db95`, never committed. Files: M1 = gate histories (6), M4 = restart equivalence (16), M3+F2 = admission liveness (3), A = anchors (8), R = real chain (7), PI = proposal ingress (6), W = wakes (13), PD = port deferral (5), LO = `conf-change-leader-only` (1), C = census (8), X = the implementer's exit witness (17). "-" = not run.
+
+| Mutation (mechanism) | M1 | M4 | M3+F2 | A | R | PI / W / PD / LO / C / X |
+| --- | --- | --- | --- | --- | --- | --- |
+| gate removed | 6 | 10 | 3 | 3 (B1 reachability, B12 x2) | 5 | - |
+| gate at j only | 6 | 8 | 2 (M3, F-2 gate clause) | 0 | 2 (M5 b, c) | - |
+| gate delegating to the crate's hup check | 6 | 10 | 1 (M3) | 0 | 2 (M5 a, c) | - |
+| bootstrap index not persisted | 6 | 15 | 0 | 1 (GENESIS restore) | - | - |
+| restore ignores the record's admission | - | 7 | - | - | - | - |
+| resume + campaign ungated | - | 1 (H1 transient) | - | - | - | - |
+| j from core `status.applied` | 0 | 0 | 0 | 0 | - | equivalent (as before) |
+| R-1a ignores the gate | - | - | - | 0 | - | equivalent under F1 (round 2, 8.4) |
+| stamp from rows | - | - | - | - | 1 (M2) | - |
+| join mode / ticks from a row count | - | - | - | - | 1 (GENESIS anchor) | - |
+| absent stamp defaults to GENESIS | - | - | - | 1 (port stamp validation) | - | - |
+| admission not re-driven (settlement/leadership re-drive disabled) | - | - | - | - | 2 (M2, M3) | W 10 red; PI 1 red (production-path leadership gain) |
+| re-drive on MEMBERSHIP_CHANGED only (F-1/V2 wiring reverted) | - | - | - | - | 0 | **W 10 red** (every latch x wake except the NOT_LEADER x settlement zero cells) - the wakes witness is the discriminator |
+| settlement keyed on the configuration key (announced only when the ConfState key changed) | - | - | - | - | - | PD 3 red - exactly the no-op RemoveNode, no-op AddNode and post-election kinds |
+| follower forwards (the port's NOT_LEADER branch removed) | - | - | - | - | - | **PI 5 red** (every pending kind: CORE_OK at the follower instead of NOT_LEADER) + LO 1 red |
+| NOT_LEADER not remembered (`REDRIVEN_OUTCOMES` without NOT_LEADER) | - | - | - | - | - | PI 1 red (the production-path leadership-gain cell) |
+| exit ignores the gate (`gateOpen !== true` clause removed) | - | - | 1 (the gate-clause cell: GENESIS omit-self exits at once) | - | - | X 0 (the implementer's two-voter cell is above the gate); the removed-below-the-gate cell green: VOTER below the gate under O2, defence in depth (recorded) |
+| a second stamp-less construction site in a declared file | - | - | - | - | - | C 1 red (V1a census, site count) |
+
+### 9.4 Findings about the evidence (round 3)
+
+- The F-2 gate clause is discriminated only by a replica whose applied view omits it below its gate; under O2 every joiner's bootstrap names it, so the "REMOVING target below its gate" cell reads VOTER below the gate and the clause is defence in depth there (amendment section 8 item 8). No production change; the verifier's premise ("its absence from C_j + self proves nothing") is unreachable for a joiner and reachable for a GENESIS whose founders omit self.
+- The settlement-keyed-on-key mutant must capture the key before the membership announcement; captured after it, the mutant suppresses every settlement (5 red) and overstates the discrimination. Recorded so the matrix's "3 red" is reproducible.
+- B12 under corroboration: the below-gate verdict is STILL_VOTER from the leader's answer with applied = commit and the below-gate target among the corroborating voters (it adopted the term from the appends it holds); asserted, exactly right.
+
+### 9.5 Runs and SHAs (round 3)
+
+| SHA | Content |
+| --- | --- |
+| `659b7db95` | production frozen (integration of fix-f5, fix-f6, fix-f7; round-2 evidence merged) |
+| `bfb9ad747` | round 3: proposal-ingress witness, F-2 exit cells, site-counting census, latch x wake witness, B12 corroboration pins, amendment items 5-8 |
+| record commit | this section; the lab cone result appended below |
+
+Static gates at `bfb9ad747`: eslint clean; literals 0 new; duplication 55/1777 and 780/29947; unused exports 1435/1435; test metadata regenerated by the hook.
+
