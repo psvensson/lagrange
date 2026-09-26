@@ -63,10 +63,12 @@ import {findTopologyLeaks} from '../../src/test-helpers/topology-leak-check.js';
 const APPLICATION_ID = 'public-seam-acceptance';
 const TABLE = 'acceptance_objects';
 const HINT_TABLE = 'acceptance_hints';
-// better-sqlite3's refusal to bind a non-byte object (the JSON-decoded
-// {type:'Buffer',data:[...]}).
-const SQLITE_BIND_ERROR_PATTERN =
-  /can only bind numbers, strings, bigints, buffers, and null/;
+// Observed on the lab (single runtime, local partition leader): the committed
+// Raft entry is re-parsed from JSON before apply, so the Buffer bind arrives
+// as {"type":"Buffer","data":[...]} and better-sqlite3 reads that object as a
+// named-parameter bag: "Too few parameter values were provided".
+const SQLITE_BIND_ERROR_TEXT = 'Too few parameter values were provided';
+const JSON_DECODED_BUFFER_TEXT = '{"type":"Buffer","data":[';
 const BLOB_LOG_CONTEXT_LINES = 6;
 const RANGE_LOW = 'img:';
 const RANGE_HIGH = 'img;';
@@ -137,12 +139,12 @@ test('public application database routes by primary key through embedded process
   });
 
   // FINDING F-BLOB-ROUTED-BYTES (witness, asserts the CURRENT defect; flips
-  // when the owner fixes it): a BLOB bind value does not survive the routed
-  // write. Mechanism (census, see the track report): every partition hop and
-  // the Raft log are ad hoc JSON with no byte codec, so the participant binds
-  // {type:'Buffer',data:[...]} into SQLite. The same statement with a TEXT or
-  // NULL body succeeds (I1.1). When bytes are carried, replace this witness
-  // with the exact Buffer round-trip it currently cannot make.
+  // when the owner fixes it): a BLOB bind value does not survive the write.
+  // Mechanism: partition hops and the Raft log are ad hoc JSON with no byte
+  // codec; even with a LOCAL leader the committed entry is applied from its
+  // JSON copy, so SQLite is handed {type:'Buffer',data:[...]}. The same
+  // statement with a TEXT or NULL body succeeds (I1.1). When bytes are
+  // carried, replace this witness with the exact Buffer round-trip.
   await t.test('F-BLOB-ROUTED-BYTES witness: a BLOB bind is rejected on the routed write', async (t) => {
     const blobInsert = keep('F-BLOB insert', await seed.query(sessionA,
       `INSERT INTO ${TABLE} (id, body, note) VALUES (?, ?, ?)`,
@@ -163,14 +165,16 @@ test('public application database routes by primary key through embedded process
     const tableLines = cluster.nodes.flatMap((node) =>
       cluster.nodeLogLines(node, TABLE));
     const bindErrors = tableLines.filter((line) =>
-      SQLITE_BIND_ERROR_PATTERN.test(line));
+      line.includes(SQLITE_BIND_ERROR_TEXT) &&
+      line.includes(JSON_DECODED_BUFFER_TEXT));
     if (bindErrors.length === 0) {
       t.comment(`F-BLOB log lines naming ${TABLE}:\n` +
         tableLines.slice(-BLOB_LOG_CONTEXT_LINES).join('\n'));
     }
     t.ok(bindErrors.length > 0,
-      'the node log shows the SQLite bind refusal of the decoded value ' +
-      '(bytes lost in JSON, not an unavailable participant)');
+      'the node log shows the apply-time SQLite bind refusal of the ' +
+      'JSON-decoded Buffer (bytes lost in the JSON log round trip, not an ' +
+      'unavailable participant)');
   });
 
   await t.test('I1.2 update on node A becomes visible on node B', async (t) => {
