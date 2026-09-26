@@ -63,8 +63,10 @@ Two surfaces that already existed. Neither was added for this contract.
    participant nodes, read-authority witnesses, distributed plans) never leave
    the facade, a thrown engine error reaches the consumer as `{code, message}`
    only, and diagnostic statements (`EXPLAIN DISTRIBUTED`) are refused for
-   application sessions by the statement policy. These three projections were
-   the only production changes the seam needed, all at the facade owner.
+   application sessions by the statement policy, which SqlCore's statement
+   execution consults before its EXPLAIN branch. These three projections were
+   the only production changes the seam needed: two at the facade owner and
+   one policy hook inside SqlCore's statement execution.
 2. **Authenticated lifecycle SQL over the PostgreSQL wire.** `INSTALL SERVICE`,
    `CREATE BINDING`, `CONFIGURE SERVICE ACCESS` and `CALL BINDING` are
    classified only by `SqlCore.executeRequest` under a server-derived security
@@ -150,7 +152,7 @@ in [Execution semantics](../docs/execution-semantics.md).
 
 | Stage | Status | Evidence |
 | --- | --- | --- |
-| I1 public multi-node application database | PROVEN | `test/integration/public-application-database-multinode.integration.test.js` (committed on one runtime; the three-process harness is in place and was green on the lab for routing, update visibility and leak checks; the committed shape waits on the formation and transaction findings) |
+| I1 public application database | PROVEN on one runtime; multi-node RECORDED | `test/integration/public-application-database-multinode.integration.test.js` runs on one runtime. A three-process lab run was green for key routing, update visibility, the falsifiers and every leak check, but the committed shape stays at one runtime until the formation write-readiness and transaction replication findings are repaired |
 | I2 distributed transaction visibility | BLOCKED | systemic transaction replication defect, see Findings; `test/integration/public-application-database-transaction-facade.integration.test.js` proves facade semantics only |
 | I3 public Binding invocation | PROVEN | `test/integration/public-binding-cell-invocation-seam.integration.test.js` |
 | I4 outcome contract | PROVEN | `test/integration/call-cell-public-outcome-adversarial.integration.test.js`, `test/service/call-cell-public-outcome.test.js` |
@@ -165,7 +167,7 @@ in [Execution semantics](../docs/execution-semantics.md).
 | F2 consumer supplies a partition id | no | hints ignored; payload keys refused |
 | F3 half a transaction committed | no | atomic outcome on one runtime; replicated durability BLOCKED |
 | F4 caught statement error commits | no | transaction doomed |
-| F5 Binding bypasses the invocation owner | no | only path is `executeRequest` to the lifecycle owner to `CallCellInvoker` |
+| F5 Binding bypasses the invocation owner | no | static: consumer import census plus the architectural path `executeRequest` to the lifecycle owner to `CallCellInvoker` |
 | F6 legacy callback axis used | no | static token scan |
 | F7 retry policy needs Raft vocabulary | no | class plus `retrySafe` only |
 | F8 ratchet imports private core | no | static import census |
@@ -174,7 +176,10 @@ in [Execution semantics](../docs/execution-semantics.md).
 
 ## Findings routed to their owners
 
-Recorded, not absorbed. Each has a witness or a record in the epic's tests.
+Recorded, not absorbed. Most have a witness or a record in the epic's tests;
+the read-only cache proxy, the access-policy gap and the cluster-view half of
+the inbound-unreachable node are recorded only in this register and in the
+epic's memory notes.
 
 - **Transactional writes are not replicated (BLOCKING).** In-transaction
   statements mutate only the staging replica; the commit marker carries the
@@ -207,8 +212,11 @@ Recorded, not absorbed. Each has a witness or a record in the epic's tests.
 - **ORDER BY collation.** The coordinator merges with locale collation while
   SQLite and range predicates use binary order. Owner: the merge comparator and
   the routing-key comparator.
-- **Second retryability owner.** The request-cell call bridge marks five codes
-  retryable by code alone. Owner: the bridge, consuming the public class.
+- **Second retryability owner (repaired in this epic).** The request-cell
+  call bridge marked five codes retryable by code alone; it now consumes the
+  public class's `retrySafe`, so retry safety has one owner. The receiver
+  also now classifies a wrong-tenant route as an authorization failure rather
+  than a moved target.
 - **Embedded stop leaves the wire listener open** because the runtime driver
   contract has no teardown for native modules. Owner: the driver lifecycle.
 
