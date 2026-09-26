@@ -105,5 +105,4 @@ async function admitReplaceTerminalRepair(owner, projectedOperation,
 export {
   admitReplaceTerminalFailure,
   admitReplaceTerminalRepair,
-  readReplaceDurableStep,
 };

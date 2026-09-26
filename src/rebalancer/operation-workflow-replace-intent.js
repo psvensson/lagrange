@@ -91,5 +91,4 @@ export {
   isReplaceRemovalIntentDurable,
   isSourceUnreachableAtIntent,
   resolveIntentCommitIndex,
-  witnessCommitIndexAtIntent,
 };

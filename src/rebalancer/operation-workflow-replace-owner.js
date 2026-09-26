@@ -774,7 +774,6 @@ export {
   decideReplaceCompletion,
   isPartitionReplace,
   isReplaceExemptFromTimeBudget,
-  isReplaceOperationTerminalObserved,
   isReplaceRemovalIntentDurable,
   isTargetFailureDetectorDead,
   readReplaceOwnerDiagnostic,
@@ -783,5 +782,4 @@ export {
   recordReplaceOwnerWait,
   recordReplaceSourceRemovalEffect,
   reconcileReplaceStoppingOwner,
-  recordReplaceWaitDiagnostic,
 };

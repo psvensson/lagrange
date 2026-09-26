@@ -228,7 +228,6 @@ function isDeferredVisibilitySnapshot(operation) {
 }
 
 export {
-  REPLACE_DIAGNOSTIC_SEVERITY,
   admitReplaceOwnerHandBack,
   isDeferredVisibilitySnapshot,
   REPLACE_INTENT_FIELD,
