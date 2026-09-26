@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2561613,
-        "sha256": "3f913ae014c1447396f084cd1a8a02f6e921128d1b7a002a3ff745326757b59c"
+        "bytes": 2563101,
+        "sha256": "9c912598e8f5af9baa35ab3b4f5eab5739b32b0baa7630d3872aed484e9af61e"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "daf1510f080d0297bce393dd07cf892d5a03ec96d31b48060ede025df88c36f5"
+        "sha256": "bb43d62c2714c0b932f2dcbe052c167ae2c0bc0d3fe5d0ad6c69ae3d8629acc4"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "110cc14515de42c8004f1467056c7d5cd74eec4e1590907668833264fa8e9b56"
+    "inputDigest": "02b389013501817a3e4fcde174f8a4322bba00a5b3aa1f48faf49f2329c18f9d"
   },
   "reconciliation": {
     "complexity": {
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "daf1510f080d0297bce393dd07cf892d5a03ec96d31b48060ede025df88c36f5"
+          "sha256": "bb43d62c2714c0b932f2dcbe052c167ae2c0bc0d3fe5d0ad6c69ae3d8629acc4"
         },
         "cloneGroups": 788,
         "duplicatedLines": 30356,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2561613,
-        "sha256": "3f913ae014c1447396f084cd1a8a02f6e921128d1b7a002a3ff745326757b59c"
+        "bytes": 2563101,
+        "sha256": "9c912598e8f5af9baa35ab3b4f5eab5739b32b0baa7630d3872aed484e9af61e"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "c6b7bbe900df2fd8defee34f0235376acb392d905bbcb97685becf40cf831645",
-      "moduleCount": 4987,
-      "edgeCount": 23540,
+      "sourceDigest": "2f64cec309e392545a5f3dd44df40d0c413049001203e2ec08afb1d9f6a9aa11",
+      "moduleCount": 4989,
+      "edgeCount": 23554,
       "unresolvedCount": 34
     }
   },
@@ -752,7 +752,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 32,
-      "importOut": 159,
+      "importOut": 160,
       "score": 186.3,
       "topPaths": [
         "test/partition/cdc-generation.property.test.js",

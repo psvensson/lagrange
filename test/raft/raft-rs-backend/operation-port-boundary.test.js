@@ -23,7 +23,8 @@ const BASELINE = JSON.parse(fs.readFileSync(path.join(ROOT, 'solve', 'quests',
   'raft-rs-operation-port-boundary', 'capability-baseline.json'), 'utf8'));
 const PORT_OPERATIONS = Object.freeze([
   'campaign', 'close', 'configureTick', 'probePeerProgress', 'propose',
-  'proposeConfChange', 'readStatus', 'startScheduling', 'step',
+  'proposeConfChange', 'readCommittedMembership', 'readStatus',
+  'startScheduling', 'step',
   'stopScheduling', 'subscribe', 'tick', 'transferLeadership',
 ]);
 

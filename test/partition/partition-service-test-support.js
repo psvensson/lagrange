@@ -14,6 +14,10 @@ import {
 } from '../../src/raft/raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
+import {
+  COMMITTED_MEMBERSHIP_ANSWER_KIND,
+  COMMITTED_MEMBERSHIP_REFUSAL,
+} from '../../src/raft/raft-committed-membership-constants.js';
 import {RAFT_PARTITION_NODE_REQUEST} from
   '../../src/raft/raft-provider-contract-constants.js';
 import {applyCommittedEntryTransaction} from
@@ -207,6 +211,12 @@ export class ControllablePartitionRaftProvider {
         peerCount: this.peers.length,
         peers: this.peers.map((peer) => deepFreeze({...peer})),
       }),
+      // The fake holds no committed configuration; a test that needs one
+      // answers through committedMembershipHandler.
+      readCommittedMembership: (request) => this.committedMembershipHandler ?
+        this.committedMembershipHandler(request) : deepFreeze({
+          kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED,
+          reason: COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE}),
       configureTick: () => testCoreOk(),
       startScheduling: () => testCoreOk(),
       stopScheduling: () => testCoreOk(),
