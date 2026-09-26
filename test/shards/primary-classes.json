@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 1909,
-    "integration": 76,
+    "integration": 77,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2174,
-  "digest": "fnv1a32-23ccb0d7",
+  "censusSize": 2175,
+  "digest": "fnv1a32-d481875c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -980,6 +980,7 @@
     "test/integration/pgwire-rebalance.integration.test.js": "integration",
     "test/integration/preflight-critical-path-hops.integration.test.js": "integration",
     "test/integration/public-application-database-multinode.integration.test.js": "integration",
+    "test/integration/public-application-database-transactions.integration.test.js": "integration",
     "test/integration/raft-leader-election.integration.test.js": "integration",
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "integration",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "integration",

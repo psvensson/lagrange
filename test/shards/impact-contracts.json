@@ -573,7 +573,8 @@
       "tests": [
         "test/query/application-database.test.js",
         "test/release/embedded-node-worker-contract.test.js",
-        "test/integration/public-application-database-multinode.integration.test.js"
+        "test/integration/public-application-database-multinode.integration.test.js",
+        "test/integration/public-application-database-transactions.integration.test.js"
       ]
     }
   },

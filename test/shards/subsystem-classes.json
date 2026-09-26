@@ -13,7 +13,7 @@
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 240,
-    "query-sql": 162,
+    "query-sql": 163,
     "release-packaging": 12,
     "runtime-primitives": 22,
     "services-runtime": 169,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2174,
-  "digest": "fnv1a32-8b9417af",
+  "censusSize": 2175,
+  "digest": "fnv1a32-7a0fb1c9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-59b3a66d",
+  "observationDigest": "fnv1a32-183f13c2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -999,6 +999,7 @@
     "test/integration/pgwire-rebalance.integration.test.js": "pgwire-compat",
     "test/integration/preflight-critical-path-hops.integration.test.js": "control-plane",
     "test/integration/public-application-database-multinode.integration.test.js": "query-sql",
+    "test/integration/public-application-database-transactions.integration.test.js": "query-sql",
     "test/integration/raft-leader-election.integration.test.js": "storage-raft",
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "cdc-metadata",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "transport-messaging",
@@ -6014,6 +6015,11 @@
     "test/integration/public-application-database-multinode.integration.test.js": {
       "files": [
         "src/query/application-database.js",
+        "test/integration/helpers/embedded-node-worker.js"
+      ]
+    },
+    "test/integration/public-application-database-transactions.integration.test.js": {
+      "files": [
         "test/integration/helpers/embedded-node-worker.js"
       ]
     },
