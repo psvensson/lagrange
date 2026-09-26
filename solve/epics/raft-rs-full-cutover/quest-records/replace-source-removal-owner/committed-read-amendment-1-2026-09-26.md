@@ -135,3 +135,77 @@ Oracles (never the implementation's own value): (O-a) log fold: decode the durab
 ## 7. Verdict
 
 The design's two structural claims stand (any committed C_j is a safe bootstrap; the leader answers). The model was incomplete on both axes; every finding is dispositioned above as an in-scope change, a cell, or a named residual. No stop condition is met: the read needs no participation first (node-level RPC), the gate lives inside the runtime owner behind the existing operation-only seam, RF=1 has a path (gate + crate-guarded transfer + one retry), the hard-cutover/reseed model covers the fail-closed residuals, and no incompatible product contracts arise. The implementer and the evidence author work from sections 3-5.
+
+## 8. Round 2 supersessions (R09, 2026-09-27; appended, nothing above rewritten)
+
+Recorded by the evidence author after verification O1 round 1
+(`verification-o1-round-1.md`, items 3-6) and the integration-2 production
+head `d46777ecf`. Each entry names the sealed text it supersedes and the
+record or witness that measured the replacement.
+
+1. **Section 0, claim 2 - TimeoutNow.** Superseded wording: "it does not
+   campaign (tick election, explicit campaign, reconstruction resume,
+   TimeoutNow)". The gate closes the tick, explicit-campaign, reconstruction-
+   resume, single-replica-init and learner-promotion producers; it does NOT
+   close the TimeoutNow producer, which is left to the crate (row B1, section
+   3.3). What holds TimeoutNow below the gate is the crate's `hup` refusal on
+   a committed-unapplied configuration entry plus the replication invariant
+   U1 (every MsgAppend a leader sends a peer it tracks carries its committed
+   index, so the peer learns a_self is committed in the message that delivers
+   it and applies it in the same drain; a TimeoutNow reaches it only once its
+   progress is caught up, by which time its gate is open). Measured on
+   production behaviour by `evidence-o1-anchors.test.js` "anchor (B1
+   reachability)" (evidence record section 5, U1; verifier V3 concurs). The
+   synthetic cell "holds a_self with commit < a_self, receives TimeoutNow" is
+   unreachable through raft-rs replication (its only producer would be a
+   snapshot, excluded: CR-F4) and stays recorded, not open.
+2. **Section 1, row B5 - "a retried target already in C_j has a_self <= j".**
+   Unreachable under row A3: a COMMITTED stamp that already names the target
+   a voter is refused `DURABLE_RECORD_MISSING` when it holds no record
+   (`requiresDurableRecord`), and with a record it restores (no bootstrap, no
+   a_self observation). `admitsReplica`'s `index > bootstrapIndex` guard is
+   defence in depth. Witnesses: `evidence-o1-anchors.test.js` "a COMMITTED
+   stamp already naming the target a voter", T3 (zombie). Verifier V5.
+3. **Section 2, item 1 - "a seed restart with a lost DB (site 12) [is]
+   closed on the target side by GENESIS validation and O4".** False at
+   `ab7669fd0` (verifier V1: an absent stamp was read as a GENESIS of the
+   request's peer ids; the seed built its system partitions without a stamp;
+   a seed rebuilt on a lost data directory founded a second group under each
+   partition id). V1a (`a49b36f92`, in `d46777ecf`) closes the stamp-less
+   default: `bootstrapOfRequest` validates every stamp and refuses an absent
+   one typed (`STAMP_INVALID` / `MISSING`, phase `bootstrap-stamp-validation`);
+   the seed phase passes an explicit GENESIS stamp; the constructor census
+   (`committed-membership-census.test.js` "V1a census") enumerates every
+   `new PartitionService(` / `createPartitionService(` site in `src` and
+   fails on a third origin (measured in scratch, round-2 record). What is NOT
+   closed on the target side: a seed rebuilt on an EMPTY data directory with
+   its explicit GENESIS stamp still founds (no record to restore, no cache to
+   discover the live group from). That cell is owner decision CR-F5
+   (pending): challenger A's "live group reachable" refusal at the port, or
+   an owner-accepted residual. Until decided, the seed lost-data-directory
+   restart is an operator procedure, not a target-side guarantee.
+4. **Section 1, rows A2 and B10 - "the leader's admission reconcile also
+   re-runs on the port's MEMBERSHIP_CHANGED event (B-10's dropped AddNode
+   re-drive)".** Superseded by V2 (`a6e41d099`, in `d46777ecf`): the crate
+   drops a conf-change proposal behind ANY pending configuration index
+   (every proposed conf entry, effective or not, and a new leader's last
+   index), two kinds of which apply without changing the configuration key
+   MEMBERSHIP_CHANGED is keyed on (verifier V2). Now the runtime answers a
+   proposal the core would drop as a typed, retryable deferral
+   (`CONF_CHANGE_PENDING`, `raft-rs-conf-change-admission.js`) and never lets
+   the crate replace it with an empty entry; a drain that applies a
+   conf-change entry, or reaches the pending index without one, announces
+   `CONF_CHANGE_APPLIED`; the admission re-drive runs on that event and on
+   leadership gain, over this replica's in-flight and deferred admissions and
+   its deferred row-driven retirements, each re-evaluated from its row (a
+   removed voter whose row retired is not re-admitted). In a joint
+   configuration the one change the core takes is the leave (a change with no
+   steps); any other is deferred (integration 2, `d46777ecf`). Section 3.5
+   ("re-drive on MEMBERSHIP_CHANGED", "one proposal in flight per identity")
+   is superseded the same way; MEMBERSHIP_CHANGED keeps its configuration-key
+   meaning for its other listeners. Witnesses: `conf-change-pending-deferral`
+   (5 pending kinds, port), `admission-redrive-chain` (3 kinds, production
+   admission path, "no re-admission of the just-removed source" explicit),
+   `partition-admission-redrive-wakes` (4 wakes incl. leadership gain),
+   `evidence-o1-anchors.test.js` joint anchor (the joint-leave cell),
+   `evidence-o1-real-chain.test.js` M3 (premise inverted: no empty entry).
