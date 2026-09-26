@@ -73,6 +73,15 @@ const PGWIRE_ENABLED_REPLICA_COUNT = 1;
 const PGWIRE_ENABLE_SQL =
   'UPDATE service_definitions SET replica_count = ?, runtime_config = ? ' +
   'WHERE service_id = ?';
+const READYZ_PATH = '/readyz';
+const HTTP_OK = 200;
+const PGWIRE_EVIDENCE_SQL = Object.freeze({
+  definition: 'SELECT service_id, status, replica_count, runtime_config ' +
+    'FROM service_definitions WHERE service_id LIKE ?',
+  operations: 'SELECT * FROM replica_operations WHERE entity_id LIKE ?',
+  services: 'SELECT service_id, node_id, status FROM services ' +
+    'WHERE service_id LIKE ?',
+});
 const PGWIRE_REPLICAS_SQL =
   'SELECT service_id FROM services WHERE service_id LIKE ?';
 const PGWIRE_REPLICA_SUFFIX_PATTERN = '-r%';
@@ -99,6 +108,7 @@ const MANIFEST_HASH_ALGORITHM = 'sha256';
 const MANIFEST_HASH_ENCODING = 'hex';
 const HARNESS_ERROR = Object.freeze({
   ENDPOINT_TIMEOUT: 'sys-postgres-wire did not publish a postgresql endpoint',
+  READY_TIMEOUT: 'the embedded runtime never reported /readyz 200',
   WITNESS_TIMEOUT: 'no new reduce result snapshot became readable',
   MANIFEST_INVALID: 'seam manifest rejected by the manifest owner',
   SPLIT_TIMEOUT: 'managed split did not produce two routable partitions',
@@ -175,16 +185,44 @@ async function pollUntil(read, wait, failureMessage) {
   }
 }
 
+async function isReady(restPort) {
+  try {
+    const response = await fetch(`http://${PGWIRE_HOST}:${restPort}${READYZ_PATH}`);
+    return response.status === HTTP_OK;
+  } catch {
+    return false;
+  }
+}
+
+// Diagnostic evidence when the listener is not placed in time: the desired
+// row, any placed actual, and any replica operation for the service.
+async function pgwirePlacementEvidence(db) {
+  const evidence = {};
+  for (const [label, sql] of Object.entries(PGWIRE_EVIDENCE_SQL)) {
+    try {
+      evidence[label] = (await harnessQuery(
+        db, sql, [`${PGWIRE_SERVICE_ID}%`])).rows;
+    } catch (error) {
+      evidence[label] = error.message;
+    }
+  }
+  return evidence;
+}
+
 /**
  * Operator enablement of the built-in PG-wire listener in password mode.
  * Reads the published endpoint back through the application facade.
  *
  * @param {object} db - Application database facade.
  * @param {number} port - Listener port.
- * @param {{deadlineMs: number, pause: Function}} wait - Bounded wait.
+ * @param {{deadlineMs: number, pause: Function, restPort: number}} wait -
+ *   Bounded wait plus the node's REST port for the readiness probe.
  * @return {Promise<{host: string, port: number}>} Published endpoint.
  */
 async function enablePasswordPgwire(db, port, wait) {
+  // The documented operator order: wait for traffic readiness first.
+  await pollUntil(async () => isReady(wait.restPort), wait,
+    HARNESS_ERROR.READY_TIMEOUT);
   await harnessQuery(db, PGWIRE_ENABLE_SQL, [
     PGWIRE_ENABLED_REPLICA_COUNT,
     JSON.stringify({
@@ -195,11 +233,17 @@ async function enablePasswordPgwire(db, port, wait) {
     }),
     PGWIRE_SERVICE_ID,
   ]);
-  const row = await pollUntil(async () => {
-    const result = await harnessQuery(
-      db, PGWIRE_ENDPOINT_SQL, [PGWIRE_PROTOCOL]);
-    return result.rows[0] || null;
-  }, wait, HARNESS_ERROR.ENDPOINT_TIMEOUT);
+  let row;
+  try {
+    row = await pollUntil(async () => {
+      const result = await harnessQuery(
+        db, PGWIRE_ENDPOINT_SQL, [PGWIRE_PROTOCOL]);
+      return result.rows[0] || null;
+    }, wait, HARNESS_ERROR.ENDPOINT_TIMEOUT);
+  } catch (error) {
+    throw new Error(`${error.message}: ${
+      JSON.stringify(await pgwirePlacementEvidence(db))}`);
+  }
   return Object.freeze({host: row.address, port: Number(row.port)});
 }
 

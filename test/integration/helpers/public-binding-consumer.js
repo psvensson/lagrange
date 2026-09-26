@@ -130,11 +130,13 @@ function isPublicRetrySafe(observed) {
  * @param {pg.Client} client - Consumer session.
  * @param {object} request - {name, callArguments}.
  * @param {object} policy - {isRetrySafe(observed), deadlineMs, pause()}.
- * @return {Promise<object>} {outcome, result?, attempts, lastFailure?}.
+ * @return {Promise<object>} {outcome, result?, attempts, lastFailure?,
+ *   retriedDetails: distinct error details that were retried}.
  */
 async function callBindingWhileRetrySafe(client, request, policy) {
   let attempts = 0;
   let lastFailure = null;
+  const retriedDetails = new Set();
   while (Date.now() < policy.deadlineMs) {
     attempts += 1;
     try {
@@ -144,6 +146,7 @@ async function callBindingWhileRetrySafe(client, request, policy) {
         attempts,
         outcome: CONSUMER_RETRY_OUTCOME.SERVED,
         result,
+        retriedDetails: [...retriedDetails],
       });
     } catch (error) {
       lastFailure = Object.freeze({
@@ -152,6 +155,7 @@ async function callBindingWhileRetrySafe(client, request, policy) {
         message: error.message,
       });
       if (!policy.isRetrySafe(lastFailure)) break;
+      retriedDetails.add(lastFailure.detail);
       await policy.pause();
     }
   }
@@ -159,6 +163,7 @@ async function callBindingWhileRetrySafe(client, request, policy) {
     attempts,
     lastFailure,
     outcome: CONSUMER_RETRY_OUTCOME.GAVE_UP,
+    retriedDetails: [...retriedDetails],
   });
 }
 

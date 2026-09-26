@@ -316,7 +316,8 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
   // Deploy-time tooling (the CLI's build step) runs after start so it can
   // never compete with startup for this thread.
   const artifactBuild = buildCallArtifact(root, SERVICE_IDENTITY);
-  endpoint = await enablePasswordPgwire(db, pgwirePort, wait());
+  endpoint = await enablePasswordPgwire(
+    db, pgwirePort, {...wait(), restPort});
   mark('pgwireListening');
 
   // The application owns its schema through the public facade.
@@ -443,7 +444,8 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
       st.equal(served.outcome, CONSUMER_RETRY_OUTCOME.SERVED,
         JSON.stringify(served.lastFailure));
       st.comment(`consumer attempts until served: ${served.attempts}; ` +
-        `last retry-safe failure: ${JSON.stringify(served.lastFailure)}`);
+        `retried (all retry-safe on the wire): ${
+          JSON.stringify(served.retriedDetails)}`);
       const expected = expectedReduction(rows,
         (row) => row.id >= LOW_RANGE.FIRST && row.id <= LOW_RANGE.LAST);
       st.same(served.result, expected,
