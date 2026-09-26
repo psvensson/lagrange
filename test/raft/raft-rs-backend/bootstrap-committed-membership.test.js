@@ -23,132 +23,48 @@
 // node's cache lags; only the dispatched stamp knows the group), so the
 // target's identity reservations come from its bootstrap and nothing else.
 
+// Superseded under R09 by owner decision O1 (2026-09-26): the target's
+// bootstrap membership is no longer resolved from services rows; the
+// creation owner reads the group's committed configuration from its leader
+// and stamps it (COMMITTED), and the target opens from that stamp through
+// its handler. The same D1 claims are witnessed through that chain; the RF=1
+// target's pre-admission campaign is now refused by its participation gate
+// (GATE_CLOSED) instead of being counted out by raft-rs.
+
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import {test} from 'node:test';
 
-import {createLoopbackTransport} from
-  '../../partition/partition-service-test-support.js';
 import {
-  CDCOperation,
-  PartitionService,
-} from '../../../src/partition/partition-service.js';
-import {ReplicaHandler} from '../../../src/node/replica-handler.js';
-import {ConfigurationManager} from
-  '../../../src/config/configuration-manager.js';
-import {LoggingService} from '../../../src/logging/logging-service.js';
-import {SystemTableCache} from '../../../src/cache/system-table-cache.js';
-import {
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  TABLES,
-} from '../../../src/constants/index.js';
+  addressOf,
+  admitThroughRows,
+  buildTargetFromOperation,
+  configure,
+  createCommittedMembershipHarness,
+  createJoinOperation,
+  formGroup,
+  membershipOf,
+  metadataCache,
+  serviceRow,
+  statusOf,
+  waitFor,
+} from './committed-membership-harness.js';
 import {
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
-import {
-  applyRebalanceCoordinatorOperationCreationMethods,
-} from '../../../src/rebalancer/rebalance-coordinator-operation-creation.js';
-import {
-  applyRebalanceCoordinatorOperationReadMethods,
-} from '../../../src/rebalancer/rebalance-coordinator-operation-read-methods.js';
+import {PARTICIPATION_GATE} from
+  '../../../src/raft/raft-committed-membership-constants.js';
 import {OperationType} from
   '../../../src/rebalancer/replica-operation-progress.js';
 import {ReplicaOperationField} from
   '../../../src/rebalancer/replica-operation-constants.js';
 
 const PARTITION_ID = 'd1-bootstrap';
-const TABLE_NAME = 'd1_bootstrap_table';
-const TARGET_REPLICA_COUNT = 3;
-const WAIT_BUDGET_MS = 8000;
 const ISOLATION_WINDOW_MS = 600;
 const QUORUM_WINDOW_MS = 2000;
-const POLL_MS = 10;
-const TABLE_SCHEMA = Object.freeze({
-  columns: [{name: 'seq', type: 'INTEGER', primaryKey: true}],
-});
 const LEADER_ROLE = 'leader';
-const STAMP_CAPTURED = new Error('bootstrap stamp captured');
-const SILENT = Object.freeze({
-  info() {}, warn() {}, error() {}, debug() {}, trace() {},
-});
-
-class CreationOwner {}
-applyRebalanceCoordinatorOperationCreationMethods(CreationOwner);
-applyRebalanceCoordinatorOperationReadMethods(CreationOwner);
-
-function addressOf([replicaId, nodeId]) {
-  return `${nodeId}/partition/${replicaId}`;
-}
-
-function serviceRow([replicaId, nodeId]) {
-  return {
-    service_id: replicaId,
-    replica_id: replicaId,
-    partition_id: PARTITION_ID,
-    service_type: SERVICE_TYPE.PARTITION,
-    node_id: nodeId,
-    address: addressOf([replicaId, nodeId]),
-    status: SERVICE_STATUS.ACTIVE,
-  };
-}
-
-function metadataCache(members) {
-  const cache = new SystemTableCache();
-  cache.applySystemTableChange(TABLES.TABLES, CDCOperation.INSERT, {
-    table_id: TABLE_NAME,
-    table_name: TABLE_NAME,
-    schema_definition: JSON.stringify(TABLE_SCHEMA),
-  });
-  cache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
-    partition_id: PARTITION_ID,
-    table_id: TABLE_NAME,
-    replica_count: TARGET_REPLICA_COUNT,
-    partition_key_start: null,
-    partition_key_end: null,
-    leader_node_id: null,
-  });
-  for (const member of members) {
-    cache.applySystemTableChange(
-      TABLES.SERVICES, CDCOperation.INSERT, serviceRow(member));
-  }
-  return cache;
-}
-
-function waitFor(predicate, boundMs = WAIT_BUDGET_MS) {
-  const deadline = Date.now() + boundMs;
-  return new Promise((resolve) => {
-    const poll = () => {
-      if (predicate()) {
-        resolve(true);
-      } else if (Date.now() >= deadline) {
-        resolve(false);
-      } else {
-        setTimeout(poll, POLL_MS);
-      }
-    };
-    poll();
-  });
-}
-
-function statusOf(service) {
-  return service.raft.readStatus();
-}
-
-// A configuration as the core reports it, reduced to what membership is:
-// the incoming and outgoing voter sets and the learners, each sorted.
-function membershipOf(confState) {
-  const sorted = (ids) => [...(ids || [])].map(String).sort();
-  return {
-    voters: sorted(confState.voters),
-    votersOutgoing: sorted(confState.votersOutgoing),
-    learners: sorted(confState.learners),
-  };
-}
+const POLL_MS = 10;
 
 function committedMembership(service) {
   return membershipOf(statusOf(service).confState);
@@ -161,199 +77,31 @@ function withoutPeer(membership, peerId) {
   };
 }
 
-// The stamp the creation owner puts on an ADD or REPLACE for this partition,
-// captured at the persistence boundary; the services rows are the group's
-// own members, served both as the cache view and as the authoritative
-// services-owner read.
-async function creationStamp({type, sourceReplicaId = null, sourceNodeId,
-  target, rows}) {
-  let stamped = null;
-  const owner = Object.assign(new CreationOwner(), {
-    logger: SILENT,
-    nodeId: 'coordinator-node',
-    now: () => Date.now(),
-    stats: {operationsCreated: 0},
-    repository: {getEntityServiceRows: () => rows.map((row) => ({...row}))},
-    getAuthoritativeEntityServiceRowsObservation: async () => ({
-      available: true, rows: rows.map((row) => ({...row}))}),
-    controlPlaneReadinessService: {getNodeReadinessSync: () => null},
-    resolveEntitySizeBytes: () => 0,
-    ensureProvisioningAdmissionAllowed: async () => undefined,
-    resolveOperationReadinessDecisionDimension: () => null,
-    persistNewOperation: async (operation) => {
-      stamped = operation;
-      throw STAMP_CAPTURED;
-    },
-  });
-  const [targetReplicaId, targetNodeId] = target;
-  const move = {
-    type,
-    nodeId: targetNodeId,
-    replicaId: type === OperationType.REPLACE ?
-      sourceReplicaId : targetReplicaId,
-    replicaIntentId: targetReplicaId,
-  };
-  await owner.createOperationRecordInternal({
-    move,
-    normalizedMove: move,
-    normalizedMoveType: type,
-    shouldEmitOperationCreated: false,
-    entityType: SERVICE_TYPE.PARTITION,
-    entityId: PARTITION_ID,
-    partitionId: PARTITION_ID,
-    dedupeKey: `${type}:${targetReplicaId}`,
-    criticalAddLikeIntentKey: null,
-    sourceNodeId,
-  }).catch((error) => {
-    if (error !== STAMP_CAPTURED) {
-      throw error;
-    }
-  });
-  assert.ok(stamped, `the creation owner persisted the ${type} operation`);
-  return {
-    replicaIds: stamped[ReplicaOperationField.REPLICA_IDS] || [],
-    peerAddresses: stamped[ReplicaOperationField.PEER_ADDRESSES] || [],
-  };
-}
-
-// What the target node's replica handler resolves for the dispatched stamp.
-// Resolution reads the cache and the stamp only; its CDC service and replica
-// factory are required collaborators that this read never reaches.
-function targetContext({target, operationType, stamp, cache}) {
-  const [targetReplicaId, targetNodeId] = target;
-  const unreachable = () => {
-    throw new Error('context resolution reached a write collaborator');
-  };
-  const handler = new ReplicaHandler({
-    nodeId: targetNodeId,
-    systemTableCache: cache,
-    cdcIntegrationService: {insertSystemTableRow: unreachable},
-    createPartitionService: unreachable,
-  });
-  return handler.resolveReplicaContext(PARTITION_ID, targetReplicaId, {
-    explicitOperationType: operationType,
-    bootstrapReplicaIds: stamp.replicaIds,
-    bootstrapPeerAddresses: stamp.peerAddresses,
-  });
-}
-
-function configure() {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  ConfigurationManager.getInstance().initialize({
-    node: {id: 'd1-node'},
-    raft: {
-      heartbeatIntervalMs: 20,
-      electionTimeoutMinMs: 150,
-      electionTimeoutMaxMs: 300,
-    },
-  });
-  LoggingService.getInstance().initialize({level: 'error'});
-}
-
-// One partition on real replicas: each built with its own database file,
-// the given membership list and cache, on one loopback network.
 function createGroupHarness() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'd1-bootstrap-'));
-  const network = createLoopbackTransport();
-  const services = new Map();
-  const caches = new Map();
-  const build = (member, {replicaIds, peerAddresses, cache,
-    deferElection = true}) => {
-    const service = new PartitionService({
-      partitionId: PARTITION_ID,
-      tableId: TABLE_NAME,
-      tableName: TABLE_NAME,
-      replicaId: member[0],
-      replicaIds,
-      peerAddresses,
-      nodeId: member[1],
-      transport: network,
-      systemTableCache: cache,
-      schema: TABLE_SCHEMA,
-      dbPath: path.join(directory, `${member[0]}.db`),
-      deferElection,
-    });
-    services.set(member[0], service);
-    caches.set(member[0], cache);
-    return service;
-  };
-  const leader = () => [...services.values()].find((service) =>
-    service.raft?.readStatus?.()?.role === LEADER_ROLE);
-  const dispose = async () => {
-    network.deliver = async () => undefined;
-    await Promise.all([...services.values()].map((service) =>
-      service.shutdown().catch(() => undefined)));
-    fs.rmSync(directory, {recursive: true, force: true});
-    ConfigurationManager.resetInstance();
-    LoggingService.resetInstance();
-  };
-  return {directory, network, services, caches, build, leader, dispose};
+  return createCommittedMembershipHarness(PARTITION_ID);
 }
 
-// Founders share one genesis list; every founder's cache names every founder.
-async function formGroup(harness, founders) {
-  for (const founder of founders) {
-    harness.build(founder, {
-      replicaIds: founders.map(([replicaId]) => replicaId),
-      peerAddresses: founders.map(addressOf),
-      cache: metadataCache(founders),
-      deferElection: founders.length > 1,
-    });
-  }
-  for (const founder of founders) {
-    await harness.services.get(founder[0]).initialize();
-  }
-  for (const founder of founders) {
-    harness.services.get(founder[0]).startElection();
-  }
-  assert.equal(await waitFor(() => harness.leader() !== undefined), true,
-    'setup: the founding group elects a leader');
-}
-
-// The REPLACE target through the production chain: creation stamp, target
-// handler context, PartitionService on rs-raft.
+// The REPLACE target through the production chain: the creation owner's
+// committed read (routed by the leader's own node), the target handler's
+// stamp validation, PartitionService on rs-raft.
 async function buildReplaceTarget(harness, {source, target, founders}) {
-  const stamp = await creationStamp({
+  const created = await createJoinOperation(harness, {
     type: OperationType.REPLACE,
+    target,
+    rows: founders.map((member) => serviceRow(PARTITION_ID, member)),
+    leaderHint: harness.leaderMember()[1],
     sourceReplicaId: source[0],
     sourceNodeId: source[1],
-    target,
-    rows: founders.map(serviceRow),
   });
-  const targetCache = metadataCache([]);
-  const context = targetContext({
-    target, operationType: OperationType.REPLACE, stamp, cache: targetCache,
-  });
-  const service = harness.build(target, {
-    replicaIds: context.replicaIds,
-    peerAddresses: context.peerAddresses,
-    cache: targetCache,
-  });
-  await service.initialize();
-  return {service, stamp, context};
+  assert.equal(created.error, undefined, created.error?.message);
+  const targetCache = metadataCache(PARTITION_ID, []);
+  const {service} = await buildTargetFromOperation(harness, {
+    target, operation: created.operation, cache: targetCache});
+  return {service, operation: created.operation};
 }
 
-// The group's own admission: the target's row reaches every member's cache
-// and the leader proposes the ConfChange.
-async function admit(harness, target, members) {
-  for (const [replicaId] of members) {
-    harness.caches.get(replicaId).applySystemTableChange(
-      TABLES.SERVICES, CDCOperation.INSERT, serviceRow(target));
-  }
-  const joined = harness.services.get(target[0]);
-  joined.startElection();
-  const joinedPeerId = statusOf(joined).peerId;
-  return waitFor(() => {
-    const leader = harness.leader();
-    if (!leader) {
-      return false;
-    }
-    const status = statusOf(leader);
-    return status.confState.voters.map(String).includes(
-      String(joinedPeerId)) &&
-      statusOf(joined).commitIndex === status.commitIndex;
-  });
+function admit(harness, target, members) {
+  return admitThroughRows(harness, target, members);
 }
 
 async function restart(harness, member, cache) {
@@ -362,6 +110,8 @@ async function restart(harness, member, cache) {
     replicaIds: [...before.replicaIds],
     peerAddresses: [...(before.peerAddresses || [])],
     cache,
+    ...(before.bootstrapMembership === null ? {} :
+      {bootstrapMembership: before.bootstrapMembership}),
   };
   await before.shutdown();
   const reopened = harness.build(member, options);
@@ -509,21 +259,20 @@ async () => {
   try {
     await formGroup(harness, founders);
     const committed = committedMembership(harness.leader());
-    const stamp = await creationStamp({
+    const created = await createJoinOperation(harness, {
       type: OperationType.ADD,
-      sourceNodeId: founders[0][1],
       target: joiner,
-      rows: founders.map(serviceRow),
+      rows: founders.map((member) => serviceRow(PARTITION_ID, member)),
+      leaderHint: harness.leaderMember()[1],
     });
-    const peerIdOf = new Map(founders.map(([replicaId]) => [replicaId,
-      String(statusOf(harness.services.get(replicaId)).peerId)]));
-    assert.equal(stamp.replicaIds.at(-1), joiner[0],
-      'the ADD stamp ends with its target');
+    const operation = created.operation;
+    const stamp = operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP];
+    assert.deepEqual([...stamp.voters].sort(), committed.voters,
+      '(f) the ADD stamp is the committed voter set');
     assert.deepEqual(
-      stamp.replicaIds.filter((replicaId) => replicaId !== joiner[0])
-        .map((replicaId) => peerIdOf.get(replicaId)).sort(),
-      committed.voters,
-      '(f) the ADD stamp without its target is the committed voter set');
+      [...operation[ReplicaOperationField.REPLICA_IDS]].sort(),
+      [...founders.map(([replicaId]) => replicaId), joiner[0]].sort(),
+      '(f) its address hints are the committed members plus its target');
   } finally {
     await harness.dispose();
   }
@@ -549,12 +298,12 @@ async () => {
       committedAtCreation,
       'the target bootstrap is the committed configuration: it is not a ' +
         'sole voter');
-    // The target stands for election once, through the port: raft-rs
-    // counts its votes over the bootstrap configuration, which needs the
-    // source, and the source's log is ahead of the empty one.
+    // Before its admission the target is below its participation gate: an
+    // explicit campaign is refused typed and nothing is stepped (O1).
     const campaign = await replaceTarget.raft.campaign();
-    assert.equal(campaign?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
-      `the target campaigned (${JSON.stringify(campaign)})`);
+    assert.equal(campaign?.reason, PARTICIPATION_GATE.GATE_CLOSED,
+      `the unadmitted target's campaign is refused (${
+        JSON.stringify(campaign)})`);
     const ledAlone = await waitFor(() =>
       statusOf(replaceTarget).role === LEADER_ROLE, ISOLATION_WINDOW_MS);
     assert.equal(ledAlone, false,

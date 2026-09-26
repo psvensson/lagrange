@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2565794,
-        "sha256": "24ae3da4dd87602e1f62445daabf9c06014c1fbba748d639228d3550089612bc"
+        "bytes": 2567866,
+        "sha256": "cb8a6b97f920def20d9951a06776f90f49a2b72e080a8f7a2c51b30c3a08783b"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "bb43d62c2714c0b932f2dcbe052c167ae2c0bc0d3fe5d0ad6c69ae3d8629acc4"
+        "sha256": "1febb597e5aadb59f35bb8fa982756ce60e074c88e57f8d0e3eb7c1107956227"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "4a3e4315cdafcc2e2cbaf1fcb9f06be09e91c3a4d49bcd9878fa55e66e5bb4e3"
+    "inputDigest": "34dc6bda9ffdab3eadc741d99a208b573ac0046b22c47c1a46183d8ff5ee1583"
   },
   "reconciliation": {
     "complexity": {
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "bb43d62c2714c0b932f2dcbe052c167ae2c0bc0d3fe5d0ad6c69ae3d8629acc4"
+          "sha256": "1febb597e5aadb59f35bb8fa982756ce60e074c88e57f8d0e3eb7c1107956227"
         },
         "cloneGroups": 788,
         "duplicatedLines": 30356,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2565794,
-        "sha256": "24ae3da4dd87602e1f62445daabf9c06014c1fbba748d639228d3550089612bc"
+        "bytes": 2567866,
+        "sha256": "cb8a6b97f920def20d9951a06776f90f49a2b72e080a8f7a2c51b30c3a08783b"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "967ba1f1c74375c0e62d53f0fb54d2702236dcace7d3974ccb656a786e34f362",
-      "moduleCount": 4994,
-      "edgeCount": 23579,
+      "sourceDigest": "0df03680a145a0b19b3d37bb61b418afb597a7d24343e7dcd8e78095959f5b31",
+      "moduleCount": 4997,
+      "edgeCount": 23600,
       "unresolvedCount": 34
     }
   },
@@ -751,7 +751,7 @@
       "cloneTouches": 58,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 32,
+      "importIn": 31,
       "importOut": 160,
       "score": 186.3,
       "topPaths": [
@@ -3321,7 +3321,7 @@
           "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
           "test/query/schema-provisioning-transient-collision.test.js",
           "test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js",
-          "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js",
+          "test/raft/raft-rs-backend/committed-membership-harness.js",
           "test/rebalancer/priority-recovery-reserved-slot-authoritative-admission.test.js",
           "test/rebalancer/runtime-service-create-add-budget-reservation.test.js"
         ],
