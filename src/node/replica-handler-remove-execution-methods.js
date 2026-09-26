@@ -8,10 +8,12 @@ import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {raftRsLifecycleAdministration} from
   '../raft/raft-rs-lifecycle-administration.js';
 import {
+  REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_EVENT,
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
+import {awaitReplicaConsensusExit} from './replica-removal-consensus-exit.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_REMOVE_EXECUTION_REASON = Object.freeze({
@@ -97,7 +99,86 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
         skipRemovingStatusWrite:
           durableStatus === ReplicaStatus.FAILED ||
           durableStatus === ReplicaStatus.REMOVING,
+        retiringRowDurable: durableStatus === ReplicaStatus.REMOVING,
       });
+    }
+    /**
+     * Publish the replica's retiring row (REMOVING): the signal on which the
+     * group's leader proposes its RemoveNode. A replica whose row already
+     * reads REMOVING has published it; a failed replica publishes none (the
+     * state machine only permits failed -> removed).
+     * @param {Object} context - {operationId, replicaId, partitionId,
+     *   service, removalLifecycleSnapshot}.
+     * @return {Promise<Object>} {published, skipRemovingStatusWrite}.
+     * @private
+     */
+    async publishReplicaRetiringRow({operationId, replicaId, partitionId,
+      service, removalLifecycleSnapshot}) {
+      if (removalLifecycleSnapshot.skipRemovingStatusWrite === true) {
+        return {
+          published: removalLifecycleSnapshot.retiringRowDurable === true,
+          skipRemovingStatusWrite: true,
+        };
+      }
+      try {
+        await this.persistReplicaStatusWithRetry(
+          replicaId,
+          ReplicaStatus.REMOVING,
+          {partitionId},
+        );
+        return {published: true, skipRemovingStatusWrite: false};
+      } catch (error) {
+        if (this.shouldSkipReplicaRemovalLifecycleWrite(
+          replicaId,
+          ReplicaStatus.REMOVING,
+        )) {
+          this.setLocalReplica(replicaId, {
+            replicaId,
+            partitionId,
+            status: ReplicaStatus.FAILED,
+            service,
+          });
+          return {published: false, skipRemovingStatusWrite: true};
+        }
+        if (!isRetryableControlPlaneError(error)) {
+          throw error;
+        }
+        this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_STATUS_WRITE_DEFERRED, {
+          operationId,
+          replicaId,
+          partitionId,
+          nodeId: this.nodeId,
+          error: error.message,
+        });
+        return {published: false, skipRemovingStatusWrite: false};
+      }
+    }
+    /**
+     * Keep the retiring replica participating until its own applied
+     * configuration no longer names it, the group is unavailable to it, the
+     * bounded backstop elapses, or the node shuts down
+     * (replica-removal-consensus-exit.js).
+     * @param {Object|null} service - The tracked partition service.
+     * @param {Object} context - {operationId, replicaId, partitionId}.
+     * @return {Promise<Object>} Frozen {reason}.
+     * @private
+     */
+    async awaitReplicaRemovalConsensusExit(service, {operationId, replicaId,
+      partitionId}) {
+      this.removalConsensusExitRelease ??= new AbortController();
+      const exit = await awaitReplicaConsensusExit(service, {
+        replicaId,
+        backstopMs: REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS,
+        signal: this.removalConsensusExitRelease.signal,
+      });
+      this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_CONSENSUS_EXIT, {
+        operationId,
+        replicaId,
+        partitionId,
+        nodeId: this.nodeId,
+        reason: exit.reason,
+      });
+      return exit;
     }
     /**
      * Read one tracked replica lifecycle state from the shared state machine.
@@ -198,48 +279,32 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
       try {
         this.throwIfShuttingDown();
         await this.waitForReplicaServingDrain(service);
+        // Owner ruling F2: mark the replica retiring (its row reads REMOVING,
+        // the fence already admits no new client write) and keep its port
+        // live; it retires only once the committed configuration no longer
+        // names it, so its own RemoveNode still gets its ack.
+        const retiringRow = await this.publishReplicaRetiringRow({
+          operationId,
+          replicaId,
+          partitionId,
+          service,
+          removalLifecycleSnapshot,
+        });
+        skipRemovingStatusWrite = retiringRow.skipRemovingStatusWrite;
+        if (retiringRow.published) {
+          await this.awaitReplicaRemovalConsensusExit(service, {
+            operationId,
+            replicaId,
+            partitionId,
+          });
+          this.throwIfShuttingDown();
+        }
         await raftRsLifecycleAdministration.retireReplica(
           replicaId,
           reason || REPLICA_REMOVE_EXECUTION_REASON
             .DURABLE_REMOVE_CLEANUP_COMPLETE,
           {groupId: partitionId},
         );
-        if (!skipRemovingStatusWrite) {
-          try {
-            await this.persistReplicaStatusWithRetry(
-              replicaId,
-              ReplicaStatus.REMOVING,
-              {partitionId},
-            );
-          } catch (error) {
-            if (!this.shouldSkipReplicaRemovalLifecycleWrite(
-              replicaId,
-              ReplicaStatus.REMOVING,
-            )) {
-              if (!isRetryableControlPlaneError(error)) {
-                throw error;
-              }
-              this.logger.warn(
-                REPLICA_HANDLER_LOG_MSG.REMOVE_STATUS_WRITE_DEFERRED,
-                {
-                  operationId,
-                  replicaId,
-                  partitionId,
-                  nodeId: this.nodeId,
-                  error: error.message,
-                },
-              );
-            } else {
-              skipRemovingStatusWrite = true;
-              this.setLocalReplica(replicaId, {
-                replicaId,
-                partitionId,
-                status: ReplicaStatus.FAILED,
-                service,
-              });
-            }
-          }
-        }
         // Delete the authoritative row before local shutdown so routing never points at a dead handler.
         try {
           await this.getPartitionServiceRowOwner().removeReplica({

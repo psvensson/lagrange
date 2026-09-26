@@ -148,10 +148,19 @@ function removeExactReplicaId(replicaIds, replicaId) {
   return removed;
 }
 
+// A retiring row is an explicit retirement: its replica marked itself
+// REMOVING and keeps participating until its RemoveNode commits (owner
+// ruling F2), so the group proposes the removal while the row still
+// addresses the replica; the row's delete and REMOVED follow retirement.
+const EXPLICIT_PEER_RETIREMENT_STATUSES = Object.freeze(new Set([
+  ReplicaStatus.REMOVING,
+  ReplicaStatus.REMOVED,
+]));
+
 function isExplicitPeerRetirement(operation, serviceRow) {
   return (
     operation === PARTITION_SERVICE_LITERAL.DELETE ||
-    serviceRow?.status === ReplicaStatus.REMOVED
+    EXPLICIT_PEER_RETIREMENT_STATUSES.has(serviceRow?.status)
   );
 }
 
