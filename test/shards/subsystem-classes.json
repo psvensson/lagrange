@@ -19,16 +19,16 @@
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 153,
-    "storage-raft": 121,
+    "storage-raft": 122,
     "test-infrastructure": 136,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2212,
-  "digest": "fnv1a32-2ea437be",
+  "censusSize": 2213,
+  "digest": "fnv1a32-d7de258f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ef03bfcc",
+  "observationDigest": "fnv1a32-f8219eae",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1442,6 +1442,7 @@
     "test/raft/raft-rs-backend/admission-redrive.test.js": "storage-raft",
     "test/raft/raft-rs-backend/backend-seam.test.js": "storage-raft",
     "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/committed-membership-census.test.js": "storage-raft",
     "test/raft/raft-rs-backend/committed-membership-read.test.js": "storage-raft",
     "test/raft/raft-rs-backend/committed-membership-stamp.test.js": "storage-raft",
     "test/raft/raft-rs-backend/committed-membership-target-validation.test.js": "storage-raft",
@@ -7143,6 +7144,38 @@
         "src/raft/raft-committed-membership-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/committed-membership-census.test.js": {
+      "files": [
+        "src/bootstrap/shared/durable-rejoin-partition-restore-planner.js",
+        "src/constants/fields.js",
+        "src/control-plane/replica-dispatch-readiness-capture.js",
+        "src/node/replica-handler-committed-membership-methods.js",
+        "src/node/replica-handler-create-methods.js",
+        "src/node/replica-handler-runtime-metadata-methods.js",
+        "src/node/replica-lifecycle-manager.js",
+        "src/partition/partition-service-core-base.js",
+        "src/partition/partition-service-raft-init-base.js",
+        "src/partition/partition-service-raft-lifecycle-wiring.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/query/sql-query-engine-initial-partition-provisioning.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/rebalancer/committed-membership-bootstrap-read.js",
+        "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+        "src/rebalancer/operation-workflow-owner-ports.js",
+        "src/rebalancer/operation-workflow-replace-owner-wake.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-progress.js",
+        "src/rebalancer/replica-operation-repository-row-methods.js"
+      ],
+      "directories": [
+        "src",
+        "src/raft"
       ]
     },
     "test/raft/raft-rs-backend/committed-membership-read.test.js": {

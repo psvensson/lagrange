@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1946,
+    "unit": 1947,
     "integration": 75,
     "bootstrap": 184,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2212,
-  "digest": "fnv1a32-45965f72",
+  "censusSize": 2213,
+  "digest": "fnv1a32-5060c6a0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1423,6 +1423,7 @@
     "test/raft/raft-rs-backend/admission-redrive.test.js": "unit",
     "test/raft/raft-rs-backend/backend-seam.test.js": "unit",
     "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js": "unit",
+    "test/raft/raft-rs-backend/committed-membership-census.test.js": "unit",
     "test/raft/raft-rs-backend/committed-membership-read.test.js": "unit",
     "test/raft/raft-rs-backend/committed-membership-stamp.test.js": "unit",
     "test/raft/raft-rs-backend/committed-membership-target-validation.test.js": "unit",
