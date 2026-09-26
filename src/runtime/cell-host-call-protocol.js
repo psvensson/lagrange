@@ -135,12 +135,22 @@ function isHostCallCodeRetryable(code) {
   return HOST_CALL_RETRYABLE_CODES.has(code);
 }
 
-function hostCallFailureRecord(code, message) {
+// `retryable` defaults to the protocol code map, which governs only the
+// failures this protocol originates itself (deadline, protocol violation,
+// bridge not composed). A delegate that knows the outcome of what it
+// delegated (the request-call bridge, from the call routing contract)
+// supplies it explicitly and the code is then a pure translation.
+function hostCallFailureRecord(
+  code, message, retryable = isHostCallCodeRetryable(code)) {
   return Object.freeze({
     code,
     message: String(message).slice(0, HOST_CALL_MAX_FAILURE_MESSAGE_CHARS),
-    retryable: isHostCallCodeRetryable(code),
+    retryable,
   });
+}
+
+function delegatedRetryable(error) {
+  return typeof error?.retryable === 'boolean' ? error.retryable : undefined;
 }
 
 // Thrown-error shape matches the worker's typed binding-call denies:
@@ -372,7 +382,8 @@ async function executeHostCallDelegate(delegate, request) {
     if (typeof thrownCode === 'string' &&
         HOST_CALL_KNOWN_CODES.has(thrownCode) &&
         thrownCode !== HOST_CALL_ERROR_CODE.TARGET_FAILED) {
-      return {failure: hostCallFailureRecord(thrownCode, error.message)};
+      return {failure: hostCallFailureRecord(
+        thrownCode, error.message, delegatedRetryable(error))};
     }
     return {
       failure: hostCallFailureRecord(

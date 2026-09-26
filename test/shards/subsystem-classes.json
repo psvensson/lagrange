@@ -16,7 +16,7 @@
     "query-sql": 164,
     "release-packaging": 13,
     "runtime-primitives": 22,
-    "services-runtime": 169,
+    "services-runtime": 172,
     "solver-tooling": 7,
     "storage-partition": 151,
     "storage-raft": 102,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2180,
-  "digest": "fnv1a32-716cf645",
+  "censusSize": 2183,
+  "digest": "fnv1a32-4d1cd983",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-1d6d51b4",
+  "observationDigest": "fnv1a32-eb93fe2e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -963,6 +963,7 @@
     "test/integration/benchmark-system-table-read-path.integration.test.js": "query-sql",
     "test/integration/benchmark-table-create-timeout-diagnostics.integration.test.js": "convergence-topology",
     "test/integration/bidirectional-websocket.integration.test.js": "transport-messaging",
+    "test/integration/call-cell-public-outcome-adversarial.integration.test.js": "services-runtime",
     "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js": "cdc-metadata",
     "test/integration/cdc-propagation.integration.test.js": "cdc-metadata",
     "test/integration/cdc-subscription-catchup.integration.test.js": "cdc-metadata",
@@ -1002,6 +1003,7 @@
     "test/integration/preflight-critical-path-hops.integration.test.js": "control-plane",
     "test/integration/public-application-database-multinode.integration.test.js": "query-sql",
     "test/integration/public-application-database-transaction-facade.integration.test.js": "query-sql",
+    "test/integration/public-binding-cell-invocation-seam.integration.test.js": "services-runtime",
     "test/integration/public-consumer-contract-ratchet.integration.test.js": "query-sql",
     "test/integration/raft-leader-election.integration.test.js": "storage-raft",
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "cdc-metadata",
@@ -1974,6 +1976,7 @@
     "test/service/call-cell-batch-executor.test.js": "services-runtime",
     "test/service/call-cell-invoker-parallel.test.js": "services-runtime",
     "test/service/call-cell-invoker.test.js": "services-runtime",
+    "test/service/call-cell-public-outcome.test.js": "services-runtime",
     "test/service/call-cell-routing-contract.test.js": "services-runtime",
     "test/service/call-cell-statement-adapter.test.js": "services-runtime",
     "test/service/call-shard-dispatch-pool.test.js": "services-runtime",
@@ -5723,6 +5726,25 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js"
       ]
     },
+    "test/integration/call-cell-public-outcome-adversarial.integration.test.js": {
+      "files": [
+        "src/bootstrap/shared/call-cell-invocation-setup.js",
+        "src/bootstrap/shared/runtime-service-handler-setup.js",
+        "src/config/configuration-manager.js",
+        "src/constants/unified-service-lifecycle.js",
+        "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/runtime/call-cell-driver-invoke.js",
+        "src/runtime/pgwire-credential-verifier.js",
+        "src/runtime/pgwire-runtime-module.js",
+        "src/runtime/wasi-component-cell-runtime.js",
+        "test/integration/helpers/call-cell-guest-componentizer.js",
+        "test/wasm-service/fixtures/call-cell-world/guest.js"
+      ],
+      "directories": [
+        "src",
+        "wit"
+      ]
+    },
     "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -5974,6 +5996,21 @@
     "test/integration/public-application-database-transaction-facade.integration.test.js": {
       "files": [
         "test/integration/helpers/embedded-node-worker.js"
+      ]
+    },
+    "test/integration/public-binding-cell-invocation-seam.integration.test.js": {
+      "files": [
+        "src/control-plane/owners/deployment-binding-contract.js",
+        "src/embedded-lagrange.js",
+        "src/service/call-cell-batch-executor.js",
+        "src/service/service-local-oci-layout-builder.js",
+        "test/integration/helpers/public-binding-consumer.js",
+        "test/integration/helpers/public-binding-seam-harness.js",
+        "test/wasm-service/fixtures/call-cell-world/guest.js"
+      ],
+      "directories": [
+        "src",
+        "wit"
       ]
     },
     "test/integration/public-consumer-contract-ratchet.integration.test.js": {
@@ -9776,6 +9813,11 @@
     "test/service/call-cell-invoker.test.js": {
       "files": [
         "src/service/call-cell-invoker.js"
+      ]
+    },
+    "test/service/call-cell-public-outcome.test.js": {
+      "files": [
+        "src/service/service-lifecycle-command-contract.js"
       ]
     },
     "test/service/call-cell-statement-adapter.test.js": {

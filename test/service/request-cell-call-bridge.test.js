@@ -13,11 +13,12 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   HOST_CALL_ERROR_CODE,
-  isHostCallCodeRetryable,
 } from '../../src/runtime/cell-host-call-protocol.js';
 import {
+  CALL_CELL_ROUTE_CLASSIFICATION,
   CALL_CELL_ROUTE_ERROR_CODE,
   createCallRoutingFailure,
+  recordInvocationExecutionStarted,
 } from '../../src/service/call-cell-routing-contract.js';
 import {createRequestCellCallBridge} from
   '../../src/service/request-cell-call-bridge.js';
@@ -278,12 +279,9 @@ test('every decision-table row maps the invoker failure to its fixed ' +
       `${invokerCode} maps to ${expectedHostCode}`);
     t.notMatch(String(error?.message), /inner secret/u,
       `${invokerCode}: the inner failure text never reaches the guest`);
-    t.equal(
-      isHostCallCodeRetryable(error?.code),
-      error?.code === HOST_CALL_ERROR_CODE.TARGET_UNAVAILABLE,
-      `${expectedHostCode}: retryability follows the protocol canonical ` +
-        'map',
-    );
+    t.equal(error?.retryable, false,
+      `${invokerCode}: a terminal delegated failure is never retryable, ` +
+        'whatever its translated code');
     if (messages.has(expectedHostCode)) {
       t.equal(error?.message, messages.get(expectedHostCode),
         `${expectedHostCode}: one fixed message per emitted code`);
@@ -341,4 +339,46 @@ test('the bridge refuses construction without its collaborators',
       callCellInvoker: collaborators.callCellInvoker,
     }), /runtimeAccessPolicyOwner/u);
     t.end();
+  });
+
+// Retry safety of a bridged call comes from the call routing contract
+// (docs/execution-semantics.md: retry only when retryable AND guest code
+// provably did not run), never from the translated host-call code.
+test('bridged-call retryability is the call contract\'s retrySafe',
+  async (t) => {
+    const cases = [
+      ['host Cell unavailable, nothing ran',
+        () => createCallRoutingFailure(
+          CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE, INNER_SECRET_MESSAGE,
+          {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE}),
+        true],
+      ['host Cell unavailable after a sibling shard ran',
+        () => recordInvocationExecutionStarted(createCallRoutingFailure(
+          CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE, INNER_SECRET_MESSAGE,
+          {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE})),
+        false],
+      ['reduce incomplete (shards already ran)',
+        () => createCallRoutingFailure(
+          CALL_CELL_ROUTE_ERROR_CODE.REDUCE_INCOMPLETE, INNER_SECRET_MESSAGE,
+          {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE}),
+        false],
+      ['shutting down after dispatch started',
+        () => createCallRoutingFailure(
+          CALL_CELL_ROUTE_ERROR_CODE.SHUTTING_DOWN, INNER_SECRET_MESSAGE,
+          {classification: CALL_CELL_ROUTE_CLASSIFICATION.AMBIGUOUS,
+            invoked: true}),
+        false],
+    ];
+    for (const [label, failure, retrySafe] of cases) {
+      const collaborators = makeCollaborators({
+        invoke: async () => {
+          throw failure();
+        },
+      });
+      const error = await captureRefusal(
+        makeBridge(collaborators).invoke(makeBridgeCall()));
+      t.equal(error?.code, HOST_CALL_ERROR_CODE.TARGET_UNAVAILABLE,
+        `${label}: translated to target_unavailable`);
+      t.equal(error?.retryable, retrySafe, `${label}: retryable=${retrySafe}`);
+    }
   });
