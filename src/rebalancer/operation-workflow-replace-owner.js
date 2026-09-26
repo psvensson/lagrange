@@ -38,6 +38,10 @@ import {
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   './replica-operation-update-disposition.js';
 import {captureReplaceOwnerLevel} from './operation-workflow-replace-owner-wake.js';
+import {
+  isReplaceTargetGone,
+  readReplaceSurvivingMembership,
+} from './operation-workflow-replace-surviving-membership.js';
 import {isPartitionReplaceOwnerPhase} from './replica-operation-step-policy.js';
 import {
   deliverToReplaceWitness,
@@ -93,6 +97,10 @@ const REPLACE_POST_INTENT_FAILURE = Object.freeze({
 // unavailable and whose target the failure detector marked dead.
 const REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED =
   'replace_owner_unavailable_source_retained';
+
+// D2 pre-effect: a REPLACE whose target the failure detector marked dead
+// before its removal intent; nothing about the source was changed.
+const REPLACE_TARGET_DEAD_BEFORE_INTENT = 'replace_target_dead_before_intent';
 
 // A10: a REPLACE whose target replica is gone before its removal intent.
 const REPLACE_TARGET_REMOVED_BEFORE_ACTIVE =
@@ -185,7 +193,13 @@ function isSourceUnreachableAtIntent(operation) {
  * @return {Promise<Object>} Frozen {verdict, observation}.
  */
 async function decideReplaceCompletion(owner, operation) {
-  const observation = await readReplaceWitnessMembership(owner, operation);
+  let observation = await readReplaceWitnessMembership(owner, operation);
+  if (observation.state === PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE &&
+      isReplaceTargetGone(owner, operation)) {
+    // D2: t is gone and cannot answer; its surviving members' own ports
+    // decide (an absence there is a committed removal).
+    observation = await readReplaceSurvivingMembership(owner, operation);
+  }
   let verdict = REPLACE_COMPLETION_VERDICT.UNAVAILABLE;
   if (observation.state === PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER) {
     verdict = REPLACE_COMPLETION_VERDICT.STILL_VOTER;
@@ -543,7 +557,7 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
     await owner.completeOperation(operation);
     return true;
   }
-  if (isTargetFailureDetectorDead(owner, operation)) {
+  if (isReplaceTargetGone(owner, operation)) {
     return handleReplaceTargetDeath(owner, operation, decision, context);
   }
   if (decision.verdict === REPLACE_COMPLETION_VERDICT.UNAVAILABLE) {
@@ -745,6 +759,7 @@ export {
   REPLACE_POST_INTENT_FAILURE,
   REPLACE_EFFECT_ADMISSION,
   REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED,
+  REPLACE_TARGET_DEAD_BEFORE_INTENT,
   REPLACE_TARGET_REMOVED_BEFORE_ACTIVE,
   REPLACE_WAIT_REASON,
   adoptObservedReplaceSourceRetirement,

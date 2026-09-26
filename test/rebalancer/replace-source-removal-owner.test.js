@@ -69,6 +69,9 @@ function parseSteps(row) {
 async function createHarness({
   witness = createReplaceWitness({leaderReplicaId: TARGET_REPLICA_ID}),
   sourceStatus = ReplicaStatus.ACTIVE,
+  // Other members' own ports, by replica id (D2 target death): each answers
+  // READ_REPLICA_MEMBERSHIP addressed to it.
+  members = {},
 } = {}) {
   const deliveries = [];
   const clock = {offsetMs: 0};
@@ -78,7 +81,9 @@ async function createHarness({
   let coordinator = null;
   const messageRouter = {
     async deliver(target, payload, options) {
-      const answered = witness.answer(payload);
+      const member = members[payload?.replicaId];
+      const answered = member ? member.answer(payload) :
+        witness.answer(payload);
       if (answered) {
         return answered;
       }
@@ -570,3 +575,78 @@ async (t) => {
 function parseStepsFromOperation(operation) {
   return Array.isArray(operation?.stepsHistory) ? operation.stepsHistory : [];
 }
+
+// D2 / P6: target death is decided from committed membership, never by
+// elapsed time and never by waiting forever for the dead target to answer.
+// The source's own port is the surviving member read here.
+async function targetDeathOutcome({targetStatus, sourceMember,
+  afterIntent = true}) {
+  const witness = createReplaceWitness({leaderReplicaId: TARGET_REPLICA_ID});
+  const members = sourceMember ? {[SOURCE_REPLICA_ID]: sourceMember} : {};
+  const harness = await createHarness({witness, members});
+  try {
+    if (afterIntent) {
+      await driveToRemovalIntent(harness);
+    } else {
+      harness.operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+      harness.operation.status = ReplicaStatus.ACTIVE;
+      await harness.coordinator.repository.persistOperationUpdate(
+        harness.operation);
+    }
+    const effectsBefore = removalEffects(harness.deliveries).length;
+    witness.available = false;
+    harness.coordinator.systemTableCache.upsert('services',
+      targetRow(targetStatus));
+    await harness.coordinator.reconcileOperationProgress(
+      await persistedOperation(harness));
+    const persisted = await persistedOperation(harness);
+    return {
+      workflowStep: persisted.workflowStep,
+      errorMessage: String(persisted.errorMessage || ''),
+      newEffects: removalEffects(harness.deliveries).length - effectsBefore,
+      retirements: witness.retirements.length,
+    };
+  } finally {
+    await harness.coordinator.shutdown();
+  }
+}
+
+function sourceMemberSaying(sourceVoter) {
+  return createReplaceWitness({leaderReplicaId: SOURCE_REPLICA_ID,
+    sourceVoter, commitIndex: INTENT_COMMIT_INDEX + 1});
+}
+
+test('W11 (D2/P6): target death after the intent is decided from committed ' +
+  'membership', async (t) => {
+  for (const targetStatus of [ReplicaStatus.FAILED, ReplicaStatus.REMOVED]) {
+    const retained = await targetDeathOutcome({targetStatus,
+      sourceMember: sourceMemberSaying(true)});
+    t.equal(retained.workflowStep, WORKFLOW_STEP.FAILED,
+      `target ${targetStatus}, source still a voter: FAILED`);
+    t.match(retained.errorMessage, POST_INTENT_TARGET_DEATH,
+      `target ${targetStatus}: the source is retained`);
+    t.equal(retained.retirements, 0,
+      `target ${targetStatus}: no removal is proposed`);
+    const removed = await targetDeathOutcome({targetStatus,
+      sourceMember: sourceMemberSaying(false)});
+    t.equal(removed.workflowStep, WORKFLOW_STEP.REMOVED,
+      `target ${targetStatus}, source already absent: completed, no ` +
+        'rollback');
+  }
+  const unknowable = await targetDeathOutcome({
+    targetStatus: ReplicaStatus.FAILED, sourceMember: null});
+  t.equal(unknowable.workflowStep, WORKFLOW_STEP.STOPPING,
+    'no member can be read: nothing is concluded (waits visibly)');
+});
+
+test('W12 (D2 pre-effect): target death before the intent fails the ' +
+  'REPLACE with the source retained and no removal effect', async (t) => {
+  for (const targetStatus of [ReplicaStatus.FAILED, ReplicaStatus.REMOVED]) {
+    const outcome = await targetDeathOutcome({targetStatus,
+      sourceMember: sourceMemberSaying(true), afterIntent: false});
+    t.equal(outcome.workflowStep, WORKFLOW_STEP.FAILED,
+      `target ${targetStatus} before the intent: FAILED`);
+    t.equal(outcome.newEffects, 0,
+      `target ${targetStatus}: the source is sent no removal`);
+  }
+});
