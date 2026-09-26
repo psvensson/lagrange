@@ -286,6 +286,31 @@ async function readUntil(t, node, sessionKey, sql, params, satisfied,
     `${sql} ${JSON.stringify(params)} last=${observed}`);
 }
 
+/**
+ * Run one statement through a node's public session until it is served, and
+ * report every rejection on the way. A formed cluster may refuse the first
+ * DDL on a new table (images-seam finding F-FORMATION-WRITE-READINESS, owned
+ * by the formation/readiness owners); a suite that needs the table records
+ * the refusals instead of hiding them. Use only for idempotent statements
+ * (CREATE TABLE IF NOT EXISTS).
+ * @return {Promise<{served: boolean, elapsedMs: number, rejections: string[]}>}
+ */
+async function serveStatement(t, node, sessionKey, sql, params = [],
+  budgetMs = EMBEDDED_CLUSTER_BUDGET_MS.APPLICATION_WRITES) {
+  const startedAt = Date.now();
+  const deadline = startedAt + scaleByMachineFactor(budgetMs);
+  const rejections = [];
+  while (Date.now() < deadline) {
+    const outcome = await node.query(sessionKey, sql, params);
+    if (outcome.outcome === EMBEDDED_STEP_OUTCOME.FULFILLED) {
+      return {served: true, elapsedMs: Date.now() - startedAt, rejections};
+    }
+    rejections.push(describeExposedError(outcome.value));
+    await managedSleep(t, EMBEDDED_CLUSTER_BUDGET_MS.POLL_INTERVAL);
+  }
+  return {served: false, elapsedMs: Date.now() - startedAt, rejections};
+}
+
 async function labelled(label, observation) {
   try {
     return await observation;
@@ -588,6 +613,9 @@ function createEmbeddedCluster(t, options = {}) {
     seedQueryRows,
     startEmbeddedNode,
     stopAll,
+    // Stop one node's process (graceful stop, then SIGTERM/SIGKILL); the
+    // rest of the cluster keeps running.
+    stopNode: (node) => stopNode(t, node),
     waitForApplicationWrites,
     waitForClusterSize,
   };
@@ -606,4 +634,5 @@ export {
   fulfilledRows,
   mustQuery,
   readUntil,
+  serveStatement,
 };

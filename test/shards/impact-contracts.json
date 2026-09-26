@@ -573,6 +573,20 @@
         "test/query/application-database.test.js",
         "test/release/embedded-node-worker-contract.test.js"
       ]
+    },
+    "distributed-transaction-replicated-apply": {
+      "description": "A distributed transaction acknowledged to the public application session must leave its rows in every replica of each participant partition, exactly as an autocommit row is: the participant staging and commit owner (in-transaction writes, prepare, commit, the TRANSACTION_COMMIT marker), the committed-entry apply of that marker, and the coordinator that acknowledges the commit. Witnessed on a real three-process cluster by direct read-only inspection of every replica's SQLite file (finding F-TX-REPLICATED-APPLY), and by the read outage after two concurrent transactions on the same partitions.",
+      "owners": [
+        "src/partition/partition-service-transaction-base.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-service-write-metrics-base.js",
+        "src/query/distributed/distributed-transaction-protocol.js",
+        "src/query/distributed/distributed-transaction-coordinator.js"
+      ],
+      "tests": [
+        "test/integration/transaction-replicated-apply-settling.integration.test.js",
+        "test/integration/transaction-concurrent-read-outage.integration.test.js"
+      ]
     }
   },
   "coupledPairs": {

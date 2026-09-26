@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2156,
+    "ordinary": 2158,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2173,
-  "digest": "fnv1a32-ff7873b4",
+  "censusSize": 2175,
+  "digest": "fnv1a32-d0f21541",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -993,6 +993,8 @@
     "test/integration/strict-preload-pressure-reproducer.integration.test.js": "ordinary",
     "test/integration/three-node-partition-rebalance.integration.test.js": "ordinary",
     "test/integration/three-node-seed-rebalance.integration.test.js": "ordinary",
+    "test/integration/transaction-concurrent-read-outage.integration.test.js": "ordinary",
+    "test/integration/transaction-replicated-apply-settling.integration.test.js": "ordinary",
     "test/integration/user-table-local-cdc-readiness.integration.test.js": "ordinary",
     "test/integration/user-table-metadata-fanout.integration.test.js": "ordinary",
     "test/integration/versioned-cdc-readiness-convergence.integration.test.js": "ordinary",
