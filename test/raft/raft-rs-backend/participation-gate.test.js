@@ -535,20 +535,28 @@ test('T4 (restart between j and a): a target restarted from its durable ' +
 // shows the transient H1+self absence of b - a committed voter the whole
 // time - with a commit index at or past C0 (here the pre-intent floor). R-1a
 // must WAIT on it, never answer SOURCE_RETIRED.
+// F1 (owner ruling 2026-09-26): the completion authority is the group's
+// leader-answered committed configuration, reached from the target's answer
+// with one redirect; the below-gate target's own view never decides. Each
+// witness message is answered by the port of the replica it addresses; the
+// partition's replicas route by their own node ids.
 function replaceOwnerReadingThrough(cluster, sourceReplicaId) {
-  const service = {raft: cluster.node(TARGET), replicaId: TARGET,
-    partitionId: PARTITION_ID, replicaIds: [], raftTimingConfig: null};
+  const serviceOf = (replicaId) => ({raft: cluster.node(replicaId), replicaId,
+    partitionId: PARTITION_ID, replicaIds: [], raftTimingConfig: null});
   return {
     repository: {
       getReplaceSourceReplicaId: () => sourceReplicaId,
       getReplaceTargetReplicaId: () => TARGET,
       getObservedReplicaStatusFromCache: () => 'active',
     },
+    getCachedCriticalReplicaRows: () => [...cluster.replicas.keys()].map(
+      (replicaId) => ({replica_id: replicaId, node_id: `${replicaId}-node`})),
     messageRouter: {
-      deliver: async () => ({
+      deliver: async (_target, payload) => ({
         status: ReplicaOperationResponseStatus.COMPLETED,
-        [ReplicaOperationField.MEMBERSHIP]:
-          await readPartitionReplicaMembership(service, sourceReplicaId),
+        [ReplicaOperationField.MEMBERSHIP]: await readPartitionReplicaMembership(
+          serviceOf(payload[ReplicaOperationField.REPLICA_ID]),
+          sourceReplicaId),
       }),
     },
   };
@@ -566,25 +574,30 @@ async () => {
     const operation = {operationId: 'b12-replace', type: OperationType.REPLACE,
       entityType: SERVICE_TYPE.PARTITION, partitionId: PARTITION_ID,
       replicaId: TARGET, targetNodeId: 'b12-target-node'};
-    const below = await decideReplaceCompletion(owner, operation);
-    assert.equal(below.observation.state,
-      PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT,
+    const targetView = await readPartitionReplicaMembership({
+      raft: cluster.node(TARGET), replicaId: TARGET, partitionId: PARTITION_ID,
+      replicaIds: [], raftTimingConfig: null}, 'h1-b');
+    assert.equal(targetView.state, PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT,
       'setup: the below-gate witness shows the committed voter b absent');
-    assert.equal(below.observation.gateOpen, false,
+    assert.equal(targetView.gateOpen, false,
       'setup: the witness observation carries its closed gate');
+    const below = await decideReplaceCompletion(owner, operation);
     assert.notEqual(below.verdict, REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED,
       'R-1a never retires a source from a below-gate witness');
-    assert.equal(below.verdict,
-      REPLACE_COMPLETION_VERDICT.WITNESS_BELOW_GATE, 'it waits, typed');
+    assert.ok([REPLACE_COMPLETION_VERDICT.WITNESS_BELOW_GATE,
+      REPLACE_COMPLETION_VERDICT.UNAVAILABLE,
+      REPLACE_COMPLETION_VERDICT.STILL_VOTER].includes(below.verdict),
+    `it waits, typed (${below.verdict}; ${below.observation.reason ?? ''})`);
 
     cap.value = Number.POSITIVE_INFINITY;
     assert.ok(settle(cluster, () =>
       cluster.node(TARGET).readStatus().gateOpen === true, ['h1-b']),
     'setup: the target catches up and its gate opens');
     const open = await decideReplaceCompletion(owner, operation);
-    assert.equal(open.observation.gateOpen, true);
     assert.equal(open.verdict, REPLACE_COMPLETION_VERDICT.STILL_VOTER,
-      'at the gate the witness sees b as the committed voter it is');
+      'the leader\'s committed configuration holds b, a committed voter');
+    assert.equal(open.observation.leaderReplicaId,
+      open.observation.replicaId, 'the verdict is the leader\'s own answer');
   } finally {
     cluster.dispose();
   }
