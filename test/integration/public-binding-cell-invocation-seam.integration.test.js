@@ -43,13 +43,12 @@ import {
 } from '../../src/test-helpers/managed-timers.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
-import {CALL_CELL_ROUTE_ERROR_CODE} from
-  '../../src/service/call-cell-routing-contract.js';
 import {
   CONSUMER_RETRY_OUTCOME,
   LIFECYCLE_SQL,
   callBinding,
   callBindingWhileRetrySafe,
+  isPublicRetrySafe,
   observeFailure,
   openConsumerSession,
   runLifecycle,
@@ -154,24 +153,6 @@ const LEGACY_AXIS_TOKENS = Object.freeze([
   ['Wasm', 'Call', 'Adapter'].join(''),
   ['debug', 'runtime'].join('-'),
 ]);
-
-// Before a public outcome class exists, the only signal a pg client gets is
-// the owner code in the ErrorResponse detail; the retry set is imported
-// from the call routing owner, never restated.
-const CONSUMER_RETRY_CODES = Object.freeze(new Set([
-  CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE,
-  CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
-]));
-const OWNER_CODE_DETAIL_FIELD = 'ownerCode';
-
-function isOwnerCodeRetryable(observed) {
-  try {
-    return CONSUMER_RETRY_CODES.has(
-      JSON.parse(observed.detail)[OWNER_CODE_DETAIL_FIELD]);
-  } catch {
-    return false;
-  }
-}
 
 function seamRows() {
   const rows = [];
@@ -358,14 +339,14 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
 
   const client = await openConsumerSession({...endpoint, ...CREDENTIALS});
   t.teardown(() => client.end());
-  // Readiness, consumer style: re-issue the CALL while the owner code says
-  // the Cell is still activating.
+  // Readiness, consumer style: re-issue the CALL while the public contract
+  // says the failure is retry-safe (a new Binding's Cell is activating).
   const callWhenReady = (name) => callBindingWhileRetrySafe(client, {
     callArguments: {topN: TOP_N_ALL},
     name,
   }, {
     deadlineMs: Date.now() + CELL_READY_WAIT_MS,
-    isRetrySafe: isOwnerCodeRetryable,
+    isRetrySafe: isPublicRetrySafe,
     pause: () => managedSleep(t, CONSUMER_RETRY_PAUSE_MS),
   });
 
@@ -450,7 +431,7 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
       st.equal(served.outcome, CONSUMER_RETRY_OUTCOME.SERVED,
         JSON.stringify(served.lastFailure));
       st.comment(`consumer attempts until served: ${served.attempts}; ` +
-        `retried while activating: ${
+        `retried (all retry-safe on the wire): ${
           JSON.stringify(served.retriedDetails)}`);
       const expected = expectedReduction(rows,
         (row) => row.id >= LOW_RANGE.FIRST && row.id <= LOW_RANGE.LAST);

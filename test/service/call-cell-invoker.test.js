@@ -14,12 +14,15 @@ import {CallCellInvoker} from
 import {
   CALL_CELL_INVOCATION_ID_PREFIX,
   CALL_CELL_PARTIAL_KEY_PREFIX,
+  CALL_CELL_ROUTE_CLASSIFICATION,
   CALL_CELL_ROUTE_ERROR_CODE,
+  CALL_OUTCOME_CLASS,
   CallCellRoutingError,
   createCallInvocationIdentity,
   createCallReduceInvocationId,
   createCallRoutingFailure,
   createCallSlotInvocationId,
+  publicCallOutcomeOf,
 } from '../../src/service/call-cell-routing-contract.js';
 
 const SECURITY_CONTEXT = Object.freeze({
@@ -528,3 +531,86 @@ test('the activation wait never outlives the caller deadline', async (t) => {
     'the wait gave up near the caller deadline, not the full window');
   t.end();
 });
+
+// Invocation-level execution evidence for the public outcome class: the
+// surfaced failure of one dispatch must not be read as "nothing ran" when
+// another shard (or the reduce) of the same invocation already executed.
+function hostUnavailableFor(partitionId) {
+  return async (req) => {
+    if (req.exportName !== 'reduce' && req.partitionId === partitionId) {
+      throw createCallRoutingFailure(
+        CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE,
+        'no ready Cell on host: node-p1',
+        {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
+      );
+    }
+    const id = req.partitionId === 'p1' ? 'u1' : 'u2';
+    return {
+      componentResult: JSON.stringify({kept: [id]}),
+      replicaId: 'replica-1',
+      partials: [emittedPartial(id, 9)],
+    };
+  };
+}
+
+async function invocationFailure(collaborators) {
+  return makeInvoker(collaborators).invoke({
+    name: CALL_NAME,
+    argumentsJson: ARGUMENTS,
+    securityContext: SECURITY_CONTEXT,
+  }).then(() => null, (error) => error);
+}
+
+test('a not-invoked shard failure after a sibling shard ran is reported ' +
+  'as an uncertain invocation, never as retry-safe', async (t) => {
+  const error = await invocationFailure(makeCollaborators({
+    adapterInvoke: hostUnavailableFor('p1'),
+  }));
+  t.equal(error.code, CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE,
+    'the surfaced cause is still the lowest-slot typed failure');
+  t.equal(error.invoked, false, 'the failed dispatch itself did not run');
+  t.equal(error.invocationExecutionStarted, true,
+    'the invoker records that the sibling shard executed guest code');
+  t.same(publicCallOutcomeOf(error), {
+    message: publicCallOutcomeOf(error).message,
+    outcomeClass: CALL_OUTCOME_CLASS.OUTCOME_UNCERTAIN,
+    retrySafe: false,
+  });
+});
+
+test('the same failure with no shard executed stays retry-safe',
+  async (t) => {
+    const collaborators = makeCollaborators({
+      adapterInvoke: hostUnavailableFor('p1'),
+      planShards: () => ({shards: [{partitionId: 'p1'}], tableName: 'ratings'}),
+    });
+    const error = await invocationFailure(collaborators);
+    t.equal(error.invocationExecutionStarted, false);
+    t.equal(publicCallOutcomeOf(error).outcomeClass,
+      CALL_OUTCOME_CLASS.TEMPORARILY_UNAVAILABLE);
+    t.equal(publicCallOutcomeOf(error).retrySafe, true);
+  });
+
+test('a stale reduce lease holder after every shard ran is uncertain',
+  async (t) => {
+    const collaborators = makeCollaborators({
+      adapterInvoke: async (req) => {
+        if (req.exportName === 'reduce') {
+          return {componentResult: RESULT_JSON, replicaId: 'replica-rogue'};
+        }
+        const id = req.partitionId === 'p1' ? 'u1' : 'u2';
+        return {
+          componentResult: JSON.stringify({kept: [id]}),
+          replicaId: 'replica-1',
+          partials: [emittedPartial(id, 9)],
+        };
+      },
+    });
+    const error = await invocationFailure(collaborators);
+    t.equal(error.code, CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE);
+    t.equal(error.classification, CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE,
+      'the owner classification is unchanged');
+    t.equal(publicCallOutcomeOf(error).outcomeClass,
+      CALL_OUTCOME_CLASS.OUTCOME_UNCERTAIN,
+      'shards and reduce ran, so the invocation is not retry-safe');
+  });

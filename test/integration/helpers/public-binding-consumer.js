@@ -24,6 +24,7 @@ const LIFECYCLE_SQL = Object.freeze({
 const CALL_PAYLOAD_SCHEMA_VERSION = 2;
 const CONSUMER_CONNECT_TIMEOUT_MS = 5_000;
 const CONSUMER_SSL_DISABLED = false;
+const RETRY_SAFE_DETAIL_FIELD = 'retrySafe';
 const CONSUMER_RETRY_OUTCOME = Object.freeze({
   SERVED: 'served',
   GAVE_UP: 'gave_up',
@@ -107,6 +108,22 @@ async function callBinding(client, name, callArguments) {
 }
 
 /**
+ * The public retry decision a caller reads from a failed CALL: the
+ * `retrySafe` field of the ErrorResponse detail. Anything else - no
+ * detail, unparsable detail, or no field - is not retry-safe.
+ *
+ * @param {{detail?: string}} observed - Received error fields.
+ * @return {boolean} Whether an automatic retry is safe.
+ */
+function isPublicRetrySafe(observed) {
+  try {
+    return JSON.parse(observed.detail)[RETRY_SAFE_DETAIL_FIELD] === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Consumer-side retry loop: re-issue the CALL while the caller-supplied
  * predicate classifies the received error as safe to retry.
  *
@@ -156,6 +173,7 @@ export {
   LIFECYCLE_SQL,
   callBinding,
   callBindingWhileRetrySafe,
+  isPublicRetrySafe,
   observeFailure,
   openConsumerSession,
   runLifecycle,

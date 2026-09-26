@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2156,
+    "ordinary": 2157,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2173,
-  "digest": "fnv1a32-11eedb5a",
+  "censusSize": 2174,
+  "digest": "fnv1a32-88c15590",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1948,6 +1948,7 @@
     "test/service/call-cell-batch-executor.test.js": "ordinary",
     "test/service/call-cell-invoker-parallel.test.js": "ordinary",
     "test/service/call-cell-invoker.test.js": "ordinary",
+    "test/service/call-cell-public-outcome.test.js": "ordinary",
     "test/service/call-cell-routing-contract.test.js": "ordinary",
     "test/service/call-cell-statement-adapter.test.js": "ordinary",
     "test/service/call-shard-dispatch-pool.test.js": "ordinary",

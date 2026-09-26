@@ -219,6 +219,37 @@ context sizes. Query execution has a separate ambient budget.
 The exact typed codes remain part of the lower-level call contract in
 [`architecture/minimal-deployment-surface.md`](../architecture/minimal-deployment-surface.md).
 
+## Public outcome classes
+
+A failed `CALL BINDING $1` reaches a PostgreSQL client as an error whose
+`detail` field is a JSON object carrying `ownerCode` (the typed call code),
+`outcomeClass`, and `retrySafe`. The message is a fixed per-code text that
+names no node, partition, replica, or invocation. A statement that completes
+and returns its row is the success class.
+
+The class is derived from the owner classification above plus the
+invocation's execution evidence. It adds no guarantee: it tells the caller
+whether guest code of that invocation can have run.
+
+| Outcome class | Typical causes | `retrySafe` | Why |
+| --- | --- | --- | --- |
+| `success` | Every shard ran, reduce published one result | - | Exactly one visible result |
+| `definitely_not_executed` | Unknown or ambiguous Binding, no statement, invalid statement or arguments, authentication or authorization, deadline before dispatch | No | Nothing ran; the same request fails again |
+| `retryable_stale_target` | Partition, Cell, or version moved before any guest code ran | Yes | Re-resolution can succeed; nothing ran |
+| `temporarily_unavailable` | No ready Cell on the shard host or anywhere, ingress shutting down before dispatch | Yes | Capacity or activation gap; nothing ran |
+| `outcome_uncertain` | Acknowledged without an outcome, delivery or transport failure after dispatch, incomplete reduction, or any failure after another shard or the reduce of the same invocation already ran | No | Guest code may have run; no result is visible |
+| `terminal_application_failure` | Guest exception, invalid component result, batch over its declared bound | No | The component or its declared bounds fail the same input again |
+
+`retrySafe` means only that retrying cannot re-execute guest code of the
+failed invocation. It is not exactly-once execution. A caller that retries an
+`outcome_uncertain` invocation accepts possible re-execution of guest side
+effects; the published result stays exactly-once visible either way.
+
+Failures refused before the call owner is reached (wire authentication,
+action authorization, or a malformed `CALL BINDING` payload) carry no
+`outcomeClass`; they happen before any dispatch. A dropped connection
+carries no error response at all and must be treated as uncertain.
+
 ## Current unresolved product requirements
 
 The public surface does not yet provide:

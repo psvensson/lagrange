@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1908,
+    "unit": 1909,
     "integration": 76,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2173,
-  "digest": "fnv1a32-5f57e3b6",
+  "censusSize": 2174,
+  "digest": "fnv1a32-fc79bbc0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1949,6 +1949,7 @@
     "test/service/call-cell-batch-executor.test.js": "unit",
     "test/service/call-cell-invoker-parallel.test.js": "unit",
     "test/service/call-cell-invoker.test.js": "unit",
+    "test/service/call-cell-public-outcome.test.js": "unit",
     "test/service/call-cell-routing-contract.test.js": "unit",
     "test/service/call-cell-statement-adapter.test.js": "unit",
     "test/service/call-shard-dispatch-pool.test.js": "unit",

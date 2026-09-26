@@ -16,7 +16,7 @@
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
-    "services-runtime": 170,
+    "services-runtime": 171,
     "solver-tooling": 7,
     "storage-partition": 151,
     "storage-raft": 102,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2173,
-  "digest": "fnv1a32-470e05c7",
+  "censusSize": 2174,
+  "digest": "fnv1a32-936ffc22",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-864bbe93",
+  "observationDigest": "fnv1a32-90436ca2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1968,6 +1968,7 @@
     "test/service/call-cell-batch-executor.test.js": "services-runtime",
     "test/service/call-cell-invoker-parallel.test.js": "services-runtime",
     "test/service/call-cell-invoker.test.js": "services-runtime",
+    "test/service/call-cell-public-outcome.test.js": "services-runtime",
     "test/service/call-cell-routing-contract.test.js": "services-runtime",
     "test/service/call-cell-statement-adapter.test.js": "services-runtime",
     "test/service/call-shard-dispatch-pool.test.js": "services-runtime",
@@ -6015,7 +6016,6 @@
         "src/control-plane/owners/deployment-binding-contract.js",
         "src/embedded-lagrange.js",
         "src/service/call-cell-batch-executor.js",
-        "src/service/call-cell-routing-contract.js",
         "src/service/service-local-oci-layout-builder.js",
         "test/integration/helpers/public-binding-consumer.js",
         "test/integration/helpers/public-binding-seam-harness.js",
@@ -9805,6 +9805,11 @@
     "test/service/call-cell-invoker.test.js": {
       "files": [
         "src/service/call-cell-invoker.js"
+      ]
+    },
+    "test/service/call-cell-public-outcome.test.js": {
+      "files": [
+        "src/service/service-lifecycle-command-contract.js"
       ]
     },
     "test/service/call-cell-statement-adapter.test.js": {
