@@ -12,7 +12,7 @@
     "distributed-harness": 167,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 251,
+    "placement-rebalance": 256,
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2216,
-  "digest": "fnv1a32-169ff207",
+  "censusSize": 2221,
+  "digest": "fnv1a32-de0749de",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6ec9e1b7",
+  "observationDigest": "fnv1a32-e783834c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1678,6 +1678,11 @@
     "test/rebalancer/replace-owner-phase-staleness.test.js": "placement-rebalance",
     "test/rebalancer/replace-owner-recovery-equivalence.test.js": "placement-rebalance",
     "test/rebalancer/replace-owner-wake.test.js": "placement-rebalance",
+    "test/rebalancer/replace-real-group-completion.test.js": "placement-rebalance",
+    "test/rebalancer/replace-real-group-d2.test.js": "placement-rebalance",
+    "test/rebalancer/replace-real-group-handoff.test.js": "placement-rebalance",
+    "test/rebalancer/replace-real-group-latency.test.js": "placement-rebalance",
+    "test/rebalancer/replace-real-group-scheduling.test.js": "placement-rebalance",
     "test/rebalancer/replace-remove-safety-wake-property.test.js": "placement-rebalance",
     "test/rebalancer/replace-replica-workflow.test.js": "placement-rebalance",
     "test/rebalancer/replace-source-planner-set-exclusion.test.js": "placement-rebalance",
@@ -8112,6 +8117,74 @@
     "test/rebalancer/replace-owner-wake.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/replace-real-group-completion.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/node/replica-handler-membership-relay.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ],
+      "directories": [
+        "src/rebalancer"
+      ]
+    },
+    "test/rebalancer/replace-real-group-d2.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/node/replica-handler-membership-relay.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/rebalancer/replace-real-group-handoff.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/node/replica-handler-membership-relay.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/rebalancer/replace-real-group-latency.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/node/replica-handler-membership-relay.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/rebalancer/replace-real-group-scheduling.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/node/replica-handler-membership-relay.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
     "test/rebalancer/replace-remove-safety-wake-property.test.js": {
