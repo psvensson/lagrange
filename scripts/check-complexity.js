@@ -63,7 +63,12 @@ const TARGET_THRESHOLD = 12;
 // deleted; the peer-cache reconcile's expected-peer loop extracted).
 // 2026-09-26: tightened 1810 -> 1805 on the hint (fix-f1: the per-leg
 // handoff evidence and escalation deleted).
-const BASELINE_COUNT = 1805;
+// 2026-09-26: tightened 1810 -> 1809 on the checker's hint (fix-f4: the
+// readiness service-row readers share one authoritative-read helper,
+// readAllNodeServiceRows drops below the threshold).
+// 2026-09-26 (integration 2): the two merged at the lower (1805), then
+// tightened to 1804 on the checker's hint.
+const BASELINE_COUNT = 1804;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

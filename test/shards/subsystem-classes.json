@@ -7,7 +7,7 @@
     "bootstrap-membership": 259,
     "cdc-metadata": 59,
     "cli-tooling": 96,
-    "control-plane": 194,
+    "control-plane": 196,
     "convergence-topology": 92,
     "distributed-harness": 167,
     "examples-e2e": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2223,
-  "digest": "fnv1a32-c8bccbf2",
+  "censusSize": 2225,
+  "digest": "fnv1a32-b10c5d43",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d472faaa",
+  "observationDigest": "fnv1a32-a4f4fd61",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -609,6 +609,8 @@
     "test/control-plane/read-model-contract.test.js": "control-plane",
     "test/control-plane/readiness-admission-transitions-observed.test.js": "control-plane",
     "test/control-plane/readiness-cycle-cut-dependency-guard.test.js": "control-plane",
+    "test/control-plane/readiness-deferred-denial-evidence-absent.test.js": "control-plane",
+    "test/control-plane/readiness-liveness-projection-single-source.test.js": "control-plane",
     "test/control-plane/readiness-owner-authority-contract.test.js": "control-plane",
     "test/control-plane/readiness-per-change-reuse.test.js": "control-plane",
     "test/control-plane/readiness-planning-cache-classification-barrier.test.js": "control-plane",
@@ -3583,6 +3585,22 @@
         "src/control-plane/projection-readiness-decision.js",
         "src/control-plane/projection-readiness-evidence.js",
         "src/query/sql-query-engine-provisioning-methods.js"
+      ]
+    },
+    "test/control-plane/readiness-deferred-denial-evidence-absent.test.js": {
+      "files": [
+        "src/bootstrap/lifecycle-controller-constants.js",
+        "src/control-plane/readiness-denial-classification.js",
+        "src/control-plane/readiness-planning-publication-contract.js",
+        "src/rebalancer/priority-publication-safety-shared.js",
+        "src/rebalancer/priority-publication-safety-topology.js"
+      ]
+    },
+    "test/control-plane/readiness-liveness-projection-single-source.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-service.js",
+        "src/control-plane/node-liveness-semantic-projection-owner.js",
+        "src/control-plane/readiness-planning-version-contract.js"
       ]
     },
     "test/control-plane/readiness-owner-authority-contract.test.js": {
