@@ -1,0 +1,497 @@
+/**
+ * I3 - the public application -> Binding invocation seam, end to end.
+ *
+ * One embedded Lagrange runtime starts in this process; the application
+ * owns its schema through the public application-database facade, and the
+ * "application" (test/integration/helpers/public-binding-consumer.js)
+ * reaches Binding invocation with nothing but the `pg` client, a host:port
+ * and password-mode credentials: INSTALL SERVICE -> CREATE BINDING ->
+ * CONFIGURE SERVICE ACCESS -> CALL BINDING over the node's own
+ * authenticated PostgreSQL-wire listener. No new API is involved.
+ *
+ * What is proved, each against an oracle that does not come from the call
+ * path under test:
+ *  - immutable Artifact identity: re-INSTALL of the same layout replays the
+ *    same identity; a modified manifest has a different digest and package
+ *    id, and a Binding cannot pin the old package to the new digest;
+ *  - Binding is the durable execution-intent owner: byte-identical replay
+ *    is accepted, any change under the same name is refused;
+ *  - canonical routing selects placement: a Binding whose declared
+ *    statement carries a literal key predicate runs exactly the owning
+ *    partition's rows (oracle: the inserted rows filtered by the literal
+ *    predicate), the durable coordination table records one shard slot,
+ *    and the canonical planner (harness evidence) plans one shard; the
+ *    unbounded Binding over the same table fans out to both partitions;
+ *  - no topology from the consumer: the CALL payload contract rejects
+ *    node / partition / replica keys; the consumer module imports only
+ *    `pg`; the proof never touches a legacy callback axis.
+ *
+ * Harness-only steps (never consumer code) are labelled in
+ * helpers/public-binding-seam-harness.js: PG-wire enablement (no product
+ * surface starts the listener) and one managed split for shaping.
+ */
+
+import {mkdtemp, readFile, rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+
+import {test} from '../../src/test-helpers/tap.js';
+import {managedSleep} from '../../src/test-helpers/managed-timers.js';
+import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
+import {CALL_CELL_ROUTE_ERROR_CODE} from
+  '../../src/service/call-cell-routing-contract.js';
+import {getUniquePort} from './helpers/cluster-test-helpers.js';
+import {
+  CONSUMER_RETRY_OUTCOME,
+  LIFECYCLE_SQL,
+  callBinding,
+  callBindingWhileRetrySafe,
+  observeFailure,
+  openConsumerSession,
+  runLifecycle,
+} from './helpers/public-binding-consumer.js';
+import {
+  acceptsConnections,
+  buildCallArtifact,
+  disablePgwire,
+  enablePasswordPgwire,
+  planShardPartitions,
+  readCoordinationSlotCounts,
+  splitTableOnce,
+  startSeamRuntime,
+  useSingleNodeReplicaShape,
+} from './helpers/public-binding-seam-harness.js';
+import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
+
+const SEAM_TEST_TIMEOUT_MS = 240_000;
+const SEAM_WAIT_MS = scaleByMachineFactor(60_000);
+const SEAM_POLL_MS = 100;
+const CONSUMER_RETRY_PAUSE_MS = 250;
+const PGWIRE_LOOPBACK = '127.0.0.1';
+const PROBE_GUARD_SUBJECT =
+  'public-binding-invocation-seam starts an embedded runtime';
+const TEMPORARY_PREFIX = 'lagrange-public-binding-seam-';
+const APPLICATION_ID = 'lagrange-images-seam';
+const NODE_ID = 'public-binding-seam-node';
+const CREDENTIALS = Object.freeze({
+  database: 'images_seam',
+  password: 'images-seam-password',
+  user: 'images_seam_app',
+});
+const WRONG_PASSWORD = 'not-the-images-seam-password';
+const SERVICE_IDENTITY = Object.freeze({
+  name: 'images-seam-ratings',
+  ref: 'registry.example.test/images-seam/ratings:1.0.0',
+  version: '1.0.0',
+});
+const MODIFIED_VERSION = '1.0.1';
+const INSTALL_IDEMPOTENCY_KEY = 'install-images-seam-ratings-v1';
+const MODIFIED_INSTALL_IDEMPOTENCY_KEY = 'install-images-seam-ratings-v1-0-1';
+const LOCAL_OCI_LAYOUT_SOURCE = 'local_oci_layout';
+const OPERATION_STATUS = Object.freeze({
+  DURABLE: 'durable',
+  REPLAYED: 'replayed',
+});
+const TABLE = 'seam_ratings';
+const TABLE_DDL =
+  `CREATE TABLE ${TABLE} (id INTEGER PRIMARY KEY, score REAL, label TEXT)`;
+const ROW_INSERT = `INSERT INTO ${TABLE} (id, score, label) VALUES (?, ?, ?)`;
+const LOW_RANGE = Object.freeze({FIRST: 1, LAST: 10});
+const HIGH_RANGE = Object.freeze({FIRST: 1001, LAST: 1010});
+const SCORE_FRACTION = 0.25;
+const SCORE_SCALE = 100;
+const OWNED_RANGE_STATEMENT =
+  `SELECT id, score, label FROM ${TABLE} ` +
+  `WHERE id >= ${LOW_RANGE.FIRST} AND id <= ${LOW_RANGE.LAST}`;
+const UNBOUNDED_STATEMENT = `SELECT id, score, label FROM ${TABLE}`;
+const BINDING_NAME = Object.freeze({
+  OWNED_RANGE: 'images-seam-owned-range',
+  UNBOUNDED: 'images-seam-all-ratings',
+});
+const BINDING_SCHEMA_VERSION = 2;
+const ACCESS_POLICY_SCHEMA_VERSION = 2;
+const CALL_SOURCE_KIND = 'call';
+const READ_OPERATION = 'read';
+const BINDING_BUDGETS = Object.freeze({
+  context_bytes: 4096,
+  cpu_time_ms: 10_000,
+  input_bytes: 1_048_576,
+  memory_bytes: 256 * 1024 * 1024,
+  output_bytes: 1_048_576,
+  wall_time_ms: 30_000,
+});
+const TOP_N_ALL = 100;
+const COORDINATION_REDUCE_SLOTS = 1;
+const TOPOLOGY_KEYS = Object.freeze(['node', 'partition', 'replica']);
+const TOPOLOGY_PROBE_VALUE = 'public-binding-seam-node';
+const CONSUMER_HELPER_URL =
+  new URL('./helpers/public-binding-consumer.js', import.meta.url);
+const HARNESS_HELPER_URL =
+  new URL('./helpers/public-binding-seam-harness.js', import.meta.url);
+const IMPORT_SPECIFIER_PATTERN =
+  /^\s*import\b[^'";]*?from\s*['"]([^'"]+)['"]/gmu;
+const CONSUMER_ALLOWED_IMPORTS = Object.freeze(['pg']);
+// Forbidden legacy axes, assembled so the tokens never occur literally in
+// the scanned sources (this file included).
+const LEGACY_AXIS_TOKENS = Object.freeze([
+  ['partition', 'callback'].join('_'),
+  ['DB', 'call'].join('.'),
+  ['Wasm', 'Call', 'Adapter'].join(''),
+  ['debug', 'runtime'].join('-'),
+]);
+// Stage-1 consumer retry predicate: the only public signal a pg client has
+// today is the owner code carried in the ErrorResponse detail. The retry
+// set is imported from the call routing owner, never restated.
+const CONSUMER_RETRY_CODES = Object.freeze(new Set([
+  CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE,
+  CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
+]));
+const OWNER_CODE_DETAIL_FIELD = 'ownerCode';
+const PORT_BLOCK_NOT_CONTIGUOUS =
+  'test port allocator did not return a contiguous REST/admin/transport block';
+
+function seamRows() {
+  const rows = [];
+  for (const range of [LOW_RANGE, HIGH_RANGE]) {
+    for (let id = range.FIRST; id <= range.LAST; id += 1) {
+      rows.push(Object.freeze({
+        id,
+        label: null,
+        score: (id % SCORE_SCALE) + SCORE_FRACTION,
+      }));
+    }
+  }
+  return Object.freeze(rows);
+}
+
+// The guest's reduce output for topN >= row count: every emitted key with
+// its score, highest score first. Derived from the inserted rows and the
+// literal predicate only.
+function expectedReduction(rows, predicate) {
+  return rows
+    .filter(predicate)
+    .map((row) => ({key: String(row.id), score: row.score}))
+    .sort((left, right) => right.score - left.score);
+}
+
+function partitionBound(partition, field) {
+  const value = partition[field];
+  return value === null || value === undefined ? null : Number(value);
+}
+
+// Oracle for key-anchored placement from the partition ranges alone
+// ([start, end) with null as unbounded): which partitions can hold a key
+// in the literal range.
+function partitionsIntersecting(partitions, range) {
+  return partitions.filter((partition) => {
+    const start = partitionBound(partition, 'partition_key_start');
+    const end = partitionBound(partition, 'partition_key_end');
+    const startsBeforeLast = start === null || start <= range.LAST;
+    const endsAfterFirst = end === null || end > range.FIRST;
+    return startsBeforeLast && endsAfterFirst;
+  }).map((partition) => partition.partition_id || partition.partitionId);
+}
+
+function importSpecifiers(source) {
+  return [...source.matchAll(IMPORT_SPECIFIER_PATTERN)]
+    .map((match) => match[1]);
+}
+
+function callBindingPayload(name, statement, artifact) {
+  return {
+    budgets: {...BINDING_BUDGETS},
+    name,
+    schema_version: BINDING_SCHEMA_VERSION,
+    source: {kind: CALL_SOURCE_KIND, name, statement},
+    target: {
+      export_name: artifact.callExport,
+      manifest_digest: artifact.manifestDigest,
+      package_id: artifact.packageId,
+    },
+  };
+}
+
+function accessPolicy(bindingName) {
+  return {
+    binding_name: bindingName,
+    calls: [],
+    schema_version: ACCESS_POLICY_SCHEMA_VERSION,
+    tables: [{operations: [READ_OPERATION], slot: 0, table: TABLE}],
+  };
+}
+
+function installPayload(artifact, manifest, idempotencyKey) {
+  return {
+    artifact_source: {
+      kind: LOCAL_OCI_LAYOUT_SOURCE,
+      location: artifact.layoutPath,
+    },
+    config: {},
+    idempotency_key: idempotencyKey,
+    manifest,
+  };
+}
+
+function ownerCodeOf(observed) {
+  try {
+    return JSON.parse(observed.detail)[OWNER_CODE_DETAIL_FIELD];
+  } catch {
+    return null;
+  }
+}
+
+// The listener model derives admin = REST + 1 and transport = REST + 2, so
+// the REST block reserves three consecutive allocator ports before the
+// PG-wire port is drawn.
+function allocateSeamPorts() {
+  const restPort = getUniquePort();
+  const reserved = [getUniquePort(), getUniquePort()];
+  if (reserved[0] !== restPort + 1 || reserved[1] !== restPort + 2) {
+    throw new Error(PORT_BLOCK_NOT_CONTIGUOUS);
+  }
+  return Object.freeze({pgwirePort: getUniquePort(), restPort});
+}
+
+// Owner errors are frozen (ApplicationDatabaseError); tap cannot annotate a
+// frozen rejection, so surface its typed fields on a plain Error instead.
+async function readable(operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    throw new Error(
+      `${error?.code}: ${error?.message} (${error?.cause?.message})`);
+  }
+}
+
+async function newInvocationSlotCount(db, before) {
+  const after = await readCoordinationSlotCounts(db);
+  const fresh = [...after].filter(([invocationId]) => !before.has(invocationId));
+  return fresh.map(([, count]) => count);
+}
+
+test('public Binding invocation through the authenticated PostgreSQL-wire ' +
+  'seam: Artifact, Binding, key-anchored call, no topology in consumer input',
+{timeout: SEAM_TEST_TIMEOUT_MS}, async (t) => {
+  refuseUnderProbe(PROBE_GUARD_SUBJECT);
+  process.prependListener('unhandledRejection', (r) => console.error('DEBUG-UNHANDLED', r?.code, r?.message, r?.stack, r?.cause));
+  const clock = {startedAt: Date.now(), marks: {}};
+  const mark = (label) => {
+    clock.marks[label] = Date.now() - clock.startedAt;
+    process.stderr.write(`DEBUG-MARK ${label} ${clock.marks[label]}\n`);
+  };
+  const root = await mkdtemp(path.join(tmpdir(), TEMPORARY_PREFIX));
+  t.teardown(() => rm(root, {force: true, recursive: true}));
+  const wait = () => ({
+    deadlineMs: Date.now() + SEAM_WAIT_MS,
+    pause: () => managedSleep(t, SEAM_POLL_MS),
+  });
+
+  // Deploy-time tooling runs beside runtime start (the CLI's build step).
+  const artifactBuild = buildCallArtifact(root, SERVICE_IDENTITY);
+  const ports = allocateSeamPorts();
+  const runtime = await startSeamRuntime({
+    credentials: CREDENTIALS,
+    dataDir: path.join(root, 'node-data'),
+    nodeId: NODE_ID,
+    restPort: ports.restPort,
+  });
+  // Harness: the application facade reads system tables and performs the
+  // operator PG-wire enablement; the consumer only gets host:port.
+  const db = runtime.handle.openApplicationDatabase({
+    applicationId: APPLICATION_ID,
+  });
+  let endpoint = null;
+  t.teardown(async () => {
+    const stopStartedAt = Date.now();
+    const listenerClosed = endpoint ?
+      await disablePgwire(db, endpoint, wait()) : true;
+    await runtime.handle.stop();
+    runtime.restoreEnvironment();
+    t.comment(`teardown: pgwire listener closed by scale-down=${
+      listenerClosed}; stop ms=${Date.now() - stopStartedAt}; rest port ` +
+      `accepting after stop=${
+        await acceptsConnections(PGWIRE_LOOPBACK, ports.restPort)}`);
+  });
+  mark('runtimeStarted');
+  endpoint = await enablePasswordPgwire(db, ports.pgwirePort, wait());
+  mark('pgwireListening');
+
+  // The application owns its schema through the public facade.
+  useSingleNodeReplicaShape(runtime.engine);
+  const rows = seamRows();
+  await readable(async () => {
+    await db.query(TABLE_DDL, []);
+    mark('tableCreated');
+    for (const row of rows) {
+      await db.query(ROW_INSERT, [row.id, row.score, row.label]);
+    }
+  });
+  mark('rowsInserted');
+  const partitions = await readable(
+    () => splitTableOnce(runtime.engine, TABLE, wait()));
+  mark('tableSplit');
+  const ownedPartitions = partitionsIntersecting(partitions, LOW_RANGE);
+  t.equal(ownedPartitions.length, 1,
+    'harness: the literal key range lies inside exactly one partition');
+
+  const artifact = {...await artifactBuild};
+  mark('artifactBuilt');
+
+  await t.test('password mode: wrong credentials are refused', async (st) => {
+    const refused = await observeFailure(openConsumerSession({
+      ...endpoint, ...CREDENTIALS, password: WRONG_PASSWORD,
+    }));
+    st.ok(refused, 'the listener refuses a wrong password before any SQL');
+    st.comment(`pg receives on bad password: ${JSON.stringify(refused)}`);
+  });
+
+  const client = await openConsumerSession({...endpoint, ...CREDENTIALS});
+  t.teardown(() => client.end());
+
+  await t.test('Artifact identity is immutable', async (st) => {
+    const install = installPayload(
+      artifact, artifact.manifest, INSTALL_IDEMPOTENCY_KEY);
+    const [installed] = await runLifecycle(
+      client, LIFECYCLE_SQL.INSTALL_SERVICE, install);
+    st.equal(installed.operation_status, OPERATION_STATUS.DURABLE);
+    st.match(installed.package_id, /\S/u, 'INSTALL returns a package id');
+    artifact.packageId = installed.package_id;
+    mark('installed');
+
+    const [replayed] = await runLifecycle(
+      client, LIFECYCLE_SQL.INSTALL_SERVICE, install);
+    st.equal(replayed.operation_status, OPERATION_STATUS.REPLAYED,
+      'the identical INSTALL is an idempotent replay');
+    st.equal(replayed.package_id, installed.package_id);
+    st.equal(replayed.revision_id, installed.revision_id);
+
+    const modified = artifact.withVersion(MODIFIED_VERSION);
+    st.not(modified.manifestDigest, artifact.manifestDigest,
+      'a modified manifest has a different canonical digest');
+    const [modifiedInstall] = await runLifecycle(
+      client,
+      LIFECYCLE_SQL.INSTALL_SERVICE,
+      installPayload(
+        artifact, modified.manifest, MODIFIED_INSTALL_IDEMPOTENCY_KEY),
+    );
+    st.not(modifiedInstall.package_id, installed.package_id,
+      'a modified manifest is a different immutable package');
+
+    const crossPinned = await observeFailure(runLifecycle(
+      client,
+      LIFECYCLE_SQL.CREATE_BINDING,
+      callBindingPayload(BINDING_NAME.OWNED_RANGE, OWNED_RANGE_STATEMENT, {
+        ...artifact, manifestDigest: modified.manifestDigest,
+      }),
+    ));
+    st.ok(crossPinned,
+      'a Binding cannot pin the original package to the modified digest');
+    st.comment(`pg receives on cross-pinned Binding: ${
+      JSON.stringify(crossPinned)}`);
+  });
+
+  await t.test('Binding is the durable, create-only execution intent',
+    async (st) => {
+      for (const [name, statement] of [
+        [BINDING_NAME.OWNED_RANGE, OWNED_RANGE_STATEMENT],
+        [BINDING_NAME.UNBOUNDED, UNBOUNDED_STATEMENT],
+      ]) {
+        const payload = callBindingPayload(name, statement, artifact);
+        const [created] = await runLifecycle(
+          client, LIFECYCLE_SQL.CREATE_BINDING, payload);
+        st.equal(created.operation_status, OPERATION_STATUS.DURABLE);
+        st.equal(created.manifest_digest, artifact.manifestDigest);
+        st.equal(created.package_id, artifact.packageId);
+        const [replayed] = await runLifecycle(
+          client, LIFECYCLE_SQL.CREATE_BINDING, payload);
+        st.equal(replayed.operation_status, OPERATION_STATUS.REPLAYED,
+          `${name}: byte-identical replay is accepted`);
+        st.equal(replayed.binding_version_id, created.binding_version_id);
+        await runLifecycle(
+          client, LIFECYCLE_SQL.CONFIGURE_ACCESS, accessPolicy(name));
+      }
+      const changed = await observeFailure(runLifecycle(
+        client,
+        LIFECYCLE_SQL.CREATE_BINDING,
+        callBindingPayload(
+          BINDING_NAME.OWNED_RANGE, UNBOUNDED_STATEMENT, artifact),
+      ));
+      st.ok(changed, 'a changed declaration under the same name is refused');
+      st.comment(`pg receives on changed Binding: ${JSON.stringify(changed)}`);
+    });
+  mark('deployed');
+
+  await t.test('key-anchored call runs only the owning partition',
+    async (st) => {
+      const before = await readCoordinationSlotCounts(db);
+      mark('callStart');
+      const served = await callBindingWhileRetrySafe(client, {
+        callArguments: {topN: TOP_N_ALL},
+        name: BINDING_NAME.OWNED_RANGE,
+      }, {
+        deadlineMs: Date.now() + SEAM_WAIT_MS,
+        isRetrySafe: (observed) =>
+          CONSUMER_RETRY_CODES.has(ownerCodeOf(observed)),
+        pause: () => managedSleep(t, CONSUMER_RETRY_PAUSE_MS),
+      });
+      mark('firstCallServed');
+      st.equal(served.outcome, CONSUMER_RETRY_OUTCOME.SERVED,
+        JSON.stringify(served.lastFailure));
+      st.comment(`consumer attempts until served: ${served.attempts}`);
+      st.same(served.result, expectedReduction(rows,
+        (row) => row.id >= LOW_RANGE.FIRST && row.id <= LOW_RANGE.LAST),
+      'the reduced result is exactly the literal key range\'s rows');
+      st.same(await newInvocationSlotCount(db, before),
+        [ownedPartitions.length + COORDINATION_REDUCE_SLOTS],
+        'durable coordination seeded one shard slot plus the reduce slot');
+      st.same(planShardPartitions(runtime.engine, OWNED_RANGE_STATEMENT),
+        ownedPartitions,
+        'harness evidence: the canonical planner plans the owning shard only');
+    });
+
+  await t.test('the unbounded Binding fans out to every partition',
+    async (st) => {
+      const before = await readCoordinationSlotCounts(db);
+      const reduced = await callBinding(
+        client, BINDING_NAME.UNBOUNDED, {topN: TOP_N_ALL});
+      st.same(reduced, expectedReduction(rows, () => true));
+      st.same(await newInvocationSlotCount(db, before),
+        [partitions.length + COORDINATION_REDUCE_SLOTS]);
+      st.equal(
+        planShardPartitions(runtime.engine, UNBOUNDED_STATEMENT).length,
+        partitions.length);
+    });
+  mark('callsServed');
+
+  await t.test('the consumer cannot name an execution target (F2/F5)',
+    async (st) => {
+      for (const key of TOPOLOGY_KEYS) {
+        const refused = await observeFailure(runLifecycle(
+          client, LIFECYCLE_SQL.CALL_BINDING, {
+            arguments: {topN: TOP_N_ALL},
+            name: BINDING_NAME.OWNED_RANGE,
+            [key]: TOPOLOGY_PROBE_VALUE,
+            schema_version: BINDING_SCHEMA_VERSION,
+          }));
+        st.ok(refused, `a CALL payload carrying '${key}' is rejected`);
+        st.comment(`pg receives for '${key}': ${JSON.stringify(refused)}`);
+      }
+    });
+
+  await t.test('consumer import census and no legacy axis (F5/F6)',
+    async (st) => {
+      const consumerSource = await readFile(CONSUMER_HELPER_URL, 'utf8');
+      st.same(importSpecifiers(consumerSource), CONSUMER_ALLOWED_IMPORTS,
+        'the consumer imports only pg');
+      const scanned = [
+        consumerSource,
+        await readFile(HARNESS_HELPER_URL, 'utf8'),
+        await readFile(new URL(import.meta.url), 'utf8'),
+      ].join('\n');
+      for (const token of LEGACY_AXIS_TOKENS) {
+        st.notOk(scanned.includes(token), `no reference to ${token}`);
+      }
+    });
+
+  t.comment(`seam wall-clock ms: ${JSON.stringify(clock.marks)}`);
+});
