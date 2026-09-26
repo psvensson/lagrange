@@ -2,6 +2,7 @@ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {raftRsMembershipAdministration} from
   '../raft/raft-rs-membership-administration.js';
 import {
+  RAFT_EVENT,
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
@@ -112,6 +113,35 @@ function proposeAdmission(service, {replicaIdentity, peerAddress}) {
     outcome: RAFT_MEMBERSHIP_ADMISSION_OUTCOME.QUEUED};
 }
 
+// --- O1 admission liveness (committed-read amendment 1, section 3.5) ---
+// The admissions this leader proposed in the current applied configuration.
+// raft-rs drops an AddNode proposed while another configuration change is
+// unapplied (it answers Ok and appends an empty entry), so a proposal is only
+// "in flight" until the configuration next changes; then every admission is
+// re-evaluated once, without a poll.
+const ADMISSION_IN_FLIGHT_OUTCOMES = Object.freeze(new Set([
+  RAFT_MEMBERSHIP_ADMISSION_OUTCOME.PROPOSED,
+  RAFT_MEMBERSHIP_ADMISSION_OUTCOME.QUEUED,
+]));
+const ADMISSIONS_IN_FLIGHT = new WeakMap();
+
+function admissionsInFlightOf(service) {
+  if (!ADMISSIONS_IN_FLIGHT.has(service)) {
+    ADMISSIONS_IN_FLIGHT.set(service, new Set());
+  }
+  return ADMISSIONS_IN_FLIGHT.get(service);
+}
+
+// A proposal the port accepted (or queued) is in flight until the applied
+// configuration next changes.
+function proposeInFlightAdmission(service, peer) {
+  const admission = proposeAdmission(service, peer);
+  if (ADMISSION_IN_FLIGHT_OUTCOMES.has(admission.outcome)) {
+    admissionsInFlightOf(service).add(peer.replicaIdentity);
+  }
+  return admission;
+}
+
 /**
  * The partition's one path to admitting a peer into its raft configuration.
  * Only the leader proposes the admission, in the port's canonical request
@@ -138,11 +168,30 @@ function admitPartitionRaftPeer(service, {replicaIdentity, peerAddress}) {
     peer.replicaIdentity === replicaIdentity)) {
     admission = {replicaIdentity,
       outcome: RAFT_MEMBERSHIP_ADMISSION_OUTCOME.ALREADY_MEMBER};
+  } else if (admissionsInFlightOf(service).has(replicaIdentity)) {
+    admission = {replicaIdentity,
+      outcome: RAFT_MEMBERSHIP_ADMISSION_OUTCOME.IN_FLIGHT};
   } else {
-    admission = proposeAdmission(service, {replicaIdentity, peerAddress});
+    admission = proposeInFlightAdmission(service,
+      {replicaIdentity, peerAddress});
   }
   recordAdmission(service, peerAddress, admission);
   return Object.freeze(admission);
+}
+
+/**
+ * Re-drive the partition's admissions whenever its port announces a changed
+ * applied configuration: the proposals of the previous configuration are no
+ * longer in flight, and the partition's own admission reconcile runs again
+ * (a leader proposes what is still missing; any other replica records its
+ * typed no-op).
+ * @param {Object} service - The partition service (its current port).
+ */
+function redriveAdmissionsOnMembershipChange(service) {
+  service.raft.subscribe(RAFT_EVENT.MEMBERSHIP_CHANGED, () => {
+    admissionsInFlightOf(service).clear();
+    service.scheduleRaftPeerReconciliation();
+  });
 }
 
 /**
@@ -264,6 +313,7 @@ async function retirePartitionRaftPeer(service, replicaIdentity) {
 
 export {
   admitPartitionRaftPeer,
+  redriveAdmissionsOnMembershipChange,
   readPartitionReplicaMembership,
   reservePartitionRaftPeerIdentity,
   retirePartitionRaftPeer,

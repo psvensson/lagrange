@@ -125,6 +125,12 @@ const RAFT_MEMBERSHIP_ADMISSION_OUTCOME = Object.freeze({
   QUEUED: 'QUEUED',
   NOT_LEADER: 'NOT_LEADER',
   ALREADY_MEMBER: 'ALREADY_MEMBER',
+  // A proposal for this peer already left this leader in the current
+  // configuration: it is not proposed again until the applied configuration
+  // changes (MEMBERSHIP_CHANGED), which re-drives any admission the core
+  // dropped behind another unapplied change (committed-read amendment 1,
+  // section 3.5).
+  IN_FLIGHT: 'IN_FLIGHT',
 });
 
 export {

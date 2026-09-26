@@ -11,8 +11,10 @@ import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   reconcileRaftPeersFromCacheForService,
 } from './partition-service-raft-peer-cache-reconciliation.js';
-import {admitPartitionRaftPeer} from
-  './partition-service-raft-membership-administration.js';
+import {
+  admitPartitionRaftPeer,
+  redriveAdmissionsOnMembershipChange,
+} from './partition-service-raft-membership-administration.js';
 import {
   relayPartitionConsensusObservations,
   wirePartitionRaftLifecycleEvents,
@@ -477,6 +479,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     // durable operator-visible signal; repair itself rides the existing
     // typed append-fail -> leader catch-up/install route.
     relayPartitionConsensusObservations(this);
+    redriveAdmissionsOnMembershipChange(this);
     this.raft.subscribe(
       RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE,
       (observation) => {
