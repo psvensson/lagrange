@@ -7,6 +7,24 @@ import {
 import {
   attachSnapshotCatchupDispatcher,
 } from './shared/snapshot-catchup-wiring.js';
+import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
+  '../partition/partition-service-constants.js';
+import {COMMITTED_MEMBERSHIP_REFUSAL} from
+  '../raft/raft-committed-membership-constants.js';
+
+// A durable-rejoin replica that holds no durable record is refused at its
+// consensus port (owner decision O4): it is not restored, not activated and
+// not elected; it is left to the rebalancer as an ordinary ADD/REPLACE
+// target. Every other restore failure still aborts the rejoin.
+const DURABLE_REJOIN_RECORD_MISSING_MSG =
+  'Durable rejoin replica refused: no durable consensus record (O4)';
+
+function isDurableRecordMissingRefusal(error) {
+  return error?.code ===
+      PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED &&
+    error?.consensus?.reason ===
+      COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING;
+}
 
 const {
   CACHE_HYDRATION_TABLES,
@@ -80,11 +98,12 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     await this.triggerJoinReconciler(
       JOINING_UNIFIED_RECONCILE.HYDRATION_REASON,
     );
-    await this.ensureDurableRejoinPartitionRuntimes(restorePlans);
+    const restoredPlans =
+      await this.ensureDurableRejoinPartitionRuntimes(restorePlans);
     await this.activateJoinPartitionServiceRows(
-      restorePlans.map(({replicaId}) => replicaId),
+      restoredPlans.map(({replicaId}) => replicaId),
     );
-    this.startDurableRejoinLocalPartitionElections(restorePlans);
+    this.startDurableRejoinLocalPartitionElections(restoredPlans);
     this.durableRejoinRestoreState =
       JOIN_REJOIN_PROMOTION_RESTORE_STATE.RESTORED;
     this.logger.info(
@@ -103,27 +122,44 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    * Ensure the restore batch has concrete local runtimes before publication.
    * The generic reconciler records action failures without throwing; durable
    * rejoin owns this exact-runtime invariant before activating service rows.
+   * A replica refused for holding no durable record (O4) is left out.
    * @param {Object[]} restorePlans
-   * @return {Promise<void>}
+   * @return {Promise<Object[]>} The plans whose runtimes exist.
    * @private
    */
   async ensureDurableRejoinPartitionRuntimes(restorePlans = []) {
+    const restored = [];
     for (const restorePlan of restorePlans) {
       const replicaId = restorePlan?.replicaId;
       if (typeof replicaId !== 'string' || replicaId.length === 0) {
         continue;
       }
+      restored.push(restorePlan);
       const partition = this.partitionServices.get(replicaId);
       if (partition && partition.initialized !== false) {
         continue;
       }
-      await this.createJoinPartitionReplica({replicaOptions: restorePlan});
+      try {
+        await this.createJoinPartitionReplica({replicaOptions: restorePlan});
+      } catch (error) {
+        if (!isDurableRecordMissingRefusal(error)) {
+          throw error;
+        }
+        restored.pop();
+        this.logger.warn(DURABLE_REJOIN_RECORD_MISSING_MSG, {
+          nodeId: this.nodeId, replicaId,
+          partitionId: restorePlan.partitionId,
+          phase: error.consensus.phase,
+        });
+        continue;
+      }
       const readyPartition = this.partitionServices.get(replicaId);
       assertCritical(
         readyPartition && readyPartition.initialized !== false,
         `Durable rejoin restore requires initialized partition runtime for ${replicaId}`,
       );
     }
+    return restored;
   }
   /**
    * Start elections for restored durable partition replicas once the batch

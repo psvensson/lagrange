@@ -19,6 +19,8 @@ import {
   getSchemaByTableName,
 } from '../system-table-schemas-constants.js';
 import {getPartitionDbPath} from '../../storage/data-directory-manager.js';
+import {durableRecordBootstrap} from
+  '../../raft/raft-committed-membership-stamp.js';
 import {
   REPLICATION_TARGET_SOURCE,
   resolveDesiredReplicationFactor,
@@ -248,8 +250,12 @@ function buildDurableRejoinPartitionRestoreOptions({
       end: partitionRow.partition_key_end ?? null,
     },
     replicaId,
+    // The rows are this replica's address book only: its consensus opens
+    // from its own durable record, and a replica without one is refused
+    // (DURABLE_RECORD_MISSING) rather than bootstrapped from rows (O4).
     replicaIds: topology?.replicaIds || [],
     peerAddresses: topology?.peerAddresses || [],
+    bootstrapMembership: durableRecordBootstrap(),
     nodeId,
     dbPath: getPartitionDbPath(
       dataDir,

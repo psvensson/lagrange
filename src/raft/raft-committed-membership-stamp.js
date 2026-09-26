@@ -14,6 +14,7 @@
 // an address-hint list in ascending raft peer id order, never membership.
 
 import {
+  BOOTSTRAP_MEMBERSHIP_SOURCE,
   COMMITTED_MEMBERSHIP_ANSWER_KIND,
   COMMITTED_MEMBERSHIP_REFUSAL,
   COMMITTED_MEMBERSHIP_STAMP_DEFECT,
@@ -130,8 +131,19 @@ function genesisStamp(founders) {
     founders: [...founders]});
 }
 
+/**
+ * The bootstrap of a replica that must restore from its own durable record
+ * and nothing else (a durable rejoin, owner decision O4): with no record the
+ * port refuses it DURABLE_RECORD_MISSING instead of opening a group.
+ * @return {Object} Frozen {kind: DURABLE_RECORD}.
+ */
+function durableRecordBootstrap() {
+  return deepFreeze({kind: BOOTSTRAP_MEMBERSHIP_SOURCE.DURABLE_RECORD});
+}
+
 export {
   committedStampOfAnswer,
+  durableRecordBootstrap,
   genesisStamp,
   replicaIdsOfStamp,
   validateBootstrapMembershipStamp,
