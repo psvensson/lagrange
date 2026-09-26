@@ -56,6 +56,8 @@ function readOwnerState(owner) {
       retirementAttemptByOperationId: new Map(),
       removalEffectByOperationId: new Map(),
       diagnosticByOperationId: new Map(),
+      // BR14: the drain verdict a remote owner was last handed back on.
+      handBackVerdictByOperationId: new Map(),
       nextAttemptSeq: 1,
     };
     STATE_BY_OWNER.set(owner, state);
@@ -183,6 +185,26 @@ function releaseReplaceOwnerOperationState(owner, operationId) {
   state?.retirementAttemptByOperationId.delete(operationId);
   state?.removalEffectByOperationId.delete(operationId);
   state?.diagnosticByOperationId.delete(operationId);
+  state?.handBackVerdictByOperationId.delete(operationId);
+}
+
+/**
+ * R-1b / BR14: whether the drain wakes a remote REPLACE owner for this
+ * verdict - only when it differs from the verdict the owner was last handed
+ * back on, so the seed's wake traffic is bounded by verdict changes, not by
+ * sweeps.
+ * @param {Object} owner
+ * @param {string} operationId
+ * @param {string} verdictKey
+ * @return {boolean}
+ */
+function admitReplaceOwnerHandBack(owner, operationId, verdictKey) {
+  const verdicts = readOwnerState(owner).handBackVerdictByOperationId;
+  if (verdicts.get(operationId) === verdictKey) {
+    return false;
+  }
+  verdicts.set(operationId, verdictKey);
+  return true;
 }
 
 /**
@@ -207,6 +229,7 @@ function isDeferredVisibilitySnapshot(operation) {
 
 export {
   REPLACE_DIAGNOSTIC_SEVERITY,
+  admitReplaceOwnerHandBack,
   isDeferredVisibilitySnapshot,
   REPLACE_INTENT_FIELD,
   REPLACE_REMOVAL_PENDING_ESCALATION_MS,

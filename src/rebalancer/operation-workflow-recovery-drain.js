@@ -1,3 +1,6 @@
+import {
+  admitReplaceOwnerHandBack,
+} from './operation-workflow-replace-owner-state.js';
 import {OperationWorkflowRecoveryTimeout} from './operation-workflow-recovery-timeout.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
@@ -41,6 +44,8 @@ const {
   normalizeNodeIdList,
   resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence,
 } = SHARED;
+
+const HAND_BACK_VERDICT_SEPARATOR = '|';
 
 // The drain actions a non-owner may settle: a superseded target, and a
 // completion - except a partition REPLACE's, which its owner completes from
@@ -428,6 +433,26 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_OWNER_REQUIRED;
   }
 
+  /**
+   * BR14: a remote owner is woken for a hand-back only when the drain's
+   * verdict changed since its last hand-back; otherwise it is left to its
+   * own lane.
+   * @param {Object} operation
+   * @param {string} action
+   * @param {string} ownerState
+   * @param {string} verdictKey
+   * @return {string} The owner state.
+   */
+  boundReplaceOwnerHandBack(operation, action, ownerState, verdictKey) {
+    if (action !== OPERATION_LIFECYCLE_ACTION.HAND_BACK_REPLACE_OWNER ||
+        ownerState !==
+          PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_REARM_REQUIRED ||
+        admitReplaceOwnerHandBack(this, operation.operationId, verdictKey)) {
+      return ownerState;
+    }
+    return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_OWNER_REQUIRED;
+  }
+
   resolvePriorityRecoveryOperationDrainOwnerAction(ownerState) {
     return (
       PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION_BY_STATE.get(
@@ -565,12 +590,17 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     const action =
       PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE.get(state) ||
       OPERATION_LIFECYCLE_ACTION.NOOP;
-    const ownerState =
+    const ownerState = this.boundReplaceOwnerHandBack(
+      operation,
+      action,
       this.resolvePriorityRecoveryOperationDrainOwnerState(
         operation,
         action,
         state,
-      );
+      ),
+      [state, completionState, sourceSnapshot.state]
+        .join(HAND_BACK_VERDICT_SEPARATOR),
+    );
     return Object.freeze({
       state,
       action,

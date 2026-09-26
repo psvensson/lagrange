@@ -7,6 +7,7 @@ import {
   clearReplaceOwnerWaiter,
   registerReplaceOwnerWaiter,
   shutdownReplaceOwnerWake,
+  wakeReplaceOwnersForReplicaRow,
 } from './operation-workflow-replace-owner-wake.js';
 import {
   REPLACE_WAIT_REASON,
@@ -85,6 +86,9 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
   handleObservedReplicaStateChange(tableName, cacheOperation, record) {
     this.releaseObservedTerminalOperationState(
       tableName, cacheOperation, record);
+    if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+      wakeReplaceOwnersForReplicaRow(this, record);
+    }
     return super.handleObservedReplicaStateChange(
       tableName, cacheOperation, record);
   }

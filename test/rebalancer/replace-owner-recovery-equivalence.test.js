@@ -257,6 +257,15 @@ function createObservedCache() {
   const listeners = new Set();
   cache.onCacheChange = (listener) => listeners.add(listener);
   cache.offCacheChange = (listener) => listeners.delete(listener);
+  // A row another node wrote, applied here by CDC with its notification.
+  cache.observeRemoteRow = (tableName, row) => {
+    cache.upsert(tableName, row);
+    Promise.resolve().then(() => {
+      for (const listener of [...listeners]) {
+        listener(tableName, CDC_OPERATION.UPDATE, {...row}, null);
+      }
+    });
+  };
   cache.replicateRemoteRow = async (gateway, tableName, row) => {
     // The other node's durable write (the shared store), then its CDC
     // replication into this node's cache and its change notification.
@@ -774,5 +783,30 @@ test('S9: a rebuilt attempt is named in the diagnostic', async (t) => {
         operation.operationId)?.attemptRebuiltAfter,
       REPLACE_OWNER_RESTART_CLASS.PROCESS_RESTART,
       'the wait names the restart its attempt was rebuilt after');
+    });
+});
+
+// §2.0 wake tuple (amendment-1): the level the waiting owner registers is
+// (readiness, consensus, concurrency). The source-row class is not in it
+// because a source-row change already wakes the owner through the
+// observed-progress route (a services-row change of a REPLACE's source maps
+// to the REPLACE); attempt resolution is either an answer (the handoff's E11
+// continuation decides again at once) or elapsed time (the backstop). This
+// witness pins the source-row half: no timer fires.
+test('wake tuple: a source-row retirement wakes the waiting owner with no ' +
+  'timer firing', async (t) => {
+  await withDrivenWorld(REPLACE_OWNER_PHASE.SOURCE_ROW_RETIRING,
+    async (world, operation) => {
+      const reads = world.witness.reads.length;
+      world.fallbackTimers.length = 0;
+      world.cache.observeRemoteRow('services', serviceRow(SOURCE_REPLICA_ID,
+        SOURCE_NODE_ID, 'follower', ReplicaStatus.REMOVED));
+      await settle();
+      t.equal(world.fallbackTimers.filter((handle) => handle.fired).length, 0,
+        'no fallback fired');
+      t.ok(world.witness.reads.length > reads,
+        'the owner re-decided on the row change (a fresh membership read)');
+      t.equal((await readPersisted(world, operation.operationId))
+        .workflowStep, WORKFLOW_STEP.STOPPING, 'still waiting on membership');
     });
 });

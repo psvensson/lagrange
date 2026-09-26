@@ -124,6 +124,13 @@ const TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE_TABLE = Object.freeze([
 ]);
 const ORPHAN_REDRIVE_RECONCILE_BOUNDARY = 'orphan_redrive';
 
+// The drain states under which the drain itself would settle an operation
+// (R-1b: never a partition REPLACE's).
+const DRAIN_SETTLING_STATES = Object.freeze(new Set([
+  PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.CONVERGED,
+  PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.OWNER_UNAVAILABLE_RELEASED,
+]));
+
 class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusReconcile {
   isPriorityRecoveryTimeoutVisibilityOperation(operation) {
     const partitionId = operation?.partitionId || null;
@@ -737,6 +744,20 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     sourceSnapshot,
     releaseEvidence = null,
     operation = null,
+  ) {
+    const state = this.resolvePriorityRecoveryOperationDrainSettleState(
+      completion, sourceSnapshot, releaseEvidence, operation);
+    return isPartitionReplace(operation) &&
+      DRAIN_SETTLING_STATES.has(state) ?
+      PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.SOURCE_RETIREMENT_OWNED :
+      state;
+  }
+
+  resolvePriorityRecoveryOperationDrainSettleState(
+    completion,
+    sourceSnapshot,
+    releaseEvidence,
+    operation,
   ) {
     if (this.isReplaceDrainOwnerUnavailableWithDeadTarget(
       operation, releaseEvidence)) {
