@@ -28,6 +28,7 @@ const SERVICE_LIFECYCLE_COMMAND_ERROR_CODE = Object.freeze({
   ARTIFACT_REJECTED: 'service_lifecycle_artifact_rejected',
   CATALOG_REJECTED: 'service_lifecycle_catalog_rejected',
   BINDING_REJECTED: 'service_lifecycle_binding_rejected',
+  CALL_INVOCATION_FAILED: 'service_lifecycle_call_invocation_failed',
   DEPENDENCY_REQUIRED: 'service_lifecycle_dependency_required',
   IDEMPOTENCY_CONFLICT: 'service_lifecycle_idempotency_conflict',
   INVALID_CONFIG: 'service_lifecycle_invalid_config',
@@ -58,6 +59,7 @@ const SERVICE_LIFECYCLE_COMMAND_PATH = Object.freeze({
   CATALOG_PACKAGE: '/catalog/package',
   CATALOG_REVISION: '/catalog/revision',
   BINDING: '/binding',
+  CALL_INVOCATION: '/call',
   COMMAND: '/command',
   CONFIG: '/payload/config',
   DEPENDENCIES: '/dependencies',
@@ -87,7 +89,7 @@ function commandFailure(code, stage, path, message, detail = {}) {
   throw new ServiceLifecycleCommandError(code, stage, path, message, detail);
 }
 
-function classifyDelegatedFailure(error) {
+function classifyDelegatedFailure(error, command) {
   if (error instanceof RuntimeAccessPolicyError) {
     return {
       code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ACCESS_POLICY_REJECTED,
@@ -120,15 +122,30 @@ function classifyDelegatedFailure(error) {
     return {code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
       known: true, stage: SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT};
   }
+  return unclassifiedFailure(command);
+}
+
+// An untyped throw is attributed to the command that raised it: during a
+// CALL it is a call invocation failure, never a catalog rejection.
+function unclassifiedFailure(command) {
+  if (command === SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING) {
+    return {
+      code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.CALL_INVOCATION_FAILED,
+      known: false,
+      path: SERVICE_LIFECYCLE_COMMAND_PATH.CALL_INVOCATION,
+      stage: SERVICE_LIFECYCLE_COMMAND_STAGE.CALL_INVOCATION,
+    };
+  }
   return {
     code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.CATALOG_REJECTED,
-    stage: SERVICE_LIFECYCLE_COMMAND_STAGE.CATALOG,
     known: false,
+    path: SERVICE_LIFECYCLE_COMMAND_PATH.CATALOG,
+    stage: SERVICE_LIFECYCLE_COMMAND_STAGE.CATALOG,
   };
 }
 
-function describeFailure(error) {
-  const delegated = classifyDelegatedFailure(error);
+function describeFailure(error, command) {
+  const delegated = classifyDelegatedFailure(error, command);
   const lifecycle = error instanceof ServiceLifecycleCommandError;
   const known = lifecycle || delegated.known;
   return {
@@ -136,7 +153,7 @@ function describeFailure(error) {
     detail: {
       ...(known ? error.detail : {}),
       ...(delegated.known ? {ownerCode: error.code} : {}),
-      path: known ? error.path : SERVICE_LIFECYCLE_COMMAND_PATH.CATALOG,
+      path: known ? error.path : delegated.path,
       stage: lifecycle ? error.stage : delegated.stage,
     },
     lifecycle,
@@ -159,7 +176,7 @@ function callFailureOutcome(error, described) {
 }
 
 function failureResult(error, command) {
-  const described = describeFailure(error);
+  const described = describeFailure(error, command);
   if (command !== SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING) {
     return deepFreeze({
       success: false,

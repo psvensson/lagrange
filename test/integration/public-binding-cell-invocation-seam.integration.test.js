@@ -152,6 +152,15 @@ const HARNESS_HELPER_URL =
   new URL('./helpers/public-binding-seam-harness.js', import.meta.url);
 const IMPORT_SPECIFIER_PATTERN =
   /^\s*import\b[^'";]*?from\s*['"]([^'"]+)['"]/gmu;
+const SIDE_EFFECT_IMPORT_PATTERN = /^\s*import\s*['"]([^'"]+)['"]/gmu;
+// Module-loading forms the static census cannot see through; the consumer
+// must use none of them.
+const DYNAMIC_LOADING_PATTERNS = Object.freeze([
+  /\bimport\s*\(/u,
+  /\bcreateRequire\b/u,
+  /\brequire\s*\(/u,
+  /\bimport\.meta\.resolve\b/u,
+]);
 const CONSUMER_ALLOWED_IMPORTS = Object.freeze(['pg']);
 // Forbidden legacy axes, assembled so the tokens never occur literally in
 // the scanned sources (this file included).
@@ -205,8 +214,10 @@ function partitionsIntersecting(partitions, range) {
 }
 
 function importSpecifiers(source) {
-  return [...source.matchAll(IMPORT_SPECIFIER_PATTERN)]
-    .map((match) => match[1]);
+  return [
+    ...source.matchAll(IMPORT_SPECIFIER_PATTERN),
+    ...source.matchAll(SIDE_EFFECT_IMPORT_PATTERN),
+  ].map((match) => match[1]);
 }
 
 function callBindingPayload(name, statement, artifact) {
@@ -445,8 +456,11 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
         (row) => row.id >= LOW_RANGE.FIRST && row.id <= LOW_RANGE.LAST);
       st.same(served.result, expected,
         'the reduced result is exactly the literal key range\'s rows');
-      // Placement evidence from one call on a ready Cell: the durable
-      // coordination rows of exactly that invocation.
+      // Placement evidence from one call on a ready Cell. The row set above
+      // is the independent oracle; this witness is NOT independent of the
+      // invoker: the reduce coordinator publishes the slots the invoker
+      // itself seeded, so it confirms the invoker's own plan (as the
+      // planner check below does), not placement from outside.
       const before = await readReducedShardCounts(db);
       st.same(await callBinding(
         client, BINDING_NAME.OWNED_RANGE, {topN: TOP_N_ALL}), expected);
@@ -524,6 +538,10 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
       const consumerSource = await readFile(CONSUMER_HELPER_URL, 'utf8');
       st.same(importSpecifiers(consumerSource), CONSUMER_ALLOWED_IMPORTS,
         'the consumer imports only pg');
+      for (const pattern of DYNAMIC_LOADING_PATTERNS) {
+        st.notOk(pattern.test(consumerSource),
+          `the consumer loads no module through ${pattern}`);
+      }
       const scanned = [
         consumerSource,
         await readFile(HARNESS_HELPER_URL, 'utf8'),

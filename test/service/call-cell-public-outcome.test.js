@@ -47,6 +47,10 @@ const SECURITY_CONTEXT = Object.freeze({
   tenantId: 'images',
 });
 const CALL_NAME = 'images-seam-owned-range';
+// The wire values a caller reads (docs/execution-semantics.md), written
+// as the caller sees them.
+const CALL_INVOCATION_STAGE = 'call_invocation';
+const CALL_INVOCATION_PATH = '/call';
 
 function failure(code, classification, fields = {}) {
   const error = createCallRoutingFailure(code, INTERNAL_MESSAGE, {
@@ -246,4 +250,22 @@ test('non-CALL lifecycle failures carry no call outcome class', async (t) => {
   t.equal(result.success, false);
   t.equal(result.detail.outcomeClass, undefined);
   t.equal(result.detail.retrySafe, undefined);
+});
+
+test('an untyped throw during CALL is a call invocation failure, not a ' +
+  'catalog rejection', async (t) => {
+  const result = await callOwner(async () => {
+    throw new TypeError(INTERNAL_MESSAGE);
+  }).execute(
+    SERVICE_LIFECYCLE_COMMAND.CALL_BINDING,
+    {name: CALL_NAME, schema_version: 2},
+    SECURITY_CONTEXT,
+  );
+  t.equal(result.errorCode,
+    SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.CALL_INVOCATION_FAILED);
+  t.equal(result.detail.stage, CALL_INVOCATION_STAGE);
+  t.equal(result.detail.path, CALL_INVOCATION_PATH);
+  t.equal(result.detail.outcomeClass, OUTCOME.OUTCOME_UNCERTAIN);
+  t.equal(result.detail.retrySafe, false);
+  t.notOk(result.error.includes(TOPOLOGY_NODE_ID));
 });
