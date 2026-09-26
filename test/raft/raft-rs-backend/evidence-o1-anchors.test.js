@@ -556,17 +556,14 @@ async function b12Shape({key, sourceLetter, belowGate, verdict}) {
     // transient view (WITNESS_BELOW_GATE / UNRESOLVED, asserted above as the
     // target's own answer) is a route, never the verdict. The leader's gate
     // is open by construction, so the verdict below the target's gate is
-    // exactly STILL_VOTER, from the leader - SUPERSEDED (fix-f7, the lead's
-    // V1 ruling): the leader's answer counts only when a majority of its
-    // configuration ({leader, t}) corroborates its term, leader and commit
-    // index; t below its gate has not seen the leader's commit index, so
-    // the verdict below the gate is the typed WAIT, never a retirement.
-    assert.equal(below.verdict, REPLACE_COMPLETION_VERDICT.UNAVAILABLE,
-      'V1: the uncorroborated leader answer is a WAIT below the target\'s ' +
+    // exactly STILL_VOTER, from the leader.
+    assert.equal(below.verdict, REPLACE_COMPLETION_VERDICT.STILL_VOTER,
+      'F1: the leader\'s answer decides STILL_VOTER below the target\'s ' +
         `gate (the target's own view: ${verdict})`);
-    assert.equal(below.observation.reason,
-      'completion_authority_not_corroborated',
-      'the WAIT is typed: the below-gate target does not corroborate');
+    assert.equal(below.observation.replicaId, below.observation.leaderReplicaId,
+      'the below-gate verdict is the leader\'s own answer');
+    assert.equal(below.observation.gateOpen, true,
+      'the answering leader\'s gate is open');
     cap.value = UNBOUNDED;
     assert.ok(settle(model, () =>
       model.node(target).readStatus().gateOpen === true, [leader]),

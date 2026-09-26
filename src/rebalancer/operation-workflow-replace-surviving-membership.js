@@ -28,16 +28,18 @@
  *    admission and answer ABSENT for a committed voter; and
  *  - a MAJORITY of its configuration's voters - of the incoming voters and,
  *    in a joint configuration, of the outgoing voters too - each read
- *    through the same per-member witness read, confirm term == term_A,
- *    leader == leaderId_A and commitIndex >= commitIndex_A (the leader
- *    counts for itself; a higher term, another leader, an unreadable or
- *    unresolved voter counts against).
- * Why that suffices: a replica's term never decreases, so each confirming
- * voter had not voted in a term above term_A up to its read; a leader at a
- * higher term needs a majority of the configuration, which would intersect
- * the confirming majority. So no leader was elected above term_A when A was
- * read, and term_A has one leader: A's committed configuration is the
- * current one at read time. Below a majority the owner waits
+ *    through the same per-member witness read, confirm term == term_A and
+ *    leader == leaderId_A (the leader counts for itself; a higher term,
+ *    another leader, an unreadable or unresolved voter counts against).
+ * Why that suffices: commitIndex_A is the leader's own commit index, so a
+ * majority already acknowledged those entries (Raft's commit rule); no
+ * follower commit index is needed. Currentness is election safety: a
+ * replica's term never decreases, so each confirming voter had not voted in
+ * a term above term_A up to its read; a leader at a higher term needs a
+ * majority of the configuration, which would intersect the confirming
+ * majority. So no leader was elected above term_A when A was read, and
+ * term_A has one leader: A's committed configuration is the current one at
+ * read time. Below a majority the owner waits
  * (COMPLETION_AUTHORITY_NOT_CORROBORATED); nothing is written; the next wake
  * or fallback re-evaluates. A read-index at the port is the recorded R5
  * follow-up.
@@ -192,13 +194,13 @@ async function readFirstAnswer(owner, operation) {
   return authorityUnavailable(REPLACE_COMPLETION_AUTHORITY_WAIT.NO_ANSWER);
 }
 
-// Whether one voter's own answer confirms the leader's: same term, same
-// leader, and it has seen at least the leader's commit index.
+// Whether one voter's own answer confirms the leader's: it still
+// recognises the leader's term and the leader (election safety; the
+// leader's commit index is its own proof of a majority's acknowledgement).
 function confirmsLeaderAnswer(observation, leaderAnswer) {
   return isAnswered(observation) &&
     Number(observation.term) === Number(leaderAnswer.term) &&
-    observation.leaderReplicaId === leaderAnswer.leaderReplicaId &&
-    Number(observation.commitIndex) >= Number(leaderAnswer.commitIndex);
+    observation.leaderReplicaId === leaderAnswer.leaderReplicaId;
 }
 
 function voterSetsOf(leaderAnswer) {
