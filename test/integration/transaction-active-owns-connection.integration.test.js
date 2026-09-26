@@ -327,16 +327,65 @@ test(`${FINDING} (T-A): an ACTIVE transaction vs autocommit durability`,
     }
   });
 
-// Measurement run: only what the variant must establish to be meaningful.
+const logLast = (replica) => replica.consensus.logBounds?.last ?? 0;
+const appliedIndex = (replica) =>
+  Number(replica.consensus.applied?.[0]?.applied_index ?? 0);
+const progress = (replica) => [logLast(replica), appliedIndex(replica)];
+const shot = (record, label) =>
+  record.snapshots.find((snapshot) => snapshot.label === label).replicas;
+const byNode = (replicas) => new Map(replicas.map((r) => [r.node, r]));
+
+// Replicas whose consensus log and applied index did not move while the
+// transaction was held, although another replica's did.
+function frozenDuringHold(record) {
+  const held = byNode(shot(record, 'held'));
+  const beforeRelease = shot(record, 'before-release');
+  const moved = beforeRelease.filter((replica) => held.has(replica.node) &&
+    logLast(replica) > logLast(held.get(replica.node)));
+  if (moved.length === 0) return [];
+  return beforeRelease.filter((replica) => held.has(replica.node) &&
+    JSON.stringify(progress(replica)) ===
+      JSON.stringify(progress(held.get(replica.node))));
+}
+
+// What lab runs 6-7 measured today (F-TX-ACTIVE-OWNS-CONNECTION); the
+// committed witness flips when the ACTIVE transaction stops owning the
+// replica's connection.
 function assertVariant(t, record) {
+  const {decision} = record;
   t.ok(record.holdStep?.every((step) => step.acknowledged),
-    `${record.decision}: the held transaction's INSERT was staged`);
-  t.ok(record.release.transaction.acknowledged ===
-    (record.decision === EMBEDDED_HOLD_DECISION.COMMIT),
-  `${record.decision}: the held transaction ended as decided`);
-  const final = record.snapshots.at(-1).replicas;
-  t.equal(final.length, EXPECTED_REPLICAS, 'three replica files observed');
-  t.comment(`final replicas: ${JSON.stringify(final.map((replica) =>
-    [replica.node.slice(0, 8), replica.txRow,
-      replica.seedAuto, replica.joinerAuto]))}`);
+    `${decision}: the held transaction's INSERT was staged`);
+  t.equal(record.release.transaction.acknowledged,
+    decision === EMBEDDED_HOLD_DECISION.COMMIT,
+    `${decision}: the held transaction ended as decided`);
+  const settled = shot(record, 'settled');
+  t.equal(settled.length, EXPECTED_REPLICAS, 'three replica files observed');
+  t.equal(record.seedAutocommit.acknowledged, false,
+    `${FINDING}: an autocommit on the holding node, issued while the ` +
+    `transaction is ACTIVE, is refused (${record.seedAutocommit.error})`);
+  t.equal(record.seedAutocommit.deferred, false,
+    `${FINDING}: and the refusal is not marked deferred/retryable`);
+  const released = byNode(shot(record, 'released'));
+  t.ok(shot(record, 'before-release').every((replica) =>
+    logLast(released.get(replica.node) ?? replica) >= logLast(replica)),
+  'T-A property holding today: no replica\'s consensus log shrank across ' +
+    'the client release (the rs-raft store refused to write inside the ' +
+    'user transaction, so the release erased no acknowledged Raft state)');
+  const txHolders = settled.filter((replica) => replica.txRow > 0).length;
+  t.equal(txHolders, decision === EMBEDDED_HOLD_DECISION.COMMIT ? 1 : 0,
+    decision === EMBEDDED_HOLD_DECISION.COMMIT ?
+      'F-TX-REPLICATED-APPLY: the committed transaction row is on exactly ' +
+        'one replica' :
+      'the rolled-back transaction row is on no replica');
+  const frozen = frozenDuringHold(record);
+  if (frozen.length > 0) {
+    const maxLast = Math.max(...settled.map(logLast));
+    t.comment(`frozen during hold: ${JSON.stringify(frozen.map((replica) =>
+      [replica.node.slice(0, 8), progress(replica)]))}; settled max log ` +
+      `index ${maxLast}`);
+  }
+  t.ok(frozen.length > 0 || !record.joinerAutocommit.acknowledged,
+    `${FINDING}: when the partition committed a write during the hold, a ` +
+    'replica\'s consensus log and applied index stayed frozen for the ' +
+    'whole hold (the replica whose connection the transaction held)');
 }
