@@ -118,3 +118,31 @@ export function installReplaceWitnesses(router, options = {}) {
   };
   return {witnessFor};
 }
+
+/**
+ * A fixture that models the REPLACE owner's STOPPING write directly on an
+ * operation row records what that write records (quest
+ * replace-source-removal-owner, C0): the removal intent with the witness
+ * commit index it was read at, on a STOPPING step entry.
+ * @param {Object} row - The replica_operations row (steps_history JSON).
+ * @param {Object} witness - The operation's witness double.
+ */
+export function recordModelledRemovalIntent(row, witness) {
+  let history = [];
+  try {
+    history = JSON.parse(row.steps_history || '[]');
+  } catch {
+    history = [];
+  }
+  const sourceReplicaId = history.find((entry) =>
+    typeof entry?.sourceReplicaId === 'string')?.sourceReplicaId ||
+    row.source_replica_id || null;
+  history.push({
+    step: 'STOPPING',
+    timestamp: Date.now(),
+    ...(sourceReplicaId ? {sourceReplicaId} : {}),
+    replaceRemovalIntent: true,
+    replaceWitnessCommitIndex: witness.commitIndex,
+  });
+  row.steps_history = JSON.stringify(history);
+}

@@ -39,6 +39,12 @@ import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   './replica-operation-update-disposition.js';
 import {captureReplaceOwnerLevel} from './operation-workflow-replace-owner-wake.js';
 import {
+  isPartitionReplace,
+  isReplaceRemovalIntentDurable,
+  isSourceUnreachableAtIntent,
+  resolveIntentCommitIndex,
+} from './operation-workflow-replace-intent.js';
+import {
   isReplaceTargetGone,
   readReplaceSurvivingMembership,
 } from './operation-workflow-replace-surviving-membership.js';
@@ -77,9 +83,7 @@ import {
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
-  OperationType,
   ReplicaStatus,
-  SERVICE_TYPE,
   WORKFLOW_STEP,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
@@ -150,44 +154,6 @@ const STOPPING_OBSERVATION_ABSENT = 'absent';
 const STOPPING_OBSERVATION_UNAVAILABLE = 'unavailable';
 
 /**
- * Whether this operation is a REPLACE of a partition replica (the C1/D2
- * contract is about raft membership; runtime-service and message-group
- * REPLACEs keep their own owners).
- * @param {Object} operation
- * @return {boolean}
- */
-function isPartitionReplace(operation) {
-  return operation?.type === OperationType.REPLACE &&
-    (operation?.entityType === undefined ||
-      operation?.entityType === null ||
-      operation?.entityType === SERVICE_TYPE.PARTITION);
-}
-
-/**
- * The durable removal-intent boundary (D2): the REPLACE has persisted
- * STOPPING, which is written before the REMOVE_REPLICA effect.
- * @param {Object} operation
- * @return {boolean}
- */
-function isReplaceRemovalIntentDurable(operation) {
-  return isPartitionReplace(operation) &&
-    operation?.workflowStep === WORKFLOW_STEP.STOPPING;
-}
-
-// C0: the witness commit index recorded with the first removal intent; NaN
-// when no intent is recorded, which no commit index satisfies.
-function witnessCommitIndexAtIntent(operation) {
-  const entry = replaceIntentEntryOf(operation);
-  return entry === null ? Number.NaN :
-    Number(entry[REPLACE_INTENT_FIELD.WITNESS_COMMIT_INDEX]);
-}
-
-function isSourceUnreachableAtIntent(operation) {
-  return replaceIntentEntryOf(operation)
-    ?.[REPLACE_INTENT_FIELD.SOURCE_UNREACHABLE] === true;
-}
-
-/**
  * R-1a: the REPLACE succeeds only when its source has left the committed
  * voters (incoming and outgoing) as the witness reports them, at a commit
  * index no older than the one recorded with the removal intent.
@@ -208,7 +174,8 @@ async function decideReplaceCompletion(owner, operation) {
     verdict = REPLACE_COMPLETION_VERDICT.STILL_VOTER;
   } else if (
     observation.state === PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT &&
-    Number(observation.commitIndex) >= witnessCommitIndexAtIntent(operation)
+    Number(observation.commitIndex) >=
+      await resolveIntentCommitIndex(owner, operation)
   ) {
     verdict = REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED;
   }

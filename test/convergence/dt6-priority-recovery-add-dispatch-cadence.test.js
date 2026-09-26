@@ -21,7 +21,10 @@ import {
   STARTUP_AUTHORITY_STATE,
   buildStartupAuthoritySnapshotFromPlanningAnswer,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
-import {installReplaceWitnesses} from '../rebalancer/replace-witness-fixture.js';
+import {
+  installReplaceWitnesses,
+  recordModelledRemovalIntent,
+} from '../rebalancer/replace-witness-fixture.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
 import {
   initializeEnvironment,
@@ -744,12 +747,15 @@ async function runFormationCadenceScenario() {
     const selfMoveRow = trackedOperations.get(selfMove.operationId);
     selfMoveRow.workflow_step = WORKFLOW_STEP.STOPPING;
     selfMoveRow.status = WORKFLOW_STEP.STOPPING.toLowerCase();
+    recordModelledRemovalIntent(selfMoveRow,
+      replaceWitnesses.witnessFor(selfMove.operationId));
     refreshStartupAuthority();
 
     timeSource.setTimeout(() => {
       replaceWitnesses.witnessFor(selfMove.operationId).commitRemoval();
       coordinator
-        .completeOperation({...selfMove, workflowStep: WORKFLOW_STEP.STOPPING})
+        .completeOperation({...selfMove, workflowStep: WORKFLOW_STEP.STOPPING,
+          stepsHistory: JSON.parse(selfMoveRow.steps_history)})
         .then(() => {
           state.selfMoveTerminalAtMs = elapsed();
           const movedReplica = serviceRows.find(

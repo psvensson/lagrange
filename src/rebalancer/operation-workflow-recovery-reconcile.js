@@ -515,9 +515,12 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
    */
   async persistReplaceRemovalIntent(operation, stepMetadata) {
     try {
-      if (operation.workflowStep !== WORKFLOW_STEP.STOPPING) {
-        await this.updateStep(operation, WORKFLOW_STEP.STOPPING,
-          undefined, {stepMetadata, requireDurable: true});
+      if (operation.workflowStep !== WORKFLOW_STEP.STOPPING &&
+          await this.updateStep(operation, WORKFLOW_STEP.STOPPING,
+            undefined, {stepMetadata, requireDurable: true}) &&
+          replaceIntentEntryOf(operation)) {
+        // This owner's own durable transition committed the intent entry.
+        return true;
       }
       return await this.ensureReplaceRemovalIntentRecorded(
         operation, stepMetadata);
@@ -552,6 +555,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
         durable.stepsHistory, stepMetadata),
     };
     const persisted = await this.repository.persistOperationUpdate(recorded, {
+      ...this.buildOperationTransitionPersistOptions(),
       expectedWorkflowStep: WORKFLOW_STEP.STOPPING,
       returnDisposition: true,
     });
