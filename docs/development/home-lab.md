@@ -347,6 +347,77 @@ These map to the existing change selector, smoke manifest, project-hardening
 acceptance gate, post-push gate, and classified full test suite. The lab does
 not maintain a second test list.
 
+### Measure the change cone from a named commit
+
+`lab test changed --lane LANE` runs the change selector's plan of the commit
+(`--sha`, default this checkout's clean `HEAD`). By default the selector
+measures the change from the merge base with `origin/main`, which is what a
+push would carry. A long unpublished branch - several merged quests waiting for one
+publish - then looks like the whole branch changed, and a release-surface file
+such as `Dockerfile` changed anywhere on it refuses the run with
+`RELEASE_PROOF_REQUIRED`.
+
+Name the comparison commit with `--base-sha` to verify only what changed since
+it:
+
+```bash
+node scripts/lab.js test changed --lane all --sha HEAD --base-sha <commit>
+```
+
+The lab passes the commit to the selector's own `--base`, so the one owner of
+the changed set decides it: the cone, and the release-surface check, cover
+`<commit>..<sha>` only, and a release-surface file changed before
+`<commit>` does not refuse. The flag is `--base-sha` rather than `--base`
+because `lab harness run --base CONFIG` already names a harness base
+configuration; `--base-sha` pairs with `--sha` as the other end of the range.
+It applies only to the `changed` profile. It narrows what the lab runs; the
+push gate still proves the full range against `origin/main`.
+
+## Run the distributed matrix on local, lab, or GCP targets
+
+The canonical scenario matrix has one owner:
+`test/distributed/harness/scenario-registry.js`. Execution targets do not
+maintain their own scenario lists. The matrix runner changes only where each
+canonical config/scenario pair executes:
+
+```bash
+# Existing single-machine Docker path.
+node scripts/run-distributed-matrix.js --target local --profile canonical
+
+# Real Docker daemons on registered lab machines.
+node scripts/run-distributed-matrix.js --target lab --profile canonical \\
+  --nodes main-linux,small-linux,third-linux
+
+# GCP hosts. Scenario semantics still come from the canonical local config;
+# the GCP template supplies only the provisioning substrate.
+node scripts/run-distributed-matrix.js --target gcp --profile canonical
+```
+
+The smaller physical-system certification profile is derived from the unique
+real distributed scenarios referenced by `TOPOLOGY_FAILURE_GATE_MATRIX`. It is
+not the deterministic `test:topology-failure-gates` command, which remains a
+separate invariant-simulation proof:
+
+```bash
+node scripts/run-distributed-matrix.js --target lab --profile topology \\
+  --nodes main-linux,small-linux,third-linux
+```
+
+Convenience npm commands are `distributed:all`, `distributed:lab`,
+`distributed:lab:topology`, `distributed:gcp`, and
+`distributed:gcp:topology`.
+
+Every matrix report records the execution target and profile. Lab reports also
+record the selected physical host names. The matrix runner deliberately has no
+Raft-provider selector: consensus implementation choice is not an execution
+substrate dimension.
+
+For GCP, the default provisioning template is
+`test/distributed/config/gcp-default.json`. The runner overlays its `gcp`
+settings onto each canonical scenario config and defaults to one Lagrange node
+per VM, preserving the scenario's cluster size and behavioral settings. Use
+`--gcp-template` to select another provisioning template.
+
 ## Run existing distributed scenarios on physical machines
 
 The existing distributed harness already supports multiple Docker providers.
@@ -478,10 +549,12 @@ Keep the boundaries explicit:
 
 1. Inventory and SSH connectivity are owned by the home-lab adapter.
 2. Native OS execution is owned by the self-hosted runner on that machine.
-3. Physical distributed scenario semantics remain owned by
-   `test/distributed/run.js` and its scenario registry.
-4. K3s owns only deployment-style Kubernetes scheduling and lifecycle.
-5. GCP remains the controlled scale and repeatability surface.
+3. Distributed scenario and matrix semantics remain owned by
+   `test/distributed/run.js` and the canonical scenario registry.
+4. Local Docker, lab Docker, and GCP are execution substrates for that same
+   matrix; none owns a separate scenario list or pass/fail rule.
+5. K3s owns only deployment-style Kubernetes scheduling and lifecycle.
+6. GCP remains the controlled scale and repeatability surface.
 
 A failure should be repaired at the owner that produced it rather than by
 teaching a neighboring layer to compensate for it.

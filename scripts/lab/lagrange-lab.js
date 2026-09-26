@@ -15,8 +15,8 @@ import {initK3sServer, joinK3sNode, k3sKubectl, syncK3sLabels} from './k3s.js';
 import {configureRunner, runnerLabels} from './runner.js';
 import {
   WORKER_SETUP_FILE, copyWorkerSetup, discoverFleet, fleetRequirement, formatFleet,
-  labTestCommit, labTestDeps, probeRemoteNode, recordFleet, runLabTest, workerCloneUrl,
-  workerSetupScript,
+  labTestCommit, labTestDeps, labTestSelectorArgs, probeRemoteNode, recordFleet, runLabTest,
+  workerCloneUrl, workerSetupScript,
 } from './probe.js';
 import {
   CLASSIFIED_LANES, estimateFileCosts, lastResultsRoots, planClassifiedTestFiles,
@@ -35,7 +35,8 @@ import {parse as parseYaml} from 'yaml';
 const LAB_TEST_PROFILE = Object.freeze({CHANGED: 'changed', ALL: 'all'});
 const LAB_TEST_LANE_ALL = 'all';
 const LAB_TEST_LANES = Object.freeze([...CLASSIFIED_LANES, LAB_TEST_LANE_ALL]);
-const LAB_TEST_FLAG = Object.freeze({LANE: 'lane', ON: 'on', SHA: 'sha', SPLIT: 'split'});
+const LAB_TEST_FLAG = Object.freeze({LANE: 'lane', ON: 'on', SHA: 'sha', BASE_SHA: 'base-sha',
+  SPLIT: 'split'});
 const LAB_TEST_CHOICE = '|';
 const USAGE = [
   'Lagrange home lab\n\n',
@@ -61,6 +62,9 @@ const USAGE = [
   '  lab test changed|smoke|gate|postpush|all\n',
   `  lab test ${Object.values(LAB_TEST_PROFILE).join(LAB_TEST_CHOICE)} --lane `,
   `${LAB_TEST_LANES.join(LAB_TEST_CHOICE)} [--on NAME] [--sha COMMIT] [--split]\n`,
+  `  lab test ${LAB_TEST_PROFILE.CHANGED} --lane LANE [--sha COMMIT] --base-sha COMMIT\n`,
+  '      (--base-sha: the commit the change cone is measured from; ',
+  'default the merge base with origin/main)\n',
   '  lab fleet [--json]\n',
   '  lab provision [--output FILE] [--copy NAME]\n',
 ].join('');
@@ -137,13 +141,14 @@ const ERROR_TEXT = Object.freeze({
   SPLIT_TAKES_NO_VALUE: '--split takes no value',
   NO_MACHINE_NAME: '--on needs a machine name',
   NO_COMMIT_NAME: '--sha needs a commit',
+  NO_BASE_NAME: '--base-sha needs a commit',
+  BASE_NEEDS_CHANGED: '--base-sha measures the change cone: it takes the changed profile',
   NOT_THE_RUNNER: ' no longer runs the classified runner: ',
   NO_LANE_FILES: ' has no files in lane ',
 });
 // How the corpus profile's npm script reads: `node <runner> <lane filters>`.
 const LAB_TEST_SCRIPT = Object.freeze({NODE: 'node',
   RUNNER: 'scripts/run-classified-test-files.js', WORDS: /\s+/u, FILTERS_AT: 2});
-const LAB_TEST_SELECTOR = Object.freeze(['scripts/select-change-tests.js', '--list', '--head']);
 const LAB_TEST_SELECT_DEADLINE_MS = 5 * 60 * 1000;
 const LAB_TEST_LINE = /\r?\n/u;
 const LAB_TEST_SHA_DIGITS = 12;
@@ -457,7 +462,7 @@ async function commandTest(profile, args) {
   const request = labTestRequest(profile, args.flags);
   const commit = labTestCommit({root: FLEET_REPO_ROOT, sha: request.sha});
   try {
-    const plan = await labTestPlan(profile, request.lane, commit);
+    const plan = await labTestPlan(profile, request, commit);
     process.exitCode = await runLabTest({
       plan,
       costs: estimateFileCosts(plan, lastResultsRoots(FLEET_REPO_ROOT)),
@@ -489,16 +494,27 @@ function labTestRequest(profile, flags) {
   if (flags[LAB_TEST_FLAG.ON] === true) throw new Error(ERROR_TEXT.NO_MACHINE_NAME);
   if (flags[LAB_TEST_FLAG.SHA] === true) throw new Error(ERROR_TEXT.NO_COMMIT_NAME);
   return {lane, split: split === true, on: flags[LAB_TEST_FLAG.ON] ?? null,
-    sha: flags[LAB_TEST_FLAG.SHA] ?? null};
+    sha: flags[LAB_TEST_FLAG.SHA] ?? null, baseSha: labTestBaseSha(profile, flags)};
+}
+
+// The commit the change cone is measured from, or null for the selector's own
+// default. Only the changed profile has a cone to measure.
+function labTestBaseSha(profile, flags) {
+  const baseSha = flags[LAB_TEST_FLAG.BASE_SHA];
+  if (baseSha === undefined) return null;
+  if (baseSha === true) throw new Error(ERROR_TEXT.NO_BASE_NAME);
+  if (profile !== LAB_TEST_PROFILE.CHANGED) throw new Error(ERROR_TEXT.BASE_NEEDS_CHANGED);
+  return baseSha;
 }
 
 // The profile's files at the commit: the corpus through its own npm script's
-// lane filters, the change cone through the selector, and the chosen lane of
-// the classified plan of those files - planned from the commit's own tree.
-async function labTestPlan(profile, lane, commit) {
+// lane filters, the change cone through the selector (from --base-sha when
+// named), and the chosen lane of the classified plan of those files - planned
+// from the commit's own tree.
+async function labTestPlan(profile, {lane, baseSha}, commit) {
   const files = profile === LAB_TEST_PROFILE.ALL ?
     corpusFiles(commit.gitRoot, TEST_PROFILE_COMMANDS[profile].at(-1)) :
-    (await capture(process.execPath, [...LAB_TEST_SELECTOR, commit.sha],
+    (await capture(process.execPath, labTestSelectorArgs({sha: commit.sha, baseSha}),
       {cwd: FLEET_REPO_ROOT, timeoutMs: LAB_TEST_SELECT_DEADLINE_MS}))
       .split(LAB_TEST_LINE).filter(Boolean);
   const plan = planClassifiedTestFiles(commit.gitRoot, files, lastResultsRoots(FLEET_REPO_ROOT));
