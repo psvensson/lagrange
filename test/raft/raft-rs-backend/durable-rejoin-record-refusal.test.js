@@ -35,7 +35,7 @@ import {
   BOOTSTRAP_MEMBERSHIP_SOURCE,
   COMMITTED_MEMBERSHIP_REFUSAL,
 } from '../../../src/raft/raft-committed-membership-constants.js';
-import {RUNTIME_PHASE} from
+import {RUNTIME_PHASE, RUNTIME_REASON} from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../../src/raft/raft-operation-port-constants.js';
@@ -203,4 +203,68 @@ test('T5: the rejoin skips a replica refused for holding no record and ' +
   await assert.rejects(ensure.call(context, [
     {replicaId: 'o4-other', partitionId: PARTITION_ID}]), /disk on fire/,
   'any other restore failure still aborts the rejoin');
+});
+
+// C2 (lead review, owner decision O3): an rs-raft record written before the
+// participation gate existed (its applied-state row has no bootstrap or
+// admission index) cannot prove this replica's role. Under the hard cutover
+// it is refused typed and non-retryable - reseed - distinct from an
+// unreadable record (retryable) and from a missing one.
+const PRE_GATE_APPLIED_STATE_DDL = `
+  CREATE TABLE ${RAFT_RS_TABLE.APPLIED_STATE} (
+    group_id TEXT PRIMARY KEY,
+    applied_index INTEGER NOT NULL,
+    voters TEXT NOT NULL,
+    learners TEXT NOT NULL,
+    voters_outgoing TEXT NOT NULL,
+    learners_next TEXT NOT NULL,
+    auto_leave INTEGER NOT NULL
+  )`;
+
+function rewriteAsPreGateRecord(dbFile) {
+  const db = new Database(dbFile);
+  try {
+    db.exec(`ALTER TABLE ${RAFT_RS_TABLE.APPLIED_STATE} RENAME TO gate_era`);
+    db.exec(PRE_GATE_APPLIED_STATE_DDL);
+    db.exec(`INSERT INTO ${RAFT_RS_TABLE.APPLIED_STATE}
+      SELECT group_id, applied_index, voters, learners, voters_outgoing,
+             learners_next, auto_leave FROM gate_era`);
+    db.exec('DROP TABLE gate_era');
+  } finally {
+    db.close();
+  }
+}
+
+test('T5 (C2): a pre-gate durable record is refused typed and ' +
+  'non-retryable (DURABLE_RECORD_INCOMPATIBLE), never retried forever',
+async () => {
+  configure();
+  const harness = createCommittedMembershipHarness(PARTITION_ID);
+  try {
+    const founder = harness.build(REJOINER, {
+      replicaIds: [REJOINER[0]], peerAddresses: [addressOf(REJOINER)],
+      cache: metadataCache(PARTITION_ID, [REJOINER]), deferElection: false});
+    await founder.initialize();
+    await founder.shutdown();
+    rewriteAsPreGateRecord(harness.dbPathOf(REJOINER));
+
+    const {refused} = await openFromPlan(harness, rejoinPlan(
+      harness.directory));
+    assert.ok(refused, 'the pre-gate record is not opened');
+    assert.equal(refused.code,
+      PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED);
+    assert.equal(typeof RUNTIME_REASON.DURABLE_RECORD_INCOMPATIBLE, 'string',
+      'the runtime owner names the incompatible record');
+    assert.equal(refused.consensus?.reason,
+      RUNTIME_REASON.DURABLE_RECORD_INCOMPATIBLE);
+    assert.equal(refused.consensus?.outcome,
+      RAFT_OPERATION_OUTCOME.CORE_REFUSED);
+    assert.equal(refused.consensus?.phase, RUNTIME_PHASE.DURABLE_RECORD_READ);
+    assert.equal(refused.consensus?.retryable, false,
+      'reseed, not retry');
+    assert.notEqual(refused.consensus?.reason,
+      COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING);
+  } finally {
+    await harness.dispose();
+  }
 });

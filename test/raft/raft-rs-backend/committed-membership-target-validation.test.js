@@ -26,7 +26,11 @@ import {
   waitFor,
   buildTargetFromOperation,
 } from './committed-membership-harness.js';
-import {durableAppliedState} from './committed-membership-oracles.js';
+import {
+  durableAppliedState,
+  durableLog,
+  logFold,
+} from './committed-membership-oracles.js';
 import {
   COMMITTED_MEMBERSHIP_REFUSAL,
   COMMITTED_MEMBERSHIP_STAMP_DEFECT,
@@ -125,8 +129,8 @@ test('T3: a missing or defective stamp is STAMP_INVALID with its defect, ' +
   }
 });
 
-test('T3: GENESIS is refused where a group exists and governs the join ' +
-  'mode where none does', async () => {
+test('T3: GENESIS is refused where discovery shows a group outside the ' +
+  'founders and governs the join mode where none does', async () => {
   configure();
   const harness = createCommittedMembershipHarness(PARTITION_ID);
   try {
@@ -146,17 +150,71 @@ test('T3: GENESIS is refused where a group exists and governs the join ' +
     assert.equal(refusalOf(() => resolveFor(harness, genesis, discovered))
       ?.code, COMMITTED_MEMBERSHIP_REFUSAL.GENESIS_REFUSED_GROUP_EXISTS,
     'a discovered replica outside the founders refuses GENESIS');
+  } finally {
+    await harness.dispose();
+  }
+});
 
-    // This replica's own durable record exists (it founded once).
-    const earlier = harness.build(TARGET, {
-      replicaIds: [TARGET[0]], peerAddresses: [addressOf(TARGET)],
-      cache: metadataCache(PARTITION_ID, [TARGET]), deferElection: false});
-    await earlier.initialize();
-    await earlier.shutdown();
-    harness.services.delete(TARGET[0]);
-    assert.equal(refusalOf(() => resolveFor(harness, genesis))?.code,
-      COMMITTED_MEMBERSHIP_REFUSAL.GENESIS_REFUSED_GROUP_EXISTS,
-      'a durable record of this replica refuses GENESIS');
+// C1 (lead review): the record is the authority. A founder re-created with
+// its GENESIS stamp after its index-0 applied state was written (the
+// provisioner's RESTART_CREATE) restores its own group from that record:
+// one genesis configuration (O-a fold over the test's founder), the log it
+// already held, its gate restored open (bootstrap 0, admission 0).
+function genesisOperation(founders) {
+  return {type: 'ADD',
+    [ReplicaOperationField.REPLICA_IDS]: founders.map(([id]) => id),
+    [ReplicaOperationField.PEER_ADDRESSES]: founders.map(addressOf),
+    [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]: {
+      kind: COMMITTED_MEMBERSHIP_STAMP_KIND.GENESIS,
+      founders: founders.map(([id]) => id)}};
+}
+
+test('T3 (C1): a GENESIS founder re-created after its index-0 write ' +
+  'restores its own group from the record instead of being refused',
+async () => {
+  configure();
+  const harness = createCommittedMembershipHarness(PARTITION_ID);
+  const founders = [TARGET];
+  try {
+    const cache = () => metadataCache(PARTITION_ID, founders);
+    const {service: first} = await buildTargetFromOperation(harness, {
+      target: TARGET, operation: genesisOperation(founders), cache: cache()});
+    assert.ok(await waitFor(() => statusOf(first).role === 'leader'),
+      'setup: the sole founder leads');
+    const founderPeerId = String(statusOf(first).peerId);
+    const dbFile = harness.dbPathOf(TARGET);
+    assert.ok(await waitFor(() =>
+      durableAppliedState(dbFile, PARTITION_ID).appliedIndex > 0),
+    'setup: the founder applied its first entry');
+    const logBefore = durableLog(dbFile, PARTITION_ID);
+    await first.shutdown();
+
+    let restarted = null;
+    let refused = null;
+    try {
+      ({service: restarted} = await buildTargetFromOperation(harness, {
+        target: TARGET, operation: genesisOperation(founders),
+        cache: cache()}));
+    } catch (error) {
+      refused = error;
+    }
+    assert.equal(refused, null, `the RESTART_CREATE restores (${
+      refused?.code} ${refused?.message})`);
+    assert.ok(await waitFor(() => statusOf(restarted).role === 'leader'),
+      'the restored founder leads its group again');
+    const logAfter = durableLog(dbFile, PARTITION_ID);
+    assert.deepEqual(logAfter.slice(0, logBefore.length).map((entry) =>
+      [entry.index, entry.term]), logBefore.map((entry) =>
+      [entry.index, entry.term]), 'the log it held is the same group\'s log');
+    const fold = logFold(dbFile, PARTITION_ID, [founderPeerId]);
+    assert.ok(fold.every((snapshot) =>
+      snapshot.voters.length === 1 && snapshot.voters[0] === founderPeerId),
+    'O-a: one genesis configuration at every index - no second genesis');
+    const record = durableAppliedState(dbFile, PARTITION_ID);
+    assert.equal(record.bootstrapIndex, 0);
+    assert.equal(record.admissionIndex, 0);
+    assert.equal(statusOf(restarted).gateOpen, true,
+      'the founder\'s gate is restored open from the record');
   } finally {
     await harness.dispose();
   }
