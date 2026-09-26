@@ -2,7 +2,9 @@
 
 **Run the data-heavy parts of a service where its data already lives.**
 
-Lagrange combines a distributed SQL database and a WASM service runtime.
+Lagrange combines a distributed SQL database and a WebAssembly (WASM) service
+runtime. WebAssembly is a portable code format; here it runs service functions
+on the server, not in a browser.
 
 Instead of putting the database on one set of machines and application workers
 on another, every Lagrange node can hold database partitions **and** run service
@@ -14,15 +16,20 @@ code.
         node A          node B          node C
       +--------+      +--------+      +--------+
       | data   |      | data   |      | data   |
-      | P1, P3 |      | P2, P4 |      | P1, P4 |  <- replicas
+      | P1*    |      | P1     |      | P1     |
+      | P2     |      | P2*    |      | P2     |  <- replicas
+      | P3     |      | P3     |      | P3*    |
       |        |      |        |      |        |
       | WASM   |      | WASM   |      | WASM   |
       +--------+      +--------+      +--------+
+
+        * = that partition's leader replica
 ```
 
 When a service needs data from several partitions, Lagrange can run the
-relevant function separately on the nodes holding those partitions. The rows
-stay there. Only the smaller intermediate results are sent back and combined.
+relevant function separately on the nodes holding those partitions. Rather
+than fetching all selected rows into an application worker, it sends back
+smaller intermediate results and combines them.
 
 That is the main idea.
 
@@ -30,24 +37,18 @@ That is the main idea.
 
 A Lagrange database does not live on one server.
 
-A table is divided into **partitions**. A partition owns part of the table's
-data.
+A table is divided into **partitions**, each owning a range of its primary
+keys. Each partition has its own [Raft consensus group](https://raft.github.io/)
+and normally three **replicas** on different nodes. Each replica has its own
+SQLite database; there is no shared SQLite file.
 
-Each partition has several **replicas** on different Lagrange nodes. A replica
-is another copy of that partition. Raft consensus keeps the replicas consistent
-and chooses a leader for writes.
+Raft elects a leader and agrees the order of writes within that partition.
+In a three-voter group, a majority of two must agree before a write commits.
+Different partitions can have different leaders and make progress independently.
 
-For example:
-
-```text
-transactions table
-
-partition 1            partition 2            partition 3
-rows ...               rows ...               rows ...
-
-leader: node A         leader: node B         leader: node C
-copies: B, C           copies: A, C           copies: A, B
-```
+With three nodes and three replicas, every node holds every partition in the
+illustration above. On larger clusters, different partitions can have different
+sets of replica hosts.
 
 Applications do not need to know which machine currently owns a partition.
 Lagrange routes database and service work to the right nodes and handles
@@ -56,14 +57,19 @@ partition movement and replica changes.
 This storage layer is part of Lagrange. Lagrange is **not** a compute layer
 installed on top of an existing PostgreSQL cluster.
 
-It does speak a useful subset of the PostgreSQL wire protocol, mainly to make
-integration and migration easier.
+It speaks a subset of the **PostgreSQL wire protocol**: the network protocol
+used by PostgreSQL clients. That helps existing clients connect; it does not
+mean full PostgreSQL SQL, extension, or application compatibility.
+See [partitioning](architecture/process-partitioning.md) and
+[current capabilities](docs/current-capabilities-and-limitations.md).
 
 ## What runs where
 
-A Lagrange service is compiled to a WASM component.
+A Lagrange service is compiled to a **WASM component**: portable executable
+code with explicit interfaces for what it provides and may call.
 
-In source, an endpoint and its data-heavy operation can live together:
+In source, an endpoint and its data-heavy operation can live together.
+This abbreviated example declares the operation and calls it from a handler:
 
 ```js
 const summarize = distributed({
@@ -81,6 +87,17 @@ function handle(request, {call, json}) {
   }));
 }
 ```
+
+Here, `statement` selects the input rows; `run` processes each partition's
+rows; `reduce` combines the emitted results. `call` invokes that declared
+operation, and `json` builds the HTTP response. The
+[complete service](examples/call-binding-account-summary/lagrange.service.js)
+includes the imports, route declaration, and function bodies.
+
+**In this example, `accountId` filters inside `run()`, not inside SQL.** The
+fixed selector has no `WHERE`, so it selects all of the table's partitions.
+Each local batch must fit the input limits: 4,096 rows by default, plus byte
+and deadline limits. This is not an unbounded scan.
 
 Physically, one request can execute in several places:
 
@@ -114,15 +131,20 @@ POST /accounts/summary
       one result
 ```
 
-For each selected partition, `run()` executes on the node holding that
-partition's leader replica.
+For each selected partition, `run()` executes on the leader's node and reads
+its local storage. The raw selected rows are not sent to another application
+worker for this computation.
 
-Its input rows are read from that node's local storage. The raw selected rows
-are not shipped to another application worker.
+`run()` emits **partials**: small intermediate results, currently numeric
+values under partition-disjoint keys. For example, two partitions might emit
+counts of 2 and 1 and totals of 3,000 and 500 cents. `reduce()` returns a count
+of 3 and a total of 3,500 cents. See the
+[worked example](docs/native-programming-model.md#worked-example).
 
-`run()` emits bounded partial results. Once every required partition has
-completed, `reduce()` runs once and combines those partials into the result
-returned to the handler.
+Reduction waits for every required partition. A failed partition fails the
+call; it is not silently omitted. Retries do not promise exactly-once function
+execution. The [execution contract](docs/execution-semantics.md) explains the
+difference between executing code and publishing one complete result.
 
 So code that looks like one service in the repository can be spread across the
 cluster when it executes.
@@ -133,115 +155,66 @@ cluster when it executes.
 
 **Today, the supported code-first language is JavaScript.**
 
-`lagrange service init` creates a JavaScript project, and the Lagrange compiler
-turns the service into a WASI component for deployment.
+`lagrange service init` creates a JavaScript project. The build produces a WASI
+component, not a Node.js process. Existing code must fit the component's host
+interfaces; arbitrary Node.js APIs are not automatically available.
 
-JavaScript is the current authoring language, not a fundamental restriction of
-the runtime. Lagrange's execution boundary is based on WebAssembly components
-and WIT interfaces, so the service model is intended to be language-neutral.
+**WASI** is the WebAssembly System Interface. **WIT** is the interface definition
+language used to describe a component's imports and exports. Together with the
+[Component Model](https://component-model.bytecodealliance.org/), these provide
+a language-neutral execution boundary.
 
-Future first-class SDKs are intended for languages with good WASI Component
-Model support, including:
-
-- **TypeScript**;
-- **Rust**;
-- **Go**; and
-- **Python**, as its WASI/component tooling matures.
-
-Other languages that can produce compatible WASI components should be possible
-as their toolchains mature as well.
-
-The intended model stays the same:
-
-```text
-your language
-     |
-     | Lagrange SDK/compiler
-     v
-WASI component
-     |
-     v
-Lagrange service
-  handler
-  run()
-  reduce()
-```
-
-So choosing JavaScript today does not make JavaScript part of the Lagrange
-storage or execution architecture. It is simply the first supported frontend
-to a language-neutral runtime.
+First-class TypeScript, Rust, Go, and Python SDKs are future directions, not
+currently supported authoring paths. A compatible toolchain is necessary, but
+a language also needs Lagrange's interfaces and deployment tooling.
 
 ## Why do this?
 
-Consider an ordinary sharded application that needs to examine 10 GB of data
-to produce a 20 KB answer.
+Consider an operation that examines 10 GB to produce a 20 KB answer. These
+numbers illustrate the workload shape; they are not a Lagrange benchmark or
+supported scan size.
 
-A conventional architecture might do this:
-
-```text
-database shards
-     |
-     | lots of rows
-     v
-application workers
-     |
-     | filter / score / aggregate
-     v
-20 KB result
-```
-
-Lagrange can instead do:
+When application workers need the raw rows, the path looks like this:
 
 ```text
-database partition + run()
-     |
-     | small partial
-     v
-  reduce()
-     |
-     v
-20 KB result
+database partitions -> many rows -> application computation -> small answer
 ```
 
-The expensive work happens beside each piece of data.
+With data-local computation:
 
-This can remove:
+```text
+partition + run() -> small partials -> reduce() -> small answer
+```
 
-- database-to-application data transfer;
-- application-managed shard routing and fan-out;
-- repeated database round trips;
-- central aggregation work; and
-- cross-node or cross-zone traffic.
-
-The useful shape is roughly:
+The useful shape is:
 
 ```text
 data examined >> result returned
 ```
 
-If one indexed SQL query already returns the final small answer, moving code
-beside the data probably buys little.
+This can reduce database-to-application transfer and replace application-owned
+shard routing, fan-out, and merging. It does not remove Raft replication,
+coordination traffic, or the final reducer. Storage and service work also
+compete for resources on the same hosts.
+
+SQL engines already filter and aggregate near data. The account-summary demo
+is deliberately easy to check, not proof that a sum requires WASM. When an
+indexed or grouped SQL query already returns the final small answer cheaply,
+moving code beside the data may buy little. Measure against that baseline.
+
+[Related systems](docs/related-systems.md) explains the connections to
+PostgreSQL functions, TiKV coprocessors, and Durable Objects, including where
+each analogy stops. See [evaluation](docs/evaluate.md) for the measurement plan.
 
 ## What is required?
 
-There are a few concepts in Lagrange that are easy to mistake for alternative
-modes.
+The relevant data must be stored in Lagrange, and the data-local operation must
+be deployed as a WASM service with `run()` and `reduce()`. An existing application
+can call its HTTP endpoint; the application does not manage shard routing.
 
-For the **main data-local execution model**:
-
-| Part | Required? | Why |
-| --- | --- | --- |
-| Lagrange cluster | **Yes** | It owns storage, routing and execution |
-| Relevant data stored in Lagrange | **Yes** | Local execution only works if Lagrange holds the data |
-| WASM service | **Yes** | This is the code Lagrange can place and execute |
-| `run()` | **Yes for distributed work** | Executes independently beside each selected partition |
-| `reduce()` | **Yes for distributed work** | Combines the partition results |
-| HTTP endpoint | Usually | Normal application-facing service interface; distributed operations can also be invoked directly |
-| PostgreSQL-wire compatibility | **No** | Migration/integration aid, not the mechanism that makes execution local |
-| Application-managed shard routing | **No** | Lagrange owns this |
-
-You can use parts of Lagrange without reaching the final row of that story, but
-those are mostly useful adoption steps.
+PostgreSQL-wire compatibility is an integration aid, not what makes execution
+local. Running SQL or deploying an endpoint alone does not demonstrate the
+data-local computation path.
 
 ## The adoption ladder
 
@@ -249,49 +222,36 @@ You do not need to rewrite an application all at once.
 
 ### 1. Put representative data in Lagrange
 
-Connect using the supported PostgreSQL wire subset and see whether the schema
-and queries you care about fit.
+Test the schema and queries using the supported PostgreSQL wire subset.
+This evaluates the SQL layer, not yet the data-local service mechanism.
 
-At this stage Lagrange is essentially being exercised as a distributed SQL
-system.
+### 2. Deploy and call a service endpoint
 
-There is no data-local service benefit yet.
+Build and deploy the account-summary component, then call its health endpoint.
+That route makes no distributed call, so it lets you inspect deployment,
+authentication, and request routing separately.
 
-### 2. Move one service operation into Lagrange
+The current default component still declares one distributed operation, even
+when a handler does not call it. Do not remove that operation to make a
+request-only project. WASM by itself is not the optimization.
 
-Package one endpoint as a WASM service and let Lagrange run it.
+### 3. Exercise the data-heavy operation
 
-This proves deployment, isolation, permissions and service lifecycle.
-
-The code may still make ordinary database operations. WASM by itself is not
-the optimization.
-
-### 3. Make the expensive part distributed
-
-Split the operation into:
+Call the summary endpoint and trace:
 
 ```text
-run(rows, arguments)        <- once per relevant partition
-reduce(partials, arguments) <- once for the complete request
+run(rows, arguments)        <- beside each selected partition
+reduce(partials, arguments) <- combines the complete result
 ```
 
-Now Lagrange can move the computation to the partitions instead of moving their
-rows to a central service.
+For a real evaluation, extract one expensive operation and keep unrelated
+application code outside. A new application can go directly to this model.
 
-**This third step is the distinctive Lagrange mechanism.**
-
-Steps 1 and 2 are useful ways to reach it safely, not separate architectural
-requirements.
-
-For a new application you can go directly to the service model.
-
-For an existing application, the sensible first target is usually one
-expensive operation rather than the whole system.
-
-The relevant data must be loaded into Lagrange. There is not yet a supported
-PostgreSQL-to-Lagrange migration, CDC, backup, or point-in-time recovery product
-surface. Keep the existing system of record until a pilot has proven parity,
-cutover, rollback, and recovery for the chosen workload.
+The relevant data must be loaded into Lagrange. There is no supported
+PostgreSQL migration, change data capture (CDC) ingestion, backup, or
+point-in-time recovery product surface yet. Keep the existing system of record
+until a pilot proves parity, cutover, rollback, and recovery.
+See [Migration and adoption](docs/migration.md).
 
 ## A good first workload
 
@@ -359,15 +319,16 @@ The data-local service path works, but its current public interface is
 intentionally narrow. Among the important limits today:
 
 - a distributed operation uses one fixed single-table `SELECT`;
-- each partition read is bounded;
+- each partition read is bounded; no streaming or paging of a larger input;
 - partial results are currently numeric and bounded;
 - one HTTP request can make one distributed call;
 - distributed reads do not form one global cross-partition snapshot;
 - the current distributed call path is read-only for user tables;
 - PostgreSQL compatibility is a subset, not drop-in PostgreSQL;
+- secondary indexes are not supported;
 - node-to-node transport currently assumes a trusted private network; and
-- backup/restore, rolling upgrades and production SLOs are not yet supported
-  product contracts.
+- backup/restore, rolling upgrades, and production service-level objectives
+  (SLOs) are not yet supported product contracts.
 
 See [Current capabilities and limitations](docs/current-capabilities-and-limitations.md)
 for the exact current envelope.

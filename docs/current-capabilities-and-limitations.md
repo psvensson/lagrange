@@ -32,13 +32,18 @@ The rows used by a data-local operation must live in Lagrange partitions.
 
 ## Public service path
 
-The deployment model is Artifact / Binding / Cell. Recommended authoring:
-**Code-first JavaScript service compiler** - the
-compiled artifact is not a WebAssembly binary or component.
+The deployment model is [Artifact / Binding / Cell](vocabulary.md#service-deployment-hierarchy).
+Recommended authoring: **Code-first JavaScript service compiler**.
+Managed WASM execution: **Genuine WASI component Cell**.
+The legacy callback representation in the table below is a JavaScript envelope,
+not a WebAssembly binary or component. It is a separate internal path, not the
+component produced by the public service build.
+
 Binding source kinds are publicly invocable: `request`, `call`; accepted
 `change`, `time`, `once`, `boot`, `pushdown` kinds
 may be declared but have no public invocation adapter.
-Managed OCI activation and OCI callback invocation remains unsupported.
+Managed OCI activation remains unsupported.
+OCI callback invocation remains unsupported.
 
 | Call property | Current state |
 | --- | --- |
@@ -154,7 +159,7 @@ turning evidence into a product claim.
 | Service execution | A call selects one bounded shard batch; the public path does not stream or page an unbounded partition scan. |
 | Service execution | Coordinated partial values are finite numbers and their keys must be disjoint across shards. |
 | Service portability | Managed OCI container activation is unsupported; the recommended service path is a WASI component. |
-| PostgreSQL compatibility | Password authentication and TLS are implemed, but SCRAM and arbitrary PostgreSQL or ORM compatibility are not claimed. |
+| PostgreSQL compatibility | Password authentication and TLS are implemented, but SCRAM and arbitrary PostgreSQL or ORM compatibility are not claimed. |
 | Security | Node-to-node transport is plain WebSocket without cryptographic peer authentication; deploy it only on a trusted private network. |
 | Operations | Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x. |
 

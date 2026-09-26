@@ -26,8 +26,11 @@ flowchart LR
   classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
 ```
 
-No request-time lookup RPC exists. A node routes from its own cache, and the
-cache is correct because CDC keeps it converging.
+Route lookup does not make a request-time RPC to another node. It reads the
+node-local cache, which change data capture (CDC) updates from committed
+system-table changes. That view can lag; convergence is not proof that every
+cached target is current. Receiver-side validation and topology fencing must
+refuse stale targets rather than treating a cached route as permission to serve.
 
 Resolving "who is the leader" is a four-level ladder, not a single column, and
 it is worth knowing the order because the fallbacks show up in incident traces:
@@ -83,6 +86,11 @@ flowchart TD
 ```
 
 ### Choosing the target replicas
+
+This section describes ordinary SQL. A distributed call has a stronger rule:
+its `run()` must read on the partition leader's host. See
+[Call Bindings: partition-host routing](#call-bindings-partition-host-routing)
+below rather than applying SQL replica preferences to that path.
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
@@ -170,10 +178,10 @@ The nouns are worth learning, because they are the deployment surface:
 - A **Binding** is the durable user declaration of execution intent: the only
   place a route-to-artifact mapping is stated, and immutable once written. The
   service id is *derived* from the binding version, not chosen.
-- A **Cell** is a running actual of that Binding — concretely, an ACTIVE
+- A **Cell** is a running instance of that Binding - concretely, an ACTIVE
   `runtime_service` replica row in `services` belonging to the binding-compiled
   definition. One is selected deterministically by hashing the invocation id
-  across the sorted ready actuals, and the receiving handler re-validates the
+  across the sorted ready instances, and the receiving handler re-validates the
   choice before invoking, so a Cell that moved between resolution and delivery
   fails as `TARGET_STALE` rather than serving.
 
@@ -200,15 +208,18 @@ flowchart LR
 The call path (`CALL BINDING $1` over authenticated pgwire) uses the same
 cache-driven resolution with one extra constraint: each shard of the
 invocation must run on the node hosting the partition it reads. The
-statement is planned into per-partition shards without fetching rows;
+statement is planned into per-partition shards (one task per partition)
+without fetching rows;
 `call-partition-topology` resolves each partition's canonical leader as the
 required host, and `CallBindingRouteResolver` restricts Cell selection to
 that node. A missing Cell on the host is not a routing failure — it raises
 `HOST_CELL_UNAVAILABLE`, which publishes a bounded activation lease that the
-rebalancer consumes as a placement pin. The receiving node re-asserts
+rebalancer consumes as a temporary placement requirement. The receiving node re-asserts
 leadership, partition epoch, and binding digest against its own cache before
-executing, and refuses `TARGET_STALE` if the topology moved. Reduction runs
-once, on the replica holding a dedicated reduce lease. The full contract is
+executing, and refuses `TARGET_STALE` if the topology moved. Reduction is
+coordinated by the holder of a dedicated reduce lease, not run on every data
+replica. This is execution coordination, not a separate service Raft group.
+The full contract is
 [Minimal Deployment Surface](minimal-deployment-surface.md); developer-facing
 semantics are in [execution semantics](../docs/execution-semantics.md).
 
