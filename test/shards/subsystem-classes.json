@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 257,
+    "bootstrap-membership": 259,
     "cdc-metadata": 59,
     "cli-tooling": 96,
     "control-plane": 194,
@@ -12,23 +12,23 @@
     "distributed-harness": 167,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 251,
+    "placement-rebalance": 252,
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
-    "storage-partition": 153,
+    "storage-partition": 154,
     "storage-raft": 122,
     "test-infrastructure": 136,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2216,
-  "digest": "fnv1a32-169ff207",
+  "censusSize": 2220,
+  "digest": "fnv1a32-ec09608c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6ec9e1b7",
+  "observationDigest": "fnv1a32-28969a36",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1113,6 +1113,8 @@
     "test/node/replica-lifecycle-message-delivery.property.test.js": "bootstrap-membership",
     "test/node/replica-local-only-row-convergence.test.js": "bootstrap-membership",
     "test/node/replica-recovery-service.test.js": "bootstrap-membership",
+    "test/node/replica-removal-consensus-exit-decisions.test.js": "bootstrap-membership",
+    "test/node/replica-removal-consensus-exit.test.js": "bootstrap-membership",
     "test/node/replica-removal-graceful-shutdown.property.test.js": "bootstrap-membership",
     "test/node/replica-state-delegation.test.js": "bootstrap-membership",
     "test/node/replica-state-machine-transitions.property.test.js": "bootstrap-membership",
@@ -1184,6 +1186,7 @@
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": "storage-partition",
     "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js": "storage-partition",
     "test/partition/partition-rebalancer-readiness-edge-gate.test.js": "storage-partition",
+    "test/partition/partition-retiring-row-peer-retirement.test.js": "storage-partition",
     "test/partition/partition-runtime-reconstruction-leadership.test.js": "storage-partition",
     "test/partition/partition-service-cdc-log-suppression.test.js": "storage-partition",
     "test/partition/partition-service-hlc-monotonicity.test.js": "storage-partition",
@@ -1678,6 +1681,7 @@
     "test/rebalancer/replace-owner-phase-staleness.test.js": "placement-rebalance",
     "test/rebalancer/replace-owner-recovery-equivalence.test.js": "placement-rebalance",
     "test/rebalancer/replace-owner-wake.test.js": "placement-rebalance",
+    "test/rebalancer/replace-real-group-handoff.test.js": "placement-rebalance",
     "test/rebalancer/replace-remove-safety-wake-property.test.js": "placement-rebalance",
     "test/rebalancer/replace-replica-workflow.test.js": "placement-rebalance",
     "test/rebalancer/replace-source-planner-set-exclusion.test.js": "placement-rebalance",
@@ -6412,6 +6416,22 @@
         "test/node/replica-handler-bootstrap-stamps.js"
       ]
     },
+    "test/node/replica-removal-consensus-exit.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/node/replica-handler-constants.js",
+        "src/node/replica-removal-consensus-exit.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
     "test/node/replica-state-machine.test.js": {
       "files": [
         "src/node/replica-state-machine-constants.js"
@@ -6542,6 +6562,15 @@
     "test/partition/partition-rebalancer-readiness-edge-gate.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/partition/partition-retiring-row-peer-retirement.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/partition/partition-runtime-reconstruction-leadership.test.js": {
@@ -8112,6 +8141,23 @@
     "test/rebalancer/replace-owner-wake.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/replace-real-group-handoff.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/node/replica-handler-constants.js",
+        "src/node/replica-handler-membership-relay.js",
+        "src/node/replica-removal-consensus-exit.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "test/node/replica-removal-consensus-exit-fixture.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
     "test/rebalancer/replace-remove-safety-wake-property.test.js": {
