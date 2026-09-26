@@ -32,6 +32,7 @@ import {
 import {
   PERSISTENCE_ADMISSION_WAIT,
   INBOUND_DRAIN_DELAY_MS,
+  RUNTIME_PHASE,
   RUNTIME_REASON,
 } from '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {
@@ -145,6 +146,19 @@ test('enumerations: the runtime reasons the gate and the record add sit ' +
   assert.equal(RUNTIME_REASON.DURABLE_RECORD_MISSING,
     COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING,
     'one value for the missing record, owned by the boundary');
+  // Round 2 (verifier V6): the phases a refusal names, the boundary's own
+  // ones first - the stamp validator at the port (V1a), the record read
+  // (O4 / O3), the admission of a conf-change proposal (V2).
+  assertClassifies('RUNTIME_PHASE', RUNTIME_PHASE, {
+    boundaryOpening: ['STAMP_VALIDATION', 'DURABLE_RECORD_READ',
+      'BOOTSTRAP_PERSISTENCE'],
+    confChangeAdmission: ['ADMISSION'],
+    participation: ['CAMPAIGN_ELIGIBILITY', 'LEADERSHIP_TRANSFER',
+      'PROGRESS_PROBE'],
+    hostAndLifecycle: ['GENERATION_CHANGED', 'ADDRESS_RESOLUTION', 'SEND',
+      'SEND_NO_HANDLER', 'APPLICATION', 'READY_DRAIN', 'READY_PERSISTENCE',
+      'DISPATCH', 'UNEXPECTED_THROW'],
+  });
   assertClassifies('RECORD_COMPATIBILITY', RAFT_RS_RECORD_COMPATIBILITY, {
     restores: ['COMPATIBLE'],
     refusedIncompatible: ['PRE_GATE'],

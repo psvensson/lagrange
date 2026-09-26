@@ -209,12 +209,33 @@ test('anchor: a joint configuration is refused to a bootstrap read and as ' +
       assert.equal(error.defect, COMMITTED_MEMBERSHIP_STAMP_DEFECT.JOINT);
       return true;
     }, 'a joint answer is no stamp');
-    model.node(leader).proposeConfChange({transition: WIRE.transition.Auto,
-      changes: []});
+    // Round 2, D8 joint-leave cell (V2): while joint the one conf change the
+    // core takes is the leave (a change with no steps); any other change is
+    // deferred typed, and the deferred AddNode is taken once the group left.
+    for (const member of liveReplicas(model)) {
+      reserveIdentity(model, member, 'jnt-t');
+    }
+    const whileJoint = model.node(leader).proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: 'jnt-t'});
+    assert.equal(whileJoint.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+      `an AddNode while joint is deferred (${JSON.stringify(whileJoint)})`);
+    assert.equal(whileJoint.reason, RUNTIME_REASON.CONF_CHANGE_PENDING);
+    assert.equal(whileJoint.retryable, true);
+    const leave = model.node(leader).proposeConfChange({
+      transition: WIRE.transition.Auto, changes: []});
+    assert.equal(leave.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      'the leave (a change with no steps) is taken while joint');
     assert.ok(settle(model, () =>
       durableOf(model, leader).applied.votersOutgoing.length === 0 &&
       durableOf(model, leader).applied.voters.length === 2, [leader]),
     'setup: the group left the joint state');
+    const afterLeave = model.node(leader).proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, replicaIdentity: 'jnt-t'});
+    assert.equal(afterLeave.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      'the deferred AddNode is taken once the group left the joint state');
+    assert.ok(settle(model, () => durableOf(model, leader).applied.voters
+      .includes(peerIdIn(model, leader, 'jnt-t')), [leader]),
+    'and commits');
     const answer = bootstrapRead(model, leader);
     assert.equal(answer.kind, COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED);
     const fold = foldAt(logFold(model.replica(leader).dbFile, PARTITION_ID,
@@ -224,6 +245,75 @@ test('anchor: a joint configuration is refused to a bootstrap read and as ' +
     assert.equal(answer.appliedIndex,
       durableOf(model, leader).applied.appliedIndex,
       'the label is the durable applied index');
+  } finally {
+    model.dispose();
+  }
+});
+
+// Round 2 (V1a, V6): the port itself refuses every stamp defect typed, the
+// absent stamp included, whoever built the request - keyed on the production
+// defect enumeration, so a defect added without a case turns this red. The
+// IDENTITY_MISMATCH path of committedBootstrap (a registry disagreeing with
+// the validator's derivation) is typed the same way and unreachable after
+// the validator ran on the same derivation.
+const PORT_DEFECT_CASES = Object.freeze({
+  // An explicit null: the cluster driver stamps a GENESIS by default, as the
+  // founding provisioner does; the port sees no stamp at all.
+  [COMMITTED_MEMBERSHIP_STAMP_DEFECT.MISSING]: () => null,
+  [COMMITTED_MEMBERSHIP_STAMP_DEFECT.UNKNOWN_KIND]: (stamp) =>
+    ({...stamp, kind: 'not-a-kind'}),
+  [COMMITTED_MEMBERSHIP_STAMP_DEFECT.NO_BOOTSTRAP_INDEX]: (stamp) =>
+    ({...stamp, appliedIndex: 0}),
+  [COMMITTED_MEMBERSHIP_STAMP_DEFECT.JOINT]: (stamp) =>
+    ({...stamp, votersOutgoing: [stamp.voters[0]]}),
+  [COMMITTED_MEMBERSHIP_STAMP_DEFECT.NO_VOTERS]: (stamp) =>
+    ({...stamp, voters: []}),
+  [COMMITTED_MEMBERSHIP_STAMP_DEFECT.IDENTITY_MISMATCH]: (stamp) =>
+    ({...stamp, identities: {...stamp.identities,
+      [stamp.voters[0]]: 'sd-not-that-replica'}}),
+  [COMMITTED_MEMBERSHIP_STAMP_DEFECT.IDENTITY_UNRESOLVED]: (stamp) =>
+    ({...stamp, identities: {...stamp.identities, [stamp.voters[0]]: null}}),
+  [COMMITTED_MEMBERSHIP_STAMP_DEFECT.NO_FOUNDERS]: () =>
+    genesisStamp([]),
+});
+
+test('anchor (port stamp validation): the port refuses every stamp defect ' +
+  'of the enumeration typed, the absent stamp included, and opens nothing',
+() => {
+  const founders = ['sd-a', 'sd-b', 'sd-c'];
+  const {model, leader, genesis} = found(founders, 'sd-none');
+  try {
+    assert.deepEqual(Object.keys(PORT_DEFECT_CASES).sort(),
+      Object.values(COMMITTED_MEMBERSHIP_STAMP_DEFECT).sort(),
+      'every defect of the enumeration has a case');
+    const valid = oracleStamp(model, leader, genesis);
+    for (const [defect, breakStamp] of Object.entries(PORT_DEFECT_CASES)) {
+      const target = `sd-t-${defect}`;
+      const stamp = breakStamp(valid);
+      assert.throws(() => model.addReplica(target,
+        [...Object.values(valid.identities), target],
+        {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp}),
+      (error) => {
+        assert.equal(error.consensus?.outcome,
+          RAFT_OPERATION_OUTCOME.CORE_REFUSED, `${defect}: CORE_REFUSED`);
+        assert.equal(error.consensus?.reason,
+          COMMITTED_MEMBERSHIP_REFUSAL.STAMP_INVALID, `${defect}: typed`);
+        assert.equal(error.consensus?.defect, defect,
+          `${defect}: the defect is named`);
+        assert.equal(error.consensus?.phase, RUNTIME_PHASE.STAMP_VALIDATION);
+        assert.equal(error.consensus?.retryable, false);
+        return true;
+      }, `${defect}: the port does not open`);
+      // A port refused at validation never built its store: no raft-rs
+      // table exists in the file, let alone a record.
+      let written = null;
+      try {
+        written = durableOf(model, target).applied;
+      } catch {
+        written = null;
+      }
+      assert.equal(written, null, `${defect}: no record was written`);
+    }
   } finally {
     model.dispose();
   }
