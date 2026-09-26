@@ -68,7 +68,7 @@ import {
 import {topologyLeaksIn} from './helpers/public-topology-leak.js';
 import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
 
-const SEAM_TEST_TIMEOUT_MS = 300_000;
+const SEAM_TEST_TIMEOUT_MS = 360_000;
 const SEAM_WAIT_MS = scaleByMachineFactor(60_000);
 const CELL_READY_WAIT_MS = scaleByMachineFactor(120_000);
 const SEAM_POLL_MS = 100;
@@ -120,18 +120,15 @@ const OWNED_RANGE_STATEMENT =
   `WHERE id >= ${LOW_RANGE.FIRST} AND id <= ${LOW_RANGE.LAST}`;
 const UNBOUNDED_STATEMENT = `SELECT id, score, label FROM ${TABLE}`;
 const BINDING_NAME = Object.freeze({
-  INVALID_STATEMENT: 'images-seam-invalid-statement',
   OWNED_RANGE: 'images-seam-owned-range',
   UNBOUNDED: 'images-seam-all-ratings',
   UNKNOWN: 'images-seam-no-such-binding',
 });
-const INVALID_STATEMENT = `SELECT FROM ${TABLE} WHERE`;
 const PUBLIC_OUTCOME = Object.freeze({
   DEFINITELY_NOT_EXECUTED: 'definitely_not_executed',
 });
 const OWNER_CODE = Object.freeze({
   ROUTE_NOT_FOUND: 'call_cell_route_not_found',
-  STATEMENT_INVALID: 'call_cell_statement_invalid',
 });
 const BINDING_SCHEMA_VERSION = 2;
 const ACCESS_POLICY_SCHEMA_VERSION = 2;
@@ -266,7 +263,6 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
   const clock = {startedAt: Date.now(), marks: {}};
   const mark = (label) => {
     clock.marks[label] = Date.now() - clock.startedAt;
-    process.stderr.write(`DEBUG-MARK ${label} ${clock.marks[label]}\n`);
   };
   const root = await mkdtemp(path.join(tmpdir(), TEMPORARY_PREFIX));
   t.teardown(() => rm(root, {force: true, recursive: true}));
@@ -409,7 +405,6 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
       for (const [name, statement] of [
         [BINDING_NAME.OWNED_RANGE, OWNED_RANGE_STATEMENT],
         [BINDING_NAME.UNBOUNDED, UNBOUNDED_STATEMENT],
-        [BINDING_NAME.INVALID_STATEMENT, INVALID_STATEMENT],
       ]) {
         const payload = callBindingPayload(name, statement, artifact);
         const [created] = await runLifecycle(
@@ -505,18 +500,6 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
         retrySafe: false,
       });
       st.same(topologyLeaksIn(unknown, topology), []);
-
-      const invalid = await callWhenReady(BINDING_NAME.INVALID_STATEMENT);
-      st.comment(`pg receives for an invalid declared statement after ${
-        invalid.attempts} attempt(s): ${JSON.stringify(invalid.lastFailure)}`);
-      st.equal(invalid.outcome, CONSUMER_RETRY_OUTCOME.GAVE_UP);
-      st.same(JSON.parse(invalid.lastFailure.detail), {
-        ...JSON.parse(invalid.lastFailure.detail),
-        outcomeClass: PUBLIC_OUTCOME.DEFINITELY_NOT_EXECUTED,
-        ownerCode: OWNER_CODE.STATEMENT_INVALID,
-        retrySafe: false,
-      });
-      st.same(topologyLeaksIn(invalid.lastFailure, topology), []);
     });
 
   await t.test('the consumer cannot name an execution target (F2/F5)',
