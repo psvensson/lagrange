@@ -11,8 +11,9 @@ import {
 import {
   REPLACE_WAIT_REASON,
   clearAllReplaceOwnerState,
+  clearReplaceOwnerState,
   reconcileReplaceStoppingOwner,
-  recordReplaceWaitDiagnostic,
+  recordReplaceOwnerWait,
 } from './operation-workflow-replace-owner.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
@@ -49,6 +50,7 @@ const {
 const {
   REBALANCER_SKIP_REASON,
   ReplicaOperationResponseStatus,
+  SYSTEM_TABLE_NAME,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain {
@@ -57,6 +59,38 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     // A new owner instance begins its REPLACE-owner session: an operation
     // whose step began earlier may have lost its attempt state (BR10).
     startReplaceOwnerSession(this, REPLACE_OWNER_RESTART_CLASS.PROCESS_RESTART);
+  }
+
+  handleObservedReplicaStateChange(tableName, cacheOperation, record) {
+    this.releaseObservedTerminalOperationState(
+      tableName, cacheOperation, record);
+    return super.handleObservedReplicaStateChange(
+      tableName, cacheOperation, record);
+  }
+
+  /**
+   * BR17: any terminal observation of an operation - written here or by
+   * another node and seen only through the replicated row, or the row's
+   * deletion - releases the owner's waiter, its fallback timer and its
+   * REPLACE-owner state for it. Nothing waits on, or reads the witness for,
+   * an operation that is over.
+   * @param {string} tableName
+   * @param {string} cacheOperation
+   * @param {Object|null} record - The replicated row.
+   */
+  releaseObservedTerminalOperationState(tableName, cacheOperation, record) {
+    const operationId = record?.operation_id;
+    if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
+        typeof operationId !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING) {
+      return;
+    }
+    const deleted = cacheOperation === OPERATION_WORKFLOW_OWNER_LITERAL.DELETE;
+    if (!deleted && (record.completed_at === null ||
+        record.completed_at === undefined)) {
+      return;
+    }
+    this.clearDeferredSafetyBlockState(operationId);
+    clearReplaceOwnerState(this, operationId);
   }
 
   async getPriorityRecoveryDecisionSnapshotForPartitionOperations(
@@ -495,9 +529,10 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
    * @return {Object}
    */
   waitReplaceSourceRemovalEffect(operation, effect, entryLevel) {
-    recordReplaceWaitDiagnostic(this, operation, effect.reason,
-      effect.witness || null);
-    this.armReplaceOwnerWait(operation, effect.reason, entryLevel);
+    if (recordReplaceOwnerWait(this, operation, effect.reason,
+      {observation: effect.witness || null})) {
+      this.armReplaceOwnerWait(operation, effect.reason, entryLevel);
+    }
     return this.buildSkippedOperationResult(
       REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
       operation.operationId,

@@ -27,8 +27,16 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {NODE_STATE, WORKFLOW_STEP} from '../../src/constants/index.js';
-import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {
+  CDC_OPERATION,
+  NODE_STATE,
+  WORKFLOW_STEP,
+} from '../../src/constants/index.js';
+import {
+  OperationType,
+  ReplicaStatus,
+  WORKFLOW_STEP_TO_STATUS,
+} from '../../src/rebalancer/replica-status.js';
 import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
@@ -37,13 +45,16 @@ import {
   REPLICA_HANDLER_LEADER_HANDOFF_BRANCH,
 } from '../../src/node/replica-handler-leader-handoff-methods.js';
 import {
+  REPLACE_ATTEMPT_NOT_REBUILT,
   REPLACE_OWNER_PHASE,
   REPLACE_OWNER_RESTART_CLASS,
+  REPLACE_OWNER_STALENESS_CLASS,
 } from '../../src/rebalancer/operation-workflow-replace-owner-recovery.js';
 import {
+  readReplaceOwnerDiagnostic,
   readReplaceOwnerPhase,
 } from '../../src/rebalancer/operation-workflow-replace-owner.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {createMockCache, createTestCoordinator} from './test-helpers.js';
 import {createReplaceWitness} from './replace-witness-fixture.js';
 import {
   createPublishedPlanningReadinessService,
@@ -226,22 +237,46 @@ async function deliver(world, target, payload) {
   return {acknowledged: true, status: ReplicaOperationResponseStatus.INITIATED};
 }
 
+// The node's system-table cache. Its change listeners (the production
+// cache's contract: (table, CDC operation, row), outside the writer's turn)
+// are told only of rows another node wrote and CDC replicated here
+// (replicateRemoteRow); the owner's own writes stay silent, as the reduced
+// double always was.
+function createObservedCache() {
+  const cache = createMockCache({
+    nodes: NODE_IDS.map(readyNode),
+    services: [
+      serviceRow(SOURCE_REPLICA_ID, SOURCE_NODE_ID, 'follower'),
+      serviceRow(PEER_REPLICA_B, PEER_NODE_B, 'leader'),
+      serviceRow(`${PARTITION_ID}-r3`, PEER_NODE_C, 'follower'),
+      serviceRow(TARGET_REPLICA_ID, TARGET_NODE_ID, 'follower'),
+    ],
+  });
+  const listeners = new Set();
+  cache.onCacheChange = (listener) => listeners.add(listener);
+  cache.offCacheChange = (listener) => listeners.delete(listener);
+  cache.replicateRemoteRow = async (gateway, tableName, row) => {
+    // The other node's durable write (the shared store), then its CDC
+    // replication into this node's cache and its change notification.
+    await gateway.submitMutation({tableName, operation: 'update',
+      whereClause: {operation_id: row.operation_id}, data: row});
+    cache.upsert(tableName, row);
+    Promise.resolve().then(() => {
+      for (const listener of [...listeners]) {
+        listener(tableName, CDC_OPERATION.UPDATE, {...row}, null);
+      }
+    });
+  };
+  return cache;
+}
+
 function startCoordinator(world) {
+  world.cache = world.cache || createObservedCache();
   const coordinator = createTestCoordinator({
     nodeId: TARGET_NODE_ID,
     enableTimeouts: false,
     replaceWitness: false,
-    ...(world.cache ? {systemTableCache: world.cache} : {
-      cacheData: {
-        nodes: NODE_IDS.map(readyNode),
-        services: [
-          serviceRow(SOURCE_REPLICA_ID, SOURCE_NODE_ID, 'follower'),
-          serviceRow(PEER_REPLICA_B, PEER_NODE_B, 'leader'),
-          serviceRow(`${PARTITION_ID}-r3`, PEER_NODE_C, 'follower'),
-          serviceRow(TARGET_REPLICA_ID, TARGET_NODE_ID, 'follower'),
-        ],
-      },
-    }),
+    systemTableCache: world.cache,
     messageRouter: {
       deliver: (target, payload) => deliver(world, target, payload),
       getConnectionState: () => 'connected',
@@ -261,7 +296,6 @@ function startCoordinator(world) {
       }
     },
   });
-  world.cache = coordinator.systemTableCache;
   coordinator.workflowOwner.timeSource = {
     now: () => Date.now() + world.clockOffsetMs,
   };
@@ -642,3 +676,100 @@ test('BR10: an unresolved handoff survives a restart as outstanding',
         });
     }
   });
+
+// BR17: the owner's per-operation state (its waiter, attempt and diagnostic)
+// is released on ANY terminal observation - including a terminal another
+// node wrote, seen only through the replicated row - and nothing reads the
+// witness for it afterwards.
+test('BR17: a terminal written elsewhere releases the waiting owner',
+  async (t) => {
+    for (const terminalStep of [WORKFLOW_STEP.REMOVED, WORKFLOW_STEP.FAILED]) {
+      await withDrivenWorld(REPLACE_OWNER_PHASE.MEMBERSHIP_REMOVAL_UNCOMMITTED,
+        async (world, operation) => {
+          const owner = world.coordinator.workflowOwner;
+          t.ok(readReplaceOwnerDiagnostic(owner, operation.operationId),
+            `${terminalStep}: the waiting owner holds its diagnostic`);
+          const row = world.cache.get('replica_operations',
+            operation.operationId);
+          await world.cache.replicateRemoteRow(
+            world.coordinator.controlPlaneSystemTableGateway,
+            'replica_operations', {...row,
+              workflow_step: terminalStep,
+              status: WORKFLOW_STEP_TO_STATUS[terminalStep],
+              completed_at: Date.now()});
+          await settle();
+          t.equal(readReplaceOwnerDiagnostic(owner, operation.operationId),
+            null, `${terminalStep}: its state is released`);
+          const readsBefore = world.witness.reads.length;
+          emitConsensus(world, {leaderReplicaId: PEER_REPLICA_B, term: 99});
+          await fireFallbackTimers(world);
+          await settle();
+          t.equal(world.witness.reads.length, readsBefore,
+            `${terminalStep}: no wake or fallback reads the witness again`);
+        });
+    }
+  });
+
+// S9 (D2 diagnostics): every owner wait is observable - why, since when, in
+// which owner phase, how its staleness is classified, whether R-1f may act,
+// and whether its attempt was rebuilt after a restart - as one bounded record
+// that repeated waits replace, never extend.
+const WAITING_PHASES = Object.freeze([
+  REPLACE_OWNER_PHASE.ACTIVE_DEFERRING,
+  REPLACE_OWNER_PHASE.ACTIVE_ATTEMPT_UNRESOLVED,
+  REPLACE_OWNER_PHASE.SOURCE_ROW_RETIRING,
+  REPLACE_OWNER_PHASE.MEMBERSHIP_REMOVAL_UNCOMMITTED,
+]);
+// R-1f's preconditions (the source still a voter, its row retiring or gone)
+// hold exactly in these phases by their definitions.
+const RETIREMENT_ADMISSIBLE_PHASES = Object.freeze(new Set([
+  REPLACE_OWNER_PHASE.SOURCE_ROW_RETIRING,
+  REPLACE_OWNER_PHASE.MEMBERSHIP_REMOVAL_UNCOMMITTED,
+]));
+const REPEATED_WAITS = 5;
+
+test('S9: each owner wait records one bounded, complete diagnostic',
+  async (t) => {
+    for (const phase of WAITING_PHASES) {
+      await withDrivenWorld(phase, async (world, operation) => {
+        const owner = world.coordinator.workflowOwner;
+        const first = readReplaceOwnerDiagnostic(owner, operation.operationId);
+        t.ok(first, `${phase}: the wait is observable`);
+        t.equal(first?.ownerPhase, phase, `${phase}: it names its phase`);
+        t.ok(typeof first?.reason === 'string' && first.reason.length > 0,
+          `${phase}: it names why it waits`);
+        t.ok(Number.isFinite(first?.waitingSinceMs),
+          `${phase}: and since when`);
+        t.equal(first?.stalenessClass,
+          REPLACE_OWNER_STALENESS_CLASS.NEVER_STALE_BY_AGE,
+          `${phase}: a live target's REPLACE is never stale by age`);
+        t.equal(first?.retirementAdmissible,
+          RETIREMENT_ADMISSIBLE_PHASES.has(phase),
+          `${phase}: R-1f admissibility`);
+        t.equal(first?.attemptRebuiltAfter, REPLACE_ATTEMPT_NOT_REBUILT,
+          `${phase}: no attempt was rebuilt in an uninterrupted run`);
+        for (let wait = 0; wait < REPEATED_WAITS; wait += 1) {
+          await enterOwnerAfter(world, WITHIN_WINDOW_MS);
+        }
+        const later = readReplaceOwnerDiagnostic(owner, operation.operationId);
+        t.same(Object.keys(later || {}).sort(), Object.keys(first).sort(),
+          `${phase}: repeated waits replace the record, never extend it`);
+        t.notOk(Object.values(later || {}).some(Array.isArray),
+          `${phase}: nothing in it grows per retry`);
+        t.equal(later?.waitingSinceMs, first.waitingSinceMs,
+          `${phase}: the same wait keeps its start`);
+      });
+    }
+  });
+
+test('S9: a rebuilt attempt is named in the diagnostic', async (t) => {
+  await withDrivenWorld(REPLACE_OWNER_PHASE.MEMBERSHIP_REMOVAL_UNCOMMITTED,
+    async (world, operation) => {
+      await RESTARTS[REPLACE_OWNER_RESTART_CLASS.PROCESS_RESTART](world);
+      await enterOwnerAfter(world, WITHIN_WINDOW_MS);
+      t.equal(readReplaceOwnerDiagnostic(world.coordinator.workflowOwner,
+        operation.operationId)?.attemptRebuiltAfter,
+      REPLACE_OWNER_RESTART_CLASS.PROCESS_RESTART,
+      'the wait names the restart its attempt was rebuilt after');
+    });
+});

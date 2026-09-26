@@ -53,6 +53,16 @@ const REPLACE_OWNER_RESTART_CLASS = Object.freeze({
   WITNESS_RUNTIME_REBUILD: 'witness_runtime_rebuild',
 });
 
+// How a waiting REPLACE's staleness is classified (A6/A5): never by the age
+// of its step; only a failure-detector FAILED target ends its hold.
+const REPLACE_OWNER_STALENESS_CLASS = Object.freeze({
+  NEVER_STALE_BY_AGE: 'never_stale_by_age',
+  TARGET_FAILED: 'target_failed',
+});
+
+// A diagnostic's attempt that was issued in this owner session.
+const REPLACE_ATTEMPT_NOT_REBUILT = 'not_rebuilt';
+
 // Outside the owner phases (before ACTIVE, or terminal).
 const REPLACE_NOT_IN_OWNER_PHASE = 'not_in_owner_phase';
 
@@ -163,9 +173,11 @@ function releaseReplaceOwnerSessionOperation(owner, operationId) {
 }
 
 export {
+  REPLACE_ATTEMPT_NOT_REBUILT,
   REPLACE_NOT_IN_OWNER_PHASE,
   REPLACE_OWNER_PHASE,
   REPLACE_OWNER_RESTART_CLASS,
+  REPLACE_OWNER_STALENESS_CLASS,
   REPLACE_SOURCE_ROW_CLASS,
   claimReplaceAttemptStateRebuild,
   classifyReplaceOwnerPhase,

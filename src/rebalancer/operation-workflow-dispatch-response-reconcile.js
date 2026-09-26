@@ -9,6 +9,7 @@ import {
   admitReplaceSourceRemovalEffect,
   isPartitionReplace,
   isReplaceRemovalIntentDurable,
+  recordReplaceOwnerWait,
   recordReplaceSourceRemovalEffect,
 } from './operation-workflow-replace-owner.js';
 import {
@@ -362,6 +363,11 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
             removeSafetyEvaluation.error,
             removeSafetyEvaluation.deferReason,
           );
+          if (isPartitionReplace(operation)) {
+            // S9: the REPLACE owner's ACTIVE wait is observable too.
+            recordReplaceOwnerWait(this, operation,
+              removeSafetyEvaluation.deferReason);
+          }
           this.scheduleDeferredSafetyRetry(
             operation,
             removeSafetyEvaluation.deferReason,

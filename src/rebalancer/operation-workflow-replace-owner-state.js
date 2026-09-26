@@ -14,6 +14,11 @@
  */
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {replaceReplicaIdsOf} from './operation-workflow-replace-witness.js';
+import {
+  REPLACE_ATTEMPT_NOT_REBUILT,
+  REPLACE_NOT_IN_OWNER_PHASE,
+  REPLACE_OWNER_STALENESS_CLASS,
+} from './operation-workflow-replace-owner-recovery.js';
 
 const {REBALANCE_COORDINATOR_LOG_MSG} = OPERATION_WORKFLOW_OWNER_SHARED;
 
@@ -73,17 +78,21 @@ function replaceIntentEntryOf(operation) {
 
 /**
  * Record the owner's current wait as its one bounded diagnostic (D2/S9):
- * phase, source and target, how long this wait has lasted, why, the last
- * R-1f attempt and whether its outcome is uncertain, the leader, and the
- * source's membership. Severity rises past the former budgets; the state
+ * step and owner phase, source and target, how long this wait has lasted,
+ * why, the last R-1f attempt, whether its outcome is uncertain and whether
+ * it was rebuilt after a restart, the staleness classification, whether R-1f
+ * may act, the leader, and the source's membership. Severity rises past the former budgets; the state
  * never changes and nothing is appended per retry.
  * @param {Object} owner
  * @param {Object} operation
  * @param {string} reason
  * @param {Object|null} observation
+ * @param {Object} [details] - {ownerPhase, stalenessClass,
+ *   retirementAdmissible} as the waiting decision classified them.
  * @return {Object} The diagnostic.
  */
-function recordReplaceWaitDiagnostic(owner, operation, reason, observation) {
+function recordReplaceWaitDiagnostic(owner, operation, reason, observation,
+  details = {}) {
   const state = readOwnerState(owner);
   const nowMs = nowMsOf(owner);
   const previous = state.diagnosticByOperationId.get(operation.operationId);
@@ -101,6 +110,10 @@ function recordReplaceWaitDiagnostic(owner, operation, reason, observation) {
     waitedMs: nowMs - waitingSinceMs,
     ...retirementAttemptSummaryOf(
       state.retirementAttemptByOperationId.get(operation.operationId)),
+    ownerPhase: details.ownerPhase ?? REPLACE_NOT_IN_OWNER_PHASE,
+    stalenessClass: details.stalenessClass ??
+      REPLACE_OWNER_STALENESS_CLASS.NEVER_STALE_BY_AGE,
+    retirementAdmissible: details.retirementAdmissible === true,
     leaderReplicaId: observation?.leaderReplicaId ?? null,
     sourceMembership: observation?.state ?? null,
     severity: diagnosticSeverityOf(operation, nowMs),
@@ -114,6 +127,7 @@ function retirementAttemptSummaryOf(attempt) {
   return {
     lastAttemptSeq: attempt?.attemptSeq ?? null,
     lastAttemptUncertain: attempt ? attempt.answer === null : false,
+    attemptRebuiltAfter: attempt?.rebuiltAfter ?? REPLACE_ATTEMPT_NOT_REBUILT,
   };
 }
 

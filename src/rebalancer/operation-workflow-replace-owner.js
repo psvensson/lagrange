@@ -62,6 +62,7 @@ import {
 } from './operation-workflow-replace-owner-state.js';
 import {
   REPLACE_OWNER_RESTART_CLASS,
+  REPLACE_OWNER_STALENESS_CLASS,
   REPLACE_SOURCE_ROW_CLASS,
   claimReplaceAttemptStateRebuild,
   classifyReplaceOwnerPhase,
@@ -429,11 +430,71 @@ function isSourceRowRetiring(sourceRow) {
     RETIRING_SOURCE_ROW_STATUSES.has(sourceRow.lifecycleStatus);
 }
 
+/**
+ * Whether the operation is over as far as this owner can observe: its own
+ * copy, or the replicated row a terminal written anywhere lands in.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @return {boolean}
+ */
+function isReplaceOperationTerminalObserved(owner, operation) {
+  const cachedRow = owner.repository.getReplicaOperationRowFromCache?.(
+    operation.operationId) || null;
+  return owner.repository.isOperationTerminal(operation) ||
+    (cachedRow !== null && cachedRow.completed_at !== null &&
+      cachedRow.completed_at !== undefined);
+}
+
+/**
+ * The owner waits: its bounded diagnostic, the fallback and the wake. A
+ * decision that was in flight when the operation's terminal was observed
+ * records nothing and arms nothing (BR17): its state is released instead.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {string} reason
+ * @param {Object} context - {observation, entryLevel}.
+ * @return {boolean} false (the operation did not progress).
+ */
 function waitForReplaceOwner(owner, operation, reason, context) {
-  recordReplaceWaitDiagnostic(owner, operation, reason,
-    context.observation || null);
-  owner.armReplaceOwnerWait?.(operation, reason, context.entryLevel || null);
+  if (recordReplaceOwnerWait(owner, operation, reason, context)) {
+    owner.armReplaceOwnerWait?.(operation, reason, context.entryLevel || null);
+  }
   return false;
+}
+
+/**
+ * S9: record one owner wait as its bounded diagnostic, classified from what
+ * the waiting decision read (its witness observation, the source's row when
+ * it was read, R-1f's admissibility). A wait observed after the operation's
+ * terminal records nothing and releases its state instead (BR17).
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {string} reason
+ * @param {Object} [context] - {observation, sourceRow, retirementAdmissible}.
+ * @return {boolean} Whether the wait was recorded (the operation is live).
+ */
+function recordReplaceOwnerWait(owner, operation, reason, context = {}) {
+  if (isReplaceOperationTerminalObserved(owner, operation)) {
+    owner.clearDeferredSafetyBlockState?.(operation.operationId);
+    clearReplaceOwnerState(owner, operation.operationId);
+    return false;
+  }
+  const observation = context.observation || null;
+  recordReplaceWaitDiagnostic(owner, operation, reason, observation, {
+    ownerPhase: classifyReplaceOwnerPhase({
+      workflowStep: operation.workflowStep,
+      handoffAttemptUnresolved: isReplaceHandoffAttemptUnresolved(
+        owner, operation.operationId, observation),
+      sourceRetired: false,
+      sourceRowClass: context.sourceRow ?
+        sourceRowClassOf(context.sourceRow) : REPLACE_SOURCE_ROW_CLASS.UNKNOWN,
+    }),
+    stalenessClass: isTargetFailureDetectorDead(owner, operation) ?
+      REPLACE_OWNER_STALENESS_CLASS.TARGET_FAILED :
+      REPLACE_OWNER_STALENESS_CLASS.NEVER_STALE_BY_AGE,
+    retirementAdmissible: context.retirementAdmissible === true,
+  });
+  return true;
 }
 
 async function handleReplaceTargetDeath(owner, operation, decision, context) {
@@ -486,25 +547,26 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
     return waitForReplaceOwner(owner, operation,
       REPLACE_WAIT_REASON.SOURCE_ROW_UNAVAILABLE, waitContext);
   }
-  if (!isSourceRowRetiring(sourceRow) &&
-      !isSourceUnreachableAtIntent(operation)) {
+  const retirementAdmissible = isSourceRowRetiring(sourceRow) ||
+    isSourceUnreachableAtIntent(operation);
+  const rowContext = {...waitContext, sourceRow, retirementAdmissible};
+  if (!retirementAdmissible) {
     if (!isRemovalEffectResendDue(owner, operation)) {
       // The effect was delivered and the source's row has not retired yet:
       // wait for its lifecycle (or the membership) to move.
       return waitForReplaceOwner(owner, operation,
-        REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING, waitContext);
+        REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING, rowContext);
     }
     // T5': no effect is recorded (or its backstop window passed) and the
     // source's lifecycle has not retired - (re-)send its removal effect
     // through the same remove-safety evaluation.
-    recordReplaceWaitDiagnostic(owner, operation,
-      REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING,
-      decision.observation);
+    recordReplaceOwnerWait(owner, operation,
+      REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING, rowContext);
     return owner.executeReplaceSourceRemovalEffect(operation);
   }
   await redriveReplaceSourceRetirement(owner, operation, decision.observation);
   return waitForReplaceOwner(owner, operation,
-    REPLACE_WAIT_REASON.SOURCE_MEMBERSHIP_REMOVAL_PENDING, waitContext);
+    REPLACE_WAIT_REASON.SOURCE_MEMBERSHIP_REMOVAL_PENDING, rowContext);
 }
 
 function waitAdmission(reason, witness = null) {
@@ -525,11 +587,7 @@ function waitAdmission(reason, witness = null) {
  * @return {Object} Frozen admission.
  */
 function revalidateReplaceSourceRemovalEffect(owner, operation, entryLevel) {
-  const cachedRow = owner.repository.getReplicaOperationRowFromCache?.(
-    operation.operationId) || null;
-  const cachedTerminal = cachedRow !== null &&
-    cachedRow.completed_at !== null && cachedRow.completed_at !== undefined;
-  if (owner.repository.isOperationTerminal(operation) || cachedTerminal ||
+  if (isReplaceOperationTerminalObserved(owner, operation) ||
       operation.workflowStep !== WORKFLOW_STEP.STOPPING ||
       isTargetFailureDetectorDead(owner, operation)) {
     return waitAdmission(REPLACE_WAIT_REASON.EFFECT_REVALIDATION_MOVED);
@@ -633,7 +691,11 @@ function isReplaceExemptFromTimeBudget(operation) {
 function recordReplaceBudgetDiagnostic(owner, operation) {
   const previous = readReplaceOwnerDiagnostic(owner, operation.operationId);
   return recordReplaceWaitDiagnostic(owner, operation,
-    previous?.reason || REPLACE_WAIT_REASON.BUDGET_ELAPSED, null);
+    previous?.reason || REPLACE_WAIT_REASON.BUDGET_ELAPSED, null, {
+      ownerPhase: previous?.ownerPhase,
+      stalenessClass: previous?.stalenessClass,
+      retirementAdmissible: previous?.retirementAdmissible,
+    });
 }
 
 function sourceRowClassOf(sourceRow) {
@@ -685,12 +747,14 @@ export {
   decideReplaceCompletion,
   isPartitionReplace,
   isReplaceExemptFromTimeBudget,
+  isReplaceOperationTerminalObserved,
   isReplaceRemovalIntentDurable,
   isReplaceTerminalFailureAdmitted,
   isTargetFailureDetectorDead,
   readReplaceOwnerDiagnostic,
   readReplaceOwnerPhase,
   recordReplaceBudgetDiagnostic,
+  recordReplaceOwnerWait,
   recordReplaceSourceRemovalEffect,
   reconcileReplaceStoppingOwner,
   recordReplaceWaitDiagnostic,
