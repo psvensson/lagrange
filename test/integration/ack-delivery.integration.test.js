@@ -19,6 +19,7 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ReplicaLifecycleManager} from '../../src/node/replica-lifecycle-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 let portCounter = 33000;
 
@@ -110,7 +111,7 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
     await res.mg.initialize();
     await wait(() => res.mg.isLeaderReplica());
 
-    res.part = new PartitionService({
+    res.part = new PartitionService(withFoundingStamp({
       partitionId: 'p1',
       tableId: 't1',
       tableName: 't1',
@@ -124,7 +125,7 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
       messageGroupService: res.mg,
       messageRouter: res.router,
       systemTableCache: new SystemTableCache(),
-    });
+    }));
     await res.part.initialize();
     await wait(() => res.part.isLeader);
 

@@ -29,6 +29,7 @@ import {
 import {
   PARTITION_SERVICE_EVENT,
 } from '../../src/partition/partition-service-constants.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 /**
  * Partition ID for the child partition under test.
@@ -142,7 +143,7 @@ function createMockCdcIntegrationService() {
  * @return {PartitionService} child partition service
  */
 function createChildPartition(cdcIntegrationService, systemTableCache) {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId: CHILD_PARTITION_ID,
     tableId: CHILD_TABLE_ID,
     tableName: CHILD_TABLE_NAME,
@@ -152,7 +153,7 @@ function createChildPartition(cdcIntegrationService, systemTableCache) {
     dbPath: ':memory:',
     cdcIntegrationService,
     systemTableCache,
-  });
+  }));
 }
 
 test('setup child partition leader propagation tests', async (t) => {
@@ -301,7 +302,7 @@ test('leader_node_id write is not issued without cdcIntegrationService',
     const cache = createMockSystemTableCache();
     // Create partition without cdcIntegrationService — the helper
     // should queue the value but not attempt a write.
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: CHILD_PARTITION_ID,
       tableId: CHILD_TABLE_ID,
       tableName: CHILD_TABLE_NAME,
@@ -310,7 +311,7 @@ test('leader_node_id write is not issued without cdcIntegrationService',
       nodeId: CHILD_NODE_ID,
       dbPath: ':memory:',
       systemTableCache: cache,
-    });
+    }));
 
     try {
       await partition.initialize();

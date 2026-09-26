@@ -77,18 +77,27 @@ test('T7: no reader outside src/raft takes membership from a status ' +
     {outsideRaft: true}), [], 'nobody reads confState off a status');
 });
 
-test('T7: exactly two stamp origins - the leader\'s COMMITTED answer at ' +
-  'creation and the provisioner\'s GENESIS founding set', () => {
+test('T7: the stamp origins - the leader\'s COMMITTED answer at creation, ' +
+  'and the GENESIS founding sets of the provisioner and the seed', () => {
   assert.deepEqual(filesMatching(/\bcommittedStampOfAnswer\(/u)
     .filter((file) => file !== 'src/raft/raft-committed-membership-stamp.js'),
   ['src/rebalancer/committed-membership-bootstrap-read.js']);
   assert.deepEqual(filesMatching(/\bgenesisStamp\(/u)
     .filter((file) => file !== 'src/raft/raft-committed-membership-stamp.js'),
-  ['src/query/sql-query-engine-initial-partition-provisioning.js']);
+  [
+    // V1a: the seed founds its system partitions from an explicit stamp.
+    'src/bootstrap/phases/seed-partitions-phase.js',
+    'src/query/sql-query-engine-initial-partition-provisioning.js',
+  ]);
   assert.deepEqual(filesMatching(/\bdurableRecordBootstrap\(/u)
     .filter((file) => file !== 'src/raft/raft-committed-membership-stamp.js'),
-  ['src/bootstrap/shared/durable-rejoin-partition-restore-planner.js'],
-  'the one non-stamp bootstrap source (O4) has one origin');
+  [
+    'src/bootstrap/shared/durable-rejoin-partition-restore-planner.js',
+    // V1a: a snapshot install's replacement reopens from its record.
+    'src/raft/snapshot-catchup.js',
+  ],
+  'the one non-stamp bootstrap source (O4): a durable rejoin and a ' +
+    'snapshot-install replacement');
 });
 
 test('T7: the stamp is carried, never re-derived: the set of files that ' +
@@ -100,6 +109,8 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     'src/rebalancer/committed-membership-bootstrap-read.js',
     'src/rebalancer/rebalance-coordinator-operation-creation.js',
     'src/bootstrap/shared/durable-rejoin-partition-restore-planner.js',
+    'src/bootstrap/phases/seed-partitions-phase.js',
+    'src/raft/snapshot-catchup.js',
     // Carriers: the dispatch request, row rehydration (two readers), the
     // owner-port merge, the legacy lifecycle adapter.
     'src/control-plane/replica-dispatch-readiness-capture.js',
@@ -196,6 +207,54 @@ test('T7 (integration): the REPLACE target and surviving-member reads are ' +
   assert.deepEqual(filesMatching(/readPartitionReplicaMembership\(/u)
     .filter((file) => file !==
       'src/partition/partition-service-raft-membership-administration.js'),
-  ['src/node/replica-handler-membership-methods.js'],
+  [
+    'src/node/replica-handler-membership-methods.js',
+    // F2: a retiring replica reads its own configuration to leave consensus
+    // (the same witness read, addressed to itself; no REPLACE module).
+    'src/node/replica-removal-consensus-exit.js',
+  ],
   'the witness message has one handler reader');
+});
+
+// V1a (verification O1 round 1): a partition replica opens from a stamp or
+// the durable-record bootstrap, and from nothing else. Every construction
+// site of a partition service in src is declared here with how its
+// bootstrap arrives; a new site turns this red, and at runtime the port
+// refuses a replica opened without one (STAMP_INVALID, MISSING), so a third
+// origin fails visibly both ways.
+const PARTITION_CONSTRUCTION =
+  /new PartitionService\(|createPartitionService\(|createJoinLocalPartitionService\(/u;
+const PARTITION_CONSTRUCTION_SITES = Object.freeze({
+  // The seed founds its system partitions: an explicit GENESIS stamp.
+  'src/bootstrap/phases/seed-partitions-phase.js':
+    /new PartitionService\(\{[\s\S]{0,600}?bootstrapMembership: genesisStamp\(options\.replicaIds\)/u,
+  // The replica handler's create: the stamp it validated on arrival.
+  'src/node/replica-handler-create-methods.js':
+    /this\.createPartitionService\(\{[\s\S]{0,900}?bootstrapMembership: context\.bootstrapMembership,/u,
+  // A snapshot install's replacement: the durable-record bootstrap.
+  'src/raft/snapshot-catchup.js':
+    /buildReplacementServiceOptions\(service\) \{[\s\S]{0,400}?bootstrapMembership: durableRecordBootstrap\(\)/u,
+  // Factories: they forward their caller's options unchanged (the handler's
+  // stamp, a durable rejoin's restore plan, a replacement's bootstrap).
+  'src/bootstrap/bootstrap-service-replica-registration-methods.js':
+    /new PartitionService\(\{\s*\.\.\.options,/u,
+  'src/bootstrap/node-joining-publication-activation.js':
+    /new PartitionService\(\{\s*\.\.\.options,/u,
+  'src/bootstrap/shared/snapshot-catchup-wiring.js':
+    /await createPartitionService\(serviceOptions\)/u,
+  // The durable-rejoin lifecycle: a restore plan (durableRecordBootstrap)
+  // or the join options it queued, which are restore plans.
+  'src/bootstrap/node-joining-message-group-runtime-delegation.js':
+    /directOptions \|\|\s*this\.resolveJoinReplicaOptions\(/u,
+});
+
+test('V1a census: every partition-service construction site in src opens ' +
+  'from a stamp or the durable-record bootstrap', () => {
+  assert.deepEqual(filesMatching(PARTITION_CONSTRUCTION),
+    Object.keys(PARTITION_CONSTRUCTION_SITES).sort(),
+    'the construction sites are the declared set');
+  for (const [file, evidence] of Object.entries(PARTITION_CONSTRUCTION_SITES)) {
+    const {code} = FILES.find(({relative}) => relative === file);
+    assert.match(code, evidence, `${file}: its bootstrap is declared`);
+  }
 });

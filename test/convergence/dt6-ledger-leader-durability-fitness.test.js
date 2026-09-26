@@ -14,6 +14,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {LEADER_DURABILITY_CONSEQUENCE_OUTCOME} from
   '../../src/partition/partition-service-durability-fitness.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 // Quest formation-ledger-leader-local-persistence-wedge (P1) — deterministic
 // reproduction of the run-23 ledger-leader durability freeze:
@@ -92,7 +93,7 @@ function makeTmpDbPath(t) {
 }
 
 async function createLeaderPartition(t, {unfitEvents}) {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: `replica_operations-p9-${tmpDirCounter}`,
     tableId: 'replica_operations',
     tableName: 'replica_operations',
@@ -106,7 +107,7 @@ async function createLeaderPartition(t, {unfitEvents}) {
       ],
     },
     dbPath: makeTmpDbPath(t),
-  });
+  }));
   await partition.initialize();
   if (typeof partition.setLeaderDurabilityUnfitHook === 'function') {
     partition.setLeaderDurabilityUnfitHook((evidence) => {

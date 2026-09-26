@@ -43,6 +43,7 @@ import {
   createTopologyCache,
   setupConfig,
 } from '../topology/cdc-group-propagation-service-harness.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 const NODE_ID = 'seed-node';
 const REPLICA_ID = 'replica_operations-p1-r1';
@@ -113,7 +114,7 @@ test('the seed teardown completes when the latency topology stops inside a ' +
   const bridge = new SeedRuntimeBridgeOwner({
     delegates: {getLatencyTopology: () => topology},
   });
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'replica_operations-p1',
     tableId: 'replica_operations',
     tableName: 'replica_operations',
@@ -122,7 +123,7 @@ test('the seed teardown completes when the latency topology stops inside a ' +
     nodeId: NODE_ID,
     dbPath: ':memory:',
     schema: SCHEMA,
-  });
+  }));
   await partition.initialize();
   const sourceMessageGroup = createSourceMessageGroupService();
   await partition.subscribeToCDCWithHandshake(

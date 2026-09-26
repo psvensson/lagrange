@@ -59,6 +59,7 @@ import {RUNTIME_PHASE} from
 import {PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} from
   '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const TEMP_PREFIX = 'committed-statement-outcome-';
 const DB_FILE = 'partition.sqlite';
@@ -193,7 +194,7 @@ async function withPartition(partitionId, body) {
   const dbPath = path.join(directory, DB_FILE);
   const services = [];
   const open = async () => {
-    const service = new PartitionService(partitionOptions(partitionId, dbPath));
+    const service = new PartitionService(withFoundingStamp(partitionOptions(partitionId, dbPath)));
     services.push(service);
     await service.initialize();
     return service;

@@ -15,6 +15,7 @@ import {
 } from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -97,7 +98,7 @@ test('Property 4: Tables are implemented as SQLite-backed Raft partitions', asyn
         const partitionId = `${tableId}-p1`;
         const replicaId = `${partitionId}-r1`;
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           tableName: tableId,
@@ -105,7 +106,7 @@ test('Property 4: Tables are implemented as SQLite-backed Raft partitions', asyn
           replicaIds: [replicaId],
           schema,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -159,13 +160,13 @@ test('Property 4: Partitions maintain Raft consensus state', async (t) => {
         const partitionId = `${tableId}-p1`;
         const replicaId = `${partitionId}-r1`;
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           replicaId,
           replicaIds: [replicaId],
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -233,7 +234,7 @@ test('Property 4: Partition data is persisted in SQLite', async (t) => {
           ],
         };
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId: `${tableId}-p1`,
           tableId,
           tableName: tableId,
@@ -241,7 +242,7 @@ test('Property 4: Partition data is persisted in SQLite', async (t) => {
           replicaIds: [`${tableId}-p1-r1`],
           schema,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();

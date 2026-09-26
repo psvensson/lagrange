@@ -29,6 +29,7 @@ import {decodeCommittedProposal} from
   '../../src/raft/raft-rs-proposal-codec.js';
 import {RAFT_RS_ENTRY_TYPE} from
   '../../src/raft/raft-rs-ready-loop-constants.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 const {PARTITION_SERVICE_OPERATION, PARTITION_SERVICE_SQL} =
   partitionVocabulary;
@@ -160,7 +161,7 @@ test('W1 a session rollback never erases consensus rows, and the partition ' +
   const options = partitionOptions('w1-rollback', dbPath);
   let restarted = null;
   try {
-    const first = new PartitionService(options);
+    const first = new PartitionService(withFoundingStamp(options));
     let beforeSession;
     let afterSession;
     let status;
@@ -183,7 +184,7 @@ test('W1 a session rollback never erases consensus rows, and the partition ' +
     }
     const beforeRestart = durableRecordOf(dbPath, options.partitionId);
     let restartOutcome = null;
-    restarted = new PartitionService(options);
+    restarted = new PartitionService(withFoundingStamp(options));
     try {
       await restarted.initialize();
     } catch (error) {
@@ -229,7 +230,7 @@ test('W2 an acknowledged sessionless write is never erased by a named ' +
 {timeout: TEST_TIMEOUT_MS}, async () => {
   quietEnvironment();
   const {directory, dbPath} = tempDbPath();
-  const service = new PartitionService(partitionOptions('w2-ack', dbPath));
+  const service = new PartitionService(withFoundingStamp(partitionOptions('w2-ack', dbPath)));
   try {
     await service.initialize();
     await service.beginTransaction('s1');
@@ -287,7 +288,7 @@ test('W6 a session\'s commit and rollback markers are proposed only after ' +
 {timeout: TEST_TIMEOUT_MS}, async () => {
   quietEnvironment();
   const {directory, dbPath} = tempDbPath();
-  const service = new PartitionService(partitionOptions('w6-order', dbPath));
+  const service = new PartitionService(withFoundingStamp(partitionOptions('w6-order', dbPath)));
   try {
     await service.initialize();
     const written = await sessionlessWrite(service, SESSIONLESS_FIRST,

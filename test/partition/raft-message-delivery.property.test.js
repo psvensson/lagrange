@@ -16,6 +16,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
 import {isRaftPacket, RAFT_PACKET_TYPES} from '../../src/raft/raft-packet-utils.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 // Port counter for unique ports per test
 let testPortCounter = 32000;
@@ -106,7 +107,7 @@ test('Property 3: Raft messages are delivered to correct handler', async (t) => 
           await router.initialize({startServer: true});
 
           // Create partition with real transport
-          const partition = new PartitionService({
+          const partition = new PartitionService(withFoundingStamp({
             partitionId,
             tableId,
             replicaId,
@@ -114,7 +115,7 @@ test('Property 3: Raft messages are delivered to correct handler', async (t) => 
             nodeId,
             transport: router,
             dbPath: ':memory:',
-          });
+          }));
 
           await partition.initialize();
 
@@ -209,7 +210,7 @@ test('Property 3: Co-located replicas receive messages via router', async (t) =>
           await router.initialize({startServer: true});
 
           // Create two partitions on the same node
-          const partition1 = new PartitionService({
+          const partition1 = new PartitionService(withFoundingStamp({
             partitionId,
             tableId,
             replicaId: replicaId1,
@@ -218,9 +219,9 @@ test('Property 3: Co-located replicas receive messages via router', async (t) =>
             nodeId,
             transport: router,
             dbPath: ':memory:',
-          });
+          }));
 
-          const partition2 = new PartitionService({
+          const partition2 = new PartitionService(withFoundingStamp({
             partitionId,
             tableId,
             replicaId: replicaId2,
@@ -229,7 +230,7 @@ test('Property 3: Co-located replicas receive messages via router', async (t) =>
             nodeId,
             transport: router,
             dbPath: ':memory:',
-          });
+          }));
 
           await partition1.initialize();
           await partition2.initialize();

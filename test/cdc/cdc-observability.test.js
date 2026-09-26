@@ -17,6 +17,7 @@ import {
   CDC_PIPELINE_METRIC,
   CDC_EVENT_BUFFER_CAPACITY,
 } from '../../src/constants/cdc-lifecycle-constants.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -37,13 +38,13 @@ test('CDC observability - warning log when no subscribers and buffer full',
     const warnLogs = [];
     const metrics = new CDCPipelineMetrics();
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'obs-test-p1',
       tableId: 'nodes',
       tableName: 'nodes',
       replicaId: 'obs-test-r1',
       cdcPipelineMetrics: metrics,
-    });
+    }));
 
     await partition.initialize();
 

@@ -23,6 +23,7 @@ import {
   resolveReplicaCheckpointsRoot,
 } from '../../src/raft/snapshot-install.js';
 import {waitForCondition} from './bulk-transfer-socket-fixture.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 // The leader checkpoint cadence on the rs-raft partition path (quest
 // raft-rs-single-path-partition-cutover, design S19). Checkpoint creation and
@@ -173,7 +174,7 @@ test('ENGAGEMENT: the 1s prepared-state-hold sweep ticks the cadence on a ' +
     const replicaId = `${PARTITION_ID}-r1`;
     const peerReplicaId = `${PARTITION_ID}-r2`;
     const addressManager = AddressManager.getInstance();
-    service = new PartitionService({
+    service = new PartitionService(withFoundingStamp({
       partitionId: PARTITION_ID,
       tableId: STATE_TABLE,
       tableName: STATE_TABLE,
@@ -187,7 +188,7 @@ test('ENGAGEMENT: the 1s prepared-state-hold sweep ticks the cadence on a ' +
       schema: SCHEMA,
       deferElection: true,
       preparedStateHoldSweepIntervalMs: SWEEP_INTERVAL_MS,
-    });
+    }));
     await service.initialize();
     // The sweep constructs the cadence lazily on its first tick.
     const cadence = await waitForCondition(

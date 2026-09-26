@@ -34,6 +34,7 @@ import {
   evaluateLearnerPromotionProof,
   refuseLearnerPromotionProof,
 } from '../../src/raft/learner-promotion-progress.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const PARTITION_ID = 'wake-partition';
 const LEARNER_REPLICA_ID = 'replica-learner';
@@ -69,7 +70,7 @@ afterEach(() => {
 });
 
 function createLearner(options = {}) {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: 'wake-table',
     replicaId: LEARNER_REPLICA_ID,
@@ -81,7 +82,7 @@ function createLearner(options = {}) {
       options.retryIntervalMs || RETRY_INTERVAL_MS,
     replicaStateMachine: options.replicaStateMachine,
     transport: options.transport,
-  });
+  }));
   partition.role = RaftRole.LEARNER;
   return partition;
 }

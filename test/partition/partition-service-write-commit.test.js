@@ -28,6 +28,7 @@ import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../../src/raft/raft-rs-durable-store-constants.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 
 beforeEach(() => {
@@ -165,7 +166,7 @@ test('PartitionService retains the durable witness for completed idempotent repl
   async (t) => {
     // Production construction: a lone rs-raft leader commits and applies its
     // own proposal.
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'commit-replay',
       tableId: 'test_table',
       tableName: 'test_table',
@@ -179,7 +180,7 @@ test('PartitionService retains the durable witness for completed idempotent repl
         ],
       },
       dbPath: ':memory:',
-    });
+    }));
     await partition.initialize();
 
     const operation = {
@@ -386,7 +387,7 @@ test(
     'outcome, not a host failure',
   async (t) => {
     // Production construction: a lone rs-raft leader.
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'statement-failed',
       tableId: 'test_table',
       tableName: 'test_table',
@@ -400,7 +401,7 @@ test(
         ],
       },
       dbPath: ':memory:',
-    });
+    }));
     await partition.initialize();
     try {
       const appliedBefore = durableAppliedIndex(partition);

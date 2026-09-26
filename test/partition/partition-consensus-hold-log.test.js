@@ -38,6 +38,7 @@ import {
 import {RUNTIME_PHASE} from '../../src/raft/raft-rs-runtime-owner-constants.js';
 import {recoveryRetryWindowMsOf} from
   '../../src/raft/raft-rs-runtime-tuning.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const TEMP_PREFIX = 'partition-consensus-hold-log-';
 const DB_FILE = 'partition.sqlite';
@@ -132,7 +133,7 @@ test('F-an: a hold on a contained unexpected throw is named once at error ' +
   quietEnvironment();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
   const partitionId = 'fan-hold-log';
-  const service = new PartitionService({
+  const service = new PartitionService(withFoundingStamp({
     partitionId,
     tableId: TABLE_NAME,
     tableName: TABLE_NAME,
@@ -144,7 +145,7 @@ test('F-an: a hold on a contained unexpected throw is named once at error ' +
       {name: 'id', type: 'TEXT', primaryKey: true},
       {name: 'value', type: 'TEXT'},
     ]},
-  });
+  }));
   const log = recordLog(service);
   const namingHold = (level) => log.filter((entry) => entry.level === level &&
     entry.payload?.phase === RUNTIME_PHASE.UNEXPECTED_THROW);

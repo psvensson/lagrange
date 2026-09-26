@@ -74,6 +74,7 @@ import {setActualCoreEntryObserver} from
 import * as runtimeConstants from
   '../../src/raft/raft-rs-runtime-owner-constants.js';
 import * as runtimeTuning from '../../src/raft/raft-rs-runtime-tuning.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const {
   PARTITION_SERVICE_ERROR_MSG,
@@ -312,7 +313,7 @@ async function withLonePartitions(extraOptions, body, raft = {}) {
   const services = [];
   const open = async (partitionId, options = extraOptions) => {
     const dbPath = path.join(directory, `${partitionId}-${DB_FILE}`);
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       ...tableOptions(),
       partitionId,
       replicaId: `${partitionId}-r1`,
@@ -320,7 +321,7 @@ async function withLonePartitions(extraOptions, body, raft = {}) {
       nodeId: 'reconstruction-node',
       dbPath,
       ...options,
-    });
+    }));
     services.push(partition);
     await partition.initialize();
     partition.startElection();

@@ -28,6 +28,7 @@ import {
   getUniquePort,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 function createAlwaysReadyControlPlaneReadinessService() {
   const dimensions = {
@@ -145,7 +146,7 @@ async function createStandaloneLocalPartition({
   schema,
 }) {
   const replicaId = `${partitionId}-r1`;
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId,
     tableId,
     tableName,
@@ -155,7 +156,7 @@ async function createStandaloneLocalPartition({
     dbPath: ':memory:',
     schema,
     keyRange: {start: null, end: null},
-  });
+  }));
   await partition.initialize();
   await Promise.resolve();
   return partition;

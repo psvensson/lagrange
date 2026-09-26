@@ -10,14 +10,15 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 function createTestPartitionService() {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId: 'partition-1',
     tableId: 'table-1',
     replicaId: 'partition-1-r1',
     dbPath: ':memory:',
-  });
+  }));
 }
 
 function createCapturingLogger(infoCalls) {

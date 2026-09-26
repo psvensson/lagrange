@@ -35,6 +35,7 @@ import {
   createMockStorageAdmissionService,
   createMockStoragePressureBehavior,
 } from './rebalancer-integration-doubles.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 // Port counter for unique ports per test
 let integrationPortCounter = 25000;
@@ -314,7 +315,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         const partitionId = 'test-partition-1';
         const schema = createTestSchema('test_table');
 
-        resources.seedPartition = new PartitionService({
+        resources.seedPartition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId: 'test_table',
           tableName: 'test_table',
@@ -335,7 +336,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           systemTableCache,
           cdcIntegrationService,
           tablePolicyService,
-        });
+        }));
 
         // Set SQL query engine to enable rebalancer initialization
         resources.seedPartition.setSqlQueryEngine(sqlQueryEngine);
