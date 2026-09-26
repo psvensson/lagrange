@@ -62,8 +62,11 @@ const RATCHET_TARGETS = [
     // cutover deleted the v1 solver (checker hint).
     // 2026-09-21: tightened 57/1845 -> 56/1815 after the raft-rs operation
     // port removed the duplicated node/control implementation surface.
-    baselineCloneGroupCount: 56,
-    baselineDuplicatedLineCount: 1815,
+    // 2026-09-26: tightened 56/1815 -> 55/1777 on the O1 committed-read
+    // branch (the partition row branch of the creation stamp deleted, the
+    // bootstrap metadata carriers looped; checker hint).
+    baselineCloneGroupCount: 55,
+    baselineDuplicatedLineCount: 1777,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -140,8 +143,11 @@ const RATCHET_TARGETS = [
     // 2026-09-26: tightened 791/30451 -> 788/30356 after the two
     // replacement-election nudge tests of the quorum-conditioned tail moved
     // onto one shared scenario runner (checker hint).
-    baselineCloneGroupCount: 788,
-    baselineDuplicatedLineCount: 30356,
+    // 2026-09-26: tightened 788/30356 -> 787/30313 on the O1 committed-read
+    // branch (the D1 anchor moved onto the shared committed-membership
+    // harness; checker hint).
+    baselineCloneGroupCount: 787,
+    baselineDuplicatedLineCount: 30313,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

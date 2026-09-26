@@ -405,7 +405,6 @@ async function admitThroughRows(harness, target, admitters) {
 }
 
 export {
-  TABLE_NAME,
   addressOf,
   admitThroughRows,
   buildTargetFromOperation,

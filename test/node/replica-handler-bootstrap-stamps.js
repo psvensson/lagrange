@@ -127,5 +127,4 @@ export {
   genesisStampFor,
   scenarioStampingReplicaHandler,
   withBootstrapStamp,
-  withScenarioStamp,
 };

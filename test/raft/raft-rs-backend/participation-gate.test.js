@@ -202,41 +202,57 @@ function tickIsolatedTarget(cluster) {
   }
 }
 
+// H6 with |D| = 2: founders a, b, c; +d, -b, +e, -a, so C_j = {c, d, e}
+// and every founder removed after genesis is a committed voter the
+// target's replayed view silently omits before j.
+function formH6History(cluster) {
+  const founders = ['h6-a', 'h6-b', 'h6-c'];
+  assert.ok(settle(cluster, () => leaderOf(cluster) !== null, ['h6-a']),
+    'setup: the founders elect a leader');
+  const genesis = genesisPeerIds(cluster, founders);
+  cluster.addReplica('h6-d', ['h6-a', 'h6-b', 'h6-c', 'h6-d']);
+  commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.ADD_PEER, 'h6-d',
+    live(cluster));
+  commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, 'h6-b',
+    live(cluster));
+  const skewPoint = durableAppliedState(
+    cluster.replica(leaderOf(cluster)).dbFile, PARTITION_ID).appliedIndex;
+  cluster.isolate('h6-b');
+  cluster.addReplica('h6-e', ['h6-a', 'h6-c', 'h6-d', 'h6-e']);
+  commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.ADD_PEER, 'h6-e',
+    live(cluster));
+  commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, 'h6-a',
+    live(cluster));
+  cluster.isolate('h6-a');
+  const leader = leaderOf(cluster);
+  return {genesis, skewPoint, leader,
+    stamp: oracleStamp(cluster, leader, genesis)};
+}
+
+function termAndVote(durable) {
+  return {term: durable.hard?.term ?? null, vote: durable.hard?.vote ?? null};
+}
+
+function membersExcept(cluster, excluded) {
+  return live(cluster).filter((replicaId) => replicaId !== excluded);
+}
+
 test('T4 (H6, |D|=2): a target below its gate on the silent-skew prefix ' +
   'never campaigns - O-d: its durable term and vote are unchanged', () => {
   const cap = {value: Number.POSITIVE_INFINITY};
   const cluster = createCluster(['h6-a', 'h6-b', 'h6-c'],
     {rewriteToTarget: cappedDelivery(cap)});
   try {
-    const founders = ['h6-a', 'h6-b', 'h6-c'];
-    assert.ok(settle(cluster, () => leaderOf(cluster) !== null, ['h6-a']),
-      'setup: the founders elect a leader');
-    const genesis = genesisPeerIds(cluster, founders);
-    cluster.addReplica('h6-d', ['h6-a', 'h6-b', 'h6-c', 'h6-d']);
-    commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.ADD_PEER, 'h6-d',
-      live(cluster));
-    commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, 'h6-b',
-      live(cluster));
-    const skewPoint = durableAppliedState(
-      cluster.replica(leaderOf(cluster)).dbFile, PARTITION_ID).appliedIndex;
-    cluster.isolate('h6-b');
-    cluster.addReplica('h6-e', ['h6-a', 'h6-c', 'h6-d', 'h6-e']);
-    commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.ADD_PEER, 'h6-e',
-      live(cluster));
-    commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, 'h6-a',
-      live(cluster));
-    cluster.isolate('h6-a');
-    const leader = leaderOf(cluster);
-    const stamp = oracleStamp(cluster, leader, genesis);
+    const {genesis, skewPoint, leader, stamp} = formH6History(cluster);
     assert.equal(stamp.voters.length, 3, 'setup: C_j = {c, d, e}');
 
     cap.value = skewPoint;
     addTarget(cluster, stamp);
     commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.ADD_PEER, TARGET,
-      live(cluster).filter((replicaId) => replicaId !== TARGET));
+      membersExcept(cluster, TARGET));
     assert.ok(settle(cluster, () =>
       targetDurable(cluster).applied.appliedIndex === skewPoint,
-    live(cluster).filter((replicaId) => replicaId !== TARGET)),
+    membersExcept(cluster, TARGET)),
     'setup: the target applied the prefix up to the skew point');
     const fold = logFold(cluster.replica(leader).dbFile, PARTITION_ID,
       genesis);
@@ -250,16 +266,12 @@ test('T4 (H6, |D|=2): a target below its gate on the silent-skew prefix ' +
       'setup: the target is below its gate');
     cluster.isolate(TARGET);
     tickIsolatedTarget(cluster);
-    const ticked = targetDurable(cluster);
-    assert.deepEqual({term: ticked.hard?.term ?? null,
-      vote: ticked.hard?.vote ?? null},
-    {term: before.hard?.term ?? null, vote: before.hard?.vote ?? null},
-    'O-d: no term and no vote while below the gate');
+    assert.deepEqual(termAndVote(targetDurable(cluster)), termAndVote(before),
+      'O-d: no term and no vote while below the gate');
     const campaign = cluster.node(TARGET).campaign();
     assert.equal(campaign.reason, PARTICIPATION_GATE.GATE_CLOSED,
       'an explicit campaign below the gate is refused typed');
-    const after = targetDurable(cluster);
-    assert.equal(after.hard?.term ?? null, before.hard?.term ?? null,
+    assert.deepEqual(termAndVote(targetDurable(cluster)), termAndVote(before),
       'O-d: the refused campaign raised no term');
     assert.notEqual(roleOf(cluster, TARGET), LEADER_ROLE);
     assert.equal(cluster.node(TARGET).readStatus().gateOpen, false);
