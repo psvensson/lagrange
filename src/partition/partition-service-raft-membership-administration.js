@@ -359,8 +359,21 @@ async function readPartitionReplicaMembership(service, sourceReplicaIdentity) {
     appliedIndex: answer.appliedIndex,
     gateOpen: answer.gateOpen,
     leaderReplicaId: answer.leaderId ?? null,
+    // The answered configuration's voters by replica identity (null for an
+    // id this replica has not reserved), so a reader can ask each voter to
+    // corroborate the answer's term and leader (fix-f7, V1).
+    voterReplicaIds: replicaIdentitiesOf(answer, answer.voters),
+    votersOutgoingReplicaIds: replicaIdentitiesOf(answer, answer.votersOutgoing),
     transferWindowMaxMs: leadershipTransferWindowMaxMsOf(service),
   });
+}
+
+function replicaIdentitiesOf(answer, peerIds) {
+  return Object.freeze(peerIds.map((peerId) => {
+    const identity = answer.identities[peerId];
+    return typeof identity === 'string' && identity.length > 0 ?
+      identity : null;
+  }));
 }
 
 /**

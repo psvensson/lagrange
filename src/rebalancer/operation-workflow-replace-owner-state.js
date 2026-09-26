@@ -125,6 +125,9 @@ function recordReplaceWaitDiagnostic(owner, operation, reason, observation,
     retirementAdmissible: details.retirementAdmissible === true,
     leaderReplicaId: observation?.leaderReplicaId ?? null,
     sourceMembership: observation?.state ?? null,
+    // Why the completion authority could not be read (a
+    // REPLACE_COMPLETION_AUTHORITY_WAIT reason), when it could not.
+    authorityWaitReason: observation?.reason ?? null,
     severity: diagnosticSeverityOf(operation, nowMs),
   });
   state.diagnosticByOperationId.set(operation.operationId, diagnostic);

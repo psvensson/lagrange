@@ -528,6 +528,8 @@ function answerFixtureReplaceWitness(cache, payload) {
   const sourceVoter = !deletedSource &&
     !FIXTURE_RETIRING_ROW_STATUSES.has(
       String(sourceRow?.status || '').toLowerCase());
+  const leader = fixtureWitnessLeader(cache, partitionId, rows,
+    payload[ReplicaOperationField.REPLICA_ID]);
   return {
     status: ReplicaOperationResponseStatus.COMPLETED,
     [ReplicaOperationField.MEMBERSHIP]: {
@@ -538,10 +540,15 @@ function answerFixtureReplaceWitness(cache, payload) {
       partitionId,
       term: 1,
       commitIndex: FIXTURE_WITNESS_COMMIT_INDEX,
+      appliedIndex: FIXTURE_WITNESS_COMMIT_INDEX,
       // A fixture witness is a caught-up member: its gate is open (O1).
       gateOpen: true,
-      leaderReplicaId: fixtureWitnessLeader(cache, partitionId, rows,
-        payload[ReplicaOperationField.REPLICA_ID]),
+      leaderReplicaId: leader,
+      // fix-f7: the fixture has no group, so its leader's configuration
+      // names the leader alone and the leader corroborates itself; the
+      // real-group harness is the corroboration witness.
+      voterReplicaIds: leader ? [leader] : [],
+      votersOutgoingReplicaIds: [],
       transferWindowMaxMs: FIXTURE_WITNESS_TRANSFER_WINDOW_MS,
     },
   };

@@ -23,6 +23,7 @@ import {RAFT_MEMBERSHIP_OPERATION} from '../../src/raft/raft-operation-port-cons
 import {
   REPLACE_COMPLETION_VERDICT,
   decideReplaceCompletion,
+  readReplaceOwnerDiagnostic,
 } from '../../src/rebalancer/operation-workflow-replace-owner.js';
 import {
   disposeWorld,
@@ -91,6 +92,9 @@ test('deposed leader: R-1a completes from an isolated ex-leader while the ' +
         ({step: w.step, voter: w.sourceCommittedVoter, at: w.committed.commitIndex, member: w.committed.member})))})`);
     t.equal(decision.verdict, REPLACE_COMPLETION_VERDICT.UNAVAILABLE,
       'the uncorroborated answer is a typed WAIT');
+    t.equal(readReplaceOwnerDiagnostic(owner, world.operation.operationId)
+      ?.authorityWaitReason, 'completion_authority_not_corroborated',
+    'the owner\'s diagnostic names the typed reason');
     t.equal(decision.observation.reason,
       'completion_authority_not_corroborated',
       'typed reason: not corroborated by a majority at its term');
