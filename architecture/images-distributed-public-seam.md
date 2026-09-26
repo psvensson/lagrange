@@ -219,7 +219,7 @@ epic's memory notes.
   than a moved target.
 - **Embedded stop leaves the wire listener open** because the runtime driver
   contract has no teardown for native modules. Owner: the driver lifecycle.
-- **Bootstrap fresh-join under load.** `test/bootstrap/fresh-join-via-non-seed-node`
+- **Bootstrap fresh-join under load.** `test/bootstrap/fresh-join-via-non-seed-node.integration.test.js`
   passed alone on the lab host in 52 s and timed out at 132 s with
   connection-refused reconnects when run inside the full parallel cone on the
   same host. Recorded as a load-sensitivity finding for the bootstrap owner;
