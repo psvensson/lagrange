@@ -44,6 +44,10 @@ import {
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 import {
+  LIFECYCLE_ERROR_ALLOWED_KEYS,
+  findTopologyLeaks,
+} from '../../src/test-helpers/topology-leak-check.js';
+import {
   CONSUMER_RETRY_OUTCOME,
   LIFECYCLE_SQL,
   callBinding,
@@ -65,7 +69,6 @@ import {
   stopPlacedPgwireReplicas,
   useSingleNodeReplicaShape,
 } from './helpers/public-binding-seam-harness.js';
-import {topologyLeaksIn} from './helpers/public-topology-leak.js';
 import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
 
 const SEAM_TEST_TIMEOUT_MS = 360_000;
@@ -77,7 +80,6 @@ const LOOP_DELAY_PERCENTILE = 99;
 const NANOS_PER_MS = 1e6;
 const CONSUMER_RETRY_PAUSE_MS = 250;
 const PGWIRE_LOOPBACK = '127.0.0.1';
-const NODE_LISTENER_PORT_COUNT = 3;
 const seamPorts = createPortAllocator(import.meta.url);
 const PROBE_GUARD_SUBJECT =
   'public-binding-invocation-seam starts an embedded runtime';
@@ -291,9 +293,9 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
   // so a starved loop (not a slow host) would show here.
   const startLoopDelay = monitorEventLoopDelay({resolution: LOOP_DELAY_RESOLUTION_MS});
   startLoopDelay.enable();
-  // REST, admin (= REST + 1) and transport (= REST + 2) derive from one
-  // base, so the base comes from a consecutive block of the allocator.
-  const [restPort] = seamPorts.getPortBlock(NODE_LISTENER_PORT_COUNT);
+  // REST, admin and transport derive from one base (the listener-port
+  // model), so the allocator reserves the runtime's whole listener block.
+  const {restApiPort: restPort} = seamPorts.getListenerPorts();
   const pgwirePort = seamPorts.getPort();
   const runtime = await startSeamRuntime({
     credentials: CREDENTIALS,
@@ -513,7 +515,11 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
         ownerCode: OWNER_CODE.ROUTE_NOT_FOUND,
         retrySafe: false,
       });
-      st.same(topologyLeaksIn(unknown, topology), []);
+      st.same(findTopologyLeaks(
+        {failure: unknown, parsedDetail: JSON.parse(unknown.detail)}, {
+          allowedKeys: LIFECYCLE_ERROR_ALLOWED_KEYS,
+          forbiddenValues: topology,
+        }), []);
     });
 
   await t.test('the consumer cannot name an execution target (F2/F5)',

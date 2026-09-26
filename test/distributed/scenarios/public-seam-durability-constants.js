@@ -90,39 +90,6 @@ const PUBLIC_SEAM_INTERIM_RETRY_POLICY = Object.freeze({
   retryOnRetryAfterMs: true,
 });
 
-// Key fragments a public result must never carry (a topology leak).
-// Matched as word prefixes (camelCase, snake_case and kebab-case split), so
-// they are deliberately broad: a legitimate key such as `hostname` IS caught
-// by `host`, and `ownerId` by `owner`. For this harness a false positive
-// costs a look at the report; a missed topology key costs the seam claim.
-const PUBLIC_SEAM_TOPOLOGY_KEY_FRAGMENTS = Object.freeze([
-  'address',
-  'candidate',
-  'election',
-  'endpoint',
-  'epoch',
-  'follower',
-  'holder',
-  'host',
-  'leader',
-  'lease',
-  'member',
-  'node',
-  'owner',
-  'participant',
-  'partition',
-  'peer',
-  'placement',
-  'plan',
-  'quorum',
-  'replica',
-  'role',
-  'shard',
-  'term',
-  'voter',
-  'witness',
-]);
-
 // Where the value leak scan's partition identifiers came from. UNAVAILABLE
 // fails the leak check closed: a scan without them is incomplete.
 const PUBLIC_SEAM_IDENTIFIER_SOURCE = Object.freeze({
@@ -224,7 +191,6 @@ export {
   PUBLIC_SEAM_SQL,
   PUBLIC_SEAM_STEP,
   PUBLIC_SEAM_STEP_OUTCOME,
-  PUBLIC_SEAM_TOPOLOGY_KEY_FRAGMENTS,
   PUBLIC_SEAM_VERDICT,
   PUBLIC_SEAM_WRITE_OUTCOME,
 };

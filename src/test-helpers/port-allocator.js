@@ -22,6 +22,10 @@ import {
   DEFAULT_TEST_FILE_ID,
   TEST_HOST,
 } from './port-allocator-constants.js';
+import {
+  LISTENER_PORT_ENV,
+  resolveListenerPorts,
+} from '../config/listener-port-model.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_UTF8 = 'utf8';
@@ -379,7 +383,7 @@ export function getTestPort(testFileId = DEFAULT_TEST_FILE_ID) {
  * @param {string} [testFileId] - Optional test file identifier.
  * @return {number[]} Consecutive reserved ports, lowest first.
  */
-export function getTestPortBlock(count, testFileId = DEFAULT_TEST_FILE_ID) {
+function getTestPortBlock(count, testFileId = DEFAULT_TEST_FILE_ID) {
   const processScopedTestFileId = getProcessScopedTestFileId(testFileId);
   const basePort = getBasePort(processScopedTestFileId);
   const currentOffset = filePortOffsets.get(processScopedTestFileId) || 0;
@@ -397,6 +401,33 @@ export function getTestPortBlock(count, testFileId = DEFAULT_TEST_FILE_ID) {
     count,
     processScopedTestFileId,
   );
+}
+
+// One reserved port per listener a runtime opens (REST, admin WS,
+// transport WS).
+const NODE_LISTENER_PORT_COUNT = Object.keys(LISTENER_PORT_ENV).length;
+
+/**
+ * Reserve the listener ports of one runtime as a consecutive block and let
+ * the listener-port model derive the admin and transport ports from the REST
+ * port, so every consumer that derives a peer's transport address from its
+ * bare REST address (src/config/listener-port-model.js) reaches the port
+ * the runtime actually listens on.
+ *
+ * @param {string} [testFileId] - Optional test file identifier.
+ * @return {{restApiPort: number, adminWebSocketPort: number,
+ *   transportWebSocketPort: number}} The runtime's listener ports.
+ */
+function getTestListenerPorts(testFileId = DEFAULT_TEST_FILE_ID) {
+  const block = getTestPortBlock(NODE_LISTENER_PORT_COUNT, testFileId);
+  const ports = resolveListenerPorts({restApiPort: block[0]});
+  if (!block.includes(ports.adminWebSocketPort) ||
+      !block.includes(ports.transportWebSocketPort)) {
+    throw new RangeError(
+      `listener ports ${JSON.stringify(ports)} fall outside the reserved ` +
+      `block ${JSON.stringify(block)}`);
+  }
+  return ports;
 }
 
 /**
@@ -484,6 +515,15 @@ export function createPortAllocator(testFileId) {
      */
     getPortBlock(count) {
       return getTestPortBlock(count, testFileId);
+    },
+
+    /**
+     * Reserve one runtime's listener ports (see getTestListenerPorts).
+     * @returns {{restApiPort: number, adminWebSocketPort: number,
+     *   transportWebSocketPort: number}} The runtime's listener ports.
+     */
+    getListenerPorts() {
+      return getTestListenerPorts(testFileId);
     },
 
     /**

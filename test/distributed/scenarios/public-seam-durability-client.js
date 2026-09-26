@@ -1,8 +1,9 @@
 /**
  * Public-client seam of the public-seam durability scenario: the
  * PostgreSQL-wire client per node, what it observed, how a failed outcome
- * is classified for retry, the topology leak check, and the certification
- * status derivation.
+ * is classified for retry, the topology identifiers the leak check scans
+ * for (the check itself is src/test-helpers/topology-leak-check.js), and
+ * the certification status derivation.
  *
  * Nothing here reads consensus state. Endpoint discovery reads the
  * `service_endpoints` rows a public client would read, and listener
@@ -36,22 +37,16 @@ import {
   PUBLIC_SEAM_IDENTIFIER_SOURCE,
   PUBLIC_SEAM_LISTENER,
   PUBLIC_SEAM_OUTCOME_CLASS,
-  PUBLIC_SEAM_TOPOLOGY_KEY_FRAGMENTS,
 } from './public-seam-durability-constants.js';
 
 const OBJECT_TYPE = 'object';
 const STRING_TYPE = 'string';
-const KEY_PATH_SEPARATOR = '.';
-const ROOT_KEY_PATH = '$';
 const ERROR_FIELD = Object.freeze({
   CODE: 'code',
   DETAIL: 'detail',
   SEVERITY: 'severity',
 });
 const ZERO = 0;
-const CAMEL_CASE_BOUNDARY = /([a-z0-9])([A-Z])/gu;
-const CAMEL_CASE_REPLACEMENT = '$1 $2';
-const KEY_WORD_SEPARATOR = /[^a-z0-9]+/u;
 
 const SELECT_PUBLIC_ENDPOINTS_SQL =
   `SELECT ${EP_COL.NODE_ID}, ${EP_COL.PORT}, ${EP_COL.HEALTH_STATUS} ` +
@@ -133,75 +128,6 @@ function classifyPublicOutcome(described, policy) {
     return PUBLIC_SEAM_OUTCOME_CLASS.RETRYABLE;
   }
   return PUBLIC_SEAM_OUTCOME_CLASS.TERMINAL;
-}
-
-// A key is split into words (camelCase, snake_case, kebab-case) and leaks
-// when a word starts with a topology fragment: `servingNodeId`,
-// `leader_node_id` and `readAuthorityWitnesses` leak; `retryAfterMs` does
-// not (a raw substring test would match its "afTERMs").
-function keyWords(key) {
-  return String(key)
-    .replace(CAMEL_CASE_BOUNDARY, CAMEL_CASE_REPLACEMENT)
-    .toLowerCase()
-    .split(KEY_WORD_SEPARATOR)
-    .filter((word) => word.length > ZERO);
-}
-
-function keyLeaks(key) {
-  return keyWords(key).some((word) =>
-    PUBLIC_SEAM_TOPOLOGY_KEY_FRAGMENTS.some((fragment) =>
-      word.startsWith(fragment)));
-}
-
-/**
- * Every key path in `value` whose key names topology. Buffers and other
- * byte views are values, not structures, and are not descended into.
- * @param {*} value
- * @param {string} [path]
- * @return {Array<string>}
- */
-function findTopologyLeakKeys(value, path = ROOT_KEY_PATH) {
-  if (!value || typeof value !== OBJECT_TYPE || ArrayBuffer.isView(value)) {
-    return [];
-  }
-  const leaks = [];
-  for (const [key, child] of Object.entries(value)) {
-    const childPath = Array.isArray(value) ?
-      `${path}[${key}]` :
-      `${path}${KEY_PATH_SEPARATOR}${key}`;
-    if (!Array.isArray(value) && keyLeaks(key)) {
-      leaks.push(childPath);
-    }
-    leaks.push(...findTopologyLeakKeys(child, childPath));
-  }
-  return leaks;
-}
-
-/**
- * Every string value in `value` that names a topology identifier the
- * harness knows (node ids, node addresses, partition ids), e.g. an error
- * message or detail that says which node or partition served it.
- * @param {*} value
- * @param {Array<string>} identifiers
- * @param {string} [path]
- * @return {Array<string>} `<path>=<identifier>` entries.
- */
-function findTopologyLeakValues(value, identifiers, path = ROOT_KEY_PATH) {
-  if (typeof value === STRING_TYPE) {
-    return identifiers.filter((identifier) => value.includes(identifier))
-      .map((identifier) => `${path}=${identifier}`);
-  }
-  if (!value || typeof value !== OBJECT_TYPE || ArrayBuffer.isView(value)) {
-    return [];
-  }
-  const leaks = [];
-  for (const [key, child] of Object.entries(value)) {
-    const childPath = Array.isArray(value) ?
-      `${path}[${key}]` :
-      `${path}${KEY_PATH_SEPARATOR}${key}`;
-    leaks.push(...findTopologyLeakValues(child, identifiers, childPath));
-  }
-  return leaks;
 }
 
 /**
@@ -371,8 +297,6 @@ export {
   deriveCertificationStatus,
   describePublicError,
   discoverPublicEndpoints,
-  findTopologyLeakKeys,
-  findTopologyLeakValues,
   listHarnessTopologyIdentifiers,
   openPgPublicClient,
   provisionPublicListener,

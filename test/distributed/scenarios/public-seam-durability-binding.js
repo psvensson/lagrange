@@ -15,7 +15,9 @@ import {
   deployThroughPipeline,
   prepareServiceProject,
 } from './service-pipeline-deployment-helpers.js';
-import {findTopologyLeakKeys} from './public-seam-durability-client.js';
+import {
+  findTopologyLeaks,
+} from '../../../src/test-helpers/topology-leak-check.js';
 import {
   PUBLIC_SEAM_BINDING,
   PUBLIC_SEAM_BINDING_SQL,
@@ -133,7 +135,8 @@ function bindingGate(ctx) {
 // step even when every oracle field matches. The oracle compares values;
 // it never hides a leaked key.
 function invocationResult(comparison, invoked, nodeId) {
-  const leakedKeys = findTopologyLeakKeys(invoked.summaries);
+  const leakedKeys = findTopologyLeaks(invoked.summaries)
+    .map((leak) => leak.path);
   const ok = comparison.matches && leakedKeys.length === ZERO;
   return {
     actual: {leakedKeys, nodeId, summaries: comparison.actual,
