@@ -216,45 +216,74 @@ test('T7 (integration): the REPLACE target and surviving-member reads are ' +
   'the witness message has one handler reader');
 });
 
-// V1a (verification O1 round 1): a partition replica opens from a stamp or
-// the durable-record bootstrap, and from nothing else. Every construction
-// site of a partition service in src is declared here with how its
-// bootstrap arrives; a new site turns this red, and at runtime the port
-// refuses a replica opened without one (STAMP_INVALID, MISSING), so a third
-// origin fails visibly both ways.
+// V1a (verification O1 round 1; round 2 F-4): a partition replica opens
+// from a stamp or the durable-record bootstrap, and from nothing else.
+// Every construction SITE of a partition service in src - every call
+// expression, not every file - is declared here with how its bootstrap
+// arrives; a new site (a new file, or a second site in a declared file)
+// turns this red, and at runtime the port refuses a replica opened without
+// one (STAMP_INVALID, MISSING), so a third origin fails visibly both ways.
+// The method definition `async createJoinLocalPartitionService(` is not a
+// site.
 const PARTITION_CONSTRUCTION =
-  /new PartitionService\(|createPartitionService\(|createJoinLocalPartitionService\(/u;
+  /(?<!async )(?:new PartitionService|createPartitionService|createJoinLocalPartitionService)\(/gu;
 const PARTITION_CONSTRUCTION_SITES = Object.freeze({
   // The seed founds its system partitions: an explicit GENESIS stamp.
-  'src/bootstrap/phases/seed-partitions-phase.js':
+  'src/bootstrap/phases/seed-partitions-phase.js': [
     /new PartitionService\(\{[\s\S]{0,600}?bootstrapMembership: genesisStamp\(options\.replicaIds\)/u,
+  ],
   // The replica handler's create: the stamp it validated on arrival.
-  'src/node/replica-handler-create-methods.js':
+  'src/node/replica-handler-create-methods.js': [
     /this\.createPartitionService\(\{[\s\S]{0,900}?bootstrapMembership: context\.bootstrapMembership,/u,
+  ],
   // A snapshot install's replacement: the durable-record bootstrap.
-  'src/raft/snapshot-catchup.js':
+  'src/raft/snapshot-catchup.js': [
     /buildReplacementServiceOptions\(service\) \{[\s\S]{0,400}?bootstrapMembership: durableRecordBootstrap\(\)/u,
+  ],
   // Factories: they forward their caller's options unchanged (the handler's
   // stamp, a durable rejoin's restore plan, a replacement's bootstrap).
-  'src/bootstrap/bootstrap-service-replica-registration-methods.js':
+  'src/bootstrap/bootstrap-service-replica-registration-methods.js': [
     /new PartitionService\(\{\s*\.\.\.options,/u,
-  'src/bootstrap/node-joining-publication-activation.js':
+  ],
+  'src/bootstrap/node-joining-publication-activation.js': [
+    // The handler setup's factory: the handler's options, forwarded.
+    /this\.createJoinLocalPartitionService\(\{\.\.\.options, messageGroupService\}\)/u,
+    // The join's own construction: its caller's options, forwarded.
     /new PartitionService\(\{\s*\.\.\.options,/u,
-  'src/bootstrap/shared/snapshot-catchup-wiring.js':
-    /await createPartitionService\(serviceOptions\)/u,
+  ],
+  'src/bootstrap/shared/snapshot-catchup-wiring.js': [
+    // The catch-up wrapper: the wrapped factory's own options.
+    /const service = await createPartitionService\(serviceOptions\)/u,
+    // The replacement's factory: the handler's create with its options.
+    /replicaHandler\.createPartitionService\(serviceOptions\)/u,
+  ],
   // The durable-rejoin lifecycle: a restore plan (durableRecordBootstrap)
   // or the join options it queued, which are restore plans.
-  'src/bootstrap/node-joining-message-group-runtime-delegation.js':
+  'src/bootstrap/node-joining-message-group-runtime-delegation.js': [
     /directOptions \|\|\s*this\.resolveJoinReplicaOptions\(/u,
+  ],
 });
 
+function constructionSitesOf(code) {
+  return [...code.matchAll(PARTITION_CONSTRUCTION)].length;
+}
+
 test('V1a census: every partition-service construction site in src opens ' +
-  'from a stamp or the durable-record bootstrap', () => {
-  assert.deepEqual(filesMatching(PARTITION_CONSTRUCTION),
-    Object.keys(PARTITION_CONSTRUCTION_SITES).sort(),
-    'the construction sites are the declared set');
-  for (const [file, evidence] of Object.entries(PARTITION_CONSTRUCTION_SITES)) {
+  'from a stamp or the durable-record bootstrap - counted per site, not ' +
+  'per file', () => {
+  const found = FILES.filter(({code}) => constructionSitesOf(code) > 0)
+    .map(({relative}) => relative).sort();
+  assert.deepEqual(found, Object.keys(PARTITION_CONSTRUCTION_SITES).sort(),
+    'the files holding construction sites are the declared set');
+  for (const [file, sites] of Object.entries(PARTITION_CONSTRUCTION_SITES)) {
     const {code} = FILES.find(({relative}) => relative === file);
-    assert.match(code, evidence, `${file}: its bootstrap is declared`);
+    assert.equal(constructionSitesOf(code), sites.length,
+      `${file}: every construction site is declared (${sites.length})`);
+    for (const evidence of sites) {
+      assert.match(code, evidence, `${file}: a site's bootstrap is declared`);
+    }
   }
+  assert.equal(Object.values(PARTITION_CONSTRUCTION_SITES).flat().length,
+    FILES.reduce((sum, {code}) => sum + constructionSitesOf(code), 0),
+    'the declared sites are all the sites in src');
 });

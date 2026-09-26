@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1971,
+    "unit": 1972,
     "integration": 75,
     "bootstrap": 184,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2237,
-  "digest": "fnv1a32-8ace70a2",
+  "censusSize": 2238,
+  "digest": "fnv1a32-bc1517be",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1446,6 +1446,7 @@
     "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js": "unit",
     "test/raft/raft-rs-backend/evidence-o1-anchors.test.js": "unit",
     "test/raft/raft-rs-backend/evidence-o1-gate-histories.test.js": "unit",
+    "test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js": "unit",
     "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js": "unit",
     "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js": "unit",
     "test/raft/raft-rs-backend/evidence-o1-static.test.js": "unit",

@@ -564,6 +564,15 @@ async function b12Shape({key, sourceLetter, belowGate, verdict}) {
       'the below-gate verdict is the leader\'s own answer');
     assert.equal(below.observation.gateOpen, true,
       'the answering leader\'s gate is open');
+    // Round 3 (fix-f7, corroboration): the leader's answer decides only
+    // when its applied index equals its commit index and a majority of the
+    // voters it names corroborate its term and leader - the below-gate
+    // target among them (it adopted the term from the appends it holds).
+    assert.equal(Number(below.observation.appliedIndex),
+      Number(below.observation.commitIndex),
+      'the deciding answer has applied every committed entry');
+    assert.ok(below.observation.voterReplicaIds?.includes(target),
+      'the answer names the below-gate target among the voters it asked');
     cap.value = UNBOUNDED;
     assert.ok(settle(model, () =>
       model.node(target).readStatus().gateOpen === true, [leader]),

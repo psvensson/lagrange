@@ -209,3 +209,62 @@ record or witness that measured the replacement.
    `partition-admission-redrive-wakes` (4 wakes incl. leadership gain),
    `evidence-o1-anchors.test.js` joint anchor (the joint-leave cell),
    `evidence-o1-real-chain.test.js` M3 (premise inverted: no empty entry).
+
+### Round 3 supersessions (R09, 2026-09-28; appended after verification O1 round 2, production `659b7db95`)
+
+5. **Section 8 item 4 and section 3.5 - "the runtime answers a proposal the
+   core would drop as a typed, retryable deferral and never lets the crate
+   replace it with an empty entry".** True at the leader's port only; a
+   follower's proposal was forwarded by the crate (MsgPropose) into the
+   leader's `step_leader`, an ingress the deferral never saw (verifier
+   F-1: replaced silently by an empty entry, nothing tracked). Superseded
+   by the leader-only rule (`fixes/fix-f5-proposal-ingress`, in
+   `659b7db95`): conf-change proposals are taken only at the LEADER's port;
+   a replica that does not lead answers a typed, retryable `NOT_LEADER`
+   (`RAFT_MEMBERSHIP_CHANGE_REFUSAL.NOT_LEADER`, naming the leader it knows)
+   and hands the crate nothing - no entry, no forward. "Proposer role" is a
+   model dimension of D8 from here: every core role of `ROLE` is classified
+   (the leader proposes and defers what its core would drop; follower,
+   candidate and pre-candidate are refused). The admission and retirement
+   owners remember a NOT_LEADER answer beside a deferral and propose it
+   again on a settlement or when the replica gains leadership; a leader
+   source proposes its own RemoveNode through its own port (nobody else
+   can). Witnesses: `conf-change-leader-only` (F-1),
+   `evidence-o1-proposal-ingress` (proposer x pending kind, the
+   leadership-gain re-drive on the production admission path, no
+   re-admission of a removed founder), the wakes witness's NOT_LEADER latch.
+   Excluded, stated: an empty change (the leave) outside a joint
+   configuration has no producer past the port's normaliser. The
+   settlement's `admissible` flag (F-5) is deleted: nothing decided on it.
+6. **Removal effect without a durable REMOVING row.** New rule (lead ruling,
+   fix-f5 follow-up, in `659b7db95`): a removal never proceeds without a
+   durable REMOVING row - a REMOVING write that exhausts its retry defers
+   the REMOVE typed (the status-write deferral family), the operation stays
+   non-terminal and is re-dispatched by its durable owner, nothing retires;
+   the row-driven owner proposes the RemoveNode from the durable row; the
+   consensus exit is awaited whenever the port is live. Section 3 named no
+   such rule; it holds from here.
+7. **F1 completion authority - currentness.** The leader's answer decides
+   SOURCE_RETIRED / STILL_VOTER only when it is current: its applied index
+   equals its commit index (verifier F-3: an applied configuration one conf
+   entry behind commit is not an authority) and a majority of the voters it
+   names, per configuration when joint, corroborate its term and named
+   leader (a voter that names no leader yet corroborates; a different named
+   leader or a higher term counts against) - `fixes/fix-f7-completion-
+   currentness`, in `659b7db95`. Otherwise the authority is unavailable
+   typed (`APPLIED_BEHIND_COMMIT`, `NOT_CORROBORATED`) and R-1a waits. The
+   B12 anchors pin STILL_VOTER below the target's gate from the leader's
+   corroborated answer (the below-gate target itself among the corroborating
+   voters). A read-index (a linearizable read of the leader's committed
+   configuration through the crate's ReadIndex) is the R5 follow-up that
+   would replace corroboration by voters; recorded, not this release.
+8. **F2 consensus exit on the gate (verifier F-2), evidence.** The removed
+   replica's own read counts an absence only at or past its gate; below the
+   gate a REMOVING target keeps stepping and acking, its RemoveNode commits
+   on its ack, GATE_OPENED then MEMBERSHIP_CHANGED end the wait
+   (`evidence-o1-admission-liveness` F-2 cells). Under O2 a joiner's
+   below-gate view always names it (its bootstrap includes self), so the gate
+   clause is reachable only by a replica whose applied view omits it below
+   its gate - a GENESIS whose founders omit self (closed forever, fail
+   closed): that shape holds its exit to the backstop, and it is the shape
+   that discriminates the clause.
