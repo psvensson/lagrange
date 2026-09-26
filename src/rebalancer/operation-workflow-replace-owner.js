@@ -214,19 +214,42 @@ function buildReplaceCompletionRefusal(decision) {
 }
 
 /**
- * D2's admission of a terminal FAILED for a partition REPLACE: before the
- * durable intent every existing failure applies; after it, only target death
- * with the source still a voter.
+ * The step the operation's durable row holds, from the authoritative read;
+ * when the authority cannot be read, the caller's copy - whose FAILED write
+ * is then a CAS on exactly that step, so a copy that lags the durable intent
+ * still cannot cross it. A caller's in-memory copy may lag the durable
+ * removal intent; the D2 boundary is the row's.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @return {Promise<string>}
+ */
+async function readReplaceDurableStep(owner, operation) {
+  const authoritative = typeof owner.repository
+    ?.queryReplicaOperationPersistenceAuthorityOperation ===
+      OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
+    await owner.repository.queryReplicaOperationPersistenceAuthorityOperation(
+      operation) : null;
+  return authoritative?.workflowStep || operation.workflowStep;
+}
+
+/**
+ * D2's admission of a terminal FAILED for a partition REPLACE, decided on
+ * the DURABLE step: before the durable intent every existing failure
+ * applies; after it, only target death with the source still a voter. The
+ * admitted write is a CAS on the step it was admitted against, so a copy
+ * that read before the intent landed cannot write FAILED past it.
+ * @param {Object} owner
  * @param {Object} operation
  * @param {Object} options - failOperation options.
- * @return {boolean}
+ * @return {Promise<Object>} Frozen {admitted, expectedWorkflowStep}.
  */
-function isReplaceTerminalFailureAdmitted(operation, options = {}) {
-  if (!isReplaceRemovalIntentDurable(operation)) {
-    return true;
-  }
-  return options?.replacePostIntentFailure ===
-    REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED;
+async function admitReplaceTerminalFailure(owner, operation, options = {}) {
+  const durableStep = await readReplaceDurableStep(owner, operation);
+  const admitted = !isReplaceRemovalIntentDurable(
+    {...operation, workflowStep: durableStep}) ||
+    options?.replacePostIntentFailure ===
+      REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED;
+  return Object.freeze({admitted, expectedWorkflowStep: durableStep});
 }
 
 function buildReplaceFailureRefusal() {
@@ -749,7 +772,7 @@ export {
   isReplaceExemptFromTimeBudget,
   isReplaceOperationTerminalObserved,
   isReplaceRemovalIntentDurable,
-  isReplaceTerminalFailureAdmitted,
+  admitReplaceTerminalFailure,
   isTargetFailureDetectorDead,
   readReplaceOwnerDiagnostic,
   readReplaceOwnerPhase,

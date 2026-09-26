@@ -359,3 +359,85 @@ test('W7: a committed membership change relayed by the node wakes the ' +
     await harness.coordinator.shutdown();
   }
 });
+
+// A durable write of replica_operations that honours an expected-step CAS
+// (WHERE workflow_step = ?), as the production store does, on both write
+// routes (the gateway mutation and its SQL fallback).
+function enforceDurableStepCas(harness) {
+  const repository = harness.coordinator.repository;
+  const casHolds = (operationId, expectedStep) => {
+    const row = repository.getReplicaOperationRowFromCache?.(operationId);
+    return !row || row.workflow_step === expectedStep;
+  };
+  const gateway = harness.coordinator.controlPlaneSystemTableGateway;
+  const baseSubmit = gateway.submitMutation.bind(gateway);
+  gateway.submitMutation = async (mutation, options) => {
+    const expectedStep = mutation?.whereClause?.workflow_step;
+    const operationId = mutation?.whereClause?.operation_id;
+    if (typeof expectedStep === 'string' && operationId &&
+        !casHolds(operationId, expectedStep)) {
+      return {success: true, partitionResult: {affectedRows: 0}};
+    }
+    return baseSubmit(mutation, options);
+  };
+  const engine = harness.coordinator.sqlQueryEngine;
+  const baseExecute = engine.executeQuery.bind(engine);
+  engine.executeQuery = async (sql, params, options) => {
+    if (typeof sql === 'string' && sql.includes('UPDATE replica_operations') &&
+        sql.includes('AND workflow_step = ?') &&
+        !casHolds(params.at(-2), params.at(-1))) {
+      return {success: true, affectedRows: 0, changes: 0};
+    }
+    return baseExecute(sql, params, options);
+  };
+}
+
+function staleActiveCopy(operation) {
+  return {
+    ...operation,
+    workflowStep: WORKFLOW_STEP.ACTIVE,
+    status: ReplicaStatus.ACTIVE,
+    stepsHistory: operation.stepsHistory.filter((entry) =>
+      entry?.step !== WORKFLOW_STEP.STOPPING),
+  };
+}
+
+test('W8 (D2 boundary is durable): a stale in-memory copy cannot FAIL a ' +
+  'REPLACE past its durable removal intent', async (t) => {
+  const harness = await createHarness();
+  try {
+    await driveToRemovalIntent(harness);
+    enforceDurableStepCas(harness);
+    t.equal((await persistedOperation(harness)).workflowStep,
+      WORKFLOW_STEP.STOPPING, 'the intent is durable');
+    // A caller still holding the pre-intent (ACTIVE) copy.
+    await harness.owner.failOperation(
+      staleActiveCopy(harness.operation), 'Timeout in ACTIVE step');
+    t.equal((await persistedOperation(harness)).workflowStep,
+      WORKFLOW_STEP.STOPPING,
+      'the refusal reads the durable step, not the caller\'s copy');
+    // The copy's durable read also lags (it read ACTIVE before the intent
+    // landed): the terminal write itself is a CAS on that step.
+    const repository = harness.coordinator.repository;
+    const baseRead = repository.queryReplicaOperationPersistenceAuthorityOperation
+      .bind(repository);
+    repository.queryReplicaOperationPersistenceAuthorityOperation =
+      async (operation, options) => {
+        const read = await baseRead(operation, options);
+        return read ? staleActiveCopy(read) : read;
+      };
+    await harness.owner.failOperation(
+      staleActiveCopy(harness.operation), 'Timeout in ACTIVE step');
+    repository.queryReplicaOperationPersistenceAuthorityOperation = baseRead;
+    t.equal((await persistedOperation(harness)).workflowStep,
+      WORKFLOW_STEP.STOPPING,
+      'the FAILED write is a CAS on the step it was admitted against');
+    harness.witness.commitRemoval();
+    await harness.coordinator.reconcileOperationProgress(
+      await persistedOperation(harness));
+    t.equal((await persistedOperation(harness)).workflowStep,
+      WORKFLOW_STEP.REMOVED, 'the owner still completes it');
+  } finally {
+    await harness.coordinator.shutdown();
+  }
+});
