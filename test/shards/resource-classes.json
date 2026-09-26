@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2199,
+    "ordinary": 2201,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2216,
-  "digest": "fnv1a32-e8f693fd",
+  "censusSize": 2218,
+  "digest": "fnv1a32-ed05e8a2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -589,6 +589,8 @@
     "test/control-plane/read-model-contract.test.js": "ordinary",
     "test/control-plane/readiness-admission-transitions-observed.test.js": "ordinary",
     "test/control-plane/readiness-cycle-cut-dependency-guard.test.js": "ordinary",
+    "test/control-plane/readiness-deferred-denial-evidence-absent.test.js": "ordinary",
+    "test/control-plane/readiness-liveness-projection-single-source.test.js": "ordinary",
     "test/control-plane/readiness-owner-authority-contract.test.js": "ordinary",
     "test/control-plane/readiness-per-change-reuse.test.js": "ordinary",
     "test/control-plane/readiness-planning-cache-classification-barrier.test.js": "ordinary",

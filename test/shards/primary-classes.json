@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1950,
+    "unit": 1952,
     "integration": 75,
     "bootstrap": 184,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2216,
-  "digest": "fnv1a32-bc0534e1",
+  "censusSize": 2218,
+  "digest": "fnv1a32-9de2259a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -590,6 +590,8 @@
     "test/control-plane/read-model-contract.test.js": "unit",
     "test/control-plane/readiness-admission-transitions-observed.test.js": "unit",
     "test/control-plane/readiness-cycle-cut-dependency-guard.test.js": "unit",
+    "test/control-plane/readiness-deferred-denial-evidence-absent.test.js": "unit",
+    "test/control-plane/readiness-liveness-projection-single-source.test.js": "unit",
     "test/control-plane/readiness-owner-authority-contract.test.js": "unit",
     "test/control-plane/readiness-per-change-reuse.test.js": "unit",
     "test/control-plane/readiness-planning-cache-classification-barrier.test.js": "unit",
