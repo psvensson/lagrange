@@ -20,8 +20,8 @@
  * 5. every replica is inspected again: the autocommit rows, the transaction's
  *    row, `_transaction_outcomes`, and the rs-raft log / applied / hard state
  *    (the replica files hold `_raft_rs_*` tables), before vs after the
- *    release; and the nodes' transaction/consensus log lines of the window
- *    are kept (the nodes run at debug level for this).
+ *    release; and the nodes' warn/error and transaction/consensus log lines
+ *    of the window are kept.
  *
  * The recorded table is the evidence; the assertions encode exactly what the
  * lab measured today (a witness that flips when the owner fixes it).
@@ -55,8 +55,12 @@ const APPLICATION_ID = 'transaction-active-owns-connection';
 const CLUSTER_SIZE = 3;
 const EXPECTED_REPLICAS = 3;
 const TEST_TIMEOUT_MS = 600000;
-// The transaction owner and the rs-raft persistence admission log at debug.
-const NODE_LOG_LEVEL = 'debug';
+// The harness default (warn). The deferral / persistence-admission lines are
+// debug-level, but a debug-level three-node formation exhausted the seed's
+// heap (~505 MB, "LogsTableService dropped 355000 logs") on the lab, so the
+// write answers and the consensus tables are the evidence, plus the
+// warn/error and transaction/consensus-pattern lines the nodes do log.
+const NODE_LOG_LEVEL = 'warn';
 const WINDOW_MS = Object.freeze({
   HOLD: 20000,
   SETTLE: 30000,
