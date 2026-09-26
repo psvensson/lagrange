@@ -124,22 +124,11 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
       return this.buildSafeRemoveSafetyEvaluation();
     }
 
-    if (
-      this.isCompletedReplacementElectionSafeForPriorityRecovery(
-        safetySnapshot,
-        replacementReplicaRow,
-        {
-          operation,
-          priorityRecoveryCompletionSafe:
-            options?.priorityRecoveryCompletionSafe,
-          replacementLeaderRetargetCandidateAvailable:
-            options?.replacementLeaderRetargetCandidateAvailable,
-        },
-      )
-    ) {
-      return this.buildSafeRemoveSafetyEvaluation();
-    }
-
+    // R09 (BR11, amendment-1 step 7): the CL-043 completed-election
+    // authorization is deleted. Every operation this gate decides is a
+    // partition REPLACE, whose leadership is decided above by a fresh read
+    // of its target (lead === t); on the publication-wait path it falls
+    // through to, only the publication waits below apply.
     if (
       safetySnapshot.state ===
       PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.PUBLICATION_STATUS_UNAVAILABLE

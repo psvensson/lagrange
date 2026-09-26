@@ -12,7 +12,7 @@
     "distributed-harness": 167,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 250,
+    "placement-rebalance": 249,
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
@@ -25,8 +25,8 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2207,
-  "digest": "fnv1a32-389f2be1",
+  "censusSize": 2206,
+  "digest": "fnv1a32-65afc78a",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-aac90631",
   "classes": {
@@ -1525,7 +1525,6 @@
     "test/rebalancer/cl-036-publications-quorum-escape.test.js": "placement-rebalance",
     "test/rebalancer/cl-038-source-removed-handoff-terminates.test.js": "placement-rebalance",
     "test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js": "placement-rebalance",
-    "test/rebalancer/cl-043-surplus-drain-completed-election-terminates.test.js": "placement-rebalance",
     "test/rebalancer/cleanup-moves-failed-replicas.property.test.js": "placement-rebalance",
     "test/rebalancer/cluster-readiness-gate.test.js": "placement-rebalance",
     "test/rebalancer/cluster-readiness-signal.property.test.js": "placement-rebalance",

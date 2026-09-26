@@ -17,9 +17,11 @@ const SCENARIOS = {
     'test/control-plane/cl-035-voter-ready-row-seed.test.js',
     // CL-038: removed-source handoff termination.
     'test/rebalancer/cl-038-source-removed-handoff-terminates.test.js',
-    // CL-043: stale-operation and completed-election escape shapes.
+    // CL-043: the stale-operation escape shape. The completed-election
+    // escape is superseded (R09, quest replace-source-removal-owner, BR11):
+    // its guard is now that it authorizes nothing for a REPLACE.
     'test/rebalancer/operation-workflow-remove-safety-concurrent-stale-phantom.test.js',
-    'test/rebalancer/cl-043-surplus-drain-completed-election-terminates.test.js',
+    'test/rebalancer/colocated-follower-remove-safety.test.js',
     // 814f547e0: over-target hold and spread-cure admission premise.
     'test/rebalancer/rebalance-coordinator-topology-guard.test.js',
     'test/rebalancer/replica-placement-cure-policy.test.js',

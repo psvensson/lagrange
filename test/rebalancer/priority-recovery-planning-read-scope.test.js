@@ -144,10 +144,12 @@ function makeOwner(service, {prototype = PriorityRecoverySupersededTarget} = {})
     isReplaceRemovePhase: () => true,
   };
   // The REPLACE's leadership is read from its target replica's own port
-  // (quest replace-source-removal-owner, amendment-1 step 2): here the
-  // co-located sibling leads, which is what these rows describe.
+  // (quest replace-source-removal-owner, amendment-1 step 2); BR11: only the
+  // target itself leading makes the removal leadership-safe, so the
+  // leadership premise these planning-read witnesses need is the target
+  // leading.
   const witness = createReplaceWitness({
-    leaderReplicaId: coLocatedLeaderRow.replica_id,
+    leaderReplicaId: replacementFollowerRow.replica_id,
   });
   owner.messageRouter = {
     deliver: async (_target, payload) => witness.answer(payload) ?? null,
@@ -157,10 +159,6 @@ function makeOwner(service, {prototype = PriorityRecoverySupersededTarget} = {})
   owner.isConcurrentOperationTargetUncontactable = async () => false;
   owner.getCriticalReplicaRowsForSafety = async () => rows;
   owner.isNodeReadyForRouting = () => true;
-  owner.resolvePriorityPublicationReplacementLeaderCandidateRow = async () =>
-    replacementFollowerRow;
-  owner.hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound =
-    () => false;
   owner.isReplaceSourceLeaderHandoffRequiredPartition = () => true;
   owner.getCriticalMinReplicaCount = async () => 3;
   owner.getCriticalPartitionRowForSafety = async () => ({

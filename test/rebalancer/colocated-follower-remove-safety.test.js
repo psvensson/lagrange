@@ -111,10 +111,6 @@ function makeHandoff({
   instance.getCriticalReplicaRowsForSafety = async () =>
     currentVoterReadyRows;
   instance.isNodeReadyForRouting = () => true;
-  instance.resolvePriorityPublicationReplacementLeaderCandidateRow = async () =>
-    replacementFollowerRow;
-  instance.hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound =
-    () => false;
   instance.isReplaceSourceLeaderHandoffRequiredPartition = () => true;
   instance.evaluatePriorityRecoveryCompletionRemoveSafety = async () =>
     instance.buildSafeRemoveSafetyEvaluation();
@@ -307,5 +303,38 @@ test('snapshot exposes the existing replacement-election state for the stale-fol
     PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_REPLACEMENT_LEADER_ELECTION,
     'negative control remains on the explicit replacement-election branch',
   );
+  t.end();
+});
+
+// R09 (BR11, amendment-1 step 7), quest replace-source-removal-owner: the
+// CL-043 completed-election authorization never decides a REPLACE - not on
+// the publication-wait path either, the one path of this gate a REPLACE
+// still falls through to.
+test('CL-043 is unreachable for a REPLACE: completed-election evidence on ' +
+  'the publication-wait path authorizes no removal', async (t) => {
+  const {instance, currentVoterReadyRows} =
+    makeHandoff({partitionId: PUBLICATION_PARTITION_ID});
+  const observedAt = Date.now();
+  instance.normalizePriorityPublicationStatus = () => 'ACK_PENDING';
+  instance.readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety =
+    async () => ({publicationStatus: 'ACK_PENDING'});
+  instance.getPriorityPublicationReplacementLeaderElectionEvidence = () => ({
+    observedAt,
+    replacementReplicaId: TARGET_REPLICA_ID,
+    completedReplicaIds: [TARGET_REPLICA_ID],
+  });
+  instance.getPriorityPublicationLeaderHandoffEvidence = () => ({
+    observedAt,
+    sourceReplicaId: SOURCE_REPLICA_ID,
+  });
+  const evaluation = await instance.evaluatePriorityPublicationLeaderRemoveSafety(
+    replaceOperation(PUBLICATION_PARTITION_ID),
+    sourceFollowerRow,
+    replacementFollowerRow,
+    {currentVoterReadyRows, priorityRecoveryCompletionSafe: true},
+  );
+  t.not(evaluation?.classification,
+    REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
+    'completed-election evidence does not make the REPLACE removal safe');
   t.end();
 });

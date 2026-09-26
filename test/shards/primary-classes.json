@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1941,
+    "unit": 1940,
     "integration": 75,
     "bootstrap": 184,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2207,
-  "digest": "fnv1a32-8e20a48e",
+  "censusSize": 2206,
+  "digest": "fnv1a32-38caffbc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1506,7 +1506,6 @@
     "test/rebalancer/cl-036-publications-quorum-escape.test.js": "unit",
     "test/rebalancer/cl-038-source-removed-handoff-terminates.test.js": "unit",
     "test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js": "unit",
-    "test/rebalancer/cl-043-surplus-drain-completed-election-terminates.test.js": "unit",
     "test/rebalancer/cleanup-moves-failed-replicas.property.test.js": "unit",
     "test/rebalancer/cluster-readiness-gate.test.js": "unit",
     "test/rebalancer/cluster-readiness-signal.property.test.js": "unit",
