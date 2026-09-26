@@ -72,6 +72,10 @@ const handlers = {
     await runtime.start();
     return {started: true};
   },
+  async [WORKER_OP.RESTART_SAME_HANDLE]() {
+    await requireRuntime().start();
+    return {started: true};
+  },
   async [WORKER_OP.OPEN_SESSION](message) {
     const db = requireRuntime().openApplicationDatabase(message.options);
     const sessionKey = nextSessionKey++;

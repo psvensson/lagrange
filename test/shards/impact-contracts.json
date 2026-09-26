@@ -568,13 +568,17 @@
         "src/query/application-database-result.js",
         "src/query/application-database-error.js",
         "src/query/application-database-statement-policy.js",
-        "src/embedded-lagrange.js"
+        "src/query/application-database-input.js",
+        "src/embedded-lagrange.js",
+        "src/public-api.js"
       ],
       "tests": [
         "test/query/application-database.test.js",
         "test/release/embedded-node-worker-contract.test.js",
         "test/integration/public-application-database-multinode.integration.test.js",
         "test/integration/public-application-database-transaction-facade.integration.test.js",
+        "test/integration/public-consumer-contract-ratchet.integration.test.js",
+        "test/release/public-consumer-contract-ratchet.test.js",
         "test/test-helpers/topology-leak-check.test.js"
       ]
     }

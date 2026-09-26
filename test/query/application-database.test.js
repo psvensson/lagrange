@@ -145,6 +145,31 @@ test('application inputs reject accessors without invoking them', async (t) => {
   t.equal(getterCalls, 0);
 });
 
+// Referenced by the public consumer-contract ratchet
+// (test/release/public-consumer-contract-ratchet.test.js): the bind values a
+// consumer can produce by mistake (a missing field, a bigint, a hole) are
+// refused as INVALID_ARGUMENT before any await, so no statement reaches SqlCore;
+// -0 (which cannot cross the ratchet's JSON IPC) is normalized to 0.
+test('application params reject undefined, bigint and sparse slots before any await; -0 binds as 0',
+  async (t) => {
+    const core = createCore();
+    const runtime = createBoundApplicationDatabaseRuntime(core);
+    const db = runtime.openApplicationDatabase({applicationId: 'images'});
+    const refused = [
+      ['id', undefined],
+      ['id', 1n],
+      // eslint-disable-next-line no-sparse-arrays
+      ['id', , 1],
+    ].map((params) => db.query('SELECT ?, ?', params));
+    t.equal(core.calls.length, 0, 'refused synchronously, before any await');
+    for (const pending of refused) {
+      t.equal((await captureRejection(pending)).code, 'INVALID_ARGUMENT');
+    }
+    t.equal(core.calls.length, 0);
+    await db.query('SELECT ?', [-0]);
+    t.ok(Object.is(core.calls[0].params[0], 0), '-0 is normalized to 0');
+  });
+
 test('application queries use isolated generated sessions and copied params',
   async (t) => {
     const core = createCore();

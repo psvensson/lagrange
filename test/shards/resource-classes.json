@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2159,
+    "ordinary": 2161,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2176,
-  "digest": "fnv1a32-c5cf4c25",
+  "censusSize": 2178,
+  "digest": "fnv1a32-4bf1646a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -980,6 +980,7 @@
     "test/integration/preflight-critical-path-hops.integration.test.js": "ordinary",
     "test/integration/public-application-database-multinode.integration.test.js": "ordinary",
     "test/integration/public-application-database-transaction-facade.integration.test.js": "ordinary",
+    "test/integration/public-consumer-contract-ratchet.integration.test.js": "ordinary",
     "test/integration/raft-leader-election.integration.test.js": "ordinary",
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "ordinary",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "ordinary",
@@ -1705,6 +1706,7 @@
     "test/release/embedded-node-worker-contract.test.js": "ordinary",
     "test/release/project-hardening-contracts.test.js": "ordinary",
     "test/release/public-api-side-effect-boundary.test.js": "ordinary",
+    "test/release/public-consumer-contract-ratchet.test.js": "ordinary",
     "test/release/release-pipeline-proof-reuse.test.js": "ordinary",
     "test/release/version-single-source.test.js": "ordinary",
     "test/runtime/call-cell-reduce-coordinator.test.js": "ordinary",

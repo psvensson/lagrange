@@ -14,6 +14,9 @@ import {Buffer} from 'node:buffer';
 const EMBEDDED_WORKER_OP = Object.freeze({
   OPEN_SESSION: 'openSession',
   QUERY: 'query',
+  // start() again on the SAME handle (after stop: refused per the lifecycle
+  // contract); START always creates a new handle.
+  RESTART_SAME_HANDLE: 'restartSameHandle',
   START: 'start',
   STOP: 'stop',
   TRANSACTION: 'transaction',

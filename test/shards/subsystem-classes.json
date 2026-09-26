@@ -13,8 +13,8 @@
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 240,
-    "query-sql": 163,
-    "release-packaging": 12,
+    "query-sql": 164,
+    "release-packaging": 13,
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2176,
-  "digest": "fnv1a32-df58ee8e",
+  "censusSize": 2178,
+  "digest": "fnv1a32-6de6553f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-253663c1",
+  "observationDigest": "fnv1a32-36105d77",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1000,6 +1000,7 @@
     "test/integration/preflight-critical-path-hops.integration.test.js": "control-plane",
     "test/integration/public-application-database-multinode.integration.test.js": "query-sql",
     "test/integration/public-application-database-transaction-facade.integration.test.js": "query-sql",
+    "test/integration/public-consumer-contract-ratchet.integration.test.js": "query-sql",
     "test/integration/raft-leader-election.integration.test.js": "storage-raft",
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "cdc-metadata",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "transport-messaging",
@@ -1725,6 +1726,7 @@
     "test/release/embedded-node-worker-contract.test.js": "release-packaging",
     "test/release/project-hardening-contracts.test.js": "release-packaging",
     "test/release/public-api-side-effect-boundary.test.js": "release-packaging",
+    "test/release/public-consumer-contract-ratchet.test.js": "release-packaging",
     "test/release/release-pipeline-proof-reuse.test.js": "release-packaging",
     "test/release/version-single-source.test.js": "release-packaging",
     "test/runtime/call-cell-reduce-coordinator.test.js": "services-runtime",
@@ -6024,6 +6026,11 @@
         "test/integration/helpers/embedded-node-worker.js"
       ]
     },
+    "test/integration/public-consumer-contract-ratchet.integration.test.js": {
+      "files": [
+        "test/integration/helpers/embedded-node-worker.js"
+      ]
+    },
     "test/integration/raft-leader-election.integration.test.js": {
       "env": [
         "LAGRANGE_TEST_MACHINE_FACTOR"
@@ -7494,6 +7501,15 @@
     "test/release/public-api-side-effect-boundary.test.js": {
       "files": [
         "package.json"
+      ]
+    },
+    "test/release/public-consumer-contract-ratchet.test.js": {
+      "files": [
+        "test/integration/public-application-database-transaction-facade.integration.test.js",
+        "test/integration/public-consumer-contract-ratchet.integration.test.js",
+        "test/query/application-database.test.js",
+        "test/release/embedded-node-worker-contract.test.js",
+        "test/release/public-api-side-effect-boundary.test.js"
       ]
     },
     "test/release/release-pipeline-proof-reuse.test.js": {
