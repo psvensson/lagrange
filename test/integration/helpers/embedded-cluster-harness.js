@@ -588,6 +588,9 @@ function createEmbeddedCluster(t, options = {}) {
     seedQueryRows,
     startEmbeddedNode,
     stopAll,
+    // Stop one node's process (graceful stop, then SIGTERM/SIGKILL); the
+    // rest of the cluster keeps running.
+    stopNode: (node) => stopNode(t, node),
     waitForApplicationWrites,
     waitForClusterSize,
   };

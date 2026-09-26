@@ -21,14 +21,14 @@
     "storage-partition": 151,
     "storage-raft": 102,
     "test-infrastructure": 136,
-    "transactions": 15,
+    "transactions": 17,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2173,
-  "digest": "fnv1a32-b8556233",
+  "censusSize": 2175,
+  "digest": "fnv1a32-181d2a74",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-fe46a957",
+  "observationDigest": "fnv1a32-c826acb4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1013,6 +1013,8 @@
     "test/integration/strict-preload-pressure-reproducer.integration.test.js": "convergence-topology",
     "test/integration/three-node-partition-rebalance.integration.test.js": "placement-rebalance",
     "test/integration/three-node-seed-rebalance.integration.test.js": "placement-rebalance",
+    "test/integration/transaction-concurrent-read-outage.integration.test.js": "transactions",
+    "test/integration/transaction-replicated-apply-settling.integration.test.js": "transactions",
     "test/integration/user-table-local-cdc-readiness.integration.test.js": "cdc-metadata",
     "test/integration/user-table-metadata-fanout.integration.test.js": "cdc-metadata",
     "test/integration/versioned-cdc-readiness-convergence.integration.test.js": "cdc-metadata",
@@ -6059,6 +6061,16 @@
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
         "src/rebalancer/unified-rebalancer.js"
+      ]
+    },
+    "test/integration/transaction-concurrent-read-outage.integration.test.js": {
+      "files": [
+        "test/integration/helpers/embedded-node-worker.js"
+      ]
+    },
+    "test/integration/transaction-replicated-apply-settling.integration.test.js": {
+      "files": [
+        "test/integration/helpers/embedded-node-worker.js"
       ]
     },
     "test/integration/versioned-cdc-readiness-convergence.integration.test.js": {
