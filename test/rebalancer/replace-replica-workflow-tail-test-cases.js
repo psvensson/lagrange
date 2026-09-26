@@ -1096,8 +1096,15 @@ export async function registerReplaceReplicaWorkflowTailTests({
         };
 
       try {
+        // F1: the completion read now takes the leader-answer path, a few
+        // more async hops; settle until the re-drive lands (bounded) rather
+        // than a fixed 20 turns that raced on a loaded lab host.
         const settle = async () => {
-          for (let turn = 0; turn < 20; turn += 1) {
+          for (
+            let turn = 0;
+            turn < 200 && witness.retirements.length === 0;
+            turn += 1
+          ) {
             await new Promise((resolve) => setImmediate(resolve));
           }
         };

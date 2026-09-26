@@ -21,7 +21,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2578791,
-        "sha256": "72c02048b97dd1a423c7255ae39894a7ba6cca11a019b153fadb3f92af066020"
+        "sha256": "f763ec8dd08f486a960bf18818ada7f7cb0ff88ff3efbfbd1119e8245829382a"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "b199fc080e244fa82d4de98448e4337a5561b9eee3cd7b0da8c37b4816fd292f"
+        "sha256": "a719f7adb5936abc71da93a29b889d7698fef5b83aeab418d7570e846498371a"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "a241ebc1a93cb09f90c598d2783ac902ca73b0716f03a84ee37d0b5219260953"
+    "inputDigest": "09f13b5f35c8fe14f2e7199ddef3c74581ca205c79529128054c5593b6cb678e"
   },
   "reconciliation": {
     "complexity": {
@@ -130,12 +130,12 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "b199fc080e244fa82d4de98448e4337a5561b9eee3cd7b0da8c37b4816fd292f"
+          "sha256": "a719f7adb5936abc71da93a29b889d7698fef5b83aeab418d7570e846498371a"
         },
         "cloneGroups": 787,
-        "duplicatedLines": 30304,
+        "duplicatedLines": 30310,
         "sourceCloneTouches": 1574,
-        "sourceDuplicatedLineTouches": 60608,
+        "sourceDuplicatedLineTouches": 60620,
         "nonzeroSourceCount": 497,
         "touchMultiplicity": 2
       }
@@ -168,14 +168,14 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2578791,
-        "sha256": "72c02048b97dd1a423c7255ae39894a7ba6cca11a019b153fadb3f92af066020"
+        "sha256": "f763ec8dd08f486a960bf18818ada7f7cb0ff88ff3efbfbd1119e8245829382a"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "449934ce42de5742dd0349728842fc38c800679b330564d99b76fe475a45358d",
+      "sourceDigest": "8d0dbc35284d58cfc73e37d781d99886d3a00cdf4509481d40a8956f332d2a62",
       "moduleCount": 5010,
       "edgeCount": 23736,
       "unresolvedCount": 34
@@ -185,7 +185,7 @@
     "sourceSignalCount": 2622,
     "assignedSignalCount": 2622,
     "uniqueAssignmentCount": 2622,
-    "digest": "87f570626bbc55ed16a09c803a0cd281fde89eeb5bbd5ed1c997f284459506e2"
+    "digest": "c1545a7994f6034790d020fed42544478de12f583aeccbe9954f64554584189d"
   },
   "signalCounts": {
     "cognitive": 159,
@@ -243,7 +243,7 @@
       "complexity": 56,
       "cognitive": 0,
       "oversizedFiles": 5,
-      "duplicatedLines": 13494,
+      "duplicatedLines": 13506,
       "cloneTouches": 313,
       "cycleGroups": 0,
       "lintExclusions": 15,
@@ -3774,7 +3774,7 @@
           },
           {
             "path": "test/rebalancer/rebalance-coordinator-stopping-reconcile-terminal-visibility.test.js",
-            "duplicatedLines": 649,
+            "duplicatedLines": 661,
             "oversizedLines": 0,
             "lintExclusions": 0,
             "structuralScore": 50
@@ -3785,7 +3785,7 @@
           "complexity": 56,
           "cognitive": 0,
           "oversizedFiles": 5,
-          "duplicatedLines": 13494,
+          "duplicatedLines": 13506,
           "lintExclusions": 15
         },
         "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"

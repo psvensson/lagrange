@@ -251,8 +251,14 @@ async (t) => {
   const deliveries = [];
   // The source removal is confirmed where it counts (quest
   // replace-source-removal-owner, C1/R-1a): the witness replica's committed
-  // configuration no longer holds the source.
-  const witness = createReplaceWitness({sourceVoter: false});
+  // configuration no longer holds the source. F1 (owner ruling): the
+  // completion authority is the LEADER-answered committed configuration, so
+  // the witness names itself (the target) as the group leader; a leaderless
+  // answer is WAIT, never SOURCE_RETIRED.
+  const witness = createReplaceWitness({
+    sourceVoter: false,
+    leaderReplicaId: TEST_TARGET_REPLICA_ID,
+  });
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
     enableTimeouts: false,
@@ -350,8 +356,14 @@ async (t) => {
   const deliveries = [];
   // The source removal is confirmed where it counts (quest
   // replace-source-removal-owner, C1/R-1a): the witness replica's committed
-  // configuration no longer holds the source.
-  const witness = createReplaceWitness({sourceVoter: false});
+  // configuration no longer holds the source. F1 (owner ruling): the
+  // completion authority is the LEADER-answered committed configuration, so
+  // the witness names itself (the target) as the group leader; a leaderless
+  // answer is WAIT, never SOURCE_RETIRED.
+  const witness = createReplaceWitness({
+    sourceVoter: false,
+    leaderReplicaId: TEST_TARGET_REPLICA_ID,
+  });
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
     enableTimeouts: false,
