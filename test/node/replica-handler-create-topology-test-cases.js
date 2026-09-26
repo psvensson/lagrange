@@ -709,7 +709,8 @@ export async function registerReplicaHandlerCreateTopologyTests({
   );
 
   t.test(
-    'explicit REPLACE bootstrap cohort excludes stale cache-only voters',
+    'an explicit REPLACE resolves the same bootstrap membership as any join ' +
+      '(owner decision D1): no operation type narrows it',
     async (t) => {
       const partitionId = 'replica_operations-p1';
       const tableId = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
@@ -724,14 +725,16 @@ export async function registerReplicaHandlerCreateTopologyTests({
         created_at: createdAt,
         updated_at: createdAt + 5000,
       });
-      const currentReplicaIds = [
+      const stampedReplicaIds = [
         'replica_operations-p1-r1',
         'replica_operations-p1-r4',
+        'replica_operations-p1-r3',
       ];
-      const retiredReplicaId = 'replica_operations-p1-r3';
+      // A member this node observes that the stamp predates.
+      const laterObservedReplicaId = 'replica_operations-p1-r2';
       for (const [index, serviceId] of [
-        ...currentReplicaIds,
-        retiredReplicaId,
+        ...stampedReplicaIds,
+        laterObservedReplicaId,
       ].entries()) {
         cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
           service_id: serviceId,
@@ -745,11 +748,14 @@ export async function registerReplicaHandlerCreateTopologyTests({
           updated_at: createdAt,
         });
       }
+      // The dispatched stamp is the group's membership at creation plus the
+      // target; the REPLACE source (r3 here) is in it while it is a member.
       const targetReplicaId = 'replica_operations-p1-r5';
-      const bootstrapReplicaIds = [...currentReplicaIds, targetReplicaId];
+      const bootstrapReplicaIds = [...stampedReplicaIds, targetReplicaId];
       const bootstrapPeerAddresses = [
         'node-1/partition/replica_operations-p1-r1',
         'node-2/partition/replica_operations-p1-r4',
+        'node-3/partition/replica_operations-p1-r3',
         `node-target/partition/${targetReplicaId}`,
       ];
       const handler = new ReplicaHandler({
@@ -760,31 +766,34 @@ export async function registerReplicaHandlerCreateTopologyTests({
         createPartitionService: createMockPartitionServiceFactory(),
       });
       handler.initialize();
-
-      const context = handler.resolveReplicaContext(
-        partitionId,
-        targetReplicaId,
-        {
-          explicitOperationType: 'REPLACE',
+      const resolveAs = (explicitOperationType) =>
+        handler.resolveReplicaContext(partitionId, targetReplicaId, {
+          explicitOperationType,
           bootstrapReplicaIds,
           bootstrapPeerAddresses,
-        },
-      );
+        });
 
+      const replaceContext = resolveAs('REPLACE');
+      const addContext = resolveAs('ADD');
       t.same(
-        context.replicaIds,
-        bootstrapReplicaIds,
-        'placement-owned cohort is the complete replica membership',
+        replaceContext.replicaIds.slice().sort(),
+        addContext.replicaIds.slice().sort(),
+        'a REPLACE target resolves the membership an ADD target resolves',
       );
       t.same(
-        context.peerAddresses,
-        bootstrapPeerAddresses,
-        'placement-owned cohort is the complete peer-address membership',
+        replaceContext.peerAddresses.slice().sort(),
+        addContext.peerAddresses.slice().sort(),
+        'and the same peer addresses',
       );
-      t.notOk(
-        context.replicaIds.includes(retiredReplicaId),
-        'a stale target cache cannot reintroduce the retired voter',
-      );
+      for (const replicaId of [
+        ...bootstrapReplicaIds,
+        laterObservedReplicaId,
+      ]) {
+        t.ok(
+          replaceContext.replicaIds.includes(replicaId),
+          `the member ${replicaId} stays in the bootstrap`,
+        );
+      }
 
       handler.shutdown();
     },

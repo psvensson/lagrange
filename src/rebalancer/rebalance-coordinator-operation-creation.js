@@ -475,6 +475,12 @@ class RebalanceCoordinatorOperationCreation {
    * rows for the admission decision, so stamping must not see less than the
    * guard did.
    *
+   * The stamp is the new replica's bootstrap membership: the group's current
+   * members as the services rows record them, plus the joining target, never
+   * the operation's intended end state (owner decision D1). A REPLACE source
+   * is a member until its removal commits, so its target starts with it and
+   * only the applied RemoveNode in the log it replays takes the source out.
+   *
    * @param {Object} context
    * @return {Promise<{replicaIds: string[], peerAddresses: string[]}|null>}
    * @private
@@ -484,7 +490,6 @@ class RebalanceCoordinatorOperationCreation {
       normalizedMoveType,
       entityType,
       entityId,
-      excludeReplicaIds,
       partitionId,
       targetNodeId,
       targetReplicaId,
@@ -549,7 +554,6 @@ class RebalanceCoordinatorOperationCreation {
     const topology = buildReplicatedServiceBootstrapTopology({
       serviceType: entityType,
       serviceRows,
-      excludeReplicaIds,
       targetReplicaId,
       targetNodeId,
     });
@@ -749,12 +753,6 @@ class RebalanceCoordinatorOperationCreation {
       normalizedMoveType,
       entityType,
       entityId,
-      excludeReplicaIds:
-        normalizedMoveType === OperationType.REPLACE &&
-        typeof sourceReplicaId === 'string' &&
-        sourceReplicaId.length > 0 ?
-          [sourceReplicaId] :
-          [],
       partitionId,
       targetNodeId: move.nodeId,
       targetReplicaId: operationReplicaId,
