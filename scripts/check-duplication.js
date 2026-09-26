@@ -137,8 +137,11 @@ const RATCHET_TARGETS = [
     // 2026-09-23: tightened 793/30519 -> 791/30451 after the rs-raft cutover
     // witnesses moved their escape counter and seed query surface into one
     // shared fixture each (checker hint).
-    baselineCloneGroupCount: 791,
-    baselineDuplicatedLineCount: 30451,
+    // 2026-09-26: tightened 791/30451 -> 788/30356 after the two
+    // replacement-election nudge tests of the quorum-conditioned tail moved
+    // onto one shared scenario runner (checker hint).
+    baselineCloneGroupCount: 788,
+    baselineDuplicatedLineCount: 30356,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

@@ -57,6 +57,16 @@ const ALREADY_TERMINAL_TRANSITION_OUTCOME = Object.freeze({
   disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
 });
 
+// A caller's step metadata recorded on the FAILED step entry.
+function applyFailureStepMetadata(failedStepEntry, options) {
+  if (
+    options.stepMetadata &&
+    typeof options.stepMetadata === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT
+  ) {
+    Object.assign(failedStepEntry, options.stepMetadata);
+  }
+}
+
 class OperationWorkflowTransitionPersistence
   extends OperationWorkflowTransitionOrchestration {
   /**
@@ -459,6 +469,32 @@ class OperationWorkflowTransitionPersistence
   }
 
   /**
+   * D2: after a partition REPLACE's durable removal intent, only target
+   * death with the source still a voter may end it FAILED; every elapsed-time
+   * or heuristic failure is refused (typed) by failOperation, and logged here.
+   * @param {Object} operation
+   * @param {string} errorMessage
+   * @param {Object} options
+   * @return {boolean} Whether failOperation must refuse this failure.
+   */
+  isReplaceFailureRefused(operation, errorMessage, options) {
+    if (!isPartitionReplace(operation) ||
+        isReplaceTerminalFailureAdmitted(operation, options)) {
+      return false;
+    }
+    this.logger.warn(
+      REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILURE_REFUSED_AFTER_INTENT,
+      {
+        operationId: operation.operationId,
+        partitionId: operation.partitionId,
+        workflowStep: operation.workflowStep,
+        errorMessage: this.normalizeErrorMessage(errorMessage, null),
+      },
+    );
+    return true;
+  }
+
+  /**
    * Fail an operation.
    * @param {Object} operation
    * @param {string} errorMessage
@@ -475,22 +511,7 @@ class OperationWorkflowTransitionPersistence
     ) {
       return ALREADY_TERMINAL_TRANSITION_OUTCOME;
     }
-    // D2: after a partition REPLACE's durable removal intent, only target
-    // death with the source still a voter may end it FAILED; every
-    // elapsed-time or heuristic failure is refused (typed) here.
-    if (
-      isPartitionReplace(operation) &&
-      !isReplaceTerminalFailureAdmitted(operation, options)
-    ) {
-      this.logger.warn(
-        REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILURE_REFUSED_AFTER_INTENT,
-        {
-          operationId: operation.operationId,
-          partitionId: operation.partitionId,
-          workflowStep: operation.workflowStep,
-          errorMessage: this.normalizeErrorMessage(errorMessage, null),
-        },
-      );
+    if (this.isReplaceFailureRefused(operation, errorMessage, options)) {
       return buildReplaceFailureRefusal();
     }
     const normalizedError = this.normalizeErrorMessage(
@@ -517,12 +538,7 @@ class OperationWorkflowTransitionPersistence
       previousStep,
       now,
     );
-    if (
-      options.stepMetadata &&
-      typeof options.stepMetadata === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT
-    ) {
-      Object.assign(failedStepEntry, options.stepMetadata);
-    }
+    applyFailureStepMetadata(failedStepEntry, options);
     const projectedOperation = {
       ...operation,
       workflowStep: WORKFLOW_STEP.FAILED,

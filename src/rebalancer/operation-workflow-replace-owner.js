@@ -404,6 +404,8 @@ function clearAllReplaceOwnerState(owner) {
   STATE_BY_OWNER.delete(owner);
 }
 
+const RETIREMENT_LEVEL_SEPARATOR = '|';
+
 // The leader, term and membership the witness reported: an R-1f attempt is
 // re-issued only when one of them moved since it was issued (a proposal a
 // leader change dropped), or the backstop window passed with no answer
@@ -413,7 +415,7 @@ function retirementLevelOf(observation) {
     observation?.leaderReplicaId ?? '',
     observation?.term ?? '',
     observation?.state ?? '',
-  ].join('|');
+  ].join(RETIREMENT_LEVEL_SEPARATOR);
 }
 
 function shouldIssueRetirementAttempt(owner, attempt, observation) {

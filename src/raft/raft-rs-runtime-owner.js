@@ -39,6 +39,7 @@ import {
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
 } from './raft-rs-peer-identity-constants.js';
 import {
+  CONF_STATE_NOT_ANNOUNCED,
   CORE_CALL_WITHOUT_HANDLE,
   CORE_OPERATION,
   CORE_REFUSAL_KIND,
@@ -433,7 +434,7 @@ function openGroupInCurrentRuntime(group, opening) {
   group.handle = created.value;
   // Every (re)construction and restore announces its first observed
   // configuration again: a listener's baseline must be level-correct.
-  group.announcedConfStateKey = null;
+  group.announcedConfStateKey = CONF_STATE_NOT_ANNOUNCED;
   if (!opening.restore) {
     const confState = invokeCore(group, CORE_OPERATION.CONF_STATE);
     if (!confState.ok) {
@@ -1427,7 +1428,7 @@ function createRuntimeDispatcher(request) {
     handle: null,
     lastStatus: null,
     statusObservation: null,
-    announcedConfStateKey: null,
+    announcedConfStateKey: CONF_STATE_NOT_ANNOUNCED,
     health: USABLE,
     recovery: null,
     entered: 0,

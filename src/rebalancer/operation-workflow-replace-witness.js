@@ -14,6 +14,7 @@
  */
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
+  ReplaceWitnessDeliveryOutcome,
   ReplicaOperationField,
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
@@ -64,7 +65,10 @@ async function deliverToReplaceWitness(owner, operation, messageType) {
       !targetNodeId ||
       typeof owner.messageRouter?.deliver !==
         OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION) {
-    return {response: null, reason: 'witness_identity_unavailable'};
+    return {
+      outcome: ReplaceWitnessDeliveryOutcome.IDENTITY_UNAVAILABLE,
+      reason: ReplaceWitnessDeliveryOutcome.IDENTITY_UNAVAILABLE,
+    };
   }
   const handlerType = resolveOperationHandlerType(
     operation.entityType || SERVICE_TYPE.PARTITION);
@@ -77,9 +81,12 @@ async function deliverToReplaceWitness(owner, operation, messageType) {
         deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
       },
     );
-    return {response, reason: null};
+    return {outcome: ReplaceWitnessDeliveryOutcome.DELIVERED, response};
   } catch (error) {
-    return {response: null, reason: error?.message || String(error)};
+    return {
+      outcome: ReplaceWitnessDeliveryOutcome.DELIVERY_FAILED,
+      reason: error?.message || String(error),
+    };
   }
 }
 

@@ -37,6 +37,10 @@ const CORE_CALL_WITHOUT_HANDLE = new Set([
   'create_node',
   'decode_conf_change_entry',
 ]);
+// The announced-configuration key of a group that has announced nothing since
+// its last (re)construction or restore: no ConfState key (a JSON array) can
+// equal it, so the first observation is always announced.
+const CONF_STATE_NOT_ANNOUNCED = 'conf-state-not-announced';
 const CORE_OPERATION = Object.freeze({CONF_STATE: 'conf_state'});
 const RUNTIME_COMMAND = Object.freeze({
   READ_STATUS: 'read-status',
@@ -156,6 +160,7 @@ const DURABLE_PROGRESS_OBSERVATION = Object.freeze({
 });
 
 export {
+  CONF_STATE_NOT_ANNOUNCED,
   CORE_CALL_WITHOUT_HANDLE,
   FOLLOWER_RAFT_STATE,
   CORE_OPERATION,

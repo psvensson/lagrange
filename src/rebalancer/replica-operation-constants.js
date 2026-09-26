@@ -22,6 +22,15 @@ const ReplicaOperationReason = Object.freeze({
   REPLACE_SOURCE_REMOVAL: 'replace_source_removal',
 });
 
+// What delivering a request to the REPLACE witness replica produced: the
+// handler's answer, no witness identity to address, or a transport failure
+// (whose reason is the error's own message).
+const ReplaceWitnessDeliveryOutcome = Object.freeze({
+  DELIVERED: 'witness_delivered',
+  IDENTITY_UNAVAILABLE: 'witness_identity_unavailable',
+  DELIVERY_FAILED: 'witness_delivery_failed',
+});
+
 const ReplicaOperationField = Object.freeze({
   TYPE: FIELD.TYPE,
   MEMBERSHIP_PUBLICATION_EPOCH: 'membershipPublicationEpoch',
@@ -58,6 +67,7 @@ const ReplicaOperationResponseStatus = Object.freeze({
 export {
   ReplicaOperationMessageType,
   ReplicaOperationReason,
+  ReplaceWitnessDeliveryOutcome,
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
 };
