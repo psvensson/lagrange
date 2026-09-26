@@ -2,6 +2,9 @@ import {
   CONVERGENCE_DEFAULTS,
   SCENARIO_TIMING_DEFAULTS,
 } from './constants.js';
+import {
+  PUBLIC_SEAM_BINDING,
+} from '../scenarios/public-seam-durability-constants.js';
 
 const ZERO = 0;
 const DEFAULT_LOG_TABLE_NAME = 'logs';
@@ -362,6 +365,33 @@ function resolveWriteAckVisibilityScenarioConfig(options = {}) {
   });
 }
 
+// public-seam-durability (test/distributed/scenarios/public-seam-durability.js).
+// The binding step is off by default: it builds and installs a WASI
+// component through the service pipeline, which a plain durability run
+// does not need; `binding.enabled: true` turns it on.
+function resolvePublicSeamDurabilityScenarioConfig(options = {}) {
+  const publicClient = normalizeObject(options.publicClient) || {};
+  const binding = normalizeObject(options.binding) || {};
+  return Object.freeze({
+    readTimeoutMs: normalizeFiniteNumber(options.readTimeoutMs, 60000),
+    pollIntervalMs: normalizeFiniteNumber(options.pollIntervalMs, 250),
+    convergenceTimeoutMs:
+      normalizeFiniteNumber(options.convergenceTimeoutMs, 180000),
+    publicClient: Object.freeze({
+      provisionListener: publicClient.provisionListener !== false,
+      endpointTimeoutMs:
+        normalizeFiniteNumber(publicClient.endpointTimeoutMs, 120000),
+    }),
+    binding: Object.freeze({
+      enabled: binding.enabled === true,
+      artifactSource: normalizeNonEmptyString(
+        binding.artifactSource,
+        PUBLIC_SEAM_BINDING.ARTIFACT_SOURCE_SERVICE_PIPELINE),
+      readyTimeoutMs: normalizeFiniteNumber(binding.readyTimeoutMs, 120000),
+    }),
+  });
+}
+
 function resolveThreeNodeSeedRebalanceScenarioConfig(options = {}) {
   return Object.freeze({
     rebalanceWaitTimeoutMs:
@@ -516,6 +546,7 @@ export {
   resolvePartitionGrowthAndSpreadScenarioConfig,
   resolvePartitionMergeUnderLoadScenarioConfig,
   resolveScenarioOptions,
+  resolvePublicSeamDurabilityScenarioConfig,
   resolveSeedRestartUnderLoadScenarioConfig,
   resolveSlowFollowerUnderLoadScenarioConfig,
   resolveSnapshotLiveRebuildScenarioConfig,

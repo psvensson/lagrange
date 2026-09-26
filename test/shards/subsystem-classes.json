@@ -9,7 +9,7 @@
     "cli-tooling": 96,
     "control-plane": 193,
     "convergence-topology": 91,
-    "distributed-harness": 167,
+    "distributed-harness": 168,
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 240,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2172,
-  "digest": "fnv1a32-77f90537",
+  "censusSize": 2173,
+  "digest": "fnv1a32-2521e821",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-31298d2c",
+  "observationDigest": "fnv1a32-e35a3412",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -880,6 +880,7 @@
     "test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/progress-wait.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/publication-evidence-replay.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": "distributed-harness",
@@ -5172,6 +5173,20 @@
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": {
       "files": [
         "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/scenarios/table-bootstrap-core-helpers.js",
+        "test/distributed/scenarios/table-distribution-helpers-distribution-query.js",
+        "test/distributed/scenarios/table-distribution-helpers-load-node-planning.js"
+      ],
+      "directories": [
+        "examples/call-binding-account-summary"
+      ]
+    },
+    "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js": {
+      "files": [
+        "Dockerfile",
+        "package.json",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
         "test/distributed/scenarios/table-bootstrap-core-helpers.js",

@@ -560,6 +560,16 @@
         "test/query/partition-write-answer-consumers.test.js",
         "test/query/write-path-internal-pacing.test.js"
       ]
+    },
+    "public-seam-durability-certification-source": {
+      "description": "The runtime's default consensus provider (provider-control owner) decides the public-seam durability scenario's certification status line (PREPARED_BLOCKED_ON_RS_RAFT_CUTOVER vs CANDIDATE).",
+      "owners": [
+        "src/raft/raft-provider-control.js",
+        "src/raft/raft-provider-control-constants.js"
+      ],
+      "tests": [
+        "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js"
+      ]
     }
   },
   "coupledPairs": {
