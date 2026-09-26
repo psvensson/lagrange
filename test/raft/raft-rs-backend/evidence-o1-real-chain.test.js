@@ -315,6 +315,39 @@ test('M5 (row never reaches the members): the unadmitted target with its ' +
   }
 });
 
+// A target admitted from its row while its commit knowledge is capped one
+// below its own AddNode: it will hold the entry, applied one below it.
+async function admittedUnderCommitLag(harness, founders, target) {
+  await formGroup(harness, founders);
+  const created = await createJoinOperation(harness, {target,
+    rows: founders.map((member) => serviceRow(PARTITION_ID, member)),
+    leaderHint: harness.leaderMember()[1]});
+  assert.equal(created.error, undefined, created.error?.message);
+  const {service} = await buildTargetFromOperation(harness, {target,
+    operation: created.operation,
+    cache: metadataCache(PARTITION_ID, [...founders, target])});
+  const cap = {value: durableLog(leaderDurable(harness).dbFile,
+    PARTITION_ID).at(-1).index};
+  harness.network.rewriteTo(addressOf(target), (message) => ({
+    ...message,
+    ...(message.commit === undefined ? {} : {commit: String(Math.min(
+      Number(message.commit), cap.value))}),
+  }));
+  for (const [replicaId] of founders) {
+    harness.caches.get(replicaId).applySystemTableChange(TABLES.SERVICES,
+      CDCOperation.INSERT, serviceRow(PARTITION_ID, target));
+  }
+  const targetPeerId = deriveRaftRsPeerId(target[0]);
+  const admitted = () => logFold(leaderDurable(harness).dbFile,
+    PARTITION_ID, []).find((snapshot) =>
+    snapshot.voters.includes(targetPeerId))?.index ?? null;
+  assert.equal(await waitFor(() => admitted() !== null), true,
+    'setup: the leader committed the target AddNode from its row');
+  const aSelf = admitted();
+  cap.value = aSelf - 1;
+  return {service, aSelf};
+}
+
 test('M5 (row visible to every member, commit lag): the admitted-but-not-' +
   'yet-applied target with its timers asked for disturbs nothing over 3 s, ' +
   'then joins without an election', async () => {
@@ -324,33 +357,8 @@ test('M5 (row visible to every member, commit lag): the admitted-but-not-' +
     ['m5b-c', 'node-c']];
   const target = [firstSortingTarget('m5b-t', founders), 'node-t'];
   try {
-    await formGroup(harness, founders);
-    const created = await createJoinOperation(harness, {target,
-      rows: founders.map((member) => serviceRow(PARTITION_ID, member)),
-      leaderHint: harness.leaderMember()[1]});
-    assert.equal(created.error, undefined, created.error?.message);
-    const {service} = await buildTargetFromOperation(harness, {target,
-      operation: created.operation,
-      cache: metadataCache(PARTITION_ID, [...founders, target])});
-    const cap = {value: durableLog(leaderDurable(harness).dbFile,
-      PARTITION_ID).at(-1).index};
-    harness.network.rewriteTo(addressOf(target), (message) => ({
-      ...message,
-      ...(message.commit === undefined ? {} : {commit: String(Math.min(
-        Number(message.commit), cap.value))}),
-    }));
-    for (const [replicaId] of founders) {
-      harness.caches.get(replicaId).applySystemTableChange(TABLES.SERVICES,
-        CDCOperation.INSERT, serviceRow(PARTITION_ID, target));
-    }
-    const targetPeerId = deriveRaftRsPeerId(target[0]);
-    const admitted = () => logFold(leaderDurable(harness).dbFile,
-      PARTITION_ID, []).find((snapshot) =>
-      snapshot.voters.includes(targetPeerId))?.index ?? null;
-    assert.equal(await waitFor(() => admitted() !== null), true,
-      'setup: the leader committed the target AddNode from its row');
-    const aSelf = admitted();
-    cap.value = aSelf - 1;
+    const {service, aSelf} = await admittedUnderCommitLag(harness,
+      founders, target);
     assert.equal(await waitFor(() => {
       const applied = durableAppliedState(harness.dbPathOf(target),
         PARTITION_ID);
@@ -386,33 +394,8 @@ test('M5 (row visible to every member, catch-up stalled): the admitted-but-' +
     ['m5c-c', 'node-c']];
   const target = [firstSortingTarget('m5c-t', founders), 'node-t'];
   try {
-    await formGroup(harness, founders);
-    const created = await createJoinOperation(harness, {target,
-      rows: founders.map((member) => serviceRow(PARTITION_ID, member)),
-      leaderHint: harness.leaderMember()[1]});
-    assert.equal(created.error, undefined, created.error?.message);
-    const {service} = await buildTargetFromOperation(harness, {target,
-      operation: created.operation,
-      cache: metadataCache(PARTITION_ID, [...founders, target])});
-    const cap = {value: durableLog(leaderDurable(harness).dbFile,
-      PARTITION_ID).at(-1).index};
-    harness.network.rewriteTo(addressOf(target), (message) => ({
-      ...message,
-      ...(message.commit === undefined ? {} : {commit: String(Math.min(
-        Number(message.commit), cap.value))}),
-    }));
-    for (const [replicaId] of founders) {
-      harness.caches.get(replicaId).applySystemTableChange(TABLES.SERVICES,
-        CDCOperation.INSERT, serviceRow(PARTITION_ID, target));
-    }
-    const targetPeerId = deriveRaftRsPeerId(target[0]);
-    const admitted = () => logFold(leaderDurable(harness).dbFile,
-      PARTITION_ID, []).find((snapshot) =>
-      snapshot.voters.includes(targetPeerId))?.index ?? null;
-    assert.equal(await waitFor(() => admitted() !== null), true,
-      'setup: the leader committed the target AddNode from its row');
-    const aSelf = admitted();
-    cap.value = aSelf - 1;
+    const {service, aSelf} = await admittedUnderCommitLag(harness,
+      founders, target);
     assert.equal(await waitFor(() => durableAppliedState(harness.dbPathOf(
       target), PARTITION_ID).appliedIndex === aSelf - 1), true,
     'setup: the target applied one below its AddNode');

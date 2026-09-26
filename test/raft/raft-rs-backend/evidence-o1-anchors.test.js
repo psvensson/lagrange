@@ -11,9 +11,10 @@
 //     left the joint state;
 //   - RF = 1: a transfer to the target below its admission is one typed
 //     refusal, and the retry after admission completes (B13);
-//   - B1 probe: a transfer whose TimeoutNow reaches a target below its gate
-//     under a commit-knowledge lag (the crate's pending-conf guard sees
-//     nothing pending) - the frozen claim says it never leads below its gate;
+//   - B1 reachability: the construction that keeps a TimeoutNow away from
+//     a target below its gate, checked on production behaviour (every
+//     append carries commit >= a_self; a_self is held only applied;
+//     TimeoutNow is sent only with the gate open);
 //   - B12: R-1a answers WITNESS_BELOW_GATE on a witness whose replayed view
 //     transiently omits a committed voter, and STILL_VOTER once its gate is
 //     open.
@@ -273,45 +274,92 @@ test('anchor (B13, RF = 1): a transfer to the target below its admission ' +
   }
 });
 
-test('anchor (B1 probe): a transfer whose TimeoutNow reaches a target that ' +
-  'holds its AddNode but has not learned it committed - the target must not ' +
-  'lead below its gate', () => {
+// B1 reachability (lead ruling 2026-09-26): the synthetic cell "the target
+// holds its AddNode with a commit index below it and receives MsgTimeoutNow"
+// is unreachable by construction, and this anchor checks the construction
+// on production behaviour instead of prose: the leader tracks the target
+// only after applying AddNode(t), so every append it sends the target
+// carries a commit index at or past a_self; the target's commit and apply
+// reach a_self with the entry, in the same drain; and a TimeoutNow is sent
+// to the target only once its progress is caught up - by then its gate is
+// open, so the transfer is honoured at or past the gate and never below it.
+test('anchor (B1 reachability): every append to the target after its ' +
+  'AddNode carries commit >= a_self, the target holds a_self only applied, ' +
+  'and TimeoutNow reaches it only with its gate open', () => {
   const founders = ['tn-a', 'tn-b', 'tn-c'];
   const target = 'tn-t';
-  const filter = {value: null};
-  const cap = {value: UNBOUNDED};
-  const {model, leader, genesis} = found(founders, target, filter);
+  const sent = [];
+  let model = null;
+  const observe = (from, address, packet) => {
+    if (model === null || address !== model.addressOf(target)) {
+      return;
+    }
+    const message = packet?.message ?? {};
+    sent.push({
+      msgType: message.msgType,
+      commit: message.commit === undefined ? null : Number(message.commit),
+      targetApplied: durableOf(model, target).applied?.appliedIndex ?? null,
+      targetGateOpen: model.node(target).readStatus().gateOpen,
+    });
+  };
+  model = createModelCluster({partitionId: PARTITION_ID, founders, target,
+    filter: {value: null}, observe});
   try {
+    assert.ok(settle(model, () => leaderOf(model) !== null &&
+      durableOf(model, leaderOf(model)).applied.appliedIndex > 0,
+    [founders[0]]), 'setup: a leader that applied an entry');
+    const leader = leaderOf(model);
+    const genesis = founders.map((identity) => peerIdIn(model, leader,
+      identity));
     const stamp = oracleStamp(model, leader, genesis);
-    filter.value = prefixFilter(cap, {entries: false});
     joinFromStamp(model, target, stamp);
-    cap.value = durableLog(model.replica(leader).dbFile, PARTITION_ID)
-      .at(-1).index;
     commitVoterChange(model, RAFT_MEMBERSHIP_OPERATION.ADD_PEER, target);
     const targetPeerId = peerIdIn(model, target, target);
     const aSelf = admissionIndexOf(model, leader, targetPeerId,
       stamp.appliedIndex);
-    cap.value = aSelf - 1;
-    assert.ok(settle(model, () =>
-      durableOf(model, target).applied.appliedIndex === aSelf - 1 &&
-      durableLog(model.replica(target).dbFile, PARTITION_ID).at(-1)?.index >=
-        aSelf, [leader]),
-    'setup: the target holds its AddNode below its gate');
-    assert.equal(model.node(target).readStatus().gateOpen, false);
+    let holdsObserved = 0;
+    const check = () => {
+      const {applied, hard} = durableOf(model, target);
+      const last = durableLog(model.replica(target).dbFile, PARTITION_ID)
+        .at(-1)?.index ?? 0;
+      if (last >= aSelf) {
+        holdsObserved += 1;
+        assert.ok(Number(hard.commit) >= aSelf,
+          'the target learns a_self is committed with the entry itself');
+        assert.ok(applied.appliedIndex >= aSelf,
+          'the target applies a_self in the drain that stores it');
+      }
+      const status = model.node(target).readStatus();
+      assert.ok(status.gateOpen === true || status.role !== LEADER_ROLE,
+        'the target never leads below its gate');
+    };
+    model.tickers = [leader];
+    assert.ok(model.settle(() => model.node(target).readStatus().gateOpen ===
+      true, {rounds: PROBE_ROUNDS, between: check}),
+    'setup: the target catches up and opens');
+    assert.ok(holdsObserved > 0, 'the target was observed holding a_self');
+    const appends = sent.filter((packet) =>
+      packet.msgType === WIRE.messageType.MsgAppend);
+    assert.ok(appends.length > 0, 'the leader appended to the target');
+    assert.ok(appends.every((packet) => packet.commit >= aSelf),
+      'every append the leader sent the target carries commit >= a_self ' +
+        '(it tracks the target only after applying AddNode(t))');
+
     const transfer = model.node(leader).transferLeadership({
       successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
       replicaIdentity: target});
     assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
-      `setup: the leader stepped the transfer (${JSON.stringify(transfer)})`);
-    for (let round = 0; round < PROBE_ROUNDS; round += 1) {
-      model.node(leader).tick();
-      model.deliverAll();
-      const status = model.node(target).readStatus();
-      assert.ok(status.gateOpen === true || status.role !== LEADER_ROLE,
-        `the target leads only at or past its gate (round ${round}: ` +
-          `role ${status.role}, gateOpen ${status.gateOpen}, applied ${
-            status.appliedIndex})`);
-    }
+      `the leader stepped the transfer (${JSON.stringify(transfer)})`);
+    assert.ok(model.settle(() => roleOf(model, target) === LEADER_ROLE,
+      {rounds: PROBE_ROUNDS, between: check}),
+    'the transfer is honoured once the target is at its gate');
+    const timeoutNows = sent.filter((packet) =>
+      packet.msgType === WIRE.messageType.MsgTimeoutNow);
+    assert.ok(timeoutNows.length > 0, 'a TimeoutNow was sent to the target');
+    assert.ok(timeoutNows.every((packet) => packet.targetApplied >= aSelf &&
+      packet.targetGateOpen === true),
+    'every TimeoutNow was sent to the target with its gate already open');
+    assert.equal(model.node(target).readStatus().gateOpen, true);
   } finally {
     model.dispose();
   }
