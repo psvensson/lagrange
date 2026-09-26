@@ -19,16 +19,16 @@
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 155,
-    "storage-raft": 132,
+    "storage-raft": 133,
     "test-infrastructure": 136,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2237,
-  "digest": "fnv1a32-9b318d88",
+  "censusSize": 2238,
+  "digest": "fnv1a32-cae2ea41",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-aabda4e9",
+  "observationDigest": "fnv1a32-162001d4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1465,6 +1465,7 @@
     "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-anchors.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-gate-histories.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-static.test.js": "storage-raft",
@@ -6598,6 +6599,7 @@
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-provider-contract-constants.js",
         "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-conf-change-admission.js",
         "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
@@ -7415,6 +7417,8 @@
     },
     "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js": {
       "files": [
+        "src/partition/partition-replica-membership-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-provider-contract-constants.js",
@@ -7450,6 +7454,20 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-progress.js"
       ]
     },
     "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js": {
