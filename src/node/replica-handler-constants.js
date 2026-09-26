@@ -72,6 +72,8 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   LOCAL_CLEANUP_RETRY_REQUIRED:
     'Replica local cleanup requires retry after durable removal',
   REMOVE_COMPLETED: 'Replica removal completed',
+  REMOVE_DEFERRED_WITHOUT_ROW:
+    'Replica removal deferred: its REMOVING row could not be made durable',
   REMOVE_CONSENSUS_EXIT:
     'Retiring replica left consensus; retiring its port',
   REMOVE_FAILED: 'Replica removal failed',

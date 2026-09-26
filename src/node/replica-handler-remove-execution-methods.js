@@ -109,15 +109,18 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * state machine only permits failed -> removed).
      * @param {Object} context - {operationId, replicaId, partitionId,
      *   service, removalLifecycleSnapshot}.
-     * @return {Promise<Object>} {published, skipRemovingStatusWrite}.
+     * @return {Promise<Object>} {failedDurable, skipRemovingStatusWrite,
+     *   deferred}: failedDurable when the replica is FAILED (no retiring row,
+     *   no wait); deferred when the REMOVING row could not be made durable.
      * @private
      */
     async publishReplicaRetiringRow({operationId, replicaId, partitionId,
       service, removalLifecycleSnapshot}) {
       if (removalLifecycleSnapshot.skipRemovingStatusWrite === true) {
         return {
-          published: removalLifecycleSnapshot.retiringRowDurable === true,
+          failedDurable: removalLifecycleSnapshot.retiringRowDurable !== true,
           skipRemovingStatusWrite: true,
+          deferred: false,
         };
       }
       try {
@@ -126,7 +129,8 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           ReplicaStatus.REMOVING,
           {partitionId},
         );
-        return {published: true, skipRemovingStatusWrite: false};
+        return {failedDurable: false, skipRemovingStatusWrite: false,
+          deferred: false};
       } catch (error) {
         if (this.shouldSkipReplicaRemovalLifecycleWrite(
           replicaId,
@@ -138,7 +142,8 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
             status: ReplicaStatus.FAILED,
             service,
           });
-          return {published: false, skipRemovingStatusWrite: true};
+          return {failedDurable: true, skipRemovingStatusWrite: true,
+            deferred: false};
         }
         if (!isRetryableControlPlaneError(error)) {
           throw error;
@@ -150,8 +155,42 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           nodeId: this.nodeId,
           error: error.message,
         });
-        return {published: false, skipRemovingStatusWrite: false};
+        return {failedDurable: false, skipRemovingStatusWrite: false,
+          deferred: true};
       }
+    }
+    /**
+     * A removal effect never proceeds without a durable REMOVING row (lead
+     * ruling, as the REPLACE's durable intent): a REMOVING write that
+     * exhausted its retry on a retryable control-plane failure defers the
+     * REMOVE typed - the status-write deferral family (CREATE's too): no
+     * executor outcome, so the operation stays non-terminal and its durable
+     * owner re-dispatches it; the in-progress record is cleared and the
+     * local status is the durable one again. Nothing waits and nothing
+     * retires: the port stays live and the replica a full participant (the
+     * serving fence raised at acceptance stays, being irreversible).
+     * @param {Object} context - {operationId, replicaId, partitionId,
+     *   service, removalLifecycleSnapshot}.
+     * @private
+     */
+    deferReplicaRemovalWithoutDurableRow({operationId, replicaId,
+      partitionId, service, removalLifecycleSnapshot}) {
+      if (operationId) {
+        this.inProgressOperations.delete(operationId);
+      }
+      this.setLocalReplica(replicaId, {
+        replicaId,
+        partitionId,
+        status: removalLifecycleSnapshot.trackedStatus ||
+          removalLifecycleSnapshot.cachedStatus || ReplicaStatus.ACTIVE,
+        service,
+      });
+      this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_DEFERRED_WITHOUT_ROW, {
+        operationId,
+        replicaId,
+        partitionId,
+        nodeId: this.nodeId,
+      });
     }
     /**
      * Keep the retiring replica participating until its own applied
@@ -291,7 +330,15 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           removalLifecycleSnapshot,
         });
         skipRemovingStatusWrite = retiringRow.skipRemovingStatusWrite;
-        if (retiringRow.published) {
+        if (retiringRow.deferred) {
+          this.deferReplicaRemovalWithoutDurableRow({operationId, replicaId,
+            partitionId, service, removalLifecycleSnapshot});
+          return;
+        }
+        // The REMOVING row is durable: wait for the port's applied
+        // configuration (the row-driven owner proposes the RemoveNode). Only
+        // a FAILED replica - the failure detector's verdict - skips it.
+        if (!retiringRow.failedDurable) {
           await this.awaitReplicaRemovalConsensusExit(service, {
             operationId,
             replicaId,

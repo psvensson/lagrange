@@ -66,6 +66,10 @@ const RAFT_MEMBERSHIP_CHANGE_REFUSAL = Object.freeze({
   UNKNOWN_OPERATION: 'unknown-membership-change',
   WITHOUT_REPLICA_IDENTITY: 'membership-change-without-replica-identity',
   PEER_UNRESERVED: 'membership-change-peer-unreserved',
+  // Conf changes are taken only at the leader's port (round 2 F-1): a
+  // replica that does not lead refuses one typed and retryable, naming the
+  // leader it knows, instead of letting the crate forward it.
+  NOT_LEADER: 'membership-change-not-leader',
 });
 
 // What probePeerProgress(peerAddress) answers: the peer's matched index

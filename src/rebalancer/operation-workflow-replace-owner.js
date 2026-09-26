@@ -47,6 +47,7 @@ import {
 import {
   isReplaceTargetGone,
   readReplaceCompletionAuthority,
+  replaceRetirementRouteOf,
 } from './operation-workflow-replace-surviving-membership.js';
 import {isPartitionReplaceOwnerPhase} from './replica-operation-step-policy.js';
 import {
@@ -352,8 +353,9 @@ function rebuildLostRetirementAttempt(owner, state, operation, observation) {
 }
 
 /**
- * R-1f: propose REMOVE_PEER of the source through the witness replica while
- * the source is still a voter and its row is gone or retiring. At most one
+ * R-1f: propose REMOVE_PEER of the source through the group's leader (the
+ * one port that takes a conf change; the target when it leads) while the
+ * source is still a voter and its row is gone or retiring. At most one
  * attempt is in flight; a repeat after a leader, term or membership change,
  * or after the backstop window, is a raft no-op if the first one committed.
  * @param {Object} owner
@@ -379,7 +381,8 @@ async function redriveReplaceSourceRetirement(owner, operation, observation) {
   state.nextAttemptSeq += 1;
   state.retirementAttemptByOperationId.set(operation.operationId, issued);
   const {response, reason} = await deliverToReplaceWitness(
-    owner, operation, ReplicaOperationMessageType.RETIRE_REPLICA_PEER);
+    owner, operation, ReplicaOperationMessageType.RETIRE_REPLICA_PEER,
+    replaceRetirementRouteOf(owner, operation, observation));
   if (state.retirementAttemptByOperationId.get(operation.operationId) ===
       issued) {
     issued.answer = response?.[ReplicaOperationField.PROPOSAL] ||

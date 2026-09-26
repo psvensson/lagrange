@@ -221,10 +221,20 @@ function retireRaftPeerFromAuthoritativeServiceChange(
   if (
     !isExplicitPeerRetirement(operation, serviceRow) ||
     !partitionService.raft ||
-    !replicaId ||
-    replicaId === partitionService.replicaId
+    !replicaId
   ) {
     return false;
+  }
+  // Its own retiring row: the replica proposes its own RemoveNode through
+  // its own port (round 2 F-1). Conf changes are taken only at the leader's
+  // port, so a leader source removes itself here - nobody else can - and a
+  // follower's copy is refused NOT_LEADER and made again should it lead.
+  if (replicaId === partitionService.replicaId) {
+    proposePeerRetirement(partitionService, {
+      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
+      replicaIdentity: replicaId,
+    });
+    return true;
   }
 
   const addressManager = AddressManager.getInstance();
