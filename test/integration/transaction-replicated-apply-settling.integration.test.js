@@ -185,7 +185,9 @@ async function pollReplicas(t, nodes, deadline, satisfied, onObservation) {
   return replicas;
 }
 
-const markerCount = (replica, type) => replica.raftLog?.byMarker?.[type]?.length;
+const consensusLog = (replica) => replica.raftRsLog ?? replica.raftLog;
+const markerCount = (replica, type) =>
+  consensusLog(replica)?.byMarker?.[type]?.length;
 const rowCount = (replica, id) => replica.rows?.[id];
 
 function compactRow(replica, leaderNodeId) {
@@ -200,7 +202,8 @@ function compactRow(replica, leaderNodeId) {
     outcomeRows: replica.outcomes?.length,
     raftLogCommitMarkers:
       markerCount(replica, PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT),
-    raftLogControlEntries: replica.raftLog?.byId?.[ROW.CONTROL]?.length,
+    raftLogControlEntries: consensusLog(replica)?.byId?.[ROW.CONTROL]?.length,
+    raftLogTxAEntries: consensusLog(replica)?.byId?.[ROW.TX_A]?.length,
     observationError: replica.observationError,
   };
 }

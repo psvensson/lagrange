@@ -73,7 +73,12 @@ const MARKER_TYPES = [PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT];
 const ROUND = Object.freeze({
   PLAIN: 'concurrent-pair',
   AFTER_FAILURE: 'failed-transaction-then-concurrent-pair',
+  // The images-seam I2 sequence before its concurrent pair: a first-statement
+  // failure, a caught (swallowed) failure that continues, and raw COMMIT text
+  // inside the callback (TRANSACTION_CONTROL_RESERVED).
+  AFTER_I2_SEQUENCE: 'i2-failure-sequence-then-concurrent-pair',
 });
+const RAW_COMMIT = 'COMMIT';
 
 const pair = (current, history) => [
   {sql: SQL.INSERT_CURRENT, params: [current, VALUE]},
@@ -190,6 +195,27 @@ function observeBoth(nodes, ids) {
   };
 }
 
+async function runI2FailureSequence(writer, session, prefix) {
+  const existing = `${prefix}e0`;
+  const sequence = [];
+  sequence.push(settledOutcome(await writer.transaction(session,
+    pair(existing, `${prefix}eh0`))));
+  // The first statement fails on a duplicate PRIMARY KEY.
+  sequence.push(settledOutcome(await writer.transaction(session, [
+    {sql: SQL.INSERT_CURRENT, params: [existing, VALUE]},
+    {sql: SQL.INSERT_HISTORY, params: [`${prefix}eh1`, existing, VALUE]}])));
+  // A failure the callback catches and continues past.
+  sequence.push(settledOutcome(await writer.transaction(session, [
+    {sql: SQL.INSERT_CURRENT, params: [`${prefix}e2`, VALUE]},
+    {sql: SQL.INSERT_CURRENT, params: [existing, VALUE], swallow: true},
+    {sql: SQL.INSERT_HISTORY, params: [`${prefix}eh2`, existing, VALUE]}])));
+  // Raw transaction-control text inside the callback.
+  sequence.push(settledOutcome(await writer.transaction(session, [
+    {sql: SQL.INSERT_CURRENT, params: [`${prefix}e3`, VALUE]},
+    {sql: RAW_COMMIT, params: []}])));
+  return sequence;
+}
+
 async function runRound(t, context, round, prefix) {
   const {cluster, writer, writerSession, reader, readerSession} = context;
   const record = {round};
@@ -198,6 +224,10 @@ async function runRound(t, context, round, prefix) {
       {sql: SQL.INSERT_CURRENT, params: [`${prefix}f1`, VALUE]}];
     record.failingTransaction = settledOutcome(
       await writer.transaction(writerSession, failing));
+  }
+  if (round === ROUND.AFTER_I2_SEQUENCE) {
+    record.failureSequence = await runI2FailureSequence(writer, writerSession,
+      prefix);
   }
   const ids = {current: [`${prefix}c1`, `${prefix}c2`],
     history: [`${prefix}h1`, `${prefix}h2`]};
@@ -250,7 +280,7 @@ test(`${FINDING}: reads after two concurrent transactions on the same tables`,
         `both tables were created (${JSON.stringify(evidence.create)})`);
       evidence.warmup = settledOutcome(await writer.transaction(
         context.writerSession, pair('w-c0', 'w-h0')));
-      for (const [index, round] of [ROUND.PLAIN, ROUND.AFTER_FAILURE].entries()) {
+      for (const [index, round] of Object.values(ROUND).entries()) {
         if (Date.now() >= runDeadline) break;
         const record = await runRound(t, context, round, `r${index}-`);
         evidence.rounds.push(record);

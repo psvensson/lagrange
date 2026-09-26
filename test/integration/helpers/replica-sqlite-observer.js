@@ -12,6 +12,7 @@
 // not skipped.
 
 import {existsSync, readdirSync} from 'node:fs';
+import {Buffer} from 'node:buffer';
 import {join} from 'node:path';
 import Database from 'better-sqlite3';
 import {STORAGE_DEFAULT} from '../../../src/storage/storage-constants.js';
@@ -29,11 +30,22 @@ const OBSERVER_SQL = Object.freeze({
   RAFT_LOG_MATCH:
     'SELECT log_index, term, command FROM _raft_log ' +
     'WHERE command LIKE ? ORDER BY log_index',
+  RAFT_RS_LOG_BOUNDS:
+    'SELECT MIN(log_index) AS first, MAX(log_index) AS last, ' +
+    'COUNT(*) AS entries FROM _raft_rs_log',
+  RAFT_RS_LOG_ENTRIES:
+    'SELECT log_index, term, entry_type, data FROM _raft_rs_log ' +
+    'WHERE data IS NOT NULL ORDER BY log_index',
 });
 const OBSERVER_TABLE = Object.freeze({
   OUTCOMES: '_transaction_outcomes',
   RAFT_LOG: '_raft_log',
+  // The rs-raft durable store (src/raft/raft-rs-durable-store-constants.js):
+  // entry data is the proposal's JSON bytes, stored base64.
+  RAFT_RS_LOG: '_raft_rs_log',
 });
+const RAFT_RS_PAYLOAD_ENCODING = 'base64';
+const UTF8 = 'utf8';
 const OPEN_READ_ONLY = Object.freeze({readonly: true, fileMustExist: true});
 const MAX_SEARCH_DEPTH = 4;
 const LIKE_ANY = '%';
@@ -113,6 +125,27 @@ function matchLog(db, needle) {
     .map(summarizeLogEntry);
 }
 
+function decodeRaftRsEntry(row) {
+  const text = Buffer.from(row.data, RAFT_RS_PAYLOAD_ENCODING).toString(UTF8);
+  return {text, summary: summarizeLogEntry({log_index: row.log_index,
+    term: row.term, command: text})};
+}
+
+// Entries of this replica's rs-raft log that name an id or carry a marker.
+function observeRaftRsLog(db, ids, markerTypes) {
+  const entries = db.prepare(OBSERVER_SQL.RAFT_RS_LOG_ENTRIES).all()
+    .map(decodeRaftRsEntry);
+  const matching = (needle) => entries
+    .filter((entry) => entry.text.includes(`${QUOTE}${needle}${QUOTE}`))
+    .map((entry) => entry.summary);
+  return {
+    bounds: db.prepare(OBSERVER_SQL.RAFT_RS_LOG_BOUNDS).get(),
+    byId: Object.fromEntries(ids.map((id) => [id, matching(id)])),
+    byMarker: Object.fromEntries(markerTypes.map((type) =>
+      [type, matching(type)])),
+  };
+}
+
 /**
  * Read one replica file: row presence for `ids` in `tableName`, the commit
  * outcome rows, and the Raft log entries naming an id or a marker type.
@@ -141,7 +174,10 @@ function observeReplicaFile(file, {tableName, ids, markerTypes = []}) {
           [type, matchLog(db, `${QUOTE}${type}${QUOTE}`)])),
       };
     }
-    return {...file, hasTable: true, tables, rows, outcomes, raftLog};
+    const raftRsLog = tables.includes(OBSERVER_TABLE.RAFT_RS_LOG) ?
+      observeRaftRsLog(db, ids, markerTypes) : null;
+    return {...file, hasTable: true, tables, rows, outcomes, raftLog,
+      raftRsLog};
   } catch (error) {
     return {...file, observationError: error.message};
   } finally {
