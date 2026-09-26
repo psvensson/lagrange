@@ -82,6 +82,7 @@ export function createReadinessSnapshotStoreTestStub({
     recoveryEpochHistoryByNodeId: new Map(),
     nodeLivenessSemanticProjectionOwner: {
       projectNodeLivenessFromEvidence: projectNodeLiveness,
+      evaluateNodeLivenessFromEvidence: projectNodeLiveness,
       recordAllSourceChanges() {},
       recordNodeSourceChange() {},
     },

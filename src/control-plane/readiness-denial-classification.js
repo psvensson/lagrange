@@ -13,7 +13,10 @@ import {
 // classification shared by every approved formation carve-out (system-table
 // query routing, the critical-partition voter-ready floor, and formation
 // placement-target eligibility): one owner for the reason-class decision so
-// the carve-outs cannot drift apart.
+// the carve-outs cannot drift apart. The planning owner's deferred snapshot
+// is evidence-absent by this rule exactly when the completed verdict it
+// defers was not a denial on the read's dimension (the publication contract
+// composes it so); a deferred denial keeps its substantive reasons.
 const EVIDENCE_ABSENT_READINESS_REASON_CODES = Object.freeze(new Set([
   CONTROL_PLANE_READINESS_REASON.PLANNING_SNAPSHOT_REFRESH_PENDING,
   PROJECTION_READINESS_REASON.OWNER_EVIDENCE_MISSING,

@@ -5,8 +5,8 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 427172,
-        "sha256": "5ecc796535555fa7f1e532b58ceb6b3742c32e88f6b45ad4563c54a83c8a5e08"
+        "bytes": 426934,
+        "sha256": "e450af709fa6f022cb9d6bb71b37ecdad9b5f0af0ac4c95464592471686e1fd9"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2580326,
-        "sha256": "60fbc0a9d21051debccf1ec3670bf64ad42800a2384806f135b7c21d90c757a6"
+        "bytes": 2580395,
+        "sha256": "eb12c724efb8c2961479038b8e295728d86a0553d64a1bd9425f9e28bc7c7f7c"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "86d0f63bbeea1385f4cebed5f42ce451c66ca62e9ee7f63f3b3749ebf30f7505"
+        "sha256": "7e08d378610c605e33e4ae5b77318f0ead9ce0d6af3b7cb4184f5b42bded636c"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "3f94c9ec73571ef60edbe22271ed0ee6e82827791847f301918a36ec76f2d0e2"
+        "sha256": "c55db42762b4f779f678af568b57697e5e788e6e55eb736c9144c5d11ce65d81"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,18 +62,18 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "fe3bda4b2750f4b5629700ba3bd05b3194d8ba4a7a77e9b411feabb480753bd5"
+    "inputDigest": "07e65af2352f897d0720a6e67d47388c04263a1eb8ddf136c7304cee950eeabb"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 427172,
-        "sha256": "5ecc796535555fa7f1e532b58ceb6b3742c32e88f6b45ad4563c54a83c8a5e08"
+        "bytes": 426934,
+        "sha256": "e450af709fa6f022cb9d6bb71b37ecdad9b5f0af0ac4c95464592471686e1fd9"
       },
-      "declaredCount": 1810,
-      "observedCount": 1810,
-      "assignedCount": 1810
+      "declaredCount": 1809,
+      "observedCount": 1809,
+      "assignedCount": 1809
     },
     "cognitive": {
       "identity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "86d0f63bbeea1385f4cebed5f42ce451c66ca62e9ee7f63f3b3749ebf30f7505"
+          "sha256": "7e08d378610c605e33e4ae5b77318f0ead9ce0d6af3b7cb4184f5b42bded636c"
         },
         "cloneGroups": 55,
         "duplicatedLines": 1777,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "3f94c9ec73571ef60edbe22271ed0ee6e82827791847f301918a36ec76f2d0e2"
+          "sha256": "c55db42762b4f779f678af568b57697e5e788e6e55eb736c9144c5d11ce65d81"
         },
         "cloneGroups": 787,
         "duplicatedLines": 30304,
@@ -167,29 +167,29 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2580326,
-        "sha256": "60fbc0a9d21051debccf1ec3670bf64ad42800a2384806f135b7c21d90c757a6"
+        "bytes": 2580395,
+        "sha256": "eb12c724efb8c2961479038b8e295728d86a0553d64a1bd9425f9e28bc7c7f7c"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "e595694873afa7d2b2e2931d352fc0947f4f16df6b43ac3432652128298a1cd4",
+      "sourceDigest": "f7f2d3102c7a8a5b47000dd65676f72b6d16ee99fdf2c3c8186797ec195a7916",
       "moduleCount": 5012,
-      "edgeCount": 23751,
+      "edgeCount": 23752,
       "unresolvedCount": 34
     }
   },
   "assignment": {
-    "sourceSignalCount": 2622,
-    "assignedSignalCount": 2622,
-    "uniqueAssignmentCount": 2622,
-    "digest": "87f570626bbc55ed16a09c803a0cd281fde89eeb5bbd5ed1c997f284459506e2"
+    "sourceSignalCount": 2621,
+    "assignedSignalCount": 2621,
+    "uniqueAssignmentCount": 2621,
+    "digest": "3cc98ea6338a4c2e250683abf414cd15eac8abff0611fad3c5addb13fb487e1f"
   },
   "signalCounts": {
     "cognitive": 159,
-    "complexity": 1810,
+    "complexity": 1809,
     "duplication": 566,
     "fileSize": 48,
     "lintExclusion": 39
@@ -267,8 +267,8 @@
         "src/control-plane"
       ],
       "fileCount": 91,
-      "signalCount": 252,
-      "complexity": 206,
+      "signalCount": 251,
+      "complexity": 205,
       "cognitive": 38,
       "oversizedFiles": 3,
       "duplicatedLines": 165,
@@ -277,7 +277,7 @@
       "lintExclusions": 0,
       "importIn": 672,
       "importOut": 416,
-      "score": 1180.5,
+      "score": 1176.5,
       "topPaths": [
         "src/control-plane/control-plane-kernel-ingress.js",
         "src/control-plane/control-plane-readiness-priority-recovery-planning.js",

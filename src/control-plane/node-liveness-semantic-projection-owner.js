@@ -132,6 +132,23 @@ class NodeLivenessSemanticProjectionOwner {
     return existing.projection;
   }
 
+  // The same evaluation as a recorded projection, for its caller only: the
+  // evidence is not recorded and no semantic change is published. The
+  // shared projection (the planning identity's liveness input) has one
+  // evidence source, the node row it reads itself; a caller holding any
+  // other row (an authoritative or preloaded row, or none because its read
+  // was unavailable) evaluates here, so two views of one node can never
+  // flip the shared projection and rotate the planning identity (fix-f4).
+  evaluateNodeLivenessFromEvidence(nodeId, evidence, nowMs = this.now()) {
+    if (this.stopped) return null;
+    const source = copyStrictOwnDataRecord(evidence) || EMPTY_EVIDENCE;
+    return this.evaluateNodeLiveness(
+      normalizeNodeId(nodeId),
+      source,
+      normalizeSemanticNowMs(nowMs),
+    ).projection;
+  }
+
   recordNodeSourceChange(nodeId, nowMs = this.now()) {
     if (this.stopped) return null;
     const key = normalizeNodeId(nodeId);

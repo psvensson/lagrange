@@ -622,6 +622,19 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
       this.hasWritableControlPlaneService(serviceRows);
   }
 
+  // An authoritative row read is authoritative-preferred (the membership
+  // publication coordinator's read-source contract): a read that did not
+  // succeed ({success: false, error}) is unavailability, never an absent
+  // row or an empty row set, and the read answers from the row source the
+  // non-authoritative path reads. Collapsed to "no rows", an unavailable
+  // read made every node look missing to the publication-planning
+  // evaluation, whose missing-row answers then competed with the planning
+  // builds' cache-row answers for the shared liveness projection and the
+  // readiness feedback, rotating the planning identity (fix-f4).
+  isAuthoritativeRowReadAvailable(result) {
+    return result?.success !== false;
+  }
+
   async readNodeRow(nodeId, options = {}) {
     if (Array.isArray(options.allNodeRows)) {
       return (
@@ -635,7 +648,9 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
       typeof this.nodesOwner.getNode === 'function'
     ) {
       const result = await this.nodesOwner.getNode(nodeId, options);
-      return unwrapRowReadResult(result);
+      if (this.isAuthoritativeRowReadAvailable(result)) {
+        return unwrapRowReadResult(result);
+      }
     }
     if (
       this.nodesOwner &&

@@ -1,3 +1,4 @@
+import {isDeepStrictEqual} from 'node:util';
 import {COLUMN, STATE, TABLES} from '../constants/index.js';
 import {TRANSPORT_EVENT} from '../constants/transport.js';
 import {NodeLivenessSemanticProjectionOwner} from
@@ -76,13 +77,17 @@ const controlPlaneReadinessNodeLivenessMethods = {
     };
   },
 
+  // Only the projection's own source row is recorded into the shared
+  // projection; any other row is evaluated for this caller alone (see
+  // evaluateNodeLivenessFromEvidence).
   projectNodeLivenessFromRow(nodeId, nodeRow, nowMs = this.now()) {
-    return this.nodeLivenessSemanticProjectionOwner
-      ?.projectNodeLivenessFromEvidence(
-        nodeId,
-        this.buildNodeLivenessSourceEvidence(nodeId, nodeRow),
-        nowMs,
-      ) || null;
+    const owner = this.nodeLivenessSemanticProjectionOwner;
+    if (!owner) return null;
+    const evidence = this.buildNodeLivenessSourceEvidence(nodeId, nodeRow);
+    return (isNodeLivenessSourceRow(this, nodeId, nodeRow) ?
+      owner.projectNodeLivenessFromEvidence(nodeId, evidence, nowMs) :
+      owner.evaluateNodeLivenessFromEvidence(nodeId, evidence, nowMs)) ||
+      null;
   },
 
   getNodeLivenessGeneration(nodeId, nowMs = this.now()) {
@@ -147,6 +152,17 @@ function installControlPlaneReadinessNodeLivenessMethods(prototype) {
   );
 }
 
+// The row the shared projection reads for this node itself (its
+// readNodeEvidence source). An absent row is the source's answer only when
+// the source has no row either.
+function isNodeLivenessSourceRow(service, nodeId, nodeRow) {
+  const sourceRow = service.getNodeRow(nodeId) ?? null;
+  const candidateRow = nodeRow ?? null;
+  return candidateRow === sourceRow || (
+    candidateRow !== null && sourceRow !== null &&
+    isDeepStrictEqual(candidateRow, sourceRow));
+}
+
 function buildStoredLivenessNodeRow(snapshot) {
   const evidence = snapshot.nodeEvidence || {};
   const nodeRow = {
@@ -199,11 +215,14 @@ function isStoredNodeLivenessCurrent(service, snapshot, nowMs) {
     storedRow,
     currentRow,
   ) ? storedRow : currentRow;
-  const current = owner.projectNodeLivenessFromEvidence(
-    snapshot.nodeId || null,
-    service.buildNodeLivenessSourceEvidence(snapshot.nodeId, nodeRow),
-    nowMs,
-  );
+  // A stored row is not the projection's source: evaluate it, never record.
+  const evidence =
+    service.buildNodeLivenessSourceEvidence(snapshot.nodeId, nodeRow);
+  const current = nodeRow === currentRow ?
+    owner.projectNodeLivenessFromEvidence(
+      snapshot.nodeId || null, evidence, nowMs) :
+    owner.evaluateNodeLivenessFromEvidence(
+      snapshot.nodeId || null, evidence, nowMs);
   return matchesStoredNodeLiveness(snapshot, current);
 }
 

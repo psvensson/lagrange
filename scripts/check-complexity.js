@@ -61,7 +61,10 @@ const TARGET_THRESHOLD = 12;
 // 2026-09-26: tightened 1811 -> 1810 on the checker's hint on the O1
 // committed-read branch (the partition row branch of the creation stamp
 // deleted; the peer-cache reconcile's expected-peer loop extracted).
-const BASELINE_COUNT = 1810;
+// 2026-09-26: tightened 1810 -> 1809 on the checker's hint (fix-f4: the
+// readiness service-row readers share one authoritative-read helper,
+// readAllNodeServiceRows drops below the threshold).
+const BASELINE_COUNT = 1809;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';
