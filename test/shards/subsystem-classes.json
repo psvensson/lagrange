@@ -7,7 +7,7 @@
     "bootstrap-membership": 259,
     "cdc-metadata": 59,
     "cli-tooling": 96,
-    "control-plane": 196,
+    "control-plane": 197,
     "convergence-topology": 92,
     "distributed-harness": 167,
     "examples-e2e": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2231,
-  "digest": "fnv1a32-6d849268",
+  "censusSize": 2232,
+  "digest": "fnv1a32-73c85436",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d046384e",
+  "observationDigest": "fnv1a32-6116830f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -608,6 +608,7 @@
     "test/control-plane/publications-catchup-leader-pinned-read.test.js": "control-plane",
     "test/control-plane/read-model-contract.test.js": "control-plane",
     "test/control-plane/readiness-admission-transitions-observed.test.js": "control-plane",
+    "test/control-plane/readiness-authoritative-row-read-contract.test.js": "control-plane",
     "test/control-plane/readiness-cycle-cut-dependency-guard.test.js": "control-plane",
     "test/control-plane/readiness-deferred-denial-evidence-absent.test.js": "control-plane",
     "test/control-plane/readiness-liveness-projection-single-source.test.js": "control-plane",
@@ -3583,6 +3584,12 @@
         "src/control-plane/control-plane-readiness-service.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/readiness-planning-snapshot-owner.js"
+      ]
+    },
+    "test/control-plane/readiness-authoritative-row-read-contract.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-service.js",
+        "src/control-plane/membership-publication-coordinator-reads.js"
       ]
     },
     "test/control-plane/readiness-cycle-cut-dependency-guard.test.js": {
