@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2157,
+    "ordinary": 2158,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2174,
-  "digest": "fnv1a32-88c15590",
+  "censusSize": 2175,
+  "digest": "fnv1a32-abd443a8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -941,6 +941,7 @@
     "test/integration/benchmark-system-table-read-path.integration.test.js": "ordinary",
     "test/integration/benchmark-table-create-timeout-diagnostics.integration.test.js": "ordinary",
     "test/integration/bidirectional-websocket.integration.test.js": "ordinary",
+    "test/integration/call-cell-public-outcome-adversarial.integration.test.js": "ordinary",
     "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js": "ordinary",
     "test/integration/cdc-propagation.integration.test.js": "ordinary",
     "test/integration/cdc-subscription-catchup.integration.test.js": "ordinary",

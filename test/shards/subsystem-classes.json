@@ -16,7 +16,7 @@
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
-    "services-runtime": 171,
+    "services-runtime": 172,
     "solver-tooling": 7,
     "storage-partition": 151,
     "storage-raft": 102,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2174,
-  "digest": "fnv1a32-936ffc22",
+  "censusSize": 2175,
+  "digest": "fnv1a32-70a4e4df",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-90436ca2",
+  "observationDigest": "fnv1a32-0d06da68",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -961,6 +961,7 @@
     "test/integration/benchmark-system-table-read-path.integration.test.js": "query-sql",
     "test/integration/benchmark-table-create-timeout-diagnostics.integration.test.js": "convergence-topology",
     "test/integration/bidirectional-websocket.integration.test.js": "transport-messaging",
+    "test/integration/call-cell-public-outcome-adversarial.integration.test.js": "services-runtime",
     "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js": "cdc-metadata",
     "test/integration/cdc-propagation.integration.test.js": "cdc-metadata",
     "test/integration/cdc-subscription-catchup.integration.test.js": "cdc-metadata",
@@ -5767,6 +5768,25 @@
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js"
+      ]
+    },
+    "test/integration/call-cell-public-outcome-adversarial.integration.test.js": {
+      "files": [
+        "src/bootstrap/shared/call-cell-invocation-setup.js",
+        "src/bootstrap/shared/runtime-service-handler-setup.js",
+        "src/config/configuration-manager.js",
+        "src/constants/unified-service-lifecycle.js",
+        "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/runtime/call-cell-driver-invoke.js",
+        "src/runtime/pgwire-credential-verifier.js",
+        "src/runtime/pgwire-runtime-module.js",
+        "src/runtime/wasi-component-cell-runtime.js",
+        "test/integration/helpers/call-cell-guest-componentizer.js",
+        "test/wasm-service/fixtures/call-cell-world/guest.js"
+      ],
+      "directories": [
+        "src",
+        "wit"
       ]
     },
     "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js": {

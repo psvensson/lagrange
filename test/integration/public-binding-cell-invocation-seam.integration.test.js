@@ -65,6 +65,7 @@ import {
   stopPlacedPgwireReplicas,
   useSingleNodeReplicaShape,
 } from './helpers/public-binding-seam-harness.js';
+import {topologyLeaksIn} from './helpers/public-topology-leak.js';
 import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
 
 const SEAM_TEST_TIMEOUT_MS = 360_000;
@@ -121,6 +122,13 @@ const UNBOUNDED_STATEMENT = `SELECT id, score, label FROM ${TABLE}`;
 const BINDING_NAME = Object.freeze({
   OWNED_RANGE: 'images-seam-owned-range',
   UNBOUNDED: 'images-seam-all-ratings',
+  UNKNOWN: 'images-seam-no-such-binding',
+});
+const PUBLIC_OUTCOME = Object.freeze({
+  DEFINITELY_NOT_EXECUTED: 'definitely_not_executed',
+});
+const OWNER_CODE = Object.freeze({
+  ROUTE_NOT_FOUND: 'call_cell_route_not_found',
 });
 const BINDING_SCHEMA_VERSION = 2;
 const ACCESS_POLICY_SCHEMA_VERSION = 2;
@@ -470,6 +478,30 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
     });
   mark('callsServed');
 
+  // What a pg client receives for pre-dispatch failures over the live seam.
+  // The expected public values are the documented wire contract
+  // (docs/execution-semantics.md "Public outcome classes"), written here as
+  // the consumer would read them, not imported from the owner.
+  const topology = [
+    NODE_ID,
+    ...partitions.map((partition) =>
+      partition.partition_id || partition.partitionId),
+  ];
+  await t.test('pre-dispatch failures are public, typed and topology-free',
+    async (st) => {
+      const unknown = await observeFailure(callBinding(
+        client, BINDING_NAME.UNKNOWN, {topN: TOP_N_ALL}));
+      st.comment(`pg receives for an unknown Binding: ${
+        JSON.stringify(unknown)}`);
+      st.same(JSON.parse(unknown.detail), {
+        ...JSON.parse(unknown.detail),
+        outcomeClass: PUBLIC_OUTCOME.DEFINITELY_NOT_EXECUTED,
+        ownerCode: OWNER_CODE.ROUTE_NOT_FOUND,
+        retrySafe: false,
+      });
+      st.same(topologyLeaksIn(unknown, topology), []);
+    });
+
   await t.test('the consumer cannot name an execution target (F2/F5)',
     async (st) => {
       for (const key of TOPOLOGY_KEYS) {
@@ -481,6 +513,8 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
             schema_version: BINDING_SCHEMA_VERSION,
           }));
         st.ok(refused, `a CALL payload carrying '${key}' is rejected`);
+        st.notOk(isPublicRetrySafe(refused),
+          'a payload-contract refusal is never retry-safe');
         st.comment(`pg receives for '${key}': ${JSON.stringify(refused)}`);
       }
     });

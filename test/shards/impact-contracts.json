@@ -572,6 +572,7 @@
       "tests": [
         "test/service/call-cell-public-outcome.test.js",
         "test/service/call-cell-invoker.test.js",
+        "test/integration/call-cell-public-outcome-adversarial.integration.test.js",
         "test/integration/public-binding-cell-invocation-seam.integration.test.js"
       ]
     }
