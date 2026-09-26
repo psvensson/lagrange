@@ -12,7 +12,7 @@
     "distributed-harness": 167,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 252,
+    "placement-rebalance": 253,
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2231,
-  "digest": "fnv1a32-6d849268",
+  "censusSize": 2232,
+  "digest": "fnv1a32-cddc34b1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d046384e",
+  "observationDigest": "fnv1a32-e8a1f001",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1689,6 +1689,7 @@
     "test/rebalancer/replace-owner-wake.test.js": "placement-rebalance",
     "test/rebalancer/replace-real-group-completion.test.js": "placement-rebalance",
     "test/rebalancer/replace-real-group-d2.test.js": "placement-rebalance",
+    "test/rebalancer/replace-real-group-deposed-leader.test.js": "placement-rebalance",
     "test/rebalancer/replace-real-group-handoff.test.js": "placement-rebalance",
     "test/rebalancer/replace-real-group-latency.test.js": "placement-rebalance",
     "test/rebalancer/replace-real-group-scheduling.test.js": "placement-rebalance",
@@ -8345,6 +8346,22 @@
       ]
     },
     "test/rebalancer/replace-real-group-d2.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/node/replica-handler-constants.js",
+        "src/node/replica-handler-membership-relay.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/node/replica-removal-consensus-exit-fixture.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/rebalancer/replace-real-group-deposed-leader.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",

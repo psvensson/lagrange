@@ -783,3 +783,28 @@ test('W14 (F1): the leader-answered committed configuration decides ' +
     }
   });
 });
+
+test('W15 (F-3, O1 round 2): an absence in a configuration applied below ' +
+  'the answer\'s commit index is not a retirement', async (t) => {
+  const harness = await createHarness({witness: createReplaceWitness({
+    leaderReplicaId: TARGET_REPLICA_ID, appliedLag: 1})});
+  try {
+    await driveToRemovalIntent(harness);
+    // The leader committed one more conf entry than it applied (an ADD held
+    // by persistence admission): its applied configuration may miss a
+    // committed voter, so its absence decides nothing.
+    harness.witness.sourceVoter = false;
+    harness.witness.commitIndex = INTENT_COMMIT_INDEX + 1;
+    await harness.owner.completeOperation(harness.operation);
+    t.equal((await persistedOperation(harness)).workflowStep,
+      WORKFLOW_STEP.STOPPING, 'the lagging applied configuration completes ' +
+        'nothing');
+    harness.witness.appliedLag = 0;
+    await harness.owner.completeOperation(harness.operation);
+    t.equal((await persistedOperation(harness)).workflowStep,
+      WORKFLOW_STEP.REMOVED, 'applied at the commit index, the absence ' +
+        'completes it');
+  } finally {
+    await harness.coordinator.shutdown();
+  }
+});

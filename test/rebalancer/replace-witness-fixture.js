@@ -30,6 +30,13 @@ const PORT_OUTCOME_PROPOSED = 'PROPOSED';
  * @param {boolean} [options.sourceVoter=true] - Whether the source is in the
  *   witness's committed voters.
  * @param {boolean} [options.available=true] - Whether the witness answers.
+ * @param {number} [options.appliedLag=0] - How far the answered applied
+ *   index trails the commit index (F-3: a configuration applied below the
+ *   commit index).
+ * @param {string[]|null} [options.voters] - The committed voters the answer
+ *   carries (fix-f7 corroboration). Without it the answer names the leader
+ *   alone: the double has no group, so its leader corroborates itself; the
+ *   real-group harness is the corroboration witness.
  * @return {Object} The witness double.
  */
 export function createReplaceWitness(options = {}) {
@@ -39,6 +46,8 @@ export function createReplaceWitness(options = {}) {
     sourceVoter: options.sourceVoter !== false,
     available: options.available !== false,
     commitIndex: options.commitIndex ?? DEFAULT_COMMIT_INDEX,
+    appliedLag: options.appliedLag ?? 0,
+    voters: options.voters ?? null,
     // The witness's participation gate (O1): open unless a test holds it
     // below its gate.
     gateOpen: options.gateOpen !== false,
@@ -68,6 +77,9 @@ export function createReplaceWitness(options = {}) {
           return {status: ReplicaOperationResponseStatus.ERROR,
             error: 'witness unavailable'};
         }
+        const leaderReplicaId = witness.addressedLeads ?
+          payload[ReplicaOperationField.REPLICA_ID] :
+          witness.leaderReplicaId;
         return {
           status: ReplicaOperationResponseStatus.COMPLETED,
           [ReplicaOperationField.MEMBERSHIP]: {
@@ -78,10 +90,12 @@ export function createReplaceWitness(options = {}) {
             partitionId: payload[ReplicaOperationField.PARTITION_ID],
             term: witness.term,
             commitIndex: witness.commitIndex,
+            appliedIndex: witness.commitIndex - witness.appliedLag,
             gateOpen: witness.gateOpen,
-            leaderReplicaId: witness.addressedLeads ?
-              payload[ReplicaOperationField.REPLICA_ID] :
-              witness.leaderReplicaId,
+            leaderReplicaId,
+            voterReplicaIds: witness.voters ??
+              (leaderReplicaId ? [leaderReplicaId] : []),
+            votersOutgoingReplicaIds: [],
             transferWindowMaxMs: witness.transferWindowMaxMs,
           },
         };
