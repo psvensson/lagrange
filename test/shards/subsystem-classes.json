@@ -19,16 +19,16 @@
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 153,
-    "storage-raft": 120,
+    "storage-raft": 121,
     "test-infrastructure": 136,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2211,
-  "digest": "fnv1a32-48be3773",
+  "censusSize": 2212,
+  "digest": "fnv1a32-2ea437be",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-32022d06",
+  "observationDigest": "fnv1a32-ef03bfcc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1439,6 +1439,7 @@
     "test/raft/raft-provider-contract.test.js": "storage-raft",
     "test/raft/raft-provider-control.test.js": "storage-raft",
     "test/raft/raft-replica-base.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/admission-redrive.test.js": "storage-raft",
     "test/raft/raft-rs-backend/backend-seam.test.js": "storage-raft",
     "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js": "storage-raft",
     "test/raft/raft-rs-backend/committed-membership-read.test.js": "storage-raft",
@@ -7121,6 +7122,14 @@
       ],
       "directories": [
         "src"
+      ]
+    },
+    "test/raft/raft-rs-backend/admission-redrive.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-progress.js"
       ]
     },
     "test/raft/raft-rs-backend/backend-seam.test.js": {

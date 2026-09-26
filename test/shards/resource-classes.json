@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2194,
+    "ordinary": 2195,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2211,
-  "digest": "fnv1a32-3cfadc14",
+  "censusSize": 2212,
+  "digest": "fnv1a32-6058a51a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1419,6 +1419,7 @@
     "test/raft/raft-provider-contract.test.js": "ordinary",
     "test/raft/raft-provider-control.test.js": "ordinary",
     "test/raft/raft-replica-base.test.js": "ordinary",
+    "test/raft/raft-rs-backend/admission-redrive.test.js": "ordinary",
     "test/raft/raft-rs-backend/backend-seam.test.js": "ordinary",
     "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js": "ordinary",
     "test/raft/raft-rs-backend/committed-membership-read.test.js": "ordinary",
