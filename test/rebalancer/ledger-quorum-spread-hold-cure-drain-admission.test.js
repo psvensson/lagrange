@@ -55,7 +55,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {NODE_STATE, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {NODE_STATE} from '../../src/constants/index.js';
 import {
   EntityType,
   MoveType,
@@ -96,10 +96,8 @@ const TEST_COHORT_NODE_IDS = Object.freeze([
 ]);
 const TEST_SEED_LEADER_REPLICA_ID = 'replica_operations-p1-r1';
 const TEST_SEED_SURPLUS_REPLICA_ID = 'replica_operations-p1-r2';
-const TEST_SEED_SECOND_SURPLUS_REPLICA_ID = 'replica_operations-p1-r3';
 const TEST_JOINER_REPLICA_ID_B = 'replica_operations-p1-r3';
 const TEST_JOINER_REPLICA_ID_C = 'replica_operations-p1-r4';
-const TEST_PARTIAL_JOINER_REPLICA_ID = 'replace-replica-partial-spread';
 const TEST_SEED_REPLICA_IDS = Object.freeze([
   TEST_SEED_LEADER_REPLICA_ID,
   TEST_SEED_SURPLUS_REPLICA_ID,
@@ -183,45 +181,6 @@ function createSurplusLedgerServiceRows() {
       TEST_JOINER_REPLICA_ID_C, TEST_JOINER_NODE_ID_C,
       TEST_RAFT_ROLE_FOLLOWER),
   ];
-}
-
-function createPartialSpreadSurplusLedgerServiceRows() {
-  return [
-    createLedgerVoterServiceRow(
-      TEST_SEED_LEADER_REPLICA_ID, TEST_SEED_NODE_ID, TEST_RAFT_ROLE_LEADER),
-    createLedgerVoterServiceRow(
-      TEST_SEED_SURPLUS_REPLICA_ID, TEST_SEED_NODE_ID,
-      TEST_RAFT_ROLE_FOLLOWER),
-    createLedgerVoterServiceRow(
-      TEST_SEED_SECOND_SURPLUS_REPLICA_ID, TEST_SEED_NODE_ID,
-      TEST_RAFT_ROLE_FOLLOWER),
-    createLedgerVoterServiceRow(
-      TEST_PARTIAL_JOINER_REPLICA_ID, TEST_JOINER_NODE_ID_B,
-      TEST_RAFT_ROLE_FOLLOWER),
-  ];
-}
-
-function createCompletedReplaceOperationRow({
-  sourceReplicaId = TEST_SEED_SURPLUS_REPLICA_ID,
-  targetReplicaId = TEST_JOINER_REPLICA_ID_B,
-} = {}) {
-  return {
-    operation_id: 'completed-replace-with-live-source',
-    type: OperationType.REPLACE,
-    entity_type: EntityType.PARTITION,
-    entity_id: TEST_LEDGER_PARTITION_ID,
-    partition_id: TEST_LEDGER_PARTITION_ID,
-    replica_id: targetReplicaId,
-    source_replica_id: sourceReplicaId,
-    target_node_id: TEST_JOINER_NODE_ID_B,
-    status: ReplicaStatus.REMOVED,
-    workflow_step: WORKFLOW_STEP.REMOVED,
-    completed_at: Date.now(),
-    steps_history: JSON.stringify([{
-      step: WORKFLOW_STEP.PENDING,
-      sourceReplicaId,
-    }]),
-  };
 }
 
 function createFixedTargetPolicyService() {
@@ -494,142 +453,20 @@ test('CONTROL (must stay green): with every cohort node READY the same ' +
   }
 });
 
-test('REGRESSION: a completed REPLACE claim cannot hide its still-ACTIVE ' +
-'source from an authorized operation-ledger surplus drain', async (t) => {
-  initializeTestEnvironment();
-  const fixture = createDrainFixture({
-    joinersBarrierHeld: false,
-    replicaOperations: [createCompletedReplaceOperationRow()],
-  });
-  try {
-    const rawVoterRows = fixture.cache
-      .getAll(SYSTEM_TABLE_NAME.SERVICES)
-      .filter((row) =>
-        row.partition_id === TEST_LEDGER_PARTITION_ID &&
-        row.status === ReplicaStatus.ACTIVE &&
-        (row.raft_role === TEST_RAFT_ROLE_LEADER ||
-          row.raft_role === TEST_RAFT_ROLE_FOLLOWER),
-      );
-    t.equal(
-      rawVoterRows.length,
-      TEST_TOTAL_VOTER_COUNT,
-      'the current SERVICES actual reports four ACTIVE voters',
-    );
-
-    const concentration = fixture.coordinator
-      .getOperationLedgerQuorumConcentrationForPartition(
-        TEST_LEDGER_PARTITION_ID,
-      );
-    t.match(
-      concentration,
-      {
-        overTarget: true,
-        totalVoters: TEST_TOTAL_VOTER_COUNT,
-        distinctVoterNodeIds: TEST_COHORT_NODE_IDS,
-      },
-      'the concentration owner authorizes a drain from the same four-voter ' +
-        'actual',
-    );
-    const planningGate = fixture.rebalancer
-      .buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
-        TEST_LEDGER_PARTITION_ID,
-      );
-    t.equal(
-      planningGate?.ledgerSurplusDrainPlanningCapability?.kind,
-      TEST_LEDGER_SURPLUS_DRAIN_CAPABILITY_KIND,
-      'the interaction owner must mint the count-decreasing capability',
-    );
-
-    const result = await fixture.rebalancer.rebalance(TriggerType.PERIODIC);
-    const drainMoveResults = (result.moves || []).filter(
-      isHotNodeSurplusDrainMoveResult,
-    );
-    t.ok(
-      drainMoveResults.length >= 1,
-      'terminal operation history must not make the planner silently see ' +
-        'three replicas while the concentration and authoritative placement ' +
-        'owners see four; got: ' + describeMoveResults([result]),
-    );
-    t.ok(
-      drainMoveResults.some((moveResult) =>
-        moveResult.skipped !== true && moveResult.success !== false,
-      ),
-      'the authoritative four-voter placement must admit the corrective ' +
-        'REMOVE; got: ' + describeMoveResults([result]),
-    );
-  } finally {
-    await shutdownFixture(fixture);
-    resetTestEnvironment();
-  }
-});
-
-test('REGRESSION: with two READY nodes, a 3-1 ledger surplus drains one ' +
-'duplicate before a third spread target exists', async (t) => {
-  initializeTestEnvironment();
-  const partialCohortNodeIds = [
-    TEST_SEED_NODE_ID,
-    TEST_JOINER_NODE_ID_B,
-  ];
-  const fixture = createDrainFixture({
-    cohortNodeIds: partialCohortNodeIds,
-    joinersBarrierHeld: false,
-    prioritySpreadSatisfied: false,
-    services: createPartialSpreadSurplusLedgerServiceRows(),
-    replicaOperations: [createCompletedReplaceOperationRow({
-      sourceReplicaId: TEST_SEED_SECOND_SURPLUS_REPLICA_ID,
-      targetReplicaId: TEST_PARTIAL_JOINER_REPLICA_ID,
-    })],
-  });
-  try {
-    t.equal(
-      fixture.rebalancer.getAvailableNodes().length,
-      partialCohortNodeIds.length,
-      'both currently formed nodes are READY',
-    );
-    const concentration = fixture.coordinator
-      .getOperationLedgerQuorumConcentrationForPartition(
-        TEST_LEDGER_PARTITION_ID,
-      );
-    t.match(
-      concentration,
-      {
-        overTarget: true,
-        totalVoters: TEST_TOTAL_VOTER_COUNT,
-        distinctVoterNodeIds: partialCohortNodeIds,
-      },
-      'the concentration owner reports the live 3-1 partial-spread shape',
-    );
-    const planningGate = fixture.rebalancer
-      .buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
-        TEST_LEDGER_PARTITION_ID,
-      );
-    t.equal(
-      planningGate?.operationCreationRequired,
-      true,
-      'the current-partition recovery lane remains open',
-    );
-
-    const result = await fixture.rebalancer.rebalance(TriggerType.PERIODIC);
-    const drainMoveResults = (result.moves || []).filter(
-      isHotNodeSurplusDrainMoveResult,
-    );
-    t.ok(
-      drainMoveResults.length >= 1,
-      'a non-degrading REMOVE must be planned without waiting for a third ' +
-        'node; got: ' + describeMoveResults([result]),
-    );
-    t.ok(
-      drainMoveResults.some((moveResult) =>
-        moveResult.skipped !== true && moveResult.success !== false,
-      ),
-      'the authoritative 3-1 placement must admit one duplicate drain; got: ' +
-        describeMoveResults([result]),
-    );
-  } finally {
-    await shutdownFixture(fixture);
-    resetTestEnvironment();
-  }
-});
+// SUPERSEDED (R09), quest replace-source-removal-owner, amendment-1 step 4
+// (lead decision S10, 2026-09-25): the two regressions that stood here -
+// "a completed REPLACE claim cannot hide its still-ACTIVE source from an
+// authorized operation-ledger surplus drain" and "with two READY nodes, a 3-1
+// ledger surplus drains one duplicate before a third spread target exists" -
+// both built their shape from a REMOVED REPLACE row whose source is still an
+// ACTIVE voter (the pre-repair ghost). Under R-1a no REPLACE completes while
+// its source is a committed voter (witnessed in
+// test/rebalancer/replace-source-removal-owner.test.js), and the hard-cutover
+// reseed carries no such row into a cluster that runs this code, so the
+// restore helper and the "completed REPLACE can leave a 3-1" branch they
+// pinned were deleted after the dependents census recorded in
+// solve/epics/raft-rs-full-cutover/quest-records/replace-source-removal-owner/
+// s10-dependents-census.md.
 
 test('RED (binding check): in the live residual shape — 2-1-1 surplus, ' +
 'hold engaged, joiners barrier-held so ONLY the seed is READY — a bounded ' +
