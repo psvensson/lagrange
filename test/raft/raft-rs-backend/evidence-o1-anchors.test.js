@@ -367,20 +367,31 @@ test('anchor (B1 reachability): every append to the target after its ' +
 
 // The REPLACE owner's R-1a, reading its witness through the port's
 // committed-membership read (WITNESS purpose) as production does.
+// F1 (owner ruling 2026-09-26, merged in integration 2): the completion
+// authority is the group's leader-answered committed configuration, reached
+// from the target's answer with one redirect; each witness message is
+// answered by the port of the replica it addresses, and the replicas route
+// by their own node ids (as participation-gate.test.js B12).
+function serviceOf(model, replicaId) {
+  return {raft: model.node(replicaId), replicaId, partitionId: PARTITION_ID,
+    replicaIds: [], raftTimingConfig: null};
+}
+
 function replaceOwnerOver(model, target, source) {
-  const service = {raft: model.node(target), replicaId: target,
-    partitionId: PARTITION_ID, replicaIds: [], raftTimingConfig: null};
   return {
     repository: {
       getReplaceSourceReplicaId: () => source,
       getReplaceTargetReplicaId: () => target,
       getObservedReplicaStatusFromCache: () => 'active',
     },
+    getCachedCriticalReplicaRows: () => [...model.replicas.keys()].map(
+      (replicaId) => ({replica_id: replicaId, node_id: `${replicaId}-node`})),
     messageRouter: {
-      deliver: async () => ({
+      deliver: async (_target, payload) => ({
         status: ReplicaOperationResponseStatus.COMPLETED,
         [ReplicaOperationField.MEMBERSHIP]:
-          await readPartitionReplicaMembership(service, source),
+          await readPartitionReplicaMembership(serviceOf(model,
+            payload[ReplicaOperationField.REPLICA_ID]), source),
       }),
     },
   };
@@ -439,23 +450,30 @@ async function b12Shape({key, sourceLetter, belowGate, verdict}) {
     'setup: the target replays to the transient cut');
     const owner = replaceOwnerOver(model, target, source);
     const operation = {operationId: 'b12', type: OperationType.REPLACE,
-      entityType: SERVICE_TYPE.PARTITION, partitionId: PARTITION_ID,
+      entityType: SERVICE_TYPE.PARTITION, entityId: PARTITION_ID,
+      partitionId: PARTITION_ID,
       replicaId: target, targetNodeId: 'b12-node'};
-    const below = await decideReplaceCompletion(owner, operation);
-    assert.equal(below.observation.state, belowGate,
+    const targetView = await readPartitionReplicaMembership(
+      serviceOf(model, target), source);
+    assert.equal(targetView.state, belowGate,
       'the below-gate witness does not show the committed voter');
-    assert.equal(below.observation.gateOpen, false);
+    assert.equal(targetView.gateOpen, false);
+    const below = await decideReplaceCompletion(owner, operation);
     assert.notEqual(below.verdict, REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED,
       'R-1a never retires a source from a below-gate witness');
-    assert.equal(below.verdict, verdict, 'it waits, typed');
+    assert.ok([verdict, REPLACE_COMPLETION_VERDICT.STILL_VOTER]
+      .includes(below.verdict),
+    `it waits, typed (${below.verdict}; under F1 the leader's answer may ` +
+      'already decide STILL_VOTER)');
     cap.value = UNBOUNDED;
     assert.ok(settle(model, () =>
       model.node(target).readStatus().gateOpen === true, [leader]),
     'setup: the gate opens');
     const open = await decideReplaceCompletion(owner, operation);
-    assert.equal(open.observation.gateOpen, true);
     assert.equal(open.verdict, REPLACE_COMPLETION_VERDICT.STILL_VOTER,
-      'at the gate the witness sees the committed voter');
+      'at the gate the group\'s committed configuration holds the voter');
+    assert.equal(open.observation.leaderReplicaId, open.observation.replicaId,
+      'the verdict is the leader\'s own answer');
   } finally {
     model.dispose();
   }

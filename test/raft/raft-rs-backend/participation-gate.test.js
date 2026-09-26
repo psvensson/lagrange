@@ -572,7 +572,8 @@ async () => {
     formH1TransientTarget(cluster, cap);
     const owner = replaceOwnerReadingThrough(cluster, 'h1-b');
     const operation = {operationId: 'b12-replace', type: OperationType.REPLACE,
-      entityType: SERVICE_TYPE.PARTITION, partitionId: PARTITION_ID,
+      entityType: SERVICE_TYPE.PARTITION, entityId: PARTITION_ID,
+      partitionId: PARTITION_ID,
       replicaId: TARGET, targetNodeId: 'b12-target-node'};
     const targetView = await readPartitionReplicaMembership({
       raft: cluster.node(TARGET), replicaId: TARGET, partitionId: PARTITION_ID,

@@ -132,6 +132,8 @@ test('enumerations: the runtime reasons the gate and the record add sit ' +
       'INBOUND_ENQUEUED', 'INBOUND_DRAINED', 'DELIVERY_FAILED',
       'CLOSED_WITHOUT_CORE_ENTRY', 'CLOSED', 'USER_TRANSACTION_OPEN',
       'READY_DEFERRED'],
+    // V2: a conf-change proposal the core would drop is deferred typed.
+    confChangeAdmission: ['CONF_CHANGE_PENDING'],
     progressProbe: ['PROGRESS_OBSERVED', 'PROGRESS_PROBE_SENT', 'NOT_A_PEER',
       'NOT_LEADER'],
     leadershipTransfer: ['TRANSFER_REQUESTED', 'TRANSFER_FORWARDED',

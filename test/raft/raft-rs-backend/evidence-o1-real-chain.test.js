@@ -413,9 +413,14 @@ test('M5 (row visible to every member, catch-up stalled): the admitted-but-' +
   }
 });
 
+// V2 (integration 2): the port no longer lets the crate drop the second
+// AddNode behind the first - it is deferred typed and re-driven when the
+// first settles (CONF_CHANGE_APPLIED); the property (both admitted, one
+// AddNode entry each) is unchanged, the setup premise (an empty entry in
+// its place) is inverted.
 test('M3 (dropped AddNode): two rows in one turn, the second AddNode ' +
-  'dropped behind the first, both admitted by the membership-change ' +
-  're-drive - one AddNode entry each, both gates open, no further row',
+  'deferred behind the first, both admitted by the settlement re-drive - ' +
+  'one AddNode entry each, both gates open, no further row',
 async () => {
   configure();
   const harness = createCommittedMembershipHarness(PARTITION_ID);
@@ -458,8 +463,9 @@ async () => {
     assert.equal(second.length, 1, 'one AddNode entry for the second join');
     const dropped = log.filter((entry) =>
       entry.entryType === WIRE.entryType.EntryNormal && entry.data == null);
-    assert.ok(dropped.length >= 1,
-      'setup: the core replaced the dropped proposal with an empty entry');
+    assert.deepEqual(dropped, [],
+      'no proposal was dropped: the core never replaced one with an empty ' +
+        'entry');
     for (const [index, join] of joins.entries()) {
       const durable = durableAppliedState(harness.dbPathOf(join),
         PARTITION_ID);
