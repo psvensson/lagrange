@@ -15,6 +15,7 @@ import {
   deployThroughPipeline,
   prepareServiceProject,
 } from './service-pipeline-deployment-helpers.js';
+import {findTopologyLeakKeys} from './public-seam-durability-client.js';
 import {
   PUBLIC_SEAM_BINDING,
   PUBLIC_SEAM_NOT_RUN_REASON,
@@ -126,17 +127,34 @@ function bindingGate(ctx) {
   };
 }
 
+// A binding result is a public result too: a topology-bearing key in it
+// (e.g. account-summary's `contributingShards`, a placement count) FAILs the
+// step even when every oracle field matches. The oracle compares values;
+// it never hides a leaked key.
 function invocationResult(comparison, invoked, nodeId) {
+  const leakedKeys = findTopologyLeakKeys(invoked.summaries);
+  const ok = comparison.matches && leakedKeys.length === ZERO;
   return {
-    actual: {nodeId, summaries: comparison.actual,
+    actual: {leakedKeys, nodeId, summaries: comparison.actual,
       lastError: invoked.lastError},
-    expected: comparison.expected,
-    outcome: comparison.matches ?
+    expected: {leakedKeys: [], summaries: comparison.expected},
+    outcome: ok ?
       PUBLIC_SEAM_STEP_OUTCOME.PASS :
       PUBLIC_SEAM_STEP_OUTCOME.FAIL,
-    reason: comparison.matches ? undefined :
-      'binding result differs from the independent oracle',
+    reason: ok ? undefined : bindingFailureReason(comparison, leakedKeys),
   };
+}
+
+function bindingFailureReason(comparison, leakedKeys) {
+  const reasons = [];
+  if (!comparison.matches) {
+    reasons.push('binding result differs from the independent oracle');
+  }
+  if (leakedKeys.length > ZERO) {
+    reasons.push(`binding result carries topology-bearing keys: ${
+      leakedKeys.join(', ')} (call owner result shape)`);
+  }
+  return reasons.join('; ');
 }
 
 /**

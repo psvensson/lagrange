@@ -10,6 +10,7 @@
  */
 
 import {Client} from 'pg';
+import {COLUMN} from '../../../src/constants/columns.js';
 import {META_SERVICE_ID} from '../../../src/constants/wasm-meta.js';
 import {TABLES} from '../../../src/constants/tables.js';
 import {
@@ -23,6 +24,7 @@ import {
 } from '../../../src/runtime/pgwire-descriptor.js';
 import {EP_COL} from '../../../src/wasm-service/service-endpoint-builder.js';
 import {
+  WASM_SERVICE_HEALTH_STATUS,
   WASM_SERVICE_PROTOCOL,
 } from '../../../src/wasm-service/wasm-service-constants.js';
 import {SD_COL} from '../../../src/wasm-service/wasm-service-models.js';
@@ -37,6 +39,11 @@ import {
 } from './public-seam-durability-constants.js';
 
 const OBJECT_TYPE = 'object';
+const STRING_TYPE = 'string';
+const IDENTIFIER_SOURCE = Object.freeze({
+  READ: 'read',
+  UNAVAILABLE: 'unavailable: ',
+});
 const KEY_PATH_SEPARATOR = '.';
 const ROOT_KEY_PATH = '$';
 const ERROR_FIELD = Object.freeze({
@@ -50,8 +57,11 @@ const CAMEL_CASE_REPLACEMENT = '$1 $2';
 const KEY_WORD_SEPARATOR = /[^a-z0-9]+/u;
 
 const SELECT_PUBLIC_ENDPOINTS_SQL =
-  `SELECT ${EP_COL.NODE_ID}, ${EP_COL.PORT} ` +
-  `FROM ${TABLES.SERVICE_ENDPOINTS} WHERE ${EP_COL.PROTOCOL} = ?`;
+  `SELECT ${EP_COL.NODE_ID}, ${EP_COL.PORT}, ${EP_COL.HEALTH_STATUS} ` +
+  `FROM ${TABLES.SERVICE_ENDPOINTS} WHERE ${EP_COL.PROTOCOL} = ? ` +
+  `AND ${EP_COL.SERVICE_ID} = ?`;
+const SELECT_PARTITION_IDS_SQL =
+  `SELECT ${COLUMN.PARTITION_ID} FROM ${TABLES.PARTITIONS}`;
 const PROVISION_LISTENER_SQL =
   `UPDATE ${TABLES.SERVICE_DEFINITIONS} SET ${SD_COL.REPLICA_COUNT} = ?, ` +
   `${SD_COL.RUNTIME_CONFIG} = ? WHERE ${SD_COL.SERVICE_ID} = ?`;
@@ -171,6 +181,33 @@ function findTopologyLeakKeys(value, path = ROOT_KEY_PATH) {
 }
 
 /**
+ * Every string value in `value` that names a topology identifier the
+ * harness knows (node ids, node addresses, partition ids), e.g. an error
+ * message or detail that says which node or partition served it.
+ * @param {*} value
+ * @param {Array<string>} identifiers
+ * @param {string} [path]
+ * @return {Array<string>} `<path>=<identifier>` entries.
+ */
+function findTopologyLeakValues(value, identifiers, path = ROOT_KEY_PATH) {
+  if (typeof value === STRING_TYPE) {
+    return identifiers.filter((identifier) => value.includes(identifier))
+      .map((identifier) => `${path}=${identifier}`);
+  }
+  if (!value || typeof value !== OBJECT_TYPE || ArrayBuffer.isView(value)) {
+    return [];
+  }
+  const leaks = [];
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = Array.isArray(value) ?
+      `${path}[${key}]` :
+      `${path}${KEY_PATH_SEPARATOR}${key}`;
+    leaks.push(...findTopologyLeakValues(child, identifiers, childPath));
+  }
+  return leaks;
+}
+
+/**
  * Wrap a raw public client so every row set and every error it hands back
  * is recorded for the leak check.
  * @param {Object} rawClient - {query(sql, params), close()}
@@ -201,22 +238,65 @@ function createObservedClient(rawClient, nodeId, observations, policy) {
 }
 
 /**
- * Discover the public PostgreSQL-wire endpoint port per node from the
- * `service_endpoints` rows (protocol = postgresql).
+ * Discover the candidate public PostgreSQL-wire ports per node from the
+ * sys-postgres-wire `service_endpoints` rows (protocol = postgresql).
+ * Only rows the endpoint owner marks healthy are candidates, and every
+ * healthy port is kept: no row wins by order, the caller's connect decides
+ * which one is live (a stale row of a previous incarnation fails to
+ * connect and is "not yet").
  * @param {Object} adminNode - Harness node handle used as a reader.
- * @return {Promise<Map<string, number>>}
+ * @return {Promise<Map<string, Array<number>>>}
  */
 async function discoverPublicEndpoints(adminNode) {
-  const rows = rowsOf(await adminNode.query(
-    SELECT_PUBLIC_ENDPOINTS_SQL, [WASM_SERVICE_PROTOCOL.POSTGRESQL]));
+  const rows = rowsOf(await adminNode.query(SELECT_PUBLIC_ENDPOINTS_SQL,
+    [WASM_SERVICE_PROTOCOL.POSTGRESQL, META_SERVICE_ID.POSTGRES_WIRE]));
   const ports = new Map();
   for (const row of rows) {
     const port = Number(row?.[EP_COL.PORT]);
-    if (typeof row?.[EP_COL.NODE_ID] === 'string' && Number.isInteger(port)) {
-      ports.set(row[EP_COL.NODE_ID], port);
+    const nodeId = row?.[EP_COL.NODE_ID];
+    if (typeof nodeId !== 'string' || !Number.isInteger(port) ||
+        row?.[EP_COL.HEALTH_STATUS] !== WASM_SERVICE_HEALTH_STATUS.HEALTHY) {
+      continue;
     }
+    ports.set(nodeId, [...(ports.get(nodeId) || []), port]);
   }
   return ports;
+}
+
+/**
+ * The topology identifiers the harness knows, for the value leak scan:
+ * node ids and node addresses from the harness node handles, and partition
+ * ids read through the harness admin lane (the scenario itself never
+ * decides on them). An unreadable partition list is a named source state,
+ * not an empty list.
+ * @param {Object} ctx - Scenario context ({nodes, writer}).
+ * @return {Promise<{values: Array<string>, sources: Object}>}
+ */
+async function listHarnessTopologyIdentifiers(ctx) {
+  const nodeValues = [];
+  for (const node of ctx.nodes) {
+    nodeValues.push(node.id);
+    if (typeof node.ip === STRING_TYPE && node.ip.length > ZERO) {
+      nodeValues.push(node.ip);
+    }
+  }
+  let partitionIds = [];
+  let partitionSource = IDENTIFIER_SOURCE.READ;
+  try {
+    partitionIds = rowsOf(await ctx.writer.query(SELECT_PARTITION_IDS_SQL))
+      .map((row) => row?.[COLUMN.PARTITION_ID])
+      .filter((id) => typeof id === STRING_TYPE && id.length > ZERO);
+  } catch (error) {
+    partitionSource = `${IDENTIFIER_SOURCE.UNAVAILABLE}${error.message}`;
+  }
+  return {
+    sources: {
+      nodeValueCount: nodeValues.length,
+      partitionIdCount: partitionIds.length,
+      partitionIds: partitionSource,
+    },
+    values: [...new Set([...nodeValues, ...partitionIds])],
+  };
 }
 
 /**
@@ -292,6 +372,8 @@ export {
   describePublicError,
   discoverPublicEndpoints,
   findTopologyLeakKeys,
+  findTopologyLeakValues,
+  listHarnessTopologyIdentifiers,
   openPgPublicClient,
   provisionPublicListener,
 };

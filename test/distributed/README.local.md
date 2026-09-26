@@ -293,7 +293,11 @@ before the stop and after the restart). The report ends with
 `certification: PREPARED_BLOCKED_ON_RS_RAFT_CUTOVER` while the runtime's
 default consensus provider (`src/raft/raft-provider-control.js`) is the
 legacy one, and `certification: CANDIDATE` once it is not; the owner decides
-whether a CANDIDATE run certifies. Unit test:
+whether a CANDIDATE run certifies. Known binding-result finding: the
+account-summary call result carries `contributingShards` (a placement count),
+which the leak check catches, so with the binding enabled both binding steps
+FAIL on it; that is a finding for the call owner's result shape
+(CallCellInvoker), not a scenario defect. Unit test:
 `test/distributed/harness/__tests__/public-seam-durability-scenario.test.js`.
 
 ### Canonical 5-node matrix

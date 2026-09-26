@@ -30,6 +30,8 @@ import {
   deriveCertificationStatus,
   discoverPublicEndpoints,
   findTopologyLeakKeys,
+  findTopologyLeakValues,
+  listHarnessTopologyIdentifiers,
   openPgPublicClient,
   provisionPublicListener,
 } from './public-seam-durability-client.js';
@@ -78,6 +80,8 @@ function resolveDependencies(cluster) {
   return {
     deployBinding: overrides.deployBinding || defaultDeployBinding,
     discoverEndpoints: overrides.discoverEndpoints || discoverPublicEndpoints,
+    listTopologyIdentifiers: overrides.listTopologyIdentifiers ||
+      listHarnessTopologyIdentifiers,
     openPublicClient: overrides.openPublicClient || openPgPublicClient,
     provisionListener: overrides.provisionListener || provisionPublicListener,
     resolveRuntimeProvider: overrides.resolveRuntimeProvider,
@@ -157,31 +161,50 @@ async function closeClient(ctx, nodeId) {
   }
 }
 
-/**
- * Wait until every node publishes a public endpoint, then open a client on
- * each node that has none yet.
- * @return {Promise<{ports: Object, missing: Array<string>}>}
- */
-async function openClientsForNodes(ctx, nodes) {
-  const found = await pollUntil(ctx,
-    ctx.config.publicClient.endpointTimeoutMs, async () => {
-      const ports = await ctx.deps.discoverEndpoints(ctx.writer);
-      return {
-        done: nodes.every((node) => ports.has(node.id)),
-        value: ports,
-      };
-    });
-  const ports = found.value || new Map();
-  const missing = nodes.filter((node) => !ports.has(node.id))
-    .map((node) => node.id);
-  for (const node of nodes) {
-    if (ports.has(node.id) && !ctx.clients.has(node.id)) {
-      const raw = await ctx.deps.openPublicClient(node, ports.get(node.id));
+async function tryOpenClient(ctx, node, ports, connectErrors) {
+  for (const port of ports) {
+    try {
+      const raw = await ctx.deps.openPublicClient(node, port);
       ctx.clients.set(node.id, createObservedClient(raw, node.id,
         ctx.observations, ctx.deps.retryPolicy));
+      return port;
+    } catch (error) {
+      connectErrors[node.id] = `${port}: ${error.message}`;
     }
   }
-  return {missing, ports: Object.fromEntries(ports)};
+  return null;
+}
+
+/**
+ * Within one bounded window, discover healthy public endpoints and connect
+ * a client on every node that has none yet. A missing row, an unhealthy
+ * row, or a connect failure (e.g. a stale port) are all "not yet" until
+ * the window closes.
+ * @return {Promise<{connected: Object, missing: Array<string>,
+ *   connectErrors: Object}>}
+ */
+async function openClientsForNodes(ctx, nodes) {
+  const connected = {};
+  const connectErrors = {};
+  const pending = () => nodes.filter((node) => !ctx.clients.has(node.id));
+  await pollUntil(ctx, ctx.config.publicClient.endpointTimeoutMs,
+    async () => {
+      const ports = await ctx.deps.discoverEndpoints(ctx.writer);
+      for (const node of pending()) {
+        const port = await tryOpenClient(ctx, node, ports.get(node.id) || [],
+          connectErrors);
+        if (port !== null) {
+          connected[node.id] = port;
+          delete connectErrors[node.id];
+        }
+      }
+      return {done: pending().length === ZERO};
+    });
+  return {
+    connectErrors,
+    connected,
+    missing: pending().map((node) => node.id),
+  };
 }
 
 async function stepClusterConverged(ctx) {
@@ -287,10 +310,18 @@ async function stepBlobRoundTrip(ctx) {
 }
 
 async function stepParticipantStopped(ctx) {
-  await ctx.cluster.stopNode(ctx.stoppedNode.id);
-  await closeClient(ctx, ctx.stoppedNode.id);
-  return pass(`joiner ${ctx.stoppedNode.id} stopped`,
-    {stoppedNodeId: ctx.stoppedNode.id, role: ctx.stoppedNode.role});
+  const node = ctx.stoppedNode;
+  await ctx.cluster.stopNode(node.id);
+  await closeClient(ctx, node.id);
+  if (typeof node.isReachable !== 'function') {
+    return fail(`joiner ${node.id} unreachable after stopNode`, null,
+      'the node handle cannot report reachability; stop is unverified');
+  }
+  const probe = await pollUntil(ctx, ctx.config.readTimeoutMs,
+    async () => ({done: (await node.isReachable()) === false}));
+  return verdictOf(probe.done, `joiner ${node.id} unreachable after stopNode`,
+    {reachable: !probe.done, stoppedNodeId: node.id},
+    'the stopped node still answers the harness reachability probe');
 }
 
 async function stepWriteDuringOutage(ctx) {
@@ -385,17 +416,20 @@ async function stepNoDuplicateEffects(ctx) {
 }
 
 async function stepTopologyLeakCheck(ctx) {
+  const identifiers = await ctx.deps.listTopologyIdentifiers(ctx);
   const leaks = [];
   for (const observation of ctx.observations) {
     const payload = observation.error || observation.rows ||
       observation.parsed;
-    for (const path of findTopologyLeakKeys(payload)) {
+    for (const path of [...findTopologyLeakKeys(payload),
+      ...findTopologyLeakValues(payload, identifiers.values)]) {
       leaks.push(`${observation.nodeId}:${path}`);
     }
   }
   return verdictOf(leaks.length === ZERO,
     'no topology-bearing key in any public result or error',
     {
+      identifierSources: identifiers.sources,
       leakCount: leaks.length,
       observationCount: ctx.observations.length,
       sample: leaks.slice(ZERO, LEAK_SAMPLE_LIMIT),

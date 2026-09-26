@@ -243,7 +243,8 @@ function bindingDatasetRows() {
 
 /**
  * Independent oracle for the account summary over bindingDatasetRows.
- * `contributingShards` is placement-dependent and is not part of it.
+ * Value fields only; a leaked key such as `contributingShards` is judged
+ * separately by the binding step's leak check, never hidden by the oracle.
  * @param {number} accountId
  * @return {Object}
  */

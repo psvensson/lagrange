@@ -9,6 +9,7 @@ import {
   classifyPublicOutcome,
   describePublicError,
   deriveCertificationStatus,
+  discoverPublicEndpoints,
   findTopologyLeakKeys,
 } from '../../scenarios/public-seam-durability-client.js';
 import {
@@ -26,6 +27,7 @@ import {
 
 const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFindIndex = Function.call.bind(Array.prototype.findIndex);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
@@ -134,7 +136,8 @@ function createFakeClient(world, nodeId, hooks) {
         return [];
       }
       const shaped = {...row, body: Buffer.from(row.body)};
-      return [hooks.decorateObjectRow ? hooks.decorateObjectRow(shaped) : shaped];
+      return [hooks.decorateObjectRow ?
+        hooks.decorateObjectRow(shaped, nodeId) : shaped];
     }
     if (sql === PUBLIC_SEAM_SQL.SELECT_HISTORY) {
       return arrayMap(historyRows(view, params[0]), (row) => ({...row}));
@@ -205,12 +208,19 @@ function createFakeClient(world, nodeId, hooks) {
 
 function createCluster({hooks = {}, scenarioConfig = {}, overrides = {}} = {}) {
   const world = createWorld();
-  const calls = {convergence: 0, deployBinding: 0, start: [], stop: []};
+  const calls = {
+    convergence: 0, deployBinding: 0, discover: 0, start: [], stop: [],
+  };
   const nodes = arrayMap(NODE_IDS, (id, index) => ({
     id,
     ip: `10.0.0.${index + 1}`,
+    isReachable: async () => !world.down.has(id),
     role: index === 0 ? SEED_ROLE : JOINER_ROLE,
   }));
+  for (const id of hooks.stillReachable || []) {
+    nodes[arrayFindIndex(nodes, (node) => node.id === id)].isReachable =
+      async () => true;
+  }
   const cluster = {
     _config: {
       scenarios: {publicSeamDurability: {...FAST_CONFIG, ...scenarioConfig}},
@@ -221,12 +231,25 @@ function createCluster({hooks = {}, scenarioConfig = {}, overrides = {}} = {}) {
           calls.deployBinding += 1;
           return {callBindingName: CALL_BINDING_NAME};
         },
-        discoverEndpoints: async () => new Map(arrayMap(
-          arrayFilter(nodes, (node) => !world.down.has(node.id) &&
-            !arrayIncludes(hooks.endpointless || [], node.id)),
-          (node) => [node.id, PUBLIC_PORT])),
-        openPublicClient: async (node) =>
-          createFakeClient(world, node.id, hooks),
+        discoverEndpoints: async () => {
+          calls.discover += 1;
+          return new Map(arrayMap(
+            arrayFilter(nodes, (node) => !world.down.has(node.id) &&
+              !arrayIncludes(hooks.endpointless || [], node.id)),
+            (node) => [node.id, hooks.portsFor ?
+              hooks.portsFor(node.id, calls.discover) : [PUBLIC_PORT]]));
+        },
+        listTopologyIdentifiers: async (ctx) => ({
+          sources: {partitionIds: 'read'},
+          values: [...arrayMap(ctx.nodes, (node) => node.id),
+            ...(hooks.partitionIds || [])],
+        }),
+        openPublicClient: async (node, port) => {
+          if (port !== PUBLIC_PORT) {
+            throw refused(`${node.id}:${port}`);
+          }
+          return createFakeClient(world, node.id, hooks);
+        },
         provisionListener: async (_adminNode, replicaCount) => {
           world.provisioned = replicaCount;
         },
@@ -485,9 +508,35 @@ test('public-seam-durability fails public_client_ready when a node has no ' +
   t.end();
 });
 
+function withoutShardCount(summary) {
+  const {contributingShards: _shards, ...rest} = summary;
+  return rest;
+}
+
+test('public-seam-durability fails both binding steps on the ' +
+  'contributingShards key the call result carries (call owner finding)',
+async (t) => {
+  const {cluster} = createCluster({
+    scenarioConfig: {binding: {enabled: true, readyTimeoutMs: 5}},
+  });
+  const report = await runExpectingFailure(cluster);
+  const steps = stepsByName(report);
+
+  assert.deepEqual(report.failedSteps, [
+    PUBLIC_SEAM_STEP.BINDING_BEFORE_OUTAGE,
+    PUBLIC_SEAM_STEP.BINDING_AFTER_RESTART,
+    PUBLIC_SEAM_STEP.TOPOLOGY_LEAK_CHECK,
+  ]);
+  assert.ok(arraySome(
+    steps[PUBLIC_SEAM_STEP.BINDING_BEFORE_OUTAGE].actual.leakedKeys,
+    (path) => stringEndsWith(path, '.contributingShards')));
+  t.end();
+});
+
 test('public-seam-durability invokes the binding before the outage and ' +
   'after the restart when enabled', async (t) => {
   const {calls, cluster} = createCluster({
+    hooks: {callResult: withoutShardCount},
     scenarioConfig: {binding: {enabled: true, readyTimeoutMs: 5}},
   });
   const report = await run(cluster);
@@ -503,14 +552,17 @@ test('public-seam-durability invokes the binding before the outage and ' +
   const [firstAccount] = PUBLIC_SEAM_BINDING.ACCOUNT_IDS;
   assert.deepEqual(
     steps[PUBLIC_SEAM_STEP.BINDING_BEFORE_OUTAGE].actual.summaries[firstAccount],
-    steps[PUBLIC_SEAM_STEP.BINDING_BEFORE_OUTAGE].expected[firstAccount]);
+    steps[PUBLIC_SEAM_STEP.BINDING_BEFORE_OUTAGE].expected
+      .summaries[firstAccount]);
   t.end();
 });
 
 test('public-seam-durability fails the binding step when the result ' +
   'differs from the oracle', async (t) => {
   const {cluster} = createCluster({
-    hooks: {callResult: (summary) => ({...summary, totalCents: 0})},
+    hooks: {
+      callResult: (summary) => ({...withoutShardCount(summary), totalCents: 0}),
+    },
     scenarioConfig: {binding: {enabled: true, readyTimeoutMs: 5}},
   });
   const report = await runExpectingFailure(cluster);
@@ -519,6 +571,166 @@ test('public-seam-durability fails the binding step when the result ' +
     PUBLIC_SEAM_STEP.BINDING_BEFORE_OUTAGE,
     PUBLIC_SEAM_STEP.BINDING_AFTER_RESTART,
   ]);
+  t.end();
+});
+
+test('public-seam-durability connects inside the endpoint poll: a stale ' +
+  'port then a fresh one passes within the budget', async (t) => {
+  const stalePort = PUBLIC_PORT + 1;
+  const {calls, cluster} = createCluster({
+    hooks: {
+      portsFor: (nodeId, discoverCall) =>
+        (nodeId === 'joiner-1' && discoverCall === 1 ?
+          [stalePort] : [PUBLIC_PORT]),
+    },
+    scenarioConfig: {publicClient: {endpointTimeoutMs: 1000}},
+  });
+  const report = await run(cluster);
+  const ready = stepsByName(report)[PUBLIC_SEAM_STEP.PUBLIC_CLIENT_READY];
+
+  assert.equal(report.verdict, PUBLIC_SEAM_VERDICT.PASS);
+  assert.equal(ready.actual.connected['joiner-1'], PUBLIC_PORT);
+  assert.ok(calls.discover >= 2);
+  t.end();
+});
+
+test('public-seam-durability endpoint discovery keeps only healthy ' +
+  'sys-postgres-wire rows and every healthy port', async (t) => {
+  let seenParams = null;
+  const adminNode = {query: async (_sql, params) => {
+    seenParams = params;
+    return {rows: [
+      {health_status: 'unhealthy', node_id: 'n1', port: 5500},
+      {health_status: 'healthy', node_id: 'n1', port: 5432},
+      {health_status: 'healthy', node_id: 'n2', port: 5433},
+      {health_status: 'healthy', node_id: 'n2', port: 5434},
+      {health_status: 'unhealthy', node_id: 'n3', port: 5435},
+    ]};
+  }};
+  const ports = await discoverPublicEndpoints(adminNode);
+
+  assert.deepEqual([...ports.entries()],
+    [['n1', [5432]], ['n2', [5433, 5434]]]);
+  assert.deepEqual(seenParams, ['postgresql', 'sys-postgres-wire']);
+  t.end();
+});
+
+test('public-seam-durability fails remote_read_agreement when a node never ' +
+  'sees the committed object', async (t) => {
+  const empty = {history: new Map(), objects: new Map()};
+  const {cluster} = createCluster({hooks: {
+    viewFor: (nodeId) => (nodeId === 'joiner-1' ? empty : null),
+  }});
+  const report = await runExpectingFailure(cluster);
+  const steps = stepsByName(report);
+
+  assert.equal(steps[PUBLIC_SEAM_STEP.REMOTE_READ_AGREEMENT].outcome,
+    PUBLIC_SEAM_STEP_OUTCOME.FAIL);
+  assert.equal(steps[PUBLIC_SEAM_STEP.PARTICIPANT_STOPPED].reason,
+    `${PUBLIC_SEAM_NOT_RUN_REASON.BLOCKED_BY}` +
+    PUBLIC_SEAM_STEP.REMOTE_READ_AGREEMENT);
+  t.end();
+});
+
+test('public-seam-durability fails survivor_read_during_outage when the ' +
+  'surviving reader misses the acknowledged outage write', async (t) => {
+  let frozen = null;
+  const {cluster, world} = createCluster({hooks: {
+    viewFor: (nodeId) =>
+      (nodeId === 'seed-1' && world.down.size > 0 ? frozen : null),
+  }});
+  const stopNode = cluster.stopNode;
+  cluster.stopNode = async (id) => {
+    frozen = {history: new Map(world.history), objects: new Map(world.objects)};
+    await stopNode(id);
+  };
+  const report = await runExpectingFailure(cluster);
+
+  assert.deepEqual(report.failedSteps,
+    [PUBLIC_SEAM_STEP.SURVIVOR_READ_DURING_OUTAGE]);
+  t.end();
+});
+
+test('public-seam-durability fails final_state_agreement when one node ' +
+  'stays behind after the restart', async (t) => {
+  let frozen = null;
+  const {cluster, world} = createCluster({hooks: {
+    viewFor: (nodeId) => (nodeId === 'joiner-1' ? frozen : null),
+  }});
+  const startNode = cluster.startNode;
+  cluster.startNode = async (id) => {
+    frozen = {history: new Map(world.history), objects: new Map(world.objects)};
+    await startNode(id);
+  };
+  const report = await runExpectingFailure(cluster);
+  const steps = stepsByName(report);
+
+  assert.deepEqual(report.failedSteps, [
+    PUBLIC_SEAM_STEP.FINAL_STATE_AGREEMENT,
+    PUBLIC_SEAM_STEP.NO_DUPLICATE_EFFECTS,
+  ]);
+  assert.equal(steps[PUBLIC_SEAM_STEP.FINAL_STATE_AGREEMENT].actual['joiner-1']
+    .version, 2);
+  t.end();
+});
+
+test('public-seam-durability fails the leak check when only the last ' +
+  'node leaks a key', async (t) => {
+  const {cluster} = createCluster({hooks: {
+    decorateObjectRow: (row, nodeId) =>
+      (nodeId === 'joiner-2' ? {...row, raft_role: 'follower'} : row),
+  }});
+  const report = await runExpectingFailure(cluster);
+  const leak = stepsByName(report)[PUBLIC_SEAM_STEP.TOPOLOGY_LEAK_CHECK];
+
+  assert.deepEqual(report.failedSteps,
+    [PUBLIC_SEAM_STEP.TOPOLOGY_LEAK_CHECK]);
+  assert.ok(arrayEvery(leak.actual.sample,
+    (entry) => stringStartsWith(entry, 'joiner-2:')), leak.actual.sample);
+  t.end();
+});
+
+test('public-seam-durability fails the leak check on a partition id in an ' +
+  'error message value', async (t) => {
+  const {cluster} = createCluster({hooks: {
+    commitFailure: ({nodeId, world}) =>
+      (world.down.size > 0 && nodeId === 'joiner-1') ?
+        {error: Object.assign(
+          new Error('partition p-objects-7 has no quorum'),
+          {deferred: true})} : null,
+    partitionIds: ['p-objects-7'],
+  }});
+  const report = await runExpectingFailure(cluster);
+  const leak = stepsByName(report)[PUBLIC_SEAM_STEP.TOPOLOGY_LEAK_CHECK];
+
+  assert.deepEqual(report.failedSteps,
+    [PUBLIC_SEAM_STEP.TOPOLOGY_LEAK_CHECK]);
+  assert.ok(arraySome(leak.actual.sample, (entry) =>
+    stringEndsWith(entry, '.message=p-objects-7')), leak.actual.sample);
+  t.end();
+});
+
+test('public-seam-durability fails participant_stopped when the stopped ' +
+  'node still answers the reachability probe', async (t) => {
+  const {cluster} = createCluster({hooks: {stillReachable: ['joiner-2']}});
+  const report = await runExpectingFailure(cluster);
+  const steps = stepsByName(report);
+
+  assert.equal(steps[PUBLIC_SEAM_STEP.PARTICIPANT_STOPPED].outcome,
+    PUBLIC_SEAM_STEP_OUTCOME.FAIL);
+  assert.equal(steps[PUBLIC_SEAM_STEP.WRITE_DURING_OUTAGE].outcome,
+    PUBLIC_SEAM_STEP_OUTCOME.NOT_RUN);
+  t.end();
+});
+
+test('public-seam-durability fails participant_stopped when the node ' +
+  'handle cannot report reachability', async (t) => {
+  const {cluster} = createCluster();
+  delete cluster.getNodes()[2].isReachable;
+  const report = await runExpectingFailure(cluster);
+
+  assert.equal(stepsByName(report)[PUBLIC_SEAM_STEP.PARTICIPANT_STOPPED]
+    .outcome, PUBLIC_SEAM_STEP_OUTCOME.FAIL);
   t.end();
 });
 

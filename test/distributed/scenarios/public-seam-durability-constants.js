@@ -97,9 +97,14 @@ const PUBLIC_SEAM_TOPOLOGY_KEY_FRAGMENTS = Object.freeze([
   'node',
   'participant',
   'partition',
+  'peer',
   'plan',
+  'quorum',
   'replica',
+  'role',
+  'shard',
   'term',
+  'voter',
   'witness',
 ]);
 
