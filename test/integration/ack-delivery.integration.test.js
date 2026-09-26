@@ -20,6 +20,14 @@ import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-consta
 import {ReplicaLifecycleManager} from '../../src/node/replica-lifecycle-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {RAFT_OPERATION} from '../../src/raft/raft-operation-port-constants.js';
+import {
+  COMMITTED_MEMBERSHIP_READ_PURPOSE,
+} from '../../src/raft/raft-committed-membership-constants.js';
+import {
+  committedStampOfAnswer,
+  validateBootstrapMembershipStamp,
+} from '../../src/raft/raft-committed-membership-stamp.js';
 
 let portCounter = 33000;
 
@@ -182,6 +190,22 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
       return {acknowledged: true};
     });
 
+    // The new replica joins the existing group {p1-r1}: its CREATE carries
+    // the COMMITTED stamp the creation owner reads from the group's leader
+    // (the leader's own committed-membership read, BOOTSTRAP purpose), never
+    // a founding (GENESIS) stamp - the group exists.
+    let stamp = null;
+    await wait(async () => {
+      const answer = await res.part.raft[
+        RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP]({
+        purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP});
+      const candidate = committedStampOfAnswer(answer);
+      if (candidate && validateBootstrapMembershipStamp(candidate).valid) {
+        stamp = candidate;
+      }
+      return stamp !== null;
+    }, 2000);
+    t.ok(stamp, 'the leader answered a valid committed-membership stamp');
     const ack = await res.part.deliverWithAck(
       res.router,
       `${nodeId}/lifecycle/manager`,
@@ -194,6 +218,7 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
         leader_address: nodeId,
         key_range: {start: null, end: null},
         schema: schema('t1'),
+        bootstrap_membership: stamp,
         timestamp: Date.now(),
       },
       2000,

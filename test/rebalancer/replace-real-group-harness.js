@@ -183,6 +183,16 @@ function createObservedCache(data) {
   const listeners = new Set();
   cache.onCacheChange = (listener) => listeners.add(listener);
   cache.offCacheChange = (listener) => listeners.delete(listener);
+  // A row another node deleted, applied here by CDC with its notification.
+  cache.observeRemoteDelete = (tableName, rowId) => {
+    const row = cache.get(tableName, rowId);
+    cache.delete(tableName, rowId);
+    Promise.resolve().then(() => {
+      for (const listener of [...listeners]) {
+        listener(tableName, CDC_OPERATION.DELETE, row ? {...row} : null, null);
+      }
+    });
+  };
   cache.observeRemoteRow = (tableName, row) => {
     cache.upsert(tableName, row);
     Promise.resolve().then(() => {
@@ -561,9 +571,17 @@ function createReplaceWorld(options = {}) {
       replicaId, nodeId, replicaId === initialLeader ? 'leader' : 'follower')),
   });
   if (options.sourceHandler === true) {
+    // The source node's own row writes reach the owner's node by CDC: the
+    // handler writes through a view whose writes are observed remote rows
+    // (the cache-change feed that wakes the owner on its source's row).
+    const sourceNodeCache = Object.create(world.cache);
+    sourceNodeCache.upsert = (tableName, row) =>
+      world.cache.observeRemoteRow(tableName, row);
+    sourceNodeCache.delete = (tableName, rowId) =>
+      world.cache.observeRemoteDelete(tableName, rowId);
     world.sourceHandler = createRemovalSourceHandler({
       cluster: group.cluster, replicaId: sourceReplicaId, partitionId,
-      nodeId: NODE.SOURCE, cache: world.cache,
+      nodeId: NODE.SOURCE, cache: sourceNodeCache,
       rowOf: (status) => serviceRow(partitionId, sourceReplicaId,
         NODE.SOURCE, 'follower', status)});
   }
@@ -955,6 +973,25 @@ async function disposeWorld(world) {
   }
 }
 
+// The completion authority's typed wait reasons while no leader can answer
+// (F1: readReplaceCompletionAuthority; the diagnostic records the owner's
+// WITNESS_UNAVAILABLE wait, the observation carries the authority reason).
+const LEADERLESS_AUTHORITY_WAITS = Object.freeze([
+  'completion_authority_leader_unknown',
+  'completion_authority_leader_unreachable',
+  'completion_authority_no_answer',
+]);
+
+/**
+ * Let the live members elect a leader (after a leader's death).
+ * @param {Object} world
+ * @return {string|null} The leader.
+ */
+function electAmongLive(world) {
+  world.group.settle(() => world.group.leader() !== null, ELECTION_ROUNDS);
+  return world.group.leader();
+}
+
 /**
  * A world with its coordinator started and one REPLACE at ACTIVE.
  * @param {Object} [options] - createReplaceWorld options.
@@ -973,11 +1010,13 @@ async function openReplaceWorld(options = {}) {
 }
 
 export {
+  LEADERLESS_AUTHORITY_WAITS,
   ORDINARY_PARTITION_ID,
   PRIORITY_PARTITION_ID,
   NODE,
   disposeWorld,
   driveToIntent,
+  electAmongLive,
   enterOwnerAfter,
   fireFallbackTimers,
   firedTimerCount,
