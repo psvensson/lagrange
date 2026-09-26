@@ -28,7 +28,7 @@
   "censusSize": 2218,
   "digest": "fnv1a32-27ead5a8",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-fcd0ad51",
+  "observationDigest": "fnv1a32-2d2d88b2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3592,6 +3592,7 @@
     "test/control-plane/readiness-liveness-projection-single-source.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-service.js",
+        "src/control-plane/node-liveness-semantic-projection-owner.js",
         "src/control-plane/readiness-planning-version-contract.js"
       ]
     },

@@ -36,6 +36,8 @@ import {
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {NodeLivenessSemanticProjectionOwner} from
+  '../../src/control-plane/node-liveness-semantic-projection-owner.js';
 import {ControlPlaneReadinessService} from
   '../../src/control-plane/control-plane-readiness-service.js';
 import {isDeferredReadinessPlanningSnapshot} from
@@ -192,3 +194,43 @@ for (const [label, listNodes] of NON_SOURCE_ROW_CASES) {
     }
   });
 }
+
+test('the shared liveness projection moves forward only: an absent or ' +
+  'older caller-held row answers its caller and records nothing',
+async (t) => {
+  let sourceRow = nodeRow(PEER_NODE_ID, START_MS - HEARTBEAT_AGE_MS);
+  const owner = new NodeLivenessSemanticProjectionOwner({
+    localNodeId: SELF_NODE_ID,
+    now: () => START_MS,
+    setTimeoutFn: () => null,
+    clearTimeoutFn: () => {},
+    thresholds: {clusterMemberStaleHeartbeatMs: LEASE_MS},
+    readNodeEvidence: () => ({nodeRow: sourceRow, transportConnected: true}),
+  });
+  t.teardown(() => owner.shutdown());
+  const changes = [];
+  owner.subscribe((change) => changes.push(change));
+  const recorded = owner.projectNodeLivenessFromEvidence(PEER_NODE_ID,
+    {nodeRow: sourceRow, transportConnected: true}, START_MS);
+  const generation =
+    owner.getNodeLivenessSemanticIdentity(PEER_NODE_ID, START_MS).generation;
+  const changesBefore = changes.length;
+  for (const [label, row] of [
+    ['absent row', null],
+    ['older row', nodeRow(PEER_NODE_ID, START_MS - LEASE_MS * 2)],
+  ]) {
+    const answered = owner.projectNodeLivenessFromEvidence(PEER_NODE_ID,
+      {nodeRow: row, transportConnected: true}, START_MS);
+    t.not(answered.heartbeatFreshness.clusterMembership,
+      recorded.heartbeatFreshness.clusterMembership,
+      `${label}: the caller is answered from its own evidence`);
+    t.equal(owner.getNodeLivenessSemanticIdentity(PEER_NODE_ID, START_MS)
+      .generation, generation, `${label}: the shared projection did not move`);
+  }
+  t.equal(changes.length, changesBefore, 'no semantic change was published');
+  sourceRow = null;
+  owner.recordNodeSourceChange(PEER_NODE_ID, START_MS);
+  t.not(owner.getNodeLivenessSemanticIdentity(PEER_NODE_ID, START_MS)
+    .generation, generation,
+  'the row\'s absence reaches the projection from its source');
+});
