@@ -946,12 +946,9 @@ async function openReplaceWorld(options = {}) {
 }
 
 export {
-  GROUP_TIMING,
   ORDINARY_PARTITION_ID,
   PRIORITY_PARTITION_ID,
   NODE,
-  TERMINAL_STEPS,
-  createReplace,
   disposeWorld,
   driveToIntent,
   enterOwnerAfter,
@@ -964,7 +961,6 @@ export {
   setSourceRow,
   setTargetRow,
   settleTurns,
-  sourceRowStatus,
   startCoordinator,
   waitUntil,
 };

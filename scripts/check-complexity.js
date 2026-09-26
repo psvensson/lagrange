@@ -61,7 +61,9 @@ const TARGET_THRESHOLD = 12;
 // 2026-09-26: tightened 1811 -> 1810 on the checker's hint on the O1
 // committed-read branch (the partition row branch of the creation stamp
 // deleted; the peer-cache reconcile's expected-peer loop extracted).
-const BASELINE_COUNT = 1810;
+// 2026-09-26: tightened 1810 -> 1805 on the hint (fix-f1: the per-leg
+// handoff evidence and escalation deleted).
+const BASELINE_COUNT = 1805;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

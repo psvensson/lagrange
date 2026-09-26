@@ -196,7 +196,6 @@ async function readReplaceCompletionAuthority(owner, operation) {
 }
 
 export {
-  REPLACE_COMPLETION_AUTHORITY_WAIT,
   isReplaceTargetGone,
   observedReplaceTargetStatus,
   readReplaceCompletionAuthority,
