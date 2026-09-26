@@ -38,6 +38,7 @@ import {
   createEmbeddedCluster,
   decodeExposure,
   describeExposedError,
+  serveStatement,
 } from './helpers/embedded-cluster-harness.js';
 import {observeTableReplicas} from './helpers/replica-sqlite-observer.js';
 import {createEvidenceSink} from './helpers/replicated-apply-evidence.js';
@@ -58,9 +59,9 @@ const LOG_LINES_PER_NODE = 400;
 const ERROR_DETAIL_CHARS = 2000;
 const TABLE = Object.freeze({CURRENT: 'current', HISTORY: 'history'});
 const SQL = Object.freeze({
-  CREATE_CURRENT: 'CREATE TABLE current (id TEXT PRIMARY KEY, value TEXT)',
+  CREATE_CURRENT: 'CREATE TABLE IF NOT EXISTS current (id TEXT PRIMARY KEY, value TEXT)',
   CREATE_HISTORY:
-    'CREATE TABLE history (id TEXT PRIMARY KEY, current_id TEXT, value TEXT)',
+    'CREATE TABLE IF NOT EXISTS history (id TEXT PRIMARY KEY, current_id TEXT, value TEXT)',
   INSERT_CURRENT: 'INSERT INTO current (id, value) VALUES (?, ?)',
   INSERT_HISTORY:
     'INSERT INTO history (id, current_id, value) VALUES (?, ?, ?)',
@@ -111,6 +112,9 @@ async function sampleReads(t, reader, sessionKey, ids, deadline) {
   let samples = 0;
   let firstFailureMs = null;
   let lastFailureMs = null;
+  // How many rows each successful read returned: a follower-served read of a
+  // committed transactional row answers [] (F-TX-REPLICATED-APPLY).
+  const rowCounts = {};
   while (consecutive < STABLE_SUCCESSES && Date.now() < deadline) {
     const reads = [
       [TABLE.CURRENT, await readOnce(reader, sessionKey, SQL.READ_CURRENT, ids[0])],
@@ -118,6 +122,11 @@ async function sampleReads(t, reader, sessionKey, ids, deadline) {
     ];
     samples++;
     const atMs = Date.now() - startedAt;
+    for (const [table, read] of reads) {
+      if (!read.ok) continue;
+      const key = `${table} rows=${read.rows}`;
+      rowCounts[key] = (rowCounts[key] ?? 0) + 1;
+    }
     const failed = reads.filter(([, read]) => !read.ok);
     if (failed.length === 0) {
       consecutive++;
@@ -132,7 +141,7 @@ async function sampleReads(t, reader, sessionKey, ids, deadline) {
   return {samples, stable: consecutive >= STABLE_SUCCESSES,
     windowMs: Date.now() - startedAt, firstFailureMs, lastFailureMs,
     outageMs: firstFailureMs === null ? 0 : lastFailureMs - firstFailureMs,
-    failureCount: failures.length, errors: summarizeErrors(failures),
+    failureCount: failures.length, errors: summarizeErrors(failures), rowCounts,
     failures: failures.slice(0, LOG_LINES_PER_NODE)};
 }
 
@@ -233,8 +242,12 @@ test(`${FINDING}: reads after two concurrent transactions on the same tables`,
       const context = {cluster, writer, reader, runDeadline,
         writerSession: await writer.openApplicationDatabase(APPLICATION_ID),
         readerSession: await reader.openApplicationDatabase(APPLICATION_ID)};
-      await writer.query(context.writerSession, SQL.CREATE_CURRENT);
-      await writer.query(context.writerSession, SQL.CREATE_HISTORY);
+      evidence.create = [
+        await serveStatement(t, writer, context.writerSession, SQL.CREATE_CURRENT),
+        await serveStatement(t, writer, context.writerSession, SQL.CREATE_HISTORY),
+      ];
+      t.ok(evidence.create.every((create) => create.served),
+        `both tables were created (${JSON.stringify(evidence.create)})`);
       evidence.warmup = settledOutcome(await writer.transaction(
         context.writerSession, pair('w-c0', 'w-h0')));
       for (const [index, round] of [ROUND.PLAIN, ROUND.AFTER_FAILURE].entries()) {

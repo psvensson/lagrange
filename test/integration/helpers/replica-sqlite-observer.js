@@ -124,10 +124,8 @@ function observeReplicaFile(file, {tableName, ids, markerTypes = []}) {
   let db;
   try {
     db = new Database(file.path, OPEN_READ_ONLY);
-    if (!tableExists(db, tableName)) {
-      return {...file, hasTable: false,
-        tables: db.prepare(OBSERVER_SQL.TABLES).all().map((row) => row.name)};
-    }
+    const tables = db.prepare(OBSERVER_SQL.TABLES).all().map((row) => row.name);
+    if (!tables.includes(tableName)) return {...file, hasTable: false, tables};
     const select = db.prepare(
       `SELECT COUNT(*) AS count FROM "${tableName}" WHERE id = ?`);
     const rows = Object.fromEntries(ids.map((id) => [id, select.get(id).count]));
@@ -143,7 +141,7 @@ function observeReplicaFile(file, {tableName, ids, markerTypes = []}) {
           [type, matchLog(db, `${QUOTE}${type}${QUOTE}`)])),
       };
     }
-    return {...file, hasTable: true, rows, outcomes, raftLog};
+    return {...file, hasTable: true, tables, rows, outcomes, raftLog};
   } catch (error) {
     return {...file, observationError: error.message};
   } finally {

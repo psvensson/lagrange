@@ -48,6 +48,7 @@ import {
   createEmbeddedCluster,
   decodeExposure,
   describeExposedError,
+  serveStatement,
 } from './helpers/embedded-cluster-harness.js';
 import {observeTableReplicas} from './helpers/replica-sqlite-observer.js';
 import {createEvidenceSink} from './helpers/replicated-apply-evidence.js';
@@ -64,6 +65,7 @@ const TEST_TIMEOUT_MS = 600000;
 const RUN_RESERVE_MS = 45000;
 // Reference budgets (scaled per host).
 const WINDOW_MS = Object.freeze({
+  CREATE: 90000,
   REPLICA_DISCOVERY: 30000,
   SETTLE: 30000,
   NEW_LEADER_WRITE: 90000,
@@ -78,7 +80,7 @@ const ROW = Object.freeze({
 });
 const TABLE = 'settle_rows';
 const SQL = Object.freeze({
-  CREATE: `CREATE TABLE ${TABLE} (id TEXT PRIMARY KEY, value TEXT)`,
+  CREATE: `CREATE TABLE IF NOT EXISTS ${TABLE} (id TEXT PRIMARY KEY, value TEXT)`,
   INSERT: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`,
   READ_ALL: `SELECT id FROM ${TABLE} WHERE id IN (?, ?, ?)`,
   PARTITION: 'SELECT * FROM partitions WHERE partition_id = ?',
@@ -291,13 +293,23 @@ async function runSettlingExperiment(t, cluster, evidence, runDeadline, sink) {
   const [seed] = cluster.nodes;
   const sessions = await openSessions(cluster.nodes);
   const seedSession = sessions.get(seed.nodeId);
-  evidence.phases.create = decodedOutcome(await seed.query(seedSession,
-    SQL.CREATE));
+  evidence.phases.create = await serveStatement(t, seed, seedSession,
+    SQL.CREATE, [], WINDOW_MS.CREATE);
+  sink.write(evidence, cluster.nodes);
+  if (!evidence.phases.create.served) {
+    t.fail(`CREATE TABLE was never served: ${JSON.stringify(
+      evidence.phases.create.rejections.slice(-3))}`);
+    return;
+  }
 
   const settle = await commitAndSettle(t, cluster, seed, seedSession,
     runDeadline);
   evidence.phases.settle = settle.record;
   sink.write(evidence, cluster.nodes);
+  if (!settle.committed) {
+    t.fail(`the transaction did not commit: ${settle.record.transaction.rejected}`);
+    return;
+  }
   t.comment(`settled replica table:\n${JSON.stringify(settle.record.table)}`);
   assertSettledWitness(t, settle);
 
@@ -322,6 +334,10 @@ async function commitAndSettle(t, cluster, seed, seedSession, runDeadline) {
       undefined : describeExposedError(committed.transaction.value),
     steps: committed.steps.map(decodedOutcome),
   };
+  if (committed.transaction.outcome !== EMBEDDED_STEP_OUTCOME.FULFILLED) {
+    return {record, replicas: [], staging: [], partitionId: null,
+      committed: false};
+  }
   record.autocommit = decodedOutcome(await seed.query(seedSession, SQL.INSERT,
     [ROW.CONTROL, VALUE]));
   record.autocommitAckMsAfterCommitAck = Date.now() - commitAckAt;
