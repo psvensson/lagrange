@@ -123,13 +123,23 @@ function recordReplaceWaitDiagnostic(owner, operation, reason, observation,
     stalenessClass: details.stalenessClass ??
       REPLACE_OWNER_STALENESS_CLASS.NEVER_STALE_BY_AGE,
     retirementAdmissible: details.retirementAdmissible === true,
-    leaderReplicaId: observation?.leaderReplicaId ?? null,
-    sourceMembership: observation?.state ?? null,
+    ...observationSummaryOf(observation),
     severity: diagnosticSeverityOf(operation, nowMs),
   });
   state.diagnosticByOperationId.set(operation.operationId, diagnostic);
   logReplaceDiagnosticTransition(owner, previous, diagnostic);
   return diagnostic;
+}
+
+// The observation the waiting decision read: the leader it names, the
+// source's membership in it, and - when the completion authority could not
+// be read - why (a REPLACE_COMPLETION_AUTHORITY_WAIT reason, fix-f7).
+function observationSummaryOf(observation) {
+  return {
+    leaderReplicaId: observation?.leaderReplicaId ?? null,
+    sourceMembership: observation?.state ?? null,
+    authorityWaitReason: observation?.reason ?? null,
+  };
 }
 
 function retirementAttemptSummaryOf(attempt) {

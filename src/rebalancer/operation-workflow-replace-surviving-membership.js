@@ -14,9 +14,37 @@
  * a route to that leader's node only (the answer's own leader role is the
  * check).
  * Canonical output: the leader's own answer (its replica leads in its own
- * observation), reached with at most one redirect; otherwise UNAVAILABLE
- * with a REPLACE_COMPLETION_AUTHORITY_WAIT reason. Whether the target is
- * gone.
+ * observation), reached with at most one redirect, that is CURRENT;
+ * otherwise UNAVAILABLE with a REPLACE_COMPLETION_AUTHORITY_WAIT reason.
+ * Whether the target is gone. Where R-1f proposes REMOVE_PEER: the leader
+ * of that same current answer (conf changes are leader-only, round 2 F-1).
+ *
+ * Currentness (fix-f7, verification round 1 V1; O1 round 2 F-3). raft-rs
+ * runs with check_quorum off, so a deposed leader keeps answering as leader
+ * until it sees a higher term, with its own stale configuration. The
+ * leader's answer A = {configuration, commitIndex_A, appliedIndex_A, term_A,
+ * leaderId_A} counts only when
+ *  - its configuration is the one at its commit index (appliedIndex_A ===
+ *    commitIndex_A): a leader can lag one conf entry under persistence
+ *    admission and answer ABSENT for a committed voter; and
+ *  - a MAJORITY of its configuration's voters - of the incoming voters and,
+ *    in a joint configuration, of the outgoing voters too - each read
+ *    through the same per-member witness read, confirm term == term_A and
+ *    name leaderId_A or no leader yet (the leader counts for itself; a
+ *    higher term, a different named leader, an unreadable or unresolved
+ *    voter counts against).
+ * Why that suffices: commitIndex_A is the leader's own commit index, so a
+ * majority already acknowledged those entries (Raft's commit rule); no
+ * follower commit index is needed. Currentness is election safety: a
+ * replica's term never decreases, so each confirming voter had not voted in
+ * a term above term_A up to its read; a leader at a higher term needs a
+ * majority of the configuration, which would intersect the confirming
+ * majority. So no leader was elected above term_A when A was read, and
+ * term_A has one leader: A's committed configuration is the current one at
+ * read time. Below a majority the owner waits
+ * (COMPLETION_AUTHORITY_NOT_CORROBORATED); nothing is written; the next wake
+ * or fallback re-evaluates. A read-index at the port is the recorded R5
+ * follow-up.
  * Prohibited: no decision; never a row as membership; no second redirect.
  */
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
@@ -106,6 +134,11 @@ const REPLACE_COMPLETION_AUTHORITY_WAIT = Object.freeze({
   NOT_LEADER: 'completion_authority_not_leader',
   // No replica answered at all.
   NO_ANSWER: 'completion_authority_no_answer',
+  // The leader's configuration is applied below its commit index (F-3).
+  APPLIED_BEHIND_COMMIT: 'completion_authority_applied_behind_commit',
+  // No majority of the configuration confirmed the leader's term, leader
+  // and commit index (V1: possibly a deposed leader).
+  NOT_CORROBORATED: 'completion_authority_not_corroborated',
 });
 
 function authorityUnavailable(reason) {
@@ -163,15 +196,66 @@ async function readFirstAnswer(owner, operation) {
   return authorityUnavailable(REPLACE_COMPLETION_AUTHORITY_WAIT.NO_ANSWER);
 }
 
-/**
- * The completion authority: the leader's answer, reached from the first
- * answering addressee with at most one redirect to the leader it names.
- * @param {Object} owner
- * @param {Object} operation
- * @return {Promise<Object>} The leader's frozen witness observation, or
- *   UNAVAILABLE with a REPLACE_COMPLETION_AUTHORITY_WAIT reason.
- */
-async function readReplaceCompletionAuthority(owner, operation) {
+// Whether one voter's own answer confirms the leader's: it is at the
+// leader's term and names that leader or none. A voter at term_A has not
+// voted in a higher term, and a term has one leader, so a voter that has not
+// yet heard from term_A's leader (raft-rs sets it on the leader's first
+// message) confirms as well; a DIFFERENT named leader or a higher term counts
+// against. The leader's commit index is its own proof of a majority's
+// acknowledgement (Raft's commit rule).
+function confirmsLeaderAnswer(observation, leaderAnswer) {
+  const named = observation.leaderReplicaId ?? null;
+  return isAnswered(observation) &&
+    Number(observation.term) === Number(leaderAnswer.term) &&
+    (named === null || named === leaderAnswer.leaderReplicaId);
+}
+
+function voterSetsOf(leaderAnswer) {
+  const incoming = Array.isArray(leaderAnswer.voterReplicaIds) ?
+    leaderAnswer.voterReplicaIds : [];
+  const outgoing = Array.isArray(leaderAnswer.votersOutgoingReplicaIds) ?
+    leaderAnswer.votersOutgoingReplicaIds : [];
+  return outgoing.length > 0 ? [incoming, outgoing] : [incoming];
+}
+
+async function voterConfirms(owner, operation, leaderAnswer, replicaId) {
+  if (typeof replicaId !== 'string' || replicaId.length === 0) {
+    return false;
+  }
+  if (replicaId === leaderAnswer.replicaId) {
+    return true;
+  }
+  const route = memberRouteOf(owner, operation, replicaId);
+  return route !== null && confirmsLeaderAnswer(
+    await readReplaceWitnessMembership(owner, operation, route), leaderAnswer);
+}
+
+function isMajorityOf(voterSet, confirmed) {
+  return voterSet.length > 0 &&
+    voterSet.filter((replicaId) => confirmed.get(replicaId) === true).length >
+      voterSet.length / 2;
+}
+
+// The leader's answer, or the typed WAIT when it is not current.
+async function currentLeaderAnswer(owner, operation, leaderAnswer) {
+  if (Number(leaderAnswer.appliedIndex) !== Number(leaderAnswer.commitIndex)) {
+    return authorityUnavailable(
+      REPLACE_COMPLETION_AUTHORITY_WAIT.APPLIED_BEHIND_COMMIT);
+  }
+  const voterSets = voterSetsOf(leaderAnswer);
+  const confirmed = new Map();
+  for (const replicaId of new Set(voterSets.flat())) {
+    confirmed.set(replicaId,
+      await voterConfirms(owner, operation, leaderAnswer, replicaId));
+  }
+  return voterSets.every((voterSet) => isMajorityOf(voterSet, confirmed)) ?
+    leaderAnswer :
+    authorityUnavailable(REPLACE_COMPLETION_AUTHORITY_WAIT.NOT_CORROBORATED);
+}
+
+// The leader's own answer, reached from the first answering addressee with
+// at most one redirect to the leader it names.
+async function readLeaderAnswer(owner, operation) {
   const answer = await readFirstAnswer(owner, operation);
   if (!isAnswered(answer) || isLeaderAnswer(answer)) {
     return answer;
@@ -196,19 +280,41 @@ async function readReplaceCompletionAuthority(owner, operation) {
 }
 
 /**
+ * The completion authority: the leader's answer, reached from the first
+ * answering addressee with at most one redirect to the leader it names, and
+ * current (applied at its commit index, corroborated by a majority of its
+ * configuration at its term).
+ * @param {Object} owner
+ * @param {Object} operation
+ * @return {Promise<Object>} The leader's frozen witness observation, or
+ *   UNAVAILABLE with a REPLACE_COMPLETION_AUTHORITY_WAIT reason.
+ */
+async function readReplaceCompletionAuthority(owner, operation) {
+  const answer = await readLeaderAnswer(owner, operation);
+  return isAnswered(answer) ?
+    currentLeaderAnswer(owner, operation, answer) : answer;
+}
+
+/**
  * Where R-1f proposes the source's REMOVE_PEER: conf changes are taken only
  * at the leader's port (round 2 F-1), so through the leader the completion
  * authority named - its own answer - routed like the authority's redirect;
  * null (the target) when that leader is the target or cannot be routed (the
  * target then answers NOT_LEADER typed, and the attempt is re-issued once
- * the observed leader moves).
+ * the observed leader moves). The observation is the completion
+ * authority's CURRENT answer (integration 3: the same majority-corroborated
+ * leader answer R-1a decided on, fix-f7); an uncorroborated or unavailable
+ * observation names no leader to route to.
  * @param {Object} owner
  * @param {Object} operation
  * @param {Object} observation - The completion authority's observation.
  * @return {Object|null} {replicaId, nodeId} or null.
  */
 function replaceRetirementRouteOf(owner, operation, observation) {
-  const leaderReplicaId = observation?.leaderReplicaId;
+  if (!observation || !isAnswered(observation)) {
+    return null;
+  }
+  const leaderReplicaId = observation.leaderReplicaId;
   const {targetReplicaId} = replaceReplicaIdsOf(owner, operation);
   if (typeof leaderReplicaId !== 'string' || leaderReplicaId.length === 0 ||
       leaderReplicaId === targetReplicaId) {
