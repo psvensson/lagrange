@@ -26,6 +26,10 @@
  *   write is refused even with a local leader. It flips to the exact round
  *   trip when the codec owner lands. (Bytes cross the harness IPC as a
  *   Buffer, so a Uint8Array bind is not separately exercised here.)
+ * - ORDER BY over mixed-case / punctuation ids is a WITNESS of
+ *   F-ORDER-BY-LOCALE-COLLATION (locale order, not the binary order of the
+ *   statement's own range predicate); ordered PASS assertions use ids where
+ *   the orders agree (the consumer's own ids are lower-case hex).
  * - I5.6 records that Binding invocation is NOT part of the embedded facade:
  *   lifecycle SQL is classified only on the authenticated request path. When
  *   owner decision D (an embedded Binding invocation adapter) lands, that
@@ -45,8 +49,13 @@ import {
   mustQuery,
 } from './helpers/embedded-cluster-harness.js';
 
-// Lab-derived budget, see the header of the progress record in the hand-back.
-const CONSUMER_CONTRACT_TEST_TIMEOUT_MS = 300000;
+// Lab-derived (adams-gamla, factor 2.1, 2026-09-26): runtime start 15.7 s,
+// first write served 2.8 s later, whole file 29.1 s (~14 s reference). The
+// formation budget (reference ms, scaled per host by the harness) is ~5x the
+// measured reference start; the test timeout covers it at the slowest lab
+// factor (2.5) plus the statements.
+const FORMATION_BUDGET_MS = 45000;
+const CONSUMER_CONTRACT_TEST_TIMEOUT_MS = 180000;
 const SINGLE_RUNTIME = 1;
 const APPLICATION_ID = 'lagrange-images';
 const CODE = Object.freeze({
@@ -131,7 +140,8 @@ test('I5 public consumer-contract ratchet (one embedded runtime)', {
   timeout: CONSUMER_CONTRACT_TEST_TIMEOUT_MS,
 }, async (t) => {
   const cluster = createEmbeddedCluster(t);
-  const formation = await cluster.formCluster(SINGLE_RUNTIME);
+  const formation = await cluster.formCluster(SINGLE_RUNTIME, {},
+    FORMATION_BUDGET_MS);
   t.comment(`formation: ${JSON.stringify(formation)}`);
   const [node] = cluster.nodes;
   const session = await node.openApplicationDatabase(APPLICATION_ID);
@@ -191,16 +201,21 @@ test('I5 public consumer-contract ratchet (one embedded runtime)', {
     const target = OBJECT_IDS[1];
     t.same(fulfilledRows(await must('pk', SQL.READ_OBJECT, [target])),
       [objectRow(target, 1)], 'exact PK lookup returns the whole row');
+    // Membership only here; ORDER across mixed case and punctuation is the
+    // F-ORDER-BY-LOCALE-COLLATION witness below.
     const range = sortedIds(OBJECT_IDS).filter(inRange(PREFIX.LOW, PREFIX.HIGH));
-    t.same(ids(await must('half-open', SQL.HALF_OPEN, [PREFIX.LOW, PREFIX.HIGH])),
-      range, 'id >= ? AND id < ?: lexicographic, low bound in, high bound out');
+    t.same(sortedIds(ids(await must('half-open', SQL.HALF_OPEN,
+      [PREFIX.LOW, PREFIX.HIGH]))), range,
+    'id >= ? AND id < ?: exactly the rows in [low, high), low in, high out');
+    t.same(sortedIds(ids(await must('scan', SQL.SCAN))), sortedIds(OBJECT_IDS),
+      'a scan without a key predicate returns every row');
+    // Ordered, on ids where every candidate collation agrees (lower-case hex
+    // and one separator, the shape of the consumer's ids).
     t.same(ids(await must('limit', SQL.LIMITED, [PREFIX.LOW, PREFIX.HIGH])),
       range.slice(0, 2), 'ORDER BY id LIMIT 2');
     t.same(ids(await must('between', SQL.BETWEEN,
       [`img:${SHA_A}:`, `img:${SHA_A}:~`])),
-    [`img:${SHA_A}:blob`, `img:${SHA_A}:meta`], 'BETWEEN is inclusive');
-    t.same(ids(await must('scan', SQL.SCAN)), sortedIds(OBJECT_IDS),
-      'ORDER BY id without a key predicate scans every row in order');
+    [`img:${SHA_A}:blob`, `img:${SHA_A}:meta`], 'BETWEEN is inclusive, ordered');
 
     t.equal(affected(await must('cas', SQL.CAS_UPDATE, casParams(target, 1))), 1,
       'CAS on the current version: affectedRows 1');
@@ -211,6 +226,31 @@ test('I5 public consumer-contract ratchet (one embedded runtime)', {
     t.same(ids(await must('range after', SQL.HALF_OPEN_AFTER,
       [PREFIX.LOW, PREFIX.HIGH, 1])), [target],
     'a range with a further column predicate');
+  });
+
+  // WITNESS F-ORDER-BY-LOCALE-COLLATION. Expected: ORDER BY id is the
+  // lexicographic order of the statement's own storage collation (SQLite
+  // BINARY for TEXT), the same order its range predicate is evaluated in, so
+  // `img:Z` < `img:a` and `img:` < `img;`. Observed (lab, one runtime, one
+  // partition): the coordinator re-sorts the merged rows with
+  // String#localeCompare (src/query/query-executor-select-aggregation.js
+  // compareOrderByClauseValues; a second copy in src/query/
+  // streaming-aggregator.js compareDefinedValues), so mixed-case and
+  // punctuation ids come back in ICU locale order. The range FILTER is right;
+  // only the order differs. Flip to the binary order when the owner fixes it.
+  await t.test('F-ORDER-BY-LOCALE-COLLATION witness: ORDER BY id follows locale order, not binary', async (t) => {
+    const binary = sortedIds(OBJECT_IDS);
+    const locale = [...OBJECT_IDS].sort((left, right) => left.localeCompare(right));
+    t.notSame(locale, binary, 'the id set distinguishes the two orders');
+    const range = (order) => order.filter(inRange(PREFIX.LOW, PREFIX.HIGH));
+    const halfOpen = ids(await must('F-ORDER half-open', SQL.HALF_OPEN,
+      [PREFIX.LOW, PREFIX.HIGH]));
+    const scan = ids(await must('F-ORDER scan', SQL.SCAN));
+    if (JSON.stringify(scan) === JSON.stringify(binary)) {
+      t.comment('F-ORDER-BY-LOCALE-COLLATION flipped: binary order observed');
+    }
+    t.same(halfOpen, range(locale), 'observed today: range rows in locale order');
+    t.same(scan, locale, 'observed today: scan rows in locale order');
   });
 
   await t.test('I5.5 transactions on ONE runtime: coordinator-visible commit and rollback (not distributed durability)', async (t) => {
