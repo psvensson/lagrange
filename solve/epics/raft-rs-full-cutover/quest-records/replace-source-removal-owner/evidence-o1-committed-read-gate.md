@@ -359,3 +359,12 @@ Lab cone (`lab test changed --sha 14233f065 --base-sha ab7669fd0 --lane all
 --split`): the lab sends only an exact commit, so the run is launched on the
 commit that carries this record; its result is appended below as a dated
 entry (append-only).
+
+### Lab cone result (appended 2026-09-26)
+
+`lab test changed --sha 7d5bed7ca --base-sha ab7669fd0 --lane all --split`
+(the record commit; its tree equals `14233f065` in `src` and `test`): 194
+files, 194 pass, 0 fail, 4703 assertions - controller 191/191 (ordinary,
+external-toolchain, bootstrap lanes), carinas-windows exclusive 3/3. Every
+evidence file and every implementer witness importing the edited harness is
+in the cone and green.
