@@ -34,6 +34,7 @@
 import {mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {monitorEventLoopDelay} from 'node:perf_hooks';
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
@@ -71,6 +72,9 @@ const SEAM_TEST_TIMEOUT_MS = 300_000;
 const SEAM_WAIT_MS = scaleByMachineFactor(60_000);
 const CELL_READY_WAIT_MS = scaleByMachineFactor(120_000);
 const SEAM_POLL_MS = 100;
+const LOOP_DELAY_RESOLUTION_MS = 20;
+const LOOP_DELAY_PERCENTILE = 99;
+const NANOS_PER_MS = 1e6;
 const CONSUMER_RETRY_PAUSE_MS = 250;
 const PGWIRE_LOOPBACK = '127.0.0.1';
 const NODE_LISTENER_PORT_COUNT = 3;
@@ -271,8 +275,10 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
     pause: () => managedSleep(t, SEAM_POLL_MS),
   });
 
-  // Deploy-time tooling runs beside runtime start (the CLI's build step).
-  const artifactBuild = buildCallArtifact(root, SERVICE_IDENTITY);
+  // Event-loop delay across runtime start: startup runs on this thread,
+  // so a starved loop (not a slow host) would show here.
+  const startLoopDelay = monitorEventLoopDelay({resolution: LOOP_DELAY_RESOLUTION_MS});
+  startLoopDelay.enable();
   // REST, admin (= REST + 1) and transport (= REST + 2) derive from one
   // base, so the base comes from a consecutive block of the allocator.
   const [restPort] = seamPorts.getPortBlock(NODE_LISTENER_PORT_COUNT);
@@ -302,7 +308,14 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
       `accepting after stop=${
         await acceptsConnections(PGWIRE_LOOPBACK, pgwirePort)}`);
   });
+  startLoopDelay.disable();
   mark('runtimeStarted');
+  t.comment(`runtime start event-loop delay ms: max=${
+    Math.round(startLoopDelay.max / NANOS_PER_MS)} p99=${
+    Math.round(startLoopDelay.percentile(LOOP_DELAY_PERCENTILE) / NANOS_PER_MS)}`);
+  // Deploy-time tooling (the CLI's build step) runs after start so it can
+  // never compete with startup for this thread.
+  const artifactBuild = buildCallArtifact(root, SERVICE_IDENTITY);
   endpoint = await enablePasswordPgwire(db, pgwirePort, wait());
   mark('pgwireListening');
 
