@@ -43,7 +43,15 @@ const OBSERVER_TABLE = Object.freeze({
   // The rs-raft durable store (src/raft/raft-rs-durable-store-constants.js):
   // entry data is the proposal's JSON bytes, stored base64.
   RAFT_RS_LOG: '_raft_rs_log',
+  RAFT_RS_APPLIED_STATE: '_raft_rs_applied_state',
+  RAFT_RS_HARD_STATE: '_raft_rs_hard_state',
 });
+// The consensus progress tables read whole (one row per group): the applied
+// watermark and the hard state (term, vote, commit).
+const RAFT_RS_STATE_TABLES = Object.freeze([
+  OBSERVER_TABLE.RAFT_RS_APPLIED_STATE,
+  OBSERVER_TABLE.RAFT_RS_HARD_STATE,
+]);
 const RAFT_RS_PAYLOAD_ENCODING = 'base64';
 const UTF8 = 'utf8';
 const OPEN_READ_ONLY = Object.freeze({readonly: true, fileMustExist: true});
@@ -176,8 +184,11 @@ function observeReplicaFile(file, {tableName, ids, markerTypes = []}) {
     }
     const raftRsLog = tables.includes(OBSERVER_TABLE.RAFT_RS_LOG) ?
       observeRaftRsLog(db, ids, markerTypes) : null;
+    const raftRsState = Object.fromEntries(RAFT_RS_STATE_TABLES
+      .filter((table) => tables.includes(table))
+      .map((table) => [table, db.prepare(`SELECT * FROM "${table}"`).all()]));
     return {...file, hasTable: true, tables, rows, outcomes, raftLog,
-      raftRsLog};
+      raftRsLog, raftRsState};
   } catch (error) {
     return {...file, observationError: error.message};
   } finally {

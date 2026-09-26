@@ -26,7 +26,6 @@
  * concurrent-read-outage-<timestamp>/ (helpers/replicated-apply-evidence.js).
  */
 
-import {readFileSync} from 'node:fs';
 import {hostname} from 'node:os';
 import {test} from '../../src/test-helpers/tap.js';
 import {managedSleep} from '../../src/test-helpers/managed-timers.js';
@@ -40,6 +39,7 @@ import {
   describeExposedError,
   serveStatement,
 } from './helpers/embedded-cluster-harness.js';
+import {logLinesBetween} from './helpers/node-log-window.js';
 import {observeTableReplicas} from './helpers/replica-sqlite-observer.js';
 import {createEvidenceSink} from './helpers/replicated-apply-evidence.js';
 import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
@@ -52,9 +52,6 @@ const RUN_RESERVE_MS = 45000;
 const READ_WINDOW_MS = 60000;
 const READ_POLL_MS = 100;
 const STABLE_SUCCESSES = 30;
-const LOG_WINDOW_SLACK_MS = 2000;
-const LOG_MIN_LEVEL = 40;
-const LOG_LINE_CHARS = 600;
 const LOG_LINES_PER_NODE = 400;
 const ERROR_DETAIL_CHARS = 2000;
 const TABLE = Object.freeze({CURRENT: 'current', HISTORY: 'history'});
@@ -159,31 +156,6 @@ function summarizeErrors(failures) {
     }
   }
   return counts;
-}
-
-function logLinesBetween(node, fromMs, toMs) {
-  let text = '';
-  try {
-    text = readFileSync(node.logPath, 'utf8');
-  } catch (error) {
-    return [`log unreadable: ${error.message}`];
-  }
-  const lines = [];
-  for (const line of text.split('\n')) {
-    let entry;
-    try {
-      entry = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (!(entry.level >= LOG_MIN_LEVEL)) continue;
-    // The runtime logs ISO-8601 time (src/logging/logging-service.js).
-    const atMs = Date.parse(entry.time);
-    if (!(atMs >= fromMs - LOG_WINDOW_SLACK_MS &&
-      atMs <= toMs + LOG_WINDOW_SLACK_MS)) continue;
-    lines.push(line.slice(0, LOG_LINE_CHARS));
-  }
-  return lines.slice(0, LOG_LINES_PER_NODE);
 }
 
 function observeBoth(nodes, ids) {

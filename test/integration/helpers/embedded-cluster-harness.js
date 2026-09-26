@@ -34,6 +34,7 @@ import {
 import {refuseUnderProbe} from '../../../src/test-helpers/probe-guard.js';
 import {getUniquePort} from './cluster-test-helpers.js';
 import {
+  EMBEDDED_HOLD_DECISION,
   EMBEDDED_STEP_OUTCOME,
   EMBEDDED_WORKER_OP,
   decodeExposure,
@@ -475,6 +476,21 @@ function createEmbeddedCluster(t, options = {}) {
       }),
       `transaction on ${nodeId}`,
     );
+    node.holdTransaction = async (sessionKey, steps) => requireOk(
+      await node.channel.request(EMBEDDED_WORKER_OP.HOLD_TRANSACTION, {
+        sessionKey,
+        steps: steps.map((step) => ({
+          ...step,
+          params: (step.params ?? []).map(encodeParam),
+        })),
+      }),
+      `hold transaction on ${nodeId}`,
+    );
+    node.releaseTransaction = async (holdKey, decision) => requireOk(
+      await node.channel.request(EMBEDDED_WORKER_OP.RELEASE_TRANSACTION,
+        {decision, holdKey}),
+      `release transaction on ${nodeId}`,
+    );
     return node;
   }
 
@@ -623,6 +639,7 @@ function createEmbeddedCluster(t, options = {}) {
 
 export {
   EMBEDDED_CLUSTER_BUDGET_MS,
+  EMBEDDED_HOLD_DECISION,
   EMBEDDED_NODE_ROLE,
   EMBEDDED_STEP_OUTCOME,
   EMBEDDED_WORKER_OP,

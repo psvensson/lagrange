@@ -16,6 +16,7 @@
 
 import {createEmbeddedLagrange} from '../../../src/public-api.js';
 import {
+  EMBEDDED_HOLD_DECISION as HOLD_DECISION,
   EMBEDDED_STEP_OUTCOME as STEP_OUTCOME,
   EMBEDDED_WORKER_EVENT as WORKER_EVENT,
   EMBEDDED_WORKER_OP as WORKER_OP,
@@ -26,10 +27,14 @@ import {
 const UNKNOWN_OP_MESSAGE = 'unknown embedded worker op: ';
 const UNKNOWN_SESSION_MESSAGE = 'unknown embedded worker session: ';
 const RUNTIME_NOT_STARTED_MESSAGE = 'embedded worker runtime not started';
+const UNKNOWN_HOLD_MESSAGE = 'unknown held transaction: ';
+const HOLD_ROLLBACK_MESSAGE = 'held transaction rolled back by the test';
 
 let runtime = null;
 const sessions = new Map();
 let nextSessionKey = 1;
+const holds = new Map();
+let nextHoldKey = 1;
 
 function requireSession(sessionKey) {
   const db = sessions.get(sessionKey);
@@ -61,6 +66,48 @@ async function runTransaction(db, steps) {
   return {steps: stepOutcomes, transaction: transactionOutcome};
 }
 
+async function runSteps(tx, steps) {
+  const outcomes = [];
+  for (const step of steps) {
+    outcomes.push(await settle(() => tx.query(step.sql, decodeParams(step.params))));
+  }
+  return outcomes;
+}
+
+// A transaction left ACTIVE: its steps run, then its callback waits for the
+// test's decision. The reply carries the step outcomes; the transaction's own
+// outcome is answered by RELEASE_TRANSACTION.
+function holdTransaction(db, steps) {
+  const holdKey = nextHoldKey++;
+  let decide;
+  const decision = new Promise((resolve) => {
+    decide = resolve;
+  });
+  let stepsDone;
+  const staged = new Promise((resolve) => {
+    stepsDone = resolve;
+  });
+  const transaction = settle(() => db.transaction(async (tx) => {
+    stepsDone(await runSteps(tx, steps));
+    if (await decision === HOLD_DECISION.ROLLBACK) {
+      throw new Error(HOLD_ROLLBACK_MESSAGE);
+    }
+    return steps.length;
+  }));
+  // A transaction that ends before its steps report still answers the hold.
+  transaction.then(() => stepsDone(null));
+  holds.set(holdKey, {decide, transaction});
+  return staged.then((stepOutcomes) => ({holdKey, steps: stepOutcomes}));
+}
+
+async function releaseTransaction(holdKey, decision) {
+  const hold = holds.get(holdKey);
+  if (!hold) throw new Error(`${UNKNOWN_HOLD_MESSAGE}${holdKey}`);
+  holds.delete(holdKey);
+  hold.decide(decision);
+  return {transaction: await hold.transaction};
+}
+
 function requireRuntime() {
   if (!runtime) throw new Error(RUNTIME_NOT_STARTED_MESSAGE);
   return runtime;
@@ -86,6 +133,12 @@ const handlers = {
   },
   async [WORKER_OP.TRANSACTION](message) {
     return runTransaction(requireSession(message.sessionKey), message.steps);
+  },
+  async [WORKER_OP.HOLD_TRANSACTION](message) {
+    return holdTransaction(requireSession(message.sessionKey), message.steps);
+  },
+  async [WORKER_OP.RELEASE_TRANSACTION](message) {
+    return releaseTransaction(message.holdKey, message.decision);
   },
   async [WORKER_OP.STOP]() {
     if (runtime) await runtime.stop();

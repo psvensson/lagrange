@@ -433,3 +433,186 @@ files, all 187 passing, with 4761 assertions.
   admission (raft-rs-durable-store.js:187-205) refuses consensus persistence
   while a user session holds the connection. This is the interaction that
   64f420ace reacted to, and it applies to this head's partitions (measured).
+
+## T-A (today): an ACTIVE transaction vs Raft durability
+
+Evidence only. This section answers design-gate items 1 and 2 of the owner's
+design-gate directive (2026-09-26) with measurements rather than code
+reading.
+
+Test: `test/integration/transaction-active-owns-connection.integration.test.js`.
+
+Each variant runs through the public sessions only:
+
+- The application on the seed opens `db.transaction` and runs one INSERT.
+  The participant now holds `BEGIN IMMEDIATE` on its replica's connection.
+  The callback then waits for the test's decision (the worker's
+  HOLD_TRANSACTION operation).
+- While the transaction is ACTIVE, a second seed session and a joiner session
+  each issue one autocommit INSERT into the same table (same partition).
+- Every replica file is polled read-only.
+- The transaction is then released: ROLLBACK (the callback throws), and in
+  the second variant COMMIT.
+
+Each replica is snapshotted at five points: before the hold, held, before
+release, released, and settled. Each snapshot records rows,
+`_transaction_outcomes`, and the rs-raft consensus state (`_raft_rs_log`
+bounds, `_raft_rs_applied_state`, `_raft_rs_hard_state`).
+
+**Provider fact.** Every partition replica file holds `_raft_rs_*` tables
+and no `_raft_log`. The partitions run the rs-raft backend, and its log,
+hard state and applied watermark live in the SAME SQLite file, on the same
+connection, as the application rows (design-gate item 1). The rs-raft store
+refuses to write while that connection is inside a transaction it did not
+open (raft-rs-durable-store.js:187-205).
+
+**Logging.** A run at LOG_LEVEL=debug was attempted to capture the
+debug-level deferral and admission lines. The seed ran out of JS heap during
+formation (about 505 MB after 142 s; "LogsTableService dropped 355000 logs";
+lab run 5, `evidence/lab5/`). That is a separate finding for the logging
+owner. The test therefore runs at warn and keeps the warn/error lines of the
+window.
+
+### Runs
+
+- Lab run 7: tv-dator, factor 1.36, WIP head c35146e53,
+  `active-owns-connection-2026-09-26T19-19-38-286Z/`.
+- Lab run 8: tv-dator, factor 1.55, WIP head e6f2b9dc9 (the witness),
+  `active-owns-connection-2026-09-26T19-31-52-053Z/`. 188 of 188 files
+  passed; T-A had 19 assertions and took 126 s.
+- In both runs the partition was steady before the experiment: a sentinel
+  autocommit row reached all three replicas (3 voters, applied index 2).
+- Evidence was copied to the lead's scratchpad at `evidence/lab7` and
+  `evidence/lab8`.
+
+### Table: consensus state per replica (log last index / applied index / term)
+
+**Run 7, ROLLBACK variant.** BEGIN+INSERT was held on the seed replica, the
+partition leader at term 1. The hold lasted 28.0 s.
+
+| replica | before hold | held | before release | released | settled (+42 s) | tx row after | seed auto | joiner auto |
+|---|---|---|---|---|---|---|---|---|
+| seed 1f492ca9 (staging, leader t1) | 2/2/t1 | 2/2/t1 | **2/2/t1** | 2/2/t1 | **2/2/t1** | 0 | 0 | **0** |
+| joiner 95f1dc5e | 2/2/t1 | 2/2/t1 | 4/4/t2 | 4/4/t2 | 4/4/t2 | 0 | 0 | 1 |
+| joiner 0805218d | 2/2/t1 | 2/2/t1 | 4/4/t2 | 4/4/t2 | 4/4/t2 | 0 | 0 | 1 |
+
+Public answers during the hold:
+
+- Seed-session autocommit: `DISTRIBUTED_PARTICIPANT_FAILURE` after 2.03 s,
+  with deferred=false and retryAfterMs=null.
+- Joiner-session autocommit: **acknowledged** after 4.86 s, by a NEW leader,
+  0805218d, at term 2, log index 4.
+
+**Run 7, COMMIT variant.**
+
+- The hold was staged on 0805218d, the leader at that time.
+- Both autocommits failed with `DISTRIBUTED_PARTICIPANT_FAILURE` after 2.0 s
+  (deferred=false). Neither row exists anywhere.
+- No replica's log moved during the hold.
+- The commit was acknowledged in 288 ms.
+- The transaction row is on 0805218d only, with its outcome row. This is
+  F-TX-REPLICATED-APPLY again.
+- The joiners' logs went from 4 to 5 (the marker). The seed replica stayed
+  at 2/2/t1.
+
+**Run 8** matches run 7:
+
+- The seed replica was the leader at term 1 and staged both holds.
+- ROLLBACK variant: both autocommits failed with
+  `DISTRIBUTED_PARTICIPANT_FAILURE` after 2.0 s (deferred=false). The joiners
+  moved from 2/2/t1 to 3/3/t2, which is a new leader's entry. The seed
+  replica stayed frozen at 2/2/t1.
+- COMMIT variant: the hold was staged on 25a72c7f. Both autocommits failed
+  after 2.0 s. The commit was acknowledged, and the transaction row plus its
+  outcome row exist only on 25a72c7f.
+- The seed replica was still at 2/2/t1 at the end, 32 s after its client
+  rolled back.
+
+### What the measurement shows (design-gate item 2)
+
+1. **An ACTIVE transaction freezes its replica's consensus participation.**
+   - Staging replica state for the whole hold (runs 7 and 8):
+     - log index, applied index and hard state did not change;
+     - the replica kept believing it was leader at term 1.
+   - Rest of the partition:
+     - the followers elected a new leader past it within about 5 s (terms
+       2, 4, 5);
+     - the only write that was acknowledged went to that new leader.
+   - The rs-raft store refuses every write while the user transaction holds
+     the shared connection, so the replica can neither append, apply,
+     heartbeat, nor step down.
+2. **Acknowledged Raft state is NOT erased by the client rollback, today.**
+   - Across both releases in both runs, no replica's log or applied index
+     went down.
+   - The rolled-back row is on no replica.
+   - The acknowledged joiner row (run 7) survived on the two replicas that
+     committed it.
+   - This holds only because the rs-raft admission keeps consensus writes
+     out of the user transaction. No write happened inside it that could be
+     erased. The owner's T-A property in its literal form ("an unrelated
+     acknowledged write survives the client rollback on all replicas") is
+     **not** met: the acknowledged row is **absent from the staging
+     replica**. That replica never caught up in the observation window: it
+     was still at log 2 up to 70 s after the rollback (run 7) and 32 s
+     after it (run 8).
+3. **The client's ROLLBACK did not release the staging replica's
+   transaction** (runs 7 and 8).
+   - The staging replica's log reported "Stuck transaction heal deferred:
+     rolling back on a leader/candidate would re-mint acked raft indices",
+     with role=leader, once per second.
+   - It started about 60 s after the hold's BEGIN, which is the ACTIVE hold
+     timeout. That is about 30 s after the client's ROLLBACK had completed (32 s in run 7, 29 s in run 8), and
+     it continued until the cluster was stopped.
+   - In run 7 it logged "Replica local durability is unfit for leadership"
+     at BEGIN+63 s, and "Durability-unfit leader demoted WITHOUT a provable
+     successor" at BEGIN+78 s. The heal was still deferred after that.
+   - So the participant's BEGIN IMMEDIATE outlived the application's
+     rollback. The only paths out are the time-based hold sweep and the
+     durability-fitness demotion.
+   - The routing cause is unmeasured, because the debug-level lines are not
+     available. The hypothesis is that the rollback was delivered to the new
+     leader, which has no such session and answers idempotently.
+4. **Autocommit writes do not wait for the transaction to close.**
+   - Across 4 variants, a write sent to the holding replica was refused after
+     2.0 s with `DISTRIBUTED_PARTICIPANT_FAILURE`, deferred=false and
+     retryAfterMs=null. That is the partition's 2 s user-transaction deferral
+     budget, surfaced to the application as a definite, non-retryable
+     failure.
+   - A write succeeded only when it reached a new leader (1 of 4).
+   - None was deferred until the transaction closed.
+   - With COMMIT, the autocommit writes had already failed before the commit
+     (-26 s relative to the release).
+5. **Answer correctness (lab run 6, unsteady partition,
+   `evidence/lab6/`).**
+   - That run started while the new table's partition was still adding its
+     third replica: 2 voters, a leader change from term 1 to term 8 during
+     the hold.
+   - There, the hold's INSERT and both autocommits were answered
+     `DISTRIBUTED_PARTICIPANT_FAILURE` (deferred=false) after 30 s.
+   - Yet all three rows were then present on both voter replicas (log 2 to
+     5).
+   - So definite failure answers were returned for writes that committed.
+     That breaks the "lost ack must not be reported as failure" rule, and
+     the directive's rule that missing evidence is never upgraded.
+   - The transaction's INSERT also became durable even though its
+     transaction failed.
+   - The steady-partition gate was added so that T-A measures the ACTIVE
+     transaction and not this. The run-6 behaviour is a separate finding for
+     the write-answer classification owner.
+
+### Witness
+
+F-TX-ACTIVE-OWNS-CONNECTION. The committed test asserts, per variant:
+
+- the autocommit issued on the holding node's session during the hold is
+  refused, and not deferred;
+- no replica's consensus log shrinks across the release;
+- the transaction row is on 0 replicas (ROLLBACK) or exactly 1 replica
+  (COMMIT, F-TX-REPLICATED-APPLY);
+- whenever the partition committed a write during the hold, a replica's log
+  and applied index stayed frozen for the whole hold.
+
+The witness flips when the ACTIVE transaction stops owning the replica's
+connection. The stale-leader, never-caught-up and orphaned-BEGIN
+observations are recorded in the evidence JSON and in this document, but
+not asserted: they depend on timing.
