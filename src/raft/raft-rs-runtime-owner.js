@@ -965,7 +965,7 @@ function announce(group, expectedGeneration) {
 
 // A conf-change proposal the core would drop is deferred typed, read from
 // the core's status and configuration in this turn (verification V2).
-function deferredConfChange(group, expectedGeneration) {
+function deferredConfChange(group, expectedGeneration, change) {
   const status = invokeCoreAt(group, expectedGeneration, 'status');
   if (!status.ok) {
     return status.result;
@@ -975,7 +975,7 @@ function deferredConfChange(group, expectedGeneration) {
   if (!conf.ok) {
     return conf.result;
   }
-  return confChangeProposalDeferral(status.value, conf.value);
+  return confChangeProposalDeferral(status.value, conf.value, change);
 }
 
 // The configuration's voter-bearing and learner parts as one comparable key.
@@ -1288,7 +1288,7 @@ function performCommand(group, command, expectedGeneration) {
     });
   }
   const deferred = command.type === PROPOSE_CONF_CHANGE ?
-    deferredConfChange(group, expectedGeneration) : null;
+    deferredConfChange(group, expectedGeneration, command.change) : null;
   if (deferred !== null) {
     return deferred;
   }

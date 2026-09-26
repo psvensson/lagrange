@@ -34,15 +34,18 @@ function hasPendingConfChange(status) {
 
 /**
  * The deferral of a conf-change proposal the core would drop, or null when
- * the core takes it.
+ * the core takes it. In a joint configuration the one change the core takes
+ * is the leave (a change with no steps); any other waits for it.
  * @param {Object} status - The core's status.
  * @param {Object} confState - The core's configuration.
+ * @param {Object} change - The normalized ConfChangeV2 ({changes}).
  * @return {Object|null} Frozen HOST_FAILURE deferral (retryable, the group
  *   usable), or null.
  */
-function confChangeProposalDeferral(status, confState) {
-  if (!hasPendingConfChange(status) &&
-      (confState?.votersOutgoing || []).length === 0) {
+function confChangeProposalDeferral(status, confState, change) {
+  const joint = (confState?.votersOutgoing || []).length > 0;
+  const leavesJoint = (change?.changes || []).length === 0;
+  if (!hasPendingConfChange(status) && !(joint && !leavesJoint)) {
     return null;
   }
   return deepFreeze({

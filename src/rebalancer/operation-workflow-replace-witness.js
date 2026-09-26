@@ -22,10 +22,11 @@ import {
 import {
   PARTITION_REPLICA_MEMBERSHIP_STATE,
 } from '../partition/partition-replica-membership-constants.js';
+import {assertCanonicalRebalancerEntityIdentity} from
+  './rebalancer-entity-identity.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
-  SERVICE_TYPE,
   resolveOperationHandlerType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
@@ -82,8 +83,18 @@ async function deliverToReplaceWitness(owner, operation, messageType,
       reason: ReplaceWitnessDeliveryOutcome.IDENTITY_UNAVAILABLE,
     };
   }
-  const handlerType = resolveOperationHandlerType(
-    operation.entityType || SERVICE_TYPE.PARTITION);
+  // The operation's own typed entity identity (never a partition default):
+  // an operation without a canonical one has no witness to address.
+  let handlerType;
+  try {
+    handlerType = resolveOperationHandlerType(
+      assertCanonicalRebalancerEntityIdentity(operation).entityType);
+  } catch {
+    return {
+      outcome: ReplaceWitnessDeliveryOutcome.IDENTITY_UNAVAILABLE,
+      reason: ReplaceWitnessDeliveryOutcome.IDENTITY_UNAVAILABLE,
+    };
+  }
   try {
     const response = await owner.messageRouter.deliver(
       `${targetNodeId}/service/${handlerType}`,
