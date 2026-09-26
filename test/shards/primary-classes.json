@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1911,
+    "unit": 1913,
     "integration": 78,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2178,
-  "digest": "fnv1a32-0131fb1c",
+  "censusSize": 2180,
+  "digest": "fnv1a32-4e2333ae",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -807,6 +807,7 @@
     "test/distributed/harness/__tests__/disk-full-under-load-scenario.test.js": "unit",
     "test/distributed/harness/__tests__/distributed-failure-analyzer-load-metrics-fallback.test.js": "unit",
     "test/distributed/harness/__tests__/distributed-matrix-plan.test.js": "unit",
+    "test/distributed/harness/__tests__/docker-build-context.test.js": "unit",
     "test/distributed/harness/__tests__/docker-provider.test.js": "unit",
     "test/distributed/harness/__tests__/examples-catalog-scenario.test.js": "unit",
     "test/distributed/harness/__tests__/failure-bundle-dominant-reason-denoise.test.js": "unit",
@@ -861,6 +862,7 @@
     "test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js": "unit",
     "test/distributed/harness/__tests__/progress-wait.test.js": "unit",
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": "unit",
+    "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js": "unit",
     "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js": "unit",
     "test/distributed/harness/__tests__/publication-evidence-replay.test.js": "unit",
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": "unit",

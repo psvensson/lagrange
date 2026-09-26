@@ -17,28 +17,22 @@
  */
 
 import assert from 'node:assert/strict';
-import {copyFile, mkdir, readFile, rm, symlink} from 'node:fs/promises';
-import path from 'node:path';
-import {
-  runBuild,
-  runDeploy,
-  runGenerate,
-} from '../../../src/cli/service-pipeline-command.js';
-import {
-  ServiceLocalOciLayoutBuilder,
-} from '../../../src/service/service-local-oci-layout-builder.js';
 import {
   createInvocationIdentity,
 } from '../../../src/service/request-cell-routing-contract.js';
 import {
   PORTS,
   REQUEST_CELL_AUTH,
-  SCENARIO_ARTIFACTS,
 } from '../harness/constants.js';
+import {
+  createServicePipeline,
+  deployThroughPipeline,
+  prepareServiceProject,
+  readDeploymentManifest,
+} from './service-pipeline-deployment-helpers.js';
 import {
   buildUserActivityTableSql,
   createTableTopologyHelpers,
-  queryRows,
   selectSettledPartitionRows,
   topologyFingerprint,
 } from './user-table-topology-helpers.js';
@@ -62,18 +56,7 @@ import {
 const SCENARIO_NAME = 'public-path-multinode-baseline';
 const TABLE_NAME = 'account_activity';
 const SCENARIO_SUBDIR = 'public-path-baseline';
-// The service module is copied two levels below the artifacts root so its
-// relative `../../src/...` imports resolve through the src symlink placed
-// at the artifacts root (see defaultPrepareProject).
-const PROJECT_SUBDIR = 'project';
-const SOURCE_SYMLINK_NAME = 'src';
-const SERVICE_MODULE_FILE = 'lagrange.service.js';
-const SERVICE_MODULE_SOURCE = path.join(
-  'examples', 'call-binding-account-summary', SERVICE_MODULE_FILE);
-const MANIFEST_RELATIVE_PATH = path.join(
-  '.lagrange', 'deployment', 'manifest.json');
 const UTF8_ENCODING = 'utf8';
-
 const ZERO = 0;
 const ONE = 1;
 const MIN_PARTITION_COUNT = 2;
@@ -130,37 +113,6 @@ function defaultResourceSnapshot(cluster) {
   };
 }
 
-async function defaultPrepareProject() {
-  const artifactsRoot = path.resolve(
-    process.cwd(), SCENARIO_ARTIFACTS.HOST_RELATIVE_PATH);
-  const scenarioDirectory = path.join(artifactsRoot, SCENARIO_SUBDIR);
-  const projectDirectory = path.join(scenarioDirectory, PROJECT_SUBDIR);
-  await rm(scenarioDirectory, {force: true, recursive: true});
-  await mkdir(projectDirectory, {recursive: true});
-  // The service module imports ../../src/authoring/*; from
-  // <root>/public-path-baseline/project/ that resolves to <root>/src,
-  // the symlink to the repo source created here. The link target must be
-  // RELATIVE: ComponentizeJS resolves imports inside a WASI preopen that
-  // rejects absolute symlink targets as sandbox escapes (verified live).
-  // Recreated every run so a checkout move can never leave a stale link.
-  const sourceLink = path.join(artifactsRoot, SOURCE_SYMLINK_NAME);
-  await rm(sourceLink, {force: true});
-  await symlink(
-    path.relative(
-      artifactsRoot, path.resolve(process.cwd(), SOURCE_SYMLINK_NAME)),
-    sourceLink);
-  await copyFile(
-    path.resolve(process.cwd(), SERVICE_MODULE_SOURCE),
-    path.join(projectDirectory, SERVICE_MODULE_FILE),
-  );
-  return {artifactsRoot, projectDirectory};
-}
-
-async function defaultReadManifest(projectDirectory) {
-  return JSON.parse(await readFile(
-    path.join(projectDirectory, MANIFEST_RELATIVE_PATH), UTF8_ENCODING));
-}
-
 function resolveScenarioDependencies(cluster) {
   const overrides =
     cluster?._scenarioOverrides?.publicPathBaseline || {};
@@ -172,17 +124,10 @@ function resolveScenarioDependencies(cluster) {
       DEFAULT_INVOCATION_COUNT,
     logBuffer: overrides.logBuffer ||
       (() => cluster.getLogCollector().getBuffer()),
-    pipeline: overrides.pipeline || {
-      runBuild: (options) => runBuild({
-        ...options,
-        createLocalOciLayoutBuilder:
-          () => new ServiceLocalOciLayoutBuilder(),
-      }),
-      runDeploy,
-      runGenerate,
-    },
-    prepareProject: overrides.prepareProject || defaultPrepareProject,
-    readManifest: overrides.readManifest || defaultReadManifest,
+    pipeline: overrides.pipeline || createServicePipeline(),
+    prepareProject: overrides.prepareProject ||
+      (() => prepareServiceProject(SCENARIO_SUBDIR)),
+    readManifest: overrides.readManifest || readDeploymentManifest,
     resourceSnapshot: overrides.resourceSnapshot ||
       defaultResourceSnapshot(cluster),
     runId: typeof overrides.runId === 'string' ?
@@ -251,28 +196,6 @@ async function waitForSplitAndLeaderSpread(nodes, seedNode, deps) {
     `${deps.splitWaitTimeoutMs}ms: ` +
     JSON.stringify(lastRows),
   );
-}
-
-// Deploy replays the generated records through the pipeline owner; the
-// SQL client is the harness admin lane into the same grammar ingress.
-async function deployThroughPipeline(seedNode, deps, paths, layoutPath) {
-  const containerLayoutPath = path.posix.join(
-    SCENARIO_ARTIFACTS.CONTAINER_PATH,
-    path.relative(paths.artifactsRoot, layoutPath)
-      .split(path.sep).join(path.posix.sep),
-  );
-  const sqlClient = {
-    execute: async (statement, parameters) => ({
-      rows: await queryRows(seedNode, statement, parameters),
-    }),
-  };
-  return deps.pipeline.runDeploy({
-    createSqlClient: () => sqlClient,
-    idempotencyKey: deps.runId,
-    layoutPath: containerLayoutPath,
-    projectDirectory: paths.projectDirectory,
-    writeOutput: deps.writeOutput,
-  });
 }
 
 function basicAuthorizationHeader() {

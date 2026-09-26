@@ -581,6 +581,27 @@
         "test/release/public-consumer-contract-ratchet.test.js",
         "test/test-helpers/topology-leak-check.test.js"
       ]
+    },
+    "public-seam-durability-certification-source": {
+      "description": "The runtime's default consensus provider (provider-control owner) decides the public-seam durability scenario's certification status line (PREPARED_BLOCKED_ON_RS_RAFT_CUTOVER vs CANDIDATE).",
+      "owners": [
+        "src/raft/raft-provider-control.js",
+        "src/raft/raft-provider-control-constants.js"
+      ],
+      "tests": [
+        "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js"
+      ]
+    },
+    "harness-docker-build-context": {
+      "description": "The distributed-harness image build context is derived from the Dockerfile's COPY sources; changing either must re-run the parity falsifier.",
+      "owners": [
+        "Dockerfile",
+        "test/distributed/harness/docker-build-context.js"
+      ],
+      "tests": [
+        "test/distributed/harness/__tests__/docker-build-context.test.js",
+        "test/distributed/harness/__tests__/docker-provider.test.js"
+      ]
     }
   },
   "coupledPairs": {
