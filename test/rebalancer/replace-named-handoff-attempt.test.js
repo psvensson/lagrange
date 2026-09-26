@@ -60,6 +60,16 @@ import {
   REPLICA_HANDLER_LEADER_HANDOFF_BRANCH,
 } from '../../src/node/replica-handler-leader-handoff-methods.js';
 import {createTestCoordinator} from './test-helpers.js';
+import {
+  readReplaceOwnerDiagnostic,
+  recordReplaceOwnerWait,
+} from '../../src/rebalancer/operation-workflow-replace-owner.js';
+import {
+  REPLACE_OWNER_PHASE,
+} from '../../src/rebalancer/operation-workflow-replace-owner-recovery.js';
+import {
+  REBALANCE_COORDINATOR_DEFER_REASON,
+} from '../../src/rebalancer/rebalancer-constants.js';
 import {createReplaceWitness} from './replace-witness-fixture.js';
 import {
   createPublishedPlanningReadinessService,
@@ -367,6 +377,41 @@ test('BR11: only a fresh read of the target leading authorizes removal; a ' +
     await harness.coordinator.executeOperation(harness.operation);
     t.equal(harness.removals().length, 1,
       'the target leading (fresh read) lets removal proceed');
+  } finally {
+    await harness.shutdown();
+  }
+});
+
+// S9 hygiene (fix-f1, the instrumented SLO classification): an ACTIVE wait's
+// phase label and attempt fields derive from the named-handoff decision the
+// owner last took, not from the R-1f retirement map or a witness-less
+// re-classification. Here attempt 1 is accepted and the decision read the
+// target leading (LEADERSHIP_SAFE); a later ACTIVE wait (another check
+// deferring) must not read "attempt unresolved" with no attempt.
+test('S9: an ACTIVE wait after the named handoff decided safe reads the ' +
+  'handoff attempt, not an unresolved phase with no attempt', async (t) => {
+  const harness = await createHarness();
+  try {
+    await harness.coordinator.executeOperation(harness.operation);
+    const attempt = readReplaceHandoffAttempt(harness.owner,
+      harness.operation.operationId);
+    t.equal(attempt.answerClass, REPLACE_HANDOFF_ANSWER_CLASS.ACCEPTED,
+      'setup: attempt accepted');
+    harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+    const evaluation =
+      await harness.owner.evaluateReplaceNamedHandoffSafety(harness.operation);
+    t.equal(evaluation.classification, 'safe',
+      'setup: the named handoff decided safe (the target leads)');
+    recordReplaceOwnerWait(harness.owner, harness.operation,
+      REBALANCE_COORDINATOR_DEFER_REASON.REPLACE_REMOVE_SAFETY_BLOCKED);
+    const diagnostic = readReplaceOwnerDiagnostic(harness.owner,
+      harness.operation.operationId);
+    t.equal(diagnostic.ownerPhase, REPLACE_OWNER_PHASE.ACTIVE_DEFERRING,
+      'the phase is the one the decision read: not attempt-unresolved');
+    t.equal(diagnostic.lastAttemptSeq, attempt.attemptSeq,
+      'the last attempt is the handoff attempt');
+    t.equal(diagnostic.lastAttemptUncertain, false,
+      'the accepted attempt is not uncertain');
   } finally {
     await harness.shutdown();
   }
