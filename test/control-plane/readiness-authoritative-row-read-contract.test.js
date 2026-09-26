@@ -38,18 +38,25 @@ const UNAVAILABLE_ERROR = 'authoritative_row_source_unavailable';
 // Every shape an authoritative row read answers with: an explicit success
 // with rows or none, an explicit failure, a result without an outcome (with
 // or without rows), and no result at all.
+// Each shape carries the rows the read-source contract answers with, written
+// from the contract's statement (only an explicit success is an answer;
+// anything else falls back to the row source), not from either reader's
+// code: the differential alone cannot see a rule both readers share.
+const CACHE_ROWS = [CACHE_NODE_ID];
 const AUTHORITATIVE_RESULT_SHAPES = [
   ['explicit success with rows', () => ({
     success: true,
     rows: [createActiveNode(AUTHORITATIVE_NODE_ID)],
-  })],
-  ['explicit success without rows', () => ({success: true, rows: []})],
-  ['explicit failure', () => ({success: false, error: UNAVAILABLE_ERROR})],
+  }), [AUTHORITATIVE_NODE_ID]],
+  ['explicit success without rows', () => ({success: true, rows: []}), []],
+  ['explicit failure', () => ({success: false, error: UNAVAILABLE_ERROR}),
+    CACHE_ROWS],
   ['rows without an outcome', () => ({
     rows: [createActiveNode(AUTHORITATIVE_NODE_ID)],
-  })],
-  ['an error without an outcome', () => ({error: UNAVAILABLE_ERROR})],
-  ['no result', () => null],
+  }), CACHE_ROWS],
+  ['an error without an outcome', () => ({error: UNAVAILABLE_ERROR}),
+    CACHE_ROWS],
+  ['no result', () => null, CACHE_ROWS],
 ];
 
 function nodeIdsOf(rows) {
@@ -58,7 +65,8 @@ function nodeIdsOf(rows) {
 
 test('the readiness list reader and the membership publication coordinator ' +
   'answer every authoritative row-read shape alike', async (t) => {
-  for (const [label, buildResult] of AUTHORITATIVE_RESULT_SHAPES) {
+  for (const [label, buildResult, contractRows] of
+    AUTHORITATIVE_RESULT_SHAPES) {
     const cache = createCache({nodes: [createActiveNode(CACHE_NODE_ID)]});
     const coordinator = new MembershipPublicationCoordinatorReads({
       nodeId: 'seed-node',
@@ -89,6 +97,8 @@ test('the readiness list reader and the membership publication coordinator ' +
     });
     t.same(nodeIdsOf(readinessRows), nodeIdsOf(coordinatorRows),
       `${label}: both readers answer the same rows`);
+    t.same(nodeIdsOf(readinessRows), contractRows,
+      `${label}: the readiness reader answers the contract's rows`);
     readiness.shutdown();
   }
 });
