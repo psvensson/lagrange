@@ -6,7 +6,7 @@
  * embedded-node-worker.js) must reach Lagrange only through the public package
  * entry `src/public-api.js`. This pins that import census, the exposure codec
  * that carries everything the application observed back to the parent, the
- * topology-leak detector the suites share. No process or node is started
+ * shared topology-leak check's snapshot reading. No process or node is started
  * here; the IPC round trip itself is exercised by the multi-node suites.
  */
 
@@ -20,10 +20,7 @@ import {
   expose,
   exposedProperty,
 } from '../integration/helpers/embedded-node-protocol.js';
-import {
-  SESSION_KEY_FRAGMENT,
-  findTopologyLeaks,
-} from '../integration/helpers/public-surface-leak.js';
+import {findTopologyLeaks} from '../../src/test-helpers/topology-leak-check.js';
 
 const HELPERS = new URL('../integration/helpers/', import.meta.url);
 const WORKER_URL = new URL('embedded-node-worker.js', HELPERS);
@@ -34,7 +31,6 @@ const NODE_BUILTIN_PREFIX = 'node:';
 const IMPORT_SPECIFIER_PATTERN =
   /(?:\bfrom\s*|\bimport\s*\(?\s*)['"]([^'"]+)['"]/g;
 const NODE_ID = '6a6be293-dbd7-4a81-999d-1153f09d18e1';
-const PARTITION_ID = 'acceptance_objects-p1';
 
 function importSpecifiers(url) {
   const source = readFileSync(url, 'utf8');
@@ -97,40 +93,10 @@ test('exposure snapshots keep everything the application could observe', async (
   t.ok(bytes.equals(param), 'bind bytes survive JSON IPC exactly');
 });
 
-test('the topology-leak detector fails raw engine shapes and passes the public shape', async (t) => {
-  const rawSelect = {
-    success: true,
-    rows: [{id: 'a'}],
-    partitions: [PARTITION_ID],
-    readAuthorityWitnesses: [{servingNodeId: NODE_ID, term: 3}],
-    timestamp: `1790412099886-0-${NODE_ID}`,
-  };
-  const leakPaths = findTopologyLeaks(rawSelect, {forbiddenValues: [NODE_ID]})
-    .map((leak) => leak.path);
-  t.ok(leakPaths.includes('$.partitions'), 'partitions key is a leak');
-  t.ok(leakPaths.includes('$.readAuthorityWitnesses'), 'witness key is a leak');
-  t.ok(leakPaths.includes('$.timestamp'), 'a node id inside a value is a leak');
-
+test('the shared topology-leak check reads exposure snapshots', async (t) => {
   const causeLeak = new Error('failed', {cause: Object.assign(new Error('x'),
     {participantNodeId: 'n'})});
-  t.same(findTopologyLeaks(causeLeak).map((leak) => leak.path),
-    ['$.cause.participantNodeId'], 'a leak through cause is found (live value)');
   t.same(findTopologyLeaks(expose(causeLeak)).map((leak) => leak.path),
-    ['$.cause.participantNodeId'], 'and through the exposure snapshot');
-
-  const publicShape = Object.freeze(Object.assign(Object.create(null),
-    {rows: [{id: 'a', note: 'n'}], affectedRows: 0}));
-  t.same(findTopologyLeaks(publicShape, {forbiddenValues: [NODE_ID]}), [],
-    'the public {rows, affectedRows} shape passes');
-  t.same(findTopologyLeaks({rows: [{partition_id: 'user'}]},
-    {allowedKeys: ['partition_id']}), [],
-  'an application-declared column can be exempted explicitly');
-  t.same(findTopologyLeaks({retryAfterMs: 1, determinant: 2, explain: 3}), [],
-    'a fragment matches only at a word start (retryAfterMs is not a term)');
-  t.same(findTopologyLeaks({'routedToNode': 1, 'leader_node_id': 2, 'plan-id': 3})
-    .map((leak) => leak.path), ['$.routedToNode', '$.leader_node_id', '$.plan-id'],
-  'camelCase, snake_case and kebab keys are all split into words');
-  t.same(findTopologyLeaks({sessionId: 's'},
-    {extraKeyFragments: [SESSION_KEY_FRAGMENT]}).map((leak) => leak.path),
-  ['$.sessionId'], 'session identity is detectable on request');
+    ['$.cause.participantNodeId'],
+    'a leak through cause is found in the cross-process snapshot form');
 });

@@ -1,40 +1,35 @@
 /**
- * Public Application Database transactions across partitions (I2).
+ * Public Application Database transaction FACADE semantics (I2 partial).
+ *
+ * SCOPE: single-runtime, coordinator-visible facade semantics - rollback,
+ * caught failure, control-SQL refusal, session isolation, public result
+ * shape. NOT distributed durability: I2 (atomic, replicated outcome across
+ * nodes) is BLOCKED, see finding F-TX-REPLICATED-APPLY (quest
+ * distributed-transaction-replicated-apply): a committed transaction's rows
+ * exist only on the replica that staged them, because followers applying the
+ * TRANSACTION_COMMIT marker never run its operations. Nothing here asserts or
+ * implies visibility, durability or atomicity on any other replica.
  *
  * The application (test/integration/helpers/embedded-node-worker.js, public
- * package entry only) writes a two-table fixture, `current` and `history`:
- * two tables are two partitions, so every transaction below touching both is
- * a two-participant (2PC) transaction through the one coordinator
- * (src/query/distributed/distributed-transaction-protocol.js) behind
- * `db.transaction` (src/query/application-database.js).
+ * package entry only) runs on ONE embedded runtime
+ * (helpers/public-application-database-shape.js) against `current` and
+ * `history`: two tables, two partitions, so each transaction touching both
+ * has two participants in the one coordinator behind `db.transaction`
+ * (src/query/application-database.js). With a single runtime every read is
+ * served by the same replica that staged the writes, so what is observed is
+ * exactly the coordinator-visible state.
  *
- * What this proves, precisely:
- * - ATOMIC OUTCOME: a committed transaction's writes are all durable and
- *   become visible to another session; a failed transaction leaves NONE of its
- *   staged writes, whether the first or a later statement fails, and even when
- *   the callback catches the failure and continues (the first failure dooms
- *   the transaction), or tries raw COMMIT text (TRANSACTION_CONTROL_RESERVED).
- * - SHAPE: the committed size is ONE runtime
- *   (helpers/public-application-database-shape.js). On three processes the lab
- *   showed FINDING F-2PC-REPLICA-VISIBILITY: a committed transaction's rows
- *   exist only on the replica that staged them (followers applying the
- *   TRANSACTION_COMMIT marker never run its operations), so reads routed to a
- *   follower return [] for committed rows. Owned by the partition transaction
- *   owner, not this seam; the multi-process proof waits on that fix.
- * - Absence is proven with a sentinel, never with a sleep: after a failed
- *   transaction, an autocommit sentinel is written to the SAME tables; once
- *   the reader sees both sentinels, a durable staged write would be visible
- *   too. This holds only when the reader and writer see the same replica
- *   (one runtime); with per-read replica selection across processes it does
- *   not, which is part of why the multi-process shape is blocked.
- * - The application never receives a session identity. Concurrent
- *   top-level transactions on the SAME partitions do NOT commit independently
- *   today: see the F-2PC-CONCURRENT-PARTICIPANT witness below.
- * - NOT proven and NOT promised: that a concurrent reader on another node
- *   never observes one participant's writes before the other's (commit
- *   fan-out is sequential per participant; visibility is not atomic across
- *   partitions). The suite samples the reader and REPORTS any half-visible
- *   observation without asserting on it.
+ * What this shows at that scope:
+ * - a committed callback's writes are readable from another session of the
+ *   same runtime, and every tx.query result has the public shape;
+ * - a failed callback (first or later statement, a caught failure, or raw
+ *   COMMIT text -> TRANSACTION_CONTROL_RESERVED) rejects with an
+ *   ApplicationDatabaseError and leaves none of its writes readable on this
+ *   runtime (checked after autocommit sentinels in both tables, never by
+ *   sleeping);
+ * - the application never receives a session identity or topology.
+ * Concurrent top-level transactions on the SAME partitions do NOT commit
+ * independently today: see the F-2PC-CONCURRENT-PARTICIPANT witness.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -49,7 +44,7 @@ import {
 import {
   SESSION_KEY_FRAGMENT,
   findTopologyLeaks,
-} from './helpers/public-surface-leak.js';
+} from '../../src/test-helpers/topology-leak-check.js';
 import {
   TRANSACTIONS_CLUSTER_SIZE,
   TRANSACTIONS_TEST_TIMEOUT_MS,
@@ -86,7 +81,7 @@ function isPublicResultSnapshot(snapshot) {
       JSON.stringify(PUBLIC_RESULT_KEYS);
 }
 
-test('public application database transactions are atomic in outcome across partitions', {
+test('public application database transaction facade semantics (single runtime, coordinator-visible; not distributed durability)', {
   timeout: TRANSACTIONS_TEST_TIMEOUT_MS,
 }, async (t) => {
   const cluster = createEmbeddedCluster(t);
@@ -107,7 +102,7 @@ test('public application database transactions are atomic in outcome across part
   let sentinelSequence = 0;
 
   // Proves absence: once the reader sees fresh sentinels in BOTH tables, any
-  // durable staged write committed before them would be visible as well.
+  // staged write committed before them on this runtime would be visible too.
   async function readAfterSentinels(t) {
     sentinelSequence++;
     const id = `sentinel-${sentinelSequence}`;
@@ -126,7 +121,7 @@ test('public application database transactions are atomic in outcome across part
   await mustQuery(writer, sessionA, SQL.CREATE_CURRENT);
   await mustQuery(writer, sessionA, SQL.CREATE_HISTORY);
 
-  await t.test('I2.1 a committed two-partition transaction is durable and visible', async (t) => {
+  await t.test('I2.1 facade: a committed two-participant callback is readable from another session of the same runtime', async (t) => {
     const result = keepTransaction('I2.1', await writer.transaction(sessionA, [
       insertCurrent('c1', 'v1'),
       insertHistory('h1', 'c1', 'v1'),
@@ -156,7 +151,7 @@ test('public application database transactions are atomic in outcome across part
       'asserted: cross-partition visibility is not atomic)');
   });
 
-  await t.test('I2.2 a failed later statement leaves neither staged write', async (t) => {
+  await t.test('I2.2 facade: a failed later statement rejects and leaves neither write readable on this runtime', async (t) => {
     const result = keepTransaction('I2.2', await writer.transaction(sessionA, [
       insertCurrent('c2', 'staged'),
       insertHistory('h1', 'c2', 'duplicate primary key'),
@@ -166,12 +161,12 @@ test('public application database transactions are atomic in outcome across part
       'the callback rejects with an ApplicationDatabaseError');
     await readAfterSentinels(t);
     t.same(await readerRows(SQL.READ_CURRENT, 'c2'), [],
-      'the first (successful) statement was not made durable');
+      'the first (successful) statement is not readable on this runtime');
     t.same(await readerRows(SQL.READ_HISTORY, 'h1'),
       [{id: 'h1', current_id: 'c1', value: 'v1'}], 'the duplicate target is intact');
   });
 
-  await t.test('I2.2b a failed first statement leaves neither staged write', async (t) => {
+  await t.test('I2.2b facade: a failed first statement rejects and leaves neither write readable on this runtime', async (t) => {
     const result = keepTransaction('I2.2b', await writer.transaction(sessionA, [
       insertCurrent('c1', 'duplicate primary key'),
       insertHistory('h2', 'c1', 'staged'),
@@ -183,7 +178,7 @@ test('public application database transactions are atomic in outcome across part
     t.same(await readerRows(SQL.READ_CURRENT, 'c1'), [{id: 'c1', value: 'v1'}]);
   });
 
-  await t.test('I2.3 a caught failure still dooms the transaction', async (t) => {
+  await t.test('I2.3 facade: a caught failure still dooms the transaction', async (t) => {
     const result = keepTransaction('I2.3', await writer.transaction(sessionA, [
       insertCurrent('c1', 'duplicate primary key', true),
       insertHistory('h3', 'c1', 'after caught failure', true),
@@ -201,7 +196,7 @@ test('public application database transactions are atomic in outcome across part
     t.same(await readerRows(SQL.READ_HISTORY, 'h3'), []);
   });
 
-  await t.test('I2.3b raw COMMIT text is reserved and dooms the transaction', async (t) => {
+  await t.test('I2.3b facade: raw COMMIT text is reserved and dooms the transaction', async (t) => {
     const result = keepTransaction('I2.3b', await writer.transaction(sessionA, [
       insertCurrent('c4', 'staged before raw commit'),
       {sql: SQL.RAW_COMMIT, params: [], swallow: true},
@@ -224,7 +219,7 @@ test('public application database transactions are atomic in outcome across part
   // application as an untyped INTERNAL_ERROR (not retryable, not deferred),
   // and the contract in architecture/process-replication.md (snapshot
   // isolation, first-committer-wins at prepare) is not what runs. The loser
-  // leaves nothing durable. When the owner admits concurrent sessions (or
+  // leaves nothing readable on this runtime. When the owner admits concurrent sessions (or
   // types the conflict as retryable), replace this witness with "both commit".
   await t.test('F-2PC-CONCURRENT-PARTICIPANT witness: a concurrent transaction on the same partitions is refused', async (t) => {
     const [first, second] = await Promise.all([
@@ -258,11 +253,11 @@ test('public application database transactions are atomic in outcome across part
     await readAfterSentinels(t);
     const loserIds = winner[0] === 'c5' ? ['c6', 'h6'] : ['c5', 'h5'];
     t.same(await readerRows(SQL.READ_CURRENT, loserIds[0]), [],
-      'the refused transaction left nothing durable');
+      'the refused transaction left nothing readable on this runtime');
     t.same(await readerRows(SQL.READ_HISTORY, loserIds[1]), []);
   });
 
-  await t.test('I2 no transaction outcome carries topology or a session identity', async (t) => {
+  await t.test('I2 facade: no transaction outcome carries topology or a session identity', async (t) => {
     const forbiddenValues = [
       ...cluster.nodes.map((node) => node.nodeId),
       `application:${APPLICATION_ID}:`,

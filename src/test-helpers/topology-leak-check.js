@@ -1,33 +1,57 @@
-// Topology-leak detector for values an application receives from Lagrange.
+// Topology-leak check for values a public-seam consumer receives.
 //
 // The public Application Database surface must never hand an application the
 // cluster's shape: no partition, node, replica, leader, term, epoch, read
-// witness, participant, plan, routing target or address, under any key and in
-// any value. This walks EVERYTHING a consumer could observe - every own key
-// (enumerable or not), recursively, including error `cause` chains - and
-// reports each violation with its path. It accepts either a live value or an
-// exposure snapshot produced by embedded-node-worker.js (the cross-process
-// form), so in-process and multi-process suites share one definition.
+// witness, participant, plan, routing target, address or similar, under any
+// key and in any value. This walks EVERYTHING a consumer could observe - every
+// own key (enumerable or not), recursively, including error `cause` chains -
+// and reports each violation with its path. It accepts either a live value or
+// an exposure snapshot (`{__kind: 'object', properties: {key: {value}}}`, the
+// cross-process form produced by test/integration/helpers/
+// embedded-node-protocol.js), so in-process and multi-process suites share
+// one definition. Test-only: nothing under src/ outside test-helpers imports it.
 
-// A key is a leak when a word of it STARTS one of these (see keyWords).
+// A key is a leak when a word of it STARTS one of these (see keyWords). The
+// union of the track A list and the public-seam durability scenario list
+// (test/distributed/scenarios/public-seam-durability-constants.js
+// PUBLIC_SEAM_TOPOLOGY_KEY_FRAGMENTS) plus `routedto`; a legitimate
+// application key that happens to match (plan_name, address_line1,
+// terms_accepted) is exempted per call through `allowedKeys`.
 const TOPOLOGY_KEY_FRAGMENTS = Object.freeze([
-  'partition',
-  'node',
-  'replica',
-  'leader',
-  'term',
-  'epoch',
-  'witness',
-  'participant',
-  'plan',
-  'routedto',
   'address',
+  'candidate',
+  'election',
+  'endpoint',
+  'epoch',
+  'follower',
+  'holder',
+  'host',
+  'leader',
+  'lease',
+  'member',
+  'node',
+  'owner',
+  'participant',
+  'partition',
+  'peer',
+  'placement',
+  'plan',
+  'quorum',
+  'replica',
+  'role',
+  'routedto',
+  'shard',
+  'term',
+  'voter',
+  'witness',
 ]);
 
 const SESSION_KEY_FRAGMENT = 'session';
 const SNAPSHOT_OBJECT_KIND = 'object';
 const SNAPSHOT_BYTES_KIND = 'bytes';
 const PATH_ROOT = '$';
+const WORD_BREAK_REPLACEMENT = '$1 $2';
+const DATA_DESCRIPTOR_FIELD = 'value';
 
 /**
  * Split a key into lower-case words at camelCase, snake_case, kebab and dot
@@ -39,8 +63,8 @@ const PATH_ROOT = '$';
  */
 function keyWords(key) {
   return key
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/([a-z0-9])([A-Z])/g, WORD_BREAK_REPLACEMENT)
+    .replace(/([A-Z]+)([A-Z][a-z])/g, WORD_BREAK_REPLACEMENT)
     .split(/[^A-Za-z0-9]+/)
     .filter((word) => word.length > 0)
     .map((word) => word.toLowerCase());
@@ -64,7 +88,7 @@ function ownEntries(value) {
   }
   return Reflect.ownKeys(value).map((key) => {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return [String(key), Object.hasOwn(descriptor, 'value') ?
+    return [String(key), Object.hasOwn(descriptor, DATA_DESCRIPTOR_FIELD) ?
       descriptor.value :
       undefined];
   });

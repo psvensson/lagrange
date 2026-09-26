@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 151,
     "storage-raft": 102,
-    "test-infrastructure": 136,
+    "test-infrastructure": 137,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2175,
-  "digest": "fnv1a32-7a0fb1c9",
+  "censusSize": 2176,
+  "digest": "fnv1a32-df58ee8e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-183f13c2",
+  "observationDigest": "fnv1a32-253663c1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -999,7 +999,7 @@
     "test/integration/pgwire-rebalance.integration.test.js": "pgwire-compat",
     "test/integration/preflight-critical-path-hops.integration.test.js": "control-plane",
     "test/integration/public-application-database-multinode.integration.test.js": "query-sql",
-    "test/integration/public-application-database-transactions.integration.test.js": "query-sql",
+    "test/integration/public-application-database-transaction-facade.integration.test.js": "query-sql",
     "test/integration/raft-leader-election.integration.test.js": "storage-raft",
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "cdc-metadata",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "transport-messaging",
@@ -2028,6 +2028,7 @@
     "test/storage/sqlite-store.test.js": "storage-partition",
     "test/test-helpers/managed-timers.test.js": "test-infrastructure",
     "test/test-helpers/port-allocator.test.js": "test-infrastructure",
+    "test/test-helpers/topology-leak-check.test.js": "test-infrastructure",
     "test/threading/service-thread-manager.test.js": "services-runtime",
     "test/time/dt4-seam-collapse.test.js": "runtime-primitives",
     "test/time/pct-scheduler.test.js": "runtime-primitives",
@@ -6018,7 +6019,7 @@
         "test/integration/helpers/embedded-node-worker.js"
       ]
     },
-    "test/integration/public-application-database-transactions.integration.test.js": {
+    "test/integration/public-application-database-transaction-facade.integration.test.js": {
       "files": [
         "test/integration/helpers/embedded-node-worker.js"
       ]
@@ -6473,7 +6474,7 @@
         "src/query/application-database-error.js",
         "src/query/application-database.js",
         "src/query/application-runtime-generation.js",
-        "test/integration/helpers/public-surface-leak.js"
+        "src/test-helpers/topology-leak-check.js"
       ]
     },
     "test/query/callback-context.test.js": {

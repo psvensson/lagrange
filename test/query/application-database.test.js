@@ -13,7 +13,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {createApplicationRuntimeGeneration} from
   '../../src/query/application-runtime-generation.js';
 import {findTopologyLeaks} from
-  '../integration/helpers/public-surface-leak.js';
+  '../../src/test-helpers/topology-leak-check.js';
 
 function createCore(handler = null) {
   const calls = [];

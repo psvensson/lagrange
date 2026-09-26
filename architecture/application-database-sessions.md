@@ -123,6 +123,9 @@ it is the sole terminal decision: a failed, deferred, or uncertain commit is
 propagated and the facade never issues a competing rollback. The coordinator
 may already be `COMMITTING` when it reports failure
 (`src/query/distributed/distributed-transaction-protocol.js:285-326`).
+This facade contract covers coordinator-visible outcome only: replicated
+durability of a committed transaction on the other replicas is BLOCKED
+(finding F-TX-REPLICATED-APPLY, quest `distributed-transaction-replicated-apply`).
 
 One `AsyncLocalStorage` instance per facade detects same-facade active nesting.
 Separate top-level concurrent callbacks receive distinct session ids. A closed
@@ -136,7 +139,9 @@ by the facade (`src/query/application-database-result.js`) from SqlCore's
 internal result: a frozen null-prototype `{rows, affectedRows}`.
 
 - `rows` is a fresh array of plain objects holding the statement's own row
-  data (own enumerable data properties copied; `BLOB` values stay bytes). A
+  data (own enumerable data properties copied; `BLOB` values are passed
+  through as SqlCore returns them, and a routed `BLOB` bind is currently
+  rejected: finding F-BLOB-ROUTED-BYTES). A
   statement that produced no rows returns `[]`. Row-level internals are
   already removed by SqlCore's owner projection
   (`TableCreationService.stripPartitionDetails`).

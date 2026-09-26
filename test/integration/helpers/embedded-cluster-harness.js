@@ -461,6 +461,19 @@ function createEmbeddedCluster(t, options = {}) {
     return fulfilledRows(await seed.query(harnessSession, sql, params));
   }
 
+  // Harness-side evidence (never consumer code): the raw log lines of one
+  // node that contain `needle`, so a suite can name the mechanism behind an
+  // error the public seam reports only generically.
+  function nodeLogLines(node, needle) {
+    let text = '';
+    try {
+      text = readFileSync(node.logPath, 'utf8');
+    } catch {
+      return [];
+    }
+    return text.split('\n').filter((line) => line.includes(needle));
+  }
+
   function logDigest() {
     return nodes.map(nodeLogDigest).join('\n');
   }
@@ -583,6 +596,7 @@ function createEmbeddedCluster(t, options = {}) {
     discoverPgwireEndpoints,
     formCluster,
     logDigest,
+    nodeLogLines,
     nodes,
     rootDir,
     seedQueryRows,

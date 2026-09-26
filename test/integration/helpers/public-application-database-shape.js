@@ -1,9 +1,16 @@
 // The cluster shape and budgets of the public Application Database acceptance
-// suites (I1 multinode, I2 transactions), derived from lab measurement.
+// suites (I1 multinode, I2 transaction facade), derived from lab measurement.
 //
-// Shape: three embedded processes (a seed and two joiners). Raft needs an odd
-// member count and the default replica count is 3; two-node runs were
-// exploratory only and are not evidence.
+// THE 3-NODE FLIP IS BLOCKED on two findings owned outside this seam:
+// F-FORMATION-WRITE-READINESS (after a fresh 3-process formation, application
+// writes are intermittently not served) and F-TX-REPLICATED-APPLY (quest
+// distributed-transaction-replicated-apply: committed transaction rows exist
+// only on the staging replica). Until both are fixed the committed size below
+// stays ONE runtime.
+//
+// Intended shape: three embedded processes (a seed and two joiners). Raft
+// needs an odd member count and the default replica count is 3; two-node runs
+// were exploratory only and are not evidence.
 //
 // Measured on lab host lenovo-laptop (placement factor 2.0-2.3), 2026-09-26:
 // all three `active` 40.5-44.9 s after the seed fork (seed start 19-22 s,
@@ -15,8 +22,8 @@
 // already runs them serially in the exclusive lane, and the runner's per-file
 // kill is 600 s, which these declarations match.
 
-// BLOCKED (track A findings F-FORMATION-WRITE-READINESS and
-// F-2PC-REPLICA-VISIBILITY): on three processes the suites are not reliably
+// BLOCKED (findings F-FORMATION-WRITE-READINESS and
+// F-TX-REPLICATED-APPLY): on three processes the suites are not reliably
 // green today, so the committed shape is ONE embedded runtime; switch this to
 // 3 (seed + two joiners) when the owners land their fixes.
 const SINGLE_RUNTIME_CLUSTER_SIZE = 1;

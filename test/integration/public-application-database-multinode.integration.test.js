@@ -13,7 +13,7 @@
  * runtime: on three processes the lab showed application writes intermittently
  * not served after formation (F-FORMATION-WRITE-READINESS) and committed
  * transactional rows existing only on the staging replica
- * (F-2PC-REPLICA-VISIBILITY, see the transactions suite), both owned outside
+ * (F-TX-REPLICATED-APPLY, see the transaction facade suite), both owned outside
  * this seam. On three processes (lab, 2026-09-26) the TEXT write, cross-node
  * PK read (64 ms), cross-node update visibility (33 ms), F1, F2, EXPLAIN
  * refusal and every leak check passed; that run is recorded, not asserted.
@@ -34,7 +34,7 @@
  *   so the range proof is single-partition.
  * - The public result shape is the facade projection `{rows, affectedRows}`;
  *   no value the application receives (results, rows, errors, cause chains)
- *   carries topology (I1.4, reusable helper public-surface-leak.js), and
+ *   carries topology (I1.4, reusable helper src/test-helpers/topology-leak-check.js), and
  *   EXPLAIN DISTRIBUTED is refused (DIAGNOSTIC_STATEMENT_RESERVED).
  * - F-BLOB-ROUTED-BYTES is a witness of a current defect, not a guarantee.
  *
@@ -58,11 +58,16 @@ import {
   MULTINODE_CLUSTER_SIZE,
   MULTINODE_TEST_TIMEOUT_MS,
 } from './helpers/public-application-database-shape.js';
-import {findTopologyLeaks} from './helpers/public-surface-leak.js';
+import {findTopologyLeaks} from '../../src/test-helpers/topology-leak-check.js';
 
 const APPLICATION_ID = 'public-seam-acceptance';
 const TABLE = 'acceptance_objects';
 const HINT_TABLE = 'acceptance_hints';
+// better-sqlite3's refusal to bind a non-byte object (the JSON-decoded
+// {type:'Buffer',data:[...]}).
+const SQLITE_BIND_ERROR_PATTERN =
+  /can only bind numbers, strings, bigints, buffers, and null/;
+const BLOB_LOG_CONTEXT_LINES = 6;
 const RANGE_LOW = 'img:';
 const RANGE_HIGH = 'img;';
 const PUBLIC_RESULT_KEYS = ['affectedRows', 'rows'];
@@ -153,6 +158,19 @@ test('public application database routes by primary key through embedded process
     const absent = await mustQuery(joiner, sessionB,
       `SELECT id FROM ${TABLE} WHERE id = ?`, [BLOB_ROW_ID]);
     t.same(fulfilledRows(absent), [], 'and nothing was written');
+    // The public code cannot tell byte loss from participant unavailability;
+    // the harness-side node log names the mechanism (never consumer code).
+    const tableLines = cluster.nodes.flatMap((node) =>
+      cluster.nodeLogLines(node, TABLE));
+    const bindErrors = tableLines.filter((line) =>
+      SQLITE_BIND_ERROR_PATTERN.test(line));
+    if (bindErrors.length === 0) {
+      t.comment(`F-BLOB log lines naming ${TABLE}:\n` +
+        tableLines.slice(-BLOB_LOG_CONTEXT_LINES).join('\n'));
+    }
+    t.ok(bindErrors.length > 0,
+      'the node log shows the SQLite bind refusal of the decoded value ' +
+      '(bytes lost in JSON, not an unavailable participant)');
   });
 
   await t.test('I1.2 update on node A becomes visible on node B', async (t) => {
