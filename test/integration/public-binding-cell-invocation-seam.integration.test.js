@@ -42,13 +42,12 @@ import {
 } from '../../src/test-helpers/managed-timers.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
-import {CALL_CELL_ROUTE_ERROR_CODE} from
-  '../../src/service/call-cell-routing-contract.js';
 import {
   CONSUMER_RETRY_OUTCOME,
   LIFECYCLE_SQL,
   callBinding,
   callBindingWhileRetrySafe,
+  isPublicRetrySafe,
   observeFailure,
   openConsumerSession,
   runLifecycle,
@@ -64,6 +63,7 @@ import {
   stopPlacedPgwireReplicas,
   useSingleNodeReplicaShape,
 } from './helpers/public-binding-seam-harness.js';
+import {topologyLeaksIn} from './helpers/public-topology-leak.js';
 import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
 
 const SEAM_TEST_TIMEOUT_MS = 240_000;
@@ -114,13 +114,24 @@ const OWNED_RANGE_STATEMENT =
   `WHERE id >= ${LOW_RANGE.FIRST} AND id <= ${LOW_RANGE.LAST}`;
 const UNBOUNDED_STATEMENT = `SELECT id, score, label FROM ${TABLE}`;
 const BINDING_NAME = Object.freeze({
+  INVALID_STATEMENT: 'images-seam-invalid-statement',
   OWNED_RANGE: 'images-seam-owned-range',
   UNBOUNDED: 'images-seam-all-ratings',
+  UNKNOWN: 'images-seam-no-such-binding',
+});
+const INVALID_STATEMENT = `SELECT FROM ${TABLE} WHERE`;
+const PUBLIC_OUTCOME = Object.freeze({
+  DEFINITELY_NOT_EXECUTED: 'definitely_not_executed',
+});
+const OWNER_CODE = Object.freeze({
+  ROUTE_NOT_FOUND: 'call_cell_route_not_found',
+  STATEMENT_INVALID: 'call_cell_statement_invalid',
 });
 const BINDING_SCHEMA_VERSION = 2;
 const ACCESS_POLICY_SCHEMA_VERSION = 2;
 const CALL_SOURCE_KIND = 'call';
 const READ_OPERATION = 'read';
+const TABLE_IDENTITY = `table:global.${TABLE}`;
 const BINDING_BUDGETS = Object.freeze({
   context_bytes: 4096,
   cpu_time_ms: 10_000,
@@ -148,14 +159,6 @@ const LEGACY_AXIS_TOKENS = Object.freeze([
   ['Wasm', 'Call', 'Adapter'].join(''),
   ['debug', 'runtime'].join('-'),
 ]);
-// Stage-1 consumer retry predicate: the only public signal a pg client has
-// today is the owner code carried in the ErrorResponse detail. The retry
-// set is imported from the call routing owner, never restated.
-const CONSUMER_RETRY_CODES = Object.freeze(new Set([
-  CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE,
-  CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
-]));
-const OWNER_CODE_DETAIL_FIELD = 'ownerCode';
 
 function seamRows() {
   const rows = [];
@@ -223,7 +226,7 @@ function accessPolicy(bindingName) {
     binding_name: bindingName,
     calls: [],
     schema_version: ACCESS_POLICY_SCHEMA_VERSION,
-    tables: [{operations: [READ_OPERATION], slot: 0, table: TABLE}],
+    tables: [{operations: [READ_OPERATION], slot: 0, table: TABLE_IDENTITY}],
   };
 }
 
@@ -237,14 +240,6 @@ function installPayload(artifact, manifest, idempotencyKey) {
     idempotency_key: idempotencyKey,
     manifest,
   };
-}
-
-function ownerCodeOf(observed) {
-  try {
-    return JSON.parse(observed.detail)[OWNER_CODE_DETAIL_FIELD];
-  } catch {
-    return null;
-  }
 }
 
 // Owner errors can be frozen (ApplicationDatabaseError); tap cannot annotate
@@ -423,24 +418,31 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
 
   await t.test('key-anchored call runs only the owning partition',
     async (st) => {
-      const before = await readCoordinationSlotCounts(db);
       mark('callStart');
+      // Readiness, consumer style: retry while the public contract says
+      // the failure is retry-safe (the Cell is still activating).
       const served = await callBindingWhileRetrySafe(client, {
         callArguments: {topN: TOP_N_ALL},
         name: BINDING_NAME.OWNED_RANGE,
       }, {
         deadlineMs: Date.now() + SEAM_WAIT_MS,
-        isRetrySafe: (observed) =>
-          CONSUMER_RETRY_CODES.has(ownerCodeOf(observed)),
+        isRetrySafe: isPublicRetrySafe,
         pause: () => managedSleep(t, CONSUMER_RETRY_PAUSE_MS),
       });
       mark('firstCallServed');
       st.equal(served.outcome, CONSUMER_RETRY_OUTCOME.SERVED,
         JSON.stringify(served.lastFailure));
-      st.comment(`consumer attempts until served: ${served.attempts}`);
-      st.same(served.result, expectedReduction(rows,
-        (row) => row.id >= LOW_RANGE.FIRST && row.id <= LOW_RANGE.LAST),
-      'the reduced result is exactly the literal key range\'s rows');
+      st.comment(`consumer attempts until served: ${served.attempts}; ` +
+        `last retry-safe failure: ${JSON.stringify(served.lastFailure)}`);
+      const expected = expectedReduction(rows,
+        (row) => row.id >= LOW_RANGE.FIRST && row.id <= LOW_RANGE.LAST);
+      st.same(served.result, expected,
+        'the reduced result is exactly the literal key range\'s rows');
+      // Placement evidence from one call on a ready Cell: the durable
+      // coordination rows of exactly that invocation.
+      const before = await readCoordinationSlotCounts(db);
+      st.same(await callBinding(
+        client, BINDING_NAME.OWNED_RANGE, {topN: TOP_N_ALL}), expected);
       st.same(await newInvocationSlotCount(db, before),
         [ownedPartitions.length + COORDINATION_REDUCE_SLOTS],
         'durable coordination seeded one shard slot plus the reduce slot');
@@ -463,6 +465,54 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
     });
   mark('callsServed');
 
+  // What a pg client receives for pre-dispatch failures over the live seam.
+  // The expected public values are the documented wire contract
+  // (docs/execution-semantics.md "Public outcome classes"), written here as
+  // the consumer would read them, not imported from the owner.
+  const topology = [
+    NODE_ID,
+    ...partitions.map((partition) =>
+      partition.partition_id || partition.partitionId),
+  ];
+  await t.test('pre-dispatch failures are public, typed and topology-free',
+    async (st) => {
+      const unknown = await observeFailure(callBinding(
+        client, BINDING_NAME.UNKNOWN, {topN: TOP_N_ALL}));
+      st.comment(`pg receives for an unknown Binding: ${
+        JSON.stringify(unknown)}`);
+      st.same(JSON.parse(unknown.detail), {
+        ...JSON.parse(unknown.detail),
+        outcomeClass: PUBLIC_OUTCOME.DEFINITELY_NOT_EXECUTED,
+        ownerCode: OWNER_CODE.ROUTE_NOT_FOUND,
+        retrySafe: false,
+      });
+      st.same(topologyLeaksIn(unknown, topology), []);
+
+      await runLifecycle(client, LIFECYCLE_SQL.CREATE_BINDING,
+        callBindingPayload(
+          BINDING_NAME.INVALID_STATEMENT, INVALID_STATEMENT, artifact));
+      await runLifecycle(client, LIFECYCLE_SQL.CONFIGURE_ACCESS,
+        accessPolicy(BINDING_NAME.INVALID_STATEMENT));
+      const invalid = await callBindingWhileRetrySafe(client, {
+        callArguments: {topN: TOP_N_ALL},
+        name: BINDING_NAME.INVALID_STATEMENT,
+      }, {
+        deadlineMs: Date.now() + SEAM_WAIT_MS,
+        isRetrySafe: isPublicRetrySafe,
+        pause: () => managedSleep(t, CONSUMER_RETRY_PAUSE_MS),
+      });
+      st.comment(`pg receives for an invalid declared statement after ${
+        invalid.attempts} attempt(s): ${JSON.stringify(invalid.lastFailure)}`);
+      st.equal(invalid.outcome, CONSUMER_RETRY_OUTCOME.GAVE_UP);
+      st.same(JSON.parse(invalid.lastFailure.detail), {
+        ...JSON.parse(invalid.lastFailure.detail),
+        outcomeClass: PUBLIC_OUTCOME.DEFINITELY_NOT_EXECUTED,
+        ownerCode: OWNER_CODE.STATEMENT_INVALID,
+        retrySafe: false,
+      });
+      st.same(topologyLeaksIn(invalid.lastFailure, topology), []);
+    });
+
   await t.test('the consumer cannot name an execution target (F2/F5)',
     async (st) => {
       for (const key of TOPOLOGY_KEYS) {
@@ -474,6 +524,8 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
             schema_version: BINDING_SCHEMA_VERSION,
           }));
         st.ok(refused, `a CALL payload carrying '${key}' is rejected`);
+        st.notOk(isPublicRetrySafe(refused),
+          'a payload-contract refusal is never retry-safe');
         st.comment(`pg receives for '${key}': ${JSON.stringify(refused)}`);
       }
     });

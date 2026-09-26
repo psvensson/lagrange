@@ -29,8 +29,6 @@ import {readFile, writeFile} from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 
-import {componentize} from '@bytecodealliance/componentize-js';
-
 import {RUNTIME_KIND} from '../../../src/constants/runtime.js';
 import {canonicalJson} from
   '../../../src/control-plane/owners/deployment-binding-contract.js';
@@ -41,6 +39,7 @@ import {
   snapshotEmbeddedFactoryConfiguration,
 } from '../../../src/embedded-lagrange-input.js';
 import {startLagrangeRuntime} from '../../../src/lagrange-runtime-startup.js';
+import {componentizeCallCellGuest} from './call-cell-guest-componentizer.js';
 import {createCallCellBatchExecutor} from
   '../../../src/service/call-cell-batch-executor.js';
 import {
@@ -87,15 +86,6 @@ const GUEST_SOURCE_URL = new URL(
   '../../wasm-service/fixtures/call-cell-world/guest.js',
   import.meta.url,
 );
-const CANONICAL_WIT_DIRECTORY = new URL('../../../wit', import.meta.url);
-const CALL_CELL_WORLD = 'call-cell';
-const COMPONENTIZE_DISABLED_FEATURES = Object.freeze([
-  'random',
-  'stdio',
-  'clocks',
-  'http',
-  'fetch-event',
-]);
 const ARTIFACT_BUILD = Object.freeze({
   COMPONENT_FILE: 'component.wasm',
   OCI_DIRECTORY: 'oci-layouts',
@@ -334,11 +324,7 @@ function manifestDigestOf(manifest) {
  */
 async function buildCallArtifact(root, identity) {
   const guestSource = await readFile(GUEST_SOURCE_URL, 'utf8');
-  const {component} = await componentize(guestSource, {
-    disableFeatures: [...COMPONENTIZE_DISABLED_FEATURES],
-    witPath: CANONICAL_WIT_DIRECTORY.pathname,
-    worldName: CALL_CELL_WORLD,
-  });
+  const component = await componentizeCallCellGuest(guestSource);
   const componentPath = path.join(root, ARTIFACT_BUILD.COMPONENT_FILE);
   await writeFile(componentPath, component);
   const receipt = await new ServiceLocalOciLayoutBuilder().build({
