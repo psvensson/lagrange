@@ -30,6 +30,22 @@ the same deployment surface for HTTP endpoints, and
 [Current Capabilities And Limitations](../../docs/current-capabilities-and-limitations.md)
 is the status authority.
 
+### Translate the old vocabulary to the current surface
+
+If you read these examples to understand mechanics, map the old terms like
+this rather than carrying them into new code:
+
+| Legacy example concept | Current public concept |
+| --- | --- |
+| callback module in `index.js` | `distributed({run, reduce, statement})` in a service |
+| callback manifest | compiler-generated Artifact / Binding records |
+| `partition_callback` execution mode | `CALL BINDING` or handler `call(...)` |
+| callback return / plan reduction | bounded `emit()` partials plus `reduce()` |
+| uploaded JavaScript envelope | genuine WASI component on the public service path |
+
+The useful idea that survives is partition-local execution. The deployment
+and invocation mechanism around it has changed.
+
 ## What's inside
 
 Six copyable examples, ordered from basic to advanced:

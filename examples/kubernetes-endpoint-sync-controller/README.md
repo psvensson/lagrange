@@ -49,6 +49,20 @@ flowchart LR
   classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
 ```
 
+### The ownership boundary
+
+The controller is a projection adapter, not a second scheduler:
+
+- Lagrange decides which runtime replicas exist and where they run.
+- `service_endpoints` is the durable source the controller observes.
+- Kubernetes owns the `Service` and `EndpointSlice` objects used by its network.
+- The controller only reconciles the latter from the former. It never moves a
+  Lagrange Cell, elects a Lagrange leader, or invents an endpoint.
+
+That distinction matters during failures: a stale or missing Kubernetes
+EndpointSlice is repaired from Lagrange endpoint state; it is not evidence that
+Kubernetes should repair Lagrange placement.
+
 ## Kubernetes vs Lagrange (key differences)
 
 Lagrange and Kubernetes solve different ownership problems:
