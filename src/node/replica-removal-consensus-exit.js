@@ -17,7 +17,8 @@
  *                      (below the gate its absence is a lag, not a removal);
  *   GROUP_UNAVAILABLE  the port answers typed that the group is not
  *                      available to it (held, closed, retired);
- *   NO_CONSENSUS_PORT  the service has no port to participate through;
+ *   NO_CONSENSUS_PORT  the service has no port (no events) to participate
+ *                      through;
  *   BACKSTOP           the bounded wait elapsed (a removal nobody proposed,
  *                      or an applied removal this replica never learned);
  *   RELEASED           the caller released the wait (node shutdown).
@@ -28,10 +29,7 @@ import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
   '../partition/partition-replica-membership-constants.js';
 import {readPartitionReplicaMembership} from
   '../partition/partition-service-raft-membership-administration.js';
-import {
-  RAFT_EVENT,
-  RAFT_OPERATION,
-} from '../raft/raft-operation-port-constants.js';
+import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
 
 const REPLICA_CONSENSUS_EXIT_REASON = Object.freeze({
   REMOVAL_APPLIED: 'own-removal-applied',
@@ -77,9 +75,10 @@ function consensusExitOf(observation) {
  * @return {Promise<Object>} Frozen {reason}.
  */
 function awaitReplicaConsensusExit(service, {replicaId, backstopMs, signal}) {
+  // The read itself goes through the partition's one witness read (which
+  // answers UNAVAILABLE for a port without the committed read).
   const port = service?.raft;
-  if (typeof port?.subscribe !== FUNCTION_TYPE ||
-      typeof port[RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP] !== FUNCTION_TYPE) {
+  if (typeof port?.subscribe !== FUNCTION_TYPE) {
     return Promise.resolve(Object.freeze({
       reason: REPLICA_CONSENSUS_EXIT_REASON.NO_CONSENSUS_PORT}));
   }
