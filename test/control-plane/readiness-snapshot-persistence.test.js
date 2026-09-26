@@ -20,8 +20,16 @@ import {
 import {
   OPERATION_METADATA_KEY,
 } from '../../src/rebalancer/replica-status.js';
-import {RebalanceCoordinator} from
-  '../../src/rebalancer/rebalance-coordinator.js';
+import {
+  RebalanceCoordinator as ProductionRebalanceCoordinator,
+} from '../../src/rebalancer/rebalance-coordinator.js';
+import {fixtureCommittedReadCoordinator} from
+  '../rebalancer/committed-membership-fixture.js';
+
+// Joins are stamped from the committed-membership read, answered here by
+// the fixture world (owner decision O1).
+const RebalanceCoordinator =
+  fixtureCommittedReadCoordinator(ProductionRebalanceCoordinator);
 import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
 import {

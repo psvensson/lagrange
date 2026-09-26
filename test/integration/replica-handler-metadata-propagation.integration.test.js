@@ -9,7 +9,15 @@ import {test} from '../../src/test-helpers/tap.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {
+  ReplicaHandler as ProductionReplicaHandler,
+} from '../../src/node/replica-handler.js';
+import {scenarioStampingReplicaHandler} from
+  '../node/replica-handler-bootstrap-stamps.js';
+
+// Lifecycle scenarios: every create carries the committed-membership stamp
+// its scenario's creator would have produced (owner decision O1).
+const ReplicaHandler = scenarioStampingReplicaHandler(ProductionReplicaHandler);
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';

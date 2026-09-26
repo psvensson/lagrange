@@ -9,6 +9,8 @@
  * goes through message groups as required by 4.13.
  */
 
+import {committedStampFor} from
+  '../node/replica-handler-bootstrap-stamps.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {EventEmitter} from 'events';
 import {mkdtempSync} from 'fs';
@@ -777,6 +779,9 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
       leader_address: 'leader-node',
       key_range: {start: null, end: null},
       schema: createTestSchema('test_table'),
+      // The committed-membership stamp its creator produced (owner decision
+      // O1): a join of the group led by test-partition-r1.
+      bootstrap_membership: committedStampFor(['test-partition-r1']),
     };
 
     const ack1 = await lifecycleManager.handleCreateReplica(message);

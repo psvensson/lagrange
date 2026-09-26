@@ -6,7 +6,7 @@
       {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 427655,
-        "sha256": "554b43c148f9c499b169e0b2b900f30cb25230f8f7437fac238788b53eba6cc8"
+        "sha256": "938527bf1a7b0c475cbd3b8c3769efc15d6fed82c2f7d536c3414fff64649a58"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2569254,
-        "sha256": "09b91a4a4fb0da29ee2bbf95b7aea5505c4d2e9b5ec26994a3cbf665358c3876"
+        "bytes": 2570492,
+        "sha256": "f369d2828d72644b7fa2454a1546038e02d54c71d08720356b7459cceff7afff"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "ba456f9c0abe705e21c9f61bbda45bf7c640e2211bd2212f660b6882bafdd338"
+        "sha256": "ece2f27dc1f92c5f80b5ed5157a337802af0c76443b228479949bc9da60b7697"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "0b8f6f4c79f1029d0e640873d66ff47a64197595d777d0bed10147a9e66884db"
+    "inputDigest": "96d3cab1bfb16e1d6d4eeb73bbb1f99b49721dc80c44ffc688c5ca0abfe42986"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 427655,
-        "sha256": "554b43c148f9c499b169e0b2b900f30cb25230f8f7437fac238788b53eba6cc8"
+        "sha256": "938527bf1a7b0c475cbd3b8c3769efc15d6fed82c2f7d536c3414fff64649a58"
       },
       "declaredCount": 1812,
       "observedCount": 1812,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "ba456f9c0abe705e21c9f61bbda45bf7c640e2211bd2212f660b6882bafdd338"
+          "sha256": "ece2f27dc1f92c5f80b5ed5157a337802af0c76443b228479949bc9da60b7697"
         },
         "cloneGroups": 787,
         "duplicatedLines": 30313,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2569254,
-        "sha256": "09b91a4a4fb0da29ee2bbf95b7aea5505c4d2e9b5ec26994a3cbf665358c3876"
+        "bytes": 2570492,
+        "sha256": "f369d2828d72644b7fa2454a1546038e02d54c71d08720356b7459cceff7afff"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "9456321de8adcae1d0e6d2105bf59cc0090efba1075196485b6252389ecda054",
-      "moduleCount": 4999,
-      "edgeCount": 23619,
+      "sourceDigest": "5c1fa315762b6ea1de20388b75538a9b96a0c1328df1457ade3ebb9f222852be",
+      "moduleCount": 5000,
+      "edgeCount": 23635,
       "unresolvedCount": 34
     }
   },
@@ -185,7 +185,7 @@
     "sourceSignalCount": 2624,
     "assignedSignalCount": 2624,
     "uniqueAssignmentCount": 2624,
-    "digest": "d9bfec71cbe865eb6f2ef8d9230c5abe288dc8572a08d90458bd9d58476a6178"
+    "digest": "060d03568a3a36e9223443e1dcc8f834415cfda8c7b494b67392a974f20dced1"
   },
   "signalCounts": {
     "cognitive": 159,
@@ -248,7 +248,7 @@
       "cycleGroups": 0,
       "lintExclusions": 15,
       "importIn": 188,
-      "importOut": 691,
+      "importOut": 695,
       "score": 1595.2,
       "topPaths": [
         "test/rebalancer/unified-rebalancer-triggers-priority-cohort.test.js",
@@ -332,7 +332,7 @@
       "cycleGroups": 0,
       "lintExclusions": 5,
       "importIn": 74,
-      "importOut": 287,
+      "importOut": 288,
       "score": 664.3,
       "topPaths": [
         "test/control-plane/replica-dispatch-atomic-claim-ready-trigger.integration.test.js",
@@ -444,7 +444,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 41,
-      "importOut": 375,
+      "importOut": 376,
       "score": 401.8,
       "topPaths": [
         "test/integration/move-replica-handoff.integration.test.js",

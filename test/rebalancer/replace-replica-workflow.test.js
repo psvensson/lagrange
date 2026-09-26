@@ -300,21 +300,27 @@ test('REPLACE replica workflow', async (t) => {
         // membership, so while the source nodes-p1-r1 is still a voter the
         // target's bootstrap stamp includes it; the source leaves only through
         // the real, committed REMOVE_PEER ConfChange afterwards.
+        // O1 (2026-09-26): the stamp is the leader's committed answer and
+        // the address hints are in ascending raft peer id order, so the
+        // members are compared as a set.
         t.same(
-          deliveries[0]?.payload?.[ReplicaOperationField.REPLICA_IDS],
-          ['nodes-p1-r1', 'nodes-p1-r2', 'nodes-p1-r3', replacementReplicaId],
+          [...(deliveries[0]?.payload?.[ReplicaOperationField.REPLICA_IDS] ||
+            [])].sort(),
+          ['nodes-p1-r1', 'nodes-p1-r2', 'nodes-p1-r3', replacementReplicaId]
+            .sort(),
           'REPLACE create phase should bootstrap the target from the current ' +
           'committed membership, including the still-voting source replica ' +
           '(owner decision D1)',
         );
         t.same(
-          deliveries[0]?.payload?.[ReplicaOperationField.PEER_ADDRESSES],
+          [...(deliveries[0]?.payload?.[
+            ReplicaOperationField.PEER_ADDRESSES] || [])].sort(),
           [
             'seed-node/partition/nodes-p1-r1',
             'seed-node/partition/nodes-p1-r2',
             'seed-node/partition/nodes-p1-r3',
             'node-2/partition/' + replacementReplicaId,
-          ],
+          ].sort(),
           'REPLACE create phase should carry the still-voting source replica ' +
           'in the bootstrap peer addresses (owner decision D1)',
         );

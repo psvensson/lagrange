@@ -9,6 +9,8 @@
  * Requirements: 8.1, 8.2, 8.3
  */
 
+import {withFixtureCommittedMembership} from
+  './committed-membership-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {MovePlanner} from '../../src/rebalancer/move-planner.js';
@@ -171,9 +173,9 @@ function createMockCoordinatorDeps(sqlEngine) {
     cdcIntegrationService: {
       insertSystemTableRow: async () => ({success: true}),
     },
-    messageRouter: {
+    messageRouter: withFixtureCommittedMembership({
       deliver: async () => ({acknowledged: true, status: 'completed'}),
-    },
+    }, null),
     controlPlaneSystemTableGateway: {
       readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>
         sqlEngine.executeQuery(sql, params, queryOptions),

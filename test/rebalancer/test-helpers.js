@@ -3,6 +3,10 @@
  * Provides mock factories for all required dependencies.
  */
 
+import {
+  answerFixtureCommittedMembership,
+  withFixtureCommittedMembership,
+} from './committed-membership-fixture.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -421,11 +425,15 @@ function createMockPolicyService(options = {}) {
  * @return {Object} Mock router.
  */
 function createMockMessageRouter(options = {}) {
-  const {connectionState = 'connected'} = options;
+  const {connectionState = 'connected', systemTableCache = null} = options;
 
   return {
     getConnectionState: () => connectionState,
-    deliver: async () => ({acknowledged: true, status: 'completed'}),
+    // A committed-membership read is answered by the fixture world (from
+    // the given cache, when there is one); every other delivery succeeds.
+    deliver: async (target, payload) =>
+      answerFixtureCommittedMembership(systemTableCache, payload) ??
+        {acknowledged: true, status: 'completed'},
     pingNode: async () => true,
     isOutboundQueueAvailable: () => true,
   };
@@ -671,10 +679,14 @@ function createTestCoordinator(options = {}) {
   const mockPolicyService = options.tablePolicyService ||
     createMockPolicyService(cacheData);
   trackFixtureServiceDeletions(mockCache);
-  const mockMessageRouter = options.replaceWitness === false ?
-    options.messageRouter || createMockMessageRouter() :
-    withFixtureReplaceWitness(
-      options.messageRouter || createMockMessageRouter(), mockCache);
+  // The committed-membership read is always the fixture world's (owner
+  // decision O1); the REPLACE witness double is opt-out.
+  const mockMessageRouter = withFixtureCommittedMembership(
+    options.replaceWitness === false ?
+      options.messageRouter || createMockMessageRouter() :
+      withFixtureReplaceWitness(
+        options.messageRouter || createMockMessageRouter(), mockCache),
+    mockCache);
 
   // Track operations via SQL engine (not CDC)
   const trackedOperations = new Map();
