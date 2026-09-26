@@ -28,7 +28,7 @@
   "censusSize": 2157,
   "digest": "fnv1a32-4dcd180e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a750f6d4",
+  "observationDigest": "fnv1a32-6a89e74c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7856,6 +7856,7 @@
         "docs/current-capabilities.json",
         "docs/service-portability-capabilities.json",
         "scripts/check-current-capabilities.js",
+        "scripts/generate-current-capabilities-doc.js",
         "src/bootstrap/bootstrap-api-constants.js",
         "src/service/request-cell-http-authenticator.js",
         "src/transport/router-server-manager.js"
