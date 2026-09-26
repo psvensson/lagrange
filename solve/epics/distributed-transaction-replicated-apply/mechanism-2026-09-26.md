@@ -4,6 +4,8 @@ Quest `distributed-transaction-replicated-apply`, phase 1. This phase gathers
 evidence only. Nothing here repairs anything.
 
 - Finding: F-TX-REPLICATED-APPLY.
+- Challenged owner model: `design-gate-owner-model-2026-09-26.md` (with its
+  v1 and two challenge records beside it).
 - Heads measured: the WIP heads named in Measurements. Their src is identical to 19995c7bc; only tests and helpers changed.
 - Source head read: 19995c7bc. `git diff --stat 33885263f 19995c7bc -- src/`
   is empty, so every src citation below holds on main 33885263f too.
