@@ -35,7 +35,7 @@ const summarizeAccountActivity = distributed({
 });
 
 export default defineService({
-  name: 'account-sumary',
+  name: 'account-summary',
   version: '1.0.0',
   operations: {summarizeAccountActivity},
   handlers: {
@@ -55,7 +55,7 @@ entry, manifest, request Bindings, call Binding, and outbound-call policy.
 There is no package ID, manifest digest, or durable Binding-name string in the
 authored service.
 
-The full file contains the partition function, reducer, HTTP Handlers, typed
+The full file contains the partition function, reducer, HTTP handlers, typed
 failure mapping, and the denial probe used by the runner.
 
 ## Run it
@@ -89,7 +89,7 @@ POST /accounts/summary
 Authorization: Basic ...
 Content-Type: application/json
 
-[{"accountId":202}
+{"accountId":202}
 ```
 
 Response:
@@ -108,6 +108,8 @@ Response:
 
 The same component also serves `GET /accounts/health`. That route declares no
 distributed calls, so the compiler emits no outbound-call policy for it.
+The component still contains the summary operation; a no-call handler is not
+a request-only component.
 
 ## What runs where
 
@@ -149,7 +151,10 @@ former and let the compiler produce the latter.
 ## Boundaries of the proof
 
 This example is intentionally small. It proves the functional path, not an
-unbounded scan or a production scale claim.
+unbounded scan or a production scale claim. Its sums and counts could also be
+expressed in SQL. Use it to understand execution, not to claim that WASM beats
+a grouped SQL query. The [worked partials example](../../docs/native-programming-model.md#worked-example)
+shows exactly what leaves each partition.
 
 Current limits that matter here:
 

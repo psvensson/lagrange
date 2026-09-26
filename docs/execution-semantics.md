@@ -16,9 +16,18 @@ This is the contract behind one distributed operation invoked directly over
 | Is there one cross-partition snapshot? | No; shards read independently |
 | Are writes allowed in a call operation? | The current call path does not write user tables |
 | Can the caller cancel? | No; the deadline is the caller-side bound |
-| Does movement return stale data? | No; topology drift is fenced and returned as a typed retryable failure |
+| Can a retired partition target serve the call? | Stale topology is fenced and returned as a typed failure; this is not a global read-freshness guarantee |
 | Can an HTTP handler call several operations? | One nested distributed call per request today |
 | Can one component contain several operations? | The current pre-v2 code-first compiler allows one distributed operation |
+
+Here, a **shard** is one selected partition's task. A **slot** is that shard's
+expected contribution to this invocation. A **Cell** is a running component
+instance. A **lease** gives time-limited coordination ownership or activation
+demand. See [Vocabulary](vocabulary.md) for the deployment terms.
+
+The leader-local rule above applies to distributed calls. Ordinary SQL read
+routing can consider other eligible replicas; do not transfer its preference
+rules to `run()`. The receiving call host must read its input locally.
 
 ## End-to-end flow
 
@@ -116,7 +125,9 @@ For an HTTP request, a repeated outer request with the same `Idempotency-Key`
 returns the journaled outer response and does not re-run its nested call.
 
 Direct `CALL BINDING` does not currently accept a caller idempotency key. Two
-identical direct calls are two invocations.
+identical direct calls are two invocations. HTTP replay is also not a promise
+that repeating the same request body under a new key will reuse an old result.
+Keep invocation identity separate from equality of arguments.
 
 ## Result and side-effect semantics
 
@@ -129,7 +140,9 @@ intermediate result.
 
 This is exactly-once visibility, not exactly-once execution. Logging, external
 I/O, or any other effect performed by guest code is outside the coordinated
-result. Make those effects idempotent or avoid them in `run()` and `reduce()`.
+result. Make any permitted effects idempotent or avoid them in `run()` and
+`reduce()`. This warning does not grant an external I/O capability: the
+component can use only the host interfaces actually supplied to it.
 
 ## Ordering and determinism
 
@@ -152,9 +165,14 @@ Each shard reads its local partition independently. The invocation does not
 establish one global snapshot, so concurrent writes may occur between shard
 reads.
 
-Topology fencing guarantees that each shard executes against a current,
-non-superseded partition replica. It does not make all shards observe one
-instant.
+Topology fencing checks that work targets the current partition generation
+and leader rather than a retired target. It does not make all shards observe
+one instant or keep the input unchanged between separate calls.
+
+For example, a transaction can move a value from partition A to partition B
+between their reads. Reading A before the move and B after it can count the
+value twice in the combined answer. Reject workloads that require a shared
+snapshot across the whole call; local execution alone does not supply one.
 
 The current distributed call path reads user tables and coordinates a result;
 it does not write user tables. A request handler can separately use declared
@@ -166,8 +184,10 @@ Partition split, replica movement, Binding replacement, and Cell replacement
 can race with planning. The runtime checks immutable digests, partition epochs,
 leader ownership, route identity, and reduce-lease ownership at several points.
 
-A moved target is returned as a typed retryable stale-target failure. It is not
-served from a retired partition and it is not marked as replica corruption.
+A stale target detected before guest execution is refused with a typed failure
+and may be re-resolved within the retry budget. An uncertain outcome after
+delivery remains ambiguous under the retry rules above. Topology movement does
+not justify treating every failure as safe to retry or as replica corruption.
 
 If a selected host lacks a ready Cell, that is an activation trigger. A
 short-lived demand lease pins compute to the host until the call completes or
