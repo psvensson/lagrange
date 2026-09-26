@@ -206,7 +206,7 @@ const ADVANCED_COMMAND_GROUPS = Object.freeze([
       }),
       Object.freeze({
         command: 'npm run distributed:all',
-        description: 'Run distributed scenarios with verbose output.',
+        description: 'Run the canonical distributed matrix locally with verbose output.',
       }),
       Object.freeze({
         command: 'npm run distributed:stop-containers -- [--dry-run|--remove|--containers-only|--processes-only]',

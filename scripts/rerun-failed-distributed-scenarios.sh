@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Re-run only the distributed scenarios that failed in the most recent reports.
-# Scans test-output/reports/ for *.report.json files, finds the latest report
-# per scenario, and re-runs those that failed.
+# Scans test-output/reports/ recursively for *.report.json files, finds the
+# latest local-target report per canonical config+scenario, and re-runs only
+# those whose latest result failed. Lab/GCP failures stay on their own target.
 #
 # Usage:
 #   bash scripts/rerun-failed-distributed-scenarios.sh
@@ -55,7 +56,8 @@ import {
 } from './test/distributed/harness/scenario-registry.js';
 
 const dir = resolve('${REPORT_DIR}');
-const files = readdirSync(dir).filter((f) => f.endsWith('.report.json'));
+const LOCAL_TARGET = 'local';
+const REPORT_SUFFIX = '.report.json';
 const results = [];
 const canonicalEntriesByScenario = new Map();
 for (const entry of CANONICAL_SCENARIO_MATRIX) {
@@ -81,29 +83,55 @@ function resolveCanonicalConfigForScenario(scenario, configPathOrName) {
   return normalizedConfig;
 }
 
-for (const f of files) {
+function listReportFiles(root) {
+  const files = [];
+  for (const entry of readdirSync(root, {withFileTypes: true})) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listReportFiles(path));
+    } else if (entry.isFile() && entry.name.endsWith(REPORT_SUFFIX)) {
+      files.push(path);
+    }
+  }
+  return files;
+}
+
+for (const file of listReportFiles(dir)) {
   try {
-    const r = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+    const r = JSON.parse(readFileSync(file, 'utf8'));
+    const target = r.metadata?.executionTarget;
+    if (target && target !== LOCAL_TARGET) continue;
     const s = r.scenarios && r.scenarios[0];
-    if (!s || s.passed) continue;
-    const configPath = r.config?.configPath || r.metadata?.configPath || '';
+    if (!s) continue;
+    const configPath =
+      r.metadata?.matrixConfig ||
+      r.config?.configPath ||
+      r.metadata?.configPath ||
+      '';
     const scenario = s.scenario;
     const ts = r.timestamp || '';
     if (!scenario) continue;
     const config = resolveCanonicalConfigForScenario(scenario, configPath);
     if (!config) continue;
-    results.push({scenario, config, ts, file: f});
+    results.push({
+      scenario,
+      config,
+      ts,
+      passed: s.passed === true,
+      file,
+    });
   } catch (_e) { /* skip */ }
 }
 
-// Sort by timestamp descending, deduplicate by scenario+config (keep latest)
+// Select the latest local result for each canonical config+scenario first.
+// Only after that selection do we decide whether it still needs a rerun.
 results.sort((a, b) => b.ts.localeCompare(a.ts));
 const seen = new Set();
 for (const r of results) {
   const key = r.config + '|' + r.scenario;
   if (seen.has(key)) continue;
   seen.add(key);
-  console.log(key);
+  if (!r.passed) console.log(key);
 }
 ") || true
 

@@ -11,6 +11,9 @@ import {
 import {
   collectDecisionBoundaryViolationsWithBaseline,
 } from '../../scripts/check-guideline-decision-boundaries.js';
+import {
+  buildHarnessRunnerArgs,
+} from '../../scripts/lab/harness.js';
 
 // The home-lab CLI (scripts/lab/*) landed on main past the guideline audits:
 // 197 raw literals outside a named constant owner and one decision boundary
@@ -47,6 +50,9 @@ const USAGE = [
   '  lab test changed|smoke|gate|postpush|all\n',
   '  lab test changed|all --lane ordinary|cpu-heavy|external-toolchain|bootstrap|exclusive|all ',
   '[--on NAME] [--sha COMMIT] [--split]\n',
+  '  lab test changed --lane LANE [--sha COMMIT] --base-sha COMMIT\n',
+  '      (--base-sha: the commit the change cone is measured from; ',
+  'default the merge base with origin/main)\n',
   '  lab fleet [--json]\n',
   '  lab provision [--output FILE] [--copy NAME]\n',
 ].join('');
@@ -54,6 +60,10 @@ const USAGE = [
 const PROTOTYPE_NAMED_COMMANDS = ['constructor', 'toString', 'hasOwnProperty', '__proto__'];
 const EXIT_FAILURE = 1;
 const UTF8 = 'utf8';
+const HARNESS_CONFIG = 'test/distributed/config/local-three-node.json';
+const HARNESS_SCENARIO = 'rolling-restart';
+const HARNESS_FAST_LOCAL = '--fast-local';
+const HARNESS_NO_FAST_LOCAL = '--no-fast-local';
 
 function lab(...args) {
   return spawnSync(process.execPath, [LAB_CLI, ...args], {encoding: UTF8});
@@ -106,10 +116,24 @@ test('a hand lab run refuses what it cannot run before it looks at anything', ()
     [['test', 'all', '--lane', 'exclusive', '--split'],
       'lab: --split divides the whole corpus: it takes --lane all'],
     [['test', 'all', '--lane', 'all', '--split', '--on'], 'lab: --on needs a machine name'],
+    [['test', 'changed', '--lane', 'all', '--base-sha'], 'lab: --base-sha needs a commit'],
+    [['test', 'all', '--lane', 'all', '--base-sha', 'main'],
+      'lab: --base-sha measures the change cone: it takes the changed profile'],
+    [['test', 'changed', '--base-sha', 'main'], 'lab: a lab test run names its lane with --lane'],
   ]) {
     const refused = labWithoutInventory(...args);
     assert.equal(refused.status, EXIT_FAILURE, `${args.join(' ')} exits non-zero`);
     assert.equal(refused.stderr, `${refusal}\n`, args.join(' '));
     assert.equal(refused.stdout, '', 'and runs nothing');
   }
+});
+
+test('physical lab harness makes no-fast-local non-overridable', () => {
+  const args = buildHarnessRunnerArgs({
+    configPath: HARNESS_CONFIG,
+    scenario: HARNESS_SCENARIO,
+    extraArgs: [HARNESS_FAST_LOCAL],
+  });
+  assert.equal(args[args.length - 1], HARNESS_NO_FAST_LOCAL);
+  assert.ok(args.indexOf(HARNESS_FAST_LOCAL) < args.indexOf(HARNESS_NO_FAST_LOCAL));
 });
