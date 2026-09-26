@@ -195,8 +195,31 @@ async function readReplaceCompletionAuthority(owner, operation) {
     authorityUnavailable(REPLACE_COMPLETION_AUTHORITY_WAIT.NOT_LEADER);
 }
 
+/**
+ * Where R-1f proposes the source's REMOVE_PEER: conf changes are taken only
+ * at the leader's port (round 2 F-1), so through the leader the completion
+ * authority named - its own answer - routed like the authority's redirect;
+ * null (the target) when that leader is the target or cannot be routed (the
+ * target then answers NOT_LEADER typed, and the attempt is re-issued once
+ * the observed leader moves).
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {Object} observation - The completion authority's observation.
+ * @return {Object|null} {replicaId, nodeId} or null.
+ */
+function replaceRetirementRouteOf(owner, operation, observation) {
+  const leaderReplicaId = observation?.leaderReplicaId;
+  const {targetReplicaId} = replaceReplicaIdsOf(owner, operation);
+  if (typeof leaderReplicaId !== 'string' || leaderReplicaId.length === 0 ||
+      leaderReplicaId === targetReplicaId) {
+    return null;
+  }
+  return memberRouteOf(owner, operation, leaderReplicaId);
+}
+
 export {
   isReplaceTargetGone,
   observedReplaceTargetStatus,
   readReplaceCompletionAuthority,
+  replaceRetirementRouteOf,
 };

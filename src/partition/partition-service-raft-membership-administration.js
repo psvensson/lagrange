@@ -10,6 +10,7 @@ import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION,
   RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
+  RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_OPERATION_OUTCOME,
 } from '../raft/raft-operation-port-constants.js';
 import {recoveryRetryWindowMsOf} from '../raft/raft-rs-runtime-tuning.js';
@@ -44,10 +45,12 @@ function reservePartitionRaftPeerIdentity(
 /**
  * What the port's answer to a membership proposal means for the admission:
  * CORE_OK is PROPOSED; a retryable host failure that left the group usable
- * (recoveryRequired false) is DEFERRED; every other answer is REFUSED. The
- * port's own outcome and reason ride along.
+ * (recoveryRequired false) is DEFERRED; the port's typed NOT_LEADER (conf
+ * changes are taken only at the leader's port, round 2 F-1) is NOT_LEADER,
+ * with the leader it named; every other answer is REFUSED. The port's own
+ * outcome and reason ride along.
  * @param {Object} answered - The port's settled answer.
- * @return {Object} {outcome, portOutcome, reason}.
+ * @return {Object} {outcome, portOutcome, reason, leaderReplicaId?}.
  */
 function admissionOfPortAnswer(answered) {
   const portOutcome = answered?.outcome;
@@ -57,6 +60,11 @@ function admissionOfPortAnswer(answered) {
   } else if (portOutcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
       answered.retryable === true && answered.recoveryRequired === false) {
     outcome = RAFT_MEMBERSHIP_ADMISSION_OUTCOME.DEFERRED;
+  } else if (portOutcome === RAFT_OPERATION_OUTCOME.CORE_REFUSED &&
+      answered.reason === RAFT_MEMBERSHIP_CHANGE_REFUSAL.NOT_LEADER) {
+    return {outcome: RAFT_MEMBERSHIP_ADMISSION_OUTCOME.NOT_LEADER,
+      portOutcome, reason: answered.reason,
+      leaderReplicaId: answered.leaderReplicaId ?? null};
   }
   return {outcome, portOutcome, reason: answered?.reason};
 }
@@ -129,6 +137,14 @@ function proposeAdmission(service, {replicaIdentity, peerAddress}) {
 //    change and would have dropped it); it latches nothing, so any later
 //    cache change still proposes it.
 // Every admission is re-evaluated from its services row, without a poll.
+// Proposals remembered without a latch and made again on the next
+// settlement or leadership gain: deferred by the leader's port, or refused
+// NOT_LEADER by a follower's (the leader proposes; this replica does if it
+// leads later).
+const REDRIVEN_OUTCOMES = Object.freeze(new Set([
+  RAFT_MEMBERSHIP_ADMISSION_OUTCOME.DEFERRED,
+  RAFT_MEMBERSHIP_ADMISSION_OUTCOME.NOT_LEADER,
+]));
 const ADMISSION_IN_FLIGHT_OUTCOMES = Object.freeze(new Set([
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME.PROPOSED,
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME.QUEUED,
@@ -156,7 +172,7 @@ function trackAdmission(service, replicaIdentity, outcome) {
   deferred.delete(replicaIdentity);
   if (ADMISSION_IN_FLIGHT_OUTCOMES.has(outcome)) {
     inFlight.add(replicaIdentity);
-  } else if (outcome === RAFT_MEMBERSHIP_ADMISSION_OUTCOME.DEFERRED) {
+  } else if (REDRIVEN_OUTCOMES.has(outcome)) {
     deferred.add(replicaIdentity);
   }
 }
@@ -191,6 +207,8 @@ function admitPartitionRaftPeer(service, {replicaIdentity, peerAddress}) {
   if (status?.role !== RaftRole.LEADER) {
     admission = {replicaIdentity,
       outcome: RAFT_MEMBERSHIP_ADMISSION_OUTCOME.NOT_LEADER};
+    // Re-driven if this replica gains leadership (it admits then).
+    trackAdmission(service, replicaIdentity, admission.outcome);
   } else if ((status.peers || []).some((peer) =>
     peer.replicaIdentity === replicaIdentity)) {
     admission = {replicaIdentity,
@@ -221,8 +239,7 @@ function retirementsDeferredOf(service) {
 
 function trackRetirement(service, change, answered) {
   const key = change.replicaIdentity ?? change.peerAddress;
-  if (admissionOfPortAnswer(answered).outcome ===
-      RAFT_MEMBERSHIP_ADMISSION_OUTCOME.DEFERRED) {
+  if (REDRIVEN_OUTCOMES.has(admissionOfPortAnswer(answered).outcome)) {
     retirementsDeferredOf(service).set(key, change);
   } else {
     retirementsDeferredOf(service).delete(key);
@@ -366,12 +383,14 @@ async function readPartitionReplicaMembership(service, sourceReplicaIdentity) {
 /**
  * Propose the removal of one voter through this replica's port: reserve its
  * identity (so the proposal names a raft peer this replica can address),
- * then REMOVE_PEER in the port's canonical shape. raft-rs forwards a
- * follower's proposal to its leader; removing a non-member is a no-op, so a
- * repeat is harmless. The answer is what the port said.
+ * then REMOVE_PEER in the port's canonical shape. Only the leader's port
+ * takes it: a follower answers NOT_LEADER naming the leader (round 2 F-1),
+ * so the caller addresses the leader. Removing a non-member is a no-op, so
+ * a repeat is harmless. The answer is what the port said.
  * @param {Object} service - The partition service.
  * @param {string} replicaIdentity - The voter to remove.
- * @return {Promise<Object>} {outcome, portOutcome, reason}.
+ * @return {Promise<Object>} {outcome, portOutcome, reason,
+ *   leaderReplicaId?}.
  */
 async function retirePartitionRaftPeer(service, replicaIdentity) {
   const reservation = reservePartitionRaftPeerIdentity(

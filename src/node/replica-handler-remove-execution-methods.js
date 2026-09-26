@@ -109,14 +109,15 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * state machine only permits failed -> removed).
      * @param {Object} context - {operationId, replicaId, partitionId,
      *   service, removalLifecycleSnapshot}.
-     * @return {Promise<Object>} {published, skipRemovingStatusWrite}.
+     * @return {Promise<Object>} {failedDurable, skipRemovingStatusWrite}:
+     *   failedDurable when the replica is FAILED (no retiring row, no wait).
      * @private
      */
     async publishReplicaRetiringRow({operationId, replicaId, partitionId,
       service, removalLifecycleSnapshot}) {
       if (removalLifecycleSnapshot.skipRemovingStatusWrite === true) {
         return {
-          published: removalLifecycleSnapshot.retiringRowDurable === true,
+          failedDurable: removalLifecycleSnapshot.retiringRowDurable !== true,
           skipRemovingStatusWrite: true,
         };
       }
@@ -126,7 +127,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           ReplicaStatus.REMOVING,
           {partitionId},
         );
-        return {published: true, skipRemovingStatusWrite: false};
+        return {failedDurable: false, skipRemovingStatusWrite: false};
       } catch (error) {
         if (this.shouldSkipReplicaRemovalLifecycleWrite(
           replicaId,
@@ -138,7 +139,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
             status: ReplicaStatus.FAILED,
             service,
           });
-          return {published: false, skipRemovingStatusWrite: true};
+          return {failedDurable: true, skipRemovingStatusWrite: true};
         }
         if (!isRetryableControlPlaneError(error)) {
           throw error;
@@ -150,7 +151,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           nodeId: this.nodeId,
           error: error.message,
         });
-        return {published: false, skipRemovingStatusWrite: false};
+        return {failedDurable: false, skipRemovingStatusWrite: false};
       }
     }
     /**
@@ -291,7 +292,10 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
           removalLifecycleSnapshot,
         });
         skipRemovingStatusWrite = retiringRow.skipRemovingStatusWrite;
-        if (retiringRow.published) {
+        // The wait reads the port's applied configuration, never the row: it
+        // holds whatever the row write answered (a deferred write too). Only
+        // a FAILED replica - the failure detector's verdict - skips it.
+        if (!retiringRow.failedDurable) {
           await this.awaitReplicaRemovalConsensusExit(service, {
             operationId,
             replicaId,

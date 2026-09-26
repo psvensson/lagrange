@@ -69,7 +69,7 @@ import {
 } from './raft-rs-runtime-tuning.js';
 import {shapeGroupObservation} from './raft-rs-status-observation.js';
 import {
-  confChangeProposalDeferral,
+  confChangeProposalRefusal,
   confChangeSettlement,
 } from './raft-rs-conf-change-admission.js';
 import {
@@ -963,9 +963,10 @@ function announce(group, expectedGeneration) {
   }
 }
 
-// A conf-change proposal the core would drop is deferred typed, read from
-// the core's status and configuration in this turn (verification V2).
-function deferredConfChange(group, expectedGeneration, change) {
+// A conf-change proposal is taken only at the leader's port; one the core
+// would drop is deferred typed - read from the core's status and
+// configuration in this turn (verification V2, round 2 F-1).
+function refusedConfChange(group, expectedGeneration, change) {
   const status = invokeCoreAt(group, expectedGeneration, 'status');
   if (!status.ok) {
     return status.result;
@@ -975,7 +976,9 @@ function deferredConfChange(group, expectedGeneration, change) {
   if (!conf.ok) {
     return conf.result;
   }
-  return confChangeProposalDeferral(status.value, conf.value, change);
+  return confChangeProposalRefusal({status: status.value,
+    confState: conf.value, change,
+    leaderReplicaIdOf: (lead) => semanticLeaderIdentity(group, lead)});
 }
 
 // The configuration's voter-bearing and learner parts as one comparable key.
@@ -1287,10 +1290,10 @@ function performCommand(group, command, expectedGeneration) {
       recoveryRequired: false,
     });
   }
-  const deferred = command.type === PROPOSE_CONF_CHANGE ?
-    deferredConfChange(group, expectedGeneration, command.change) : null;
-  if (deferred !== null) {
-    return deferred;
+  const refused = command.type === PROPOSE_CONF_CHANGE ?
+    refusedConfChange(group, expectedGeneration, command.change) : null;
+  if (refused !== null) {
+    return refused;
   }
   const invoked = invokeCoreAt(
     group, expectedGeneration, primitive[0], ...primitive[1]);
