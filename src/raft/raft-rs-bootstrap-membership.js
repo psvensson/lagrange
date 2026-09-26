@@ -4,28 +4,50 @@
 // the raft peer ids of the core's initial configuration and the participation
 // gate's bootstrap index.
 //
-//   GENESIS (the default: a founder, a seed partition) - the founding set,
-//     bootstrap index 0;
+//   GENESIS (a founder: the founding provisioner, a seed partition) - the
+//     founding set, bootstrap index 0;
 //   COMMITTED (a join) - the group's committed configuration as its leader
 //     answered it at applied index j, plus this replica (owner decision O2),
 //     learners passed through, bootstrap index j;
 //   DURABLE_RECORD (a restart or rejoin) - nothing: the runtime owner restores
 //     the record or refuses.
 //
-// A replica with a durable record is restored from it whatever it was handed
-// here. Nothing in this module reads a row.
+// Every stamp passes the one stamp validator (validateBootstrapMembershipStamp)
+// here, whoever built it; an absent stamp is refused typed (STAMP_INVALID,
+// defect MISSING) and never read as a genesis (verification V1a): the
+// durable-record bootstrap is the only opening without a stamp. A refusal is
+// the port's typed CORE_REFUSED, which the partition surfaces as its
+// consensus init refusal. A replica with a durable record is restored from it
+// whatever valid stamp it was handed. Nothing in this module reads a row.
 
 import {
   BOOTSTRAP_MEMBERSHIP_SOURCE,
+  COMMITTED_MEMBERSHIP_REFUSAL,
   COMMITTED_MEMBERSHIP_STAMP_DEFECT,
 } from './raft-committed-membership-constants.js';
 import {ascendingPeerIdOrder} from './raft-rs-committed-membership-read.js';
+import {validateBootstrapMembershipStamp} from
+  './raft-committed-membership-stamp.js';
+import {deepFreeze} from './raft-operation-port.js';
+import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
+import {RUNTIME_PHASE} from './raft-rs-runtime-owner-constants.js';
 
 const GENESIS_BOOTSTRAP_INDEX = '0';
 
+// The port refuses to open: a typed, non-retryable CORE_REFUSED carrying the
+// stamp's defect, thrown so the partition's port opening surfaces it as its
+// consensus init refusal.
 function stampDefect(defect) {
+  const consensus = deepFreeze({
+    outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+    reason: COMMITTED_MEMBERSHIP_REFUSAL.STAMP_INVALID,
+    defect,
+    phase: RUNTIME_PHASE.STAMP_VALIDATION,
+    retryable: false,
+    recoveryRequired: false,
+  });
   return Object.assign(new Error(
-    `raft-rs bootstrap membership refused: ${defect}`), {defect});
+    `raft-rs bootstrap membership refused: ${defect}`), {defect, consensus});
 }
 
 function committedBootstrap(membership, registry, peerId) {
@@ -55,30 +77,30 @@ function committedBootstrap(membership, registry, peerId) {
 
 /**
  * The bootstrap the runtime owner opens a group from when it holds no record.
- * @param {Object} options - {membership, bootstrapPeerIds, registry, peerId}:
- *   the request's bootstrap membership (absent: a genesis of the bootstrap
- *   peer ids), the request's bootstrap peer ids, this replica's identity
- *   registry and its raft peer id.
+ * @param {Object} options - {membership, registry, peerId}: the request's
+ *   bootstrap membership (a stamp, or the durable-record bootstrap), this
+ *   replica's identity registry and its raft peer id.
  * @return {Object} Frozen {source, voters, learners, bootstrapIndex,
  *   selfCommittedVoter}.
+ * @throws {Error} The typed STAMP_INVALID refusal (`consensus`) of an absent
+ *   or invalid stamp.
  */
-function bootstrapOfRequest({membership, bootstrapPeerIds, registry,
-  peerId}) {
-  const kind = membership?.kind ?? BOOTSTRAP_MEMBERSHIP_SOURCE.GENESIS;
-  if (kind === BOOTSTRAP_MEMBERSHIP_SOURCE.COMMITTED) {
-    return Object.freeze(committedBootstrap(membership, registry, peerId));
-  }
-  if (kind === BOOTSTRAP_MEMBERSHIP_SOURCE.DURABLE_RECORD) {
-    return Object.freeze({source: kind, voters: [], learners: [],
+function bootstrapOfRequest({membership, registry, peerId}) {
+  if (membership?.kind === BOOTSTRAP_MEMBERSHIP_SOURCE.DURABLE_RECORD) {
+    return Object.freeze({source: membership.kind, voters: [], learners: [],
       bootstrapIndex: null, selfCommittedVoter: false});
   }
-  if (kind !== BOOTSTRAP_MEMBERSHIP_SOURCE.GENESIS) {
-    throw stampDefect(COMMITTED_MEMBERSHIP_STAMP_DEFECT.UNKNOWN_KIND);
+  const validation = validateBootstrapMembershipStamp(membership);
+  if (!validation.valid) {
+    throw stampDefect(validation.defect);
   }
-  const founders = membership?.founders ?? bootstrapPeerIds;
+  if (membership.kind === BOOTSTRAP_MEMBERSHIP_SOURCE.COMMITTED) {
+    return Object.freeze(committedBootstrap(membership, registry, peerId));
+  }
   return Object.freeze({
-    source: kind,
-    voters: founders.map((identity) => registry.registerReplica(identity)),
+    source: membership.kind,
+    voters: membership.founders.map((identity) =>
+      registry.registerReplica(identity)),
     learners: [],
     bootstrapIndex: GENESIS_BOOTSTRAP_INDEX,
     selfCommittedVoter: false,

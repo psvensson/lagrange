@@ -9,6 +9,7 @@
  */
 
 import {PartitionService} from '../../partition/partition-service.js';
+import {genesisStamp} from '../../raft/raft-committed-membership-stamp.js';
 import {assertCritical} from '../../utils/assert.js';
 import {AssignmentEpochManager} from '../../rebalancer/assignment-epoch-manager.js';
 import {AssignmentEpoch} from '../../rebalancer/assignment-epoch.js';
@@ -202,6 +203,11 @@ class SeedPartitionsPhase {
         keyRange: {start: null, end: null},
         replicaId: options.replicaId,
         replicaIds: options.replicaIds,
+        // The seed founds each system partition from an explicit GENESIS
+        // stamp of its founding list, validated by the port like every stamp
+        // (verification V1a); a seed that holds a durable record restores
+        // from it instead.
+        bootstrapMembership: genesisStamp(options.replicaIds),
         peerAddresses: options.peerAddresses,
         nodeId: d.getNodeId(),
         transport: d.getTransport(),

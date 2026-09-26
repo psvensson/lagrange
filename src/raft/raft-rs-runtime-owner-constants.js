@@ -101,6 +101,9 @@ const RUNTIME_PHASE = Object.freeze({
   ADMISSION: 'admission',
   PROGRESS_PROBE: 'progress-probe',
   LEADERSHIP_TRANSFER: 'leadership-transfer',
+  // The bootstrap membership the port was handed failed the stamp validator
+  // (absent, or invalid): the port does not open.
+  STAMP_VALIDATION: 'bootstrap-stamp-validation',
   // The group's durable record could not be read where it is opened or
   // reconstructed from (a missing table, SQLITE_IOERR, SQLITE_CORRUPT).
   DURABLE_RECORD_READ: 'durable-record-read',

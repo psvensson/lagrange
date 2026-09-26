@@ -152,7 +152,7 @@ function createRaftRsOperationPort(request) {
   const peerId = registry.registerReplica(replicaIdentity);
   // The bootstrap peer ids are address hints: each is reserved so the
   // replica can name and reach it. The configuration the group opens from is
-  // the bootstrap membership's (a genesis of these ids when none is given).
+  // the bootstrap membership's alone (an absent one is refused typed).
   const bootstrapPeerIds = required(
     request, RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS);
   for (const identity of bootstrapPeerIds) {
@@ -160,7 +160,6 @@ function createRaftRsOperationPort(request) {
   }
   const bootstrap = bootstrapOfRequest({
     membership: request[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP],
-    bootstrapPeerIds,
     registry,
     peerId,
   });
