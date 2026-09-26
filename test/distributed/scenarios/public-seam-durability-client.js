@@ -33,6 +33,7 @@ import {
   PUBLIC_SEAM_CERTIFICATION,
   PUBLIC_SEAM_CERTIFICATION_LINE_PREFIX,
   PUBLIC_SEAM_CERTIFICATION_SOURCE,
+  PUBLIC_SEAM_IDENTIFIER_SOURCE,
   PUBLIC_SEAM_LISTENER,
   PUBLIC_SEAM_OUTCOME_CLASS,
   PUBLIC_SEAM_TOPOLOGY_KEY_FRAGMENTS,
@@ -40,10 +41,6 @@ import {
 
 const OBJECT_TYPE = 'object';
 const STRING_TYPE = 'string';
-const IDENTIFIER_SOURCE = Object.freeze({
-  READ: 'read',
-  UNAVAILABLE: 'unavailable: ',
-});
 const KEY_PATH_SEPARATOR = '.';
 const ROOT_KEY_PATH = '$';
 const ERROR_FIELD = Object.freeze({
@@ -281,18 +278,21 @@ async function listHarnessTopologyIdentifiers(ctx) {
     }
   }
   let partitionIds = [];
-  let partitionSource = IDENTIFIER_SOURCE.READ;
+  let partitionSource = PUBLIC_SEAM_IDENTIFIER_SOURCE.READ;
+  let partitionError = null;
   try {
     partitionIds = rowsOf(await ctx.writer.query(SELECT_PARTITION_IDS_SQL))
       .map((row) => row?.[COLUMN.PARTITION_ID])
       .filter((id) => typeof id === STRING_TYPE && id.length > ZERO);
   } catch (error) {
-    partitionSource = `${IDENTIFIER_SOURCE.UNAVAILABLE}${error.message}`;
+    partitionSource = PUBLIC_SEAM_IDENTIFIER_SOURCE.UNAVAILABLE;
+    partitionError = error.message;
   }
   return {
     sources: {
       nodeValueCount: nodeValues.length,
       partitionIdCount: partitionIds.length,
+      partitionIdError: partitionError,
       partitionIds: partitionSource,
     },
     values: [...new Set([...nodeValues, ...partitionIds])],

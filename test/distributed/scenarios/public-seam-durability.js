@@ -36,6 +36,7 @@ import {
   provisionPublicListener,
 } from './public-seam-durability-client.js';
 import {
+  PUBLIC_SEAM_IDENTIFIER_SOURCE,
   PUBLIC_SEAM_INTERIM_RETRY_POLICY,
   PUBLIC_SEAM_NOT_RUN_REASON,
   PUBLIC_SEAM_OBJECT,
@@ -426,8 +427,11 @@ async function stepTopologyLeakCheck(ctx) {
       leaks.push(`${observation.nodeId}:${path}`);
     }
   }
-  return verdictOf(leaks.length === ZERO,
-    'no topology-bearing key in any public result or error',
+  const complete = identifiers.sources.partitionIds ===
+    PUBLIC_SEAM_IDENTIFIER_SOURCE.READ;
+  return verdictOf(complete && leaks.length === ZERO,
+    'no topology-bearing key or known identifier in any public result or ' +
+    'error, scanned with the complete identifier set',
     {
       identifierSources: identifiers.sources,
       leakCount: leaks.length,
@@ -435,7 +439,10 @@ async function stepTopologyLeakCheck(ctx) {
       sample: leaks.slice(ZERO, LEAK_SAMPLE_LIMIT),
       withheld: Math.max(ZERO, leaks.length - LEAK_SAMPLE_LIMIT),
     },
-    'public results carry topology-bearing keys');
+    complete ?
+      'public results carry topology-bearing keys or identifiers' :
+      'partition identifiers unavailable; the value leak scan is ' +
+      `incomplete: ${identifiers.sources.partitionIdError}`);
 }
 
 const BINDING_STEPS = createBindingSteps(pollUntil);

@@ -1,10 +1,17 @@
 import assert from 'node:assert/strict';
-import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync}
-  from 'node:fs';
+import {
+  existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync,
+  writeFileSync,
+} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {test} from '../../../../src/test-helpers/tap.js';
-import {buildImageContext} from '../docker-build-context.js';
+import {
+  DOCKERFILE_CONTEXT_CONSTRUCT,
+  DockerfileContextUnsupportedError,
+  buildImageContext,
+} from '../docker-build-context.js';
 
 // Parity falsifier for the distributed harness image build: every source the
 // repository Dockerfile COPYs from the build context must reach the explicit
@@ -15,7 +22,8 @@ import {buildImageContext} from '../docker-build-context.js';
 // The Dockerfile is read here with its own minimal reading, independent of
 // the builder's parser: COPY lines without --from=, last token = target.
 
-const REPOSITORY_DOCKERFILE = new URL('../../../../Dockerfile', import.meta.url);
+const REPOSITORY_ROOT = new URL('../../../../', import.meta.url);
+const REPOSITORY_DOCKERFILE = new URL('Dockerfile', REPOSITORY_ROOT);
 const DOCKERFILE_NAME = 'Dockerfile';
 const TEMP_PREFIX = 'docker-build-context-';
 const PLACEHOLDER_FILE = 'placeholder.txt';
@@ -139,5 +147,99 @@ test('docker build context refuses an unreadable Dockerfile', (t) => {
 
   assert.throws(() => buildImageContext(contextPath, DOCKERFILE_NAME),
     /Dockerfile/u);
+  t.end();
+});
+
+// Fail-closed grammar: the builder supports exactly the constructs the
+// repository Dockerfile uses; anything it cannot map to explicit context
+// entries is a typed refusal naming the construct and the line, never a
+// silently wrong (e.g. near-empty) context.
+function buildFrom(t, dockerfileLines, sources = []) {
+  const contextPath = mkdtempSync(path.join(tmpdir(), TEMP_PREFIX));
+  t.teardown(() => rmSync(contextPath, {force: true, recursive: true}));
+  writeFileSync(path.join(contextPath, DOCKERFILE_NAME),
+    dockerfileLines.join('\n'));
+  for (const source of sources) {
+    materialize(contextPath, source);
+  }
+  return () => buildImageContext(contextPath, DOCKERFILE_NAME);
+}
+
+const REFUSALS = [
+  ['a whole-context "." source', ['FROM node:22', 'COPY . ./'],
+    DOCKERFILE_CONTEXT_CONSTRUCT.WHOLE_CONTEXT, 2],
+  ['a whole-context "./" source', ['FROM node:22', '', 'COPY ./ /app/'],
+    DOCKERFILE_CONTEXT_CONSTRUCT.WHOLE_CONTEXT, 3],
+  ['a wildcard source', ['FROM node:22', 'COPY package*.json ./'],
+    DOCKERFILE_CONTEXT_CONSTRUCT.WILDCARD, 2],
+  ['a JSON-form COPY with a leading flag',
+    ['FROM node:22', 'COPY --chown=1:1 ["a", "./"]'],
+    DOCKERFILE_CONTEXT_CONSTRUCT.JSON_FORM, 2],
+  ['a JSON-form COPY', ['FROM node:22', 'COPY ["a", "./"]'],
+    DOCKERFILE_CONTEXT_CONSTRUCT.JSON_FORM, 2],
+  ['an ADD with a local source', ['FROM node:22', 'ADD vendor/x.tar ./'],
+    DOCKERFILE_CONTEXT_CONSTRUCT.ADD_LOCAL, 2],
+  ['a source escaping the context', ['FROM node:22', 'COPY ../x ./'],
+    DOCKERFILE_CONTEXT_CONSTRUCT.OUTSIDE_CONTEXT, 2],
+  ['a heredoc COPY', ['FROM node:22', 'COPY <<EOF /app/x', 'y', 'EOF'],
+    DOCKERFILE_CONTEXT_CONSTRUCT.HEREDOC, 2],
+];
+
+for (const [label, lines, construct, line] of REFUSALS) {
+  test(`docker build context refuses ${label}`, (t) => {
+    const build = buildFrom(t, lines);
+    assert.throws(build, (error) => {
+      assert.ok(error instanceof DockerfileContextUnsupportedError,
+        String(error));
+      assert.equal(error.construct, construct);
+      assert.equal(error.line, line);
+      assert.ok(stringIncludes(error.message, `line ${line}`), error.message);
+      return true;
+    });
+    t.end();
+  });
+}
+
+test('docker build context ignores an ADD from a remote URL (no context ' +
+  'read)', (t) => {
+  const build = buildFrom(t,
+    ['FROM node:22', 'ADD https://example.com/x.tar /opt/', 'COPY a.txt ./'],
+    ['a.txt']);
+  assert.deepEqual(build().src, [DOCKERFILE_NAME, 'a.txt']);
+  t.end();
+});
+
+test('docker build context strips comments before joining continuations, ' +
+  'as Docker does', (t) => {
+  const build = buildFrom(t, [
+    'FROM node:22',
+    '# a comment that ends in a backslash \\',
+    'COPY tools/ ./tools/',
+    'COPY a.txt \\',
+    '# a comment inside the continuation',
+    '  b.txt ./',
+  ], ['tools/', 'a.txt', 'b.txt']);
+  assert.deepEqual(build().src, [DOCKERFILE_NAME, 'a.txt', 'b.txt',
+    'tools/nested/placeholder.txt']);
+  t.end();
+});
+
+test('every COPY source of the repository Dockerfile resolves to files ' +
+  'that exist in the real repository', (t) => {
+  const repositoryRoot = fileURLToPath(REPOSITORY_ROOT);
+  const sources = copySources(readFileSync(REPOSITORY_DOCKERFILE, UTF8));
+  const {src} = buildImageContext(repositoryRoot, DOCKERFILE_NAME);
+  const unresolved = arrayFilter(sources, (source) => {
+    const normalized = normalizedSource(source);
+    const covering = arrayFilter(src, (entry) => entry === normalized ||
+      stringStartsWith(entry, `${normalized}${DIRECTORY_SUFFIX}`));
+    return !arraySome(covering, (entry) => {
+      const absolute = path.join(repositoryRoot, entry);
+      return existsSync(absolute) && statSync(absolute).isFile();
+    });
+  });
+  assert.deepEqual(unresolved, [],
+    `COPY sources with no existing file in the repository: ${
+      unresolved.join(', ')}`);
   t.end();
 });

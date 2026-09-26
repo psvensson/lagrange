@@ -11,10 +11,12 @@ import {
   deriveCertificationStatus,
   discoverPublicEndpoints,
   findTopologyLeakKeys,
+  listHarnessTopologyIdentifiers,
 } from '../../scenarios/public-seam-durability-client.js';
 import {
   PUBLIC_SEAM_BINDING,
   PUBLIC_SEAM_CERTIFICATION,
+  PUBLIC_SEAM_IDENTIFIER_SOURCE,
   PUBLIC_SEAM_INTERIM_RETRY_POLICY,
   PUBLIC_SEAM_NOT_RUN_REASON,
   PUBLIC_SEAM_OUTCOME_CLASS,
@@ -240,7 +242,9 @@ function createCluster({hooks = {}, scenarioConfig = {}, overrides = {}} = {}) {
               hooks.portsFor(node.id, calls.discover) : [PUBLIC_PORT]]));
         },
         listTopologyIdentifiers: async (ctx) => ({
-          sources: {partitionIds: 'read'},
+          sources: hooks.identifierSources || {
+            partitionIds: PUBLIC_SEAM_IDENTIFIER_SOURCE.READ,
+          },
           values: [...arrayMap(ctx.nodes, (node) => node.id),
             ...(hooks.partitionIds || [])],
         }),
@@ -707,6 +711,48 @@ test('public-seam-durability fails the leak check on a partition id in an ' +
     [PUBLIC_SEAM_STEP.TOPOLOGY_LEAK_CHECK]);
   assert.ok(arraySome(leak.actual.sample, (entry) =>
     stringEndsWith(entry, '.message=p-objects-7')), leak.actual.sample);
+  t.end();
+});
+
+test('public-seam-durability fails the leak check closed when partition ' +
+  'identifiers are unavailable', async (t) => {
+  const {cluster} = createCluster({hooks: {identifierSources: {
+    partitionIdError: 'admin lane refused',
+    partitionIds: PUBLIC_SEAM_IDENTIFIER_SOURCE.UNAVAILABLE,
+  }}});
+  const report = await runExpectingFailure(cluster);
+  const leak = stepsByName(report)[PUBLIC_SEAM_STEP.TOPOLOGY_LEAK_CHECK];
+
+  assert.deepEqual(report.failedSteps,
+    [PUBLIC_SEAM_STEP.TOPOLOGY_LEAK_CHECK]);
+  assert.equal(leak.actual.leakCount, 0);
+  assert.ok(stringStartsWith(leak.reason, 'partition identifiers unavailable'),
+    leak.reason);
+  t.end();
+});
+
+test('public-seam-durability default identifier source reports an ' +
+  'unreadable partition list as UNAVAILABLE', async (t) => {
+  const identifiers = await listHarnessTopologyIdentifiers({
+    nodes: [{id: 'n1', ip: '10.1.1.1'}],
+    writer: {query: async () => {
+      throw new Error('admin lane refused');
+    }},
+  });
+  assert.equal(identifiers.sources.partitionIds,
+    PUBLIC_SEAM_IDENTIFIER_SOURCE.UNAVAILABLE);
+  assert.equal(identifiers.sources.partitionIdError, 'admin lane refused');
+  assert.deepEqual(identifiers.values, ['n1', '10.1.1.1']);
+  t.end();
+});
+
+test('public-seam-durability leak fragments are broad word prefixes ' +
+  '(hostname is caught by design)', (t) => {
+  assert.deepEqual(findTopologyLeakKeys({
+    followerOf: 1, hostname: 'h', lease_expires_at: 2, memberCount: 3,
+    placementEpoch: 4, transactions: 5, accountId: 6,
+  }), ['$.followerOf', '$.hostname', '$.lease_expires_at', '$.memberCount',
+    '$.placementEpoch']);
   t.end();
 });
 
