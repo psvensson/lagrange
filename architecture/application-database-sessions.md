@@ -140,8 +140,9 @@ internal result: a frozen null-prototype `{rows, affectedRows}`.
 
 - `rows` is a fresh array of plain objects holding the statement's own row
   data (own enumerable data properties copied; `BLOB` values are passed
-  through as SqlCore returns them, and a routed `BLOB` bind is currently
-  rejected: finding F-BLOB-ROUTED-BYTES). A
+  through as SqlCore returns them, and a `BLOB` bind is currently rejected
+  on the partition write path even with a local leader: finding
+  F-BLOB-ROUTED-BYTES). A
   statement that produced no rows returns `[]`. Row-level internals are
   already removed by SqlCore's owner projection
   (`TableCreationService.stripPartitionDetails`).
