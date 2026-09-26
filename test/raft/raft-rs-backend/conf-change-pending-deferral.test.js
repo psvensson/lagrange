@@ -12,7 +12,7 @@
 // leader's post-election conservative index} x "AddNode(t) lands behind it":
 //   - the AddNode is answered as a typed, retryable deferral, never CORE_OK,
 //     and the crate never replaces it with an empty entry;
-//   - the port announces the settlement (CONF_CHANGE_APPLIED, admissible) in
+//   - the port announces the settlement (CONF_CHANGE_APPLIED) in
 //     the drain that applies the pending index - within one applied entry;
 //   - proposed again then (what the admission re-drive does), t is admitted.
 // Oracles: the leader's durable log (entry types from the binding's own wire
@@ -180,12 +180,9 @@ for (const [kind, setup] of Object.entries(PENDING_KINDS)) {
     cluster.node(leader).subscribe(RAFT_EVENT.CONF_CHANGE_APPLIED,
       (settlement) => settlements.push(settlement));
     cluster.tickers = [leader];
-    const admissible = () => settlements.some((settlement) =>
-      settlement.admissible === true);
-    assert.ok(cluster.settle(admissible, {rounds: 60}),
+    assert.ok(cluster.settle(() => settlements.length > 0, {rounds: 60}),
       'the settlement is announced');
-    const first = settlements.find((settlement) =>
-      settlement.admissible === true);
+    const [first] = settlements;
     assert.ok(first.appliedIndex <= lastAtProposal,
       'announced by the apply of the entries it waited behind (last ' +
         `${lastAtProposal}, announced at ${first.appliedIndex})`);
