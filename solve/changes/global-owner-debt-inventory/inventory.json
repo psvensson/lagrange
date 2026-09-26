@@ -6,7 +6,7 @@
       {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 426934,
-        "sha256": "e450af709fa6f022cb9d6bb71b37ecdad9b5f0af0ac4c95464592471686e1fd9"
+        "sha256": "11e7b757410b0db66fac854c0e6c14ace8e84dfc69b5d045f2d2e25ed56cd466"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2580395,
-        "sha256": "edaa8d41f41d8e3d58092f411dbb9e660f0bfc144e800800efbaa0f359fb3004"
+        "bytes": 2580389,
+        "sha256": "f3ea7aba2262aee6dab21ff8aee86218fe254d263957fb20b8a3e4dd24737add"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "7e08d378610c605e33e4ae5b77318f0ead9ce0d6af3b7cb4184f5b42bded636c"
+        "sha256": "b717018a5b7c6a6ecb76758965578d0312afc006e73adb46dc308462633d1467"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "dcfb8d11d3125d0a6b239c8d2fcf3b508ee0aaefaab42163577cda9d5b7e5183"
+        "sha256": "f7186c766205dc039495def0b25f910a7ba35b110663da75d0593b7a174f1a9c"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "74dba32b4b9079ae5538df899fc48a0d7626399af17617482d514fcbee43d0eb"
+    "inputDigest": "f7d6d34a60086ccffdc17b3cbd64b24172dc8f53a15d73be3feb857593453761"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 426934,
-        "sha256": "e450af709fa6f022cb9d6bb71b37ecdad9b5f0af0ac4c95464592471686e1fd9"
+        "sha256": "11e7b757410b0db66fac854c0e6c14ace8e84dfc69b5d045f2d2e25ed56cd466"
       },
       "declaredCount": 1809,
       "observedCount": 1809,
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "7e08d378610c605e33e4ae5b77318f0ead9ce0d6af3b7cb4184f5b42bded636c"
+          "sha256": "b717018a5b7c6a6ecb76758965578d0312afc006e73adb46dc308462633d1467"
         },
         "cloneGroups": 55,
         "duplicatedLines": 1777,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "dcfb8d11d3125d0a6b239c8d2fcf3b508ee0aaefaab42163577cda9d5b7e5183"
+          "sha256": "f7186c766205dc039495def0b25f910a7ba35b110663da75d0593b7a174f1a9c"
         },
         "cloneGroups": 787,
         "duplicatedLines": 30304,
@@ -167,15 +167,15 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2580395,
-        "sha256": "edaa8d41f41d8e3d58092f411dbb9e660f0bfc144e800800efbaa0f359fb3004"
+        "bytes": 2580389,
+        "sha256": "f3ea7aba2262aee6dab21ff8aee86218fe254d263957fb20b8a3e4dd24737add"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "179bfde1e72f3da8bc31d3ec9f50e07e50aa5fd210c245d13733a230b08d0fc4",
+      "sourceDigest": "ccbb9d09fd9209a12f0fa7c3508903caffe77ce26a70fbf34ab119a59f786c0b",
       "moduleCount": 5012,
       "edgeCount": 23752,
       "unresolvedCount": 34
@@ -185,7 +185,7 @@
     "sourceSignalCount": 2621,
     "assignedSignalCount": 2621,
     "uniqueAssignmentCount": 2621,
-    "digest": "3cc98ea6338a4c2e250683abf414cd15eac8abff0611fad3c5addb13fb487e1f"
+    "digest": "a278bb02b35c6434fe9c944de427ce5a19a6fce463db81a1ada072f5c81723b6"
   },
   "signalCounts": {
     "cognitive": 159,
