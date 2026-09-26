@@ -16,7 +16,7 @@
  *    a refused attempt resolves and the next one names the same target;
  *  - attemptSeq echo: a late answer of an earlier attempt is dropped;
  *  - fresh leadership decides: removal proceeds once the witness reports the
- *    target (or another non-source replica) leading;
+ *    target itself leading (BR11);
  *  - F-b: no handoff leaves for an operation that became terminal;
  *  - target NOT_FOUND fails the REPLACE before its intent (no retarget).
  *
@@ -265,6 +265,33 @@ test('attemptSeq echo: a late answer of an earlier attempt is dropped',
       await harness.shutdown();
     }
   });
+
+test('attemptSeq echo, routed: an answer echoing another attempt through the ' +
+  'real dispatch leaves the current attempt outstanding', async (t) => {
+  const harness = await createHarness({stepDownResponse: (payload) => ({
+    status: ReplicaOperationResponseStatus.COMPLETED,
+    handoffBranch: REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REQUESTED,
+    [ReplicaOperationField.ATTEMPT_SEQ]:
+      payload[ReplicaOperationField.ATTEMPT_SEQ] - 1,
+  })});
+  try {
+    const lateBefore = readReplaceHandoffLateAnswerCount(harness.owner);
+    await harness.coordinator.executeOperation(harness.operation);
+    const attempt = readReplaceHandoffAttempt(harness.owner,
+      harness.operation.operationId);
+    t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+    t.equal(attempt?.answerClass, null,
+      'the mismatched answer resolved nothing');
+    t.equal(readReplaceHandoffLateAnswerCount(harness.owner),
+      lateBefore + 1, 'it was counted late');
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.stepDowns().length, 1,
+      'the outstanding attempt blocks a second handoff');
+    t.equal(harness.removals().length, 0, 'and no removal');
+  } finally {
+    await harness.shutdown();
+  }
+});
 
 test('F-b: no handoff leaves for an operation that became terminal',
   async (t) => {

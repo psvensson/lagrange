@@ -33,8 +33,13 @@
  *  - source-row class: the REPLACE source replica's lifecycle row as the
  *    cache holds it (a change wakes the owner through
  *    wakeReplaceOwnersForReplicaRow, from the node's cache-change feed);
- *  - attempt state: the owner's handoff attempt (sequence, answer class)
- *    and R-1f attempt (sequence, answered or not).
+ *  Attempt state is deliberately NOT in the level: it is the owner's own
+ *  output, changed inside the owner's turn, so an entry level captured
+ *  before a decision that issues an attempt would always differ and the
+ *  owner would wake itself (a self-redrive that joins the next entry's lane).
+ *  Attempt resolution is an answer (the handoff's E11 continuation decides
+ *  again at once; an R-1f answer is recorded in the same turn) or elapsed
+ *  time (the transfer window / backstop, reached by the 1 s fallback).
  *
  * Lost-wakeup rule. The level is captured BEFORE the owner's reads. When the
  * owner waits it subscribes (once, permanently), registers the waiter with
@@ -55,10 +60,6 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 import {
   runDeferredSafetyReentryTurn,
 } from './operation-workflow-dispatch-rearm-evidence.js';
-import {
-  readReplaceHandoffAttempt,
-} from './operation-workflow-replace-handoff-attempt.js';
-import {readOwnerState} from './operation-workflow-replace-owner-state.js';
 
 const {
   OperationType,
@@ -145,7 +146,6 @@ function readReplaceOwnerLevel(owner, operation, nodeIds) {
     consensusLevel,
     concurrentOperationLevel(owner, operation),
     sourceRowLevel(owner, operation),
-    attemptLevel(owner, operation),
   ].join(LEVEL_PART_SEPARATOR);
 }
 
@@ -161,20 +161,6 @@ function sourceRowLevel(owner, operation) {
   return String(owner.repository.getObservedReplicaStatusFromCache(
     sourceReplicaId, operation.partitionId, operation.sourceNodeId,
     {allowPartitionNodeFallback: false}) ?? NO_CONSENSUS_OBSERVATION);
-}
-
-// The owner's own attempt state: the handoff attempt and the R-1f attempt.
-function attemptLevel(owner, operation) {
-  const handoff = readReplaceHandoffAttempt(owner, operation?.operationId);
-  const retirement = readOwnerState(owner).retirementAttemptByOperationId
-    .get(operation?.operationId);
-  return [
-    handoff?.attemptSeq ?? NO_CONSENSUS_OBSERVATION,
-    handoff?.answerClass ?? NO_CONSENSUS_OBSERVATION,
-    retirement?.attemptSeq ?? NO_CONSENSUS_OBSERVATION,
-    retirement ? (retirement.answer === null ? LEVEL_FALSE : LEVEL_TRUE) :
-      NO_CONSENSUS_OBSERVATION,
-  ].join(LEVEL_FIELD_SEPARATOR);
 }
 
 /**
