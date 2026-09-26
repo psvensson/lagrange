@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2155,
+    "ordinary": 2156,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2172,
-  "digest": "fnv1a32-1b6d1f5f",
+  "censusSize": 2173,
+  "digest": "fnv1a32-ff7873b4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1700,6 +1700,7 @@
     "test/rebalancer/unified-rebalancer-triggers-system-partition-defer.test.js": "ordinary",
     "test/rebalancer/unified-rebalancer.test.js": "ordinary",
     "test/rebalancer/user-table-leader-placement-cure.test.js": "ordinary",
+    "test/release/embedded-node-worker-contract.test.js": "ordinary",
     "test/release/project-hardening-contracts.test.js": "ordinary",
     "test/release/public-api-side-effect-boundary.test.js": "ordinary",
     "test/release/release-pipeline-proof-reuse.test.js": "ordinary",

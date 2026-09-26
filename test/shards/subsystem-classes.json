@@ -14,7 +14,7 @@
     "pgwire-compat": 17,
     "placement-rebalance": 240,
     "query-sql": 161,
-    "release-packaging": 11,
+    "release-packaging": 12,
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2172,
-  "digest": "fnv1a32-77f90537",
+  "censusSize": 2173,
+  "digest": "fnv1a32-b8556233",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-31298d2c",
+  "observationDigest": "fnv1a32-fe46a957",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1720,6 +1720,7 @@
     "test/rebalancer/unified-rebalancer-triggers-system-partition-defer.test.js": "placement-rebalance",
     "test/rebalancer/unified-rebalancer.test.js": "placement-rebalance",
     "test/rebalancer/user-table-leader-placement-cure.test.js": "placement-rebalance",
+    "test/release/embedded-node-worker-contract.test.js": "release-packaging",
     "test/release/project-hardening-contracts.test.js": "release-packaging",
     "test/release/public-api-side-effect-boundary.test.js": "release-packaging",
     "test/release/release-pipeline-proof-reuse.test.js": "release-packaging",
@@ -7436,6 +7437,14 @@
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
         "src/rebalancer/placement-owner-constants.js"
+      ]
+    },
+    "test/release/embedded-node-worker-contract.test.js": {
+      "files": [
+        "src/public-api.js"
+      ],
+      "directories": [
+        "test/integration/helpers"
       ]
     },
     "test/release/project-hardening-contracts.test.js": {

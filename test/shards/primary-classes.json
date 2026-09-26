@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1908,
+    "unit": 1909,
     "integration": 75,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2172,
-  "digest": "fnv1a32-692a2597",
+  "censusSize": 2173,
+  "digest": "fnv1a32-c646ff6c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1701,6 +1701,7 @@
     "test/rebalancer/unified-rebalancer-triggers-system-partition-defer.test.js": "unit",
     "test/rebalancer/unified-rebalancer.test.js": "unit",
     "test/rebalancer/user-table-leader-placement-cure.test.js": "unit",
+    "test/release/embedded-node-worker-contract.test.js": "unit",
     "test/release/project-hardening-contracts.test.js": "unit",
     "test/release/public-api-side-effect-boundary.test.js": "unit",
     "test/release/release-pipeline-proof-reuse.test.js": "unit",
