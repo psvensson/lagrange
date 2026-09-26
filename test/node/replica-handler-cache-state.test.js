@@ -8,7 +8,11 @@ import {test} from '../../src/test-helpers/tap.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {
+  ReplicaHandler as ProductionReplicaHandler,
+} from '../../src/node/replica-handler.js';
+import {scenarioStampingReplicaHandler} from
+  './replica-handler-bootstrap-stamps.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -17,6 +21,10 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+
+// Lifecycle scenarios: every create carries the committed-membership stamp
+// its scenario's creator would have produced (owner decision O1).
+const ReplicaHandler = scenarioStampingReplicaHandler(ProductionReplicaHandler);
 
 const TEST_ACTIVE_CACHE_OPERATION_ID = 'active-cache-op';
 const TEST_ACTIVE_CACHE_PARTITION_ID = 'partition-1';

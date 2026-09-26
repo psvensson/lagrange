@@ -1,3 +1,16 @@
+// Superseded under R09 by owner decision O1 (2026-09-26): a new partition
+// replica's membership and join mode come from its committed-membership stamp
+// (GENESIS for a founder, COMMITTED for a join), never from the services rows
+// this node observes. The rows remain the address book (the viability filter
+// still shapes addresses and the leader hint), and a create without a stamp is
+// refused STAMP_INVALID - there is no row-derived fallback.
+
+import {
+  committedStampFor,
+  genesisStampFor,
+  withBootstrapStamp,
+} from './replica-handler-bootstrap-stamps.js';
+
 export async function registerReplicaHandlerCreateTopologyTests({
   t,
   ReplicaHandler,
@@ -61,18 +74,18 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'replicaCreationFailed',
       );
 
-      await handler.handleCreateReplica({
+      await handler.handleCreateReplica(withBootstrapStamp({
         operationId: 'op-1',
         partitionId,
         replicaId: 'replica-1',
-      });
+      }, genesisStampFor(['replica-1', 'replica-2', 'replica-3'])));
       await created;
 
       t.ok(capturedOptions, 'partition factory should receive create options');
       t.equal(
         capturedOptions.isJoiningExistingGroup,
         false,
-        'fresh partition replicas should bootstrap voters until a leader exists',
+        'a GENESIS founder bootstraps voters whatever the rows show',
       );
 
       handler.shutdown();
@@ -128,18 +141,18 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'replicaCreationFailed',
       );
 
-      await handler.handleCreateReplica({
+      await handler.handleCreateReplica(withBootstrapStamp({
         operationId: 'op-1',
         partitionId,
         replicaId: 'replica-1',
-      });
+      }, genesisStampFor(['replica-1', 'replica-2', 'replica-3'])));
       await created;
 
       t.ok(capturedOptions, 'partition factory should receive create options');
       t.equal(
         capturedOptions.isJoiningExistingGroup,
         false,
-        'active rows without explicit voter roles should still bootstrap fresh partitions',
+        'active rows without explicit voter roles never make a founder a joiner',
       );
 
       handler.shutdown();
@@ -175,7 +188,8 @@ export async function registerReplicaHandlerCreateTopologyTests({
 
       handler.initialize();
 
-      const context = handler.resolveReplicaContext(partitionId, 'replica-1');
+      const context = handler.resolveReplicaContext(partitionId, 'replica-1',
+        {bootstrapMembership: genesisStampFor(['replica-1', 'replica-2', 'replica-3'])});
 
       t.equal(
         context.leaderAddress,
@@ -241,7 +255,8 @@ export async function registerReplicaHandlerCreateTopologyTests({
 
       handler.initialize();
 
-      const context = handler.resolveReplicaContext(partitionId, 'replica-1');
+      const context = handler.resolveReplicaContext(partitionId, 'replica-1',
+        {bootstrapMembership: genesisStampFor(['replica-1', 'replica-2', 'replica-3'])});
 
       t.equal(
         context.existingReplicaCount,
@@ -333,11 +348,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'replicaCreationFailed',
       );
 
-      await handler.handleCreateReplica({
+      await handler.handleCreateReplica(withBootstrapStamp({
         operationId: 'op-1',
         partitionId,
         replicaId: 'replica-1',
-      });
+      }, committedStampFor(['replica-2', 'replica-3', 'replica-4'])));
       await created;
 
       t.ok(capturedOptions, 'partition factory should receive create options');
@@ -348,8 +363,9 @@ export async function registerReplicaHandlerCreateTopologyTests({
       );
       t.equal(
         capturedOptions.isJoiningExistingGroup,
-        false,
-        'replacement should bootstrap recovery instead of joining a dead leader as learner',
+        true,
+        'the COMMITTED stamp, not stale leader rows, decides the join mode: ' +
+          'rows never re-form a group (O1)',
       );
 
       handler.shutdown();
@@ -435,12 +451,13 @@ export async function registerReplicaHandlerCreateTopologyTests({
 
       handler.initialize();
 
-      await handler.handleCreateReplica({
+      await handler.handleCreateReplica(withBootstrapStamp({
         operationId: 'op-1',
         operationType: 'REPLACE',
         partitionId,
         replicaId: 'replica_operations-p1-r4',
-      });
+      }, committedStampFor(['replica_operations-p1-r2',
+        'replica_operations-p1-r3', 'replica_operations-p1-r5'])));
       await factoryCalled;
 
       t.ok(capturedOptions, 'partition factory should receive create options');
@@ -463,8 +480,9 @@ export async function registerReplicaHandlerCreateTopologyTests({
       );
       t.equal(
         capturedOptions.isJoiningExistingGroup,
-        false,
-        'priority replacement should not join a group led by disconnected metadata',
+        true,
+        'a COMMITTED stamp is a join: disconnected leader metadata no longer ' +
+          're-forms the group from rows (O1)',
       );
 
       handler.shutdown();
@@ -513,11 +531,11 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'replicaCreationFailed',
       );
 
-      await handler.handleCreateReplica({
+      await handler.handleCreateReplica(withBootstrapStamp({
         operationId: 'op-1',
         partitionId: 'partition-1',
         replicaId: 'replica-1',
-      });
+      }, committedStampFor(['leader-replica'])));
       await created;
 
       t.ok(capturedOptions, 'partition factory should receive create options');
@@ -587,24 +605,24 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'replicaCreationFailed',
       );
 
-      await handler.handleCreateReplica({
+      await handler.handleCreateReplica(withBootstrapStamp({
         operationId: 'op-1',
         partitionId,
         replicaId: 'replica-1',
         replicaIds: bootstrapReplicaIds,
         peerAddresses: bootstrapPeerAddresses,
-      });
+      }, genesisStampFor(bootstrapReplicaIds)));
       await created;
 
       t.ok(capturedOptions, 'partition factory should receive create options');
       t.same(
-        capturedOptions.replicaIds,
-        bootstrapReplicaIds,
-        'fresh bootstrap should use the explicit initial replica cohort',
+        capturedOptions.replicaIds.slice().sort(),
+        bootstrapReplicaIds.slice().sort(),
+        'fresh bootstrap uses the GENESIS founding cohort',
       );
       t.same(
-        capturedOptions.peerAddresses,
-        bootstrapPeerAddresses,
+        capturedOptions.peerAddresses.slice().sort(),
+        bootstrapPeerAddresses.slice().sort(),
         'fresh bootstrap should use the explicit peer addresses for the cohort',
       );
       t.equal(
@@ -671,21 +689,21 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'replicaCreated',
         'replicaCreationFailed',
       );
-      await handler.handleCreateReplica({
+      await handler.handleCreateReplica(withBootstrapStamp({
         operationId: 'op-1',
         operationType: 'REPLACE',
         partitionId,
         replicaId: 'replica-4',
         replicaIds: bootstrapReplicaIds,
         peerAddresses: bootstrapPeerAddresses,
-      });
+      }, committedStampFor(['replica-1', 'replica-2', 'replica-3'])));
       await created;
 
       t.ok(capturedOptions, 'partition factory invoked');
       t.same(
         capturedOptions.replicaIds.slice().sort(),
         bootstrapReplicaIds.slice().sort(),
-        'dispatched cohort consumed despite the closed fresh window',
+        'the stamped committed members plus the target, whatever the cache',
       );
       t.same(
         capturedOptions.peerAddresses.slice().sort(),
@@ -694,10 +712,8 @@ export async function registerReplicaHandlerCreateTopologyTests({
       );
       t.equal(
         capturedOptions.isJoiningExistingGroup,
-        false,
-        'no viable leader in cache view: voter-mode re-formation with the ' +
-          'full dispatched cohort (dead-leader recovery semantics) — the ' +
-          'CL-013 guarantee is peers, never solo',
+        true,
+        'a COMMITTED stamp is a join; no row view re-forms the group (O1)',
       );
       t.ok(
         capturedOptions.replicaIds.length > 1,
@@ -771,6 +787,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
           explicitOperationType,
           bootstrapReplicaIds,
           bootstrapPeerAddresses,
+          bootstrapMembership: committedStampFor(stampedReplicaIds),
         });
 
       const replaceContext = resolveAs('REPLACE');
@@ -785,23 +802,25 @@ export async function registerReplicaHandlerCreateTopologyTests({
         addContext.peerAddresses.slice().sort(),
         'and the same peer addresses',
       );
-      for (const replicaId of [
-        ...bootstrapReplicaIds,
-        laterObservedReplicaId,
-      ]) {
+      for (const replicaId of bootstrapReplicaIds) {
         t.ok(
           replaceContext.replicaIds.includes(replicaId),
           `the member ${replicaId} stays in the bootstrap`,
         );
       }
+      t.notOk(
+        replaceContext.replicaIds.includes(laterObservedReplicaId),
+        'a row the stamp does not name adds no member (O1: rows are the ' +
+          'address book only)',
+      );
 
       handler.shutdown();
     },
   );
 
   t.test(
-    'CL-013: explicit REPLACE join with no hints and self-only cache view ' +
-      'fails retryably instead of solo-bootstrapping an isolated group',
+    'CL-013 (superseded, O1): a REPLACE join without a stamp is refused ' +
+      'instead of solo-bootstrapping an isolated group',
     async (t) => {
       const partitionId = 'partition-1';
       const tableId = 'table-1';
@@ -854,12 +873,12 @@ export async function registerReplicaHandlerCreateTopologyTests({
       t.equal(
         capturedOptions,
         null,
-        'no partition service created — solo bootstrap prevented',
+        'no partition service created - solo bootstrap prevented',
       );
       t.match(
         String(failure?.error || failure?.message || failure),
-        /join topology unavailable/,
-        'failure carries the retryable topology-missing class',
+        /membership-stamp-invalid/,
+        'a create without a stamp is refused STAMP_INVALID (O1)',
       );
 
       handler.shutdown();
@@ -867,8 +886,8 @@ export async function registerReplicaHandlerCreateTopologyTests({
   );
 
   t.test(
-    'CL-013: non-REPLACE create on an established partition keeps legacy ' +
-      'fallback behavior',
+    'CL-013 (superseded, O1): a non-REPLACE create without a stamp has no ' +
+      'row-derived fallback',
     async (t) => {
       const partitionId = 'partition-1';
       const tableId = 'table-1';
@@ -904,19 +923,22 @@ export async function registerReplicaHandlerCreateTopologyTests({
       });
       handler.initialize();
 
-      const created = waitForReplicaEvent(
+      const refused = waitForReplicaEvent(
         handler,
-        'replicaCreated',
         'replicaCreationFailed',
+        'replicaCreated',
       );
       await handler.handleCreateReplica({
         operationId: 'op-1',
         partitionId,
         replicaId: 'replica-4',
       });
-      await created;
+      const failure = await refused;
 
-      t.ok(capturedOptions, 'legacy path still creates');
+      t.equal(capturedOptions, null,
+        'no row-derived fallback: nothing is created without a stamp (O1)');
+      t.match(String(failure?.error || failure), /membership-stamp-invalid/,
+        'refused STAMP_INVALID');
 
       handler.shutdown();
     },

@@ -8,7 +8,11 @@ import {test} from '../../src/test-helpers/tap.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {
+  ReplicaHandler as ProductionReplicaHandler,
+} from '../../src/node/replica-handler.js';
+import {scenarioStampingReplicaHandler} from
+  './replica-handler-bootstrap-stamps.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -35,6 +39,10 @@ import {
   registerReplicaHandlerCreateTopologyTests,
 } from './replica-handler-create-topology-test-cases.js';
 import {registerReplicaHandlerTailTests} from './replica-handler-tail-test-cases.js';
+
+// Lifecycle scenarios: every create carries the committed-membership stamp
+// its scenario's creator would have produced (owner decision O1).
+const ReplicaHandler = scenarioStampingReplicaHandler(ProductionReplicaHandler);
 
 const TEST_STEP_DOWN_OPERATION_ID = 'step-down-op';
 const TEST_STEP_DOWN_PARTITION_ID = 'partition-1';
@@ -603,7 +611,8 @@ test('ReplicaHandler', async (t) => {
 
   await registerReplicaHandlerCreateTopologyTests({
     t,
-    ReplicaHandler,
+    // Membership cases hand their stamps (or none) explicitly.
+    ReplicaHandler: ProductionReplicaHandler,
     ReplicaStatus,
     SYSTEM_TABLE_NAME,
     SERVICE_STATUS,

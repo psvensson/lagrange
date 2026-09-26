@@ -28,7 +28,7 @@
   "censusSize": 2209,
   "digest": "fnv1a32-b6be96fc",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-079b4839",
+  "observationDigest": "fnv1a32-34a0feea",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -6254,6 +6254,13 @@
         "NODE_ENV"
       ]
     },
+    "test/node/replica-handler-cache-state.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/node/replica-handler-bootstrap-stamps.js"
+      ]
+    },
     "test/node/replica-handler-leadership-transfer.test.js": {
       "files": [
         "src/config/configuration-manager.js",
@@ -6275,7 +6282,9 @@
     "test/node/replica-handler-owner-path-bypass.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
-        "src/config/configuration-manager.js"
+        "src/config/configuration-manager.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/node/replica-handler-bootstrap-stamps.js"
       ]
     },
     "test/node/replica-handler-replacement-election-already-leader.test.js": {
@@ -6294,7 +6303,10 @@
     },
     "test/node/replica-handler.test.js": {
       "files": [
-        "src/node/replica-handler-leader-handoff-methods.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/node/replica-handler-leader-handoff-methods.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/node/replica-handler-bootstrap-stamps.js"
       ]
     },
     "test/node/replica-state-machine.test.js": {

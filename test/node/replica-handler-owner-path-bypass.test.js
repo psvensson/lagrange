@@ -22,7 +22,11 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import {test} from '../../src/test-helpers/tap.js';
-import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {
+  ReplicaHandler as ProductionReplicaHandler,
+} from '../../src/node/replica-handler.js';
+import {scenarioStampingReplicaHandler} from
+  './replica-handler-bootstrap-stamps.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -47,6 +51,10 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+
+// Lifecycle scenarios: every create carries the committed-membership stamp
+// its scenario's creator would have produced (owner decision O1).
+const ReplicaHandler = scenarioStampingReplicaHandler(ProductionReplicaHandler);
 
 const TEST_NODE_ID = 'test-node';
 const TEST_PARTITION_ID = 'partition-1';
