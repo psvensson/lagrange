@@ -12,7 +12,7 @@
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 248,
+    "placement-rebalance": 249,
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2200,
-  "digest": "fnv1a32-c1be2f78",
+  "censusSize": 2201,
+  "digest": "fnv1a32-b69ec6df",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2d8463cb",
+  "observationDigest": "fnv1a32-76c0b6eb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1661,6 +1661,7 @@
     "test/rebalancer/remove-active-dispatch-redrive.test.js": "placement-rebalance",
     "test/rebalancer/remove-workflow-step-progression.property.test.js": "placement-rebalance",
     "test/rebalancer/removed-replica-cleanup-debt-owner.test.js": "placement-rebalance",
+    "test/rebalancer/replace-dispatch-epoch-gate-scope.test.js": "placement-rebalance",
     "test/rebalancer/replace-named-handoff-attempt.test.js": "placement-rebalance",
     "test/rebalancer/replace-owner-lease-causal.test.js": "placement-rebalance",
     "test/rebalancer/replace-owner-lease-verdict-property.test.js": "placement-rebalance",
@@ -7537,6 +7538,12 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/config/configuration-manager.js",
         "src/rebalancer/executor-outcome-emitter.js"
+      ]
+    },
+    "test/rebalancer/replace-dispatch-epoch-gate-scope.test.js": {
+      "files": [
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-constants.js"
       ]
     },
     "test/rebalancer/replica-operation-membership-epoch-binding.test.js": {

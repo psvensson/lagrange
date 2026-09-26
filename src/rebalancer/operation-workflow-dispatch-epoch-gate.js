@@ -15,6 +15,7 @@ import {
   MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
   assertMembershipPublicationEpochBinding,
 } from './replica-operation-membership-epoch-binding.js';
+import {DISPATCH_PENDING_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 
 const {
   OperationType,
@@ -28,10 +29,15 @@ const STALE_DISPATCH_EPOCH_PREFIX =
   'Stale dispatch for published membership epoch ';
 const DISPATCH_EPOCH_BINDING_SOURCE = 'dispatch candidate';
 
-function isEpochFencedOperationType(operationType) {
+// BR6 (quest replace-source-removal-owner): the fence is this gate's own
+// contract - an ADD/REPLACE still queued before its create reached an
+// executor. An operation past that point that re-enters through DISPATCH is
+// not work from an abandoned plan to fence here; its owner decides it.
+function isEpochFencedOperation(operation) {
   return (
-    operationType === OperationType.ADD ||
-    operationType === OperationType.REPLACE
+    (operation?.type === OperationType.ADD ||
+      operation?.type === OperationType.REPLACE) &&
+    DISPATCH_PENDING_WORKFLOW_STEPS.has(operation?.workflowStep)
   );
 }
 
@@ -80,7 +86,7 @@ function isDispatchEpochGateEngaged(owner) {
  */
 async function ensureDispatchMembershipEpochOrSkip(owner, operation) {
   if (
-    !isEpochFencedOperationType(operation?.type) ||
+    !isEpochFencedOperation(operation) ||
     !isDispatchEpochGateEngaged(owner)
   ) {
     return null;
