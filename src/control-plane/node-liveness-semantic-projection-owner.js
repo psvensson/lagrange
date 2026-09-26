@@ -3,6 +3,7 @@ import {
   normalizeSemanticNowMs,
   normalizeThresholds,
   projectNodeLivenessSemantics,
+  readNodeLivenessRowFacts,
 } from './node-liveness-semantic-projection.js';
 import {
   copyDenseOwnDataArray,
@@ -50,14 +51,37 @@ function readProjectionEvidence(owner, nodeId) {
   return copyStrictOwnDataRecord(rawEvidence) || EMPTY_EVIDENCE;
 }
 
+function nodeLivenessRowFactsEqual(left, right) {
+  return left.lastHeartbeatMs === right.lastHeartbeatMs &&
+    left.readyLeaseExpiresAtMs === right.readyLeaseExpiresAtMs &&
+    left.hasReadyLeaseField === right.hasReadyLeaseField &&
+    left.status === right.status &&
+    left.connectionState === right.connectionState;
+}
+
 // Whether caller-held evidence may replace the node row the shared
-// projection last projected: never an older row (by heartbeat watermark),
-// and never an absent row over a present one (a row's absence reaches the
-// projection from its source, whose change clears the recorded evidence).
+// projection last projected. Two views of one node must never alternate the
+// projection (each alternation is a global planning-identity rotation), so
+// the candidate is current only when it is strictly newer by heartbeat
+// watermark, or at the same watermark with the same content the projection
+// reads (status, connection state, heartbeat, lease and its clearing). A
+// candidate without a heartbeat is never current over a projected row that
+// has one, and an absent row never replaces a present one: a row's absence
+// or a same-watermark content change reaches the projection from its
+// source, whose change clears the recorded evidence (fix-f4, F-1).
 function isEvidenceRowCurrent(projectedRow, candidateRow) {
   if (projectedRow === null || projectedRow === undefined) return true;
   if (candidateRow === null || candidateRow === undefined) return false;
-  return compareNodeHeartbeatWatermarks(projectedRow, candidateRow) >= 0;
+  const projected = readNodeLivenessRowFacts(projectedRow);
+  const candidate = readNodeLivenessRowFacts(candidateRow);
+  if (projected.lastHeartbeatMs !== null) {
+    if (candidate.lastHeartbeatMs === null) return false;
+  } else if (candidate.lastHeartbeatMs !== null) {
+    return true;
+  }
+  const order = compareNodeHeartbeatWatermarks(projectedRow, candidateRow);
+  if (order !== 0) return order > 0;
+  return nodeLivenessRowFactsEqual(projected, candidate);
 }
 
 function readSupplementalEvidence(records, nodeId) {

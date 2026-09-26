@@ -199,6 +199,16 @@ async function readAuthoritativeControlPlaneRows(
   return gateway.readRows(tableName, sql, params, options);
 }
 
+// The one availability rule for an authoritative control-plane row read
+// (a list or keyed read through readAuthoritativeControlPlaneRows, or the
+// authoritative view): only an explicit success is an answer. A result that
+// did not succeed ({success: false, error}) or carries no outcome is
+// unavailability, never "no rows"; the reader then answers from its own
+// row source (authoritative-preferred) or surfaces the unavailability.
+function isAuthoritativeControlPlaneRowReadSuccessful(result) {
+  return result?.success === true;
+}
+
 async function readProjectionControlPlaneRows(
   gateway,
   tableName,
@@ -222,6 +232,7 @@ async function readProjectionControlPlaneRows(
 }
 export {
   ControlPlaneSystemTableGateway,
+  isAuthoritativeControlPlaneRowReadSuccessful,
   readAuthoritativeControlPlaneRows,
   readProjectionControlPlaneRows,
 };

@@ -27,6 +27,8 @@ import {LIFECYCLE_REASON} from
   '../../src/bootstrap/lifecycle-controller-constants.js';
 import {buildDeferredSnapshot} from
   '../../src/control-plane/readiness-planning-publication-contract.js';
+import {ReadinessPlanningSnapshotOwner} from
+  '../../src/control-plane/readiness-planning-snapshot-owner.js';
 import {isEvidenceAbsentReadinessDenialSnapshot} from
   '../../src/control-plane/readiness-denial-classification.js';
 import {PriorityPublicationSafetyTopology} from
@@ -181,5 +183,53 @@ test('the critical voter-ready floor counts a voter row whose node answers ' +
       false,
       `denied verdict + ${reasonCode}: row not counted`,
     );
+  }
+});
+
+// The planning owner's memoized deferral serves each read its own
+// dimension's cell (F-2 of the round-1 verification). One completed
+// snapshot, eligible on one dimension and denied on another, deferred under
+// one token for one owner key; reads alternate between the two dimensions
+// (the floor reads controlPlaneRecoveryEligible, routing serveEligible). A
+// memo that ignored the read's dimension would serve the eligible
+// dimension's evidence-absent cell to the denied dimension's read and turn a
+// substantive denial into "no verdict".
+test('the memoized deferral serves each read its own dimension\'s cell when ' +
+  'two dimensions of one completed verdict disagree', async (t) => {
+  const owner = new ReadinessPlanningSnapshotOwner({service: {}});
+  t.teardown(() => owner.shutdown());
+  for (const [eligibleDimension, deniedDimension] of [
+    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE],
+    [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE],
+  ]) {
+    const dimensions = {};
+    for (const dimension of DIMENSIONS) {
+      dimensions[dimension] = dimension !== deniedDimension;
+    }
+    const completed = Object.freeze({
+      nodeId: NODE_ID,
+      dimensions: Object.freeze(dimensions),
+      ...dimensions,
+      reasons: Object.freeze([Object.freeze({
+        code: LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      })]),
+    });
+    const expected = new Map([
+      [eligibleDimension, [REFRESH_PENDING]],
+      [deniedDimension, [
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+        REFRESH_PENDING,
+      ]],
+    ]);
+    for (const dimension of [eligibleDimension, deniedDimension,
+      eligibleDimension, deniedDimension]) {
+      const deferred = owner.buildMemoizedDeferredSnapshot(
+        completed, TOKEN, NODE_ID, {decisionDimension: dimension});
+      t.same(deferredCodes(deferred), expected.get(dimension),
+        `${dimension} read (${eligibleDimension} eligible, ` +
+        `${deniedDimension} denied): its own cell`);
+    }
   }
 });
