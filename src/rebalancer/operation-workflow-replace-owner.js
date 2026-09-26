@@ -91,6 +91,9 @@ const REPLACE_COMPLETION_VERDICT = Object.freeze({
   SOURCE_RETIRED: 'source_retired',
   STILL_VOTER: 'still_voter',
   UNAVAILABLE: 'unavailable',
+  // The witness's applied configuration is below its participation gate
+  // (O1, B12): a replaying replica's transient view proves no absence.
+  WITNESS_BELOW_GATE: 'witness_below_gate',
 });
 
 // The one FAILED a REPLACE may reach after its durable removal intent (D2).
@@ -120,6 +123,7 @@ const REPLACE_OWNER_REFUSAL = Object.freeze({
 // What the STOPPING owner is waiting on (S9/D2 diagnostics; bounded state).
 const REPLACE_WAIT_REASON = Object.freeze({
   WITNESS_UNAVAILABLE: 'witness_membership_unavailable',
+  WITNESS_BELOW_GATE: 'witness_below_participation_gate',
   SOURCE_ROW_UNAVAILABLE: 'source_row_unavailable',
   SOURCE_REMOVAL_EFFECT_PENDING: 'source_removal_effect_pending',
   SOURCE_MEMBERSHIP_REMOVAL_PENDING: 'source_membership_removal_pending',
@@ -131,6 +135,15 @@ const REPLACE_WAIT_REASON = Object.freeze({
   // A former step or operation budget elapsed while no other wait was
   // recorded (a diagnostic only).
   BUDGET_ELAPSED: 'former_time_budget_elapsed',
+});
+
+// The verdicts on which the STOPPING owner waits with nothing concluded: an
+// unreadable witness, and a witness below its participation gate (B12).
+const VERDICT_WAIT_REASON = Object.freeze({
+  [REPLACE_COMPLETION_VERDICT.UNAVAILABLE]:
+    REPLACE_WAIT_REASON.WITNESS_UNAVAILABLE,
+  [REPLACE_COMPLETION_VERDICT.WITNESS_BELOW_GATE]:
+    REPLACE_WAIT_REASON.WITNESS_BELOW_GATE,
 });
 
 // What the removal-effect boundary decides after SAFE (A8/BR7): send the
@@ -169,17 +182,30 @@ async function decideReplaceCompletion(owner, operation) {
     // decide (an absence there is a committed removal).
     observation = await readReplaceSurvivingMembership(owner, operation);
   }
-  let verdict = REPLACE_COMPLETION_VERDICT.UNAVAILABLE;
+  return Object.freeze({
+    verdict: await completionVerdictOf(owner, operation, observation),
+    observation,
+  });
+}
+
+// R-1a on one witness observation: a voter is a voter; an absence retires
+// the source only when the witness is at or past its participation gate
+// (B12: gateOpen from its port's committed-membership read, never a row)
+// and at or past the intent's commit index C0 (AN11).
+async function completionVerdictOf(owner, operation, observation) {
   if (observation.state === PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER) {
-    verdict = REPLACE_COMPLETION_VERDICT.STILL_VOTER;
-  } else if (
-    observation.state === PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT &&
-    Number(observation.commitIndex) >=
-      await resolveIntentCommitIndex(owner, operation)
-  ) {
-    verdict = REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED;
+    return REPLACE_COMPLETION_VERDICT.STILL_VOTER;
   }
-  return Object.freeze({verdict, observation});
+  if (observation.state !== PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT) {
+    return REPLACE_COMPLETION_VERDICT.UNAVAILABLE;
+  }
+  if (observation.gateOpen !== true) {
+    return REPLACE_COMPLETION_VERDICT.WITNESS_BELOW_GATE;
+  }
+  return Number(observation.commitIndex) >=
+    await resolveIntentCommitIndex(owner, operation) ?
+    REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED :
+    REPLACE_COMPLETION_VERDICT.UNAVAILABLE;
 }
 
 /**
@@ -530,9 +556,9 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
   if (isReplaceTargetGone(owner, operation)) {
     return handleReplaceTargetDeath(owner, operation, decision, context);
   }
-  if (decision.verdict === REPLACE_COMPLETION_VERDICT.UNAVAILABLE) {
+  if (Object.hasOwn(VERDICT_WAIT_REASON, decision.verdict)) {
     return waitForReplaceOwner(owner, operation,
-      REPLACE_WAIT_REASON.WITNESS_UNAVAILABLE, waitContext);
+      VERDICT_WAIT_REASON[decision.verdict], waitContext);
   }
   const sourceRow = await observeReplaceSourceRow(owner, operation);
   if (sourceRow.state === STOPPING_OBSERVATION_UNAVAILABLE) {
