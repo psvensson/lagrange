@@ -12,6 +12,7 @@ import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {TABLES} from '../../src/constants/index.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 function initializeIntegrationEnvironment(nodeId) {
   ConfigurationManager.resetInstance();
@@ -54,7 +55,7 @@ function createRecordingLogger() {
 }
 
 function createReplayTestPartition(nodeId) {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId: 'cdc-pressure-p1',
     tableId: 'cdc_pressure_nodes',
     tableName: SYSTEM_TABLE_NAME.NODES,
@@ -62,7 +63,7 @@ function createReplayTestPartition(nodeId) {
     replicaIds: ['cdc-pressure-p1-r1'],
     nodeId,
     dbPath: ':memory:',
-  });
+  }));
 }
 
 function buildBufferedNodeEvent(nodeId, sequence) {

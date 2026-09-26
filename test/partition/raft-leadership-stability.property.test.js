@@ -13,6 +13,7 @@ import {PartitionService, RaftRole} from '../../src/partition/partition-service.
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -82,7 +83,7 @@ test('Property 1: Single replica elects exactly one leader', async (t) => {
           addressManager.format(nodeId, 'partition', rid),
         );
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           replicaId,
@@ -90,7 +91,7 @@ test('Property 1: Single replica elects exactly one leader', async (t) => {
           peerAddresses,
           nodeId,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -164,7 +165,7 @@ test('Property 1: At most one leader exists (no split-brain)', async (t) => {
 
         try {
           for (let i = 0; i < replicaCount; i++) {
-            const partition = new PartitionService({
+            const partition = new PartitionService(withFoundingStamp({
               partitionId,
               tableId,
               replicaId: replicaIds[i],
@@ -173,7 +174,7 @@ test('Property 1: At most one leader exists (no split-brain)', async (t) => {
               nodeId,
               transport: mockTransport,
               dbPath: ':memory:',
-            });
+            }));
             partitions.push(partition);
           }
 
@@ -245,7 +246,7 @@ test('Property 1: Partition status reflects correct leader state', async (t) => 
           addressManager.format(nodeId, 'partition', rid),
         );
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           replicaId,
@@ -253,7 +254,7 @@ test('Property 1: Partition status reflects correct leader state', async (t) => 
           peerAddresses,
           nodeId,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -343,7 +344,7 @@ test('Property 2: Leadership remains stable without topology changes', async (t)
           addressManager.format(nodeId, 'partition', rid),
         );
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           replicaId,
@@ -351,7 +352,7 @@ test('Property 2: Leadership remains stable without topology changes', async (t)
           peerAddresses,
           nodeId,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -428,7 +429,7 @@ test('Property 2: Term numbers stabilize after election', async (t) => {
           addressManager.format(nodeId, 'partition', rid),
         );
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           replicaId,
@@ -436,7 +437,7 @@ test('Property 2: Term numbers stabilize after election', async (t) => {
           peerAddresses,
           nodeId,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -501,7 +502,7 @@ test('Property 2: Multi-replica leadership stability', async (t) => {
 
         try {
           for (let i = 0; i < replicaCount; i++) {
-            const partition = new PartitionService({
+            const partition = new PartitionService(withFoundingStamp({
               partitionId,
               tableId,
               replicaId: replicaIds[i],
@@ -510,7 +511,7 @@ test('Property 2: Multi-replica leadership stability', async (t) => {
               nodeId,
               transport: mockTransport,
               dbPath: ':memory:',
-            });
+            }));
             partitions.push(partition);
           }
 

@@ -7,7 +7,9 @@ import {
 import {
   admitPartitionRaftPeer,
   reservePartitionRaftPeerIdentity,
+  proposePeerRetirement,
   takeAdmissionsInFlight,
+  takeDeferredRetirements,
 } from './partition-service-raft-membership-administration.js';
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
 
@@ -148,10 +150,19 @@ function removeExactReplicaId(replicaIds, replicaId) {
   return removed;
 }
 
+// A retiring row is an explicit retirement: its replica marked itself
+// REMOVING and keeps participating until its RemoveNode commits (owner
+// ruling F2), so the group proposes the removal while the row still
+// addresses the replica; the row's delete and REMOVED follow retirement.
+const EXPLICIT_PEER_RETIREMENT_STATUSES = Object.freeze(new Set([
+  ReplicaStatus.REMOVING,
+  ReplicaStatus.REMOVED,
+]));
+
 function isExplicitPeerRetirement(operation, serviceRow) {
   return (
     operation === PARTITION_SERVICE_LITERAL.DELETE ||
-    serviceRow?.status === ReplicaStatus.REMOVED
+    EXPLICIT_PEER_RETIREMENT_STATUSES.has(serviceRow?.status)
   );
 }
 
@@ -177,7 +188,7 @@ function retireMatchingRaftAddresses(
   if (typeof partitionService.raft?.proposeConfChange ===
       PARTITION_SERVICE_TYPE.FUNCTION) {
     for (const address of retiredAddresses) {
-      partitionService.raft.proposeConfChange({
+      proposePeerRetirement(partitionService, {
         type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
         peerAddress: address,
         replicaIdentity: replicaId,
@@ -265,7 +276,7 @@ function reconcileExpectedRaftPeer({
   if (typeof partitionService.raft?.proposeConfChange ===
       PARTITION_SERVICE_TYPE.FUNCTION) {
     for (const staleAddress of staleAddresses) {
-      partitionService.raft.proposeConfChange({
+      proposePeerRetirement(partitionService, {
         type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
         peerAddress: staleAddress,
       });
@@ -371,22 +382,34 @@ function reconcileRaftPeersFromCacheForService(partitionService,
 }
 
 /**
- * Re-drive, whenever the port announces a changed applied configuration,
- * exactly the admissions this leader proposed in the previous configuration
- * (committed-read amendment 1, section 3.5): raft-rs drops an AddNode
- * proposed while another change was unapplied, answering Ok, so each of them
- * is re-evaluated once from its services row - and nothing else is: a voter
- * the group removed is not re-admitted by this wake-up.
+ * Re-drive the admissions this replica proposed or deferred (committed-read
+ * amendment 1, section 3.5; verification V2) whenever a configuration change
+ * settles - a conf-change entry applied, effective or not, or the core's
+ * pending index reached (CONF_CHANGE_APPLIED) - and whenever it gains
+ * leadership (a latch of an earlier term never outlives it). Each is
+ * re-evaluated once from its services row, and nothing else is: a voter the
+ * group removed (its row retiring or gone) is not re-admitted by this
+ * wake-up.
  * @param {Object} partitionService - The partition service (current port).
  */
 function redriveAdmissionsOnMembershipChange(partitionService) {
-  partitionService.raft.subscribe(RAFT_EVENT.MEMBERSHIP_CHANGED, () => {
-    const inFlight = takeAdmissionsInFlight(partitionService);
-    if (inFlight.size > 0) {
-      queueMicrotask(() => reconcileRaftPeersFromCacheForService(
-        partitionService, {onlyReplicaIds: inFlight}));
+  const redrive = () => {
+    const taken = takeAdmissionsInFlight(partitionService);
+    const retirements = takeDeferredRetirements(partitionService);
+    if (taken.size > 0 || retirements.length > 0) {
+      queueMicrotask(() => {
+        for (const change of retirements) {
+          proposePeerRetirement(partitionService, change);
+        }
+        if (taken.size > 0) {
+          reconcileRaftPeersFromCacheForService(
+            partitionService, {onlyReplicaIds: taken});
+        }
+      });
     }
-  });
+  };
+  partitionService.raft.subscribe(RAFT_EVENT.CONF_CHANGE_APPLIED, redrive);
+  partitionService.raft.subscribe(RAFT_EVENT.LEADER, redrive);
 }
 
 export {

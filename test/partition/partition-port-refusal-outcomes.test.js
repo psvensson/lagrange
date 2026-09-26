@@ -56,6 +56,7 @@ import {
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../../src/raft/raft-rs-durable-store-constants.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const TEMP_PREFIX = 'partition-port-refusal-';
 const DB_FILE = 'partition.sqlite';
@@ -184,7 +185,7 @@ test('F-f: production construction over an inert rs-raft record (no ' +
     } finally {
       seeded.close();
     }
-    const service = new PartitionService(partitionOptions(partitionId, dbPath));
+    const service = new PartitionService(withFoundingStamp(partitionOptions(partitionId, dbPath)));
     const error = await refusedInitialization(service);
     try {
       assert.ok(error !== null,

@@ -85,6 +85,8 @@ import {RAFT_PARTITION_NODE_REQUEST} from
   '../../src/raft/raft-provider-contract-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {createMockCache, createTestCoordinator} from './test-helpers.js';
+import {createRemovalSourceHandler} from
+  '../node/replica-removal-consensus-exit-fixture.js';
 import {
   createPublishedPlanningReadinessService,
 } from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
@@ -283,8 +285,14 @@ class RealGroup {
       this.roleOf(replicaId) === RAFT_ROLE.LEADER) ?? null;
   }
 
+  // Remembered from the first read: a retired replica's port no longer
+  // answers its status, and the id the backend registered never changes.
   peerIdOf(replicaId) {
-    return String(this.cluster.raftPeerIdOf(replicaId));
+    this.peerIds ??= new Map();
+    if (!this.peerIds.has(replicaId)) {
+      this.peerIds.set(replicaId, String(this.cluster.raftPeerIdOf(replicaId)));
+    }
+    return this.peerIds.get(replicaId);
   }
 
   settle(predicate, rounds = RAFT_ROUNDS) {
@@ -299,8 +307,12 @@ class RealGroup {
 
   electLeader(preferred) {
     this.cluster.tickers = [preferred];
-    const elected = this.cluster.settle(() => this.leader() === preferred,
-      {rounds: ELECTION_ROUNDS});
+    // Elected and applied its first entry: a leader's committed stamp names
+    // a committed index j > 0 (the port validates every stamp).
+    const elected = this.cluster.settle(() => this.leader() === preferred &&
+      durableAppliedState(this.cluster.replica(preferred).dbFile,
+        this.partitionId)?.appliedIndex > 0,
+    {rounds: ELECTION_ROUNDS});
     if (!elected) {
       throw new Error(`setup: ${preferred} did not become leader`);
     }
@@ -527,6 +539,10 @@ function createReplaceWorld(options = {}) {
     // Control (not production): the source's port keeps stepping after the
     // effect, so its own removal can still be acked by it.
     sourceStopsAtEffect: options.sourceStopsAtEffect !== false,
+    // Production (F2): the source node's REMOVE_REPLICA effect is answered by
+    // the PRODUCTION replica handler over the source's real port; when it
+    // retires the port is the handler's decision.
+    sourceHandler: null,
     // Answers a test holds in flight (a decision taken meanwhile is
     // decide-first): the next STEP_DOWN answer, the next witness read.
     holdNextStepDown: false,
@@ -544,6 +560,13 @@ function createReplaceWorld(options = {}) {
     services: members.map(([replicaId, nodeId]) => serviceRow(partitionId,
       replicaId, nodeId, replicaId === initialLeader ? 'leader' : 'follower')),
   });
+  if (options.sourceHandler === true) {
+    world.sourceHandler = createRemovalSourceHandler({
+      cluster: group.cluster, replicaId: sourceReplicaId, partitionId,
+      nodeId: NODE.SOURCE, cache: world.cache,
+      rowOf: (status) => serviceRow(partitionId, sourceReplicaId,
+        NODE.SOURCE, 'follower', status)});
+  }
   // The production relay from the target's port to the node's registry.
   const relayed = new EventEmitter();
   relayed.partitionId = partitionId;
@@ -644,6 +667,9 @@ function answerRemoveEffect(world, payload) {
   world.removeEffects.push(payload);
   if (world.removeEffectAnswer) {
     return world.removeEffectAnswer;
+  }
+  if (world.sourceHandler !== null) {
+    return world.sourceHandler.handler.handleRemoveReplica(payload);
   }
   if (sourceRowStatus(world) === ReplicaStatus.ACTIVE) {
     setSourceRow(world, ReplicaStatus.REMOVING);
@@ -921,6 +947,7 @@ async function disposeWorld(world) {
     if (world.coordinator) {
       await world.coordinator.shutdown();
     }
+    await world.sourceHandler?.dispose();
   } finally {
     world.registry.clear();
     world.group.dispose();

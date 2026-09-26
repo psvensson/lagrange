@@ -19,6 +19,7 @@ import {
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -101,7 +102,7 @@ test('Property 32: System tables use same PartitionService as user tables', asyn
     const replicaIds = INITIAL_REPLICA_IDS[tableName];
     const replicaId = replicaIds[0];
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId,
       tableId: tableName,
       tableName,
@@ -109,7 +110,7 @@ test('Property 32: System tables use same PartitionService as user tables', asyn
       replicaId,
       replicaIds: [replicaId],
       dbPath: ':memory:',
-    });
+    }));
 
     try {
       await partition.initialize();
@@ -140,7 +141,7 @@ test('Property 32: User tables use same PartitionService as system tables', asyn
         const partitionId = `${tableId}-p1`;
         const replicaId = `${partitionId}-r1`;
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           tableName: tableId,
@@ -148,7 +149,7 @@ test('Property 32: User tables use same PartitionService as system tables', asyn
           replicaId,
           replicaIds: [replicaId],
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -196,7 +197,7 @@ test('Property 32: No infrastructure distinction between system and user tables'
         const userReplicaId = `${userPartitionId}-r1`;
 
         // Create system table partition
-        const systemPartition = new PartitionService({
+        const systemPartition = new PartitionService(withFoundingStamp({
           partitionId: systemPartitionId,
           tableId: systemTableName,
           tableName: systemTableName,
@@ -204,10 +205,10 @@ test('Property 32: No infrastructure distinction between system and user tables'
           replicaId: systemReplicaId,
           replicaIds: [systemReplicaId],
           dbPath: ':memory:',
-        });
+        }));
 
         // Create user table partition
-        const userPartition = new PartitionService({
+        const userPartition = new PartitionService(withFoundingStamp({
           partitionId: userPartitionId,
           tableId: userTableId,
           tableName: userTableId,
@@ -215,7 +216,7 @@ test('Property 32: No infrastructure distinction between system and user tables'
           replicaId: userReplicaId,
           replicaIds: [userReplicaId],
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await systemPartition.initialize();

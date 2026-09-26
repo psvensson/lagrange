@@ -64,6 +64,7 @@ const RUNTIME_EVENT = Object.freeze({
   TERM_CHANGE: RAFT_EVENT.TERM_CHANGE,
   LEADER_CHANGE: RAFT_EVENT.LEADER_CHANGE,
   MEMBERSHIP_CHANGED: RAFT_EVENT.MEMBERSHIP_CHANGED,
+  CONF_CHANGE_APPLIED: RAFT_EVENT.CONF_CHANGE_APPLIED,
 });
 const PEER_ADDRESS_STATUS = Object.freeze({
   RESOLVED: 'resolved',
@@ -101,6 +102,9 @@ const RUNTIME_PHASE = Object.freeze({
   ADMISSION: 'admission',
   PROGRESS_PROBE: 'progress-probe',
   LEADERSHIP_TRANSFER: 'leadership-transfer',
+  // The bootstrap membership the port was handed failed the stamp validator
+  // (absent, or invalid): the port does not open.
+  STAMP_VALIDATION: 'bootstrap-stamp-validation',
   // The group's durable record could not be read where it is opened or
   // reconstructed from (a missing table, SQLITE_IOERR, SQLITE_CORRUPT).
   DURABLE_RECORD_READ: 'durable-record-read',
@@ -143,6 +147,11 @@ const RUNTIME_REASON = Object.freeze({
   // never retried and never opened.
   DURABLE_RECORD_INCOMPATIBLE: 'durable-record-incompatible',
   CLOSED: 'closed',
+  // A conf-change proposal the core would drop (a pending configuration
+  // index above its applied index, or a joint configuration): answered as a
+  // typed, retryable deferral instead of letting the crate replace it with
+  // an empty entry (verification V2).
+  CONF_CHANGE_PENDING: 'conf-change-pending',
   // The store's own admission state, carried as the reason of the typed,
   // retryable, non-fatal deferral while a user transaction holds the
   // replica's connection.

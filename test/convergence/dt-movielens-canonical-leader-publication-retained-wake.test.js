@@ -12,6 +12,7 @@ import {
 import {
   AuthoritativeRowMutationHelper,
 } from '../../src/raft/authoritative-row-mutation-helper.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 const PARTITION_ID = 'services-p1';
 const REPLICA_ID = 'services-p1-r1';
@@ -117,7 +118,7 @@ test(
         return false;
       },
     };
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: PARTITION_ID,
       tableId: TABLES.SERVICES,
       tableName: TABLES.SERVICES,
@@ -126,7 +127,7 @@ test(
       nodeId: NODE_ID,
       dbPath: ':memory:',
       systemTableCache: cache,
-    });
+    }));
     const projectionOwner = new RuntimeReplicaStateProjectionOwner({
       hostNodeId: 'runtime-source-node',
       servicesOwner: {

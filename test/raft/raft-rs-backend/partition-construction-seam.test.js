@@ -19,6 +19,8 @@ import {
   RAFT_PARTITION_NODE_REQUEST,
   RAFT_PROVIDER_CONTRACT_METHOD,
 } from '../../../src/raft/raft-provider-contract-constants.js';
+import {genesisStamp} from
+  '../../../src/raft/raft-committed-membership-stamp.js';
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -47,6 +49,8 @@ function minimalPartitionRequest(overrides = {}) {
     [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: REPLICA_ID,
     [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: REPLICA_ID,
     [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: [REPLICA_ID],
+    [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+      genesisStamp([REPLICA_ID]),
     [RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG]: {
       end: () => undefined,
       getLastInfo: async () => ({index: 0, term: 0, committedIndex: 0}),
@@ -90,6 +94,7 @@ function buildPartition() {
     tableName: 'seam_table',
     replicaId: REPLICA_ID,
     replicaIds: [REPLICA_ID],
+    bootstrapMembership: genesisStamp([REPLICA_ID]),
     nodeId: 'node-seam-1',
     dbPath: ':memory:',
     deferElection: true,

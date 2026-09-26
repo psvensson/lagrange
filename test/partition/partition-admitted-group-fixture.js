@@ -26,6 +26,7 @@ import {
   PartitionService,
 } from '../../src/partition/partition-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const POLL_MS = 10;
 
@@ -74,7 +75,7 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
       cache.applySystemTableChange(
         TABLES.SERVICES, CDCOperation.INSERT, serviceRow(row));
     }
-    const service = new PartitionService({
+    const service = new PartitionService(withFoundingStamp({
       ...serviceOptions,
       partitionId,
       replicaId: member[0],
@@ -85,7 +86,7 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
       transport: network,
       systemTableCache: cache,
       ...extra,
-    });
+    }));
     services.push(service);
     caches.push(cache);
     return service;

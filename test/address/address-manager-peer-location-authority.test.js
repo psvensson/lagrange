@@ -52,6 +52,7 @@ import {
 } from '../../src/raft/remote-peer-representation.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {waitForCondition} from '../partition/partition-service-test-support.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -149,7 +150,7 @@ function recordingTransport(sent) {
 // it campaigns when the witness says so), with the authoritative cache naming
 // its peer; the peer is admitted once the partition leads.
 function buildPartition({cache, peerAddresses, sent}) {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: PARTITION_TABLE,
     tableName: PARTITION_TABLE,
@@ -161,7 +162,7 @@ function buildPartition({cache, peerAddresses, sent}) {
     schema: PARTITION_SCHEMA,
     dbPath: ':memory:',
     deferElection: true,
-  });
+  }));
   partition.systemTableCache = cache;
   return partition;
 }
@@ -272,7 +273,7 @@ test('one node mutating the shared registry cannot move another node destination
       ['node-b', `${PARTITION_ID}-r3`, `${PARTITION_ID}-r4`],
     ]) {
       const peerAddress = `${nodeId}/${ENTITY_TYPE.PARTITION}/${peerId}`;
-      const partition = new PartitionService({
+      const partition = new PartitionService(withFoundingStamp({
         partitionId: PARTITION_ID,
         tableId: PARTITION_TABLE,
         tableName: PARTITION_TABLE,
@@ -284,7 +285,7 @@ test('one node mutating the shared registry cannot move another node destination
         schema: PARTITION_SCHEMA,
         dbPath: ':memory:',
         deferElection: true,
-      });
+      }));
       const peerRow = serviceRow(peerId, peerAddress, SERVICE_TYPE.PARTITION);
       partition.systemTableCache = cacheSaying([
         serviceRow(selfId, `${nodeId}/${ENTITY_TYPE.PARTITION}/${selfId}`,

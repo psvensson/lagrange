@@ -42,6 +42,7 @@ import {
   createMockControlPlaneReadinessService,
   createTestCoordinator,
 } from '../rebalancer/test-helpers.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 // ── Suite-local fixture constants ──────────────────────────────────
 
@@ -73,7 +74,7 @@ afterEach(() => {
  * @return {PartitionService} Partition service instance.
  */
 function createPartitionService(overrides = {}) {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_ID,
     replicaId: REPLICA_ID,
@@ -82,7 +83,7 @@ function createPartitionService(overrides = {}) {
     deferElection: true,
     suppressLifecycleLogs: true,
     ...overrides,
-  });
+  }));
 }
 
 /**

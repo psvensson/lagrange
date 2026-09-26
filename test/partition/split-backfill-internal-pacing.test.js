@@ -2,6 +2,7 @@ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const FOREGROUND_WRITE_BUDGET_MS = 15_000;
 const PROPOSAL_COST_MS = 300;
@@ -33,7 +34,7 @@ function createSnapshotDb(rows) {
 }
 
 function createPartition(partitionId = 'ratings-source') {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId,
     tableId: 'tbl-ratings',
     tableName: 'ratings',
@@ -41,7 +42,7 @@ function createPartition(partitionId = 'ratings-source') {
     replicaIds: [`${partitionId}-r1`],
     schema: TABLE_SCHEMA,
     dbPath: ':memory:',
-  });
+  }));
 }
 
 async function settlePendingCdc(partition) {

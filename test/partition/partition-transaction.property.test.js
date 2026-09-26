@@ -18,6 +18,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
   restartOverCommittedCommands,
 } from './partition-rs-raft-restart-fixture.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -30,7 +31,7 @@ const rowIdArb = fc.stringMatching(/^[a-z][a-z0-9]{2,11}$/);
 const valueArb = fc.stringMatching(/^[a-z]{1,8}$/);
 
 function createTransactionPartition(selection = {}) {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId: `tx-partition-${Date.now()}-${Math.random()}`,
     tableId: TEST_TABLE_NAME,
     tableName: TEST_TABLE_NAME,
@@ -44,7 +45,7 @@ function createTransactionPartition(selection = {}) {
     },
     dbPath: ':memory:',
     ...selection,
-  });
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -594,7 +595,7 @@ test(
         valueArb,
         async (rowId, value) => {
           const holdTimeoutMs = 5;
-          const partition = new PartitionService({
+          const partition = new PartitionService(withFoundingStamp({
             partitionId: `tx-partition-${Date.now()}-${Math.random()}`,
             tableId: TEST_TABLE_NAME,
             tableName: TEST_TABLE_NAME,
@@ -608,7 +609,7 @@ test(
             },
             dbPath: ':memory:',
             preparedStateHoldTimeoutMs: holdTimeoutMs,
-          });
+          }));
           await partition.initialize();
 
           try {

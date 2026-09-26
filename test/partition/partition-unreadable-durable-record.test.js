@@ -59,6 +59,7 @@ import {
 import * as runtimeConstants from
   '../../src/raft/raft-rs-runtime-owner-constants.js';
 import * as runtimeTuning from '../../src/raft/raft-rs-runtime-tuning.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const TEMP_PREFIX = 'unreadable-durable-record-';
 const DB_FILE = 'partition.sqlite';
@@ -256,8 +257,8 @@ async function withLonePartitions(body) {
   const services = [];
   const open = async (partitionId, extra = {}) => {
     const dbPath = path.join(directory, `${partitionId}-${DB_FILE}`);
-    const partition = new PartitionService({
-      ...loneOptions(partitionId, dbPath), ...extra});
+    const partition = new PartitionService(withFoundingStamp({
+      ...loneOptions(partitionId, dbPath), ...extra}));
     services.push(partition);
     await partition.initialize();
     partition.startElection();
@@ -371,7 +372,7 @@ test('F-ah: a lone partition restarted while its record table is still ' +
       damage.close();
     }
     const restarted = new PartitionService(
-      loneOptions(partition.partitionId, dbPath));
+      withFoundingStamp(loneOptions(partition.partitionId, dbPath)));
     const escapes = countEscapes();
     let error = null;
     try {
@@ -507,7 +508,7 @@ test('F-ap: a follower restarted while its record table is missing is ' +
       damage.close();
     }
 
-    const refused = new PartitionService(restartOptions);
+    const refused = new PartitionService(withFoundingStamp(restartOptions));
     restarts.push(refused);
     let error = null;
     try {
@@ -534,7 +535,7 @@ test('F-ap: a follower restarted while its record table is missing is ' +
     } finally {
       repair.close();
     }
-    const restored = new PartitionService(restartOptions);
+    const restored = new PartitionService(withFoundingStamp(restartOptions));
     restarts.push(restored);
     await restored.initialize();
     restored.startElection();
@@ -692,7 +693,7 @@ test('F-ao: the durable record\'s tables are created whole or not at all, ' +
     }
     const partialTables = recordTablesOf(partialPath);
     const partial = new PartitionService(
-      loneOptions('fao-partial', partialPath));
+      withFoundingStamp(loneOptions('fao-partial', partialPath)));
     let error = null;
     try {
       await partial.initialize();

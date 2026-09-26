@@ -21,6 +21,8 @@ import Database from 'better-sqlite3';
 import {
   RAFT_PARTITION_NODE_REQUEST,
 } from '../../../src/raft/raft-provider-contract-constants.js';
+import {genesisStamp} from
+  '../../../src/raft/raft-committed-membership-stamp.js';
 import {raftRsLifecycleAdministration} from
   '../../../src/raft/raft-rs-lifecycle-administration.js';
 import {setActualCoreEntryObserver} from
@@ -146,6 +148,11 @@ class PartitionNodeCluster {
       [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: replicaId,
       [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: this.addressOf(replicaId),
       [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: bootstrapReplicaIds,
+      // The founding members' GENESIS stamp, as the founding provisioner and
+      // the seed phase hand it (a join passes its own stamp in extraRequest;
+      // the port refuses an absent one).
+      [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+        genesisStamp(bootstrapReplicaIds),
       [RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE]: db,
       [RAFT_PARTITION_NODE_REQUEST.TIMING]: this.timingFor === null ?
         PARTITION_TIMING : this.timingFor(replicaId),

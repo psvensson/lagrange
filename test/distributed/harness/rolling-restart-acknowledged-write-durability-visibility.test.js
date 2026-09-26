@@ -27,6 +27,7 @@ import {LoadGenerator} from './load-generator.js';
 import {
   assertAcknowledgedWritesVisibleOnReachableNodes,
 } from './acknowledged-write-visibility.js';
+import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
 
 const FAILED_RUN_IDS = Object.freeze([
   'bench-9fc36d55-8126-4f3d-ad77-c3fd1c151d5d-412',
@@ -62,7 +63,7 @@ const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayMap = Function.call.bind(Array.prototype.map);
 
 function createEndToEndPartition() {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId: 'logs-p1',
     tableId: 'logs',
     tableName: 'logs',
@@ -80,7 +81,7 @@ function createEndToEndPartition() {
       ],
     },
     dbPath: ':memory:',
-  });
+  }));
 }
 
 function createEndToEndCoordinator(partition) {
@@ -106,7 +107,7 @@ function createEndToEndCoordinator(partition) {
 }
 
 function createRun13Partition(nodeId, dbPath) {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId: RUN13_PARTITION_ID,
     tableId: 'benchmark_events',
     tableName: 'benchmark_events',
@@ -120,7 +121,7 @@ function createRun13Partition(nodeId, dbPath) {
       ],
     },
     dbPath,
-  });
+  }));
 }
 
 function buildRun13Command(id, index) {

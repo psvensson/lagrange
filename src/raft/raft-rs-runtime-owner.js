@@ -69,6 +69,10 @@ import {
 } from './raft-rs-runtime-tuning.js';
 import {shapeGroupObservation} from './raft-rs-status-observation.js';
 import {
+  confChangeProposalDeferral,
+  confChangeSettlement,
+} from './raft-rs-conf-change-admission.js';
+import {
   admitsReplica,
   createdParticipationGate,
   recordAppliedEntry,
@@ -798,6 +802,9 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
   }
   const admitted = admitsReplica(group.gate, resolvedConfState.decoded,
     group.peerId, BigInt(entry.index));
+  if (resolvedConfState.decoded !== undefined) {
+    group.confChangeEntriesApplied = (group.confChangeEntriesApplied ?? 0) + 1;
+  }
   try {
     applyCommittedEntryTransaction({
       store: group.store,
@@ -947,6 +954,28 @@ function announce(group, expectedGeneration) {
   if (observed.ok) {
     announceMembership(group, observed.value, now);
   }
+  const settlement = confChangeSettlement({before, now,
+    confChangeEntries: group.confChangeEntriesApplied ?? 0,
+    appliedIndex: group.appliedIndex});
+  group.confChangeEntriesApplied = 0;
+  if (settlement !== null) {
+    group.emit(RUNTIME_EVENT.CONF_CHANGE_APPLIED, settlement);
+  }
+}
+
+// A conf-change proposal the core would drop is deferred typed, read from
+// the core's status and configuration in this turn (verification V2).
+function deferredConfChange(group, expectedGeneration) {
+  const status = invokeCoreAt(group, expectedGeneration, 'status');
+  if (!status.ok) {
+    return status.result;
+  }
+  const conf = invokeCoreAt(group, expectedGeneration,
+    CORE_OPERATION.CONF_STATE);
+  if (!conf.ok) {
+    return conf.result;
+  }
+  return confChangeProposalDeferral(status.value, conf.value);
 }
 
 // The configuration's voter-bearing and learner parts as one comparable key.
@@ -1236,7 +1265,8 @@ const COMMAND_OPERATION = Object.freeze({
   [RUNTIME_COMMAND.TRANSFER_LEADERSHIP]: (group, command, generation) =>
     transferLeadership(group, generation, command.transfer),
 });
-const PROPOSAL_COMMANDS = new Set(['propose', 'propose-conf-change']);
+const PROPOSE_CONF_CHANGE = 'propose-conf-change';
+const PROPOSAL_COMMANDS = new Set(['propose', PROPOSE_CONF_CHANGE]);
 
 function performCommand(group, command, expectedGeneration) {
   if (Object.hasOwn(COMMAND_OPERATION, command.type)) {
@@ -1245,7 +1275,7 @@ function performCommand(group, command, expectedGeneration) {
   const primitive = {
     'tick': ['tick', []],
     'propose': ['propose', [command.bytes]],
-    'propose-conf-change': ['propose_conf_change_v2', [command.change]],
+    [PROPOSE_CONF_CHANGE]: ['propose_conf_change_v2', [command.change]],
   }[command.type];
   if (primitive && !group.gateOpen) {
     return participationGateClosed();
@@ -1256,6 +1286,11 @@ function performCommand(group, command, expectedGeneration) {
       phase: RUNTIME_PHASE.DISPATCH, retryable: false,
       recoveryRequired: false,
     });
+  }
+  const deferred = command.type === PROPOSE_CONF_CHANGE ?
+    deferredConfChange(group, expectedGeneration) : null;
+  if (deferred !== null) {
+    return deferred;
   }
   const invoked = invokeCoreAt(
     group, expectedGeneration, primitive[0], ...primitive[1]);

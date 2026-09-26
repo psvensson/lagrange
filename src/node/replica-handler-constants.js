@@ -18,6 +18,10 @@ const REPLICA_HANDLER_DEFAULT = Object.freeze({
   DATA_DIR: STORAGE_DEFAULT.DATA_DIR,
   SYNC_TIMEOUT_MS: TIME_MS.MINUTE,
   STATUS_WRITE_RETRY_TIMEOUT_MS: TIME_MS.SECOND * NUM.THIRTY,
+  // The bound on a retiring replica's wait for its own removal to apply
+  // (owner ruling F2): inside the replica state machine's one-minute REMOVING
+  // timeout, so the removal still completes as REMOVED.
+  REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS: TIME_MS.SECOND * NUM.THIRTY,
 });
 
 const REPLICA_HANDLER_ADDRESS = Object.freeze({
@@ -68,6 +72,8 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   LOCAL_CLEANUP_RETRY_REQUIRED:
     'Replica local cleanup requires retry after durable removal',
   REMOVE_COMPLETED: 'Replica removal completed',
+  REMOVE_CONSENSUS_EXIT:
+    'Retiring replica left consensus; retiring its port',
   REMOVE_FAILED: 'Replica removal failed',
   REMOVE_STATUS_WRITE_DEFERRED:
     'Replica removal status write deferred after retryable control-plane failure',

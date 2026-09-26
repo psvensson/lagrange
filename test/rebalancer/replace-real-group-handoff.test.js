@@ -21,6 +21,12 @@ import {
   ReplicaOperationField,
   ReplicaOperationReason,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {EXECUTOR_OUTCOME_TYPE} from
+  '../../src/rebalancer/executor-outcome-constants.js';
+import {REPLICA_CONSENSUS_EXIT_REASON} from
+  '../../src/node/replica-removal-consensus-exit.js';
+import {durableLifecycleState} from
+  '../node/replica-removal-consensus-exit-fixture.js';
 import {
   REPLACE_HANDOFF_ANSWER_CLASS,
   readReplaceHandoffAttempt,
@@ -72,16 +78,20 @@ test('named-target only: the one handoff names the target and is served ' +
   }
 });
 
-// B13 in two orders of the source's retirement. Production: the source's
-// handler retires its port at the REMOVE_REPLICA effect (retireReplica runs
-// before the REMOVING row; the port refuses every step once retiring), so in
-// the two-voter group {s, t} the RemoveNode(s) proposed afterwards has no
-// second ack. Control: the source's port keeps stepping until its removal
-// commits (the order the D1 anchor witness uses).
-async function runRf1Replace(t, {sourceStopsAtEffect, label}) {
+// B13 in two orders of the source's retirement. Production: the source
+// node's REMOVE_REPLICA effect is answered by the production replica handler
+// over the source's real port (finding F2: at ab7669fd0 it retired the port
+// at the effect, before the REMOVING row, so in the two-voter group {s, t}
+// the RemoveNode(s) proposed afterwards had no second ack). Control: the
+// source's port keeps stepping until its removal commits and is never
+// retired (the order the D1 anchor witness uses).
+async function runRf1Replace(t, {sourceHandler, label}) {
   const world = await openReplaceWorld({replicaCount: 1, sourceLeads: true,
     capDelivery: 'sql_transactions-p1-r4', capBeforeAdmission: true,
-    sourceStopsAtEffect});
+    sourceStopsAtEffect: false, sourceHandler});
+  const sourceDb = world.group.cluster.replica(world.sourceReplicaId).dbFile;
+  const sourceLifecycleAtSetup = durableLifecycleState(sourceDb,
+    world.partitionId);
   try {
     const target = world.group.cluster.node(world.targetReplicaId);
     t.equal(target.readStatus().gateOpen, false,
@@ -123,6 +133,33 @@ async function runRf1Replace(t, {sourceStopsAtEffect, label}) {
     t.same(world.group.committedConfiguration().voters,
       [world.group.peerIdOf(world.targetReplicaId)],
       `${label}: the committed configuration is the target alone`);
+    if (sourceHandler) {
+      // The source's own removal completes: it left consensus on its applied
+      // removal and retired its port (durably), then removed its row.
+      const handled = world.sourceHandler;
+      const completed = () => handled.outcomes.some(([type]) =>
+        type === EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED);
+      for (let round = 0; round < ATTEMPT_ROUNDS && !completed(); round += 1) {
+        world.group.advance();
+        await settleTurns();
+      }
+      t.same(handled.exits.map((exit) => exit.reason),
+        [REPLICA_CONSENSUS_EXIT_REASON.REMOVAL_APPLIED],
+        `${label}: the source left consensus on its own applied removal`);
+      t.not(durableLifecycleState(sourceDb, world.partitionId),
+        sourceLifecycleAtSetup, `${label}: the source retired its port`);
+      t.equal(completed(), true, `${label}: the source's removal completed`);
+    }
+    // Quorum: a write proposed through the target commits and applies.
+    const marker = `after-replace-${label}`;
+    const targetReplica = world.group.cluster.replica(world.targetReplicaId);
+    const applied = () => targetReplica.appliedCommands.some((command) =>
+      JSON.stringify(command).includes(marker));
+    await world.group.cluster.propose(world.targetReplicaId, marker);
+    world.group.settle(applied, 200);
+    t.equal(applied(), true,
+      `${label}: the partition keeps quorum (a write through the target ` +
+        'commits)');
   } finally {
     world.group.cap.value = Number.POSITIVE_INFINITY;
     await disposeWorld(world);
@@ -132,10 +169,10 @@ async function runRf1Replace(t, {sourceStopsAtEffect, label}) {
 test('B13 (RF=1, production order): the target below its admission index ' +
   'cannot take leadership; no removal is issued; completion once admitted',
 async (t) => {
-  await runRf1Replace(t, {sourceStopsAtEffect: true, label: 'production order'});
+  await runRf1Replace(t, {sourceHandler: true, label: 'production order'});
 });
 
 test('B13 (RF=1, control order): with the source stepping until its ' +
   'removal commits, the same REPLACE completes', async (t) => {
-  await runRf1Replace(t, {sourceStopsAtEffect: false, label: 'control order'});
+  await runRf1Replace(t, {sourceHandler: false, label: 'control order'});
 });

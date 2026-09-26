@@ -29,6 +29,7 @@ import {
   cleanupTestEnvironment,
   initializeTestEnvironment,
 } from './helpers/cluster-test-helpers.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 function createMockCDCService(cache) {
   const operations = [];
@@ -135,7 +136,7 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
       cdcIntegrationService,
       dataDir: tempDir,
       createPartitionService: async (options) => {
-        const service = new PartitionService({
+        const service = new PartitionService(withFoundingStamp({
           partitionId: options.partitionId,
           tableId: options.tableId,
           tableName: options.tableName,
@@ -147,7 +148,7 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
           dbPath: options.dbPath,
           suppressLifecycleLogs: true,
           onInitializationStage: options.onInitializationStage,
-        });
+        }));
         await service.initialize();
         return service;
       },

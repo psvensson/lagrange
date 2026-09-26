@@ -24,6 +24,7 @@ import {
 import {
   RAFT_SNAPSHOT_INSTALL_OUTCOME,
 } from '../../src/raft/snapshot-install-constants.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 // Snapshot catch-up end to end on the rs-raft partition path (quest
 // raft-rs-single-path-partition-cutover, design S26/S27 and Q5/Q6).
@@ -118,7 +119,7 @@ test('a snapshot-installed replica without an rs-raft record fails closed ' +
       'fixture: the replica is snapshot-installed');
 
     const replicaId = `${PARTITION_ID}-r1`;
-    service = new PartitionService({
+    service = new PartitionService(withFoundingStamp({
       partitionId: PARTITION_ID,
       tableId: TABLE,
       tableName: TABLE,
@@ -128,7 +129,7 @@ test('a snapshot-installed replica without an rs-raft record fails closed ' +
       dbPath,
       schema: SCHEMA,
       deferElection: true,
-    });
+    }));
     let outcome = null;
     try {
       await service.initialize();

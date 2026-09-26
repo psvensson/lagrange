@@ -17,6 +17,7 @@ import {
 import {
   PARTITION_SERVICE_CDC,
 } from '../../src/partition/partition-service-constants.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 const TEST_TABLE_SCHEMA = Object.freeze({
   columns: [
@@ -55,7 +56,7 @@ const ROW_VALUE_THREE = 3;
 const ROW_VALUE_FOUR = 4;
 
 function createPartition() {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId: TEST_IDS.PARTITION_ID,
     tableId: TEST_IDS.TABLE_ID,
     tableName: TEST_IDS.TABLE_ID,
@@ -64,7 +65,7 @@ function createPartition() {
     nodeId: TEST_IDS.NODE_ID,
     schema: TEST_TABLE_SCHEMA,
     dbPath: ':memory:',
-  });
+  }));
 }
 
 function initializeTestEnvironment() {

@@ -549,6 +549,8 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
           nodeId: this.nodeId,
         });
         this.shuttingDown = true;
+        // A removal waiting for its replica to leave consensus stops waiting.
+        this.removalConsensusExitRelease?.abort();
         for (const progress of this.creationProgressByReplica.values()) {
           this.creationProgressReporter.fail(
             progress,

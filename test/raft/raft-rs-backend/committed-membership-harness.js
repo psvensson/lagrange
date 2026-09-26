@@ -41,6 +41,7 @@ import {OperationType} from
   '../../../src/rebalancer/replica-operation-progress.js';
 import {ReplicaOperationField} from
   '../../../src/rebalancer/replica-operation-constants.js';
+import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
 
 const TABLE_NAME = 'committed_membership_table';
 const WAIT_BUDGET_MS = 8000;
@@ -226,7 +227,9 @@ function createCommittedMembershipHarness(partitionId) {
     deferElection = true, bootstrapMembership = undefined,
     isJoiningExistingGroup = false}) => {
     fs.mkdirSync(path.dirname(dbPathOf(member)), {recursive: true});
-    const service = new PartitionService({
+    // A founder is built with its founding list's GENESIS stamp (V1a: the
+    // port opens nothing without a stamp or the durable-record bootstrap).
+    const service = new PartitionService(withFoundingStamp({
       partitionId,
       tableId: TABLE_NAME,
       tableName: TABLE_NAME,
@@ -241,7 +244,7 @@ function createCommittedMembershipHarness(partitionId) {
       deferElection,
       isJoiningExistingGroup,
       ...(bootstrapMembership === undefined ? {} : {bootstrapMembership}),
-    });
+    }));
     services.set(member[0], service);
     caches.set(member[0], cache);
     members.set(member[0], member);

@@ -58,6 +58,7 @@ import {
   SERVICE_STATUS,
   TABLES,
 } from '../../src/constants/index.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 export const PARTITION_ID = 'progress-proof-p1';
 const TABLE_NAME = 'progress_proof_table';
@@ -314,7 +315,7 @@ function assertLeaderCommitIndex(leader, expected, stage) {
 }
 
 async function createLeader(transport, cache) {
-  const leader = new PartitionService({
+  const leader = new PartitionService(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_NAME,
     tableName: TABLE_NAME,
@@ -325,7 +326,7 @@ async function createLeader(transport, cache) {
     systemTableCache: cache,
     schema: TABLE_SCHEMA,
     dbPath: ':memory:',
-  });
+  }));
   await leader.initialize();
   // How the prefix became committed is a precondition here, not the
   // mechanism under test - the proof consumes committedIndex however it
@@ -395,7 +396,7 @@ async function admitLiveVoter(topology, replicaId, nodeId, options = {}) {
   const address = partitionAddress(nodeId, replicaId);
   const placement = placementWith(topology, replicaId, nodeId);
   const voterCache = createPlacementCache(placement);
-  const voter = new PartitionService({
+  const voter = new PartitionService(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_NAME,
     tableName: TABLE_NAME,
@@ -408,7 +409,7 @@ async function admitLiveVoter(topology, replicaId, nodeId, options = {}) {
     schema: TABLE_SCHEMA,
     dbPath: ':memory:',
     deferElection: true,
-  });
+  }));
   topology.voters.push(voter);
   await voter.initialize();
   const hydratedCaches = options.surplus === true ?
@@ -453,7 +454,7 @@ export function observeLearnerTerm(learner, term) {
 }
 
 async function createLearner(transport, cache, options = {}) {
-  const learner = new PartitionService({
+  const learner = new PartitionService(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: TABLE_NAME,
     tableName: TABLE_NAME,
@@ -470,7 +471,7 @@ async function createLearner(transport, cache, options = {}) {
     learnerCatchUpCheckIntervalMs:
       options.retryIntervalMs || RETRY_INTERVAL_MS,
     replicaStateMachine: options.replicaStateMachine,
-  });
+  }));
   await learner.initialize();
   return learner;
 }

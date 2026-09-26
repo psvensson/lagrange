@@ -154,8 +154,11 @@ const RATCHET_TARGETS = [
     // leader-answered witness double factored into one helper).
     // 2026-09-26: tightened 787/30301 -> 781/29963 on the hint (fix-f1: the
     // seven per-leg evidence tests deleted with the evidence maps).
-    baselineCloneGroupCount: 781,
-    baselineDuplicatedLineCount: 29963,
+    // 2026-09-26 (integration 2): fix-f1 781/29963 and fix-f2 786/30288
+    // merged at the lower of each pair, then tightened to 780/29947 on the
+    // checker's hint.
+    baselineCloneGroupCount: 780,
+    baselineDuplicatedLineCount: 29947,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
