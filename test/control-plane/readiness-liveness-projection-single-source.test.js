@@ -50,6 +50,7 @@ const START_MS = 300000;
 const LEASE_MS = 15000;
 const HEARTBEAT_AGE_MS = 100;
 const WARM_ROUNDS = 20;
+const ALTERNATION_CYCLES = 3;
 // The production refusal of an authoritative row read (the listNodes result
 // recorded on the owner node in the red join runs).
 const UNAVAILABLE_AUTHORITATIVE_READ = Object.freeze({
@@ -162,23 +163,32 @@ for (const [label, listNodes] of NON_SOURCE_ROW_CASES) {
     t.equal(await warm(service), true,
       'precondition: every read kind of both nodes is served a completed ' +
       'snapshot');
-    const before = captureIdentity(service);
-
+    // The first publication-planning evaluation may record its own readiness
+    // feedback once (a separate owner: the evaluation stores a snapshot built
+    // from the row it holds). The invariant is the steady alternation the
+    // red runs recorded: planning builds and publication-planning
+    // evaluations interleaving, several times per second.
     await service.getAllNodeReadiness({allowAuthoritativeRefresh: true});
-
-    t.same(captureIdentity(service), before,
-      'neither the shared liveness projection nor the planning identity moved');
-    for (const nodeId of [SELF_NODE_ID, PEER_NODE_ID]) {
-      const routed = isDeferredReadinessPlanningSnapshot(
-        read(service, nodeId, CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ));
-      for (const kind of PARTICIPATION_KINDS) {
-        const deferred = isDeferredReadinessPlanningSnapshot(
-          read(service, nodeId, kind));
-        t.equal(deferred, false,
-          `${kind} read of ${nodeId} is served the completed snapshot`);
-        t.equal(deferred, routed,
-          `${kind} and routed reads of ${nodeId} agree`);
+    t.equal(await warm(service), true,
+      'precondition: settled after the first publication-planning read');
+    const before = captureIdentity(service);
+    for (let cycle = 0; cycle < ALTERNATION_CYCLES; cycle += 1) {
+      await service.getAllNodeReadiness({allowAuthoritativeRefresh: true});
+      t.same(captureIdentity(service), before, `cycle ${cycle}: neither ` +
+        'the shared liveness projection nor the planning identity moved');
+      for (const nodeId of [SELF_NODE_ID, PEER_NODE_ID]) {
+        const routed = isDeferredReadinessPlanningSnapshot(
+          read(service, nodeId, CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ));
+        for (const kind of PARTICIPATION_KINDS) {
+          const deferred = isDeferredReadinessPlanningSnapshot(
+            read(service, nodeId, kind));
+          t.equal(deferred, false, `cycle ${cycle}: ${kind} read of ` +
+            `${nodeId} is served the completed snapshot`);
+          t.equal(deferred, routed,
+            `cycle ${cycle}: ${kind} and routed reads of ${nodeId} agree`);
+        }
       }
+      await warm(service);
     }
   });
 }
