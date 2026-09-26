@@ -52,6 +52,7 @@ function buildContext({rows, minReplicaCount}) {
     nodeId: 'owner-node',
     repository: {
       isReplaceRemovePhase: () => false,
+      isReplaceRemoveDispatchPhase: () => false,
       getOperationsByEntity: async () => [],
       isOperationTerminal: () => false,
       getReplaceSourceReplicaId: () => null,

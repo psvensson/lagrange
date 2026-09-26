@@ -12,7 +12,7 @@
     "distributed-harness": 167,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 256,
+    "placement-rebalance": 257,
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2221,
-  "digest": "fnv1a32-de0749de",
+  "censusSize": 2222,
+  "digest": "fnv1a32-a6082c59",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-e783834c",
+  "observationDigest": "fnv1a32-6a6e5eb0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1683,6 +1683,7 @@
     "test/rebalancer/replace-real-group-handoff.test.js": "placement-rebalance",
     "test/rebalancer/replace-real-group-latency.test.js": "placement-rebalance",
     "test/rebalancer/replace-real-group-scheduling.test.js": "placement-rebalance",
+    "test/rebalancer/replace-remove-safety-post-intent.test.js": "placement-rebalance",
     "test/rebalancer/replace-remove-safety-wake-property.test.js": "placement-rebalance",
     "test/rebalancer/replace-replica-workflow.test.js": "placement-rebalance",
     "test/rebalancer/replace-source-planner-set-exclusion.test.js": "placement-rebalance",
@@ -8175,6 +8176,19 @@
       ]
     },
     "test/rebalancer/replace-real-group-scheduling.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/node/replica-handler-membership-relay.js",
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/rebalancer/replace-remove-safety-post-intent.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",

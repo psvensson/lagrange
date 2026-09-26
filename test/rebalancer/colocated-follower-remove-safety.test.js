@@ -101,6 +101,7 @@ function makeHandoff({
       operation?.targetReplicaId || null,
     isOperationTerminal: () => false,
     isReplaceRemovePhase: () => true,
+    isReplaceRemoveDispatchPhase: () => true,
   };
   instance.messageRouter = {
     deliver: async (_target, payload) => witness.answer(payload) ?? null,

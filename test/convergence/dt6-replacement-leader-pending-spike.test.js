@@ -155,6 +155,7 @@ function makeHandoff({
     getReplaceSourceReplicaId: (op) => op?.sourceReplicaId ?? null,
     getReplaceTargetReplicaId: (op) => op?.targetReplicaId ?? null,
     isReplaceRemovePhase: () => true, // surplus-drain REMOVE phase of the REPLACE
+    isReplaceRemoveDispatchPhase: () => true,
   };
   instance.getReplicaRowIdentity = (row) => row?.replica_id ?? null;
   instance.getPriorityPublicationSourceRoleState = roleFromRow;

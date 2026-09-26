@@ -142,6 +142,7 @@ function makeOwner(service, {prototype = PriorityRecoverySupersededTarget} = {})
     getReplaceTargetReplicaId: (operation) => operation?.targetReplicaId || null,
     isOperationTerminal: () => false,
     isReplaceRemovePhase: () => true,
+    isReplaceRemoveDispatchPhase: () => true,
   };
   // The REPLACE's leadership is read from its target replica's own port
   // (quest replace-source-removal-owner, amendment-1 step 2); BR11: only the

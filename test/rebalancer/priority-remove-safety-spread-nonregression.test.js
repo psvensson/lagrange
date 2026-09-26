@@ -24,6 +24,7 @@ function makeRemoveSafetyOwner() {
   const owner = Object.create(PriorityRecoverySupersededTarget.prototype);
   owner.repository = {
     isReplaceRemovePhase: () => true,
+    isReplaceRemoveDispatchPhase: () => true,
   };
   owner.readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety = async () => ({
     publishedActiveNodeIdsPresent: true,

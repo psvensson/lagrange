@@ -126,11 +126,15 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
       coordinator.workflowOwner.evaluateRemoveSafety.bind(
         coordinator.workflowOwner,
       );
+    // F3 (fix-f1): the post-intent re-send at STOPPING runs the same
+    // remove-safety evaluation as the first send at ACTIVE, so the stubbed
+    // SAFE answer covers both sends.
     coordinator.workflowOwner.evaluateRemoveSafety =
       async (operation) => {
         if (
           operation?.type === OperationType.REPLACE &&
-          operation?.workflowStep === WORKFLOW_STEP.ACTIVE
+          (operation?.workflowStep === WORKFLOW_STEP.ACTIVE ||
+            operation?.workflowStep === WORKFLOW_STEP.STOPPING)
         ) {
           return coordinator.workflowOwner.buildSafeRemoveSafetyEvaluation();
         }

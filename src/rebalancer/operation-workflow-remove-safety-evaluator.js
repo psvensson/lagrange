@@ -328,7 +328,7 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
     PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED
   ) {
     const replaceRemovePhase =
-      context.repository.isReplaceRemovePhase(operation);
+      context.repository.isReplaceRemoveDispatchPhase(operation);
     const deferReason = await context.resolveRemoveSafetyDeferredReason(
       operation,
       replaceRemovePhase,
@@ -440,9 +440,12 @@ async function evaluateRemoveSafety(context, operation) {
 
   const isRemoveInitialDispatch =
     context.isRemoveInitialDispatchPhase(operation);
-  const isReplaceRemoveInitialDispatch =
-    context.repository.isReplaceRemovePhase(operation);
-  if (!isRemoveInitialDispatch && !isReplaceRemoveInitialDispatch) {
+  // A REPLACE's removal effect is evaluated at every send, not the first
+  // only: the ACTIVE dispatch and every post-intent re-send at STOPPING (the
+  // T5' re-send, the post-WAIT redrive) run the same checks (F3).
+  const isReplaceRemoveDispatch =
+    context.repository.isReplaceRemoveDispatchPhase(operation);
+  if (!isRemoveInitialDispatch && !isReplaceRemoveDispatch) {
     return context.buildSafeRemoveSafetyEvaluation();
   }
 
@@ -592,7 +595,7 @@ async function evaluateRemoveSafety(context, operation) {
 
   if (!partitionClassification.systemTable) {
     return evaluateUniversalPartitionRemoveSafety(context, operation, {
-      isReplaceRemoveInitialDispatch,
+      isReplaceRemoveInitialDispatch: isReplaceRemoveDispatch,
       removeSafetyReadiness,
       currentVoterReadyRows,
       projectedVoterReadyRows:
@@ -624,7 +627,7 @@ async function evaluateRemoveSafety(context, operation) {
     priorityRecoveryCompletionEvaluation?.classification ===
     REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE;
 
-  if (isReplaceRemoveInitialDispatch) {
+  if (isReplaceRemoveDispatch) {
     const replacementGuard = evaluateReplaceReplacementVoterReady(
       context,
       operation,

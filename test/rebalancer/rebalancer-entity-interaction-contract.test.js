@@ -71,6 +71,8 @@ function buildEvaluationContext({rows, minReplicaCount = 1, operations = []}) {
       isOperationTerminal: () => false,
       isReplaceRemovePhase: (operation) =>
         operation.type === OperationType.REPLACE,
+      isReplaceRemoveDispatchPhase: (operation) =>
+        operation.type === OperationType.REPLACE,
       getReplaceSourceReplicaId: (operation) => operation.sourceReplicaId,
       getReplaceTargetReplicaId: (operation) => operation.replicaId,
     },
