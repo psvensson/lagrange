@@ -120,21 +120,31 @@ test('backstop K1: with the events suppressed, the timeout sweep alone ' +
   }
 });
 
-test('backstop W_max: a lost R-1f proposal with the events suppressed is ' +
-  're-driven only once the transfer window passed, then completes',
+test('backstop W_max: a RETIRE the leader accepted but cannot commit (its ' +
+  'inbox held, the acks never arrive) is re-driven only once the window ' +
+  'passed, with the events suppressed; the release then completes',
 async (t) => {
-  // A follower witness (ordinary partition): its proposal crosses the
-  // transport to the leader, where it is lost.
+  // A follower target on an ordinary partition: RETIRE is routed to the
+  // leader (conf changes are leader-only); the production source handler
+  // keeps the source stepping.
   const world = await openReplaceWorld({partitionId: ORDINARY_PARTITION_ID,
-    sourceLeads: false});
+    sourceLeads: false, sourceHandler: true});
   try {
+    const leader = world.group.leader();
+    // The leader's inbox is held from here: it appends what R-1f proposes
+    // and replicates it, but its followers' acks never reach it (a leader
+    // whose node does not drain; check_quorum off keeps it leading).
+    world.group.holdInbox(leader);
     await driveToIntent(world);
+    await settleTurns();
+    t.ok(world.retirements.length >= 1, 'R-1f proposed once');
+    t.same([...new Set(world.retirements.map((payload) =>
+      payload.replicaId))], [leader], 'the RETIRE reached the leader');
     world.eventsSuppressed = true;
-    for (const replica of world.group.cluster.replicas.values()) {
-      replica.inbox.length = 0;
-    }
-    const issued = world.retirements.length;
     world.group.advance();
+    t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), true,
+      'setup: the removal is not committed');
+    const issued = world.retirements.length;
     world.clockOffsetMs += 100;
     await fireFallbackTimers(world);
     await settleTurns();
@@ -145,8 +155,13 @@ async (t) => {
     await settleTurns();
     t.equal(world.retirements.length, issued + 1,
       'past the window the backstop re-drives once');
+    t.equal(world.retirements.at(-1).replicaId, leader,
+      'the re-drive goes to the leader again (the level did not move)');
+    world.group.releaseInbox(leader);
     const outcome = await runToQuiescence(world, {rounds: 10});
     t.equal(outcome.workflowStep, WORKFLOW_STEP.REMOVED, 'completed');
+    t.equal(world.terminalWrites.at(-1)?.sourceCommittedVoter, false,
+      'at the write the source is absent');
   } finally {
     await disposeWorld(world);
   }

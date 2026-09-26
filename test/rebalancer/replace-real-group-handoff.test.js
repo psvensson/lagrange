@@ -31,12 +31,15 @@ import {
   REPLACE_HANDOFF_ANSWER_CLASS,
   readReplaceHandoffAttempt,
 } from '../../src/rebalancer/operation-workflow-replace-handoff-attempt.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
+  ORDINARY_PARTITION_ID,
   disposeWorld,
   driveToIntent,
   openReplaceWorld,
   readPersisted,
   runToQuiescence,
+  runToQuiescenceWithSweeps,
   settleTurns,
 } from './replace-real-group-harness.js';
 
@@ -175,4 +178,98 @@ async (t) => {
 test('B13 (RF=1, control order): with the source stepping until its ' +
   'removal commits, the same REPLACE completes', async (t) => {
   await runRf1Replace(t, {sourceHandler: false, label: 'control order'});
+});
+
+// V10 (verification round 1): RF=1 on an ordinary partition with the SOURCE
+// leading and no handoff. The removed leader is the group's leader: R-1f
+// routes the RETIRE to it (conf changes are leader-only; the target is a
+// follower), it proposes its own RemoveNode, commits it with the target's
+// ack, leaves on its applied removal and retires; the target then leads the
+// sole-voter group and the leader's answer completes the REPLACE.
+test('RF=1 x ordinary partition x source leads: the removed leader takes ' +
+  'its own RemoveNode through R-1f, retires on its applied removal, and ' +
+  'the target completes the REPLACE', async (t) => {
+  const world = await openReplaceWorld({replicaCount: 1,
+    partitionId: ORDINARY_PARTITION_ID, sourceLeads: true,
+    sourceHandler: true});
+  const sourceDb = world.group.cluster.replica(world.sourceReplicaId).dbFile;
+  const lifecycleAtSetup = durableLifecycleState(sourceDb, world.partitionId);
+  try {
+    t.equal(world.group.leader(), world.sourceReplicaId, 'setup: source leads');
+    await driveToIntent(world);
+    await settleTurns();
+    t.equal(world.stepDowns.length, 0, 'no handoff on an ordinary partition');
+    t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.STOPPING,
+      'the removal intent is durable');
+    const outcome = await runToQuiescence(world, {rounds: 30});
+    t.equal(outcome.workflowStep, WORKFLOW_STEP.REMOVED, 'completed');
+    t.same([...new Set(world.retirements.map((payload) =>
+      payload[ReplicaOperationField.REPLICA_ID]))], [world.sourceReplicaId],
+    'every RETIRE went to the leader - the source itself - never the follower target');
+    t.same(world.group.committedConfiguration().voters,
+      [world.group.peerIdOf(world.targetReplicaId)],
+      'the committed configuration is the target alone');
+    t.same(world.sourceHandler.exits.map((exit) => exit.reason),
+      [REPLICA_CONSENSUS_EXIT_REASON.REMOVAL_APPLIED],
+      'the source left consensus on its own applied removal');
+    t.not(durableLifecycleState(sourceDb, world.partitionId), lifecycleAtSetup,
+      'the source retired its port');
+    t.equal(world.terminalWrites.at(-1)?.sourceCommittedVoter, false,
+      'at the write the source is absent');
+  } finally {
+    await disposeWorld(world);
+  }
+});
+
+// V2 (verification round 1), the REPLACE shape: the source's REMOVING write
+// fails retryable at the first effect. The handler defers the REMOVE typed
+// (no wait, no retirement, port live, the source still a committed voter);
+// the owner's re-sent effect lands the row, the removal commits with the
+// source's ack, and the REPLACE completes - in the two-voter group of an
+// RF=1 REPLACE, where a port retired before its removal commits would cost
+// the quorum.
+test('V2 (RF=1 REPLACE): a REMOVING write that fails retryable defers the ' +
+  'effect typed - nothing retired, port live - and the re-sent effect ' +
+  'completes the REPLACE', async (t) => {
+  const world = await openReplaceWorld({replicaCount: 1, sourceLeads: true,
+    sourceHandler: true, removingWriteFails: true});
+  const sourceDb = world.group.cluster.replica(world.sourceReplicaId).dbFile;
+  const lifecycleAtSetup = durableLifecycleState(sourceDb, world.partitionId);
+  try {
+    await driveToIntent(world);
+    await settleTurns();
+    t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.STOPPING,
+      'the removal intent is durable');
+    t.equal(world.removeEffects.length, 1, 'the first effect left');
+    world.group.advance(100);
+    await settleTurns();
+    t.equal(world.cache.get('services', world.sourceReplicaId)?.status,
+      ReplicaStatus.ACTIVE, 'no REMOVING row could be made durable');
+    t.equal(durableLifecycleState(sourceDb, world.partitionId),
+      lifecycleAtSetup, 'nothing retired');
+    t.equal(world.sourceHandler.exits.length, 0, 'no consensus exit awaited');
+    t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), true,
+      'the source is still a committed voter');
+    t.equal(world.retirements.length, 0,
+      'R-1f proposes nothing while the source row is admissible');
+    // The write can land: the owner's re-sent effect (T5', after the
+    // resend window) drives the row, the row-driven removal and the exit.
+    // (Observation O2, the record: after the T5' re-send the owner's turn
+    // ends without a fallback armed; the K1 sweep reaches it.)
+    world.removingWriteFails = false;
+    const outcome = await runToQuiescenceWithSweeps(world, {rounds: 30,
+      advanceMs: 61_000});
+    t.equal(outcome.workflowStep, WORKFLOW_STEP.REMOVED, 'completed');
+    t.ok(world.removeEffects.length >= 2, 'the effect was re-sent');
+    t.same(world.group.committedConfiguration().voters,
+      [world.group.peerIdOf(world.targetReplicaId)],
+      'the committed configuration is the target alone');
+    t.same(world.sourceHandler.exits.map((exit) => exit.reason),
+      [REPLICA_CONSENSUS_EXIT_REASON.REMOVAL_APPLIED],
+      'the source left consensus on its own applied removal (never before)');
+    t.not(durableLifecycleState(sourceDb, world.partitionId), lifecycleAtSetup,
+      'then retired its port');
+  } finally {
+    await disposeWorld(world);
+  }
 });

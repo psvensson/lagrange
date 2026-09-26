@@ -17,8 +17,15 @@
  *   S7 remote terminal write x completion;
  *   S8 planner check x planner excess;
  *   S11 a concurrent operation between SAFE and the effect (section 3.2).
+ *   S14 leader change x R-1a (generated: two staleness shapes x two orders,
+ *       the dimension "authority currentness" of verification round 1 V1,
+ *       fix-f7), crossed with the retire route (RETIRE only to a
+ *       corroborated leader, never to a stale one nor to a follower target).
  * Readiness publication x remove safety is the approved R-2 evidence (W6,
- * 27 cells); leader/term change x R-1f re-drive is AN6 (the D2 file).
+ * 27 cells); leader/term change x R-1f re-drive is AN6 (the D2 file). The
+ * direct anchor "a stale leader's answer never retires the source" is
+ * replace-real-group-deposed-leader.test.js (fix-f7), whose two shapes S14
+ * generates over both orders.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -34,18 +41,26 @@ import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
+  REPLACE_COMPLETION_VERDICT,
   REPLACE_WAIT_REASON,
+  decideReplaceCompletion,
   readReplaceOwnerDiagnostic,
 } from '../../src/rebalancer/operation-workflow-replace-owner.js';
+import {
+  RAFT_MEMBERSHIP_OPERATION,
+} from '../../src/raft/raft-operation-port-constants.js';
 import {createMockCache, createTestRebalancer} from './test-helpers.js';
 import {
   NODE,
   ORDINARY_PARTITION_ID,
+  STALE_AUTHORITY_WAITS,
   disposeWorld,
   driveToIntent,
+  electAmongLive,
   openReplaceWorld,
   readPersisted,
   runToQuiescence,
+  runToQuiescenceWithSweeps,
   serviceRow,
   setSourceRow,
   settleTurns,
@@ -552,6 +567,198 @@ test('S13: a terminal written elsewhere between SAFE and the effect - the ' +
       .queryReplicaOperationPersistenceAuthorityOperation(world.operation);
     t.equal(durable.workflowStep, WORKFLOW_STEP.FAILED, 'the terminal stands');
   } finally {
+    await disposeWorld(world);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// S14: leader change x R-1a, generated over the staleness shapes of the
+// authority-currentness dimension and both orders.
+//
+// The event: t (the leader after the handoff) is deposed by a new leader
+// that re-admits the source (BR16/A4) while t still believes it leads
+// (raft-rs check_quorum off). The decision: R-1a's read of the completion
+// authority. Shapes of "the deposition not yet processed by t":
+//   partitioned - t is cut off (processes it when the partition heals);
+//   stall       - t is connected but has not drained the deposing
+//                 heartbeat (its inbox is held).
+// Orders: decide-first (R-1a reads while t is stale) must WAIT typed
+// (NOT_CORROBORATED) and write nothing; process-first (t processed the
+// deposition) decides STILL_VOTER from the corroborated new leader. Both
+// converge: R-1f re-drives ONLY through the corroborated leader (never t,
+// never the stale answerer), the source leaves again, REMOVED with the
+// oracle absent at the write.
+const STALE_LEADER_SHAPES = Object.freeze({
+  partitioned: {
+    make(world, deposed) {
+      world.group.cluster.isolate(deposed);
+    },
+    process(world, deposed) {
+      world.group.cluster.heal(deposed);
+      world.group.settle(() => world.group.roleOf(deposed) !== 'leader', 60);
+      world.group.advance(40);
+    },
+  },
+  stall: {
+    make(world, deposed) {
+      world.group.cluster.isolate(deposed);
+      world.group.holdInbox(deposed);
+    },
+    process(world, deposed) {
+      world.group.releaseInbox(deposed);
+      world.group.settle(() => world.group.roleOf(deposed) !== 'leader', 60);
+      world.group.advance(40);
+    },
+  },
+});
+const DECISION_ORDERS = Object.freeze(['decide-first', 'process-first']);
+
+// Depose t: a new leader among the others re-admits the source under it;
+// t (stale) still answers as leader.
+async function deposeTargetLeader(world, shape) {
+  const deposed = world.targetReplicaId;
+  await driveToIntent(world);
+  world.eventsSuppressed = true;
+  world.group.advance(200);
+  shape.make(world, deposed);
+  const newLeader = electAmongLive(world);
+  world.group.dead.delete(world.sourceReplicaId);
+  world.group.cluster.heal(world.sourceReplicaId);
+  setSourceRow(world, ReplicaStatus.ACTIVE);
+  world.group.commitChange(RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
+    world.sourceReplicaId);
+  if (shape === STALE_LEADER_SHAPES.stall) {
+    // Connected again, the deposing heartbeats queue in t's held inbox.
+    world.group.cluster.heal(deposed);
+    for (let round = 0; round < 8; round += 1) {
+      world.group.cluster.tick(newLeader);
+    }
+  }
+  return {deposed, newLeader};
+}
+
+async function assertStaleAnswerWaits(t, world, label) {
+  const owner = world.coordinator.workflowOwner;
+  const decision = await decideReplaceCompletion(owner,
+    await readPersisted(world));
+  t.not(decision.verdict, REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED,
+    `${label}: a stale leader's answer never retires the source`);
+  t.equal(decision.verdict, REPLACE_COMPLETION_VERDICT.UNAVAILABLE,
+    `${label}: decide-first answers WAIT`);
+  t.equal(decision.observation.reason, STALE_AUTHORITY_WAITS.NOT_CORROBORATED,
+    `${label}: typed - not corroborated by a majority at its term`);
+  await entry(world);
+  t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.STOPPING,
+    `${label}: nothing written`);
+  t.equal(world.terminalWrites.length, 0, `${label}: no terminal write`);
+}
+
+for (const [shapeName, shape] of Object.entries(STALE_LEADER_SHAPES)) {
+  for (const order of DECISION_ORDERS) {
+    const label = `S14 ${shapeName} ${order}`;
+    test(`${label}: leader change x R-1a - the stale leader's answer never ` +
+      'retires; the corroborated new leader decides; RETIRE only through ' +
+      'it', async (t) => {
+      const world = await openReplaceWorld({sourceLeads: false});
+      try {
+        const {deposed, newLeader} = await deposeTargetLeader(world, shape);
+        t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), true,
+          'setup: the source is a committed voter again under the new leader');
+        t.equal(world.group.roleOf(deposed), 'leader',
+          'setup: the deposed target still believes it leads');
+        const retiresBefore = world.retirements.length;
+        if (order === 'decide-first') {
+          await assertStaleAnswerWaits(t, world, label);
+          t.equal(world.retirements.length, retiresBefore,
+            `${label}: no RETIRE while the authority is not current`);
+          shape.process(world, deposed);
+        } else {
+          shape.process(world, deposed);
+        }
+        t.not(world.group.roleOf(deposed), 'leader',
+          `${label}: t processed its deposition`);
+        const decision = await decideReplaceCompletion(
+          world.coordinator.workflowOwner, await readPersisted(world));
+        t.equal(decision.verdict, REPLACE_COMPLETION_VERDICT.STILL_VOTER,
+          `${label}: the corroborated leader holds the re-admitted source`);
+        t.equal(decision.observation.replicaId, newLeader,
+          `${label}: the verdict is the new leader's own answer`);
+        // The re-admitted source's row reads ACTIVE: the REPLACE returns to
+        // its REMOVE_REPLICA path (A4; the T5' re-send after its window),
+        // then R-1f. Rounds carry the fallback and the K1 sweep.
+        const outcome = await runToQuiescenceWithSweeps(world, {rounds: 20,
+          advanceMs: 61_000});
+        t.equal(outcome.workflowStep, WORKFLOW_STEP.REMOVED,
+          `${label}: R-1f removed the source again, completed`);
+        // Every RETIRE after the deposition went to the group's leader at
+        // that instant (the corroborated answer's own replica) - on a
+        // priority partition the STOPPING re-send re-runs the named handoff
+        // (F3 x BR11), so the target may lead again by then; never to a
+        // follower and never while the answerer was stale.
+        const routes = world.retirementRoutes.slice(retiresBefore);
+        t.ok(routes.length >= 1, `${label}: R-1f re-drove`);
+        t.ok(routes.every((route) => route.replicaId === route.leader),
+          `${label}: every RETIRE went to the leader of the moment (${
+            routes.map((route) => `${route.replicaId}=${route.leader}`)
+              .join(', ')})`);
+        t.equal(world.terminalWrites.filter((write) =>
+          write.step === WORKFLOW_STEP.REMOVED && write.sourceCommittedVoter)
+          .length, 0, `${label}: no REMOVED while the fold holds the source`);
+      } finally {
+        world.group.heldInboxes.clear();
+        await disposeWorld(world);
+      }
+    });
+  }
+}
+
+// S15 (authority currentness x a lagging voter): corroboration is election
+// safety over TERMS - a majority of the leader's configuration at its term,
+// naming it or none - never the voters' commit indexes (the leader's own
+// commit index is already a majority's acknowledgement). RF=2: {source,
+// r2, t}, r2 leading, t's inbox held so t lags r2's commit. The removal
+// commits with the source's ack; the source leaves and retires; the
+// configuration is {r2, t}. r2's ABSENT answer is corroborated by t at the
+// term (2 of 2) although t's commit index is behind: SOURCE_RETIRED. A
+// commit clause on the confirmations (the fix's first version) would wait
+// here until t caught up - forever while it lags.
+test('S15: a leader corroborated by a term majority decides although a ' +
+  'voter lags its commit index (RF=2)', async (t) => {
+  const world = await openReplaceWorld({partitionId: ORDINARY_PARTITION_ID,
+    replicaCount: 2, sourceLeads: false, sourceHandler: true});
+  try {
+    const leader = world.group.leader();
+    t.equal(leader, `${ORDINARY_PARTITION_ID}-r2`, 'setup: r2 leads');
+    world.group.holdInbox(world.targetReplicaId);
+    await driveToIntent(world);
+    await settleTurns();
+    world.eventsSuppressed = true;
+    world.group.advance(200);
+    t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), false,
+      'setup: the removal committed with the source\'s ack');
+    const leaderStatus = world.group.cluster.node(leader).readStatus();
+    const targetStatus = world.group.cluster.node(world.targetReplicaId)
+      .readStatus();
+    t.ok(Number(targetStatus.commitIndex) < Number(leaderStatus.commitIndex),
+      `setup: the held target's commit (${targetStatus.commitIndex}) is ` +
+        `below the leader's (${leaderStatus.commitIndex})`);
+    t.equal(Number(targetStatus.term), Number(leaderStatus.term),
+      'setup: at the leader\'s term');
+    const decision = await decideReplaceCompletion(
+      world.coordinator.workflowOwner, await readPersisted(world));
+    t.not(decision.observation.reason, STALE_AUTHORITY_WAITS.NOT_CORROBORATED,
+      'a term majority corroborates the leader; commit lag does not block');
+    t.equal(decision.verdict, REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED,
+      'the corroborated leader decides SOURCE_RETIRED');
+    t.equal(decision.observation.replicaId, leader,
+      'the verdict is the leader\'s own answer');
+    world.group.releaseInbox(world.targetReplicaId);
+    const outcome = await runToQuiescenceWithSweeps(world, {rounds: 20});
+    t.equal(outcome.workflowStep, WORKFLOW_STEP.REMOVED, 'completed');
+    t.equal(world.terminalWrites.at(-1)?.sourceCommittedVoter, false,
+      'at the write the source is absent');
+  } finally {
+    world.group.heldInboxes.clear();
     await disposeWorld(world);
   }
 });

@@ -169,3 +169,58 @@ Not a finding, recorded: S5 shows the owner's per-operation lane holding a secon
 ## R2.5 Findings
 
 None new against production in round 2: F1, F2, F3 are closed on d46777ecf by the same witnesses that were red on ab7669fd0. Observation P6(b') and evidence finding E3 above are for the lead.
+
+---
+
+# Round 3 (2026-09-28): the evidence under V1 corroboration, leader-only conf changes, the durable-row rule (production frozen at 659b7db95)
+
+**Author:** the same evidence author, round 3 (worktree `evidence-replace-r3`, branch `evidence/evidence-replace-r3-2026-09-28`). No `src/` change. Production `659b7db95` = `d46777ecf` + V1 corroboration (the leader's answer counts only when applied == commit and a majority of its voters, per half when joint, confirm term_A naming leaderId_A or none; else typed `completion_authority_not_corroborated` / `completion_authority_applied_behind_commit`), conf changes leader-only at the port (a follower's port answers typed NOT_LEADER with the leader hint; the row-driven owner proposes a leader source's own RemoveNode; R-1f routes RETIRE through the corroborated leader, `replaceRetirementRouteOf`), a removal never proceeds without a durable REMOVING row (typed deferral, port live), the exit awaited whenever the port is live, readiness F4 round 2. Inputs: `verification-replace-owner-round-1.md` (REJECT; items 3-5, V3-V6, V10), `verification-o1-round-2.md` F-3, the fix-f7/f5/integration-3 notes.
+
+## R3.1 What changed in the evidence
+
+- **Harness.** `holdInbox(replicaId)` / `releaseInbox` (a replica whose inbox is not drained: envelopes queue, including those produced in the same delivery pass; a held follower does not tick, a held leader keeps ticking so its heartbeats and appends leave and only what it is sent waits); `replicaCount: 2` groups; `removingWriteFails` (the production source handler's REMOVING write throws the retryable control-plane error while the flag holds, as fix-f5's fixture does); `retirementRoutes` (the group's leader at the instant each RETIRE arrives); `runToQuiescenceWithSweeps` (the 1 s fallback and the K1 sweep in every round); `STALE_AUTHORITY_WAITS`.
+- **V3 - P2 regenerated with the dimension "authority currentness"** (`replace-real-group-scheduling.test.js` S14, S15). The model's inputs gain the answering leader's currentness: {current (corroborated), stale-partitioned (an isolated ex-leader), stale-stalled (an ex-leader that has not drained the deposing heartbeat), lagging voters (commit behind the leader's)}. `leader change x R-1a` is generated over the two stale shapes x the two orders (4 cells): the event is the target-leader's deposition by a new leader that re-admits the source (BR16/A4) while the target still believes it leads; decide-first (R-1a reads while the answerer is stale) answers WAIT typed `completion_authority_not_corroborated`, writes nothing and issues no RETIRE; process-first (the deposition processed) decides STILL_VOTER from the corroborated new leader's own answer; both converge to REMOVED with the oracle absent at the write, and every RETIRE after the deposition went to the group's leader of that instant (never a follower, never while the answerer was stale). The direct anchor "a stale leader's answer never retires the source" is fix-f7's `replace-real-group-deposed-leader.test.js` (2 shapes), which the generated cells range over both orders. **The retire route crossed with corroboration:** on the priority partition the post-intent re-send re-runs the named handoff (F3 x BR11), so the deposed target regains leadership before the effect is re-sent and the RETIRE then goes to it as the leader of the moment; on the ordinary partition (the target a follower throughout) every RETIRE goes to the corroborated leader that is NOT t (`replace-real-group-retire-route.test.js`, fix-f5, and S15 here). S15 pins what corroboration is: election safety over terms, not the voters' commit indexes - RF=2, the target's inbox held so it lags the leader's commit, the removal committed with the source's ack, the leader's ABSENT answer corroborated by the lagging target at the term (2 of 2): SOURCE_RETIRED, REMOVED; a commit clause on the confirmations waits here forever (red under that mutation).
+- **The two cells whose premise died** (fix-f5 made a follower's RETIRE reach the leader's port instead of the transport): latency `backstop W_max` now holds the LEADER's inbox before the RETIRE (it appends and replicates, its followers' acks never arrive, check_quorum off keeps it leading): inside the window nothing is re-issued, past the window the backstop re-drives once (to the same leader, the level did not move), the release commits and completes. d2 AN7 now isolates the leader after it accepted the RETIRE (its appends lost with the network), the owner restarts in Φ5, the survivors elect: BR10 rebuilds the attempt as outstanding (no re-issue inside the window), the backstop re-drives to the corroborated new leader, REMOVED with the oracle absent. The properties are unchanged: bounded re-drive, 0 timers on the causal path (AN6, latency 1-2), W_max recovers.
+- **V2 REPLACE-shaped cell** (`replace-real-group-handoff.test.js`): RF=1 REPLACE, the production source handler, the REMOVING write failing retryable at the first effect: the effect is deferred typed - no REMOVING row durable, nothing retired (durable lifecycle row unchanged), no consensus exit awaited, the source still a committed voter, R-1f proposes nothing; once the write can land the re-sent effect (T5') drives the row, the removal commits with the source's ack, the source leaves on its applied removal, retires, and the REPLACE completes with the target alone. Red under the "removal proceeds without a durable row" mutation (with fix-f5's `replica-removal-deferred-row-write.test.js`).
+- **V4** S9 pre-intent x elapsed budgets (d2): ACTIVE with an unresolved attempt survives +61 s, +301 s and an hour of every sweep, no terminal write - green, kept as an anchor. **V10** RF=1 x ordinary partition x source leads (handoff): no handoff; R-1f routes the RETIRE to the leader - the source itself - which takes its own RemoveNode, commits it with the target's ack, leaves on its applied removal (`own-removal-applied`) and retires; the target completes the REPLACE alone. Measured green. **V5** the double-only P3 cells (17 of 21) remain uncovered live (recorded). **V6** E1 updated: the section-3.2 level compare (check 5) is load-bearing after F3 (S11 decide-first red with the revalidation removed); its terminal and failure-detector checks stay shadowed (S12, S13).
+
+## R3.2 Per-cell verdicts on 659b7db95 (local)
+
+| File | Result |
+|---|---|
+| replace-real-group-completion.test.js | 121/121 |
+| replace-real-group-d2.test.js | 86/86 (AN7 re-premised; S9 pre-intent anchor) |
+| replace-real-group-latency.test.js | 25/25 (W_max re-premised) |
+| replace-real-group-scheduling.test.js | 117/117 (S14 x4, S15) |
+| replace-real-group-handoff.test.js | 61/61 (RF=1 ordinary source-leads; V2 REPLACE) |
+| replace-real-group-deposed-leader.test.js (fix-f7) | 22/22 |
+| replace-real-group-retire-route.test.js (fix-f5) | 10/10 |
+
+## R3.3 Mutation matrix on 659b7db95 (`scratchpad/mutate-ev3.sh`)
+
+| Mechanism | Mutation | Red |
+|---|---|---|
+| corroboration removed (V1 undone) | `currentLeaderAnswer` returns the leader's answer unchecked | deposed-leader 7 red; scheduling S14 x4 (14 red) |
+| commit clause reinstated (the fix's first version) | `confirmsLeaderAnswer` also requires the voter's commit >= the leader's | scheduling S15 red (3 assertions): the lagging target no longer corroborates, NOT_CORROBORATED forever - a liveness loss; S11 green here (its voters keep up) |
+| follower forwards conf changes (F-1 undone) | the port's NOT_LEADER refusal skipped | `conf-change-leader-only.test.js` red; retire-route red (the follower target took the RETIRE) |
+| removal proceeds without a durable row (V2 undone) | the deferred branch skipped | `replica-removal-deferred-row-write.test.js` 5 red; handoff V2 REPLACE 4 red |
+| membership from rows | as round 2 | completion 58 red, d2 40 red |
+| authority = the target's own view (F1 undone) | as round 2 | completion 13 red, scheduling 6 red (S14) |
+| safety ACTIVE-only (F3 undone) | as round 2 | scheduling S11 x2, post-intent witness |
+| source retires before its removal commits (F2 undone) | exit resolves BACKSTOP at once | handoff 12 red (B13, RF=1 ordinary, V2), node exit witness 7 red |
+| planted old timeout transition | as round 1 | d2 33 red (P4, S9 pre-intent), completion 49 red |
+
+## R3.4 Observations for the lead (not property violations)
+
+- **O2 (liveness, sweep cadence).** After a T5' re-send of the removal effect the owner's turn ends with no fallback armed and no waiter registered (`operation-workflow-replace-owner.js:589-594` records the wait without arming and hands the re-send to the effect path; the answer's nested STOPPING-owner run cannot re-enter the operation's lane), so the REMOVING row's wake is lost; the K1 timeout sweep reaches the owner and R-1f proceeds. Seen in the V2 REPLACE cell and the S14 convergence (both run with the sweep). Not a terminal route; the design's K1 backstop holds.
+- On a priority partition the post-intent re-send re-runs the named handoff (F3 x BR11), so a deposed target regains leadership before the effect is re-sent (S14). Correct under the ruling (the RETIRE goes to the corroborated leader of the moment); recorded because it moves leadership twice.
+- F-3 (applied behind commit): typed `completion_authority_applied_behind_commit` exists; the construction (a leader lagging exactly one conf entry under persistence admission) is not built here - uncovered, recorded.
+
+## R3.5 Timing table (round 3 additions)
+
+| Relationship | Value | Where |
+|---|---|---|
+| held-leader W_max backstop | the R-1f attempt is re-issued only after `transferWindowMaxMs` (7 650 ms at the group timing) since the answer; the +100 ms fire re-issues nothing, the +61 s fire re-issues once | latency W_max |
+| restart in Φ5 with a deposed leader | the rebuilt attempt is outstanding for the window; the re-drive goes to the corroborated new leader | AN7 |
+| corroboration | term equality and leader naming only; no commit-index clause (S15: a lagging voter still corroborates) | S15 |
+| T5' re-send window | 60 s (`REPLACE_REMOVAL_PENDING_ESCALATION_MS`); a re-admitted source's ACTIVE row returns the REPLACE to the re-send after it (S14 convergence, 61 s rounds) | S14 |
