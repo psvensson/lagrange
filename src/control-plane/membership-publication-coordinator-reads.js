@@ -2,6 +2,8 @@ import {
   TABLES,
 } from '../constants/index.js';
 import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
+import {isAuthoritativeControlPlaneRowReadSuccessful} from
+  './control-plane-system-table-gateway.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {buildMembershipOwnerDivergence} from './membership-owner-shadow.js';
 import {
@@ -190,7 +192,7 @@ class MembershipPublicationCoordinatorReads {
           tableName,
         }),
       );
-      if (result?.success === true) {
+      if (isAuthoritativeControlPlaneRowReadSuccessful(result)) {
         const authoritativeRows = normalizeTableRowsResult(result);
         if (
           shouldMergePlanningEvidenceRows(tableName, options) &&
