@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2199,
+    "ordinary": 2204,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2216,
-  "digest": "fnv1a32-e8f693fd",
+  "censusSize": 2221,
+  "digest": "fnv1a32-75656dcf",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1658,6 +1658,11 @@
     "test/rebalancer/replace-owner-phase-staleness.test.js": "ordinary",
     "test/rebalancer/replace-owner-recovery-equivalence.test.js": "ordinary",
     "test/rebalancer/replace-owner-wake.test.js": "ordinary",
+    "test/rebalancer/replace-real-group-completion.test.js": "ordinary",
+    "test/rebalancer/replace-real-group-d2.test.js": "ordinary",
+    "test/rebalancer/replace-real-group-handoff.test.js": "ordinary",
+    "test/rebalancer/replace-real-group-latency.test.js": "ordinary",
+    "test/rebalancer/replace-real-group-scheduling.test.js": "ordinary",
     "test/rebalancer/replace-remove-safety-wake-property.test.js": "ordinary",
     "test/rebalancer/replace-replica-workflow.test.js": "ordinary",
     "test/rebalancer/replace-source-planner-set-exclusion.test.js": "ordinary",

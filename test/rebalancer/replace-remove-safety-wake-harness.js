@@ -268,9 +268,9 @@ function buildReplaceRow(partitionId, nowMs) {
 }
 
 /**
- * The REPLACE owner (the target node) at ACTIVE, three voters, the
- * replacement's own election evidence present (no handoff deferral), on a
- * frozen fallback clock and a controllable readiness authority.
+ * The REPLACE owner (the target node) at ACTIVE, three voters, its witness
+ * reporting the target leading (no handoff deferral), on a frozen fallback
+ * clock and a controllable readiness authority.
  * @param {Object} options - {partitionId, profiles}
  * @return {Object}
  */
@@ -315,16 +315,10 @@ function createWakeScenario(options) {
     coordinator,
     async () => ReplicaStatus.ACTIVE,
   );
-  owner.getPriorityPublicationReplacementLeaderElectionEvidenceMap().set(
-    WAKE_OPERATION_ID,
-    Object.freeze({
-      completedReplicaIds: Object.freeze([`${partitionId}-r4`]),
-      notFoundReplicaIds: Object.freeze([]),
-      observedAt: clock.now(),
-      replacementReplicaId: `${partitionId}-r4`,
-      responseStatus: ReplicaOperationResponseStatus.COMPLETED,
-    }),
-  );
+  // No handoff deferral: the REPLACE's leadership is decided from its
+  // witness's fresh leader (BR11), which the fixture witness answers as the
+  // target (the partition row names no other leader). Nothing is planted in
+  // the per-leg evidence maps, which no operation reaches any more.
   return {
     coordinator,
     owner,
