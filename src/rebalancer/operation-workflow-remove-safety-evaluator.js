@@ -699,9 +699,6 @@ async function evaluateRemoveSafety(context, operation) {
       {
         currentVoterReadyRows,
         priorityRecoveryCompletionSafe,
-        // No retarget exists for a REPLACE (R09, amendment-1 step 2): a
-        // target that answers NOT_FOUND ends the REPLACE's leadership leg.
-        replacementLeaderElectionNotFoundTerminal: requiresSourceLeaderHandoff,
         readAuthoritativePlanningSnapshot: readRemoveSafetyPlanningSnapshot,
       },
     );

@@ -27,7 +27,8 @@ t.setTimeout(TEST_FILE_TIMEOUT_MS);
 //
 // This is the FIRST (CPU) kill-gate root for the docker rolling-restart scenario,
 // the harder counterpart to the COORDINATION-tail spike
-// (dt6-replacement-leader-pending-spike.test.js). It hosts the REAL drain/timeout
+// (dt6-replacement-leader-pending-spike, deleted with the per-leg handoff
+// evidence maps in fix-f1). It hosts the REAL drain/timeout
 // orchestration loop — RebalanceCoordinator's startTimeoutChecking loop body =
 // OperationWorkflowOwner.prototype.checkTimeouts (DT6 steps 9-12) — on a
 // COST-MODELED VirtualNetwork node, and asserts the DISCRIMINATING SIGNAL the

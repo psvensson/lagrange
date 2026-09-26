@@ -340,10 +340,11 @@
       "description": "A surplus-drain REPLACE whose declared source replica is already removed terminalizes (reaches SAFE) instead of re-dispatching a source-leader handoff to a replica that no longer exists (CL-038).",
       "owners": [
         "src/rebalancer/priority-publication-leader-safety.js",
-        "src/rebalancer/priority-publication-safety-shared.js"
+        "src/rebalancer/priority-publication-safety-shared.js",
+        "src/rebalancer/operation-workflow-replace-owner.js"
       ],
       "tests": [
-        "test/rebalancer/cl-038-source-removed-handoff-terminates.test.js"
+        "test/rebalancer/replace-source-removal-owner.test.js"
       ]
     },
     "CL-035": {

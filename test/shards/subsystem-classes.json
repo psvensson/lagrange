@@ -8,11 +8,11 @@
     "cdc-metadata": 59,
     "cli-tooling": 96,
     "control-plane": 194,
-    "convergence-topology": 93,
+    "convergence-topology": 92,
     "distributed-harness": 167,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 257,
+    "placement-rebalance": 252,
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2222,
-  "digest": "fnv1a32-a6082c59",
+  "censusSize": 2216,
+  "digest": "fnv1a32-93455d75",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6a6e5eb0",
+  "observationDigest": "fnv1a32-bca10639",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -718,7 +718,6 @@
     "test/convergence/dt6-rebalancer-timeout-loop-network.test.js": "convergence-topology",
     "test/convergence/dt6-rebalancer-timeout-orchestration-network.test.js": "convergence-topology",
     "test/convergence/dt6-rebalancer-timeout-reconcile-network.test.js": "convergence-topology",
-    "test/convergence/dt6-replacement-leader-pending-spike.test.js": "convergence-topology",
     "test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js": "convergence-topology",
     "test/convergence/dt6-zombie-transaction-lifecycle.test.js": "convergence-topology",
     "test/convergence/membership-publication-owner-driver-host.test.js": "convergence-topology",
@@ -1531,13 +1530,11 @@
     "test/rebalancer/canonical-replica-inventory-cutover-guard.test.js": "placement-rebalance",
     "test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js": "placement-rebalance",
     "test/rebalancer/cl-036-publications-quorum-escape.test.js": "placement-rebalance",
-    "test/rebalancer/cl-038-source-removed-handoff-terminates.test.js": "placement-rebalance",
     "test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js": "placement-rebalance",
     "test/rebalancer/cleanup-moves-failed-replicas.property.test.js": "placement-rebalance",
     "test/rebalancer/cluster-readiness-gate.test.js": "placement-rebalance",
     "test/rebalancer/cluster-readiness-signal.property.test.js": "placement-rebalance",
     "test/rebalancer/cluster-readiness-signal.test.js": "placement-rebalance",
-    "test/rebalancer/colocated-follower-remove-safety.test.js": "placement-rebalance",
     "test/rebalancer/concurrent-epoch-proposals.property.test.js": "placement-rebalance",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js": "placement-rebalance",
     "test/rebalancer/coordinator-created-operation-progress.test.js": "placement-rebalance",
@@ -1618,10 +1615,10 @@
     "test/rebalancer/planning-sweep-memoization.test.js": "placement-rebalance",
     "test/rebalancer/priority-dispatch-deferred-local-progress-outcome-coverage.test.js": "placement-rebalance",
     "test/rebalancer/priority-follow-up-target-readiness.test.js": "placement-rebalance",
+    "test/rebalancer/priority-publication-per-leg-evidence-census.test.js": "placement-rebalance",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js": "placement-rebalance",
     "test/rebalancer/priority-recovery-follow-up-count-aware-add-gate.test.js": "placement-rebalance",
     "test/rebalancer/priority-recovery-planning-gate-diagnostic.test.js": "placement-rebalance",
-    "test/rebalancer/priority-recovery-planning-read-scope.test.js": "placement-rebalance",
     "test/rebalancer/priority-recovery-reserved-slot-authoritative-admission.test.js": "placement-rebalance",
     "test/rebalancer/priority-recovery-stale-planning-visibility.test.js": "placement-rebalance",
     "test/rebalancer/priority-recovery-surrogate-owner-arbitration.test.js": "placement-rebalance",
@@ -1633,8 +1630,6 @@
     "test/rebalancer/promoted-voter-voter-ready-routable-60s-axis.test.js": "placement-rebalance",
     "test/rebalancer/provisioning-admission-policy.test.js": "placement-rebalance",
     "test/rebalancer/quorum-conditioned-remove-safety.test.js": "placement-rebalance",
-    "test/rebalancer/r1-leader-election-ack-proof-starved-rejoiner.test.js": "placement-rebalance",
-    "test/rebalancer/r3-handoff-escalate-replacement-election.test.js": "placement-rebalance",
     "test/rebalancer/readiness-policy-equivalence-characterization.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-ack-constants.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-budget-enforcement.property.test.js": "placement-rebalance",
@@ -1651,7 +1646,6 @@
     "test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-coordinator-stopping-reconcile-source-removal.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-coordinator-stopping-reconcile-stale-priority.test.js": "placement-rebalance",
-    "test/rebalancer/rebalance-coordinator-stopping-reconcile-terminal-visibility.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-coordinator-stopping-reconcile.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-coordinator-terminal-intent-collision.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js": "placement-rebalance",
@@ -7923,6 +7917,16 @@
         "src/bootstrap/system-table-schemas-constants.js"
       ]
     },
+    "test/rebalancer/priority-publication-per-leg-evidence-census.test.js": {
+      "files": [
+        "src/rebalancer/user-table-leader-placement-cure.js"
+      ],
+      "directories": [
+        "scripts",
+        "src",
+        "test"
+      ]
+    },
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js": {
       "files": [
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -8004,11 +8008,6 @@
       ]
     },
     "test/rebalancer/rebalance-coordinator-stopping-reconcile-stale-priority.test.js": {
-      "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
-      ]
-    },
-    "test/rebalancer/rebalance-coordinator-stopping-reconcile-terminal-visibility.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
       ]
