@@ -29,7 +29,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // removed; every new evidence/observer export has a consumer).
 // 2026-09-21: tightened 1438 -> 1437 while replacing the raft-rs public
 // object graph with its operation-only port and de-exporting dead internals.
-const BASELINE_UNUSED_EXPORT_COUNT = 1437;
+// 2026-09-26: tightened 1437 -> 1436 by the images-seam convergence (dead
+// re-exports of the embedded harness/protocol and the leak/port owners).
+const BASELINE_UNUSED_EXPORT_COUNT = 1436;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

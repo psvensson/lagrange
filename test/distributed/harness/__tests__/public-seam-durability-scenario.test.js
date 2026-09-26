@@ -11,13 +11,15 @@ import {
   classifyServiceLifecycleSql,
 } from '../../../../src/query/service-lifecycle-sql-contract.js';
 import {SQLParser} from '../../../../src/query/sql-parser.js';
+import {
+  findTopologyLeaks,
+} from '../../../../src/test-helpers/topology-leak-check.js';
 import {run} from '../../scenarios/public-seam-durability.js';
 import {
   classifyPublicOutcome,
   describePublicError,
   deriveCertificationStatus,
   discoverPublicEndpoints,
-  findTopologyLeakKeys,
   listHarnessTopologyIdentifiers,
 } from '../../scenarios/public-seam-durability-client.js';
 import {
@@ -44,6 +46,10 @@ const arraySome = Function.call.bind(Array.prototype.some);
 const arraySort = Function.call.bind(Array.prototype.sort);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+// The scenario's leak check is the shared owner's; these assertions pin the
+// behaviour the scenario relies on.
+const findTopologyLeakKeys = (value) =>
+  arrayMap(findTopologyLeaks(value), (leak) => leak.path);
 
 // Deterministic mocked cluster: three harness node handles over one
 // in-memory "replicated" store. The fake public client understands exactly
@@ -854,5 +860,50 @@ test('public-seam-durability interim retry policy retries only ' +
   assert.deepEqual(findTopologyLeakKeys({
     participantResults: [], read_authority_witnesses: [], retryAfterMs: 1,
   }), ['$.participantResults', '$.read_authority_witnesses']);
+  t.end();
+});
+
+// A lifecycle (CALL BINDING) failure's JSON detail carries the delegated
+// owner's typed code as `ownerCode`; the shape is
+// src/service/service-lifecycle-command-failure.js describeFailure.
+function lifecycleDetailError(extraDetail = {}) {
+  const error = deferredError();
+  error.detail = JSON.stringify({
+    outcomeClass: 'unknown', ownerCode: 'ROUTE_UNAVAILABLE',
+    path: 'call_invocation', retrySafe: true, stage: 'call_invocation',
+    ...extraDetail,
+  });
+  return error;
+}
+
+function deferOnceWith(error) {
+  let deferredOnce = false;
+  return ({nodeId, world}) => {
+    if (world.down.size > 0 && nodeId === 'joiner-1' && !deferredOnce) {
+      deferredOnce = true;
+      return {applyFirst: true, error};
+    }
+    return null;
+  };
+}
+
+test('public-seam-durability leak check exempts exactly the lifecycle ' +
+  'ownerCode key in an error detail', async (t) => {
+  const {cluster} = createCluster({hooks: {
+    commitFailure: deferOnceWith(lifecycleDetailError()),
+  }});
+  const report = await run(cluster);
+  assert.equal(report.verdict, PUBLIC_SEAM_VERDICT.PASS);
+  assert.equal(stepsByName(report)[PUBLIC_SEAM_STEP.TOPOLOGY_LEAK_CHECK]
+    .actual.leakCount, 0);
+
+  const leaking = createCluster({hooks: {
+    commitFailure: deferOnceWith(lifecycleDetailError({ownerNodeId: 'x'})),
+  }});
+  const failed = await runExpectingFailure(leaking.cluster);
+  assert.deepEqual(failed.failedSteps, [PUBLIC_SEAM_STEP.TOPOLOGY_LEAK_CHECK]);
+  assert.deepEqual(
+    stepsByName(failed)[PUBLIC_SEAM_STEP.TOPOLOGY_LEAK_CHECK].actual.sample,
+    ['joiner-1:$.detail.ownerNodeId']);
   t.end();
 });

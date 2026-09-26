@@ -88,6 +88,18 @@ export function getUniquePort() {
 }
 
 /**
+ * Reserve one runtime's REST, admin WS and transport WS ports as the
+ * consecutive block the listener-port model derives (see
+ * getTestListenerPorts in src/test-helpers/port-allocator.js).
+ *
+ * @returns {{restApiPort: number, adminWebSocketPort: number,
+ *   transportWebSocketPort: number}} The runtime's listener ports.
+ */
+export function getUniqueListenerPorts() {
+  return getTestFilePortAllocator(resolveCallerTestFileId()).getListenerPorts();
+}
+
+/**
  * Reset the port counter to a specific value.
  * Useful for test isolation when running tests in parallel.
  *

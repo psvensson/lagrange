@@ -582,6 +582,16 @@
         "test/test-helpers/topology-leak-check.test.js"
       ]
     },
+    "test-listener-port-block": {
+      "description": "A runtime's test listener ports are one allocator block whose admin and transport ports the listener-port model derives from the REST port (getTestListenerPorts); changing the allocator or the port model must re-run the block witness.",
+      "owners": [
+        "src/test-helpers/port-allocator.js",
+        "src/config/listener-port-model.js"
+      ],
+      "tests": [
+        "test/test-helpers/port-allocator.test.js"
+      ]
+    },
     "public-seam-durability-certification-source": {
       "description": "The runtime's default consensus provider (provider-control owner) decides the public-seam durability scenario's certification status line (PREPARED_BLOCKED_ON_RS_RAFT_CUTOVER vs CANDIDATE).",
       "owners": [

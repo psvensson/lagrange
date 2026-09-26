@@ -195,11 +195,9 @@ function describeExposedError(snapshot) {
 }
 
 export {
-  BYTES_TYPE,
   EMBEDDED_STEP_OUTCOME,
   EMBEDDED_WORKER_EVENT,
   EMBEDDED_WORKER_OP,
-  EXPOSURE_KIND,
   decodeExposure,
   decodeParams,
   describeExposedError,

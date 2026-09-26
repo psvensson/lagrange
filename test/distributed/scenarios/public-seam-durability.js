@@ -20,6 +20,11 @@
  * proves the harness, not an rs-raft certification.
  */
 
+import {
+  LEAK_KIND,
+  LIFECYCLE_ERROR_ALLOWED_KEYS,
+  findTopologyLeaks,
+} from '../../../src/test-helpers/topology-leak-check.js';
 import {CONVERGENCE_DEFAULTS, NODE_ROLES} from '../harness/constants.js';
 import {
   resolvePublicSeamDurabilityScenarioConfig,
@@ -29,8 +34,6 @@ import {
   createObservedClient,
   deriveCertificationStatus,
   discoverPublicEndpoints,
-  findTopologyLeakKeys,
-  findTopologyLeakValues,
   listHarnessTopologyIdentifiers,
   openPgPublicClient,
   provisionPublicListener,
@@ -416,15 +419,26 @@ async function stepNoDuplicateEffects(ctx) {
     {violations}, 'duplicate or phantom effects are visible');
 }
 
+// `<path>` for a topology-bearing key, `<path>=<identity>` for a known
+// identity found inside a string value.
+function leakEntry(leak) {
+  return leak.kind === LEAK_KIND.VALUE ? `${leak.path}=${leak.match}` :
+    leak.path;
+}
+
 async function stepTopologyLeakCheck(ctx) {
   const identifiers = await ctx.deps.listTopologyIdentifiers(ctx);
   const leaks = [];
   for (const observation of ctx.observations) {
     const payload = observation.error || observation.rows ||
       observation.parsed;
-    for (const path of [...findTopologyLeakKeys(payload),
-      ...findTopologyLeakValues(payload, identifiers.values)]) {
-      leaks.push(`${observation.nodeId}:${path}`);
+    // CALL BINDING failures are lifecycle errors whose JSON detail carries
+    // the delegated owner's error code (`ownerCode`), not topology.
+    for (const leak of findTopologyLeaks(payload, {
+      allowedKeys: LIFECYCLE_ERROR_ALLOWED_KEYS,
+      forbiddenValues: identifiers.values,
+    })) {
+      leaks.push(`${observation.nodeId}:${leakEntry(leak)}`);
     }
   }
   const complete = identifiers.sources.partitionIds ===

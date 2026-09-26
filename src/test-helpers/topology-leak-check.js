@@ -11,12 +11,15 @@
 // embedded-node-protocol.js), so in-process and multi-process suites share
 // one definition. Test-only: nothing under src/ outside test-helpers imports it.
 
-// A key is a leak when a word of it STARTS one of these (see keyWords). The
-// union of the track A list and the public-seam durability scenario list
-// (test/distributed/scenarios/public-seam-durability-constants.js
-// PUBLIC_SEAM_TOPOLOGY_KEY_FRAGMENTS) plus `routedto`; a legitimate
+// A key is a leak when a word of it STARTS one of these (see keyWords). This
+// is the one list every public-seam suite uses (the in-process and
+// multi-process Application Database suites, the Binding seam suites and the
+// provider-neutral public-seam durability scenario); a legitimate
 // application key that happens to match (plan_name, address_line1,
-// terms_accepted) is exempted per call through `allowedKeys`.
+// terms_accepted) is exempted per call through `allowedKeys`. The fragments
+// are deliberately broad: `hostname` is caught by `host` and `ownerId` by
+// `owner`; a false positive costs a look at the report, a missed topology
+// key costs the seam claim.
 const TOPOLOGY_KEY_FRAGMENTS = Object.freeze([
   'address',
   'candidate',
@@ -47,6 +50,23 @@ const TOPOLOGY_KEY_FRAGMENTS = Object.freeze([
 ]);
 
 const SESSION_KEY_FRAGMENT = 'session';
+
+// Keys a service lifecycle failure legitimately carries that the broad
+// fragments above would flag. `ownerCode` is the typed error code of the
+// owner a lifecycle command delegated to (e.g. ROUTE_NOT_FOUND), set by
+// describeFailure in src/service/service-lifecycle-command-failure.js; it
+// names an outcome, not a place, so it is not topology. It is exempted
+// explicitly where lifecycle errors are checked (pass as `allowedKeys`),
+// never by default: an application result carrying `ownerCode` is still
+// reported unless the application declared it.
+const LIFECYCLE_ERROR_ALLOWED_KEYS = Object.freeze(['ownerCode']);
+// What a reported leak matched: a topology-bearing KEY (match = the
+// fragment) or a known identity inside a string VALUE (match = the value).
+const LEAK_KIND = Object.freeze({
+  KEY: 'key',
+  VALUE: 'value',
+});
+
 const SNAPSHOT_OBJECT_KIND = 'object';
 const SNAPSHOT_BYTES_KIND = 'bytes';
 const PATH_ROOT = '$';
@@ -81,6 +101,17 @@ function isSnapshotBytes(value) {
     value.__kind === SNAPSHOT_BYTES_KIND;
 }
 
+function isArrayLike(value) {
+  return Array.isArray(value) ||
+    (isSnapshotObject(value) && value.array === true);
+}
+
+// `$.rows[0].id` for an array element, `$.detail.code` for a property, the
+// same for a live value and its exposure snapshot.
+function childPath(parent, value, key) {
+  return isArrayLike(value) ? `${parent}[${key}]` : `${parent}.${key}`;
+}
+
 function ownEntries(value) {
   if (isSnapshotObject(value)) {
     return Object.entries(value.properties)
@@ -103,7 +134,8 @@ function ownEntries(value) {
  *   inside any string; extraKeyFragments: further forbidden key fragments
  *   (e.g. 'session'); allowedKeys: exact keys the APPLICATION declared (its
  *   own column names) that are exempt from the key check.
- * @return {{path: string, reason: string}[]}
+ * @return {{kind: string, match: string, path: string, reason: string}[]}
+ *   kind is a LEAK_KIND; match is the fragment (KEY) or identity (VALUE).
  */
 function findTopologyLeaks(value, options = {}) {
   const fragments = [
@@ -119,7 +151,8 @@ function findTopologyLeaks(value, options = {}) {
   function visitString(current, path) {
     for (const forbidden of forbiddenValues) {
       if (current.includes(forbidden)) {
-        leaks.push({path, reason: `value contains ${forbidden}`});
+        leaks.push({kind: LEAK_KIND.VALUE, match: forbidden, path,
+          reason: `value contains ${forbidden}`});
       }
     }
   }
@@ -137,7 +170,8 @@ function findTopologyLeaks(value, options = {}) {
     const fragment = fragments.find((candidate) =>
       words.some((_, index) => words.slice(index).join('').startsWith(candidate)));
     if (fragment && !allowedKeys.has(key)) {
-      leaks.push({path, reason: `key contains ${fragment}`});
+      leaks.push({kind: LEAK_KIND.KEY, match: fragment, path,
+        reason: `key contains ${fragment}`});
     }
   }
 
@@ -149,8 +183,9 @@ function findTopologyLeaks(value, options = {}) {
     if (isOpaque(current)) return;
     ancestors.add(current);
     for (const [key, child] of ownEntries(current)) {
-      visitKey(key, `${path}.${key}`);
-      visit(child, `${path}.${key}`);
+      const keyPath = childPath(path, current, key);
+      visitKey(key, keyPath);
+      visit(child, keyPath);
     }
     ancestors.delete(current);
   }
@@ -159,22 +194,10 @@ function findTopologyLeaks(value, options = {}) {
   return leaks;
 }
 
-/**
- * Assert that a received value exposes no topology.
- * @param {object} t - tap test
- * @param {*} value - live value or exposure snapshot
- * @param {string} label - what the value is (for the assertion message)
- * @param {object} [options] - see findTopologyLeaks
- * @return {boolean} whether the assertion passed
- */
-function assertNoTopologyLeak(t, value, label, options = {}) {
-  const leaks = findTopologyLeaks(value, options);
-  return t.same(leaks, [], `${label} exposes no topology`);
-}
-
 export {
+  LEAK_KIND,
+  LIFECYCLE_ERROR_ALLOWED_KEYS,
   SESSION_KEY_FRAGMENT,
   TOPOLOGY_KEY_FRAGMENTS,
-  assertNoTopologyLeak,
   findTopologyLeaks,
 };

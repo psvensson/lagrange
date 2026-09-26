@@ -63,6 +63,11 @@ import {findTopologyLeaks} from '../../src/test-helpers/topology-leak-check.js';
 const APPLICATION_ID = 'public-seam-acceptance';
 const TABLE = 'acceptance_objects';
 const HINT_TABLE = 'acceptance_hints';
+// Sessions A and B share one runtime at the committed shape (seed === joiner,
+// MULTINODE_CLUSTER_SIZE); cross-node routing is not proven by it.
+const COMMITTED_SHAPE_TITLE = 'on the committed shape (one runtime; ' +
+  'three-process shape recorded on the lab, blocked on ' +
+  'F-FORMATION-WRITE-READINESS and F-TX-REPLICATED-APPLY)';
 // Observed on the lab (single runtime, local partition leader): the committed
 // Raft entry is re-parsed from JSON before apply, so the Buffer bind arrives
 // as {"type":"Buffer","data":[...]} and better-sqlite3 reads that object as a
@@ -123,7 +128,8 @@ test('public application database routes by primary key through embedded process
     return outcome;
   };
 
-  await t.test('I1.1 create and write on node A, exact PK read on node B', async (t) => {
+  await t.test('I1.1 create and write on session A, exact PK read on session B ' +
+    COMMITTED_SHAPE_TITLE, async (t) => {
     keep('create table', await mustQuery(seed, sessionA,
       `CREATE TABLE ${TABLE} (id TEXT PRIMARY KEY, body BLOB, note TEXT)`));
     keep('insert text row', await mustQuery(seed, sessionA,
@@ -134,8 +140,8 @@ test('public application database routes by primary key through embedded process
       `SELECT id, body, note FROM ${TABLE} WHERE id = ?`, [TEXT_ROW.id],
       (rows) => rows.length === 1);
     keep('select text row on B', onB.outcome);
-    t.same(onB.rows, [{...TEXT_ROW}], 'node B returns the exact TEXT row by its PK');
-    t.comment(`cross-node visibility window (insert): ${onB.windowMs} ms`);
+    t.same(onB.rows, [{...TEXT_ROW}], 'session B returns the exact TEXT row by its PK');
+    t.comment(`cross-session visibility window (insert): ${onB.windowMs} ms`);
   });
 
   // FINDING F-BLOB-ROUTED-BYTES (witness, asserts the CURRENT defect; flips
@@ -177,7 +183,8 @@ test('public application database routes by primary key through embedded process
       'unavailable participant)');
   });
 
-  await t.test('I1.2 update on node A becomes visible on node B', async (t) => {
+  await t.test('I1.2 update on session A becomes visible on session B ' +
+    COMMITTED_SHAPE_TITLE, async (t) => {
     const updated = keep('update', await mustQuery(seed, sessionA,
       `UPDATE ${TABLE} SET note = ? WHERE id = ?`,
       ['first image metadata v2', TEXT_ROW.id]));
@@ -188,7 +195,7 @@ test('public application database routes by primary key through embedded process
       (rows) => rows.length === 1 && rows[0].note === 'first image metadata v2');
     keep('select updated row on B', onB.outcome);
     t.same(onB.rows, [{note: 'first image metadata v2'}]);
-    t.comment(`cross-node visibility window (update): ${onB.windowMs} ms ` +
+    t.comment(`cross-session visibility window (update): ${onB.windowMs} ms ` +
       '(eventual follower-local visibility; no linearizability claim)');
   });
 

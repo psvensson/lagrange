@@ -5,6 +5,8 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  LEAK_KIND,
+  LIFECYCLE_ERROR_ALLOWED_KEYS,
   SESSION_KEY_FRAGMENT,
   TOPOLOGY_KEY_FRAGMENTS,
   findTopologyLeaks,
@@ -38,7 +40,7 @@ test('raw engine shapes are reported by key and by value', async (t) => {
   }, {forbiddenValues: [NODE_ID, PARTITION_ID]});
   for (const expected of ['$.partitions', '$.readAuthorityWitnesses',
     '$.participantResults', '$.distributedPlan', '$.timestamp',
-    '$.readAuthorityWitnesses.0.servingNodeId']) {
+    '$.readAuthorityWitnesses[0].servingNodeId']) {
     t.ok(paths.includes(expected), `${expected} is a leak`);
   }
 });
@@ -74,3 +76,56 @@ test('the public result shape passes', async (t) => {
     {rows: [{id: 'a', note: 'n'}], affectedRows: 0}));
   t.same(findTopologyLeaks(publicShape, {forbiddenValues: [NODE_ID]}), []);
 });
+
+test('the value scan finds a known identity inside any string, at any depth',
+  async (t) => {
+    const failure = {
+      code: 'XX000',
+      message: `no route to ${PARTITION_ID}`,
+      detail: JSON.stringify({outcomeClass: 'unknown', hint: NODE_ID}),
+      nested: [{note: 'clean'}, {note: `served by ${NODE_ID}`}],
+      body: Buffer.from(NODE_ID),
+    };
+    const valueLeak = (path, match) => ({kind: LEAK_KIND.VALUE, match, path,
+      reason: `value contains ${match}`});
+    t.same(findTopologyLeaks(failure, {forbiddenValues: [NODE_ID, PARTITION_ID]}), [
+      valueLeak('$.message', PARTITION_ID),
+      valueLeak('$.detail', NODE_ID),
+      valueLeak('$.nested[1].note', NODE_ID),
+    ], 'strings are scanned (JSON text included); bytes are opaque values');
+    t.same(findTopologyLeaks({message: 'clean'}, {forbiddenValues: ['', 7]}), [],
+      'empty and non-string identities never match');
+  });
+
+test('a lifecycle failure passes only with the explicit ownerCode allowance',
+  async (t) => {
+    const lifecycleFailure = {
+      code: 'XX000',
+      detail: {outcomeClass: 'definitely_not_executed', ownerCode: 'X',
+        path: 'call_invocation', retrySafe: false, stage: 'call_invocation'},
+    };
+    t.same(leakPaths(lifecycleFailure), ['$.detail.ownerCode'],
+      'the broad `owner` fragment flags ownerCode without the allowance');
+    t.same(leakPaths(lifecycleFailure,
+      {allowedKeys: LIFECYCLE_ERROR_ALLOWED_KEYS}), [],
+    'the allowance exempts exactly the lifecycle owner code');
+    t.same(leakPaths({detail: {ownerCode: 'X', owner_node_id: 'n',
+      ownerNodeId: 'n', ownerId: 'o'}},
+    {allowedKeys: LIFECYCLE_ERROR_ALLOWED_KEYS}),
+    ['$.detail.owner_node_id', '$.detail.ownerNodeId', '$.detail.ownerId'],
+    'the allowance is an exact key, not a fragment');
+    t.same(leakPaths({rows: [{ownerCode: 'X'}]}), ['$.rows[0].ownerCode'],
+      'ownerCode is allowed only where the allowance is passed');
+  });
+
+test('array elements are addressed by index in live and snapshot form',
+  async (t) => {
+    t.same(findTopologyLeaks({rows: [{}, {leaderId: 'x'}]}), [
+      {kind: LEAK_KIND.KEY, match: 'leader', path: '$.rows[1].leaderId',
+        reason: 'key contains leader'},
+    ]);
+    const snapshot = {__kind: 'object', properties: {rows: {value: {
+      __kind: 'object', array: true, properties: {0: {value: {
+        __kind: 'object', properties: {termId: {value: 3}}}}}}}}};
+    t.same(leakPaths(snapshot), ['$.rows[0].termId']);
+  });

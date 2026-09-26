@@ -35,6 +35,10 @@ import {
 } from '../../src/service/service-lifecycle-command-owner.js';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 import {
+  LIFECYCLE_ERROR_ALLOWED_KEYS,
+  findTopologyLeaks,
+} from '../../src/test-helpers/topology-leak-check.js';
+import {
   CALL_SERVICE_NAME,
   DECLARED_TABLE,
   EXPECTED_RESULT_JSON,
@@ -52,7 +56,6 @@ import {
   observeFailure,
   openConsumerSession,
 } from './helpers/public-binding-consumer.js';
-import {topologyLeaksIn} from './helpers/public-topology-leak.js';
 
 const ADVERSARIAL_TIMEOUT_MS = 180_000;
 const PROBE_GUARD_SUBJECT =
@@ -211,8 +214,12 @@ function assertPublicOutcome(testContext, observed, failure, expected) {
   assert.equal(detail.ownerCode, expected.ownerCode);
   assert.equal(detail.outcomeClass, expected.outcomeClass);
   assert.equal(detail.retrySafe, expected.retrySafe);
-  assert.deepEqual(topologyLeaksIn(failure, observed.topology), [],
-    'nothing the client receives names a node, partition or replica');
+  // Every field the client receives, plus the parsed detail's keys; the
+  // lifecycle owner code is the one detail key exempted.
+  assert.deepEqual(findTopologyLeaks({failure, parsedDetail: detail}, {
+    allowedKeys: LIFECYCLE_ERROR_ALLOWED_KEYS,
+    forbiddenValues: observed.topology,
+  }), [], 'nothing the client receives names a node, partition or replica');
 }
 
 describe('public CALL outcome classes through a real pg client', () => {

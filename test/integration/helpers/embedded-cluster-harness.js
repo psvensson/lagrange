@@ -32,7 +32,7 @@ import {
   managedTimeout,
 } from '../../../src/test-helpers/managed-timers.js';
 import {refuseUnderProbe} from '../../../src/test-helpers/probe-guard.js';
-import {getUniquePort} from './cluster-test-helpers.js';
+import {getUniqueListenerPorts} from './cluster-test-helpers.js';
 import {
   EMBEDDED_STEP_OUTCOME,
   EMBEDDED_WORKER_OP,
@@ -384,14 +384,15 @@ function createEmbeddedCluster(t, options = {}) {
   async function startEmbeddedNode(nodeOptions = {}) {
     const role = nodeOptions.role ?? EMBEDDED_NODE_ROLE.SEED;
     const nodeId = nodeOptions.nodeId ?? randomUUID();
+    const listenerPorts = getUniqueListenerPorts();
     const node = {
-      adminPort: getUniquePort(),
+      adminPort: listenerPorts.adminWebSocketPort,
       dataDir: nodeOptions.dataDir ?? join(rootDir, `node-${nodes.length}`),
       logPath: join(rootDir, `node-${nodes.length}${EMBEDDED_CLUSTER_VALUE.LOG_SUFFIX}`),
       nodeId,
-      restPort: getUniquePort(),
+      restPort: listenerPorts.restApiPort,
       role,
-      transportPort: getUniquePort(),
+      transportPort: listenerPorts.transportWebSocketPort,
     };
     mkdirSync(node.dataDir, {recursive: true});
     const logFd = openSync(node.logPath, 'a');
@@ -608,14 +609,9 @@ function createEmbeddedCluster(t, options = {}) {
 }
 
 export {
-  EMBEDDED_CLUSTER_BUDGET_MS,
-  EMBEDDED_NODE_ROLE,
   EMBEDDED_STEP_OUTCOME,
   EMBEDDED_WORKER_OP,
   createEmbeddedCluster,
-  decodeExposure,
-  describeExposedError,
-  encodeParam,
   exposedProperty,
   fulfilledRows,
   mustQuery,
