@@ -264,21 +264,20 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
     if (peerAddresses.length > 0) {
       operation[ReplicaOperationField.PEER_ADDRESSES] = peerAddresses;
     }
-    const bootstrapTableMetadata = getOperationMetadataObject(
-      stepsHistory,
-      OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA,
-    );
-    if (bootstrapTableMetadata) {
-      operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] =
-        bootstrapTableMetadata;
-    }
-    const bootstrapPartitionMetadata = getOperationMetadataObject(
-      stepsHistory,
-      OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA,
-    );
-    if (bootstrapPartitionMetadata) {
-      operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
-        bootstrapPartitionMetadata;
+    // The bootstrap metadata objects, the committed-membership stamp among
+    // them, cross from the row unchanged.
+    for (const [metadataKey, field] of [
+      [OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA,
+        ReplicaOperationField.BOOTSTRAP_TABLE_METADATA],
+      [OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA,
+        ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA],
+      [OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP,
+        ReplicaOperationField.BOOTSTRAP_MEMBERSHIP],
+    ]) {
+      const metadata = getOperationMetadataObject(stepsHistory, metadataKey);
+      if (metadata) {
+        operation[field] = metadata;
+      }
     }
     return operation;
   }

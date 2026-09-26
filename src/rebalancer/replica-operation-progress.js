@@ -354,6 +354,7 @@ const OPERATION_METADATA_KEY = Object.freeze({
   PEER_ADDRESSES: 'peerAddresses',
   BOOTSTRAP_TABLE_METADATA: 'bootstrapTableMetadata',
   BOOTSTRAP_PARTITION_METADATA: 'bootstrapPartitionMetadata',
+  BOOTSTRAP_MEMBERSHIP: 'bootstrapMembership',
   BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED:
     'bootstrapTopologyDispatchDeferred',
   // The one exact membership transition a critical spread cure authorized.

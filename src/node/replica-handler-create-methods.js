@@ -92,6 +92,10 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           request[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] :
           null;
       const tableName = request?.tableName || null;
+      // The committed-membership stamp, carried unchanged to the target's
+      // port (owner decision O1); validated in resolveReplicaContext.
+      const bootstrapMembership =
+        request?.[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] ?? null;
       const createRequest = {
         operationId,
         explicitOperationType,
@@ -101,6 +105,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         bootstrapPeerAddresses,
         bootstrapTableMetadata,
         bootstrapPartitionMetadata,
+        bootstrapMembership,
         deferCdcPropagationHandshake: classifySystemPartition({
           partitionId,
           partitionRow: bootstrapPartitionMetadata,
@@ -376,6 +381,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         bootstrapPeerAddresses,
         bootstrapTableMetadata,
         bootstrapPartitionMetadata,
+        bootstrapMembership,
         deferCdcPropagationHandshake = false,
         skipLifecycleStatusPersistence = false,
       } = request;
@@ -421,6 +427,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             bootstrapPeerAddresses,
             bootstrapTableMetadata,
             bootstrapPartitionMetadata,
+            bootstrapMembership,
             explicitOperationType,
           },
         );
@@ -460,6 +467,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           dbPath,
           leaderAddress,
           isJoiningExistingGroup,
+          bootstrapMembership: context.bootstrapMembership,
           deferCdcPropagationHandshake,
           // Start as learner if joining existing group
           suppressLifecycleLogs: true,

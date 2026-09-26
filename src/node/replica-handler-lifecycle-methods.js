@@ -70,6 +70,10 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
         response = await this.handleReadReplicaMembership(payload);
       } else if (type === ReplicaOperationMessageType.RETIRE_REPLICA_PEER) {
         response = await this.handleRetireReplicaPeer(payload);
+      } else if (
+        type === ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP
+      ) {
+        response = await this.handleReadCommittedMembership(payload);
       } else {
         const unknownMessageType =
           REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE;

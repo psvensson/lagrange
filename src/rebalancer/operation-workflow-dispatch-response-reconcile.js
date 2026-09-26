@@ -502,6 +502,11 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       request[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
         operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA];
     }
+    // The committed-membership stamp crosses unchanged (owner decision O1).
+    if (operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]) {
+      request[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] =
+        operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP];
+    }
     logSendOperationAttempt(this, operation, {
       operationId: operation.operationId,
       target,

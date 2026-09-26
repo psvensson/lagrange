@@ -288,6 +288,8 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.messageGroupService = options.messageGroupService || null;
     this.messageRouter = options.messageRouter || null;
     this.isJoiningExistingGroup = options.isJoiningExistingGroup || false;
+    // The O1 committed-membership stamp (absent: the replicas are founders).
+    this.bootstrapMembership = options.bootstrapMembership ?? null;
     this.roleMutationHelper = this.createRoleMutationHelper();
     this.pendingRoleUpdate = this.role;
     this.persistedRole = null;
@@ -679,6 +681,19 @@ class PartitionServiceCoreBase extends EventEmitter {
    * @return {string} Unified address for the peer.
    */
   buildPeerAddress(peerId) {
+    const address = this.resolveKnownPeerAddress(peerId);
+    if (address === null) {
+      throw new Error(`Unable to resolve unified peer address for ${peerId}`);
+    }
+    return address;
+  }
+  /**
+   * The unified address the address book (dispatched hints, the services
+   * cache) holds for a peer, or null while discovery cannot place it.
+   * @param {string} peerId - Peer replica ID.
+   * @return {string|null} Unified address, or null.
+   */
+  resolveKnownPeerAddress(peerId) {
     const addressManager = AddressManager.getInstance();
     const cacheAddress = this.resolvePeerAddressFromCache(peerId);
     if (peerId.includes(PARTITION_SERVICE_ADDRESS.SEPARATOR)) {
@@ -726,10 +741,7 @@ class PartitionServiceCoreBase extends EventEmitter {
         }
       }
     }
-    if (cacheAddress) {
-      return cacheAddress;
-    }
-    throw new Error(`Unable to resolve unified peer address for ${peerId}`);
+    return cacheAddress || null;
   }
   /**
    * Resolve the leader's unified address for write forwarding.

@@ -20,6 +20,11 @@ const FIELD = Object.freeze({
   PEER_ADDRESSES: 'peerAddresses',
   BOOTSTRAP_TABLE_METADATA: 'bootstrapTableMetadata',
   BOOTSTRAP_PARTITION_METADATA: 'bootstrapPartitionMetadata',
+  // The committed-membership stamp a new replica is created from (owner
+  // decision O1): the group's committed configuration as its leader answered
+  // it, or a genesis founding set. Carried unchanged from creation to the
+  // target's port.
+  BOOTSTRAP_MEMBERSHIP: 'bootstrapMembership',
   TARGET_NODE_ID: 'targetNodeId',
   FORWARDED_BY: 'forwardedBy',
   SOURCE_NODE_ID: 'sourceNodeId',

@@ -14,6 +14,10 @@ const ReplicaOperationMessageType = Object.freeze({
   // of the source through its port.
   READ_REPLICA_MEMBERSHIP: MESSAGE_TYPE.READ_REPLICA_MEMBERSHIP,
   RETIRE_REPLICA_PEER: MESSAGE_TYPE.RETIRE_REPLICA_PEER,
+  // The creation owner's read of a partition's committed configuration,
+  // answered by the node hosting its leader (owner decision O1, committed-
+  // read amendment 1, section 3.1).
+  READ_COMMITTED_MEMBERSHIP: MESSAGE_TYPE.READ_COMMITTED_MEMBERSHIP,
 });
 
 const ReplicaOperationReason = Object.freeze({
@@ -43,6 +47,7 @@ const ReplicaOperationField = Object.freeze({
   PEER_ADDRESSES: FIELD.PEER_ADDRESSES,
   BOOTSTRAP_TABLE_METADATA: FIELD.BOOTSTRAP_TABLE_METADATA,
   BOOTSTRAP_PARTITION_METADATA: FIELD.BOOTSTRAP_PARTITION_METADATA,
+  BOOTSTRAP_MEMBERSHIP: FIELD.BOOTSTRAP_MEMBERSHIP,
   SOURCE_NODE_ID: FIELD.SOURCE_NODE_ID,
   ENTITY_TYPE: FIELD.ENTITY_TYPE,
   ENTITY_ID: FIELD.ENTITY_ID,

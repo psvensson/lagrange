@@ -72,16 +72,6 @@ function resolveSnapshotStateForTransition(
     return localStatus || ReplicaStatus.ACTIVE;
   }
 }
-function isFreshPartitionBootstrapWindow(partition) {
-  if (!partition || partition.leader_node_id) {
-    return false;
-  }
-  return (
-    Number.isFinite(partition.created_at) &&
-    Number.isFinite(partition.updated_at) &&
-    partition.created_at === partition.updated_at
-  );
-}
 function hasExplicitReadyLeaseMetadata(nodeRow) {
   return Boolean(
     nodeRow &&
@@ -148,7 +138,6 @@ export {
   TABLE_METADATA_MISSING_PREFIX,
   VOTER_READY_CHECK_INTERVAL_MS,
   hasExplicitReadyLeaseMetadata,
-  isFreshPartitionBootstrapWindow,
   isReplicaJoinNodeViable,
   partitionMetadataMissingError,
   resolveSnapshotStateForTransition,

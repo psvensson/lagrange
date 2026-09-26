@@ -25,6 +25,10 @@ import {
   SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD,
   stampSpreadCureTransitionAuthorization,
 } from './spread-cure-transition-authorization.js';
+import {
+  buildCommittedBootstrapTopology,
+  readCommittedMembershipStamp,
+} from './committed-membership-bootstrap-read.js';
 
 const LOCAL_STR_REBALANCECOORDINATOR_IS_SHUTTING_DOWN = 'RebalanceCoordinator is shutting down';
 const LOCAL_STR_FUNCTION = 'function';
@@ -464,25 +468,22 @@ class RebalanceCoordinatorOperationCreation {
   }
 
   /**
-   * Build canonical bootstrap topology for create dispatch.
-   * Message-group operations fail closed when canonical topology is missing.
-   * Partition operations derive topology when visible, but tolerate cache lag
-   * so explicit bootstrap hints or local restore paths can still proceed.
-   * The stamped cohort merges the cache view with the same authoritative
-   * services-owner rows the create-time topology guard already reads (audit
-   * finding 8): under cache lag the cache-only path could persist an
-   * unstamped/self-only cohort even though the guard merged authoritative
-   * rows for the admission decision, so stamping must not see less than the
-   * guard did.
+   * Build the bootstrap topology a create dispatch carries.
    *
-   * The stamp is the new replica's bootstrap membership: the group's current
-   * members as the services rows record them, plus the joining target, never
-   * the operation's intended end state (owner decision D1). A REPLACE source
-   * is a member until its removal commits, so its target starts with it and
-   * only the applied RemoveNode in the log it replays takes the source out.
+   * A partition join (ADD, REPLACE, formation) is stamped with the group's
+   * committed configuration as its leader answers it (owner decision O1):
+   * the stamp is the new replica's bootstrap membership, the replica list it
+   * yields is an address-hint list, and services rows are only the address
+   * book. A read that fails refuses the creation before anything persists. A
+   * founding cohort (deferred until its bootstrap topology) is stamped
+   * GENESIS by its provisioner instead.
+   *
+   * Message-group operations (liferaft, out of O1) keep the services-row
+   * cohort and fail closed when it is missing.
    *
    * @param {Object} context
-   * @return {Promise<{replicaIds: string[], peerAddresses: string[]}|null>}
+   * @return {Promise<Object|null>} {replicaIds, peerAddresses,
+   *   bootstrapMembership?} or null.
    * @private
    */
   async buildOperationBootstrapTopology(context) {
@@ -503,7 +504,56 @@ class RebalanceCoordinatorOperationCreation {
     ) {
       return null;
     }
+    if (entityType === SERVICE_TYPE.PARTITION) {
+      return context.deferredBootstrap === true ? null :
+        buildCommittedBootstrapTopology({
+          partitionId,
+          targetNodeId,
+          targetReplicaId,
+          readStamp: () => readCommittedMembershipStamp(this, partitionId),
+          readAddressBook: () => this.readBootstrapServiceRows(context),
+        });
+    }
 
+    const serviceRows = await this.readBootstrapServiceRows(context);
+    if (!Array.isArray(serviceRows) || serviceRows.length === 0) {
+      throw new Error(
+        `Cannot create ${entityType} operation for ${entityId} without existing canonical topology`,
+      );
+    }
+
+    const topology = buildReplicatedServiceBootstrapTopology({
+      serviceType: entityType,
+      serviceRows,
+      targetReplicaId,
+      targetNodeId,
+    });
+    const replicaIds = topology?.replicaIds || [];
+    const peerAddresses = topology?.peerAddresses || [];
+
+    if (
+      replicaIds.length <= 1 ||
+      peerAddresses.length < replicaIds.length
+    ) {
+      throw new Error(
+        `Canonical topology for ${entityType} ${entityId} is incomplete`,
+      );
+    }
+
+    return {
+      replicaIds,
+      peerAddresses,
+    };
+  }
+
+  /**
+   * The entity's services rows: the cache view merged with the
+   * services-owner's authoritative rows when that read is available.
+   * @param {Object} context - {partitionId, entityType, entityId}.
+   * @return {Promise<Array<Object>>}
+   * @private
+   */
+  async readBootstrapServiceRows({partitionId, entityType, entityId}) {
     const cacheServiceRows = this.repository.getEntityServiceRows({
       partitionId,
       entityType,
@@ -523,71 +573,13 @@ class RebalanceCoordinatorOperationCreation {
       // observation.
       authoritativeObservation = null;
     }
-    const serviceRows =
-      authoritativeObservation?.available === true &&
-        authoritativeObservation.rows.length > 0 ?
-        this.mergeEntityServiceRows(
-          cacheServiceRows,
-          authoritativeObservation.rows,
-        ) :
-        cacheServiceRows;
-    if (!Array.isArray(serviceRows) || serviceRows.length === 0) {
-      if (entityType === SERVICE_TYPE.PARTITION) {
-        // CL-013: a silently-unstamped operation forces the target replica
-        // onto its local cache fallback — make the tolerated null loud.
-        this.logger.warn(
-          REBALANCE_COORDINATOR_LOG_MSG.BOOTSTRAP_TOPOLOGY_UNRESOLVED,
-          {
-            partitionId,
-            entityType,
-            entityId,
-            reason: 'no_service_rows',
-          },
-        );
-        return null;
-      }
-      throw new Error(
-        `Cannot create ${entityType} operation for ${entityId} without existing canonical topology`,
-      );
-    }
-
-    const topology = buildReplicatedServiceBootstrapTopology({
-      serviceType: entityType,
-      serviceRows,
-      targetReplicaId,
-      targetNodeId,
-    });
-    const replicaIds = topology?.replicaIds || [];
-    const peerAddresses = topology?.peerAddresses || [];
-
-    if (
-      replicaIds.length <= 1 ||
-      peerAddresses.length < replicaIds.length
-    ) {
-      if (entityType === SERVICE_TYPE.PARTITION) {
-        // CL-013: see above — never drop topology silently.
-        this.logger.warn(
-          REBALANCE_COORDINATOR_LOG_MSG.BOOTSTRAP_TOPOLOGY_UNRESOLVED,
-          {
-            partitionId,
-            entityType,
-            entityId,
-            reason: 'incomplete_topology',
-            replicaIdCount: replicaIds.length,
-            peerAddressCount: peerAddresses.length,
-          },
-        );
-        return null;
-      }
-      throw new Error(
-        `Canonical topology for ${entityType} ${entityId} is incomplete`,
-      );
-    }
-
-    return {
-      replicaIds,
-      peerAddresses,
-    };
+    return authoritativeObservation?.available === true &&
+      authoritativeObservation.rows.length > 0 ?
+      this.mergeEntityServiceRows(
+        cacheServiceRows,
+        authoritativeObservation.rows,
+      ) :
+      cacheServiceRows;
   }
 
   /**
@@ -756,6 +748,7 @@ class RebalanceCoordinatorOperationCreation {
       partitionId,
       targetNodeId: move.nodeId,
       targetReplicaId: operationReplicaId,
+      deferredBootstrap: move?.deferDispatchUntilBootstrapTopology === true,
     });
     if (bootstrapTopology && operation.stepsHistory.length > 0) {
       operation[ReplicaOperationField.REPLICA_IDS] =
@@ -766,6 +759,12 @@ class RebalanceCoordinatorOperationCreation {
         bootstrapTopology.replicaIds;
       operation.stepsHistory[0][OPERATION_METADATA_KEY.PEER_ADDRESSES] =
         bootstrapTopology.peerAddresses;
+      if (bootstrapTopology.bootstrapMembership) {
+        operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] =
+          bootstrapTopology.bootstrapMembership;
+        operation.stepsHistory[0][OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP] =
+          bootstrapTopology.bootstrapMembership;
+      }
     }
 
     // Capture readiness snapshot for the target node at creation time

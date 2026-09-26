@@ -33,6 +33,8 @@ import {assertCritical} from '../utils/assert.js';
 import {TrackedServiceRegistry} from './replica-handler-membership-relay.js';
 import {assignReplicaHandlerMembershipMethods} from
   './replica-handler-membership-methods.js';
+import {assignReplicaHandlerCommittedMembershipMethods} from
+  './replica-handler-committed-membership-methods.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   REPLICA_HANDLER_ADDRESS,
@@ -64,14 +66,12 @@ import {assignReplicaHandlerRuntimeMethods} from './replica-handler-runtime-meth
 import {
   assignReplicaHandlerRemoveExecutionMethods,
 } from './replica-handler-remove-execution-methods.js';
-import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
 import {
   METADATA_RESOLUTION_POLL_INTERVAL_MS,
   PARTITION_METADATA_MISSING_PREFIX,
   REPLICA_HANDLER_LITERAL,
   SYSTEM_TABLE_HYDRATION_SQL,
   TABLE_METADATA_MISSING_PREFIX,
-  isFreshPartitionBootstrapWindow,
   isReplicaJoinNodeViable,
   partitionMetadataMissingError,
 } from './replica-handler-transition-policy.js';
@@ -179,11 +179,11 @@ assignReplicaHandlerRemoveRequestMethods(ReplicaHandler);
 assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler);
 assignReplicaHandlerStatusMethods(ReplicaHandler);
 assignReplicaHandlerMembershipMethods(ReplicaHandler);
+assignReplicaHandlerCommittedMembershipMethods(ReplicaHandler);
 assignReplicaHandlerVoterReadinessMethods(ReplicaHandler);
 assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler);
 assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   AddressManager,
-  VOTER_RAFT_ROLES,
   METADATA_RESOLUTION_POLL_INTERVAL_MS,
   NUM,
   PRESSURE_WORK_CLASS,
@@ -207,7 +207,6 @@ assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   createControlPlaneRuntimeBundle,
   createSystemMetadataGatewayRequiredError,
   fs,
-  isFreshPartitionBootstrapWindow,
   isReplicaJoinNodeViable,
   path,
   partitionMetadataMissingError,
