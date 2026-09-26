@@ -39,6 +39,8 @@ import {
   REPLICA_LIFECYCLE_VALID_TRANSITIONS,
 } from './replica-lifecycle-constants.js';
 import {ReplicaHandler} from './replica-handler.js';
+import {ReplicaOperationField} from
+  '../rebalancer/replica-operation-constants.js';
 import {
   runReplicaLifecycleRecovery,
 } from './replica-lifecycle-recovery.js';
@@ -355,10 +357,14 @@ class ReplicaLifecycleManager extends EventEmitter {
       leader_address: leaderAddress,
       replica_ids: replicaIds,
       peer_addresses: peerAddresses,
+      bootstrap_membership: bootstrapMembership,
     } = message;
 
-    // Convert message format for handler
+    // Convert message format for handler; the committed-membership stamp
+    // crosses unchanged (owner decision O1).
     const handlerRequest = {
+      ...(bootstrapMembership === undefined ? {} :
+        {[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]: bootstrapMembership}),
       operationId: requestId,
       partitionId,
       replicaId,
