@@ -12,7 +12,7 @@
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 249,
+    "placement-rebalance": 250,
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
@@ -25,8 +25,8 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2201,
-  "digest": "fnv1a32-b69ec6df",
+  "censusSize": 2202,
+  "digest": "fnv1a32-7cbd7a45",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-76c0b6eb",
   "classes": {
@@ -1666,6 +1666,7 @@
     "test/rebalancer/replace-owner-lease-causal.test.js": "placement-rebalance",
     "test/rebalancer/replace-owner-lease-verdict-property.test.js": "placement-rebalance",
     "test/rebalancer/replace-owner-phase-staleness.test.js": "placement-rebalance",
+    "test/rebalancer/replace-owner-recovery-equivalence.test.js": "placement-rebalance",
     "test/rebalancer/replace-owner-wake.test.js": "placement-rebalance",
     "test/rebalancer/replace-remove-safety-wake-property.test.js": "placement-rebalance",
     "test/rebalancer/replace-replica-workflow.test.js": "placement-rebalance",

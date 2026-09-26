@@ -39,6 +39,13 @@ import {
 import {
   PARTITION_REPLICA_MEMBERSHIP_STATE,
 } from '../partition/partition-replica-membership-constants.js';
+import {
+  claimReplaceAttemptStateRebuild,
+} from './operation-workflow-replace-owner-recovery.js';
+
+// The sequence of an attempt record rebuilt after a restart (BR10): not one
+// this session issued, so no answer can match it.
+const REBUILT_ATTEMPT_SEQ = 0;
 
 const REPLACE_HANDOFF_DECISION = Object.freeze({
   LEADERSHIP_SAFE: 'leadership_safe',
@@ -159,6 +166,29 @@ function isAttemptUnresolved(owner, attempt, witness) {
 }
 
 /**
+ * BR10: a handoff the previous owner session issued may still be in flight.
+ * Its record is rebuilt as an accepted attempt answered now: a fresh read of
+ * a non-source leader resolves it at once, otherwise the transfer window
+ * does; it only blocks a new issuance.
+ * @param {Object} owner
+ * @param {Object} state - The attempt state.
+ * @param {Object} operation
+ */
+function rebuildLostHandoffAttempt(owner, state, operation) {
+  if (state.attemptByOperationId.has(operation.operationId) ||
+      !claimReplaceAttemptStateRebuild(owner, operation).due) {
+    return;
+  }
+  const nowMs = nowMsOf(owner);
+  state.attemptByOperationId.set(operation.operationId, {
+    attemptSeq: REBUILT_ATTEMPT_SEQ,
+    issuedAtMs: nowMs,
+    answeredAtMs: nowMs,
+    answerClass: REPLACE_HANDOFF_ANSWER_CLASS.ACCEPTED,
+  });
+}
+
+/**
  * The REPLACE's leadership decision from a fresh witness read.
  * @param {Object} owner
  * @param {Object} operation
@@ -168,6 +198,7 @@ function isAttemptUnresolved(owner, attempt, witness) {
  */
 function decideReplaceNamedHandoff(owner, operation, witness, replicaIds) {
   const state = readAttemptState(owner);
+  rebuildLostHandoffAttempt(owner, state, operation);
   const attempt = state.attemptByOperationId.get(operation.operationId);
   if (!witness ||
       witness.state === PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE) {
@@ -205,6 +236,19 @@ function readReplaceHandoffAttempt(owner, operationId) {
 }
 
 /**
+ * Whether the operation has an attempt its answers have not resolved yet.
+ * @param {Object} owner
+ * @param {string} operationId
+ * @param {Object|null} witness - A fresh witness observation.
+ * @return {boolean}
+ */
+function isReplaceHandoffAttemptUnresolved(owner, operationId, witness) {
+  return isAttemptUnresolved(owner,
+    ATTEMPT_STATE_BY_OWNER.get(owner)?.attemptByOperationId.get(operationId),
+    witness);
+}
+
+/**
  * @param {Object} owner
  * @return {number} Late answers dropped (a different or no current attempt).
  */
@@ -216,12 +260,20 @@ function clearReplaceHandoffAttempt(owner, operationId) {
   ATTEMPT_STATE_BY_OWNER.get(owner)?.attemptByOperationId.delete(operationId);
 }
 
+// Shutdown: every attempt is released with the owner's state; the sequence
+// keeps counting, so a late answer of a released attempt stays late.
+function clearAllReplaceHandoffAttempts(owner) {
+  ATTEMPT_STATE_BY_OWNER.get(owner)?.attemptByOperationId.clear();
+}
+
 export {
   REPLACE_HANDOFF_ANSWER_CLASS,
   REPLACE_HANDOFF_DECISION,
   beginReplaceHandoffAttempt,
+  clearAllReplaceHandoffAttempts,
   clearReplaceHandoffAttempt,
   decideReplaceNamedHandoff,
+  isReplaceHandoffAttemptUnresolved,
   readReplaceHandoffAttempt,
   readReplaceHandoffLateAnswerCount,
   recordReplaceHandoffAnswer,

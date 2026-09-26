@@ -45,13 +45,33 @@ import {
   replaceReplicaIdsOf,
 } from './operation-workflow-replace-witness.js';
 import {
+  clearAllReplaceHandoffAttempts,
   clearReplaceHandoffAttempt,
+  isReplaceHandoffAttemptUnresolved,
 } from './operation-workflow-replace-handoff-attempt.js';
+import {
+  REPLACE_INTENT_FIELD,
+  REPLACE_REMOVAL_PENDING_ESCALATION_MS,
+  nowMsOf,
+  readOwnerState,
+  readReplaceOwnerDiagnostic,
+  recordReplaceWaitDiagnostic,
+  releaseAllReplaceOwnerState,
+  releaseReplaceOwnerOperationState,
+  replaceIntentEntryOf,
+} from './operation-workflow-replace-owner-state.js';
+import {
+  REPLACE_OWNER_RESTART_CLASS,
+  REPLACE_SOURCE_ROW_CLASS,
+  claimReplaceAttemptStateRebuild,
+  classifyReplaceOwnerPhase,
+  releaseReplaceOwnerSessionOperation,
+  startReplaceOwnerSession,
+} from './operation-workflow-replace-owner-recovery.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
-  REBALANCE_COORDINATOR_LOG_MSG,
   ReplicaStatus,
   SERVICE_TYPE,
   WORKFLOW_STEP,
@@ -106,15 +126,6 @@ const REPLACE_EFFECT_ADMISSION = Object.freeze({
   WAIT: 'wait',
 });
 
-// Durable witness metadata on the STOPPING (removal-intent) step entry.
-const REPLACE_INTENT_FIELD = Object.freeze({
-  INTENT: 'replaceRemovalIntent',
-  WITNESS_REPLICA_ID: 'replaceWitnessReplicaId',
-  WITNESS_NODE_ID: 'replaceWitnessNodeId',
-  WITNESS_COMMIT_INDEX: 'replaceWitnessCommitIndex',
-  SOURCE_UNREACHABLE: 'replaceSourceUnreachable',
-});
-
 // Source rows under which the source's lifecycle has retired or failed, so
 // its membership removal is the REPLACE's to re-drive (R-1f preconditions).
 const RETIRING_SOURCE_ROW_STATUSES = Object.freeze(new Set([
@@ -123,40 +134,8 @@ const RETIRING_SOURCE_ROW_STATUSES = Object.freeze(new Set([
   ReplicaStatus.REMOVED,
 ]));
 
-const REPLACE_DIAGNOSTIC_SEVERITY = Object.freeze({
-  NORMAL: 'normal',
-  // D2: removal pending past the former 60 s step budget, or a REPLACE past
-  // the former 300 s operation budget, raises severity only.
-  ELEVATED: 'elevated',
-});
-const REPLACE_REMOVAL_PENDING_ESCALATION_MS = 60_000;
-const REPLACE_OPERATION_AGE_ESCALATION_MS = 300_000;
 const STOPPING_OBSERVATION_ABSENT = 'absent';
 const STOPPING_OBSERVATION_UNAVAILABLE = 'unavailable';
-
-// Owner-scoped in-memory state, keyed by the owner instance: the R-1f
-// attempt and the diagnostic per operation. Rebuilt from the durable intent
-// and a fresh read after a restart.
-const STATE_BY_OWNER = new WeakMap();
-
-function readOwnerState(owner) {
-  let state = STATE_BY_OWNER.get(owner);
-  if (!state) {
-    state = {
-      retirementAttemptByOperationId: new Map(),
-      removalEffectByOperationId: new Map(),
-      diagnosticByOperationId: new Map(),
-      nextAttemptSeq: 1,
-    };
-    STATE_BY_OWNER.set(owner, state);
-  }
-  return state;
-}
-
-function nowMsOf(owner) {
-  return typeof owner.resolveTimeoutCheckNowMs === 'function' ?
-    owner.resolveTimeoutCheckNowMs() : Date.now();
-}
 
 /**
  * Whether this operation is a REPLACE of a partition replica (the C1/D2
@@ -181,18 +160,6 @@ function isPartitionReplace(operation) {
 function isReplaceRemovalIntentDurable(operation) {
   return isPartitionReplace(operation) &&
     operation?.workflowStep === WORKFLOW_STEP.STOPPING;
-}
-
-function replaceIntentEntryOf(operation) {
-  const history = Array.isArray(operation?.stepsHistory) ?
-    operation.stepsHistory : [];
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const entry = history[index];
-    if (entry?.[REPLACE_INTENT_FIELD.INTENT] === true) {
-      return entry;
-    }
-  }
-  return null;
 }
 
 function witnessCommitIndexAtIntent(operation) {
@@ -305,107 +272,29 @@ function isTargetFailureDetectorDead(owner, operation) {
 }
 
 /**
- * Record the owner's current wait as its one bounded diagnostic (D2/S9):
- * phase, source and target, how long this wait has lasted, why, the last
- * R-1f attempt and whether its outcome is uncertain, the leader, and the
- * source's membership. Severity rises past the former budgets; the state
- * never changes and nothing is appended per retry.
- * @param {Object} owner
- * @param {Object} operation
- * @param {string} reason
- * @param {Object|null} observation
- * @return {Object} The diagnostic.
- */
-function recordReplaceWaitDiagnostic(owner, operation, reason, observation) {
-  const state = readOwnerState(owner);
-  const nowMs = nowMsOf(owner);
-  const previous = state.diagnosticByOperationId.get(operation.operationId);
-  const waitingSinceMs = previous?.reason === reason ?
-    previous.waitingSinceMs : nowMs;
-  const {sourceReplicaId, targetReplicaId} =
-    replaceReplicaIdsOf(owner, operation);
-  const diagnostic = Object.freeze({
-    operationId: operation.operationId,
-    phase: operation.workflowStep,
-    sourceReplicaId,
-    targetReplicaId,
-    reason,
-    waitingSinceMs,
-    waitedMs: nowMs - waitingSinceMs,
-    ...retirementAttemptSummaryOf(
-      state.retirementAttemptByOperationId.get(operation.operationId)),
-    leaderReplicaId: observation?.leaderReplicaId ?? null,
-    sourceMembership: observation?.state ?? null,
-    severity: diagnosticSeverityOf(operation, nowMs),
-  });
-  state.diagnosticByOperationId.set(operation.operationId, diagnostic);
-  logReplaceDiagnosticTransition(owner, previous, diagnostic);
-  return diagnostic;
-}
-
-function retirementAttemptSummaryOf(attempt) {
-  return {
-    lastAttemptSeq: attempt?.attemptSeq ?? null,
-    lastAttemptUncertain: attempt ? attempt.answer === null : false,
-  };
-}
-
-function elapsedSinceMs(nowMs, startMs) {
-  return Number.isFinite(startMs) ? nowMs - startMs : 0;
-}
-
-// D2: removal pending past the former 60 s step budget, or a REPLACE past
-// the former 300 s operation budget, raises severity only.
-function diagnosticSeverityOf(operation, nowMs) {
-  const removalPendingMs = elapsedSinceMs(nowMs,
-    Number(replaceIntentEntryOf(operation)?.timestamp));
-  const operationAgeMs = elapsedSinceMs(nowMs, Number(operation.createdAt));
-  return removalPendingMs >= REPLACE_REMOVAL_PENDING_ESCALATION_MS ||
-    operationAgeMs >= REPLACE_OPERATION_AGE_ESCALATION_MS ?
-    REPLACE_DIAGNOSTIC_SEVERITY.ELEVATED :
-    REPLACE_DIAGNOSTIC_SEVERITY.NORMAL;
-}
-
-// One log line per change of reason or severity; nothing per retry.
-function logReplaceDiagnosticTransition(owner, previous, diagnostic) {
-  if (previous?.reason === diagnostic.reason &&
-      previous?.severity === diagnostic.severity) {
-    return;
-  }
-  const log = diagnostic.severity === REPLACE_DIAGNOSTIC_SEVERITY.ELEVATED ?
-    owner.logger?.warn : owner.logger?.info;
-  log?.call(owner.logger,
-    REBALANCE_COORDINATOR_LOG_MSG.REPLACE_SOURCE_REMOVAL_WAITING, diagnostic);
-}
-
-/**
- * @param {Object} owner
- * @param {string} operationId
- * @return {Object|null} The operation's current bounded diagnostic.
- */
-function readReplaceOwnerDiagnostic(owner, operationId) {
-  return STATE_BY_OWNER.get(owner)?.diagnosticByOperationId
-    .get(operationId) || null;
-}
-
-/**
  * Drop an operation's in-memory owner state (terminal, or shutdown).
  * @param {Object} owner
  * @param {string} operationId
  */
 function clearReplaceOwnerState(owner, operationId) {
-  const state = STATE_BY_OWNER.get(owner);
-  state?.retirementAttemptByOperationId.delete(operationId);
-  state?.removalEffectByOperationId.delete(operationId);
-  state?.diagnosticByOperationId.delete(operationId);
+  releaseReplaceOwnerOperationState(owner, operationId);
   clearReplaceHandoffAttempt(owner, operationId);
+  releaseReplaceOwnerSessionOperation(owner, operationId);
 }
 
+// Shutdown releases every in-memory attempt, effect and diagnostic; what
+// follows is a new owner session (a re-initialization), in which an
+// operation's lost attempt is rebuilt, never assumed absent (BR10).
 function clearAllReplaceOwnerState(owner) {
-  STATE_BY_OWNER.delete(owner);
+  releaseAllReplaceOwnerState(owner);
+  clearAllReplaceHandoffAttempts(owner);
+  startReplaceOwnerSession(owner, REPLACE_OWNER_RESTART_CLASS.COORDINATOR_REINIT);
 }
 
 const RETIREMENT_LEVEL_SEPARATOR = '|';
+// The sequence of an attempt record rebuilt after a restart (BR10): not one
+// this session issued.
+const REBUILT_ATTEMPT_SEQ = 0;
 
 // The leader, term and membership the witness reported: an R-1f attempt is
 // re-issued only when one of them moved since it was issued (a proposal a
@@ -437,6 +326,35 @@ function shouldIssueRetirementAttempt(owner, attempt, observation) {
 }
 
 /**
+ * BR10: the previous owner session may have issued a REMOVE_PEER whose
+ * outcome is unknown. Its record is rebuilt as an outstanding attempt,
+ * answered now at the witness's current level: a changed level or the
+ * backstop window resolves it; nothing is issued before.
+ * @param {Object} owner
+ * @param {Object} state - The owner state.
+ * @param {Object} operation
+ * @param {Object} observation - The fresh witness observation.
+ */
+function rebuildLostRetirementAttempt(owner, state, operation, observation) {
+  if (state.retirementAttemptByOperationId.has(operation.operationId)) {
+    return;
+  }
+  const rebuild = claimReplaceAttemptStateRebuild(owner, operation);
+  if (!rebuild.due) {
+    return;
+  }
+  const nowMs = nowMsOf(owner);
+  state.retirementAttemptByOperationId.set(operation.operationId, {
+    attemptSeq: REBUILT_ATTEMPT_SEQ,
+    issuedAtMs: nowMs,
+    level: retirementLevelOf(observation),
+    answer: Object.freeze({rebuiltAfter: rebuild.restartClass}),
+    answeredAtMs: nowMs,
+    rebuiltAfter: rebuild.restartClass,
+  });
+}
+
+/**
  * R-1f: propose REMOVE_PEER of the source through the witness replica while
  * the source is still a voter and its row is gone or retiring. At most one
  * attempt is in flight; a repeat after a leader, term or membership change,
@@ -448,6 +366,7 @@ function shouldIssueRetirementAttempt(owner, attempt, observation) {
  */
 async function redriveReplaceSourceRetirement(owner, operation, observation) {
   const state = readOwnerState(owner);
+  rebuildLostRetirementAttempt(owner, state, operation, observation);
   const attempt =
     state.retirementAttemptByOperationId.get(operation.operationId) || null;
   if (!shouldIssueRetirementAttempt(owner, attempt, observation)) {
@@ -490,7 +409,7 @@ function recordReplaceSourceRemovalEffect(owner, operation, response) {
 }
 
 function isRemovalEffectResendDue(owner, operation) {
-  const effect = STATE_BY_OWNER.get(owner)?.removalEffectByOperationId
+  const effect = readOwnerState(owner).removalEffectByOperationId
     .get(operation.operationId);
   return !effect ||
     nowMsOf(owner) - effect.sentAtMs >= REPLACE_REMOVAL_PENDING_ESCALATION_MS;
@@ -717,6 +636,40 @@ function recordReplaceBudgetDiagnostic(owner, operation) {
     previous?.reason || REPLACE_WAIT_REASON.BUDGET_ELAPSED, null);
 }
 
+function sourceRowClassOf(sourceRow) {
+  if (sourceRow.state === STOPPING_OBSERVATION_UNAVAILABLE) {
+    return REPLACE_SOURCE_ROW_CLASS.UNKNOWN;
+  }
+  if (sourceRow.state === STOPPING_OBSERVATION_ABSENT ||
+      sourceRow.lifecycleStatus === ReplicaStatus.REMOVED ||
+      sourceRow.lifecycleStatus === ReplicaStatus.FAILED) {
+    return REPLACE_SOURCE_ROW_CLASS.GONE;
+  }
+  return sourceRow.lifecycleStatus === ReplicaStatus.REMOVING ?
+    REPLACE_SOURCE_ROW_CLASS.RETIRING : REPLACE_SOURCE_ROW_CLASS.ADMISSIBLE;
+}
+
+/**
+ * The operation's owner phase (Φ1-Φ6) from fresh reads: the witness verdict,
+ * the source's row, and the owner's own attempt state.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @return {Promise<string>} A REPLACE_OWNER_PHASE member, or
+ *   REPLACE_NOT_IN_OWNER_PHASE.
+ */
+async function readReplaceOwnerPhase(owner, operation) {
+  const decision = await decideReplaceCompletion(owner, operation);
+  const sourceRow = await observeReplaceSourceRow(owner, operation);
+  return classifyReplaceOwnerPhase({
+    workflowStep: operation?.workflowStep,
+    handoffAttemptUnresolved: isReplaceHandoffAttemptUnresolved(
+      owner, operation?.operationId, decision.observation),
+    sourceRetired:
+      decision.verdict === REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED,
+    sourceRowClass: sourceRowClassOf(sourceRow),
+  });
+}
+
 export {
   REPLACE_COMPLETION_VERDICT,
   REPLACE_EFFECT_ADMISSION,
@@ -736,6 +689,7 @@ export {
   isReplaceTerminalFailureAdmitted,
   isTargetFailureDetectorDead,
   readReplaceOwnerDiagnostic,
+  readReplaceOwnerPhase,
   recordReplaceBudgetDiagnostic,
   recordReplaceSourceRemovalEffect,
   reconcileReplaceStoppingOwner,

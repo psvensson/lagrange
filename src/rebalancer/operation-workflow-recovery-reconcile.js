@@ -16,6 +16,10 @@ import {
 } from './operation-workflow-replace-owner.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
+  REPLACE_OWNER_RESTART_CLASS,
+  startReplaceOwnerSession,
+} from './operation-workflow-replace-owner-recovery.js';
+import {
   applyPriorityRecoveryDispatchPendingOwnerProgress,
   applyPriorityRecoveryDispatchPendingReentryAction,
   buildPriorityRecoveryDispatchPendingDrainContext,
@@ -48,6 +52,13 @@ const {
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain {
+  constructor(options) {
+    super(options);
+    // A new owner instance begins its REPLACE-owner session: an operation
+    // whose step began earlier may have lost its attempt state (BR10).
+    startReplaceOwnerSession(this, REPLACE_OWNER_RESTART_CLASS.PROCESS_RESTART);
+  }
+
   async getPriorityRecoveryDecisionSnapshotForPartitionOperations(
     partitionId,
     operations = [],
