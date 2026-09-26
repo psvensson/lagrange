@@ -17,6 +17,9 @@ import {
   RAFT_RS_WASM_FILE,
 } from './raft-rs-core-constants.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
+import {
+  RAFT_RS_RECORD_COMPATIBILITY,
+} from './raft-rs-durable-store-constants.js';
 import {admitRaftRsMessage} from './raft-rs-ingress.js';
 import {RAFT_RS_MESSAGE_TYPE} from './raft-rs-ingress-constants.js';
 import {
@@ -69,6 +72,7 @@ import {
   admitsReplica,
   createdParticipationGate,
   recordAppliedEntry,
+  durableRecordIncompatible,
   durableRecordMissing,
   participationGateClosed,
   participationGateColumns,
@@ -304,6 +308,10 @@ function durableRecordReadFailure(error) {
 // not be read, and no other group is touched.
 function readOpeningRecord(group) {
   try {
+    if (group.store.recordCompatibility() ===
+        RAFT_RS_RECORD_COMPATIBILITY.PRE_GATE) {
+      return {ok: false, result: durableRecordIncompatible()};
+    }
     const restore = group.store.hasDurableRecord(group.groupId);
     return {ok: true, restore,
       record: restore ? group.store.readDurableRecord(group.groupId) : null};
@@ -1403,7 +1411,8 @@ function createRuntimeDispatcher(request) {
   const opening = readOpeningRecord(group);
   const opened = opening.ok ? openGroupInCurrentRuntime(group, opening) :
     opening.result;
-  if (opening.ok && opened.outcome !== CORE_OK) {
+  if (opened.outcome === CORE_REFUSED ||
+      (opening.ok && opened.outcome !== CORE_OK)) {
     groups.delete(group.key);
     throw Object.assign(new Error(opened.reason), {consensus: opened});
   }

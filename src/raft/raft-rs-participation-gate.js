@@ -16,12 +16,14 @@ import {deepFreeze} from './raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {
   BOOTSTRAP_MEMBERSHIP_SOURCE,
-  COMMITTED_MEMBERSHIP_REFUSAL,
   PARTICIPATION_GATE,
   PARTICIPATION_GATE_PHASE,
 } from './raft-committed-membership-constants.js';
 import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
-import {RUNTIME_PHASE} from './raft-rs-runtime-owner-constants.js';
+import {
+  RUNTIME_PHASE,
+  RUNTIME_REASON,
+} from './raft-rs-runtime-owner-constants.js';
 
 const ZERO = 0n;
 // The admission index of a replica no applied entry has admitted yet: the
@@ -211,10 +213,27 @@ function participationGateClosed() {
 function durableRecordMissing() {
   return deepFreeze({
     outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
-    reason: COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING,
+    reason: RUNTIME_REASON.DURABLE_RECORD_MISSING,
     phase: RUNTIME_PHASE.DURABLE_RECORD_READ,
     retryable: false,
     recoveryRequired: false,
+  });
+}
+
+/**
+ * The typed refusal of a durable record written before the participation
+ * gate existed (owner decision O3, hard cutover): non-retryable, the replica
+ * is reseeded; distinct from an unreadable record (retryable) and from a
+ * missing one.
+ * @return {Object} Frozen CORE_REFUSED outcome.
+ */
+function durableRecordIncompatible() {
+  return deepFreeze({
+    outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+    reason: RUNTIME_REASON.DURABLE_RECORD_INCOMPATIBLE,
+    phase: RUNTIME_PHASE.DURABLE_RECORD_READ,
+    retryable: false,
+    recoveryRequired: true,
   });
 }
 
@@ -235,6 +254,7 @@ function requiresDurableRecord(bootstrap) {
 export {
   admitsReplica,
   createdParticipationGate,
+  durableRecordIncompatible,
   durableRecordMissing,
   participationGateClosed,
   participationGateColumns,

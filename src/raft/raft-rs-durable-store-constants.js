@@ -182,6 +182,10 @@ const RAFT_RS_SQL = Object.freeze({
       bootstrap_index = excluded.bootstrap_index,
       admission_index = excluded.admission_index
   `,
+  // The applied-state table's columns, asked of the schema: a record written
+  // before the participation gate lacks the gate's columns.
+  SELECT_APPLIED_STATE_COLUMNS:
+    `SELECT name FROM pragma_table_info('${RAFT_RS_TABLE.APPLIED_STATE}')`,
   UPDATE_ADMISSION_INDEX: `
     UPDATE ${RAFT_RS_TABLE.APPLIED_STATE}
     SET admission_index = ?
@@ -237,6 +241,17 @@ const RAFT_RS_PERSISTENCE_ADMISSION = Object.freeze({
   USER_TRANSACTION_OPEN: 'user-transaction-open',
 });
 
+// Whether a durable record's schema carries the participation gate.
+const RAFT_RS_RECORD_COMPATIBILITY = Object.freeze({
+  COMPATIBLE: 'compatible',
+  PRE_GATE: 'pre-gate',
+  // No applied-state table at all: a lost table, which the record read
+  // itself reports (an unreadable record), not a pre-gate schema.
+  TABLE_MISSING: 'table-missing',
+});
+const RAFT_RS_PARTICIPATION_GATE_COLUMNS = Object.freeze([
+  'bootstrap_index', 'admission_index']);
+
 const RAFT_RS_STORE_ERROR_CODE = Object.freeze({
   USER_TRANSACTION_OPEN: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN',
 });
@@ -259,7 +274,9 @@ export {
   RAFT_RS_BOOLEAN_COLUMN,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
+  RAFT_RS_PARTICIPATION_GATE_COLUMNS,
   RAFT_RS_PERSISTENCE_ADMISSION,
+  RAFT_RS_RECORD_COMPATIBILITY,
   RAFT_RS_RECORD_TABLES,
   RAFT_RS_SCHEMA_SQL,
   RAFT_RS_SQL,

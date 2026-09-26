@@ -15,6 +15,9 @@ import {
   RAFT_RS_PERSISTENCE_ADMISSION,
 } from './raft-rs-durable-store-constants.js';
 import {
+  COMMITTED_MEMBERSHIP_REFUSAL,
+} from './raft-committed-membership-constants.js';
+import {
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
 } from './raft-rs-peer-identity-constants.js';
 
@@ -131,6 +134,14 @@ const RUNTIME_REASON = Object.freeze({
   // The leadership transfer's outcomes, owned by the port's contract.
   ...RAFT_LEADERSHIP_TRANSFER_REASON,
   CLOSED_WITHOUT_CORE_ENTRY: 'closed-without-core-entry',
+  // A replica that must restore holds no durable record (owner decision O4);
+  // the value is the committed-membership boundary's own.
+  DURABLE_RECORD_MISSING: COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING,
+  // A durable record written before the participation gate existed (no
+  // bootstrap or admission index): it cannot prove the replica's role, so
+  // under the hard cutover (owner decision O3) it is refused for a reseed,
+  // never retried and never opened.
+  DURABLE_RECORD_INCOMPATIBLE: 'durable-record-incompatible',
   CLOSED: 'closed',
   // The store's own admission state, carried as the reason of the typed,
   // retryable, non-fatal deferral while a user transaction holds the

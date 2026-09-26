@@ -63,9 +63,10 @@ const COMMITTED_MEMBERSHIP_READ_PURPOSE = Object.freeze({
 //                         second NOT_LEADER, a timeout, a delivery failure);
 //   STAMP_INVALID         a dispatched stamp failed the target's validation;
 //   GENESIS_REFUSED_GROUP_EXISTS
-//                         a GENESIS stamp reached a node where a group of
-//                         the partition already exists (a durable record, or
-//                         a replica discovery shows outside the founders);
+//                         a GENESIS stamp reached a replica with no durable
+//                         record while discovery shows a replica of the
+//                         partition outside the founders (a replica that
+//                         holds a record is restored from it instead);
 //   DURABLE_RECORD_MISSING
 //                         a replica that must restore (a rejoin, or a
 //                         COMMITTED stamp that already names it a voter)

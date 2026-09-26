@@ -7,7 +7,8 @@
  * Canonical output: the answer of the local replica's operation port to a
  * bootstrap read (the leader's committed configuration, or a typed refusal);
  * the validated stamp a new replica opens its group from, with the address
- * hints and join mode it yields.
+ * hints and join mode it yields (a replica holding a durable record is
+ * restored from it by its port whatever the stamp).
  * Prohibited: no row is read as membership. Rows are discovery only: the
  * genesis check reads them as evidence that a group already exists, and the
  * address book stays with the caller.
@@ -30,7 +31,6 @@ import {
   replicaIdsOfStamp,
   validateBootstrapMembershipStamp,
 } from '../raft/raft-committed-membership-stamp.js';
-import {durableRecordPresentAt} from '../raft/raft-rs-durable-record-probe.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const READ = RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP;
@@ -123,9 +123,9 @@ function assignReplicaHandlerCommittedMembershipMethods(ReplicaHandler) {
      * The bootstrap membership a new partition replica opens its group from:
      * the dispatched stamp, validated. A COMMITTED stamp is a join into the
      * group whose leader answered it; a GENESIS stamp founds a group and is
-     * refused where a group already exists (a durable record of this replica,
-     * or a discovered replica outside the founders). The stamp kind, never a
-     * row count, decides the join mode.
+     * refused where discovery shows a replica outside the founders (a
+     * founder holding a durable record is restored from it by its port).
+     * The stamp kind, never a row count, decides the join mode.
      * @param {Object} context - {partitionId, replicaId, bootstrapMembership,
      *   observedServices}.
      * @return {Object} {bootstrapMembership, replicaIds, existingReplicaCount}.
@@ -139,11 +139,11 @@ function assignReplicaHandlerCommittedMembershipMethods(ReplicaHandler) {
       }
       const committed = bootstrapMembership.kind ===
         COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED;
-      if (!committed && (
-        durableRecordPresentAt(
-          this.getPartitionDbPath(partitionId, replicaId), partitionId) ||
-        discoveredOutsideFounders(observedServices,
-          bootstrapMembership.founders))) {
+      // A founder that already holds a durable record (a RESTART_CREATE
+      // after its index-0 write) is restored from that record by its port:
+      // the record, not the stamp, is the authority, so there is one group.
+      if (!committed && discoveredOutsideFounders(observedServices,
+        bootstrapMembership.founders)) {
         throw bootstrapMembershipRefusedError(partitionId,
           COMMITTED_MEMBERSHIP_REFUSAL.GENESIS_REFUSED_GROUP_EXISTS);
       }

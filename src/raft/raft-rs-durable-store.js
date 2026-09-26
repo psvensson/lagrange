@@ -14,7 +14,9 @@ import {
   RAFT_RS_BOOLEAN_COLUMN,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
+  RAFT_RS_PARTICIPATION_GATE_COLUMNS,
   RAFT_RS_PERSISTENCE_ADMISSION,
+  RAFT_RS_RECORD_COMPATIBILITY,
   RAFT_RS_RECORD_TABLES,
   RAFT_RS_SCHEMA_SQL,
   RAFT_RS_SQL,
@@ -505,6 +507,24 @@ class RaftRsDurableStore {
     const row = db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE)
       .safeIntegers(true).get(groupId);
     return row ? fromExactInteger(row.applied_index) : null;
+  }
+
+  /**
+   * Whether the record's schema carries the participation gate: a table
+   * created before the gate existed lacks its columns, and such a record
+   * cannot prove this replica's role (owner decisions O1, O3).
+   * @return {string} A RAFT_RS_RECORD_COMPATIBILITY state.
+   */
+  recordCompatibility() {
+    const columns = new Set(readRecordTable(RAFT_RS_TABLE.APPLIED_STATE, () =>
+      this.db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE_COLUMNS).all())
+      .map((row) => row.name));
+    if (columns.size === 0) {
+      return RAFT_RS_RECORD_COMPATIBILITY.TABLE_MISSING;
+    }
+    return RAFT_RS_PARTICIPATION_GATE_COLUMNS.every((column) =>
+      columns.has(column)) ? RAFT_RS_RECORD_COMPATIBILITY.COMPATIBLE :
+      RAFT_RS_RECORD_COMPATIBILITY.PRE_GATE;
   }
 
   /**
