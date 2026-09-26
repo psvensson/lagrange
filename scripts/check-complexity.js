@@ -58,7 +58,10 @@ const TARGET_THRESHOLD = 12;
 // 2026-09-25: tightened 1813 -> 1811 on the checker's hint after the REPLACE
 // owner deleted the replacement-leader retarget resolution (H-B', quest
 // replace-source-removal-owner).
-const BASELINE_COUNT = 1811;
+// 2026-09-26: tightened 1811 -> 1810 on the checker's hint on the O1
+// committed-read branch (the partition row branch of the creation stamp
+// deleted; the peer-cache reconcile's expected-peer loop extracted).
+const BASELINE_COUNT = 1810;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

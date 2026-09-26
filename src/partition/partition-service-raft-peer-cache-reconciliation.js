@@ -7,7 +7,9 @@ import {
 import {
   admitPartitionRaftPeer,
   reservePartitionRaftPeerIdentity,
+  takeAdmissionsInFlight,
 } from './partition-service-raft-membership-administration.js';
+import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
 
 // The admission outcomes that leave a peer outside the configuration.
 const UNADMITTED_PEER_OUTCOMES = Object.freeze(new Set([
@@ -292,7 +294,36 @@ function reconcileExpectedRaftPeer({
   }
 }
 
-function reconcileRaftPeersFromCacheForService(partitionService) {
+// The address each services row expects for a peer replica (all of them, or
+// only those named), each named replica kept in the partition's hint list.
+function expectedPeerAddressesOf(partitionService, services, addressManager,
+  onlyReplicaIds) {
+  const expected = new Map();
+  for (const serviceRow of services) {
+    const replicaId = serviceRow.service_id || serviceRow.replica_id;
+    if (shouldSkipPeerServiceRow(partitionService, serviceRow, replicaId) ||
+        (onlyReplicaIds !== null && !onlyReplicaIds.has(replicaId))) {
+      continue;
+    }
+    const peerAddress = resolvePeerAddressFromService(
+      addressManager,
+      serviceRow,
+      replicaId,
+    );
+    if (!peerAddress) {
+      continue;
+    }
+    expected.set(replicaId, peerAddress);
+    if (!partitionService.replicaIds.includes(replicaId)) {
+      partitionService.replicaIds.push(replicaId);
+    }
+  }
+  return expected;
+}
+
+function reconcileRaftPeersFromCacheForService(partitionService,
+  options = {}) {
+  const onlyReplicaIds = options.onlyReplicaIds ?? null;
   if (
     !partitionService.raft ||
     !partitionService.systemTableCache ||
@@ -314,25 +345,8 @@ function reconcileRaftPeersFromCacheForService(partitionService) {
     return;
   }
   const addressManager = AddressManager.getInstance();
-  const expectedAddressesByReplicaId = /* @__PURE__ */ new Map();
-  for (const serviceRow of services) {
-    const replicaId = serviceRow.service_id || serviceRow.replica_id;
-    if (shouldSkipPeerServiceRow(partitionService, serviceRow, replicaId)) {
-      continue;
-    }
-    const peerAddress = resolvePeerAddressFromService(
-      addressManager,
-      serviceRow,
-      replicaId,
-    );
-    if (!peerAddress) {
-      continue;
-    }
-    expectedAddressesByReplicaId.set(replicaId, peerAddress);
-    if (!partitionService.replicaIds.includes(replicaId)) {
-      partitionService.replicaIds.push(replicaId);
-    }
-  }
+  const expectedAddressesByReplicaId = expectedPeerAddressesOf(
+    partitionService, services, addressManager, onlyReplicaIds);
   const currentNodes = partitionService.raft?.readStatus?.().peers || [];
   const currentAddresses = new Set(
     currentNodes
@@ -356,8 +370,28 @@ function reconcileRaftPeersFromCacheForService(partitionService) {
   }
 }
 
+/**
+ * Re-drive, whenever the port announces a changed applied configuration,
+ * exactly the admissions this leader proposed in the previous configuration
+ * (committed-read amendment 1, section 3.5): raft-rs drops an AddNode
+ * proposed while another change was unapplied, answering Ok, so each of them
+ * is re-evaluated once from its services row - and nothing else is: a voter
+ * the group removed is not re-admitted by this wake-up.
+ * @param {Object} partitionService - The partition service (current port).
+ */
+function redriveAdmissionsOnMembershipChange(partitionService) {
+  partitionService.raft.subscribe(RAFT_EVENT.MEMBERSHIP_CHANGED, () => {
+    const inFlight = takeAdmissionsInFlight(partitionService);
+    if (inFlight.size > 0) {
+      queueMicrotask(() => reconcileRaftPeersFromCacheForService(
+        partitionService, {onlyReplicaIds: inFlight}));
+    }
+  });
+}
+
 export {
   reconcileRaftPeersFromCacheForService,
+  redriveAdmissionsOnMembershipChange,
   retireRaftPeerFromAuthoritativeServiceChange,
   resolveLiveRaftLeaderAddressForPeer,
 };

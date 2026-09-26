@@ -10,11 +10,10 @@ const PARTITION_REPLICA_INIT_SYNC_SECTION_SITE = 'partition_replica_init';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   reconcileRaftPeersFromCacheForService,
-} from './partition-service-raft-peer-cache-reconciliation.js';
-import {
-  admitPartitionRaftPeer,
   redriveAdmissionsOnMembershipChange,
-} from './partition-service-raft-membership-administration.js';
+} from './partition-service-raft-peer-cache-reconciliation.js';
+import {admitPartitionRaftPeer} from
+  './partition-service-raft-membership-administration.js';
 import {
   relayPartitionConsensusObservations,
   wirePartitionRaftLifecycleEvents,

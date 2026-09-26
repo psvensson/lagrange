@@ -6,7 +6,6 @@ import {
   COMMITTED_MEMBERSHIP_READ_PURPOSE,
 } from '../raft/raft-committed-membership-constants.js';
 import {
-  RAFT_EVENT,
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION,
@@ -185,18 +184,16 @@ function admitPartitionRaftPeer(service, {replicaIdentity, peerAddress}) {
 }
 
 /**
- * Re-drive the partition's admissions whenever its port announces a changed
- * applied configuration: the proposals of the previous configuration are no
- * longer in flight, and the partition's own admission reconcile runs again
- * (a leader proposes what is still missing; any other replica records its
- * typed no-op).
- * @param {Object} service - The partition service (its current port).
+ * The admissions this leader proposed since the applied configuration last
+ * changed, handed over and forgotten: the configuration changed, so none of
+ * them is in flight any more (committed-read amendment 1, section 3.5).
+ * @param {Object} service - The partition service.
+ * @return {Set<string>} The replica identities.
  */
-function redriveAdmissionsOnMembershipChange(service) {
-  service.raft.subscribe(RAFT_EVENT.MEMBERSHIP_CHANGED, () => {
-    admissionsInFlightOf(service).clear();
-    service.scheduleRaftPeerReconciliation();
-  });
+function takeAdmissionsInFlight(service) {
+  const taken = new Set(admissionsInFlightOf(service));
+  admissionsInFlightOf(service).clear();
+  return taken;
 }
 
 /**
@@ -319,8 +316,8 @@ async function retirePartitionRaftPeer(service, replicaIdentity) {
 
 export {
   admitPartitionRaftPeer,
-  redriveAdmissionsOnMembershipChange,
   readPartitionReplicaMembership,
   reservePartitionRaftPeerIdentity,
   retirePartitionRaftPeer,
+  takeAdmissionsInFlight,
 };
