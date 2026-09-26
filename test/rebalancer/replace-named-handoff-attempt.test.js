@@ -324,3 +324,23 @@ test('BR12: no handoff leaves on a deferred-visibility snapshot', async (t) => {
     await harness.shutdown();
   }
 });
+
+test('BR11: only a fresh read of the target leading authorizes removal; a ' +
+  'third replica leading gets the named-target handoff', async (t) => {
+  const harness = await createHarness();
+  try {
+    harness.witness.leaderReplicaId = PEER_REPLICA_B;
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.removals().length, 0,
+      'a non-source, non-target leader does not authorize the removal');
+    t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+    t.equal(harness.stepDowns()[0]?.payload[ReplicaOperationField.REPLICA_ID],
+      TARGET_REPLICA_ID, 'it names the REPLACE\'s own target');
+    harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.removals().length, 1,
+      'the target leading (fresh read) lets removal proceed');
+  } finally {
+    await harness.shutdown();
+  }
+});

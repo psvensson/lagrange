@@ -169,8 +169,13 @@ async function evaluateHandoff({
   );
 }
 
-test('remove-safety owner: an explicit follower with a distinct same-node leader ' +
-  'sibling is removed without promoting the replacement', async (t) => {
+// SUPERSEDED (R09), BR11 (quest replace-source-removal-owner): this case used
+// to pass the removal once any non-source replica led. Only a fresh read of
+// the REPLACE target itself leading authorizes it; a co-located sibling
+// leading gets the one named-target handoff first.
+test('remove-safety owner: an explicit follower with a distinct same-node ' +
+  'leader sibling gets the named-target handoff before its removal',
+async (t) => {
   // The co-located sibling leads, as the witness's own port reports.
   const {instance} = makeHandoff({witnessLeader: LEADER_REPLICA_ID});
   const evaluation = await evaluateRemoveSafety(
@@ -180,13 +185,23 @@ test('remove-safety owner: an explicit follower with a distinct same-node leader
 
   t.equal(
     evaluation.classification,
-    REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
-    'a fresh leader other than the source makes the source removal leadership-safe',
+    REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
+    'a leader other than the target does not authorize the removal',
   );
   t.equal(
-    evaluation.handoffRequest,
-    null,
-    'safe follower removal does not request a replacement leader election',
+    evaluation.handoffRequest?.requestReplicaId,
+    TARGET_REPLICA_ID,
+    'the one handoff names the REPLACE target',
+  );
+  const targetLeads = makeHandoff({witnessLeader: TARGET_REPLICA_ID});
+  const authorized = await evaluateRemoveSafety(
+    targetLeads.instance,
+    replaceOperation(),
+  );
+  t.equal(
+    authorized.classification,
+    REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
+    'the target leading (fresh read) makes the removal leadership-safe',
   );
   t.end();
 });

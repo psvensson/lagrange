@@ -160,7 +160,9 @@ function createReadiness(world) {
 function createWorld() {
   const world = {
     epoch: PLANNING_EPOCH,
-    witness: createReplaceWitness({leaderReplicaId: PEER_REPLICA_B}),
+    // The target leads unless a phase driver says otherwise (BR11: only
+    // the target leading authorizes the removal).
+    witness: createReplaceWitness({leaderReplicaId: TARGET_REPLICA_ID}),
     // Proposals a witness runtime rebuild lost: retirements before this
     // index never commit.
     lostProposalCount: 0,
@@ -345,8 +347,9 @@ function evolveWorld(world) {
       completed_at: Date.now()});
     world.readiness.publish(PEER_NODE_C);
   }
+  // A named-target handoff moves leadership to the target (whoever led).
   if (world.stepDowns.length > 0 &&
-      world.witness.leaderReplicaId === SOURCE_REPLICA_ID) {
+      world.witness.leaderReplicaId !== TARGET_REPLICA_ID) {
     world.witness.leaderReplicaId = TARGET_REPLICA_ID;
     world.witness.term += 1;
     emitConsensus(world, {leaderReplicaId: TARGET_REPLICA_ID,

@@ -8,11 +8,11 @@
  * with its attempt sequence, and the group's leadership-transfer window.
  * Canonical output: for a REPLACE, the one leadership decision before its
  * source may be removed:
- *  - LEADERSHIP_SAFE when a fresh read shows the target leading, or another
- *    replica leading (the source released leadership to a canonical
- *    successor);
- *  - ISSUE a named-target handoff (always the target t) when the source
- *    leads and no attempt is unresolved;
+ *  - LEADERSHIP_SAFE when a fresh read shows the target itself leading
+ *    (BR11: lead === t; no other leader authorizes the removal);
+ *  - ISSUE a named-target handoff (always the target t) when another
+ *    replica (the source or a third one) leads and no attempt is
+ *    unresolved;
  *  - WAIT while an attempt is unresolved, while no leader is known, or while
  *    the witness cannot be read;
  *  - TARGET_NOT_FOUND when the target answered that it hosts no replica.
@@ -206,7 +206,10 @@ function decideReplaceNamedHandoff(owner, operation, witness, replicaIds) {
       state: REPLACE_HANDOFF_DECISION.WAIT_WITNESS_UNAVAILABLE});
   }
   const leader = witness.leaderReplicaId ?? null;
-  if (leader !== null && leader !== replicaIds.sourceReplicaId) {
+  // BR11: only a fresh read of the target itself leading authorizes the
+  // removal; any other leader (the source, or a third replica) gets the one
+  // named-target handoff.
+  if (leader !== null && leader === replicaIds.targetReplicaId) {
     return Object.freeze({state: REPLACE_HANDOFF_DECISION.LEADERSHIP_SAFE});
   }
   if (attempt?.answerClass === REPLACE_HANDOFF_ANSWER_CLASS.NOT_FOUND) {
