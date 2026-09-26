@@ -564,6 +564,25 @@ function createReplaceWorld(options = {}) {
   return world;
 }
 
+// The transfer each handoff reason asks for, from the tracked role (the
+// handler's own rule); null when the role makes it a named no-op.
+function transferRequestOf(reason, replicaId, trackedRole) {
+  if (reason === ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION) {
+    return trackedRole === RAFT_ROLE.FOLLOWER ? {
+      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+      replicaIdentity: replicaId,
+    } : null;
+  }
+  return trackedRole === RAFT_ROLE.LEADER ?
+    {successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP} : null;
+}
+
+function roleNoOpBranchOf(reason) {
+  return reason === ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION ?
+    REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TARGET_ELECTION_ROLE_NO_OP :
+    REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.SOURCE_DEMOTION_ROLE_NO_OP;
+}
+
 function answerStepDown(world, payload) {
   const replicaId = payload[ReplicaOperationField.REPLICA_ID];
   const reason = payload[ReplicaOperationField.REASON];
@@ -580,19 +599,10 @@ function answerStepDown(world, payload) {
     return {status: ReplicaOperationResponseStatus.NOT_FOUND, ...echo};
   }
   const trackedRole = world.group.roleOf(replicaId);
-  const request = reason === ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION ?
-    (trackedRole === RAFT_ROLE.FOLLOWER ? {
-      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: replicaId,
-    } : null) :
-    (trackedRole === RAFT_ROLE.LEADER ?
-      {successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP} : null);
+  const request = transferRequestOf(reason, replicaId, trackedRole);
   if (request === null) {
     return {status: ReplicaOperationResponseStatus.COMPLETED, ...echo,
-      handoffBranch: reason ===
-        ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION ?
-        REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TARGET_ELECTION_ROLE_NO_OP :
-        REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.SOURCE_DEMOTION_ROLE_NO_OP,
+      handoffBranch: roleNoOpBranchOf(reason),
       handoffTrackedRole: trackedRole};
   }
   const answer = world.group.cluster.node(replicaId).transferLeadership(request);
@@ -644,92 +654,117 @@ function answerRemoveEffect(world, payload) {
   return {acknowledged: true, status: ReplicaOperationResponseStatus.INITIATED};
 }
 
+const UNREACHABLE_ANSWER = Object.freeze({
+  status: ReplicaOperationResponseStatus.ERROR,
+  error: 'replica unreachable',
+});
+
+// READ_REPLICA_MEMBERSHIP answered by the production seam over the named
+// replica's own port.
+async function answerWitnessRead(world, payload) {
+  const replicaId = payload[ReplicaOperationField.REPLICA_ID];
+  world.witnessReads.push(replicaId);
+  if (world.holdNextWitnessRead) {
+    world.holdNextWitnessRead = false;
+    await new Promise((resolve) => {
+      world.heldWitnessRead = {release: resolve};
+    });
+  }
+  if (!world.group.cluster.replicas.has(replicaId)) {
+    return {status: ReplicaOperationResponseStatus.NOT_FOUND};
+  }
+  if (world.group.dead.has(replicaId)) {
+    return UNREACHABLE_ANSWER;
+  }
+  return {
+    status: ReplicaOperationResponseStatus.COMPLETED,
+    [ReplicaOperationField.MEMBERSHIP]: await readPartitionReplicaMembership(
+      world.group.serviceOf(replicaId),
+      payload[ReplicaOperationField.SOURCE_REPLICA_ID]),
+  };
+}
+
+// RETIRE_REPLICA_PEER: the production seam proposes REMOVE_PEER through the
+// named replica's own port.
+async function answerRetirement(world, payload) {
+  const replicaId = payload[ReplicaOperationField.REPLICA_ID];
+  world.retirements.push(payload);
+  if (world.group.dead.has(replicaId)) {
+    return UNREACHABLE_ANSWER;
+  }
+  return {
+    status: ReplicaOperationResponseStatus.INITIATED,
+    [ReplicaOperationField.PROPOSAL]: await retirePartitionRaftPeer(
+      world.group.serviceOf(replicaId),
+      payload[ReplicaOperationField.SOURCE_REPLICA_ID]),
+  };
+}
+
+async function answerHeldStepDown(world, payload) {
+  world.stepDowns.push(payload);
+  if (world.holdNextStepDown) {
+    world.holdNextStepDown = false;
+    const answer = await new Promise((resolve) => {
+      world.heldStepDown = {release: resolve};
+    });
+    if (answer) {
+      return answer;
+    }
+  }
+  return answerStepDown(world, payload);
+}
+
+const MESSAGE_ANSWERS = Object.freeze({
+  [ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP]: answerWitnessRead,
+  [ReplicaOperationMessageType.RETIRE_REPLICA_PEER]: answerRetirement,
+  [ReplicaOperationMessageType.STEP_DOWN_REPLICA]: answerHeldStepDown,
+  [ReplicaOperationMessageType.REMOVE_REPLICA]: answerRemoveEffect,
+});
+
 async function deliver(world, target, payload) {
-  const type = payload?.[ReplicaOperationField.TYPE];
-  const replicaId = payload?.[ReplicaOperationField.REPLICA_ID];
-  const sourceReplicaId = payload?.[ReplicaOperationField.SOURCE_REPLICA_ID];
   world.deliveries.push({target, payload});
-  if (type === ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP) {
-    world.witnessReads.push(replicaId);
-    if (world.holdNextWitnessRead) {
-      world.holdNextWitnessRead = false;
-      await new Promise((resolve) => {
-        world.heldWitnessRead = {release: resolve};
-      });
-    }
-    if (!world.group.cluster.replicas.has(replicaId)) {
-      return {status: ReplicaOperationResponseStatus.NOT_FOUND};
-    }
-    if (world.group.dead.has(replicaId)) {
-      return {status: ReplicaOperationResponseStatus.ERROR,
-        error: 'replica unreachable'};
-    }
-    return {
-      status: ReplicaOperationResponseStatus.COMPLETED,
-      [ReplicaOperationField.MEMBERSHIP]: await readPartitionReplicaMembership(
-        world.group.serviceOf(replicaId), sourceReplicaId),
-    };
-  }
-  if (type === ReplicaOperationMessageType.RETIRE_REPLICA_PEER) {
-    world.retirements.push(payload);
-    if (world.group.dead.has(replicaId)) {
-      return {status: ReplicaOperationResponseStatus.ERROR,
-        error: 'replica unreachable'};
-    }
-    return {
-      status: ReplicaOperationResponseStatus.INITIATED,
-      [ReplicaOperationField.PROPOSAL]: await retirePartitionRaftPeer(
-        world.group.serviceOf(replicaId), sourceReplicaId),
-    };
-  }
-  if (type === ReplicaOperationMessageType.STEP_DOWN_REPLICA) {
-    world.stepDowns.push(payload);
-    if (world.holdNextStepDown) {
-      world.holdNextStepDown = false;
-      const answer = await new Promise((resolve) => {
-        world.heldStepDown = {release: resolve};
-      });
-      if (answer) {
-        return answer;
-      }
-    }
-    return answerStepDown(world, payload);
-  }
-  if (type === ReplicaOperationMessageType.REMOVE_REPLICA) {
-    return answerRemoveEffect(world, payload);
-  }
-  return {acknowledged: true, status: ReplicaOperationResponseStatus.INITIATED};
+  const answer = MESSAGE_ANSWERS[payload?.[ReplicaOperationField.TYPE]];
+  return answer ? answer(world, payload) :
+    {acknowledged: true, status: ReplicaOperationResponseStatus.INITIATED};
 }
 
 // Every terminal write is captured with the oracle read at that instant.
+function isCapturedTerminalWrite(operation, persistOptions, result) {
+  return TERMINAL_STEPS.has(operation?.workflowStep) &&
+    persistOptions?.terminalTransition === true &&
+    result?.persisted !== false;
+}
+
+// One terminal write with the oracle read at that instant. The durable row
+// after the write comes from the authority read: the test double's SQL
+// fallback answers a terminal statement without its affected-row count, so
+// the disposition alone is not the durable outcome.
+async function captureTerminalWrite(world, repository, operation, result) {
+  const durable = await repository
+    .queryReplicaOperationPersistenceAuthorityOperation(operation);
+  world.terminalWrites.push(Object.freeze({
+    operationId: operation.operationId,
+    step: operation.workflowStep,
+    disposition: result?.disposition ?? null,
+    durableStepAfter: durable?.workflowStep ?? null,
+    errorMessage: operation.errorMessage ?? null,
+    sourceCommittedVoter:
+      world.group.sourceCommittedVoter(world.sourceReplicaId),
+    committed: world.group.committedConfiguration(),
+    targetRowStatus: world.cache.get('services', world.targetReplicaId)
+      ?.status ?? null,
+    sourceRowStatus: sourceRowStatus(world),
+    edge: world.currentEdge ?? null,
+  }));
+}
+
 function captureTerminalWrites(world, coordinator) {
   const repository = coordinator.repository;
   const base = repository.persistOperationUpdate.bind(repository);
   repository.persistOperationUpdate = async (operation, persistOptions) => {
     const result = await base(operation, persistOptions);
-    const step = operation?.workflowStep;
-    if (TERMINAL_STEPS.has(step) && persistOptions?.terminalTransition === true &&
-        result?.persisted !== false) {
-      // The durable row after the write, from the authority read: the test
-      // double's SQL fallback answers a terminal statement without its
-      // affected-row count, so the disposition alone is not the durable
-      // outcome.
-      const durable = await repository
-        .queryReplicaOperationPersistenceAuthorityOperation(operation);
-      world.terminalWrites.push(Object.freeze({
-        operationId: operation.operationId,
-        step,
-        disposition: result?.disposition ?? null,
-        durableStepAfter: durable?.workflowStep ?? null,
-        errorMessage: operation.errorMessage ?? null,
-        sourceCommittedVoter:
-          world.group.sourceCommittedVoter(world.sourceReplicaId),
-        committed: world.group.committedConfiguration(),
-        targetRowStatus: world.cache.get('services', world.targetReplicaId)
-          ?.status ?? null,
-        sourceRowStatus: sourceRowStatus(world),
-        edge: world.currentEdge ?? null,
-      }));
+    if (isCapturedTerminalWrite(operation, persistOptions, result)) {
+      await captureTerminalWrite(world, repository, operation, result);
     }
     return result;
   };
