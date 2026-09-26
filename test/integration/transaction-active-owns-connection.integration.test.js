@@ -62,6 +62,11 @@ const TEST_TIMEOUT_MS = 600000;
 // warn/error and transaction/consensus-pattern lines the nodes do log.
 const NODE_LOG_LEVEL = 'warn';
 const WINDOW_MS = Object.freeze({
+  // A new table's partition may still be adding its third replica; the
+  // experiment starts only once a sentinel autocommit row is in all three
+  // replica files (lab run 6 started inside a membership change and measured
+  // that instead).
+  STEADY: 120000,
   HOLD: 20000,
   SETTLE: 30000,
 });
@@ -74,6 +79,7 @@ const SQL = Object.freeze({
     'WHERE table_name = ?',
 });
 const VALUE = 'v';
+const SENTINEL_PREFIX = 'steady-';
 const ROW_SUFFIX = Object.freeze({
   TX: 'tx',
   SEED_AUTO: 'auto-seed',
@@ -248,6 +254,27 @@ function pickAnswer(answer) {
     settledRelativeToReleaseMs: answer.settledRelativeToReleaseMs};
 }
 
+// One sentinel autocommit row per attempt until one is in every replica file.
+async function awaitSteadyPartition(t, cluster, seed, sessionKey) {
+  const startedAt = Date.now();
+  const deadline = startedAt + scaleByMachineFactor(WINDOW_MS.STEADY);
+  const attempts = [];
+  while (Date.now() < deadline) {
+    const id = `${SENTINEL_PREFIX}${attempts.length}`;
+    const answer = publicAnswer(await seed.query(sessionKey, SQL.INSERT,
+      [id, VALUE]));
+    attempts.push({id, acknowledged: answer.acknowledged, error: answer.error});
+    const replicas = await pollUntil(t,
+      Math.min(deadline, Date.now() + scaleByMachineFactor(WINDOW_MS.HOLD)),
+      () => observeTableReplicas(cluster.nodes, {tableName: TABLE, ids: [id]}),
+      (observed) => everyReplicaHolds(observed, [id]));
+    if (everyReplicaHolds(replicas, [id])) {
+      return {steady: true, elapsedMs: Date.now() - startedAt, attempts};
+    }
+  }
+  return {steady: false, elapsedMs: Date.now() - startedAt, attempts};
+}
+
 async function openContext(t, cluster, evidence) {
   const [seed] = cluster.nodes;
   const joiner = cluster.nodes[cluster.nodes.length - 1];
@@ -258,6 +285,8 @@ async function openContext(t, cluster, evidence) {
   };
   evidence.create = await serveStatement(t, seed, sessions.seedAuto,
     SQL.CREATE);
+  evidence.steady = await awaitSteadyPartition(t, cluster, seed,
+    sessions.seedAuto);
   const partition = await seed.query(sessions.seedAuto, SQL.PARTITION,
     [TABLE]);
   evidence.partition = publicAnswer(partition).acknowledged ?
@@ -278,6 +307,10 @@ test(`${FINDING} (T-A): an ACTIVE transaction vs autocommit durability`,
         {env: {LOG_LEVEL: NODE_LOG_LEVEL}});
       const context = await openContext(t, cluster, evidence);
       t.ok(evidence.create.served, 'the table was created');
+      t.ok(evidence.steady.steady,
+        'a sentinel autocommit row reached all three replicas first ' +
+        `(${JSON.stringify(evidence.steady)})`);
+      if (!evidence.steady.steady) return;
       for (const [index, decision] of [EMBEDDED_HOLD_DECISION.ROLLBACK,
         EMBEDDED_HOLD_DECISION.COMMIT].entries()) {
         const record = await runVariant(t, context, decision, `v${index}-`);
