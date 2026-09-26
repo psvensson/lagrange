@@ -76,8 +76,12 @@ test('witness read: the replica\'s own committed voters name the source; ' +
   }
 });
 
-test('witness retire: a follower\'s REMOVE_PEER commits through the leader; ' +
-  'the witness then reads the source absent at a later commit index',
+// Round 2 F-1: conf changes are taken only at the leader's port - the
+// follower witness refuses the REMOVE_PEER typed, naming the leader, and the
+// leader's port takes it.
+test('witness retire: a follower refuses REMOVE_PEER typed naming the ' +
+  'leader, the leader\'s commits; the witness then reads the source absent ' +
+  'at a later commit index',
 async () => {
   const cluster = electedCluster();
   try {
@@ -85,9 +89,14 @@ async () => {
     const [witness, source] = FOUNDING.filter((id) => id !== leader);
     const service = witnessService(cluster, witness);
     const before = await readPartitionReplicaMembership(service, source);
-    const retired = await retirePartitionRaftPeer(service, source);
+    const refused = await retirePartitionRaftPeer(service, source);
+    assert.deepEqual([refused.outcome, refused.leaderReplicaId],
+      [RAFT_MEMBERSHIP_ADMISSION_OUTCOME.NOT_LEADER, leader],
+      'the follower refuses typed, naming the leader');
+    const retired = await retirePartitionRaftPeer(
+      witnessService(cluster, leader), source);
     assert.equal(retired.outcome, RAFT_MEMBERSHIP_ADMISSION_OUTCOME.PROPOSED,
-      `the port accepted the proposal (${retired.portOutcome}/` +
+      `the leader's port accepted the proposal (${retired.portOutcome}/` +
       `${retired.reason})`);
     const sourcePeerId = String(cluster.raftPeerIdOf(source));
     assert.ok(cluster.settle(() => !cluster.coreConfState(witness).voters
@@ -99,7 +108,7 @@ async () => {
       'the absence is read at a later commit index');
     const votersAfter = cluster.coreConfState(witness).voters.map(String)
       .sort();
-    await retirePartitionRaftPeer(service, source);
+    await retirePartitionRaftPeer(witnessService(cluster, leader), source);
     cluster.settle(() => false, {rounds: 20});
     assert.deepEqual(cluster.coreConfState(witness).voters.map(String).sort(),
       votersAfter, 'a repeat after the commit changes nothing');

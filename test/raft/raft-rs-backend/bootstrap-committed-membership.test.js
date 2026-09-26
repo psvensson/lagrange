@@ -178,16 +178,22 @@ async () => {
       committedMembership(harness.leader()),
       '(e) a restart restores the committed membership, source included');
 
-    // (d) The real removal, proposed through the target (the source must be
-    // reserved there for REMOVE_PEER to be admissible), committed by the
-    // group; the target observes the changed ConfState.
-    const proposal = await restarted.raft.proposeConfChange({
+    // (d) The real removal, committed by the group; the target observes the
+    // changed ConfState. Conf changes are taken only at the leader's port
+    // (round 2 F-1): the target, a follower, refuses it typed naming the
+    // leader, and the leader proposes it.
+    const change = {
       type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
       replicaIdentity: source[0],
       peerAddress: addressOf(source),
-    });
+    };
+    const refused = await restarted.raft.proposeConfChange(change);
+    assert.equal(refused?.leaderReplicaId, harness.leader().replicaId,
+      `the follower target refuses it typed, naming the leader (${
+        JSON.stringify(refused)})`);
+    const proposal = await harness.leader().raft.proposeConfChange(change);
     assert.equal(proposal?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
-      'REMOVE_PEER for the source is admissible on the target ' +
+      'REMOVE_PEER for the source is admissible on the leader ' +
       `(${JSON.stringify(proposal)})`);
     assert.equal(await waitFor(() => {
       const leader = harness.leader();
