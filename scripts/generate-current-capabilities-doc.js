@@ -123,13 +123,15 @@ ${capabilities.productBoundary.dataLocalRequirement}
 The deployment model is [Artifact / Binding / Cell](vocabulary.md#service-deployment-hierarchy).
 Recommended authoring: **${displayCapability(capabilities.deployment.recommendedAuthoring)}**.
 Managed WASM execution: **${displayCapability(portability.runtimes.wasm_component.managedExecution)}**.
-The legacy callback representation in the table below is a separate internal
-path, not the component produced by the public service build.
+The legacy callback representation in the table below is a JavaScript envelope,
+not a WebAssembly binary or component. It is a separate internal path, not the
+component produced by the public service build.
 
 Binding source kinds are publicly invocable: ${renderList(capabilities.deployment.publicInvocation)}; accepted
 ${renderList(capabilities.deployment.acceptedButNotPubliclyInvocable)} kinds
 may be declared but have no public invocation adapter.
-Managed OCI activation and OCI callback invocation remain unsupported.
+Managed OCI activation remains unsupported.
+OCI callback invocation remains unsupported.
 
 | Call property | Current state |
 | --- | --- |
