@@ -263,6 +263,26 @@ class RealGroup {
     });
     this.cluster = cluster;
     this.cluster.tickers = [this.founders[0]];
+    // Inboxes a test holds: envelopes queue but are not delivered until the
+    // hold is released (a node that has not drained its inbox).
+    this.heldInboxes = new Set();
+    // The cluster's own delivery, replica by replica, skipping a held one
+    // (envelopes it is sent, including those produced in this same pass,
+    // stay queued).
+    cluster.deliverAll = () => {
+      for (const [replicaId, replica] of cluster.replicas) {
+        if (this.heldInboxes.has(replicaId)) {
+          continue;
+        }
+        const pending = replica.inbox.splice(0, replica.inbox.length);
+        for (const envelope of pending) {
+          replica.node.step(envelope);
+        }
+        if (pending.length > 0) {
+          replica.node.tick();
+        }
+      }
+    };
     this.genesisPeerIds = null;
     this.rowDrivenProposals = [];
   }
@@ -306,7 +326,12 @@ class RealGroup {
   }
 
   settle(predicate, rounds = RAFT_ROUNDS) {
-    this.cluster.tickers = this.live();
+    // A held follower lags; it does not tick (no election from a replica
+    // that merely has not drained its inbox). A held LEADER keeps ticking:
+    // its heartbeats and appends still leave, only what it is sent waits.
+    this.cluster.tickers = this.live().filter((replicaId) =>
+      !this.heldInboxes.has(replicaId) ||
+      this.roleOf(replicaId) === RAFT_ROLE.LEADER);
     return this.cluster.settle(predicate, {rounds});
   }
 
@@ -471,6 +496,15 @@ class RealGroup {
     return answer;
   }
 
+  /** Hold a replica's inbox: nothing it is sent is delivered. */
+  holdInbox(replicaId) {
+    this.heldInboxes.add(replicaId);
+  }
+
+  releaseInbox(replicaId) {
+    this.heldInboxes.delete(replicaId);
+  }
+
   /** The replica's process is gone: it neither answers nor talks raft. */
   kill(replicaId) {
     this.dead.add(replicaId);
@@ -500,14 +534,21 @@ function createReplaceWorld(options = {}) {
   const replicaCount = options.replicaCount ?? 3;
   const sourceReplicaId = `${partitionId}-r1`;
   const targetReplicaId = `${partitionId}-r4`;
-  const members = replicaCount === 1 ?
-    [[sourceReplicaId, NODE.SOURCE], [targetReplicaId, NODE.TARGET]] :
-    [
+  const membersByCount = {
+    1: [[sourceReplicaId, NODE.SOURCE], [targetReplicaId, NODE.TARGET]],
+    2: [
+      [sourceReplicaId, NODE.SOURCE],
+      [`${partitionId}-r2`, NODE.PEER_B],
+      [targetReplicaId, NODE.TARGET],
+    ],
+    3: [
       [sourceReplicaId, NODE.SOURCE],
       [`${partitionId}-r2`, NODE.PEER_B],
       [`${partitionId}-r3`, NODE.PEER_C],
       [targetReplicaId, NODE.TARGET],
-    ];
+    ],
+  };
+  const members = membersByCount[replicaCount];
   const nodeIds = members.map(([, nodeId]) => nodeId);
   const group = new RealGroup({partitionId, members, targetReplicaId,
     capDelivery: options.capDelivery ?? null});
@@ -538,6 +579,7 @@ function createReplaceWorld(options = {}) {
     stepDowns: [],
     removeEffects: [],
     retirements: [],
+    retirementRoutes: [],
     witnessReads: [],
     terminalWrites: [],
     eventsSuppressed: false,
@@ -584,6 +626,18 @@ function createReplaceWorld(options = {}) {
       nodeId: NODE.SOURCE, cache: sourceNodeCache,
       rowOf: (status) => serviceRow(partitionId, sourceReplicaId,
         NODE.SOURCE, 'follower', status)});
+    // The REMOVING write exhausts its retry on a retryable control-plane
+    // failure while the flag holds (verification round 1 V2).
+    world.removingWriteFails = options.removingWriteFails === true;
+    const handler = world.sourceHandler.handler;
+    const persist = handler.persistReplicaStatusWithRetry.bind(handler);
+    handler.persistReplicaStatusWithRetry = async (id, status, data) => {
+      if (status === ReplicaStatus.REMOVING && world.removingWriteFails) {
+        throw Object.assign(new Error('control-plane write deferred'),
+          {deferRetry: true});
+      }
+      return persist(id, status, data);
+    };
   }
   // The production relay from the target's port to the node's registry.
   const relayed = new EventEmitter();
@@ -733,6 +787,9 @@ async function answerWitnessRead(world, payload) {
 async function answerRetirement(world, payload) {
   const replicaId = payload[ReplicaOperationField.REPLICA_ID];
   world.retirements.push(payload);
+  // The route taken against the group's leader at that instant.
+  world.retirementRoutes.push(Object.freeze({
+    replicaId, leader: world.group.leader()}));
   if (world.group.dead.has(replicaId)) {
     return UNREACHABLE_ANSWER;
   }
@@ -960,6 +1017,33 @@ async function runToQuiescence(world, {rounds = 12, useFallback = true,
   return {workflowStep: persisted?.workflowStep ?? null, rounds};
 }
 
+/**
+ * runToQuiescence with the K1 timeout sweep in every round as well: the
+ * owner's liveness backstops together (a turn that ends without arming its
+ * fallback is reached by the sweep, as in production).
+ * @param {Object} world
+ * @param {Object} [options] - {rounds, advanceMs}.
+ * @return {Promise<Object>} {workflowStep, rounds}.
+ */
+async function runToQuiescenceWithSweeps(world, {rounds = 12,
+  advanceMs = 1_100} = {}) {
+  for (let round = 0; round < rounds; round += 1) {
+    world.group.advance();
+    await settleTurns();
+    const persisted = await readPersisted(world);
+    if (TERMINAL_STEPS.has(persisted?.workflowStep)) {
+      return {workflowStep: persisted.workflowStep, rounds: round};
+    }
+    world.clockOffsetMs += advanceMs;
+    await fireFallbackTimers(world);
+    await settleTurns();
+    await world.coordinator.checkTimeouts();
+    await settleTurns();
+  }
+  const persisted = await readPersisted(world);
+  return {workflowStep: persisted?.workflowStep ?? null, rounds};
+}
+
 async function disposeWorld(world) {
   try {
     if (world.coordinator) {
@@ -976,6 +1060,13 @@ async function disposeWorld(world) {
 // The completion authority's typed wait reasons while no leader can answer
 // (F1: readReplaceCompletionAuthority; the diagnostic records the owner's
 // WITNESS_UNAVAILABLE wait, the observation carries the authority reason).
+// The completion authority's typed wait reasons for an answer that is not
+// current (fix-f7: a deposed leader, or a leader applied behind its commit).
+const STALE_AUTHORITY_WAITS = Object.freeze({
+  NOT_CORROBORATED: 'completion_authority_not_corroborated',
+  APPLIED_BEHIND_COMMIT: 'completion_authority_applied_behind_commit',
+});
+
 const LEADERLESS_AUTHORITY_WAITS = Object.freeze([
   'completion_authority_leader_unknown',
   'completion_authority_leader_unreachable',
@@ -1011,6 +1102,7 @@ async function openReplaceWorld(options = {}) {
 
 export {
   LEADERLESS_AUTHORITY_WAITS,
+  STALE_AUTHORITY_WAITS,
   ORDINARY_PARTITION_ID,
   PRIORITY_PARTITION_ID,
   NODE,
@@ -1023,6 +1115,7 @@ export {
   openReplaceWorld,
   readPersisted,
   runToQuiescence,
+  runToQuiescenceWithSweeps,
   serviceRow,
   setSourceRow,
   setTargetRow,

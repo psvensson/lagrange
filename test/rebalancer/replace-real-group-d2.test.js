@@ -378,23 +378,34 @@ test('AN6: the leader-source dies at the effect; leaderless the owner ' +
   }
 });
 
-// On the ordinary partition the target is a follower: its proposal crosses
-// the transport to the leader and can be lost there.
-test('AN7: a restart in Φ5 (row gone, removal uncommitted and lost) ' +
-  'resumes the same owner and completes from committed membership',
+// AN7 on the ordinary partition (a follower target, the RETIRE routed to
+// the leader). The leader accepted the proposal, then is isolated before it
+// replicated it (its appends lost with the network): the removal is
+// uncommitted and lost. The owner restarts in Φ5.
+test('AN7: a restart in Φ5 (row gone, the accepted removal lost with an ' +
+  'isolated leader) resumes the same owner: the rebuilt attempt is ' +
+  'outstanding, the backstop re-drives to the new leader, completes',
 async (t) => {
   const world = await openReplaceWorld({partitionId: ORDINARY_PARTITION_ID,
-    sourceLeads: false});
+    sourceLeads: false, sourceHandler: true});
   try {
+    const oldLeader = world.group.leader();
     await driveToIntent(world);
-    setSourceRow(world, null);
-    // The proposal in flight is lost with the transport.
-    for (const replica of world.group.cluster.replicas.values()) {
-      replica.inbox.length = 0;
-    }
+    await settleTurns();
     const issued = world.retirements.length;
+    t.ok(issued >= 1, 'R-1f proposed once, to the leader');
+    t.equal(world.retirements.at(-1).replicaId, oldLeader, 'to the leader');
+    world.eventsSuppressed = true;
+    world.group.cluster.isolate(oldLeader);
+    loseInFlightMessages(world);
+    setSourceRow(world, null);
     await world.coordinator.shutdown();
     startCoordinator(world);
+    const newLeader = electAmongLive(world);
+    t.ok(newLeader !== null && newLeader !== oldLeader,
+      `a surviving member leads (${newLeader})`);
+    t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), true,
+      'setup: the removal was lost (still a voter)');
     await world.coordinator.reconcileOperationProgress(
       await readPersisted(world));
     await settleTurns();
@@ -407,8 +418,34 @@ async (t) => {
     t.equal(outcome.workflowStep, WORKFLOW_STEP.REMOVED, 'completed');
     t.ok(world.retirements.length > issued,
       'the backstop re-drove the lost proposal');
+    t.equal(world.retirements.at(-1).replicaId, newLeader,
+      'the re-drive went to the corroborated new leader');
     t.equal(world.terminalWrites.at(-1)?.sourceCommittedVoter, false,
       'at the write the source is absent');
+  } finally {
+    await disposeWorld(world);
+  }
+});
+
+// V4 (verification round 1): S9 pre-intent x elapsed budgets. A REPLACE at
+// ACTIVE whose named-handoff attempt is unresolved outlives every former
+// budget under every sweep without a terminal write.
+test('S9 pre-intent: ACTIVE with an unresolved attempt survives 61 s, ' +
+  '301 s and an hour of every sweep', async (t) => {
+  const world = await openReplaceWorld();
+  try {
+    await world.coordinator.executeOperation(await readPersisted(world));
+    await settleTurns();
+    t.equal(world.stepDowns.length, 1, 'setup: one handoff attempt is open');
+    for (const advanceMs of [FORMER_STEP_BUDGET_MS + 1_000,
+      FORMER_OPERATION_BUDGET_MS + 1_000, LONG_AFTER_MS]) {
+      await enterOwnerAfter(world, advanceMs);
+      t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.ACTIVE,
+        `+${advanceMs} ms: still ACTIVE`);
+      t.equal(world.terminalWrites.length, 0,
+        `+${advanceMs} ms: no terminal write`);
+    }
+    t.ok(diagnosticOf(world), 'the wait is observable');
   } finally {
     await disposeWorld(world);
   }
