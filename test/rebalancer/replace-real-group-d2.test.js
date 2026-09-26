@@ -20,9 +20,11 @@ import {
 } from '../../src/rebalancer/operation-workflow-replace-owner.js';
 import {createMockCache, createTestRebalancer} from './test-helpers.js';
 import {
+  LEADERLESS_AUTHORITY_WAITS,
   ORDINARY_PARTITION_ID,
   disposeWorld,
   driveToIntent,
+  electAmongLive,
   enterOwnerAfter,
   fireFallbackTimers,
   openReplaceWorld,
@@ -163,17 +165,60 @@ test('P6 (a): the target alive with slow membership waits, decided ' +
   }
 });
 
-test('P6 (b) / AN9: the target dead with the source still a voter fails ' +
-  'safely, decided from a surviving member\'s port', async (t) => {
-  const world = await openReplaceWorld();
+// F1: with the leader dead (the target led after the handoff) nobody can
+// answer for the committed configuration: the owner waits typed and writes
+// nothing until the survivors elect.
+async function assertLeaderlessTypedWait(t, world, label,
+  {targetGone = true} = {}) {
+  const persisted = await readPersisted(world);
+  t.equal(persisted.workflowStep, WORKFLOW_STEP.STOPPING,
+    `${label}: leaderless - waits`);
+  t.equal(world.terminalWrites.length, 0, `${label}: leaderless - no write`);
+  t.equal(diagnosticOf(world)?.reason, targetGone ?
+    REPLACE_WAIT_REASON.TARGET_DEAD_WITNESS_UNAVAILABLE :
+    REPLACE_WAIT_REASON.WITNESS_UNAVAILABLE,
+  `${label}: leaderless - the wait is the unavailable authority`);
+  const decision = await decideReplaceCompletion(
+    world.coordinator.workflowOwner, persisted);
+  t.ok(LEADERLESS_AUTHORITY_WAITS.includes(decision.observation.reason),
+    `${label}: leaderless - typed: ${decision.observation.reason}`);
+}
+
+// Appends a dying leader had sent are lost with it: the removal R-1f
+// proposed through t is in no survivor's log.
+function loseInFlightMessages(world) {
+  for (const replica of world.group.cluster.replicas.values()) {
+    replica.inbox.length = 0;
+  }
+}
+
+test('P6 (b) / AN9: the target dead with the source still a voter - ' +
+  'leaderless the owner waits typed; the new leader\'s answer fails it ' +
+  'safely with the source retained', async (t) => {
+  const world = await openReplaceWorld({sourceHandler: true});
   try {
     await driveToIntent(world);
+    world.eventsSuppressed = true;
     world.group.kill(world.targetReplicaId);
+    loseInFlightMessages(world);
     setTargetRow(world, ReplicaStatus.FAILED);
     const readsBefore = world.witnessReads.length;
     await world.coordinator.reconcileOperationProgress(
       await readPersisted(world));
     await settleTurns();
+    await assertLeaderlessTypedWait(t, world, 'P6 b');
+    const leader = electAmongLive(world);
+    t.ok(leader !== null && leader !== world.targetReplicaId,
+      `a surviving member leads (${leader})`);
+    // The survivors learn the leader over the next heartbeats; each entry
+    // re-reads the authority (the leader's own answer).
+    for (let round = 0; round < 12 && (await readPersisted(world))
+      .workflowStep === WORKFLOW_STEP.STOPPING; round += 1) {
+      await world.coordinator.reconcileOperationProgress(
+        await readPersisted(world));
+      await settleTurns();
+      world.group.advance();
+    }
     const persisted = await readPersisted(world);
     t.equal(persisted.workflowStep, WORKFLOW_STEP.FAILED, 'FAILED');
     t.match(String(persisted.errorMessage), POST_INTENT_TARGET_DEATH,
@@ -191,9 +236,62 @@ test('P6 (b) / AN9: the target dead with the source still a voter fails ' +
   }
 });
 
-test('P6 (c): the target dead after the committed removal completes, ' +
+// P6 (b'): the same, but the appends the dying leader sent had reached the
+// survivors: the leader's answer is VOTER (uncommitted), FAILED
+// source-retained is written with the source a committed voter at that
+// instant, and the new leader then commits the entry it holds. Recorded as
+// an observation for the lead (the source is not retained after all): the
+// FAILED decision reads the committed configuration, not the survivors'
+// uncommitted logs.
+test('P6 (b\'): FAILED source-retained written while R-1f\'s proposal ' +
+  'sits uncommitted in the survivors\' logs; the oracle at the write ' +
+  'instant holds the source', async (t) => {
+  const world = await openReplaceWorld({sourceHandler: true});
+  try {
+    await driveToIntent(world);
+    world.eventsSuppressed = true;
+    world.group.kill(world.targetReplicaId);
+    setTargetRow(world, ReplicaStatus.FAILED);
+    await world.coordinator.reconcileOperationProgress(
+      await readPersisted(world));
+    await settleTurns();
+    await assertLeaderlessTypedWait(t, world, 'P6 b prime');
+    t.ok(electAmongLive(world) !== null, 'a surviving member leads');
+    for (let round = 0; round < 12 && (await readPersisted(world))
+      .workflowStep === WORKFLOW_STEP.STOPPING; round += 1) {
+      await world.coordinator.reconcileOperationProgress(
+        await readPersisted(world));
+      await settleTurns();
+      world.group.advance();
+    }
+    const persisted = await readPersisted(world);
+    const write = world.terminalWrites.at(-1);
+    t.ok(write, 'a terminal was written');
+    if (write?.step === WORKFLOW_STEP.FAILED) {
+      t.equal(write.sourceCommittedVoter, true,
+        'FAILED: at the write instant the committed configuration held the ' +
+          'source (P1\')');
+      t.equal(write.targetRowStatus, ReplicaStatus.FAILED,
+        'FAILED only with the dead target');
+    } else {
+      t.equal(persisted.workflowStep, WORKFLOW_STEP.REMOVED,
+        'the entry committed before the decision: completed');
+      t.equal(write.sourceCommittedVoter, false, 'REMOVED with the source ' +
+        'absent at the write instant');
+    }
+    world.group.advance(200);
+    t.pass(`observation: after the terminal (${persisted.workflowStep}) the ` +
+      `source is ${world.group.sourceCommittedVoter(world.sourceReplicaId) ?
+        'still' : 'NO LONGER'} a committed voter`);
+  } finally {
+    await disposeWorld(world);
+  }
+});
+
+test('P6 (c): the target dead after the committed removal - leaderless the ' +
+  'owner waits typed; the new leader\'s answer classifies it completed, ' +
   'never a rollback', async (t) => {
-  const world = await openReplaceWorld();
+  const world = await openReplaceWorld({sourceHandler: true});
   try {
     await driveToIntent(world);
     world.eventsSuppressed = true;
@@ -205,8 +303,21 @@ test('P6 (c): the target dead after the committed removal completes, ' +
     await world.coordinator.reconcileOperationProgress(
       await readPersisted(world));
     await settleTurns();
+    await assertLeaderlessTypedWait(t, world, 'P6 c');
+    const leader = electAmongLive(world);
+    t.ok(leader !== null && leader !== world.targetReplicaId,
+      `a surviving member leads (${leader})`);
+    // The removed source may lead until it applies its own removal (F2);
+    // the leader's answer classifies, and never as a rollback.
+    for (let round = 0; round < 12 && (await readPersisted(world))
+      .workflowStep === WORKFLOW_STEP.STOPPING; round += 1) {
+      await world.coordinator.reconcileOperationProgress(
+        await readPersisted(world));
+      await settleTurns();
+      world.group.advance();
+    }
     t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.REMOVED,
-      'completed from the surviving members\' committed absence');
+      'completed from the leader\'s committed absence');
     t.equal(world.terminalWrites.at(-1)?.sourceCommittedVoter, false,
       'the write instant: the source is absent');
   } finally {
@@ -235,28 +346,31 @@ test('AN2: a healthy owner whose lease would have expired (31 s) is not ' +
   }
 });
 
-test('AN6: REMOVE_PEER lost at a leader that was the source; the new ' +
-  'leader\'s term wakes R-1f, which completes the REPLACE', async (t) => {
+// A dead leader-source (the kill simulation, not the F2 handler: this cell
+// is about a source that died at the effect, before any RemoveNode).
+test('AN6: the leader-source dies at the effect; leaderless the owner ' +
+  'waits typed and proposes nothing; the new leader\'s answer wakes R-1f, ' +
+  'which completes the REPLACE', async (t) => {
   const world = await openReplaceWorld({partitionId: ORDINARY_PARTITION_ID,
-    sourceLeads: true});
+    sourceLeads: true, sourceStopsAtEffect: true});
   try {
     t.equal(world.group.leader(), world.sourceReplicaId, 'setup: source leads');
     await driveToIntent(world);
-    // The effect stopped the leader: the proposal R-1f sent through the
-    // target had no leader to reach.
     t.equal(world.group.leader(), null, 'the group has no leader');
-    const issued = world.retirements.length;
-    t.ok(issued >= 1, 'R-1f proposed once');
+    t.equal(world.retirements.length, 0,
+      'F1: no leader answers, so R-1f proposes nothing (no proposal to a ' +
+        'dead leader is counted as issued)');
+    await assertLeaderlessTypedWait(t, world, 'AN6', {targetGone: false});
     const timersBefore = world.fallbackTimers.filter((h) => h.fired).length;
     // The election: the relay announces the new leader and term to the
-    // owner, which re-drives on the changed level (no fallback).
+    // owner, whose next decision reads the new leader (no fallback).
     const outcome = await runToQuiescence(world, {rounds: 30,
       useFallback: false});
     t.equal(outcome.workflowStep, WORKFLOW_STEP.REMOVED, 'completed');
     t.equal(world.fallbackTimers.filter((h) => h.fired).length, timersBefore,
       'no fallback timer fired: the leader/term wake drove it');
-    t.ok(world.retirements.length > issued,
-      'R-1f re-drove after the leadership change');
+    t.ok(world.retirements.length >= 1,
+      'R-1f proposed once a leader answered');
     t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), false,
       'the source left the committed configuration');
   } finally {

@@ -412,9 +412,9 @@ const B12_SHAPES = Object.freeze([
 ]);
 
 for (const shape of B12_SHAPES) {
-  test(`anchor (B12, ${shape.key} + self): R-1a answers ${shape.verdict} ` +
-    'on a witness below its gate whose replayed view omits the committed ' +
-    'voter it asks about, and STILL_VOTER once the gate is open', async () => {
+  test(`anchor (B12, ${shape.key} + self): a witness below its gate answers ` +
+    `${shape.verdict} for the committed voter it asks about; R-1a decides ` +
+    'STILL_VOTER from the leader below and above the gate (F1)', async () => {
     await b12Shape(shape);
   });
 }
@@ -461,10 +461,19 @@ async function b12Shape({key, sourceLetter, belowGate, verdict}) {
     const below = await decideReplaceCompletion(owner, operation);
     assert.notEqual(below.verdict, REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED,
       'R-1a never retires a source from a below-gate witness');
-    assert.ok([verdict, REPLACE_COMPLETION_VERDICT.STILL_VOTER]
-      .includes(below.verdict),
-    `it waits, typed (${below.verdict}; under F1 the leader's answer may ` +
-      'already decide STILL_VOTER)');
+    // F1 (owner ruling): the completion authority is the leader's own
+    // answer, reached through the target's redirect; the below-gate target's
+    // transient view (WITNESS_BELOW_GATE / UNRESOLVED, asserted above as the
+    // target's own answer) is a route, never the verdict. The leader's gate
+    // is open by construction, so the verdict below the target's gate is
+    // exactly STILL_VOTER, from the leader.
+    assert.equal(below.verdict, REPLACE_COMPLETION_VERDICT.STILL_VOTER,
+      'F1: the leader\'s answer decides STILL_VOTER below the target\'s ' +
+        `gate (the target's own view: ${verdict})`);
+    assert.equal(below.observation.replicaId, below.observation.leaderReplicaId,
+      'the below-gate verdict is the leader\'s own answer');
+    assert.equal(below.observation.gateOpen, true,
+      'the answering leader\'s gate is open');
     cap.value = UNBOUNDED;
     assert.ok(settle(model, () =>
       model.node(target).readStatus().gateOpen === true, [leader]),

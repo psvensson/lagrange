@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "importGraphSchemaVersion": "global-owner-debt-import-graph-v2",
-  "sourceDigest": "9d9a0fe0aa56d7ce7997f03ceb5c913e0b46cde8a48464201aaf8ab1e6d4ac8a",
-  "producerInputDigest": "22cb023d0acf79667271153bea246586be33984a51a1705d2374fa3070788abb",
+  "sourceDigest": "b2c4b53a3629e09124e092f4a3e19ca693ee46fde95af16897a5a4d5d13aeb45",
+  "producerInputDigest": "0f7d9a2671ac3f6f505d5a939b39b64466022afdee0576574b5a88178ec63dd5",
   "resolverStateDigest": "23bc56cf8b3c95299091aa029dae7eb69be031434d15e5f000f7f327a234969c",
-  "snapshotDigest": "67c2bdf6cc6a8cef86264eec54b44be0ba312fb1ea06771d6e2812b239e41788"
+  "snapshotDigest": "59e6168289bd64e5a949a2fa95f54253ac6e885370e93db0defd66a1e0f3adb9"
 }

@@ -115,3 +115,57 @@ Not a finding, recorded: S5 shows the owner's per-operation lane holding a secon
 
 - Local, one file at a time through `node --test` (each file 3-40 s; real rs-raft groups are fast): completion 104/106, d2 50/50, latency 20/20, scheduling 58/60, handoff 33/35; R-2 property 136/136.
 - Lab cone run: see the commit message and the progress note (`lab test changed --base-sha ab7669fd0 --lane all --split`).
+
+---
+
+# Round 2 (2026-09-27): the evidence under F1, F2, F3 (production frozen at d46777ecf)
+
+**Author:** the same evidence author, round 2 (worktree `evidence-replace-r2`, branch `evidence/evidence-replace-r2-2026-09-27`, evidence base `fc9861157`). No `src/` change. Production `d46777ecf` = `ab7669fd0` + F1 (completion authority = the leader-answered current committed configuration through the one port read, one redirect; no leader / unnamed leader => typed wait, nothing written), F2 (a removed replica keeps participating until its own applied configuration drops it, then retires; the REMOVING row triggers the RemoveNode), F3 (every post-intent send re-runs remove safety; a FAIL-class answer after the intent is a typed safety wait), the per-leg machinery deletion (`LEADERSHIP_PENDING`), the S9 label fix, V1a (absent stamp refused; founders carry an explicit GENESIS stamp), V2 (a conf change the core would drop is answered DEFERRED and re-driven on CONF_CHANGE_APPLIED), F4 readiness.
+
+## R2.1 What changed in the evidence
+
+- **Harness** (`replace-real-group-harness.js`): `sourceHandler: true` runs the PRODUCTION `ReplicaHandler` over the source's real port (fix-f2's fixture `test/node/replica-removal-consensus-exit-fixture.js`); its row writes reach the owner's node as observed remote rows (the CDC change feed that wakes the owner on its source's row: `observeRemoteRow` / `observeRemoteDelete`), so the REMOVING row wakes the owner without the fallback. `electAmongLive` and the typed leaderless reasons (`LEADERLESS_AUTHORITY_WAITS`) are exported.
+- **Choice of source model, recorded.** Every cell whose source lives runs the production handler (P1 sink, STOPPING owner, executor outcome, repair, ordinary partition, target gone, P1', P6 b/b'/c, B13). The kill simulation (`sourceStopsAtEffect`) stays only where the cell is about a source that died: AN10 (failure-detector-dead source), AN6 (leader-source dies at the effect), ACTIVE adoption (a source whose lifecycle retired without an intent), stop-phase COMPLETED (a source already gone), AN11 recorded form (the source dies, then returns). With F2 the two models differ only in whether the source acks its own removal, which is exactly what those dead-source cells hold fixed.
+- **Re-expressed under F1** (all green on d46777ecf): completion #9 (target gone), #13 (B12 live), #16 (P1'); d2 P6(b), P6(c), AN6. With the target dead after the handoff (it led), the group is leaderless: the owner waits typed - the diagnostic reason is `TARGET_DEAD_WITNESS_UNAVAILABLE` (target gone) or `WITNESS_UNAVAILABLE` (AN6, target alive), the verdict `UNAVAILABLE`, the observation's reason one of `completion_authority_leader_{unknown,unreachable}` - and writes nothing; once the survivors elect and learn the leader (heartbeats), the leader's own answer decides: P6(b) FAILED `replace_target_dead_source_retained` with the fold holding the source at the write; P6(c) REMOVED with the fold absent at the write (never a rollback), including when the removed source leads until it applies its own removal (F2); #9 likewise; AN6: the dead leader-source is proposed nothing (0 retirements while leaderless: no proposal to a dead leader is counted as issued), the election's relayed leader/term wakes the owner, R-1f proposes, REMOVED with 0 fallback timers.
+- **B12.** Under F1 the below-gate target's transient view is a route, never the verdict. Pinned: `evidence-o1-anchors.test.js` B12 (H1 + self, H5 + self) now asserts exactly `STILL_VOTER` from the leader's own answer (`observation.replicaId === leaderReplicaId`, `gateOpen` true) below and above the target's gate; the target's own answer (WITNESS_BELOW_GATE-shaped ABSENT / UNRESOLVED) stays asserted as setup. The live B12 cell (a never-admitted target, no traffic, no leader named) pins `UNAVAILABLE` with `completion_authority_leader_unknown`: the target's view decides nothing. The two are one rule: the verdict is the leader's answer when the target names a leader, a typed wait otherwise.
+- **S11 repair confirmed legitimate** (fix-f1 `b7827763e`): the concurrent REMOVE row is stamped on the owner's clock. The PENDING step timeout is 30 s; a row stamped on the wall clock before the cell's +61 s advance was 61 s old by the owner's clock and CL-043 rightly excludes a stale operation (`isPriorityRecoveryOperationDrainStepStale`) from the serialization gate, so the old ordering asserted nothing about F3. The property (a LIVE concurrent operation defers the first send and every re-send) is asserted unchanged; S11 x2 green on d46777ecf and red under M11 below. Not a weakening.
+- **`test/integration/ack-delivery.integration.test.js`** (red since V1a): its CREATE_REPLICA joins the existing group {p1-r1}, so it now carries the COMMITTED stamp read from the leader's own port (`READ_COMMITTED_MEMBERSHIP`, BOOTSTRAP purpose, `committedStampOfAnswer` + `validateBootstrapMembershipStamp`, the creation owner's way) in `bootstrap_membership`; never a GENESIS override. 5/5 green.
+
+## R2.2 Per-cell verdicts on d46777ecf (local)
+
+| File | Result | Notes |
+|---|---|---|
+| replace-real-group-completion.test.js | 121/121 | AN11 x2 GREEN (F1 closed F1); target-gone, B12 live, P1' re-expressed |
+| replace-real-group-d2.test.js | 73/73 | P6(b), P6(c), AN6 re-expressed; new P6(b') observation cell |
+| replace-real-group-latency.test.js | 20/20 | unchanged |
+| replace-real-group-scheduling.test.js | 60/60 | S11 x2 GREEN (F3 closed F3; repair confirmed) |
+| replace-real-group-handoff.test.js | 40/40 | B13 production order GREEN (F2 closed F2; the source leaves on its applied removal, retires, the partition keeps quorum) |
+| evidence-o1-anchors.test.js | 7/7 | B12 pinned |
+| ack-delivery.integration.test.js | 5/5 | proper join |
+
+**P6(b') observation (not a violation of a stated property; for the lead).** With the target (leader) dying after R-1f's proposal was appended and replicated but not yet committed, the survivors' logs hold the RemoveNode. The outcome is nondeterministic: if the new leader commits it before the owner's decision the REPLACE completes (observed in the recorded run: REMOVED, the source no longer a voter); if the decision comes first, FAILED `source_retained` is written with the fold holding the source at that instant, and the new leader then commits the entry - the source is not retained after all, and the partition is left with a FAILED REPLACE and one voter fewer for the planner to repair. The FAILED decision reads the committed configuration, not the survivors' uncommitted logs. P1' holds either way (FAILED only with a dead target; the write-instant oracle is exact). The deterministic P6(b) cell loses the dying leader's in-flight appends.
+
+## R2.3 Mutation matrix on d46777ecf (`scratchpad/mutate-ev2.sh`, scratch copies)
+
+| Mechanism (what F1-F3 changed) | Mutation | Red |
+|---|---|---|
+| membership from rows | `completionVerdictOf` answers SOURCE_RETIRED on a gone/retiring row | completion 58 red, d2 41 red |
+| completion authority = the target's own view (F1 undone) | `readReplaceCompletionAuthority` returns the first answer, no redirect | completion 14 red: AN11 x2, target gone, B12 live, P1' |
+| R-1a ignores the gate | gateOpen check removed | `replace-source-removal-owner.test.js` W3 (double) only; participation-gate B12 and the anchors stay green (E3) |
+| safety skipped post-intent (F3 undone) | evaluator gates on `isReplaceRemovePhase` (ACTIVE only) | scheduling S11 x2; `replace-remove-safety-post-intent.test.js` |
+| source retires before its removal commits (F2 undone) | `awaitReplicaConsensusExit` resolves BACKSTOP at once | handoff B13 production order (4 red); `test/node/replica-removal-consensus-exit.test.js` (7 red) |
+
+**E3 (evidence finding):** under F1 the `gateOpen` branch of `completionVerdictOf` is unreachable on a real chain - the verdict is always a leader's answer and a leader's gate is open by construction - so only the double witness (W3) can turn its removal red. Not a defect; the branch is a fail-closed guard on the answer contract.
+
+## R2.4 Timing table (round 2)
+
+| Relationship | Value | Where it shows |
+|---|---|---|
+| F2 consensus-exit backstop vs the former REMOVING budget | 30 s (`REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS`) < 60 s (`REMOVING_TIMEOUT_MS`): a source whose removal nobody proposed retires before the REMOVE's step budget; the REPLACE owner is budget-exempt post-intent and re-drives R-1f regardless | B13 production order (exit `own-removal-applied`, no backstop); the exit witnesses (node) |
+| V2 deferral vs the SYNCING budget | event-driven (re-driven on CONF_CHANGE_APPLIED, no timer) inside the joiner's 300 s `SYNCING_TIMEOUT_MS`; a deferred AddNode resolves at the next applied configuration change | fix-f2's admission re-drive witnesses; not a REPLACE-owner cell |
+| leaderless wait -> resolution | one election (150-300 ms group timing) plus the heartbeats the survivors need to learn the leader; each owner entry re-reads the authority | #9, P6(b), P6(c), P1', AN6 (0 fallback timers in AN6) |
+| CL-043 staleness of a concurrent PENDING operation | 30 s (`PENDING_TIMEOUT_MS`) by the owner's clock | S11 (a row stamped on the owner's clock is live; the +61 s cell) |
+
+## R2.5 Findings
+
+None new against production in round 2: F1, F2, F3 are closed on d46777ecf by the same witnesses that were red on ab7669fd0. Observation P6(b') and evidence finding E3 above are for the lead.
