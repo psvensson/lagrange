@@ -691,3 +691,95 @@ test('W13 (BR12): a deferred-visibility snapshot waits at the removal ' +
     await harness.coordinator.shutdown();
   }
 });
+
+// F1 (committed-read amendment, owner ruling 2026-09-26): the completion
+// authority is the group's leader-answered CURRENT committed configuration,
+// reached through the witness read (one redirect from the target to the
+// leader it names). The target's own view is never the verdict.
+const PEER_REPLICA_ID = `${PARTITION_ID}-r3`;
+const PEER_NODE_ID = 'node-3';
+
+function peerRow() {
+  return {...targetRow(ReplicaStatus.ACTIVE), service_id: PEER_REPLICA_ID,
+    replica_id: PEER_REPLICA_ID, node_id: PEER_NODE_ID, raft_role: 'leader',
+    address: `${PEER_NODE_ID}/partition/${PEER_REPLICA_ID}`};
+}
+
+async function completionAfterTargetSeesAbsence(harness, leaderReplicaId) {
+  await driveToRemovalIntent(harness);
+  // The target has applied the removal (its own view: the source absent) and
+  // names who it thinks leads.
+  harness.witness.commitRemoval();
+  harness.witness.leaderReplicaId = leaderReplicaId;
+  await harness.owner.completeOperation(await persistedOperation(harness));
+  await harness.coordinator.reconcileOperationProgress(
+    await persistedOperation(harness));
+  return persistedOperation(harness);
+}
+
+test('W14 (F1): the leader-answered committed configuration decides ' +
+  'completion; an unknown, unreachable or non-leading answer waits', async (t) => {
+  await t.test('no leader known: WAIT, nothing written', async (t) => {
+    const harness = await createHarness();
+    try {
+      const persisted = await completionAfterTargetSeesAbsence(harness, null);
+      t.equal(persisted.workflowStep, WORKFLOW_STEP.STOPPING,
+        'the target\'s own absence is not the verdict');
+    } finally {
+      await harness.coordinator.shutdown();
+    }
+  });
+  await t.test('the named leader unreachable (no route): WAIT', async (t) => {
+    const harness = await createHarness();
+    try {
+      const persisted = await completionAfterTargetSeesAbsence(harness,
+        PEER_REPLICA_ID);
+      t.equal(persisted.workflowStep, WORKFLOW_STEP.STOPPING,
+        'nothing is concluded without the leader\'s answer');
+    } finally {
+      await harness.coordinator.shutdown();
+    }
+  });
+  await t.test('the redirect answers NOT_LEADER: WAIT (one redirect only)',
+    async (t) => {
+      const elsewhere = createReplaceWitness({
+        leaderReplicaId: SOURCE_REPLICA_ID, sourceVoter: false,
+        commitIndex: INTENT_COMMIT_INDEX + 5});
+      const harness = await createHarness({
+        members: {[PEER_REPLICA_ID]: elsewhere}});
+      try {
+        harness.coordinator.systemTableCache.upsert('services', peerRow());
+        const persisted = await completionAfterTargetSeesAbsence(harness,
+          PEER_REPLICA_ID);
+        t.equal(persisted.workflowStep, WORKFLOW_STEP.STOPPING,
+          'a redirected answer from a non-leader decides nothing');
+      } finally {
+        await harness.coordinator.shutdown();
+      }
+    });
+  await t.test('the leader still holds the source (re-admitted): ' +
+    'STILL_VOTER and R-1f re-drives; its absence then completes', async (t) => {
+    const leader = createReplaceWitness({leaderReplicaId: PEER_REPLICA_ID,
+      sourceVoter: true, commitIndex: INTENT_COMMIT_INDEX + 5});
+    const harness = await createHarness({
+      members: {[PEER_REPLICA_ID]: leader},
+      sourceStatus: ReplicaStatus.FAILED});
+    try {
+      harness.coordinator.systemTableCache.upsert('services', peerRow());
+      const persisted = await completionAfterTargetSeesAbsence(harness,
+        PEER_REPLICA_ID);
+      t.equal(persisted.workflowStep, WORKFLOW_STEP.STOPPING,
+        'the leader\'s configuration holds the source: no completion');
+      t.ok(harness.witness.retirements.length +
+        leader.retirements.length >= 1,
+      'the removal is re-driven');
+      leader.commitRemoval();
+      await harness.coordinator.reconcileOperationProgress(
+        await persistedOperation(harness));
+      t.equal((await persistedOperation(harness)).workflowStep,
+        WORKFLOW_STEP.REMOVED, 'the leader\'s committed absence completes it');
+    } finally {
+      await harness.coordinator.shutdown();
+    }
+  });
+});

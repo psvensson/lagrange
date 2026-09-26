@@ -66,18 +66,12 @@ export const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_STOPPING_OPERATION_ID =
   'priority-drain-remote-owner-unavailable-stopping';
 export const PRIORITY_DRAIN_TEST_TERMINAL_GUARD_OPERATION_ID =
   'priority-drain-terminal-guard';
-export const PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_OPERATION_ID =
-  'priority-drain-follower-election-safe';
 export const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_PARTITION_ID =
   'sql_write_operations-p1';
 export const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE = 'partition';
 export const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE = 'follower';
 export const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_NO_DELIVERY_ASSERTION =
   'remote owner unavailable priority drain should not replay source removal';
-export const PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_DISPATCH_ASSERTION =
-  'fresh replacement election evidence should dispatch source removal';
-export const PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_STEP_ASSERTION =
-  'fresh replacement election evidence should advance source removal';
 export const PRIORITY_DRAIN_TEST_TERMINAL_GUARD_TRANSITION_ASSERTION =
   'stale direct priority transition should not commit';
 export const PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STEP_ASSERTION =

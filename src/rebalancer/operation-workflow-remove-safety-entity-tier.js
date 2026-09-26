@@ -88,7 +88,7 @@ async function evaluateEntityRemoveSafety(context, operation, identity) {
 
   const projectedRows = countableRows.filter((row) =>
     !context.isOperationReplicaRow(row, {...operation, replicaId: sourceReplicaId}));
-  if (context.repository.isReplaceRemovePhase(operation)) {
+  if (context.repository.isReplaceRemoveDispatchPhase(operation)) {
     const replacementReplicaId =
       context.repository.getReplaceTargetReplicaId(operation) ||
       operation.replicaId ||

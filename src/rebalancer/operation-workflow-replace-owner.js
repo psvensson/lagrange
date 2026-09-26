@@ -46,7 +46,7 @@ import {
 } from './operation-workflow-replace-intent.js';
 import {
   isReplaceTargetGone,
-  readReplaceSurvivingMembership,
+  readReplaceCompletionAuthority,
 } from './operation-workflow-replace-surviving-membership.js';
 import {isPartitionReplaceOwnerPhase} from './replica-operation-step-policy.js';
 import {
@@ -58,6 +58,8 @@ import {
   clearAllReplaceHandoffAttempts,
   clearReplaceHandoffAttempt,
   isReplaceHandoffAttemptUnresolved,
+  readReplaceHandoffAttempt,
+  readReplaceHandoffDecisionUnresolved,
 } from './operation-workflow-replace-handoff-attempt.js';
 import {
   REPLACE_INTENT_FIELD,
@@ -175,23 +177,22 @@ const STOPPING_OBSERVATION_UNAVAILABLE = 'unavailable';
  * @return {Promise<Object>} Frozen {verdict, observation}.
  */
 async function decideReplaceCompletion(owner, operation) {
-  let observation = await readReplaceWitnessMembership(owner, operation);
-  if (observation.state === PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE &&
-      isReplaceTargetGone(owner, operation)) {
-    // D2: t is gone and cannot answer; its surviving members' own ports
-    // decide (an absence there is a committed removal).
-    observation = await readReplaceSurvivingMembership(owner, operation);
-  }
+  // F1: the group's leader-answered current committed configuration; t's
+  // own view (and, t gone, a survivor's) only routes the question (D2).
+  const observation = await readReplaceCompletionAuthority(owner, operation);
   return Object.freeze({
     verdict: await completionVerdictOf(owner, operation, observation),
     observation,
   });
 }
 
-// R-1a on one witness observation: a voter is a voter; an absence retires
-// the source only when the witness is at or past its participation gate
-// (B12: gateOpen from its port's committed-membership read, never a row)
-// and at or past the intent's commit index C0 (AN11).
+// R-1a on the completion authority's observation (the leader's own answer,
+// F1): a voter is a voter; an absence retires the source only when the
+// answering replica is at or past its participation gate (B12: gateOpen from
+// its port's committed-membership read - the ruling requires it when the
+// target answers as leader; it is required of every answer here, a leader's
+// gate being open by construction) and at or past the intent's commit index
+// C0 (AN11).
 async function completionVerdictOf(owner, operation, observation) {
   if (observation.state === PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER) {
     return REPLACE_COMPLETION_VERDICT.STILL_VOTER;
@@ -475,11 +476,18 @@ function recordReplaceOwnerWait(owner, operation, reason, context = {}) {
     return false;
   }
   const observation = context.observation || null;
+  const handoffPhase = operation.workflowStep === WORKFLOW_STEP.ACTIVE;
   recordReplaceWaitDiagnostic(owner, operation, reason, observation, {
+    // S9: at ACTIVE the attempt is the named handoff's, labelled from the
+    // decision that read it (its witness), not re-classified without one.
+    handoffAttempt: handoffPhase ?
+      readReplaceHandoffAttempt(owner, operation.operationId) : null,
     ownerPhase: classifyReplaceOwnerPhase({
       workflowStep: operation.workflowStep,
-      handoffAttemptUnresolved: isReplaceHandoffAttemptUnresolved(
-        owner, operation.operationId, observation),
+      handoffAttemptUnresolved: readReplaceHandoffDecisionUnresolved(
+        owner, operation.operationId) ??
+        isReplaceHandoffAttemptUnresolved(
+          owner, operation.operationId, observation),
       sourceRetired: false,
       sourceRowClass: context.sourceRow ?
         sourceRowClassOf(context.sourceRow) : REPLACE_SOURCE_ROW_CLASS.UNKNOWN,

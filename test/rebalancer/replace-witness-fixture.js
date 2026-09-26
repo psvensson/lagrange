@@ -24,6 +24,9 @@ const PORT_OUTCOME_PROPOSED = 'PROPOSED';
  * @param {Object} options
  * @param {string|null} [options.leaderReplicaId] - Who the witness sees
  *   leading.
+ * @param {boolean} [options.addressedLeads=false] - The addressed replica
+ *   answers as the group's leader (F1: the completion authority is the
+ *   leader's answer) when the test does not know the target id up front.
  * @param {boolean} [options.sourceVoter=true] - Whether the source is in the
  *   witness's committed voters.
  * @param {boolean} [options.available=true] - Whether the witness answers.
@@ -32,6 +35,7 @@ const PORT_OUTCOME_PROPOSED = 'PROPOSED';
 export function createReplaceWitness(options = {}) {
   const witness = {
     leaderReplicaId: options.leaderReplicaId ?? null,
+    addressedLeads: options.addressedLeads === true,
     sourceVoter: options.sourceVoter !== false,
     available: options.available !== false,
     commitIndex: options.commitIndex ?? DEFAULT_COMMIT_INDEX,
@@ -75,7 +79,9 @@ export function createReplaceWitness(options = {}) {
             term: witness.term,
             commitIndex: witness.commitIndex,
             gateOpen: witness.gateOpen,
-            leaderReplicaId: witness.leaderReplicaId,
+            leaderReplicaId: witness.addressedLeads ?
+              payload[ReplicaOperationField.REPLICA_ID] :
+              witness.leaderReplicaId,
             transferWindowMaxMs: witness.transferWindowMaxMs,
           },
         };

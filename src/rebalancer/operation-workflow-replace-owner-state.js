@@ -94,7 +94,8 @@ function replaceIntentEntryOf(operation) {
  * @param {string} reason
  * @param {Object|null} observation
  * @param {Object} [details] - {ownerPhase, stalenessClass,
- *   retirementAdmissible} as the waiting decision classified them.
+ *   retirementAdmissible, handoffAttempt} as the waiting decision classified
+ *   them (handoffAttempt: the ACTIVE named-handoff attempt, if any).
  * @return {Object} The diagnostic.
  */
 function recordReplaceWaitDiagnostic(owner, operation, reason, observation,
@@ -114,8 +115,10 @@ function recordReplaceWaitDiagnostic(owner, operation, reason, observation,
     reason,
     waitingSinceMs,
     waitedMs: nowMs - waitingSinceMs,
-    ...retirementAttemptSummaryOf(
-      state.retirementAttemptByOperationId.get(operation.operationId)),
+    ...(details.handoffAttempt ?
+      handoffAttemptSummaryOf(details.handoffAttempt) :
+      retirementAttemptSummaryOf(
+        state.retirementAttemptByOperationId.get(operation.operationId))),
     ownerPhase: details.ownerPhase ?? REPLACE_NOT_IN_OWNER_PHASE,
     stalenessClass: details.stalenessClass ??
       REPLACE_OWNER_STALENESS_CLASS.NEVER_STALE_BY_AGE,
@@ -134,6 +137,16 @@ function retirementAttemptSummaryOf(attempt) {
     lastAttemptSeq: attempt?.attemptSeq ?? null,
     lastAttemptUncertain: attempt ? attempt.answer === null : false,
     attemptRebuiltAfter: attempt?.rebuiltAfter ?? REPLACE_ATTEMPT_NOT_REBUILT,
+  };
+}
+
+// S9: at ACTIVE the attempt is the named-target handoff's (its answer
+// class is null until answered).
+function handoffAttemptSummaryOf(attempt) {
+  return {
+    lastAttemptSeq: attempt.attemptSeq,
+    lastAttemptUncertain: attempt.answerClass === null,
+    attemptRebuiltAfter: REPLACE_ATTEMPT_NOT_REBUILT,
   };
 }
 

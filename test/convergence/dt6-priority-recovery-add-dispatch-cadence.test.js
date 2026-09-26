@@ -661,8 +661,10 @@ async function runFormationCadenceScenario() {
   // The self-move REPLACE's target configuration, as its owner reads it
   // (quest replace-source-removal-owner, C1): the source leaves it when the
   // modelled self-move reaches its terminal.
+  // F1: each witness answers as its group's leader (the completion
+  // authority is the leader-answered configuration).
   const replaceWitnesses = installReplaceWitnesses(
-    coordinator.workflowOwner.messageRouter);
+    coordinator.workflowOwner.messageRouter, {addressedLeads: true});
 
   // Per-partition rebalancer loop analogue: one attempt per wake, a typed
   // retryable skip re-arms the priority retry cadence, any completion wakes

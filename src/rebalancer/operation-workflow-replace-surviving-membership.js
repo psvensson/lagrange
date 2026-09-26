@@ -1,19 +1,23 @@
 /**
  * Owner contract:
- * Owner: the REPLACE owner's reading of committed membership when its
- * witness, the target t, is gone (quest replace-source-removal-owner; owner
- * decision D2, "target death is handled from committed membership").
- * Inputs: the target's replica row (failure detector FAILED, or REMOVED);
- * the surviving members of the partition - the source first, then the other
- * replicas the cache holds - each read through its own port
- * (READ_REPLICA_MEMBERSHIP).
- * Canonical output: whether the target is gone, and one membership
- * observation of the source: ABSENT when any surviving member's applied
- * configuration no longer holds it (an applied configuration only ever
- * holds committed changes, so absence is proof), else VOTER when one holds
- * it, else UNAVAILABLE.
- * Prohibited: no decision; never a row as membership; used only while t
- * cannot answer.
+ * Owner: the REPLACE owner's completion authority (quest
+ * replace-source-removal-owner, R-1a as amended by the committed-read
+ * amendment, owner ruling on FINDING F1, 2026-09-26): the group's
+ * leader-answered CURRENT committed configuration. The target t's own view is
+ * a wake and a route, never the verdict: a lagging target shows an old
+ * configuration (a source removed and since re-admitted still reads absent
+ * there).
+ * Inputs: the witness read (READ_REPLICA_MEMBERSHIP, the port's
+ * committed-membership read with WITNESS purpose) of t - or, when t is gone
+ * (failure detector FAILED, or row REMOVED; D2), of the surviving members,
+ * source first; the leader each answer names; the partition's cached rows as
+ * a route to that leader's node only (the answer's own leader role is the
+ * check).
+ * Canonical output: the leader's own answer (its replica leads in its own
+ * observation), reached with at most one redirect; otherwise UNAVAILABLE
+ * with a REPLACE_COMPLETION_AUTHORITY_WAIT reason. Whether the target is
+ * gone.
+ * Prohibited: no decision; never a row as membership; no second redirect.
  */
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
@@ -92,36 +96,107 @@ function survivingMembersOf(owner, operation) {
   return members;
 }
 
-/**
- * The source's membership as the surviving members' own ports report it.
- * @param {Object} owner
- * @param {Object} operation
- * @return {Promise<Object>} Frozen observation (a membership state plus the
- *   answering member's commit index, applied index, leader and term).
- */
-async function readReplaceSurvivingMembership(owner, operation) {
-  let voterObservation = null;
-  let lastUnavailable = null;
+// Why the completion authority could not be read (the owner waits).
+const REPLACE_COMPLETION_AUTHORITY_WAIT = Object.freeze({
+  // No answering replica named a leader.
+  LEADER_UNKNOWN: 'completion_authority_leader_unknown',
+  // The named leader's node could not be routed to, or it did not answer.
+  LEADER_UNREACHABLE: 'completion_authority_leader_unreachable',
+  // The redirected answer came from a replica that does not lead.
+  NOT_LEADER: 'completion_authority_not_leader',
+  // No replica answered at all.
+  NO_ANSWER: 'completion_authority_no_answer',
+});
+
+function authorityUnavailable(reason) {
+  return Object.freeze({
+    state: PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE,
+    reason,
+  });
+}
+
+function isAnswered(observation) {
+  return observation.state !== PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE;
+}
+
+// An answer is the leader's own when its replica leads in its observation.
+function isLeaderAnswer(observation) {
+  return typeof observation.replicaId === 'string' &&
+    observation.leaderReplicaId === observation.replicaId;
+}
+
+// The node a named replica is routed to: the REPLACE's own source and target
+// nodes, else the partition's cached replica rows (a route, never an
+// answer).
+function memberRouteOf(owner, operation, replicaId) {
+  const {sourceReplicaId, targetReplicaId} =
+    replaceReplicaIdsOf(owner, operation);
+  if (replicaId === targetReplicaId) {
+    return {replicaId, nodeId: operation.targetNodeId};
+  }
+  if (replicaId === sourceReplicaId) {
+    return {replicaId, nodeId: operation.sourceNodeId};
+  }
+  const rows = typeof owner.getCachedCriticalReplicaRows ===
+    OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
+    owner.getCachedCriticalReplicaRows(operation?.partitionId) : [];
+  const row = (Array.isArray(rows) ? rows : []).find((candidate) =>
+    (candidate?.replica_id || candidate?.service_id) === replicaId);
+  return typeof row?.node_id === 'string' && row.node_id.length > 0 ?
+    {replicaId, nodeId: row.node_id} : null;
+}
+
+// The first answer of the addressees: t, or - t gone - the surviving
+// members, source first.
+async function readFirstAnswer(owner, operation) {
+  const first = await readReplaceWitnessMembership(owner, operation);
+  if (isAnswered(first) || !isReplaceTargetGone(owner, operation)) {
+    return first;
+  }
   for (const member of survivingMembersOf(owner, operation)) {
     const observation =
       await readReplaceWitnessMembership(owner, operation, member);
-    if (observation.state === PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT) {
+    if (isAnswered(observation)) {
       return observation;
     }
-    if (observation.state === PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER) {
-      voterObservation = voterObservation || observation;
-    } else {
-      lastUnavailable = observation;
-    }
   }
-  return voterObservation || lastUnavailable || Object.freeze({
-    state: PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE,
-    reason: null,
-  });
+  return authorityUnavailable(REPLACE_COMPLETION_AUTHORITY_WAIT.NO_ANSWER);
+}
+
+/**
+ * The completion authority: the leader's answer, reached from the first
+ * answering addressee with at most one redirect to the leader it names.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @return {Promise<Object>} The leader's frozen witness observation, or
+ *   UNAVAILABLE with a REPLACE_COMPLETION_AUTHORITY_WAIT reason.
+ */
+async function readReplaceCompletionAuthority(owner, operation) {
+  const answer = await readFirstAnswer(owner, operation);
+  if (!isAnswered(answer) || isLeaderAnswer(answer)) {
+    return answer;
+  }
+  if (typeof answer.leaderReplicaId !== 'string' ||
+      answer.leaderReplicaId.length === 0) {
+    return authorityUnavailable(REPLACE_COMPLETION_AUTHORITY_WAIT.LEADER_UNKNOWN);
+  }
+  const route = memberRouteOf(owner, operation, answer.leaderReplicaId);
+  if (route === null) {
+    return authorityUnavailable(
+      REPLACE_COMPLETION_AUTHORITY_WAIT.LEADER_UNREACHABLE);
+  }
+  const redirected =
+    await readReplaceWitnessMembership(owner, operation, route);
+  if (!isAnswered(redirected)) {
+    return authorityUnavailable(
+      REPLACE_COMPLETION_AUTHORITY_WAIT.LEADER_UNREACHABLE);
+  }
+  return isLeaderAnswer(redirected) ? redirected :
+    authorityUnavailable(REPLACE_COMPLETION_AUTHORITY_WAIT.NOT_LEADER);
 }
 
 export {
   isReplaceTargetGone,
   observedReplaceTargetStatus,
-  readReplaceSurvivingMembership,
+  readReplaceCompletionAuthority,
 };

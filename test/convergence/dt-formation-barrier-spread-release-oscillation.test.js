@@ -177,7 +177,10 @@ function buildScenario(options = {}) {
   // Each REPLACE target's own configuration, as the REPLACE owner reads it
   // (quest replace-source-removal-owner, C1): the source stays a voter until
   // the simulated STOPPING effect removes it.
-  const replaceWitnesses = installReplaceWitnesses(coordinator.messageRouter);
+  // F1: each witness answers as its group's leader (the completion
+  // authority is the leader-answered configuration).
+  const replaceWitnesses = installReplaceWitnesses(coordinator.messageRouter,
+    {addressedLeads: true});
   coordinator.repository.systemTableCache = cache;
   const clock = clockAtBuild;
   const stormStartAt = BARRIER_START_MS + STORM_START_OFFSET_MS;
