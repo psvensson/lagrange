@@ -1,4 +1,6 @@
 (component
+  ;; 1. Describe the only host capabilities this component is allowed to use.
+  ;; These are typed Component Model imports, not ambient database access.
   (type $context-type
     (instance
       (type $read-type
@@ -18,6 +20,8 @@
   (import "lagrange:cell/context"
     (instance $context (type $context-type))
   )
+  ;; 2. Lower the typed component imports so the inner core WASM module can
+  ;; call them as ordinary numeric functions.
   (alias export $context "read" (func $read))
   (core func $core-read (canon lower (func $read)))
   (alias export $context "write" (func $write))
@@ -30,6 +34,9 @@
     (export "capability" (func $core-capability))
   )
 
+  ;; 3. The example's actual business logic lives in this tiny core module.
+  ;; Slot 0 is granted by deployment policy. Slot 1 is deliberately ungranted
+  ;; so the runner can prove that capability checks fail closed.
   (core module $module
     (type $read-type (func (param i32 i32) (result i32)))
     (type $write-type (func (param i32 i32 i32)))
@@ -53,6 +60,8 @@
       i32.const 9
       i32.gt_u
       if
+        ;; The request body selects one of two paths. The denial path attempts
+        ;; read(slot 1, key 7); the normal path uses declared slot 0.
         local.get $request
         i32.const 9
         i32.add
@@ -77,6 +86,9 @@
       end
       i32.const 0
     )
+    ;; Canonical ABI string result returned by the normal request path.
+    ;; Keeping it static makes the example about host capabilities, not string
+    ;; formatting inside WASM.
     (data (i32.const 0)
       "\08\00\00\00\6d\00\00\00"
       "\7b\22\62\6f\64\79\22\3a\22\63\6f\6d\70\6f\6e\65\6e\74"
@@ -88,6 +100,8 @@
       "\7d"
     )
   )
+  ;; 4. Instantiate the core module with the lowered host functions, then lift
+  ;; its `run` export back into the typed Component Model world.
   (core instance $instance
     (instantiate $module
       (with "context" (instance $context-instance))
