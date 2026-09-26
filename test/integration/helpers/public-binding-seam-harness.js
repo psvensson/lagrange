@@ -78,8 +78,8 @@ const PGWIRE_REPLICAS_SQL =
 const PGWIRE_REPLICA_SUFFIX_PATTERN = '-r%';
 const PGWIRE_ENDPOINT_SQL =
   'SELECT address, port FROM service_endpoints WHERE protocol = ?';
-const COORDINATION_SLOTS_SQL =
-  'SELECT invocation_id, slot_id FROM call_cell_reduce_slots';
+const REDUCE_WITNESS_SQL =
+  'SELECT result_id, source_snapshot_json FROM call_cell_reduce_results';
 const SPLIT_PARTITION_COUNT = 2;
 const SINGLE_NODE_SHAPING_REPLICA_COUNT = 1;
 const GUEST_SOURCE_URL = new URL(
@@ -99,6 +99,7 @@ const MANIFEST_HASH_ALGORITHM = 'sha256';
 const MANIFEST_HASH_ENCODING = 'hex';
 const HARNESS_ERROR = Object.freeze({
   ENDPOINT_TIMEOUT: 'sys-postgres-wire did not publish a postgresql endpoint',
+  WITNESS_TIMEOUT: 'no new reduce result snapshot became readable',
   MANIFEST_INVALID: 'seam manifest rejected by the manifest owner',
   SPLIT_TIMEOUT: 'managed split did not produce two routable partitions',
 });
@@ -290,20 +291,49 @@ function planShardPartitions(engine, statement) {
 }
 
 /**
- * Durable coordination evidence: the per-invocation slot rows the call
- * coordinator seeds (one per shard plus the reduce-lease slot), read
- * through the application facade.
+ * Durable coordination evidence: the witness the reduce coordinator
+ * publishes with each final result snapshot names every shard slot that
+ * contributed, read back through the application facade.
  *
  * @param {object} db - Application database facade.
- * @return {Promise<Map<string, number>>} invocation id -> slot count.
+ * @return {Promise<Map<string, number>>} result id -> witnessed shard slots.
  */
-async function readCoordinationSlotCounts(db) {
-  const result = await harnessQuery(db, COORDINATION_SLOTS_SQL, []);
+async function readReducedShardCounts(db) {
+  const result = await harnessQuery(db, REDUCE_WITNESS_SQL, []);
   const counts = new Map();
   for (const row of result.rows) {
-    counts.set(row.invocation_id, (counts.get(row.invocation_id) || 0) + 1);
+    const witness = parseWitness(row.source_snapshot_json);
+    if (Array.isArray(witness?.slots)) {
+      counts.set(row.result_id, witness.slots.length);
+    }
   }
   return counts;
+}
+
+function parseWitness(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Wait until a result snapshot that was not in `before` is readable and
+ * return the witnessed shard counts of every such new result.
+ *
+ * @param {object} db - Application database facade.
+ * @param {Map<string, number>} before - Counts read before the call.
+ * @param {{deadlineMs: number, pause: Function}} wait - Bounded wait.
+ * @return {Promise<number[]>} Witnessed shard counts of new results.
+ */
+async function newReducedShardCounts(db, before, wait) {
+  return pollUntil(async () => {
+    const fresh = [...await readReducedShardCounts(db)]
+      .filter(([resultId]) => !before.has(resultId))
+      .map(([, count]) => count);
+    return fresh.length > 0 ? fresh : null;
+  }, wait, HARNESS_ERROR.WITNESS_TIMEOUT);
 }
 
 function manifestDigestOf(manifest) {
@@ -371,7 +401,8 @@ export {
   buildCallArtifact,
   enablePasswordPgwire,
   planShardPartitions,
-  readCoordinationSlotCounts,
+  newReducedShardCounts,
+  readReducedShardCounts,
   splitTableOnce,
   startSeamRuntime,
   stopPlacedPgwireReplicas,

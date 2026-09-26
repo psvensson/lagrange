@@ -67,7 +67,16 @@ const STALE_REPLICA_SUFFIX = '-r9';
 const INTERNAL_SQLSTATE = 'XX000';
 const UNKNOWN_BINDING_NAME = 'images-seam-no-such-binding';
 const SEVERED_TRANSPORT_MESSAGE = `transport to ${NODE_B} was severed`;
-const ACK_ONLY_DELIVERY = Object.freeze({acknowledged: true, success: true});
+// Transport-level acknowledgement with no handler completion evidence: the
+// dispatcher refuses it before the call adapter sees a delivery.
+const TRANSPORT_ACK_DELIVERY = Object.freeze({acknowledged: true, success: true});
+// The handler reports it processed the message but returns no invocation
+// outcome: the call adapter's own ack-only refusal.
+const HANDLER_ACK_ONLY_DELIVERY = Object.freeze({
+  acknowledged: true,
+  handlerProcessed: true,
+  success: true,
+});
 const CALL_ARGUMENTS = Object.freeze({topN: TOP_N});
 const SINGLE_ADMISSION = Object.freeze({
   activationRetryIntervalMs: 25,
@@ -305,13 +314,29 @@ describe('public CALL outcome classes through a real pg client', () => {
         }
       });
 
-      await t.test('acknowledged without an outcome: uncertain', async (st) => {
+      await t.test('handler acknowledged without an outcome: uncertain',
+        async (st) => {
+          const restore = interceptNextCellDelivery(deployment,
+            async () => HANDLER_ACK_ONLY_DELIVERY);
+          try {
+            assertPublicOutcome(st, observed, await observeCall(observed), {
+              outcomeClass: CALL_OUTCOME_CLASS.OUTCOME_UNCERTAIN,
+              ownerCode: CALL_CELL_ROUTE_ERROR_CODE.ACK_ONLY,
+              retrySafe: false,
+            });
+          } finally {
+            restore();
+          }
+        });
+
+      await t.test('transport acknowledged without handler evidence: ' +
+        'uncertain', async (st) => {
         const restore = interceptNextCellDelivery(deployment,
-          async () => ACK_ONLY_DELIVERY);
+          async () => TRANSPORT_ACK_DELIVERY);
         try {
           assertPublicOutcome(st, observed, await observeCall(observed), {
             outcomeClass: CALL_OUTCOME_CLASS.OUTCOME_UNCERTAIN,
-            ownerCode: CALL_CELL_ROUTE_ERROR_CODE.ACK_ONLY,
+            ownerCode: CALL_CELL_ROUTE_ERROR_CODE.HANDLER_FAILED,
             retrySafe: false,
           });
         } finally {

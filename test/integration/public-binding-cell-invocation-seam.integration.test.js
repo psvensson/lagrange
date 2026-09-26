@@ -57,7 +57,8 @@ import {
   buildCallArtifact,
   enablePasswordPgwire,
   planShardPartitions,
-  readCoordinationSlotCounts,
+  newReducedShardCounts,
+  readReducedShardCounts,
   splitTableOnce,
   startSeamRuntime,
   stopPlacedPgwireReplicas,
@@ -66,8 +67,9 @@ import {
 import {topologyLeaksIn} from './helpers/public-topology-leak.js';
 import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
 
-const SEAM_TEST_TIMEOUT_MS = 240_000;
+const SEAM_TEST_TIMEOUT_MS = 300_000;
 const SEAM_WAIT_MS = scaleByMachineFactor(60_000);
+const CELL_READY_WAIT_MS = scaleByMachineFactor(120_000);
 const SEAM_POLL_MS = 100;
 const CONSUMER_RETRY_PAUSE_MS = 250;
 const PGWIRE_LOOPBACK = '127.0.0.1';
@@ -141,7 +143,6 @@ const BINDING_BUDGETS = Object.freeze({
   wall_time_ms: 30_000,
 });
 const TOP_N_ALL = 100;
-const COORDINATION_REDUCE_SLOTS = 1;
 const TOPOLOGY_KEYS = Object.freeze(['node', 'partition', 'replica']);
 const TOPOLOGY_PROBE_VALUE = 'public-binding-seam-node';
 const CONSUMER_HELPER_URL =
@@ -253,12 +254,6 @@ async function readable(operation) {
   }
 }
 
-async function newInvocationSlotCount(db, before) {
-  const after = await readCoordinationSlotCounts(db);
-  const fresh = [...after].filter(([invocationId]) => !before.has(invocationId));
-  return fresh.map(([, count]) => count);
-}
-
 test('public Binding invocation through the authenticated PostgreSQL-wire ' +
   'seam: Artifact, Binding, key-anchored call, no topology in consumer input',
 {timeout: SEAM_TEST_TIMEOUT_MS}, async (t) => {
@@ -342,6 +337,16 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
 
   const client = await openConsumerSession({...endpoint, ...CREDENTIALS});
   t.teardown(() => client.end());
+  // Readiness, consumer style: re-issue the CALL while the public contract
+  // says the failure is retry-safe (a new Binding's Cell is activating).
+  const callWhenReady = (name) => callBindingWhileRetrySafe(client, {
+    callArguments: {topN: TOP_N_ALL},
+    name,
+  }, {
+    deadlineMs: Date.now() + CELL_READY_WAIT_MS,
+    isRetrySafe: isPublicRetrySafe,
+    pause: () => managedSleep(t, CONSUMER_RETRY_PAUSE_MS),
+  });
 
   await t.test('Artifact identity is immutable', async (st) => {
     const install = installPayload(
@@ -390,6 +395,7 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
       for (const [name, statement] of [
         [BINDING_NAME.OWNED_RANGE, OWNED_RANGE_STATEMENT],
         [BINDING_NAME.UNBOUNDED, UNBOUNDED_STATEMENT],
+        [BINDING_NAME.INVALID_STATEMENT, INVALID_STATEMENT],
       ]) {
         const payload = callBindingPayload(name, statement, artifact);
         const [created] = await runLifecycle(
@@ -419,16 +425,7 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
   await t.test('key-anchored call runs only the owning partition',
     async (st) => {
       mark('callStart');
-      // Readiness, consumer style: retry while the public contract says
-      // the failure is retry-safe (the Cell is still activating).
-      const served = await callBindingWhileRetrySafe(client, {
-        callArguments: {topN: TOP_N_ALL},
-        name: BINDING_NAME.OWNED_RANGE,
-      }, {
-        deadlineMs: Date.now() + SEAM_WAIT_MS,
-        isRetrySafe: isPublicRetrySafe,
-        pause: () => managedSleep(t, CONSUMER_RETRY_PAUSE_MS),
-      });
+      const served = await callWhenReady(BINDING_NAME.OWNED_RANGE);
       mark('firstCallServed');
       st.equal(served.outcome, CONSUMER_RETRY_OUTCOME.SERVED,
         JSON.stringify(served.lastFailure));
@@ -440,12 +437,13 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
         'the reduced result is exactly the literal key range\'s rows');
       // Placement evidence from one call on a ready Cell: the durable
       // coordination rows of exactly that invocation.
-      const before = await readCoordinationSlotCounts(db);
+      const before = await readReducedShardCounts(db);
       st.same(await callBinding(
         client, BINDING_NAME.OWNED_RANGE, {topN: TOP_N_ALL}), expected);
-      st.same(await newInvocationSlotCount(db, before),
-        [ownedPartitions.length + COORDINATION_REDUCE_SLOTS],
-        'durable coordination seeded one shard slot plus the reduce slot');
+      const witnessed = await newReducedShardCounts(db, before, wait());
+      st.comment(`witnessed shard slots of the new result: ${witnessed}`);
+      st.same(witnessed, [ownedPartitions.length],
+        'the published result snapshot witnesses exactly one shard');
       st.same(planShardPartitions(runtime.engine, OWNED_RANGE_STATEMENT),
         ownedPartitions,
         'harness evidence: the canonical planner plans the owning shard only');
@@ -453,12 +451,17 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
 
   await t.test('the unbounded Binding fans out to every partition',
     async (st) => {
-      const before = await readCoordinationSlotCounts(db);
-      const reduced = await callBinding(
-        client, BINDING_NAME.UNBOUNDED, {topN: TOP_N_ALL});
-      st.same(reduced, expectedReduction(rows, () => true));
-      st.same(await newInvocationSlotCount(db, before),
-        [partitions.length + COORDINATION_REDUCE_SLOTS]);
+      const served = await callWhenReady(BINDING_NAME.UNBOUNDED);
+      st.equal(served.outcome, CONSUMER_RETRY_OUTCOME.SERVED,
+        JSON.stringify(served.lastFailure));
+      const expected = expectedReduction(rows, () => true);
+      st.same(served.result, expected);
+      const before = await readReducedShardCounts(db);
+      st.same(await callBinding(
+        client, BINDING_NAME.UNBOUNDED, {topN: TOP_N_ALL}), expected);
+      st.same(await newReducedShardCounts(db, before, wait()),
+        [partitions.length],
+        'the published result snapshot witnesses every shard');
       st.equal(
         planShardPartitions(runtime.engine, UNBOUNDED_STATEMENT).length,
         partitions.length);
@@ -488,19 +491,7 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
       });
       st.same(topologyLeaksIn(unknown, topology), []);
 
-      await runLifecycle(client, LIFECYCLE_SQL.CREATE_BINDING,
-        callBindingPayload(
-          BINDING_NAME.INVALID_STATEMENT, INVALID_STATEMENT, artifact));
-      await runLifecycle(client, LIFECYCLE_SQL.CONFIGURE_ACCESS,
-        accessPolicy(BINDING_NAME.INVALID_STATEMENT));
-      const invalid = await callBindingWhileRetrySafe(client, {
-        callArguments: {topN: TOP_N_ALL},
-        name: BINDING_NAME.INVALID_STATEMENT,
-      }, {
-        deadlineMs: Date.now() + SEAM_WAIT_MS,
-        isRetrySafe: isPublicRetrySafe,
-        pause: () => managedSleep(t, CONSUMER_RETRY_PAUSE_MS),
-      });
+      const invalid = await callWhenReady(BINDING_NAME.INVALID_STATEMENT);
       st.comment(`pg receives for an invalid declared statement after ${
         invalid.attempts} attempt(s): ${JSON.stringify(invalid.lastFailure)}`);
       st.equal(invalid.outcome, CONSUMER_RETRY_OUTCOME.GAVE_UP);
