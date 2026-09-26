@@ -2,7 +2,7 @@
  * Scenario: public-seam-durability
  *
  * Provider-neutral durability/failure scenario at the PUBLIC seam. An
- * image-like object (`objects(id, body BLOB, version)` plus an append-only
+ * image-like object (`objects(id, body BYTEA, version)` plus an append-only
  * `object_history`) is written in one transaction through a public
  * PostgreSQL-wire client on one node, read back from the others, kept
  * writable while a joiner is stopped, and verified identical and

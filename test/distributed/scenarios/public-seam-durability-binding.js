@@ -18,6 +18,7 @@ import {
 import {findTopologyLeakKeys} from './public-seam-durability-client.js';
 import {
   PUBLIC_SEAM_BINDING,
+  PUBLIC_SEAM_BINDING_SQL,
   PUBLIC_SEAM_NOT_RUN_REASON,
   PUBLIC_SEAM_STEP,
   PUBLIC_SEAM_STEP_OUTCOME,
@@ -61,9 +62,9 @@ async function defaultDeployBinding(ctx) {
 }
 
 async function seedBindingDataset(client) {
-  await client.query(PUBLIC_SEAM_BINDING.CREATE_TABLE);
+  await client.query(PUBLIC_SEAM_BINDING_SQL.CREATE_TABLE);
   for (const row of bindingDatasetRows()) {
-    await client.query(PUBLIC_SEAM_BINDING.INSERT_ROW, row);
+    await client.query(PUBLIC_SEAM_BINDING_SQL.INSERT_ROW, row);
   }
 }
 
@@ -87,7 +88,7 @@ async function invokeSummaries(ctx, node, poll) {
   for (const accountId of PUBLIC_SEAM_BINDING.ACCOUNT_IDS) {
     const answer = await poll(ctx, ctx.config.binding.readyTimeoutMs,
       async () => {
-        const rows = await client.query(PUBLIC_SEAM_BINDING.CALL_BINDING_SQL,
+        const rows = await client.query(PUBLIC_SEAM_BINDING_SQL.CALL_BINDING,
           [callPayload(ctx.binding.callBindingName, accountId)]);
         const parsed = JSON.parse(rows[ZERO][PUBLIC_SEAM_BINDING.RESULT_COLUMN]);
         ctx.observations.push({nodeId: node.id, parsed});

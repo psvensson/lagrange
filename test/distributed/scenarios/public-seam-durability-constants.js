@@ -147,8 +147,11 @@ const PUBLIC_SEAM_SQL = Object.freeze({
   CREATE_HISTORY:
     'CREATE TABLE object_history (id TEXT PRIMARY KEY, ' +
     'object_id TEXT, version INTEGER)',
+  // The scenario speaks PostgreSQL to the wire, so the byte column is
+  // BYTEA (the pgwire parser's PostgreSQL dialect rejects BLOB; the engine
+  // maps BYTEA to BLOB affinity).
   CREATE_OBJECTS:
-    'CREATE TABLE objects (id TEXT PRIMARY KEY, body BLOB, version INTEGER)',
+    'CREATE TABLE objects (id TEXT PRIMARY KEY, body BYTEA, version INTEGER)',
   INSERT_HISTORY:
     'INSERT INTO object_history (id, object_id, version) VALUES ($1, $2, $3)',
   INSERT_OBJECT:
@@ -177,18 +180,24 @@ const PUBLIC_SEAM_LISTENER = Object.freeze({
   CONNECT_TIMEOUT_MS: 5000,
 });
 
-const PUBLIC_SEAM_BINDING = Object.freeze({
-  ACCOUNT_IDS: Object.freeze([101, 202]),
-  ARTIFACT_SOURCE_SERVICE_PIPELINE: 'service-pipeline-local-oci',
-  CALL_BINDING_SQL: 'CALL BINDING $1',
-  CALL_BINDING_MARKER: '--call--',
-  CALL_SCHEMA_VERSION: 2,
+// The binding step's statements, kept apart from its non-SQL settings so
+// the wire-dialect unit test can enumerate every statement the scenario
+// sends. CALL BINDING is lifecycle grammar (classified before the parser).
+const PUBLIC_SEAM_BINDING_SQL = Object.freeze({
+  CALL_BINDING: 'CALL BINDING $1',
   CREATE_TABLE:
     'CREATE TABLE account_activity (id INTEGER PRIMARY KEY, ' +
     'account_id INTEGER, amount_cents INTEGER, flagged INTEGER, pad TEXT)',
   INSERT_ROW:
     'INSERT INTO account_activity (id, account_id, amount_cents, flagged, ' +
     'pad) VALUES ($1, $2, $3, $4, $5)',
+});
+
+const PUBLIC_SEAM_BINDING = Object.freeze({
+  ACCOUNT_IDS: Object.freeze([101, 202]),
+  ARTIFACT_SOURCE_SERVICE_PIPELINE: 'service-pipeline-local-oci',
+  CALL_BINDING_MARKER: '--call--',
+  CALL_SCHEMA_VERSION: 2,
   PROJECT_SUBDIRECTORY: 'public-seam-durability',
   RESULT_COLUMN: 'result',
   ROW_COUNT: 8,
@@ -199,6 +208,7 @@ const PUBLIC_SEAM_BINDING = Object.freeze({
 
 export {
   PUBLIC_SEAM_BINDING,
+  PUBLIC_SEAM_BINDING_SQL,
   PUBLIC_SEAM_CERTIFICATION,
   PUBLIC_SEAM_CERTIFICATION_LINE_PREFIX,
   PUBLIC_SEAM_CERTIFICATION_SOURCE,

@@ -4,6 +4,13 @@ import {test} from '../../../../src/test-helpers/tap.js';
 import {
   RAFT_PROVIDER_CONTROL,
 } from '../../../../src/raft/raft-provider-control-constants.js';
+import {PARSER_DIALECT} from '../../../../src/query/pg/pg-compat-constants.js';
+import {
+  SERVICE_LIFECYCLE_SQL_CLASSIFICATION,
+  SERVICE_LIFECYCLE_SQL_COMMAND,
+  classifyServiceLifecycleSql,
+} from '../../../../src/query/service-lifecycle-sql-contract.js';
+import {SQLParser} from '../../../../src/query/sql-parser.js';
 import {run} from '../../scenarios/public-seam-durability.js';
 import {
   classifyPublicOutcome,
@@ -15,6 +22,7 @@ import {
 } from '../../scenarios/public-seam-durability-client.js';
 import {
   PUBLIC_SEAM_BINDING,
+  PUBLIC_SEAM_BINDING_SQL,
   PUBLIC_SEAM_CERTIFICATION,
   PUBLIC_SEAM_IDENTIFIER_SOURCE,
   PUBLIC_SEAM_INTERIM_RETRY_POLICY,
@@ -183,16 +191,16 @@ function createFakeClient(world, nodeId, hooks) {
     [PUBLIC_SEAM_SQL.COUNT_HISTORY, select],
     [PUBLIC_SEAM_SQL.CREATE_OBJECTS, () => []],
     [PUBLIC_SEAM_SQL.CREATE_HISTORY, () => []],
-    [PUBLIC_SEAM_BINDING.CREATE_TABLE, () => []],
+    [PUBLIC_SEAM_BINDING_SQL.CREATE_TABLE, () => []],
     [PUBLIC_SEAM_SQL.PROBE_OBJECTS,
       () => [{object_count: world.objects.size}]],
     [PUBLIC_SEAM_SQL.PROBE_HISTORY,
       () => [{history_count: world.history.size}]],
-    [PUBLIC_SEAM_BINDING.INSERT_ROW, (_sql, params) => {
+    [PUBLIC_SEAM_BINDING_SQL.INSERT_ROW, (_sql, params) => {
       world.accountRows.push([...params]);
       return [];
     }],
-    [PUBLIC_SEAM_BINDING.CALL_BINDING_SQL,
+    [PUBLIC_SEAM_BINDING_SQL.CALL_BINDING,
       (_sql, params) => callBinding(params)],
   ]);
   async function query(sql, params = []) {
@@ -777,6 +785,32 @@ test('public-seam-durability fails participant_stopped when the node ' +
 
   assert.equal(stepsByName(report)[PUBLIC_SEAM_STEP.PARTICIPANT_STOPPED]
     .outcome, PUBLIC_SEAM_STEP_OUTCOME.FAIL);
+  t.end();
+});
+
+test('public-seam-durability sends only statements the PostgreSQL-wire ' +
+  'path accepts (parser in PostgreSQL dialect, or lifecycle grammar)',
+(t) => {
+  const statements = [
+    ...Object.entries(PUBLIC_SEAM_SQL),
+    ...Object.entries(PUBLIC_SEAM_BINDING_SQL),
+  ];
+  const rejected = [];
+  for (const [name, sql] of statements) {
+    const lifecycle = classifyServiceLifecycleSql(sql);
+    if (lifecycle.kind === SERVICE_LIFECYCLE_SQL_CLASSIFICATION.LIFECYCLE) {
+      continue;
+    }
+    try {
+      new SQLParser(sql, {dialect: PARSER_DIALECT.POSTGRESQL}).parse();
+    } catch (error) {
+      rejected.push(`${name}: ${error.message}`);
+    }
+  }
+  assert.deepEqual(rejected, []);
+  assert.equal(
+    classifyServiceLifecycleSql(PUBLIC_SEAM_BINDING_SQL.CALL_BINDING).command,
+    SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING);
   t.end();
 });
 

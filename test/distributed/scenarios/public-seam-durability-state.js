@@ -223,7 +223,7 @@ async function writeObjectVersion(ctx, client, version, stepName) {
 
 /**
  * The deterministic account_activity rows the binding summarizes.
- * @return {Array<Array>} Parameter tuples for PUBLIC_SEAM_BINDING.INSERT_ROW.
+ * @return {Array<Array>} Parameter tuples for PUBLIC_SEAM_BINDING_SQL.INSERT_ROW.
  */
 function bindingDatasetRows() {
   const rows = [];

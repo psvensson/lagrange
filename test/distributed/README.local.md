@@ -278,7 +278,7 @@ Use these values with `--scenario`:
 11. `write-ack-visibility`
 
 `public-seam-durability` is the provider-neutral durability scenario at the
-public seam: it writes an image-like object (`objects` BLOB row plus an
+public seam: it writes an image-like object (`objects` BYTEA row plus an
 `object_history` row, one transaction) through a node's PostgreSQL-wire
 client, reads it from the other nodes, stops a joiner (chosen by harness
 role), keeps writing through a survivor, starts the joiner, and requires
