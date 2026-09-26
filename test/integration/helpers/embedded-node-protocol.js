@@ -12,11 +12,22 @@
 import {Buffer} from 'node:buffer';
 
 const EMBEDDED_WORKER_OP = Object.freeze({
+  // Start a transaction whose callback runs its steps and then stays OPEN
+  // until RELEASE_TRANSACTION decides it (commit: the callback returns;
+  // rollback: the callback throws).
+  HOLD_TRANSACTION: 'holdTransaction',
   OPEN_SESSION: 'openSession',
   QUERY: 'query',
+  RELEASE_TRANSACTION: 'releaseTransaction',
   START: 'start',
   STOP: 'stop',
   TRANSACTION: 'transaction',
+});
+
+// How RELEASE_TRANSACTION ends a held transaction.
+const EMBEDDED_HOLD_DECISION = Object.freeze({
+  COMMIT: 'commit',
+  ROLLBACK: 'rollback',
 });
 
 const EMBEDDED_WORKER_EVENT = Object.freeze({
@@ -193,6 +204,7 @@ function describeExposedError(snapshot) {
 
 export {
   BYTES_TYPE,
+  EMBEDDED_HOLD_DECISION,
   EMBEDDED_STEP_OUTCOME,
   EMBEDDED_WORKER_EVENT,
   EMBEDDED_WORKER_OP,

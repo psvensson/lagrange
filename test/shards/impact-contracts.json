@@ -585,7 +585,8 @@
       ],
       "tests": [
         "test/integration/transaction-replicated-apply-settling.integration.test.js",
-        "test/integration/transaction-concurrent-read-outage.integration.test.js"
+        "test/integration/transaction-concurrent-read-outage.integration.test.js",
+        "test/integration/transaction-active-owns-connection.integration.test.js"
       ]
     }
   },

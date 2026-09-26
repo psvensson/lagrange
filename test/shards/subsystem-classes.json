@@ -21,14 +21,14 @@
     "storage-partition": 151,
     "storage-raft": 102,
     "test-infrastructure": 136,
-    "transactions": 17,
+    "transactions": 18,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2175,
-  "digest": "fnv1a32-181d2a74",
+  "censusSize": 2176,
+  "digest": "fnv1a32-155be4a0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c826acb4",
+  "observationDigest": "fnv1a32-034d409d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1013,6 +1013,7 @@
     "test/integration/strict-preload-pressure-reproducer.integration.test.js": "convergence-topology",
     "test/integration/three-node-partition-rebalance.integration.test.js": "placement-rebalance",
     "test/integration/three-node-seed-rebalance.integration.test.js": "placement-rebalance",
+    "test/integration/transaction-active-owns-connection.integration.test.js": "transactions",
     "test/integration/transaction-concurrent-read-outage.integration.test.js": "transactions",
     "test/integration/transaction-replicated-apply-settling.integration.test.js": "transactions",
     "test/integration/user-table-local-cdc-readiness.integration.test.js": "cdc-metadata",
@@ -6061,6 +6062,11 @@
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
         "src/rebalancer/unified-rebalancer.js"
+      ]
+    },
+    "test/integration/transaction-active-owns-connection.integration.test.js": {
+      "files": [
+        "test/integration/helpers/embedded-node-worker.js"
       ]
     },
     "test/integration/transaction-concurrent-read-outage.integration.test.js": {
