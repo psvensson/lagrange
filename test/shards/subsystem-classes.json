@@ -19,16 +19,16 @@
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 153,
-    "storage-raft": 118,
+    "storage-raft": 119,
     "test-infrastructure": 136,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2209,
-  "digest": "fnv1a32-b6be96fc",
+  "censusSize": 2210,
+  "digest": "fnv1a32-23e3b6f9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-34a0feea",
+  "observationDigest": "fnv1a32-620e98d2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1458,6 +1458,7 @@
     "test/raft/raft-rs-backend/operation-port-regression.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-status-observation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-throw-containment.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/participation-gate.test.js": "storage-raft",
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": "storage-raft",
     "test/raft/raft-rs-backend/partition-peer-admission.test.js": "storage-raft",
     "test/raft/raft-rs-backend/peer-identity.test.js": "storage-raft",
@@ -7173,6 +7174,15 @@
         "src/raft/raft-provider-contract-constants.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
         "src/raft/raft-rs-runtime-tuning.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/participation-gate.test.js": {
+      "files": [
+        "src/raft/raft-provider-contract-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
       ]
     },
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": {

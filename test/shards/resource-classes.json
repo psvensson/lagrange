@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2192,
+    "ordinary": 2193,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2209,
-  "digest": "fnv1a32-519d0ce5",
+  "censusSize": 2210,
+  "digest": "fnv1a32-c116b38d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1438,6 +1438,7 @@
     "test/raft/raft-rs-backend/operation-port-regression.test.js": "ordinary",
     "test/raft/raft-rs-backend/operation-port-status-observation.test.js": "ordinary",
     "test/raft/raft-rs-backend/operation-port-throw-containment.test.js": "ordinary",
+    "test/raft/raft-rs-backend/participation-gate.test.js": "ordinary",
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": "ordinary",
     "test/raft/raft-rs-backend/partition-peer-admission.test.js": "ordinary",
     "test/raft/raft-rs-backend/peer-identity.test.js": "ordinary",

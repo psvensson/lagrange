@@ -193,15 +193,19 @@ class PartitionNodeCluster {
    * @return {PartitionReplica} The replica.
    * @private
    */
-  buildReplica(replicaId, bootstrapReplicaIds) {
+  buildReplica(replicaId, bootstrapReplicaIds, extraRequest = {}) {
     const dbFile = this.dbFileOf(replicaId);
     const openedDatabase = new Database(dbFile);
     const db = this.wrapDatabase ?
       this.wrapDatabase(replicaId, openedDatabase) : openedDatabase;
     db.exec(SERVICES_DDL);
-    const request = this.requestFor(replicaId, bootstrapReplicaIds, db);
+    const request = {
+      ...this.requestFor(replicaId, bootstrapReplicaIds, db),
+      ...extraRequest,
+    };
     const replica = new PartitionReplica({
       replicaId, dbFile, db, request, node: null});
+    replica.extraRequest = extraRequest;
     this.replicas.set(replicaId, replica);
     replica.node = this.provider.createPartitionPort(request);
     return replica;
@@ -407,9 +411,11 @@ class PartitionNodeCluster {
    * bootstrap members.
    * @param {string} replicaId - The joining replica.
    * @param {Array<string>} bootstrapReplicaIds - What it starts from.
+   * @param {Object} [extraRequest] - Further request fields in the contract
+   *   owner's names (a bootstrap membership stamp).
    * @return {PartitionReplica} The new replica.
    */
-  addReplica(replicaId, bootstrapReplicaIds) {
+  addReplica(replicaId, bootstrapReplicaIds, extraRequest = {}) {
     // Lagrange's own workflow step: every existing peer is told the joining
     // replica's logical name, so it can address the identity that name
     // derives to. Nothing discovers the joiner from a row.
@@ -419,7 +425,8 @@ class PartitionNodeCluster {
         .registerReplica(replicaId));
     }
     this.replicaIds.push(replicaId);
-    const joined = this.buildReplica(replicaId, bootstrapReplicaIds);
+    const joined = this.buildReplica(replicaId, bootstrapReplicaIds,
+      extraRequest);
     identities.add(joined.node.readStatus().peerId);
     if (identities.size !== 1) {
       throw new Error('every peer must derive the same identity for one ' +
@@ -444,7 +451,7 @@ class PartitionNodeCluster {
       replica.node.end();
     }
     replica.db.close();
-    return this.buildReplica(replicaId, bootstrap);
+    return this.buildReplica(replicaId, bootstrap, replica.extraRequest);
   }
 
   /**

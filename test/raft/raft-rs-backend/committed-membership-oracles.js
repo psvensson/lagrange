@@ -50,7 +50,8 @@ function bindingArms(functionName, enumName) {
 
 /**
  * The binding's own wire numbers.
- * @return {Object} {changeType, transition, entryType}, each name -> number.
+ * @return {Object} {changeType, transition, entryType, messageType}, each
+ *   name -> number.
  */
 function bindingWireNumbers() {
   return Object.freeze({
@@ -58,6 +59,7 @@ function bindingWireNumbers() {
     transition: bindingArms('num_to_conf_change_transition',
       'ConfChangeTransition'),
     entryType: bindingArms('num_to_entry_type', 'EntryType'),
+    messageType: bindingArms('num_to_msg_type', 'MessageType'),
   });
 }
 
@@ -81,7 +83,7 @@ function durableAppliedState(dbFile, groupId) {
   return readOnly(dbFile, (db) => {
     const row = db.prepare(
       `SELECT * FROM ${RAFT_RS_TABLE.APPLIED_STATE} WHERE group_id = ?`)
-      .get(groupId);
+      .safeIntegers(true).get(groupId);
     if (row === undefined) {
       return null;
     }
@@ -108,7 +110,7 @@ function durableHardState(dbFile, groupId) {
   return readOnly(dbFile, (db) => {
     const row = db.prepare(
       `SELECT term, vote, commit_index FROM ${RAFT_RS_TABLE.HARD_STATE} ` +
-      'WHERE group_id = ?').get(groupId);
+      'WHERE group_id = ?').safeIntegers(true).get(groupId);
     return row === undefined ? null : {term: String(row.term),
       vote: String(row.vote), commit: String(row.commit_index)};
   });
@@ -123,12 +125,13 @@ function durableHardState(dbFile, groupId) {
 function durableLog(dbFile, groupId) {
   return readOnly(dbFile, (db) => db.prepare(
     `SELECT log_index, term, entry_type, data FROM ${RAFT_RS_TABLE.LOG} ` +
-    'WHERE group_id = ? ORDER BY log_index').all(groupId).map((row) => ({
-    index: Number(row.log_index),
-    term: Number(row.term),
-    entryType: Number(row.entry_type),
-    data: row.data,
-  })));
+    'WHERE group_id = ? ORDER BY log_index').safeIntegers(true).all(groupId)
+    .map((row) => ({
+      index: Number(row.log_index),
+      term: Number(row.term),
+      entryType: Number(row.entry_type),
+      data: row.data,
+    })));
 }
 
 /**
@@ -138,7 +141,8 @@ function durableLog(dbFile, groupId) {
  */
 function reservedIdentities(dbFile) {
   return readOnly(dbFile, (db) => new Map(db.prepare(
-    `SELECT replica_identity, raft_peer_id FROM ${IDENTITY_TABLE}`).all()
+    `SELECT replica_identity, raft_peer_id FROM ${IDENTITY_TABLE}`)
+    .safeIntegers(true).all()
     .map((row) => [String(row.raft_peer_id), row.replica_identity])));
 }
 
