@@ -506,8 +506,12 @@ test('waitForConvergence — can ignore stale over-target caused by stale in-fli
           ],
           operationRows: [
             {
+              // A REMOVE: under A6 (quest replace-source-removal-owner, R09)
+              // a partition REPLACE at STOPPING is never stale by step age,
+              // so the stale in-flight operation this case needs is one whose
+              // staleness is still age-derived.
               operation_id: 'op-stale-removing',
-              type: 'REPLACE',
+              type: 'REMOVE',
               partition_id: 'p1',
               source_node_id: 'node-a',
               target_node_id: 'node-b',
