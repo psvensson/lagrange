@@ -368,3 +368,72 @@ files, 194 pass, 0 fail, 4703 assertions - controller 191/191 (ordinary,
 external-toolchain, bootstrap lanes), carinas-windows exclusive 3/3. Every
 evidence file and every implementer witness importing the edited harness is
 in the cone and green.
+
+## 8. Round 2 (2026-09-27, production FROZEN at `d46777ecf`, evidence branch `evidence/evidence-o1-r2-2026-09-27`)
+
+After verification O1 round 1 (`verification-o1-round-1.md`, REJECT on V1 and
+V2) and the integration-2 head `d46777ecf` (F1 completion authority, F2
+removal consensus exit, F4 readiness, V1a stamp-less refusal, V2 conf-change
+deferral and settlement re-drive, joint leave admitted). Round-1 evidence was
+merged by the integrator with four repairs (`fc9861157`): the B12 anchors
+route each witness message to the addressed replica's port under F1 and
+carry `entityId`; `CONF_CHANGE_PENDING` classified in the static file; the M3
+"dropped AddNode" premise inverted (no empty entry any more: the second
+AddNode is deferred typed and re-driven by the settlement). No `src` file was
+changed by the evidence author: `git diff d46777ecf..HEAD -- src` is empty.
+
+### 8.1 What changed in the evidence (verifier items 3-6)
+
+| Item | Where | What |
+| --- | --- | --- |
+| 3 census | `committed-membership-census.test.js` "V1a census" (implementer, V1a) | Confirmed: it sweeps every `src` file (comments stripped) for `new PartitionService(` / `createPartitionService(` / `createJoinLocalPartitionService(` and pins the declared seven sites, each with a regex proving how its bootstrap arrives (explicit `genesisStamp` at the seed, the validated `context.bootstrapMembership` at the handler's create, `durableRecordBootstrap()` at the snapshot replacement, `...options` forwarding at the four factories/lifecycles). Scratch mutant "third constructor" (a `new PartitionService(` added to `partition-service-shared.js`): 1 red (`V1a census`). Referenced from here; not duplicated into the evidence static file (one census, one owner). |
+| 4 D8 | `conf-change-pending-deferral.test.js` (port), `admission-redrive-chain.test.js` (production admission path), `partition-admission-redrive-wakes.test.js` (fixture wakes) - implementer, V2 | Confirmed: the port witness ranges over the crate's five pending kinds {effective AddNode, effective RemoveNode, no-op RemoveNode (non-member), no-op AddNode (member), post-election conservative index} x "AddNode(t) proposed behind it" -> typed deferral, `CONF_CHANGE_APPLIED` within one applied entry, admitted when proposed again, no empty entry; the chain witness ranges over the three kinds the production admission path meets (no-op RemoveNode = R-1f's repeat, no-op AddNode, effective RemoveNode of a retiring row) with "no re-admission of the just-removed source" an explicit cell; the wakes witness covers the leadership-gain re-drive and a deferred retirement. Added by the author: the joint-leave cell in `evidence-o1-anchors.test.js` (joint anchor): an AddNode while joint is `CONF_CHANGE_PENDING` (retryable), the leave (a change with no steps) is taken, the AddNode is taken and commits once the group left. |
+| 5 amendment | `committed-read-amendment-1-2026-09-26.md` section 8 (appended) | Supersessions (R09): claim 2's TimeoutNow wording (crate guard + U1, not the gate on applied); row B5 (a_self <= j unreachable under A3); section 2 item 1 (the seed lost-data-directory cell is NOT closed on the target side: V1a closes the stamp-less default, the empty-data-directory founding is CR-F5, pending); rows A2/B10 and section 3.5 (the V2 mechanism). |
+| 6 hygiene | `evidence-o1-static.test.js`, `evidence-o1-anchors.test.js` | `RUNTIME_PHASE` classified member by member (incl. the new `bootstrap-stamp-validation`); "anchor (port stamp validation)": the port itself refuses every defect of `COMMITTED_MEMBERSHIP_STAMP_DEFECT` typed (`CORE_REFUSED`, `STAMP_INVALID`, the defect, phase `bootstrap-stamp-validation`, non-retryable) with no store built - the absent stamp (an explicit null past the cluster driver's default GENESIS) and IDENTITY_MISMATCH included, so V6's untyped path is closed at `d46777ecf` (`stampDefect` carries `consensus`); the registry-side mismatch of `committedBootstrap` is typed the same way and unreachable behind the validator's identical derivation. |
+
+### 8.2 The seven property files on `d46777ecf` (`node --test`, one at a time)
+
+static 8/8 (RUNTIME_PHASE added), gate histories 6/6, restart equivalence
+16/16, admission liveness 1/1, anchors 8/8 (port stamp validation added),
+real chain 7/7 (M3 premise inverted by the integrator), model helper - all
+green.
+
+### 8.3 Mutation matrix re-run on `d46777ecf` (scratch copies, never committed)
+
+Files: M1 = `evidence-o1-gate-histories` (6), M4 = `evidence-o1-restart-equivalence` (16), M3 = `evidence-o1-admission-liveness` (1), A = `evidence-o1-anchors` (8), R = `evidence-o1-real-chain` (7), V2 = the implementer's V2 witnesses (port deferral 5, chain 3, wakes 9 subtests), C = `committed-membership-census` (8), S = `stampless-opening-refusal` (2). "-" = not run.
+
+| Mutation (mechanism) | M1 | M4 | M3 | A | R | V2 / C / S |
+| --- | --- | --- | --- | --- | --- | --- |
+| gate removed | 6 red | 10 red | 1 red | 3 red (B1 reachability, B12 x2) | 5 red (M2, M5 a/b/c, M3) | - |
+| gate at j only | 6 red | 8 red | 1 red | 0 | 2 red (M5 b, c) | - |
+| gate delegating to the crate's hup check | 6 red | 10 red | 1 red | 0 | 2 red (M5 a, c) | - |
+| bootstrap index not persisted | 6 red | 15 red | 0 | 1 red (GENESIS restore) | - | - |
+| restore ignores the record's admission | 0 | 7 red | 0 | 0 | - | - |
+| resume unsuppressed alone | - | 0 (equivalent: campaignGroup's gate subsumes) | - | - | - | - |
+| resume + campaign ungated | - | 1 red (H1 transient) | - | - | - | - |
+| j from core `status.applied` | 0 | 0 | 0 | 0 | - | - (equivalent, as in round 1) |
+| R-1a ignores the gate (`WITNESS_BELOW_GATE` branch removed) | - | - | - | **0 - equivalent under F1** (see 8.4) | - | - |
+| stamp from rows | - | - | - | - | 1 red (M2) | - |
+| admission not re-driven (the settlement/leadership re-drive disabled) | - | - | - | - | 2 red (M2, M3) | chain 0 (its deferred admissions are re-proposed by the next cache reconcile; the port witness does not exercise the re-drive) |
+| join mode / ticks from a row count | - | - | - | - | 1 red (GENESIS anchor) | - |
+| absent stamp defaults to GENESIS (V1a reverted at the port) | - | - | - | 1 red (port stamp validation) | - | S 2 red |
+| third constructor site (a `new PartitionService(` added to `src`) | - | - | - | - | - | C 1 red (V1a census) |
+| settlement keyed on the configuration key (CONF_CHANGE_APPLIED only when the ConfState key changed) | - | - | - | - | 0 | V2 port 3 red - exactly the no-op RemoveNode, no-op AddNode and post-election kinds; chain 0, wakes 0 (fixture-emitted events) |
+| re-drive on MEMBERSHIP_CHANGED only (V2 wiring reverted) | - | - | - | - | 0 (M3's first AddNode changes the key) | V2 wakes 4 red (no-key-change settlement, deferred admission, leadership gain, deferred retirement); port 0, chain 0 (cache reconcile masks) |
+
+### 8.4 Findings about the evidence (round 2)
+
+- **R-1a ignores the gate is now an equivalent mutant.** Under F1 (integration 2) the completion authority is the group's leader-answered committed configuration, reached from the addressed replica with one redirect; the integrator accordingly relaxed the B12 anchors to accept `STILL_VOTER` from the leader's answer below the target's gate. The `WITNESS_BELOW_GATE` branch of `completionVerdictOf` (`operation-workflow-replace-owner.js:203`) is therefore reached only when the ANSWERING replica is below its gate, which a leader never is; removing the branch turns nothing red. It is defence in depth under F1; whether any F1 path can present a below-gate observation to R-1a is F1's owner question, recorded here, not repaired by adding a hand case.
+- **The chain re-drive witness does not discriminate the re-drive itself**: with the re-drive disabled or wired to MEMBERSHIP_CHANGED only, `admission-redrive-chain` stays green because a deferred admission latches nothing and the next cache reconcile of the same row proposes it again; the property (admitted within the bound) holds by another path. The port witness and the wakes witness carry the discrimination (settlement kinds; wakes). Recorded for the implementer; no hand case added.
+- Two mutants (gate removed, bootstrap index not persisted) also turn the B1 reachability / GENESIS-restore anchors red through their setup (a gate that never closes, a record that never restores) - expected collateral, not new coverage.
+
+### 8.5 Runs and SHAs (round 2)
+
+| SHA | Content |
+| --- | --- |
+| `fc9861157` | integration-2 evidence head (the integrator's merge repairs to round-1 files) |
+| `e7cec589f` | round 2: port stamp-defect anchor, D8 joint-leave cell, RUNTIME_PHASE classified, amendment section 8 |
+| record commit | this section; the lab cone result appended below |
+
+Static gates at `e7cec589f`: eslint clean; literals 0 new; duplication 55/1777 and 780/29947 (the integrator's tightened baseline held); unused exports 1435/1435; test metadata regenerated by the hook.
+
