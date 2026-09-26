@@ -43,6 +43,8 @@ import {NodeLivenessSemanticProjectionOwner} from
 import {NodesOwner} from '../../src/control-plane/owners/nodes-owner.js';
 import {ControlPlaneReadinessService} from
   '../../src/control-plane/control-plane-readiness-service.js';
+import {isEvidenceAbsentReadinessDenialSnapshot} from
+  '../../src/control-plane/readiness-denial-classification.js';
 import {isDeferredReadinessPlanningSnapshot} from
   '../../src/control-plane/readiness-planning-version-contract.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -407,5 +409,79 @@ async (t) => {
         projected, `${label}: alternating the two views never moves it`);
     }
     owner.shutdown();
+  }
+});
+
+// F-3 of the round-1 verification: the evidence-absent carve-outs count a
+// node deferred over its last ELIGIBLE verdict. That counting window opens
+// when the node's own liveness change rotates the planning identity and
+// closes when the node's variant rebuild lands its denial. The window's
+// bound is that rebuild latency, in planning-queue drains: at most the
+// builds queued when the deferral was served. Once the rebuilt denial is
+// served, no second deferral of the node is served for the same rotation.
+const LIVENESS_LOSS_ADVANCE_MS = LEASE_MS * 4;
+const SETTLED_READS_AFTER_DENIAL = 3;
+// A dimension the liveness loss denies. controlPlaneRecoveryEligible does
+// not: a lapsed member stays recovery-eligible (the pre-existing
+// two-authority finding, recorded for its owner in evidence-readiness-f4).
+const LIVENESS_DIMENSION =
+  CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY;
+
+function readOn(service, nodeId, participationKind) {
+  return service.getNodeReadinessSync(nodeId, {
+    participationKind,
+    decisionDimension: LIVENESS_DIMENSION,
+  });
+}
+
+test('a rotation caused by a node\'s own liveness change lands that node\'s ' +
+  'rebuilt denial within the queued builds, and no second deferral follows',
+async (t) => {
+  const {clock, service} =
+    await createRig(async () => UNAVAILABLE_AUTHORITATIVE_READ);
+  t.teardown(() => service.shutdown());
+  t.equal(await warm(service), true, 'precondition: settled');
+  const kind = CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ;
+  let eligibleBefore = readOn(service, PEER_NODE_ID, kind);
+  for (let round = 0; round < WARM_ROUNDS &&
+    isDeferredReadinessPlanningSnapshot(eligibleBefore); round += 1) {
+    await macrotask();
+    eligibleBefore = readOn(service, PEER_NODE_ID, kind);
+  }
+  t.equal(eligibleBefore.dimensions[LIVENESS_DIMENSION], true,
+    'precondition: the last completed verdict is eligible');
+  const generationBefore = captureIdentity(service).globalPlanningGeneration;
+
+  clock.now = START_MS + LIVENESS_LOSS_ADVANCE_MS;
+  const first = readOn(service, PEER_NODE_ID, kind);
+  t.ok(captureIdentity(service).globalPlanningGeneration > generationBefore,
+    'the liveness loss rotated the planning identity');
+  t.equal(isDeferredReadinessPlanningSnapshot(first), true,
+    'the first read after the rotation is a deferral');
+  t.equal(isEvidenceAbsentReadinessDenialSnapshot(first), true,
+    'over the eligible verdict it is evidence-absent (the window opens)');
+  const queuedBuilds = service.readinessPlanningSnapshotOwner.getDiagnostics()
+    .pendingOwnerKeys.length;
+
+  let drains = 0;
+  let answer = first;
+  while (isDeferredReadinessPlanningSnapshot(answer) &&
+    drains <= queuedBuilds) {
+    await macrotask();
+    drains += 1;
+    answer = readOn(service, PEER_NODE_ID, kind);
+  }
+  t.ok(drains <= queuedBuilds, `the rebuilt answer landed within the ${
+    queuedBuilds} queued builds (${drains} drains)`);
+  t.equal(isDeferredReadinessPlanningSnapshot(answer), false,
+    'the rebuilt answer is a completed snapshot');
+  t.equal(answer.dimensions[LIVENESS_DIMENSION], false, 'it denies the dimension');
+  t.equal(isEvidenceAbsentReadinessDenialSnapshot(answer), false,
+    'with substantive reasons (the window closed)');
+  for (let index = 0; index < SETTLED_READS_AFTER_DENIAL; index += 1) {
+    await macrotask();
+    t.equal(isDeferredReadinessPlanningSnapshot(
+      readOn(service, PEER_NODE_ID, kind)), false,
+    `read ${index + 1} after the denial: no second deferral`);
   }
 });
