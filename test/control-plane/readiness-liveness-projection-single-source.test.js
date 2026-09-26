@@ -27,8 +27,10 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   CDC_OPERATION,
   COLUMN,
+  NODE_STATE,
   SERVICE_STATUS,
   SERVICE_TYPE,
+  STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
@@ -38,6 +40,7 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {NodeLivenessSemanticProjectionOwner} from
   '../../src/control-plane/node-liveness-semantic-projection-owner.js';
+import {NodesOwner} from '../../src/control-plane/owners/nodes-owner.js';
 import {ControlPlaneReadinessService} from
   '../../src/control-plane/control-plane-readiness-service.js';
 import {isDeferredReadinessPlanningSnapshot} from
@@ -80,7 +83,30 @@ function macrotask() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-async function createRig(listNodes) {
+// The production NodesOwner over a gateway whose authoritative reads answer
+// with the case's result (a list read) or that result narrowed to one key (a
+// single-row read), and whose projection reads come from the cache: every
+// owner method the readiness readers call (listNodes, getNode with its typed
+// throw, the cache reads) is the production one.
+function createNodesOwner(cache, authoritativeRead) {
+  return new NodesOwner({
+    controlPlaneSystemTableGateway: {
+      async readAuthoritativeRows(_tableName, _sql, params) {
+        const result = await authoritativeRead();
+        if (params.length === 0 || result?.success !== true) return result;
+        return {
+          ...result,
+          rows: result.rows.filter((row) => row[COLUMN.NODE_ID] === params[0]),
+        };
+      },
+      async readProjectionRows(_tableName, options) {
+        return {success: true, rows: options.readFromCache(cache)};
+      },
+    },
+  });
+}
+
+async function createRig(authoritativeRead) {
   const clock = {now: START_MS};
   const cache = new SystemTableCache();
   for (const nodeId of [SELF_NODE_ID, PEER_NODE_ID]) {
@@ -100,12 +126,7 @@ async function createRig(listNodes) {
     nodeId: SELF_NODE_ID,
     systemTableCache: cache,
     now: () => clock.now,
-    nodesOwner: {
-      listNodes,
-      getNodeFromCache: async (nodeId) =>
-        ({rows: [cache.get(TABLES.NODES, nodeId)]}),
-      listNodesFromCache: async () => ({rows: cache.getAll(TABLES.NODES)}),
-    },
+    nodesOwner: createNodesOwner(cache, authoritativeRead),
     cdcGroupPropagationService: {
       getPublicationModeDiagnostics: () => ({
         currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
@@ -146,21 +167,74 @@ function captureIdentity(service) {
   };
 }
 
+// A caller-held row at the cache row's own heartbeat watermark, differing
+// only in content the projection reads.
+function equalWatermarkRow(nodeId, overrides) {
+  return {...nodeRow(nodeId, START_MS - HEARTBEAT_AGE_MS), ...overrides};
+}
+
+function authoritativeRows(buildRow) {
+  return async () => ({
+    success: true,
+    rows: [SELF_NODE_ID, PEER_NODE_ID].map(buildRow),
+  });
+}
+
+// Every relation of a caller-held row to the row the shared projection
+// last projected (F4 coverage model): unavailable (no row), older, equal
+// watermark with different status, equal watermark with different
+// connection state, and no heartbeat watermark. `feedbackDivergent` names
+// the cases whose row also changes the stored readiness snapshot's feedback
+// signature: the planning identity then rotates through the readiness
+// feedback channel (F-8, a separate owner decision), so for them only the
+// shared liveness projection's half of the property is asserted here.
 const NON_SOURCE_ROW_CASES = [
-  ['the authoritative node read is unavailable', () => async () =>
-    UNAVAILABLE_AUTHORITATIVE_READ],
-  ['the authoritative node read returns rows older than the cache\'s', () =>
-    async () => ({
-      success: true,
-      rows: [SELF_NODE_ID, PEER_NODE_ID].map((nodeId) =>
-        nodeRow(nodeId, START_MS - LEASE_MS)),
-    })],
+  {
+    label: 'the authoritative node read is unavailable',
+    authoritativeRead: async () => UNAVAILABLE_AUTHORITATIVE_READ,
+  },
+  {
+    label: 'the authoritative node read returns rows older than the cache\'s',
+    authoritativeRead: authoritativeRows((nodeId) =>
+      nodeRow(nodeId, START_MS - LEASE_MS)),
+  },
+  {
+    label: 'the authoritative node read returns rows at the cache\'s ' +
+      'watermark with another status',
+    authoritativeRead: authoritativeRows((nodeId) =>
+      equalWatermarkRow(nodeId, {[COLUMN.STATUS]: NODE_STATE.DRAINING})),
+    feedbackDivergent: true,
+  },
+  {
+    label: 'the authoritative node read returns rows at the cache\'s ' +
+      'watermark with another connection state',
+    authoritativeRead: authoritativeRows((nodeId) =>
+      equalWatermarkRow(nodeId, {
+        [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,
+      })),
+  },
+  {
+    label: 'the authoritative node read returns rows without a heartbeat ' +
+      'watermark',
+    authoritativeRead: authoritativeRows((nodeId) => ({
+      [COLUMN.NODE_ID]: nodeId,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    })),
+    feedbackDivergent: true,
+  },
 ];
 
-for (const [label, listNodes] of NON_SOURCE_ROW_CASES) {
-  test('an evaluation over a non-source row never rotates the planning ' +
-    `identity nor defers any read kind (${label})`, async (t) => {
-    const {service} = await createRig(listNodes());
+function captureLivenessGenerations(service) {
+  return captureIdentity(service).livenessGenerations;
+}
+
+for (const {label, authoritativeRead, feedbackDivergent} of
+  NON_SOURCE_ROW_CASES) {
+  test(`an evaluation over a non-source row ${feedbackDivergent ?
+    'never moves the shared liveness projection' :
+    'never rotates the planning identity nor defers any read kind'} ` +
+    `(${label})`, async (t) => {
+    const {service} = await createRig(authoritativeRead);
     t.teardown(() => service.shutdown());
     t.equal(await warm(service), true,
       'precondition: every read kind of both nodes is served a completed ' +
@@ -171,28 +245,58 @@ for (const [label, listNodes] of NON_SOURCE_ROW_CASES) {
     // red runs recorded: planning builds and publication-planning
     // evaluations interleaving, several times per second.
     await service.getAllNodeReadiness({allowAuthoritativeRefresh: true});
-    t.equal(await warm(service), true,
-      'precondition: settled after the first publication-planning read');
+    await warm(service);
     const before = captureIdentity(service);
     for (let cycle = 0; cycle < ALTERNATION_CYCLES; cycle += 1) {
       await service.getAllNodeReadiness({allowAuthoritativeRefresh: true});
-      t.same(captureIdentity(service), before, `cycle ${cycle}: neither ` +
-        'the shared liveness projection nor the planning identity moved');
-      for (const nodeId of [SELF_NODE_ID, PEER_NODE_ID]) {
-        const routed = isDeferredReadinessPlanningSnapshot(
-          read(service, nodeId, CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ));
-        for (const kind of PARTICIPATION_KINDS) {
-          const deferred = isDeferredReadinessPlanningSnapshot(
-            read(service, nodeId, kind));
-          t.equal(deferred, false, `cycle ${cycle}: ${kind} read of ` +
-            `${nodeId} is served the completed snapshot`);
-          t.equal(deferred, routed,
-            `cycle ${cycle}: ${kind} and routed reads of ${nodeId} agree`);
-        }
+      t.same(captureLivenessGenerations(service), before.livenessGenerations,
+        `cycle ${cycle}: the shared liveness projection did not move`);
+      if (!feedbackDivergent) {
+        t.same(captureIdentity(service), before,
+          `cycle ${cycle}: the planning identity did not move`);
+        assertEveryReadKindServed(t, service, `cycle ${cycle}`);
       }
       await warm(service);
     }
   });
+
+  test('a single-row authoritative readiness read over a non-source row ' +
+    `never moves the shared liveness projection (${label})`, async (t) => {
+    const {service} = await createRig(authoritativeRead);
+    t.teardown(() => service.shutdown());
+    t.equal(await warm(service), true, 'precondition: settled');
+    const before = captureLivenessGenerations(service);
+    for (const nodeId of [SELF_NODE_ID, PEER_NODE_ID]) {
+      const outcome = await service.getNodeReadiness(nodeId, {
+        allowAuthoritativeRefresh: true,
+        decisionDimension: DIMENSION,
+        maxCachedAgeMs: 0,
+      }).then(() => null, (error) => error);
+      const unavailable = (await authoritativeRead()).success !== true;
+      // The single-row owner read's unavailability outcome is its typed
+      // throw (the dispatch path defers on it); rows never throw.
+      t.equal(outcome !== null, unavailable,
+        `${nodeId}: the single-row read ${unavailable ?
+          'surfaces the typed unavailability' : 'answers'}`);
+      t.same(captureLivenessGenerations(service), before,
+        `${nodeId}: the shared liveness projection did not move`);
+    }
+  });
+}
+
+function assertEveryReadKindServed(t, service, label) {
+  for (const nodeId of [SELF_NODE_ID, PEER_NODE_ID]) {
+    const routed = isDeferredReadinessPlanningSnapshot(
+      read(service, nodeId, CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ));
+    for (const kind of PARTICIPATION_KINDS) {
+      const deferred = isDeferredReadinessPlanningSnapshot(
+        read(service, nodeId, kind));
+      t.equal(deferred, false,
+        `${label}: ${kind} read of ${nodeId} is served the completed snapshot`);
+      t.equal(deferred, routed,
+        `${label}: ${kind} and routed reads of ${nodeId} agree`);
+    }
+  }
 }
 
 test('the shared liveness projection moves forward only: an absent or ' +
@@ -233,4 +337,75 @@ async (t) => {
   t.not(owner.getNodeLivenessSemanticIdentity(PEER_NODE_ID, START_MS)
     .generation, generation,
   'the row\'s absence reaches the projection from its source');
+});
+
+function createProjectionOwner(sourceRow) {
+  return new NodeLivenessSemanticProjectionOwner({
+    localNodeId: SELF_NODE_ID,
+    now: () => START_MS,
+    setTimeoutFn: () => null,
+    clearTimeoutFn: () => {},
+    thresholds: {clusterMemberStaleHeartbeatMs: LEASE_MS},
+    readNodeEvidence: () => ({nodeRow: sourceRow, transportConnected: true}),
+  });
+}
+
+const PROJECTED_ROW = nodeRow(PEER_NODE_ID, START_MS - HEARTBEAT_AGE_MS);
+const WATERMARK_LESS_ROW = Object.freeze({
+  [COLUMN.NODE_ID]: PEER_NODE_ID,
+  [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+});
+// The coverage model's caller-held-row dimension against a projected row,
+// with whether the shared projection may take the candidate.
+const CALLER_HELD_ROW_CASES = [
+  ['strictly newer, other content', PROJECTED_ROW, {
+    ...nodeRow(PEER_NODE_ID, START_MS - HEARTBEAT_AGE_MS + 1),
+    [COLUMN.STATUS]: NODE_STATE.DRAINING,
+  }, true],
+  ['equal watermark, same content', PROJECTED_ROW, {...PROJECTED_ROW}, true],
+  ['equal watermark, other status', PROJECTED_ROW,
+    equalWatermarkRow(PEER_NODE_ID, {[COLUMN.STATUS]: NODE_STATE.DRAINING}),
+    false],
+  ['equal watermark, other connection state', PROJECTED_ROW,
+    equalWatermarkRow(PEER_NODE_ID, {
+      [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,
+    }), false],
+  ['no watermark over a watermarked row', PROJECTED_ROW, WATERMARK_LESS_ROW,
+    false],
+  ['older', PROJECTED_ROW, nodeRow(PEER_NODE_ID, START_MS - LEASE_MS * 2),
+    false],
+  ['absent', PROJECTED_ROW, null, false],
+  ['a watermark over a watermark-less row', WATERMARK_LESS_ROW, PROJECTED_ROW,
+    true],
+];
+
+test('the shared liveness projection takes a caller-held row only when it ' +
+  'is strictly newer by watermark or the same view at the same watermark',
+async (t) => {
+  for (const [label, projectedRow, candidateRow, recorded] of
+    CALLER_HELD_ROW_CASES) {
+    const owner = createProjectionOwner(projectedRow);
+    const projected = owner.projectNodeLivenessFromEvidence(PEER_NODE_ID,
+      {nodeRow: projectedRow, transportConnected: true}, START_MS);
+    const answered = owner.projectNodeLivenessFromEvidence(PEER_NODE_ID,
+      {nodeRow: candidateRow, transportConnected: true}, START_MS);
+    // The oracle for "recorded": the projection now answers every caller
+    // with the candidate's own evaluation; not recorded: with the projected
+    // row's.
+    const shared = owner.projectNodeLiveness(PEER_NODE_ID, START_MS);
+    t.same(shared.clusterMembershipSemantics,
+      (recorded ? answered : projected).clusterMembershipSemantics,
+      `${label}: ${recorded ? 'recorded' : 'answers its caller only'}`);
+    if (!recorded) {
+      for (let alternation = 0; alternation < 3; alternation += 1) {
+        owner.projectNodeLivenessFromEvidence(PEER_NODE_ID,
+          {nodeRow: projectedRow, transportConnected: true}, START_MS);
+        owner.projectNodeLivenessFromEvidence(PEER_NODE_ID,
+          {nodeRow: candidateRow, transportConnected: true}, START_MS);
+      }
+      t.same(owner.projectNodeLiveness(PEER_NODE_ID, START_MS),
+        projected, `${label}: alternating the two views never moves it`);
+    }
+    owner.shutdown();
+  }
 });
