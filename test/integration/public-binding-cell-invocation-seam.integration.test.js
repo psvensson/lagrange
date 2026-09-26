@@ -275,6 +275,11 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
     pause: () => managedSleep(t, SEAM_POLL_MS),
   });
 
+  // Deploy-time tooling (the CLI's build step) runs before the runtime
+  // starts: componentize is CPU-bound on this thread and must not overlap
+  // startup or the listener placement (see the progress/finding notes).
+  const artifact = {...await buildCallArtifact(root, SERVICE_IDENTITY)};
+  mark('artifactBuilt');
   // Event-loop delay across runtime start: startup runs on this thread,
   // so a starved loop (not a slow host) would show here.
   const startLoopDelay = monitorEventLoopDelay({resolution: LOOP_DELAY_RESOLUTION_MS});
@@ -313,9 +318,6 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
   t.comment(`runtime start event-loop delay ms: max=${
     Math.round(startLoopDelay.max / NANOS_PER_MS)} p99=${
     Math.round(startLoopDelay.percentile(LOOP_DELAY_PERCENTILE) / NANOS_PER_MS)}`);
-  // Deploy-time tooling (the CLI's build step) runs after start so it can
-  // never compete with startup for this thread.
-  const artifactBuild = buildCallArtifact(root, SERVICE_IDENTITY);
   endpoint = await enablePasswordPgwire(
     db, pgwirePort, {...wait(), restPort});
   mark('pgwireListening');
@@ -338,8 +340,6 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
   t.equal(ownedPartitions.length, 1,
     'harness: the literal key range lies inside exactly one partition');
 
-  const artifact = {...await artifactBuild};
-  mark('artifactBuilt');
 
   await t.test('password mode: wrong credentials are refused', async (st) => {
     const refused = await observeFailure(openConsumerSession({
