@@ -5,6 +5,23 @@ import {
 import {createReplaceWitness} from './replace-witness-fixture.js';
 import {OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_DISPATCH_ASSERTION, PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_OPERATION_ID, PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_STEP_ASSERTION, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, PRIORITY_RECOVERY_COMPLETION_STATE, ReplicaOperationMessageType, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, WORKFLOW_STEP, buildPriorityDrainOwnerUnavailableReadinessService, buildPriorityDrainReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
 
+/**
+ * The source removal confirmed where it counts (quest
+ * replace-source-removal-owner, C1/R-1a): the witness replica's committed
+ * configuration no longer holds the source. F1 (owner ruling): the completion
+ * authority is the LEADER-answered committed configuration, so the witness
+ * names itself (the target) as the group leader; a leaderless answer is WAIT,
+ * never SOURCE_RETIRED.
+ * @param {string} targetReplicaId - The REPLACE target, answering as leader
+ * @returns {object} The witness double
+ */
+function sourceRetiredLeaderWitness(targetReplicaId) {
+  return createReplaceWitness({
+    sourceVoter: false,
+    leaderReplicaId: targetReplicaId,
+  });
+}
+
 test('RebalanceCoordinator removes a priority REPLACE source follower after ' +
   'fresh replacement election evidence and safe recovery completion',
 async (t) => {
@@ -249,16 +266,7 @@ async (t) => {
   const TEST_OPERATION_ID = 'priority-drain-stopping-converged';
   const TEST_NOW_MS = Date.now();
   const deliveries = [];
-  // The source removal is confirmed where it counts (quest
-  // replace-source-removal-owner, C1/R-1a): the witness replica's committed
-  // configuration no longer holds the source. F1 (owner ruling): the
-  // completion authority is the LEADER-answered committed configuration, so
-  // the witness names itself (the target) as the group leader; a leaderless
-  // answer is WAIT, never SOURCE_RETIRED.
-  const witness = createReplaceWitness({
-    sourceVoter: false,
-    leaderReplicaId: TEST_TARGET_REPLICA_ID,
-  });
+  const witness = sourceRetiredLeaderWitness(TEST_TARGET_REPLICA_ID);
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
     enableTimeouts: false,
@@ -354,16 +362,7 @@ async (t) => {
   const TEST_OPERATION_ID = 'priority-drain-stopping-spread-satisfied';
   const TEST_NOW_MS = Date.now();
   const deliveries = [];
-  // The source removal is confirmed where it counts (quest
-  // replace-source-removal-owner, C1/R-1a): the witness replica's committed
-  // configuration no longer holds the source. F1 (owner ruling): the
-  // completion authority is the LEADER-answered committed configuration, so
-  // the witness names itself (the target) as the group leader; a leaderless
-  // answer is WAIT, never SOURCE_RETIRED.
-  const witness = createReplaceWitness({
-    sourceVoter: false,
-    leaderReplicaId: TEST_TARGET_REPLICA_ID,
-  });
+  const witness = sourceRetiredLeaderWitness(TEST_TARGET_REPLICA_ID);
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
     enableTimeouts: false,

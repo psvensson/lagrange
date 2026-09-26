@@ -150,8 +150,10 @@ const RATCHET_TARGETS = [
     // harness; checker hint).
     // The merged O1 + REPLACE owner branch keeps the lower of each pair and
     // tightens 787/30313 -> 787/30304 on the checker's hint after the merge.
+    // 2026-09-26: tightened 787/30304 -> 787/30301 on the hint (fix-f1: the
+    // leader-answered witness double factored into one helper).
     baselineCloneGroupCount: 787,
-    baselineDuplicatedLineCount: 30304,
+    baselineDuplicatedLineCount: 30301,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
