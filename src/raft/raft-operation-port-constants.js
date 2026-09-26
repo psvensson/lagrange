@@ -21,6 +21,15 @@ const RAFT_EVENT = Object.freeze({
   // the scheduling it was asked for while the gate was closed (committed-
   // read amendment 1, section 3.3).
   GATE_OPENED: PARTICIPATION_GATE.GATE_OPENED,
+  // A configuration change settled in this drain: a conf-change entry
+  // applied (effective or not - a RemoveNode of a non-member and an AddNode
+  // of a member apply without changing the configuration key), or the
+  // core's pending configuration index (every proposed conf entry, and a new
+  // leader's last index) was reached without one. Carries {appliedIndex,
+  // confChangeEntries, admissible} (admissible: the core would now take a
+  // conf-change proposal). The admission re-drive's wake-up (verification
+  // V2); MEMBERSHIP_CHANGED keeps its configuration-key meaning.
+  CONF_CHANGE_APPLIED: 'conf change applied',
 });
 
 // The operations of the port beyond the scheduling and proposal surface,
@@ -125,11 +134,10 @@ const RAFT_MEMBERSHIP_ADMISSION_OUTCOME = Object.freeze({
   QUEUED: 'QUEUED',
   NOT_LEADER: 'NOT_LEADER',
   ALREADY_MEMBER: 'ALREADY_MEMBER',
-  // A proposal for this peer already left this leader in the current
-  // configuration: it is not proposed again until the applied configuration
-  // changes (MEMBERSHIP_CHANGED), which re-drives any admission the core
-  // dropped behind another unapplied change (committed-read amendment 1,
-  // section 3.5).
+  // A proposal for this peer already left this leader: it is not proposed
+  // again until a configuration change settles (CONF_CHANGE_APPLIED) or this
+  // replica gains leadership again, which re-drive it (committed-read
+  // amendment 1, section 3.5; verification V2).
   IN_FLIGHT: 'IN_FLIGHT',
 });
 

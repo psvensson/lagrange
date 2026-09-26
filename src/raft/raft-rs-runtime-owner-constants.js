@@ -64,6 +64,7 @@ const RUNTIME_EVENT = Object.freeze({
   TERM_CHANGE: RAFT_EVENT.TERM_CHANGE,
   LEADER_CHANGE: RAFT_EVENT.LEADER_CHANGE,
   MEMBERSHIP_CHANGED: RAFT_EVENT.MEMBERSHIP_CHANGED,
+  CONF_CHANGE_APPLIED: RAFT_EVENT.CONF_CHANGE_APPLIED,
 });
 const PEER_ADDRESS_STATUS = Object.freeze({
   RESOLVED: 'resolved',
@@ -146,6 +147,11 @@ const RUNTIME_REASON = Object.freeze({
   // never retried and never opened.
   DURABLE_RECORD_INCOMPATIBLE: 'durable-record-incompatible',
   CLOSED: 'closed',
+  // A conf-change proposal the core would drop (a pending configuration
+  // index above its applied index, or a joint configuration): answered as a
+  // typed, retryable deferral instead of letting the crate replace it with
+  // an empty entry (verification V2).
+  CONF_CHANGE_PENDING: 'conf-change-pending',
   // The store's own admission state, carried as the reason of the typed,
   // retryable, non-fatal deferral while a user transaction holds the
   // replica's connection.

@@ -117,32 +117,55 @@ function proposeAdmission(service, {replicaIdentity, peerAddress}) {
     outcome: RAFT_MEMBERSHIP_ADMISSION_OUTCOME.QUEUED};
 }
 
-// --- O1 admission liveness (committed-read amendment 1, section 3.5) ---
-// The admissions this leader proposed in the current applied configuration.
-// raft-rs drops an AddNode proposed while another configuration change is
-// unapplied (it answers Ok and appends an empty entry), so a proposal is only
-// "in flight" until the configuration next changes; then every admission is
-// re-evaluated once, without a poll.
+// --- O1 admission liveness (committed-read amendment 1, section 3.5;
+// verification V2) ---
+// Two sets per replica, both re-driven when a configuration change settles
+// (the port's CONF_CHANGE_APPLIED: a conf-change entry applied, effective or
+// not, or the core's pending index reached) and when this replica gains
+// leadership:
+//  - in flight: a proposal the port accepted (or queued); it is not proposed
+//    again meanwhile (IN_FLIGHT);
+//  - deferred: a proposal the port deferred (the core held an unapplied
+//    change and would have dropped it); it latches nothing, so any later
+//    cache change still proposes it.
+// Every admission is re-evaluated from its services row, without a poll.
 const ADMISSION_IN_FLIGHT_OUTCOMES = Object.freeze(new Set([
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME.PROPOSED,
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME.QUEUED,
 ]));
 const ADMISSIONS_IN_FLIGHT = new WeakMap();
+const ADMISSIONS_DEFERRED = new WeakMap();
 
-function admissionsInFlightOf(service) {
-  if (!ADMISSIONS_IN_FLIGHT.has(service)) {
-    ADMISSIONS_IN_FLIGHT.set(service, new Set());
+function admissionSetOf(sets, service) {
+  if (!sets.has(service)) {
+    sets.set(service, new Set());
   }
-  return ADMISSIONS_IN_FLIGHT.get(service);
+  return sets.get(service);
 }
 
-// A proposal the port accepted (or queued) is in flight until the applied
-// configuration next changes.
+function admissionsInFlightOf(service) {
+  return admissionSetOf(ADMISSIONS_IN_FLIGHT, service);
+}
+
+// Where one admission decision leaves its identity: in flight, deferred, or
+// in neither (a queued proposal is placed again when the port settles it).
+function trackAdmission(service, replicaIdentity, outcome) {
+  const inFlight = admissionsInFlightOf(service);
+  const deferred = admissionSetOf(ADMISSIONS_DEFERRED, service);
+  inFlight.delete(replicaIdentity);
+  deferred.delete(replicaIdentity);
+  if (ADMISSION_IN_FLIGHT_OUTCOMES.has(outcome)) {
+    inFlight.add(replicaIdentity);
+  } else if (outcome === RAFT_MEMBERSHIP_ADMISSION_OUTCOME.DEFERRED) {
+    deferred.add(replicaIdentity);
+  }
+}
+
 function proposeInFlightAdmission(service, peer) {
   const admission = proposeAdmission(service, peer);
-  if (ADMISSION_IN_FLIGHT_OUTCOMES.has(admission.outcome)) {
-    admissionsInFlightOf(service).add(peer.replicaIdentity);
-  }
+  trackAdmission(service, peer.replicaIdentity, admission.outcome);
+  admission.settled?.then((settled) =>
+    trackAdmission(service, peer.replicaIdentity, settled.outcome));
   return admission;
 }
 
@@ -183,16 +206,74 @@ function admitPartitionRaftPeer(service, {replicaIdentity, peerAddress}) {
   return Object.freeze(admission);
 }
 
+// The row-driven retirements (REMOVE_PEER) the port deferred, by the change
+// proposed: re-proposed when a configuration change settles or this replica
+// gains leadership, like a deferred admission (verification V2). Removing a
+// peer that is no longer a member is a raft no-op, so a repeat is harmless.
+const RETIREMENTS_DEFERRED = new WeakMap();
+
+function retirementsDeferredOf(service) {
+  if (!RETIREMENTS_DEFERRED.has(service)) {
+    RETIREMENTS_DEFERRED.set(service, new Map());
+  }
+  return RETIREMENTS_DEFERRED.get(service);
+}
+
+function trackRetirement(service, change, answered) {
+  const key = change.replicaIdentity ?? change.peerAddress;
+  if (admissionOfPortAnswer(answered).outcome ===
+      RAFT_MEMBERSHIP_ADMISSION_OUTCOME.DEFERRED) {
+    retirementsDeferredOf(service).set(key, change);
+  } else {
+    retirementsDeferredOf(service).delete(key);
+  }
+}
+
 /**
- * The admissions this leader proposed since the applied configuration last
- * changed, handed over and forgotten: the configuration changed, so none of
- * them is in flight any more (committed-read amendment 1, section 3.5).
+ * Propose one row-driven REMOVE_PEER through the port, remembering it when
+ * the port deferred it (the core held an unapplied change).
+ * @param {Object} service - The partition service.
+ * @param {Object} change - The REMOVE_PEER change.
+ * @return {*} What the port answered.
+ */
+function proposePeerRetirement(service, change) {
+  const answered = service.raft.proposeConfChange(change);
+  if (answered && typeof answered.then === 'function') {
+    answered.then((settled) => trackRetirement(service, change, settled),
+      (error) => trackRetirement(service, change, {reason: error?.message}));
+  } else {
+    trackRetirement(service, change, answered);
+  }
+  return answered;
+}
+
+/**
+ * The deferred row-driven retirements, handed over and forgotten.
+ * @param {Object} service - The partition service.
+ * @return {Array<Object>} The REMOVE_PEER changes.
+ */
+function takeDeferredRetirements(service) {
+  const deferred = retirementsDeferredOf(service);
+  const taken = [...deferred.values()];
+  deferred.clear();
+  return taken;
+}
+
+/**
+ * The admissions this replica proposed or deferred since a configuration
+ * change last settled, handed over and forgotten: a change settled (or this
+ * replica gained leadership), so none of them is in flight any more and each
+ * is re-evaluated once (committed-read amendment 1, section 3.5;
+ * verification V2).
  * @param {Object} service - The partition service.
  * @return {Set<string>} The replica identities.
  */
 function takeAdmissionsInFlight(service) {
-  const taken = new Set(admissionsInFlightOf(service));
-  admissionsInFlightOf(service).clear();
+  const inFlight = admissionsInFlightOf(service);
+  const deferred = admissionSetOf(ADMISSIONS_DEFERRED, service);
+  const taken = new Set([...inFlight, ...deferred]);
+  inFlight.clear();
+  deferred.clear();
   return taken;
 }
 
@@ -317,7 +398,9 @@ async function retirePartitionRaftPeer(service, replicaIdentity) {
 export {
   admitPartitionRaftPeer,
   readPartitionReplicaMembership,
+  proposePeerRetirement,
   reservePartitionRaftPeerIdentity,
   retirePartitionRaftPeer,
   takeAdmissionsInFlight,
+  takeDeferredRetirements,
 };
