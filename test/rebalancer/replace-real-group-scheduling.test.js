@@ -378,7 +378,12 @@ test('S8 / AN1: planner check x the REPLACE\'s terminal - the planner plans ' +
 
 const CONCURRENT_OPERATION_ID = 'p2-concurrent-remove';
 
+// The concurrent row is stamped on the owner's clock (the world's offset
+// clock): a row stamped on the wall clock before an offset jump is past its
+// PENDING step timeout by the owner's clock, and CL-043 rightly excludes a
+// stale operation from the serialization gate (fix-f1, F3 witness repair).
 function concurrentRemoveRow(world) {
+  const nowMs = Date.now() + world.clockOffsetMs;
   return {
     operation_id: CONCURRENT_OPERATION_ID,
     type: OperationType.REMOVE,
@@ -390,11 +395,11 @@ function concurrentRemoveRow(world) {
     target_node_id: 'node-c',
     status: ReplicaStatus.PENDING,
     workflow_step: WORKFLOW_STEP.PENDING,
-    created_at: Date.now(),
-    updated_at: Date.now(),
+    created_at: nowMs,
+    updated_at: nowMs,
     completed_at: null,
     steps_history: JSON.stringify([{step: WORKFLOW_STEP.PENDING,
-      timestamp: Date.now()}]),
+      timestamp: nowMs}]),
   };
 }
 
@@ -469,8 +474,8 @@ test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
     await driveToIntent(world);
     world.eventsSuppressed = true;
     t.equal(world.removeEffects.length, 1, 'setup: the first effect left');
-    world.cache.upsert('replica_operations', concurrentRemoveRow(world));
     world.clockOffsetMs += 61_000;
+    world.cache.upsert('replica_operations', concurrentRemoveRow(world));
     await world.coordinator.reconcileOperationProgress(
       await readPersisted(world));
     await settleTurns();
