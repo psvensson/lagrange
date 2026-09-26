@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2578791,
-        "sha256": "a9802f0aab8693a6cb46522e78115bc712a3374de67554145460b1b386f4aaea"
+        "bytes": 2584861,
+        "sha256": "5a5c9c61b7c4c707275e64a9bd206d000e60db23d6b1ce48e7f1ba6f2100b6f1"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "cf06d3f965ddff6ebf9f8058f4fd5a02e3d46e4e9a01a2da487b81b4245b2979"
+        "sha256": "7d62ea6dbc92b743483ca3f142a9376c346c3c84b140a517e0ef3861ab9b03e1"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "3c1c6340625e34d6f3db72142242439a05540c2f4f8e27d29ceb79272893a0ae"
+    "inputDigest": "5f4e76dd2de371cfeeca46b3ff3f098529a51c41d59308fdd9b688869b47b125"
   },
   "reconciliation": {
     "complexity": {
@@ -130,13 +130,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "cf06d3f965ddff6ebf9f8058f4fd5a02e3d46e4e9a01a2da487b81b4245b2979"
+          "sha256": "7d62ea6dbc92b743483ca3f142a9376c346c3c84b140a517e0ef3861ab9b03e1"
         },
-        "cloneGroups": 787,
-        "duplicatedLines": 30304,
-        "sourceCloneTouches": 1574,
-        "sourceDuplicatedLineTouches": 60608,
-        "nonzeroSourceCount": 497,
+        "cloneGroups": 788,
+        "duplicatedLines": 30333,
+        "sourceCloneTouches": 1576,
+        "sourceDuplicatedLineTouches": 60666,
+        "nonzeroSourceCount": 498,
         "touchMultiplicity": 2
       }
     ],
@@ -167,35 +167,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2578791,
-        "sha256": "a9802f0aab8693a6cb46522e78115bc712a3374de67554145460b1b386f4aaea"
+        "bytes": 2584861,
+        "sha256": "5a5c9c61b7c4c707275e64a9bd206d000e60db23d6b1ce48e7f1ba6f2100b6f1"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "4da25d0f3d31caa4c03002df18d97fe39c7fd7d4658d89f60d6ba107c07ee9cd",
-      "moduleCount": 5010,
-      "edgeCount": 23736,
+      "sourceDigest": "3da4b63b986d497af26aa15c435cc383f98dbb904ba39ad8bd97a993bcec4ddc",
+      "moduleCount": 5017,
+      "edgeCount": 23811,
       "unresolvedCount": 34
     }
   },
   "assignment": {
-    "sourceSignalCount": 2622,
-    "assignedSignalCount": 2622,
-    "uniqueAssignmentCount": 2622,
-    "digest": "87f570626bbc55ed16a09c803a0cd281fde89eeb5bbd5ed1c997f284459506e2"
+    "sourceSignalCount": 2623,
+    "assignedSignalCount": 2623,
+    "uniqueAssignmentCount": 2623,
+    "digest": "071d406fd7931e45e95b6f1c5be137d695b9f384efb171cf9219e0e2e1ff369f"
   },
   "signalCounts": {
     "cognitive": 159,
     "complexity": 1810,
-    "duplication": 566,
+    "duplication": 567,
     "fileSize": 48,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1349,
+    "filesWithDebt": 1350,
     "rankedBoundaryCount": 118,
     "semanticBoundaryCount": 21,
     "fallbackBoundaryCount": 97,
@@ -1227,7 +1227,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 206,
+      "importIn": 207,
       "importOut": 79,
       "score": 72,
       "topPaths": [
@@ -1377,6 +1377,34 @@
       ]
     },
     {
+      "key": "area:test/raft",
+      "owner": null,
+      "boundary": "test/raft",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/raft"
+      ],
+      "fileCount": 11,
+      "signalCount": 13,
+      "complexity": 3,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 393,
+      "cloneTouches": 13,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 1,
+      "importOut": 77,
+      "score": 51.3,
+      "topPaths": [
+        "test/raft/helpers/raft-follower-append-starvation-relief-scenarios.js",
+        "test/raft/liferaft-append-fail-recovery.test.js",
+        "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js",
+        "test/raft/raft-replica-base.test.js",
+        "test/raft/peer-address-resolver.property.test.js"
+      ]
+    },
+    {
       "key": "area:src/runtime",
       "owner": null,
       "boundary": "src/runtime",
@@ -1457,34 +1485,6 @@
         "test/runtime/native-js-driver.test.js",
         "test/runtime/oci-container-driver.test.js",
         "test/runtime/service-runtime-lifecycle-idempotency.test.js"
-      ]
-    },
-    {
-      "key": "area:test/raft",
-      "owner": null,
-      "boundary": "test/raft",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/raft"
-      ],
-      "fileCount": 10,
-      "signalCount": 12,
-      "complexity": 3,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 335,
-      "cloneTouches": 11,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 1,
-      "importOut": 65,
-      "score": 45.5,
-      "topPaths": [
-        "test/raft/helpers/raft-follower-append-starvation-relief-scenarios.js",
-        "test/raft/liferaft-append-fail-recovery.test.js",
-        "test/raft/raft-replica-base.test.js",
-        "test/raft/peer-address-resolver.property.test.js",
-        "test/raft/peer-address-resolver.test.js"
       ]
     },
     {
@@ -1588,7 +1588,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 70,
+      "importIn": 71,
       "importOut": 55,
       "score": 44,
       "topPaths": [

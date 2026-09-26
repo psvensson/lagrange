@@ -142,14 +142,18 @@ function membershipOf(confState) {
 }
 
 /**
- * A loopback network whose deliveries to or from a cut replica are dropped.
- * Senders are known by the raft peer id the packet names.
- * @return {Object} The transport, with cut(replicaId, peerId) and heal().
+ * A loopback network whose deliveries to or from a cut replica are dropped,
+ * and whose deliveries to a rewritten address pass through a function of
+ * the raft message (null drops the packet). Senders are known by the raft
+ * peer id the packet names.
+ * @return {Object} The transport, with cut(replicaId, peerId), heal() and
+ *   rewriteTo(address, fn|null).
  */
 function createCuttableTransport() {
   const handlers = new Map();
   const cutAddresses = new Set();
   const cutPeerIds = new Set();
+  const rewrites = new Map();
   return {
     register(address, handler) {
       handlers.set(address, handler);
@@ -166,7 +170,20 @@ function createCuttableTransport() {
       if (!handler) {
         throw new Error(`No handler registered for ${address}`);
       }
-      return handler({payload});
+      const rewrite = rewrites.get(address);
+      if (rewrite === undefined) {
+        return handler({payload});
+      }
+      const message = rewrite(payload.message);
+      return message === null ? {acknowledged: false, error: 'rewritten'} :
+        handler({payload: {...payload, message}});
+    },
+    rewriteTo(address, rewrite) {
+      if (rewrite === null) {
+        rewrites.delete(address);
+      } else {
+        rewrites.set(address, rewrite);
+      }
     },
     cut(address, peerId) {
       cutAddresses.add(address);
