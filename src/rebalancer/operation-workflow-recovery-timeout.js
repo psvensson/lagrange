@@ -688,10 +688,18 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
   // conservatively still treated as active. The downstream quorum projection in
   // evaluateRemoveSafety independently protects the voter-ready minimum, so the
   // gate is a serialization guard, not the sole quorum protector.
+  //
+  // A6 (quest replace-source-removal-owner, A5's rule): a partition REPLACE
+  // in its owner phases (ACTIVE, STOPPING) is never inactive by step age -
+  // it may legitimately wait without bound (S9, D2). It stops holding the
+  // partition only when the failure detector marked its target FAILED.
   isConcurrentOperationStalePastStepTimeout(
     operation,
     now = this.resolveTimeoutCheckNowMs(),
   ) {
+    if (isReplaceExemptFromTimeBudget(operation)) {
+      return isTargetFailureDetectorDead(this, operation);
+    }
     return this.isPriorityRecoveryOperationDrainStepStale(operation, now);
   }
 
@@ -705,7 +713,12 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
   // checks still protect quorum for the op that is allowed to proceed. A live,
   // pingable target still blocks (pingNode returns false fast for a
   // non-CONNECTED peer, so a clearly-down target does not delay the gate).
+  // A6: for a partition REPLACE in its owner phases a failed ping is not the
+  // failure detector's verdict; only a FAILED target ends its hold.
   async isConcurrentOperationTargetUncontactable(operation) {
+    if (isReplaceExemptFromTimeBudget(operation)) {
+      return isTargetFailureDetectorDead(this, operation);
+    }
     const targetNodeId =
       operation?.targetNodeId || operation?.target_node_id || null;
     if (!targetNodeId || targetNodeId === this.nodeId) {

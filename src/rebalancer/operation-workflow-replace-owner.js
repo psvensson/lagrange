@@ -38,6 +38,7 @@ import {
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   './replica-operation-update-disposition.js';
 import {captureReplaceOwnerLevel} from './operation-workflow-replace-owner-wake.js';
+import {isPartitionReplaceOwnerPhase} from './replica-operation-step-policy.js';
 import {
   deliverToReplaceWitness,
   readReplaceWitnessMembership,
@@ -700,9 +701,7 @@ async function adoptObservedReplaceSourceRetirement(owner, operation) {
  * @return {boolean}
  */
 function isReplaceExemptFromTimeBudget(operation) {
-  return isPartitionReplace(operation) &&
-    (operation?.workflowStep === WORKFLOW_STEP.ACTIVE ||
-      operation?.workflowStep === WORKFLOW_STEP.STOPPING);
+  return isPartitionReplaceOwnerPhase(operation);
 }
 
 /**

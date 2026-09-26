@@ -12,6 +12,7 @@ import {
   resolveReplicaOperationSemanticPhase,
 } from './replica-status.js';
 import {REBALANCER_DEFAULT} from './rebalancer-constants.js';
+import {isPartitionReplaceOwnerPhase} from './replica-operation-step-policy.js';
 import {
   hasObservedCompletedReplicaOperation,
 } from './replica-operation-observed-completion.js';
@@ -568,6 +569,16 @@ function resolveStepTimeoutMs(workflowStep, options = {}) {
 
 function isReplicaOperationStale(record, options = {}) {
   if (!isReplicaOperationInFlight(record, options)) {
+    return false;
+  }
+  // A6 / S9 / D2: a partition REPLACE in its owner phases is never stale by
+  // the age of its step; only its owner resolves it.
+  if (isPartitionReplaceOwnerPhase({
+    type: record?.type,
+    entityType: record?.entityType === UNKNOWN_ENTITY_TYPE ?
+      undefined : record?.entityType,
+    workflowStep: record?.workflowStep,
+  })) {
     return false;
   }
   const nowMs = Number.isFinite(options.nowMs) ?
