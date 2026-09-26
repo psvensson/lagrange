@@ -58,6 +58,8 @@ import {
   clearAllReplaceHandoffAttempts,
   clearReplaceHandoffAttempt,
   isReplaceHandoffAttemptUnresolved,
+  readReplaceHandoffAttempt,
+  readReplaceHandoffDecisionUnresolved,
 } from './operation-workflow-replace-handoff-attempt.js';
 import {
   REPLACE_INTENT_FIELD,
@@ -474,11 +476,18 @@ function recordReplaceOwnerWait(owner, operation, reason, context = {}) {
     return false;
   }
   const observation = context.observation || null;
+  const handoffPhase = operation.workflowStep === WORKFLOW_STEP.ACTIVE;
   recordReplaceWaitDiagnostic(owner, operation, reason, observation, {
+    // S9: at ACTIVE the attempt is the named handoff's, labelled from the
+    // decision that read it (its witness), not re-classified without one.
+    handoffAttempt: handoffPhase ?
+      readReplaceHandoffAttempt(owner, operation.operationId) : null,
     ownerPhase: classifyReplaceOwnerPhase({
       workflowStep: operation.workflowStep,
-      handoffAttemptUnresolved: isReplaceHandoffAttemptUnresolved(
-        owner, operation.operationId, observation),
+      handoffAttemptUnresolved: readReplaceHandoffDecisionUnresolved(
+        owner, operation.operationId) ??
+        isReplaceHandoffAttemptUnresolved(
+          owner, operation.operationId, observation),
       sourceRetired: false,
       sourceRowClass: context.sourceRow ?
         sourceRowClassOf(context.sourceRow) : REPLACE_SOURCE_ROW_CLASS.UNKNOWN,

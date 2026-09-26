@@ -74,7 +74,10 @@ const ATTEMPT_STATE_BY_OWNER = new WeakMap();
 function readAttemptState(owner) {
   let state = ATTEMPT_STATE_BY_OWNER.get(owner);
   if (!state) {
-    state = {attemptByOperationId: new Map(), nextSeq: 1, lateAnswers: 0};
+    // decisionByOperationId: the last named-handoff decision per operation,
+    // the state an ACTIVE wait's diagnostic is labelled from (S9).
+    state = {attemptByOperationId: new Map(), decisionByOperationId: new Map(),
+      nextSeq: 1, lateAnswers: 0};
     ATTEMPT_STATE_BY_OWNER.set(owner, state);
   }
   return state;
@@ -197,6 +200,13 @@ function rebuildLostHandoffAttempt(owner, state, operation) {
  * @return {Object} Frozen {state, attemptSeq?}.
  */
 function decideReplaceNamedHandoff(owner, operation, witness, replicaIds) {
+  const decision = decideNamedHandoff(owner, operation, witness, replicaIds);
+  readAttemptState(owner).decisionByOperationId.set(
+    operation.operationId, decision);
+  return decision;
+}
+
+function decideNamedHandoff(owner, operation, witness, replicaIds) {
   const state = readAttemptState(owner);
   rebuildLostHandoffAttempt(owner, state, operation);
   const attempt = state.attemptByOperationId.get(operation.operationId);
@@ -259,14 +269,31 @@ function readReplaceHandoffLateAnswerCount(owner) {
   return ATTEMPT_STATE_BY_OWNER.get(owner)?.lateAnswers || 0;
 }
 
+/**
+ * S9: whether the operation's last named-handoff decision waited on an
+ * unresolved attempt; null when no decision was taken in this session.
+ * @param {Object} owner
+ * @param {string} operationId
+ * @return {boolean|null}
+ */
+function readReplaceHandoffDecisionUnresolved(owner, operationId) {
+  const decision = ATTEMPT_STATE_BY_OWNER.get(owner)?.decisionByOperationId
+    .get(operationId);
+  return decision ?
+    decision.state === REPLACE_HANDOFF_DECISION.WAIT_ATTEMPT_UNRESOLVED :
+    null;
+}
+
 function clearReplaceHandoffAttempt(owner, operationId) {
   ATTEMPT_STATE_BY_OWNER.get(owner)?.attemptByOperationId.delete(operationId);
+  ATTEMPT_STATE_BY_OWNER.get(owner)?.decisionByOperationId.delete(operationId);
 }
 
 // Shutdown: every attempt is released with the owner's state; the sequence
 // keeps counting, so a late answer of a released attempt stays late.
 function clearAllReplaceHandoffAttempts(owner) {
   ATTEMPT_STATE_BY_OWNER.get(owner)?.attemptByOperationId.clear();
+  ATTEMPT_STATE_BY_OWNER.get(owner)?.decisionByOperationId.clear();
 }
 
 export {
@@ -278,6 +305,7 @@ export {
   decideReplaceNamedHandoff,
   isReplaceHandoffAttemptUnresolved,
   readReplaceHandoffAttempt,
+  readReplaceHandoffDecisionUnresolved,
   readReplaceHandoffLateAnswerCount,
   recordReplaceHandoffAnswer,
 };
