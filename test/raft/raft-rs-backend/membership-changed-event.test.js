@@ -10,11 +10,16 @@
 //   - a round with no configuration change announces nothing.
 // Oracle: the core's own readStatus().confState on the same replica. Nothing
 // here chooses an expected configuration.
+//   - every announcement carries the applied index of the observation its
+//     configuration came from; oracle: the replica's durable applied state,
+//     which records the applied index and the configuration it includes in
+//     one statement, read at the instant of the announcement.
 
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
 import {
   RAFT_EVENT,
   RAFT_MEMBERSHIP_OPERATION,
@@ -24,14 +29,30 @@ const PARTITION_ID = 'membership-event-partition';
 const FOUNDING = Object.freeze(['replica-a', 'replica-b', 'replica-c']);
 const SETTLE_ROUNDS = 400;
 
+// Each announcement, with the replica's durable applied index at the instant
+// it was announced (the oracle for the announcement's appliedIndex).
 function subscribeAll(cluster, replicaIds, received) {
   return replicaIds.map((replicaId) => {
     received.set(replicaId, []);
     return cluster.node(replicaId).subscribe(
       RAFT_EVENT.MEMBERSHIP_CHANGED,
-      (observation) => received.get(replicaId).push(observation),
+      (observation) => received.get(replicaId).push({
+        ...observation,
+        durableAppliedIndex: RaftRsDurableStore.readAppliedIndexIn(
+          cluster.replica(replicaId).db, PARTITION_ID),
+      }),
     );
   });
+}
+
+function assertAppliedIndexOfObservation(observation, label) {
+  assert.equal(Number.isFinite(observation.appliedIndex), true,
+    `${label}: the announcement carries an applied index`);
+  assert.equal(observation.appliedIndex,
+    Number(observation.durableAppliedIndex ?? 0),
+    `${label}: it is the applied index the configuration was recorded at`);
+  assert.ok(observation.appliedIndex <= observation.commitIndex,
+    `${label}: applied never runs ahead of commit`);
 }
 
 function votersOf(confState) {
@@ -70,6 +91,7 @@ test('membership changed: the first observation after construction is ' +
         'the announced configuration is the core\'s');
       assert.equal(Number.isFinite(first.commitIndex), true,
         'the announcement carries the commit index');
+      assertAppliedIndexOfObservation(first, `${replicaId} first`);
     }
   } finally {
     cluster.dispose();
@@ -117,6 +139,9 @@ test('membership changed: a committed RemoveNode is announced once on every ' +
       assert.deepEqual(votersOf(events.at(-1).confState),
         votersOf(cluster.coreConfState(replicaId)),
         'the announced configuration is the one the core applied');
+      assertAppliedIndexOfObservation(events.at(-1), `${replicaId} removal`);
+      assert.ok(events.at(-1).appliedIndex > 0,
+        'the removal was applied at a log index');
     }
   } finally {
     cluster.dispose();
@@ -139,6 +164,7 @@ test('membership changed: a restart announces its first observation again, ' +
     assert.ok(first, 'the restarted replica announced its first observation');
     assert.deepEqual(votersOf(first.confState), before,
       'the restored configuration is the committed one it had');
+    assertAppliedIndexOfObservation(first, `${restarted} restored`);
   } finally {
     cluster.dispose();
   }

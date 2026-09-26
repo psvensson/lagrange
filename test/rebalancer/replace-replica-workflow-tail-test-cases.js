@@ -704,6 +704,11 @@ export async function registerReplaceReplicaWorkflowTailTests({
         operation.sourceReplicaId = 'users-p1-r1';
         operation.workflowStep = WORKFLOW_STEP.STOPPING;
         operation.status = ReplicaStatus.ACTIVE;
+        // The durable row is STOPPING (another writer's, with no intent);
+        // the owner records its intent from a fresh witness read first.
+        operation.stepsHistory = [...operation.stepsHistory,
+          {step: WORKFLOW_STEP.STOPPING, timestamp: Date.now()}];
+        await coordinator.repository.persistOperationUpdate(operation);
 
         await coordinator.reconcileOperationProgress(operation);
         t.equal(

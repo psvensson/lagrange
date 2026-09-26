@@ -47,21 +47,33 @@ function unavailableWitness(reason) {
   });
 }
 
-function buildReplaceWitnessRequest(operation, messageType, replicaIds) {
+function buildReplaceWitnessRequest(operation, messageType, replicaIds,
+  readReplicaId) {
   return {
     [ReplicaOperationField.TYPE]: messageType,
     [ReplicaOperationField.OPERATION_ID]: operation.operationId,
     [ReplicaOperationField.OPERATION_TYPE]: operation.type,
     [ReplicaOperationField.PARTITION_ID]: operation.partitionId,
-    [ReplicaOperationField.REPLICA_ID]: replicaIds.targetReplicaId,
+    [ReplicaOperationField.REPLICA_ID]: readReplicaId,
     [ReplicaOperationField.SOURCE_REPLICA_ID]: replicaIds.sourceReplicaId,
   };
 }
 
-async function deliverToReplaceWitness(owner, operation, messageType) {
+/**
+ * Deliver a witness message to one replica of the partition: the REPLACE
+ * target t unless another member is named (D2 target death only).
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {string} messageType
+ * @param {Object} [member] - {replicaId, nodeId}; defaults to t.
+ * @return {Promise<Object>} {outcome, response?, reason?}.
+ */
+async function deliverToReplaceWitness(owner, operation, messageType,
+  member = null) {
   const replicaIds = replaceReplicaIdsOf(owner, operation);
-  const targetNodeId = operation?.targetNodeId || null;
-  if (!replicaIds.sourceReplicaId || !replicaIds.targetReplicaId ||
+  const readReplicaId = member?.replicaId || replicaIds.targetReplicaId;
+  const targetNodeId = member?.nodeId || operation?.targetNodeId || null;
+  if (!replicaIds.sourceReplicaId || !readReplicaId ||
       !targetNodeId ||
       typeof owner.messageRouter?.deliver !==
         OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION) {
@@ -75,7 +87,8 @@ async function deliverToReplaceWitness(owner, operation, messageType) {
   try {
     const response = await owner.messageRouter.deliver(
       `${targetNodeId}/service/${handlerType}`,
-      buildReplaceWitnessRequest(operation, messageType, replicaIds),
+      buildReplaceWitnessRequest(operation, messageType, replicaIds,
+        readReplicaId),
       {
         targetNodeId,
         deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
@@ -94,12 +107,17 @@ async function deliverToReplaceWitness(owner, operation, messageType) {
  * The witness replica's committed configuration as its own port reports it.
  * @param {Object} owner
  * @param {Object} operation
+ * @param {Object} [member] - {replicaId, nodeId}: another member to read
+ *   (D2 target death); defaults to the REPLACE target t.
  * @return {Promise<Object>} Frozen observation (a membership state plus
- *   commitIndex, leaderReplicaId, term, transferWindowMaxMs).
+ *   commitIndex, appliedIndex - the witness runtime's applied index of the
+ *   same observation its configuration came from; commit may run ahead of
+ *   it - leaderReplicaId, term, transferWindowMaxMs).
  */
-async function readReplaceWitnessMembership(owner, operation) {
+async function readReplaceWitnessMembership(owner, operation, member = null) {
   const {response, reason} = await deliverToReplaceWitness(
-    owner, operation, ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP);
+    owner, operation, ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP,
+    member);
   const membership = response?.[ReplicaOperationField.MEMBERSHIP];
   if (response?.status !== ReplicaOperationResponseStatus.COMPLETED ||
       !membership || typeof membership.state !== 'string') {

@@ -5,6 +5,7 @@
  * A9, generalised by amendment-1 step 0 to every level the owner waits on).
  * Inputs (wakes only, never authority):
  *  - the readiness owner's snapshot publications;
+ *  - the node's replicated services rows (a REPLACE source's row change);
  *  - the node's partition consensus relay (the replica handler's tracked
  *    services): the applied ConfState announcement and the leader/term
  *    announcements of every local replica.
@@ -28,7 +29,17 @@
  *  - consensus: the last applied ConfState, leader and term the local relay
  *    announced for the operation's partition;
  *  - concurrency: the other non-terminal operations cached for the
- *    partition.
+ *    partition;
+ *  - source-row class: the REPLACE source replica's lifecycle row as the
+ *    cache holds it (a change wakes the owner through
+ *    wakeReplaceOwnersForReplicaRow, from the node's cache-change feed);
+ *  Attempt state is deliberately NOT in the level: it is the owner's own
+ *  output, changed inside the owner's turn, so an entry level captured
+ *  before a decision that issues an attempt would always differ and the
+ *  owner would wake itself (a self-redrive that joins the next entry's lane).
+ *  Attempt resolution is an answer (the handoff's E11 continuation decides
+ *  again at once; an R-1f answer is recorded in the same turn) or elapsed
+ *  time (the transfer window / backstop, reached by the 1 s fallback).
  *
  * Lost-wakeup rule. The level is captured BEFORE the owner's reads. When the
  * owner waits it subscribes (once, permanently), registers the waiter with
@@ -130,8 +141,43 @@ function readReplaceOwnerLevel(owner, operation, nodeIds) {
   const consensusLevel = WAKE_STATE_BY_OWNER.get(owner)
     ?.consensusLevelByPartitionId.get(operation?.partitionId) ??
     NO_CONSENSUS_OBSERVATION;
-  return readinessLevel + LEVEL_PART_SEPARATOR + consensusLevel +
-    LEVEL_PART_SEPARATOR + concurrentOperationLevel(owner, operation);
+  return [
+    readinessLevel,
+    consensusLevel,
+    concurrentOperationLevel(owner, operation),
+    sourceRowLevel(owner, operation),
+  ].join(LEVEL_PART_SEPARATOR);
+}
+
+// The REPLACE source replica's lifecycle row as the cache holds it.
+function sourceRowLevel(owner, operation) {
+  const sourceReplicaId = operation?.type === OperationType.REPLACE ?
+    owner.repository?.getReplaceSourceReplicaId?.(operation) : null;
+  if (!sourceReplicaId ||
+      typeof owner.repository?.getObservedReplicaStatusFromCache !==
+        'function') {
+    return NO_CONSENSUS_OBSERVATION;
+  }
+  return String(owner.repository.getObservedReplicaStatusFromCache(
+    sourceReplicaId, operation.partitionId, operation.sourceNodeId,
+    {allowPartitionNodeFallback: false}) ?? NO_CONSENSUS_OBSERVATION);
+}
+
+/**
+ * A replicated services row changed: wake every waiting REPLACE whose source
+ * replica it is (the source-row part of the level).
+ * @param {Object} owner
+ * @param {Object|null} record - The services row.
+ */
+function wakeReplaceOwnersForReplicaRow(owner, record) {
+  const state = WAKE_STATE_BY_OWNER.get(owner);
+  const replicaId = record?.replica_id || record?.service_id;
+  if (!state || typeof replicaId !== 'string' || owner.isShuttingDown) {
+    return;
+  }
+  wakeWaiters(owner, state, (waiter) =>
+    owner.repository?.getReplaceSourceReplicaId?.(waiter.operation) ===
+      replicaId);
 }
 
 // The other non-terminal operations the cache holds for the partition: a
@@ -403,6 +449,7 @@ function shutdownReplaceOwnerWake(owner) {
 
 export {
   attachReplicaConsensusEvents,
+  wakeReplaceOwnersForReplicaRow,
   captureReplaceOwnerLevel,
   clearReplaceOwnerWaiter,
   registerReplaceOwnerWaiter,

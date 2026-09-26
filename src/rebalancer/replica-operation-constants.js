@@ -35,6 +35,13 @@ const ReplaceWitnessDeliveryOutcome = Object.freeze({
   DELIVERY_FAILED: 'witness_delivery_failed',
 });
 
+// How an owner's copy of an operation was obtained (BR12): a deferred
+// authoritative read hands the owner its previous snapshot, which may be
+// behind the durable row and is never grounds for an effect.
+const ReplicaOperationVisibilityClass = Object.freeze({
+  DEFERRED_SNAPSHOT: 'deferred_snapshot',
+});
+
 const ReplicaOperationField = Object.freeze({
   TYPE: FIELD.TYPE,
   MEMBERSHIP_PUBLICATION_EPOCH: 'membershipPublicationEpoch',
@@ -57,6 +64,8 @@ const ReplicaOperationField = Object.freeze({
   // answer of an earlier attempt is dropped.
   ATTEMPT_SEQ: 'attemptSeq',
   MEMBERSHIP: 'membership',
+  // In-memory only (never persisted): ReplicaOperationVisibilityClass.
+  VISIBILITY_CLASS: 'visibilityClass',
   PROPOSAL: 'proposal',
 });
 
@@ -74,5 +83,6 @@ export {
   ReplicaOperationReason,
   ReplaceWitnessDeliveryOutcome,
   ReplicaOperationField,
+  ReplicaOperationVisibilityClass,
   ReplicaOperationResponseStatus,
 };

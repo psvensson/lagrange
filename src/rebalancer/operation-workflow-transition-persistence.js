@@ -6,8 +6,10 @@ import {
   clearReplaceOwnerState,
   decideReplaceCompletion,
   isPartitionReplace,
-  isReplaceTerminalFailureAdmitted,
 } from './operation-workflow-replace-owner.js';
+import {
+  admitReplaceTerminalFailure,
+} from './operation-workflow-replace-terminal-admission.js';
 import {
   OperationWorkflowTransitionOrchestration,
 } from './operation-workflow-transition-orchestration.js';
@@ -55,6 +57,12 @@ const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
 const ALREADY_TERMINAL_TRANSITION_OUTCOME = Object.freeze({
   committed: false,
   disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+});
+
+// A failure of anything but a partition REPLACE: no D2 admission applies.
+const NON_REPLACE_FAILURE_ADMISSION = Object.freeze({
+  refused: false,
+  persistOptions: Object.freeze({}),
 });
 
 // A caller's step metadata recorded on the FAILED step entry.
@@ -300,6 +308,7 @@ class OperationWorkflowTransitionPersistence
     projectedOperation,
     transitionOutcome,
     step,
+    persistOptions = {},
   ) {
     this.clearTransitionRetry(operation.operationId);
     // Release only on a proven terminal: lost-to-other-terminal
@@ -325,6 +334,7 @@ class OperationWorkflowTransitionPersistence
         this,
         projectedOperation,
         TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED,
+        persistOptions,
       );
     }
     this.clearDeferredSafetyBlockState(operation.operationId);
@@ -469,29 +479,36 @@ class OperationWorkflowTransitionPersistence
   }
 
   /**
-   * D2: after a partition REPLACE's durable removal intent, only target
-   * death with the source still a voter may end it FAILED; every elapsed-time
-   * or heuristic failure is refused (typed) by failOperation, and logged here.
+   * D2: after a partition REPLACE's DURABLE removal intent, only target
+   * death with the source still a voter may end it FAILED; every
+   * elapsed-time or heuristic failure is refused (typed) by failOperation,
+   * and logged here. An admitted REPLACE failure carries the durable step it
+   * was admitted against, for the terminal write's CAS.
    * @param {Object} operation
    * @param {string} errorMessage
    * @param {Object} options
-   * @return {boolean} Whether failOperation must refuse this failure.
+   * @return {Promise<Object>} Frozen {refused, persistOptions}.
    */
-  isReplaceFailureRefused(operation, errorMessage, options) {
-    if (!isPartitionReplace(operation) ||
-        isReplaceTerminalFailureAdmitted(operation, options)) {
-      return false;
+  async admitOperationFailure(operation, errorMessage, options) {
+    if (!isPartitionReplace(operation)) {
+      return NON_REPLACE_FAILURE_ADMISSION;
+    }
+    const admission = await admitReplaceTerminalFailure(
+      this, operation, options);
+    if (admission.admitted) {
+      return Object.freeze({refused: false, persistOptions: {
+        expectedWorkflowStep: admission.expectedWorkflowStep}});
     }
     this.logger.warn(
       REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILURE_REFUSED_AFTER_INTENT,
       {
         operationId: operation.operationId,
         partitionId: operation.partitionId,
-        workflowStep: operation.workflowStep,
+        workflowStep: admission.expectedWorkflowStep,
         errorMessage: this.normalizeErrorMessage(errorMessage, null),
       },
     );
-    return true;
+    return Object.freeze({refused: true, persistOptions: {}});
   }
 
   /**
@@ -511,7 +528,9 @@ class OperationWorkflowTransitionPersistence
     ) {
       return ALREADY_TERMINAL_TRANSITION_OUTCOME;
     }
-    if (this.isReplaceFailureRefused(operation, errorMessage, options)) {
+    const failureAdmission =
+      await this.admitOperationFailure(operation, errorMessage, options);
+    if (failureAdmission.refused) {
       return buildReplaceFailureRefusal();
     }
     const normalizedError = this.normalizeErrorMessage(
@@ -572,6 +591,7 @@ class OperationWorkflowTransitionPersistence
         projectedOperation,
         {
           ...this.buildOperationTransitionPersistOptions(),
+          ...failureAdmission.persistOptions,
           terminalTransition: true,
           returnDisposition: true,
         },
@@ -587,7 +607,8 @@ class OperationWorkflowTransitionPersistence
         afterCommit: async () => {
           await this.confirmCommittedTransitionPersistence(
             projectedOperation,
-            {terminalTransitionRepair: true},
+            {terminalTransitionRepair: true,
+              repairPersistOptions: failureAdmission.persistOptions},
           );
         },
       },
@@ -601,6 +622,7 @@ class OperationWorkflowTransitionPersistence
         projectedOperation,
         transitionOutcome,
         WORKFLOW_STEP.FAILED,
+        failureAdmission.persistOptions,
       );
       return transitionOutcome;
     }

@@ -384,28 +384,6 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
     );
   }
 
-  // The H-B' replacement-leader retarget is deleted (quest
-  // replace-source-removal-owner, amendment-1 step 2): a REPLACE's handoff
-  // names its own target only, so no retarget candidate exists (R09).
-  hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound() {
-    return false;
-  }
-
-  /**
-   * @param {Object} operation
-   * @param {Object|null} replacementReplicaRow
-   * @param {Object[]} currentVoterReadyRows
-   * @param {string|null} operationReplicaId
-   * @return {Promise<Object|null>}
-   * @private
-   */
-  async resolvePriorityPublicationReplacementLeaderCandidateRow(
-    operation,
-    replacementReplicaRow,
-  ) {
-    return replacementReplicaRow || null;
-  }
-
   /**
    * Evaluate safety validation for REMOVE operations.
    * @param {Object} operation

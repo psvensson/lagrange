@@ -5,6 +5,14 @@ import {
   resolveOperationOwnerLeaseExpiryForPersist,
 } from './replica-operation-owner-lease.js';
 
+// A terminal write that is also a step CAS (a REPLACE FAILED admitted
+// against its durable step, quest replace-source-removal-owner): both guards,
+// first-terminal-wins and the admitted step.
+const UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_SQL = `UPDATE replica_operations SET
+    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
+    error_message = ?, steps_history = ?, replica_id = ?
+    WHERE operation_id = ? AND workflow_step = ? AND completed_at IS NULL`;
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const PERSIST_PHASE_DIVERGENCE_REINSERT = 'divergence_reinsert';
 const OWNER_LEASE_TOUCH_LOG_CONTEXT = 'owner_lease_touch';
@@ -189,11 +197,13 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     }
 
     // An expected-step CAS write pins the step in the WHERE clause; a
-    // terminal write guards on completed_at IS NULL instead; the plain
-    // update carries neither guard.
+    // terminal write guards on completed_at IS NULL; a terminal write that
+    // is also a step CAS carries both; the plain update carries neither.
     resolveOperationUpdateSql(expectedWorkflowStep, terminalTransition) {
       if (expectedWorkflowStep) {
-        return SQL.UPDATE_OPERATION_EXPECTING_STEP;
+        return terminalTransition ?
+          UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_SQL :
+          SQL.UPDATE_OPERATION_EXPECTING_STEP;
       }
       return terminalTransition ?
         SQL.UPDATE_OPERATION_TERMINAL :

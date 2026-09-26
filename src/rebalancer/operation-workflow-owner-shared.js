@@ -287,6 +287,9 @@ const OPERATION_LIFECYCLE_ACTION = Object.freeze({
   EXECUTE_REMOVE_DISPATCH: 'execute_remove_dispatch',
   RECONCILE_STOPPING: 'reconcile_stopping',
   RECONCILE_REPLICA_STATUS: 'reconcile_replica_status',
+  // R-1b: the drain hands a partition REPLACE back to its owner, which
+  // decides from committed membership (never the drain).
+  HAND_BACK_REPLACE_OWNER: 'hand_back_replace_owner',
   NOOP: 'noop',
 });
 

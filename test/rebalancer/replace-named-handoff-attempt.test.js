@@ -16,7 +16,7 @@
  *    a refused attempt resolves and the next one names the same target;
  *  - attemptSeq echo: a late answer of an earlier attempt is dropped;
  *  - fresh leadership decides: removal proceeds once the witness reports the
- *    target (or another non-source replica) leading;
+ *    target itself leading (BR11);
  *  - F-b: no handoff leaves for an operation that became terminal;
  *  - target NOT_FOUND fails the REPLACE before its intent (no retarget).
  *
@@ -266,6 +266,33 @@ test('attemptSeq echo: a late answer of an earlier attempt is dropped',
     }
   });
 
+test('attemptSeq echo, routed: an answer echoing another attempt through the ' +
+  'real dispatch leaves the current attempt outstanding', async (t) => {
+  const harness = await createHarness({stepDownResponse: (payload) => ({
+    status: ReplicaOperationResponseStatus.COMPLETED,
+    handoffBranch: REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REQUESTED,
+    [ReplicaOperationField.ATTEMPT_SEQ]:
+      payload[ReplicaOperationField.ATTEMPT_SEQ] - 1,
+  })});
+  try {
+    const lateBefore = readReplaceHandoffLateAnswerCount(harness.owner);
+    await harness.coordinator.executeOperation(harness.operation);
+    const attempt = readReplaceHandoffAttempt(harness.owner,
+      harness.operation.operationId);
+    t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+    t.equal(attempt?.answerClass, null,
+      'the mismatched answer resolved nothing');
+    t.equal(readReplaceHandoffLateAnswerCount(harness.owner),
+      lateBefore + 1, 'it was counted late');
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.stepDowns().length, 1,
+      'the outstanding attempt blocks a second handoff');
+    t.equal(harness.removals().length, 0, 'and no removal');
+  } finally {
+    await harness.shutdown();
+  }
+});
+
 test('F-b: no handoff leaves for an operation that became terminal',
   async (t) => {
     const harness = await createHarness();
@@ -301,6 +328,45 @@ test('no retarget: a target that reports its replica missing fails the ' +
     t.same([...new Set(harness.stepDowns().map((delivery) =>
       delivery.payload[ReplicaOperationField.REPLICA_ID]))],
     [TARGET_REPLICA_ID], 'no other replica was asked to lead');
+  } finally {
+    await harness.shutdown();
+  }
+});
+
+test('BR12: no handoff leaves on a deferred-visibility snapshot', async (t) => {
+  const harness = await createHarness();
+  try {
+    await harness.coordinator.repository.persistOperationUpdate(
+      harness.operation);
+    const snapshot = harness.owner.resolveDeferredRetryVisibleOperation(
+      {operation: null, deferredOutcome: {reasonCode: 'visibility_deferred'}},
+      harness.operation);
+    await harness.coordinator.executeOperation(snapshot);
+    t.equal(harness.stepDowns().length, 0,
+      'the deferred snapshot issues no handoff');
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.stepDowns().length, 1,
+      'control: the fresh copy issues the named-target handoff');
+  } finally {
+    await harness.shutdown();
+  }
+});
+
+test('BR11: only a fresh read of the target leading authorizes removal; a ' +
+  'third replica leading gets the named-target handoff', async (t) => {
+  const harness = await createHarness();
+  try {
+    harness.witness.leaderReplicaId = PEER_REPLICA_B;
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.removals().length, 0,
+      'a non-source, non-target leader does not authorize the removal');
+    t.equal(harness.stepDowns().length, 1, 'one handoff was issued');
+    t.equal(harness.stepDowns()[0]?.payload[ReplicaOperationField.REPLICA_ID],
+      TARGET_REPLICA_ID, 'it names the REPLACE\'s own target');
+    harness.witness.leaderReplicaId = TARGET_REPLICA_ID;
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.removals().length, 1,
+      'the target leading (fresh read) lets removal proceed');
   } finally {
     await harness.shutdown();
   }

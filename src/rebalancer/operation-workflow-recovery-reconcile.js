@@ -7,14 +7,21 @@ import {
   clearReplaceOwnerWaiter,
   registerReplaceOwnerWaiter,
   shutdownReplaceOwnerWake,
+  wakeReplaceOwnersForReplicaRow,
 } from './operation-workflow-replace-owner-wake.js';
 import {
   REPLACE_WAIT_REASON,
   clearAllReplaceOwnerState,
+  clearReplaceOwnerState,
   reconcileReplaceStoppingOwner,
-  recordReplaceWaitDiagnostic,
+  recordReplaceOwnerWait,
 } from './operation-workflow-replace-owner.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
+import {
+  REPLACE_OWNER_RESTART_CLASS,
+  startReplaceOwnerSession,
+} from './operation-workflow-replace-owner-recovery.js';
+import {replaceIntentEntryOf} from './operation-workflow-replace-owner-state.js';
 import {
   applyPriorityRecoveryDispatchPendingOwnerProgress,
   applyPriorityRecoveryDispatchPendingReentryAction,
@@ -45,9 +52,72 @@ const {
 const {
   REBALANCER_SKIP_REASON,
   ReplicaOperationResponseStatus,
+  SYSTEM_TABLE_NAME,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
+// The durable STOPPING row's step and history become the owner's copy.
+function adoptDurableReplaceIntent(operation, durable) {
+  operation.workflowStep = durable.workflowStep;
+  operation.status = durable.status;
+  operation.stepsHistory = [...durable.stepsHistory];
+}
+
+// The intent's metadata on the newest STOPPING entry (its timestamp - the
+// step's entry time - is kept).
+function recordIntentOnCurrentStoppingEntry(stepsHistory, stepMetadata) {
+  const history = Array.isArray(stepsHistory) ? [...stepsHistory] : [];
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    if (history[index]?.step === WORKFLOW_STEP.STOPPING) {
+      history[index] = {...history[index], ...stepMetadata};
+      return history;
+    }
+  }
+  return history;
+}
+
 class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain {
+  constructor(options) {
+    super(options);
+    // A new owner instance begins its REPLACE-owner session: an operation
+    // whose step began earlier may have lost its attempt state (BR10).
+    startReplaceOwnerSession(this, REPLACE_OWNER_RESTART_CLASS.PROCESS_RESTART);
+  }
+
+  handleObservedReplicaStateChange(tableName, cacheOperation, record) {
+    this.releaseObservedTerminalOperationState(
+      tableName, cacheOperation, record);
+    if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+      wakeReplaceOwnersForReplicaRow(this, record);
+    }
+    return super.handleObservedReplicaStateChange(
+      tableName, cacheOperation, record);
+  }
+
+  /**
+   * BR17: any terminal observation of an operation - written here or by
+   * another node and seen only through the replicated row, or the row's
+   * deletion - releases the owner's waiter, its fallback timer and its
+   * REPLACE-owner state for it. Nothing waits on, or reads the witness for,
+   * an operation that is over.
+   * @param {string} tableName
+   * @param {string} cacheOperation
+   * @param {Object|null} record - The replicated row.
+   */
+  releaseObservedTerminalOperationState(tableName, cacheOperation, record) {
+    const operationId = record?.operation_id;
+    if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
+        typeof operationId !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING) {
+      return;
+    }
+    const deleted = cacheOperation === OPERATION_WORKFLOW_OWNER_LITERAL.DELETE;
+    if (!deleted && (record.completed_at === null ||
+        record.completed_at === undefined)) {
+      return;
+    }
+    this.clearDeferredSafetyBlockState(operationId);
+    clearReplaceOwnerState(this, operationId);
+  }
+
   async getPriorityRecoveryDecisionSnapshotForPartitionOperations(
     partitionId,
     operations = [],
@@ -434,15 +504,26 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
 
   /**
    * Persist a REPLACE's removal intent: the STOPPING CAS with its witness
-   * metadata, counted only when the durable write committed.
+   * metadata, counted only when the durable row holds an intent entry. The
+   * first intent's witness commit index (C0) is kept: a durable STOPPING
+   * that already carries an intent is adopted as it is; one that does not
+   * (another writer's STOPPING, or an idempotent transition that wrote no
+   * entry) gets this intent's metadata on its STOPPING entry.
    * @param {Object} operation
    * @param {Object} stepMetadata
    * @return {Promise<boolean>}
    */
   async persistReplaceRemovalIntent(operation, stepMetadata) {
     try {
-      return await this.updateStep(operation, WORKFLOW_STEP.STOPPING,
-        undefined, {stepMetadata, requireDurable: true});
+      if (operation.workflowStep !== WORKFLOW_STEP.STOPPING &&
+          await this.updateStep(operation, WORKFLOW_STEP.STOPPING,
+            undefined, {stepMetadata, requireDurable: true}) &&
+          replaceIntentEntryOf(operation)) {
+        // This owner's own durable transition committed the intent entry.
+        return true;
+      }
+      return await this.ensureReplaceRemovalIntentRecorded(
+        operation, stepMetadata);
     } catch (error) {
       this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.REPLACE_SOURCE_REMOVAL_WAITING,
         {operationId: operation?.operationId || null,
@@ -450,6 +531,39 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
           error: error?.message || String(error)});
       return false;
     }
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {Object} stepMetadata
+   * @return {Promise<boolean>} Whether the durable row holds the intent.
+   * @private
+   */
+  async ensureReplaceRemovalIntentRecorded(operation, stepMetadata) {
+    const durable = await this.repository
+      .queryReplicaOperationPersistenceAuthorityOperation(operation);
+    if (durable?.workflowStep !== WORKFLOW_STEP.STOPPING) {
+      return false;
+    }
+    if (replaceIntentEntryOf(durable)) {
+      adoptDurableReplaceIntent(operation, durable);
+      return true;
+    }
+    const recorded = {
+      ...durable,
+      stepsHistory: recordIntentOnCurrentStoppingEntry(
+        durable.stepsHistory, stepMetadata),
+    };
+    const persisted = await this.repository.persistOperationUpdate(recorded, {
+      ...this.buildOperationTransitionPersistOptions(),
+      expectedWorkflowStep: WORKFLOW_STEP.STOPPING,
+      returnDisposition: true,
+    });
+    if (persisted?.persisted === false) {
+      return false;
+    }
+    adoptDurableReplaceIntent(operation, recorded);
+    return true;
   }
 
   /**
@@ -484,9 +598,10 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
    * @return {Object}
    */
   waitReplaceSourceRemovalEffect(operation, effect, entryLevel) {
-    recordReplaceWaitDiagnostic(this, operation, effect.reason,
-      effect.witness || null);
-    this.armReplaceOwnerWait(operation, effect.reason, entryLevel);
+    if (recordReplaceOwnerWait(this, operation, effect.reason,
+      {observation: effect.witness || null})) {
+      this.armReplaceOwnerWait(operation, effect.reason, entryLevel);
+    }
     return this.buildSkippedOperationResult(
       REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
       operation.operationId,

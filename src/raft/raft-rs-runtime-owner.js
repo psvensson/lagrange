@@ -812,6 +812,8 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
     return groupHostFailure(group, RUNTIME_PHASE.APPLICATION,
       applicationFailureOf(error));
   }
+  // The runtime's own applied index (the entry whose configuration the core
+  // now holds, durable with it) and the participation gate it moves.
   recordAppliedEntry(group, BigInt(entry.index), admitted);
   return applyEntries(group, expectedGeneration, entries, index + 1);
 }
@@ -943,7 +945,7 @@ function announce(group, expectedGeneration) {
     );
   }
   if (observed.ok) {
-    announceMembership(group, observed.value.confState, now);
+    announceMembership(group, observed.value, now);
   }
 }
 
@@ -962,7 +964,7 @@ function confStateKeyOf(confState) {
 // The applied ConfState is announced when it differs from the one last
 // announced, and first after every (re)construction: the transition the core
 // itself applied, never a prediction or a row.
-function announceMembership(group, confState, status) {
+function announceMembership(group, {confState, appliedIndex}, status) {
   const key = confStateKeyOf(confState);
   if (key === group.announcedConfStateKey) {
     return;
@@ -971,6 +973,7 @@ function announceMembership(group, confState, status) {
   group.emit(RUNTIME_EVENT.MEMBERSHIP_CHANGED, {
     confState,
     commitIndex: Number(status.commit),
+    appliedIndex,
   });
 }
 
@@ -988,9 +991,20 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
   if (!conf.ok) {
     return conf;
   }
+  // The applied index is the runtime's own, read in the same turn as the
+  // configuration: the index whose apply left the core holding it (commit
+  // may run ahead of it), never the core's status.applied.
   return {ok: true, value: {status: status.value, confState: conf.value,
-    participation: participationObservation(group.gate, group.appliedIndex),
-    runtimeHealth, runtimeGeneration}};
+    ...observedParticipation(group), runtimeHealth, runtimeGeneration}};
+}
+
+// One applied index per observation: the participation gate's, recorded with
+// the configuration it was applied at (the REPLACE witness and the
+// MEMBERSHIP_CHANGED announcement read the same value).
+function observedParticipation(group) {
+  const participation = participationObservation(group.gate,
+    group.appliedIndex);
+  return {participation, appliedIndex: participation.appliedIndex};
 }
 
 function shapeGroupStatus(group, observation) {

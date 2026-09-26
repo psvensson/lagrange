@@ -21,7 +21,7 @@
  * none does, what is the new row's name and why does its coverage stop
  * where it stops?
  */
-import {WORKFLOW_STEP} from '../constants/index.js';
+import {SERVICE_TYPE, WORKFLOW_STEP} from '../constants/index.js';
 import {OperationType} from './replica-status.js';
 import {OPERATION_TRANSITION_REASON} from './rebalancer-constants.js';
 
@@ -110,6 +110,35 @@ function isActiveReplaceSourceRemovalPhase(operationType, workflowStep) {
     operationType === OperationType.REPLACE &&
     workflowStep === WORKFLOW_STEP.ACTIVE
   );
+}
+
+// The owner phases of a partition REPLACE (quest replace-source-removal-owner):
+// ACTIVE, where the owner waits on remove safety with no time bound (S9), and
+// STOPPING, the durable source-removal intent after which no elapsed-time
+// budget decides its outcome (D2). No step age makes an operation in these
+// steps stale, abandoned or inactive; only its owner resolves it.
+const REPLACE_OWNER_PHASE_WORKFLOW_STEPS = Object.freeze(
+  new Set([
+    WORKFLOW_STEP.ACTIVE,
+    WORKFLOW_STEP.STOPPING,
+  ]),
+);
+
+/**
+ * Whether an operation is a partition REPLACE in its owner phases. An
+ * operation with no entity type is a partition's (the row predates the
+ * column).
+ * @param {Object} operation - {type, entityType, workflowStep}.
+ * @return {boolean}
+ */
+function isPartitionReplaceOwnerPhase(operation) {
+  const entityType = operation?.entityType;
+  return String(operation?.type || '').toUpperCase() ===
+      OperationType.REPLACE &&
+    (entityType === undefined || entityType === null ||
+      entityType === SERVICE_TYPE.PARTITION) &&
+    REPLACE_OWNER_PHASE_WORKFLOW_STEPS.has(
+      String(operation?.workflowStep || '').toUpperCase());
 }
 
 // Type-agnostic terminal markers used by remove-like in-flight gate checks
@@ -500,6 +529,7 @@ function shouldClearPriorityDeferredClaim(step) {
 }
 
 export {
+  REPLACE_OWNER_PHASE_WORKFLOW_STEPS,
   CREATE_REARM_DISPATCH_OPERATION_TYPES,
   DISPATCH_PENDING_WORKFLOW_STEPS,
   DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
@@ -535,6 +565,7 @@ export {
   REMOVE_LIKE_TERMINAL_WORKFLOW_STEPS,
   TARGET_CREATING_CREATE_ADMISSION_WORKFLOW_STEPS,
   isActiveReplaceSourceRemovalPhase,
+  isPartitionReplaceOwnerPhase,
   isIncompleteOperationRowStep,
   isPriorityOutcomeDeferredLocalProgressCovered,
   shouldClearPriorityDeferredClaim,

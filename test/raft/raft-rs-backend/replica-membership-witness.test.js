@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
 import {
   readPartitionReplicaMembership,
   retirePartitionRaftPeer,
@@ -62,6 +63,11 @@ test('witness read: the replica\'s own committed voters name the source; ' +
       'the leader is the core\'s own');
     assert.equal(read.commitIndex, status.commitIndex,
       'the commit index is the core\'s own');
+    assert.equal(read.appliedIndex, Number(RaftRsDurableStore
+      .readAppliedIndexIn(cluster.replica(witness).db, PARTITION_ID) ?? 0),
+    'the applied index is the one the read configuration was recorded at');
+    assert.ok(read.appliedIndex <= read.commitIndex,
+      'applied never runs ahead of commit');
     const unknown = await readPartitionReplicaMembership(
       witnessService(cluster, witness), 'replica-never-member');
     assert.equal(unknown.state, PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT);

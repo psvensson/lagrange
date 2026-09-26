@@ -577,13 +577,6 @@ async function evaluateRemoveSafety(context, operation) {
           replicaId: replacementReplicaId,
         }),
       ) || null;
-  const replacementLeaderCandidateRow =
-    await context.resolvePriorityPublicationReplacementLeaderCandidateRow(
-      operation,
-      replacementReplicaRow,
-      currentVoterReadyRows,
-      operationReplicaId,
-    );
 
   const requiresSourceLeaderHandoff =
     operation.type === OperationType.REPLACE &&
@@ -695,26 +688,17 @@ async function evaluateRemoveSafety(context, operation) {
     }
   }
 
-  const replacementLeaderRetargetCandidateAvailable =
-    requiresSourceLeaderHandoff &&
-    context.hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound(
-      operation,
-      currentVoterReadyRows,
-      operationReplicaId,
-      replacementLeaderCandidateRow,
-    );
   const priorityPublicationLeaderRemoveSafetyEvaluation =
     await context.evaluatePriorityPublicationLeaderRemoveSafety(
       operation,
       removingReplicaRow,
-      replacementLeaderCandidateRow,
+      replacementReplicaRow,
       {
         currentVoterReadyRows,
         priorityRecoveryCompletionSafe,
-        replacementLeaderElectionNotFoundTerminal:
-          requiresSourceLeaderHandoff &&
-          !replacementLeaderRetargetCandidateAvailable,
-        replacementLeaderRetargetCandidateAvailable,
+        // No retarget exists for a REPLACE (R09, amendment-1 step 2): a
+        // target that answers NOT_FOUND ends the REPLACE's leadership leg.
+        replacementLeaderElectionNotFoundTerminal: requiresSourceLeaderHandoff,
         readAuthoritativePlanningSnapshot: readRemoveSafetyPlanningSnapshot,
       },
     );

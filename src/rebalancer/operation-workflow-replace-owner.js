@@ -39,20 +39,51 @@ import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   './replica-operation-update-disposition.js';
 import {captureReplaceOwnerLevel} from './operation-workflow-replace-owner-wake.js';
 import {
+  isPartitionReplace,
+  isReplaceRemovalIntentDurable,
+  isSourceUnreachableAtIntent,
+  resolveIntentCommitIndex,
+} from './operation-workflow-replace-intent.js';
+import {
+  isReplaceTargetGone,
+  readReplaceSurvivingMembership,
+} from './operation-workflow-replace-surviving-membership.js';
+import {isPartitionReplaceOwnerPhase} from './replica-operation-step-policy.js';
+import {
   deliverToReplaceWitness,
   readReplaceWitnessMembership,
   replaceReplicaIdsOf,
 } from './operation-workflow-replace-witness.js';
 import {
+  clearAllReplaceHandoffAttempts,
   clearReplaceHandoffAttempt,
+  isReplaceHandoffAttemptUnresolved,
 } from './operation-workflow-replace-handoff-attempt.js';
+import {
+  REPLACE_INTENT_FIELD,
+  isDeferredVisibilitySnapshot,
+  REPLACE_REMOVAL_PENDING_ESCALATION_MS,
+  nowMsOf,
+  readOwnerState,
+  readReplaceOwnerDiagnostic,
+  recordReplaceWaitDiagnostic,
+  releaseAllReplaceOwnerState,
+  releaseReplaceOwnerOperationState,
+  replaceIntentEntryOf,
+} from './operation-workflow-replace-owner-state.js';
+import {
+  REPLACE_OWNER_RESTART_CLASS,
+  REPLACE_OWNER_STALENESS_CLASS,
+  REPLACE_SOURCE_ROW_CLASS,
+  claimReplaceAttemptStateRebuild,
+  classifyReplaceOwnerPhase,
+  releaseReplaceOwnerSessionOperation,
+  startReplaceOwnerSession,
+} from './operation-workflow-replace-owner-recovery.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
-  OperationType,
-  REBALANCE_COORDINATOR_LOG_MSG,
   ReplicaStatus,
-  SERVICE_TYPE,
   WORKFLOW_STEP,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
@@ -71,6 +102,10 @@ const REPLACE_POST_INTENT_FAILURE = Object.freeze({
 // unavailable and whose target the failure detector marked dead.
 const REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED =
   'replace_owner_unavailable_source_retained';
+
+// D2 pre-effect: a REPLACE whose target the failure detector marked dead
+// before its removal intent; nothing about the source was changed.
+const REPLACE_TARGET_DEAD_BEFORE_INTENT = 'replace_target_dead_before_intent';
 
 // A10: a REPLACE whose target replica is gone before its removal intent.
 const REPLACE_TARGET_REMOVED_BEFORE_ACTIVE =
@@ -91,6 +126,8 @@ const REPLACE_WAIT_REASON = Object.freeze({
   TARGET_DEAD_WITNESS_UNAVAILABLE: 'target_dead_witness_unavailable',
   REMOVAL_INTENT_NOT_DURABLE: 'removal_intent_not_durable',
   EFFECT_REVALIDATION_MOVED: 'effect_revalidation_inputs_moved',
+  // BR12: the owner's copy is a deferred-visibility snapshot.
+  DEFERRED_VISIBILITY: 'deferred_visibility_snapshot',
   // A former step or operation budget elapsed while no other wait was
   // recorded (a diagnostic only).
   BUDGET_ELAPSED: 'former_time_budget_elapsed',
@@ -105,15 +142,6 @@ const REPLACE_EFFECT_ADMISSION = Object.freeze({
   WAIT: 'wait',
 });
 
-// Durable witness metadata on the STOPPING (removal-intent) step entry.
-const REPLACE_INTENT_FIELD = Object.freeze({
-  INTENT: 'replaceRemovalIntent',
-  WITNESS_REPLICA_ID: 'replaceWitnessReplicaId',
-  WITNESS_NODE_ID: 'replaceWitnessNodeId',
-  WITNESS_COMMIT_INDEX: 'replaceWitnessCommitIndex',
-  SOURCE_UNREACHABLE: 'replaceSourceUnreachable',
-});
-
 // Source rows under which the source's lifecycle has retired or failed, so
 // its membership removal is the REPLACE's to re-drive (R-1f preconditions).
 const RETIRING_SOURCE_ROW_STATUSES = Object.freeze(new Set([
@@ -122,89 +150,8 @@ const RETIRING_SOURCE_ROW_STATUSES = Object.freeze(new Set([
   ReplicaStatus.REMOVED,
 ]));
 
-const REPLACE_DIAGNOSTIC_SEVERITY = Object.freeze({
-  NORMAL: 'normal',
-  // D2: removal pending past the former 60 s step budget, or a REPLACE past
-  // the former 300 s operation budget, raises severity only.
-  ELEVATED: 'elevated',
-});
-const REPLACE_REMOVAL_PENDING_ESCALATION_MS = 60_000;
-const REPLACE_OPERATION_AGE_ESCALATION_MS = 300_000;
 const STOPPING_OBSERVATION_ABSENT = 'absent';
 const STOPPING_OBSERVATION_UNAVAILABLE = 'unavailable';
-
-// Owner-scoped in-memory state, keyed by the owner instance: the R-1f
-// attempt and the diagnostic per operation. Rebuilt from the durable intent
-// and a fresh read after a restart.
-const STATE_BY_OWNER = new WeakMap();
-
-function readOwnerState(owner) {
-  let state = STATE_BY_OWNER.get(owner);
-  if (!state) {
-    state = {
-      retirementAttemptByOperationId: new Map(),
-      removalEffectByOperationId: new Map(),
-      diagnosticByOperationId: new Map(),
-      nextAttemptSeq: 1,
-    };
-    STATE_BY_OWNER.set(owner, state);
-  }
-  return state;
-}
-
-function nowMsOf(owner) {
-  return typeof owner.resolveTimeoutCheckNowMs === 'function' ?
-    owner.resolveTimeoutCheckNowMs() : Date.now();
-}
-
-/**
- * Whether this operation is a REPLACE of a partition replica (the C1/D2
- * contract is about raft membership; runtime-service and message-group
- * REPLACEs keep their own owners).
- * @param {Object} operation
- * @return {boolean}
- */
-function isPartitionReplace(operation) {
-  return operation?.type === OperationType.REPLACE &&
-    (operation?.entityType === undefined ||
-      operation?.entityType === null ||
-      operation?.entityType === SERVICE_TYPE.PARTITION);
-}
-
-/**
- * The durable removal-intent boundary (D2): the REPLACE has persisted
- * STOPPING, which is written before the REMOVE_REPLICA effect.
- * @param {Object} operation
- * @return {boolean}
- */
-function isReplaceRemovalIntentDurable(operation) {
-  return isPartitionReplace(operation) &&
-    operation?.workflowStep === WORKFLOW_STEP.STOPPING;
-}
-
-function replaceIntentEntryOf(operation) {
-  const history = Array.isArray(operation?.stepsHistory) ?
-    operation.stepsHistory : [];
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const entry = history[index];
-    if (entry?.[REPLACE_INTENT_FIELD.INTENT] === true) {
-      return entry;
-    }
-  }
-  return null;
-}
-
-function witnessCommitIndexAtIntent(operation) {
-  const recorded = Number(
-    replaceIntentEntryOf(operation)?.[REPLACE_INTENT_FIELD.WITNESS_COMMIT_INDEX],
-  );
-  return Number.isFinite(recorded) ? recorded : 0;
-}
-
-function isSourceUnreachableAtIntent(operation) {
-  return replaceIntentEntryOf(operation)
-    ?.[REPLACE_INTENT_FIELD.SOURCE_UNREACHABLE] === true;
-}
 
 /**
  * R-1a: the REPLACE succeeds only when its source has left the committed
@@ -215,13 +162,20 @@ function isSourceUnreachableAtIntent(operation) {
  * @return {Promise<Object>} Frozen {verdict, observation}.
  */
 async function decideReplaceCompletion(owner, operation) {
-  const observation = await readReplaceWitnessMembership(owner, operation);
+  let observation = await readReplaceWitnessMembership(owner, operation);
+  if (observation.state === PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE &&
+      isReplaceTargetGone(owner, operation)) {
+    // D2: t is gone and cannot answer; its surviving members' own ports
+    // decide (an absence there is a committed removal).
+    observation = await readReplaceSurvivingMembership(owner, operation);
+  }
   let verdict = REPLACE_COMPLETION_VERDICT.UNAVAILABLE;
   if (observation.state === PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER) {
     verdict = REPLACE_COMPLETION_VERDICT.STILL_VOTER;
   } else if (
     observation.state === PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT &&
-    Number(observation.commitIndex) >= witnessCommitIndexAtIntent(operation)
+    Number(observation.commitIndex) >=
+      await resolveIntentCommitIndex(owner, operation)
   ) {
     verdict = REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED;
   }
@@ -242,22 +196,6 @@ function buildReplaceCompletionRefusal(decision) {
     refusal: REPLACE_OWNER_REFUSAL.COMPLETION_WITHOUT_SOURCE_RETIREMENT,
     verdict: decision.verdict,
   });
-}
-
-/**
- * D2's admission of a terminal FAILED for a partition REPLACE: before the
- * durable intent every existing failure applies; after it, only target death
- * with the source still a voter.
- * @param {Object} operation
- * @param {Object} options - failOperation options.
- * @return {boolean}
- */
-function isReplaceTerminalFailureAdmitted(operation, options = {}) {
-  if (!isReplaceRemovalIntentDurable(operation)) {
-    return true;
-  }
-  return options?.replacePostIntentFailure ===
-    REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED;
 }
 
 function buildReplaceFailureRefusal() {
@@ -304,107 +242,29 @@ function isTargetFailureDetectorDead(owner, operation) {
 }
 
 /**
- * Record the owner's current wait as its one bounded diagnostic (D2/S9):
- * phase, source and target, how long this wait has lasted, why, the last
- * R-1f attempt and whether its outcome is uncertain, the leader, and the
- * source's membership. Severity rises past the former budgets; the state
- * never changes and nothing is appended per retry.
- * @param {Object} owner
- * @param {Object} operation
- * @param {string} reason
- * @param {Object|null} observation
- * @return {Object} The diagnostic.
- */
-function recordReplaceWaitDiagnostic(owner, operation, reason, observation) {
-  const state = readOwnerState(owner);
-  const nowMs = nowMsOf(owner);
-  const previous = state.diagnosticByOperationId.get(operation.operationId);
-  const waitingSinceMs = previous?.reason === reason ?
-    previous.waitingSinceMs : nowMs;
-  const {sourceReplicaId, targetReplicaId} =
-    replaceReplicaIdsOf(owner, operation);
-  const diagnostic = Object.freeze({
-    operationId: operation.operationId,
-    phase: operation.workflowStep,
-    sourceReplicaId,
-    targetReplicaId,
-    reason,
-    waitingSinceMs,
-    waitedMs: nowMs - waitingSinceMs,
-    ...retirementAttemptSummaryOf(
-      state.retirementAttemptByOperationId.get(operation.operationId)),
-    leaderReplicaId: observation?.leaderReplicaId ?? null,
-    sourceMembership: observation?.state ?? null,
-    severity: diagnosticSeverityOf(operation, nowMs),
-  });
-  state.diagnosticByOperationId.set(operation.operationId, diagnostic);
-  logReplaceDiagnosticTransition(owner, previous, diagnostic);
-  return diagnostic;
-}
-
-function retirementAttemptSummaryOf(attempt) {
-  return {
-    lastAttemptSeq: attempt?.attemptSeq ?? null,
-    lastAttemptUncertain: attempt ? attempt.answer === null : false,
-  };
-}
-
-function elapsedSinceMs(nowMs, startMs) {
-  return Number.isFinite(startMs) ? nowMs - startMs : 0;
-}
-
-// D2: removal pending past the former 60 s step budget, or a REPLACE past
-// the former 300 s operation budget, raises severity only.
-function diagnosticSeverityOf(operation, nowMs) {
-  const removalPendingMs = elapsedSinceMs(nowMs,
-    Number(replaceIntentEntryOf(operation)?.timestamp));
-  const operationAgeMs = elapsedSinceMs(nowMs, Number(operation.createdAt));
-  return removalPendingMs >= REPLACE_REMOVAL_PENDING_ESCALATION_MS ||
-    operationAgeMs >= REPLACE_OPERATION_AGE_ESCALATION_MS ?
-    REPLACE_DIAGNOSTIC_SEVERITY.ELEVATED :
-    REPLACE_DIAGNOSTIC_SEVERITY.NORMAL;
-}
-
-// One log line per change of reason or severity; nothing per retry.
-function logReplaceDiagnosticTransition(owner, previous, diagnostic) {
-  if (previous?.reason === diagnostic.reason &&
-      previous?.severity === diagnostic.severity) {
-    return;
-  }
-  const log = diagnostic.severity === REPLACE_DIAGNOSTIC_SEVERITY.ELEVATED ?
-    owner.logger?.warn : owner.logger?.info;
-  log?.call(owner.logger,
-    REBALANCE_COORDINATOR_LOG_MSG.REPLACE_SOURCE_REMOVAL_WAITING, diagnostic);
-}
-
-/**
- * @param {Object} owner
- * @param {string} operationId
- * @return {Object|null} The operation's current bounded diagnostic.
- */
-function readReplaceOwnerDiagnostic(owner, operationId) {
-  return STATE_BY_OWNER.get(owner)?.diagnosticByOperationId
-    .get(operationId) || null;
-}
-
-/**
  * Drop an operation's in-memory owner state (terminal, or shutdown).
  * @param {Object} owner
  * @param {string} operationId
  */
 function clearReplaceOwnerState(owner, operationId) {
-  const state = STATE_BY_OWNER.get(owner);
-  state?.retirementAttemptByOperationId.delete(operationId);
-  state?.removalEffectByOperationId.delete(operationId);
-  state?.diagnosticByOperationId.delete(operationId);
+  releaseReplaceOwnerOperationState(owner, operationId);
   clearReplaceHandoffAttempt(owner, operationId);
+  releaseReplaceOwnerSessionOperation(owner, operationId);
 }
 
+// Shutdown releases every in-memory attempt, effect and diagnostic; what
+// follows is a new owner session (a re-initialization), in which an
+// operation's lost attempt is rebuilt, never assumed absent (BR10).
 function clearAllReplaceOwnerState(owner) {
-  STATE_BY_OWNER.delete(owner);
+  releaseAllReplaceOwnerState(owner);
+  clearAllReplaceHandoffAttempts(owner);
+  startReplaceOwnerSession(owner, REPLACE_OWNER_RESTART_CLASS.COORDINATOR_REINIT);
 }
 
 const RETIREMENT_LEVEL_SEPARATOR = '|';
+// The sequence of an attempt record rebuilt after a restart (BR10): not one
+// this session issued.
+const REBUILT_ATTEMPT_SEQ = 0;
 
 // The leader, term and membership the witness reported: an R-1f attempt is
 // re-issued only when one of them moved since it was issued (a proposal a
@@ -436,6 +296,35 @@ function shouldIssueRetirementAttempt(owner, attempt, observation) {
 }
 
 /**
+ * BR10: the previous owner session may have issued a REMOVE_PEER whose
+ * outcome is unknown. Its record is rebuilt as an outstanding attempt,
+ * answered now at the witness's current level: a changed level or the
+ * backstop window resolves it; nothing is issued before.
+ * @param {Object} owner
+ * @param {Object} state - The owner state.
+ * @param {Object} operation
+ * @param {Object} observation - The fresh witness observation.
+ */
+function rebuildLostRetirementAttempt(owner, state, operation, observation) {
+  if (state.retirementAttemptByOperationId.has(operation.operationId)) {
+    return;
+  }
+  const rebuild = claimReplaceAttemptStateRebuild(owner, operation);
+  if (!rebuild.due) {
+    return;
+  }
+  const nowMs = nowMsOf(owner);
+  state.retirementAttemptByOperationId.set(operation.operationId, {
+    attemptSeq: REBUILT_ATTEMPT_SEQ,
+    issuedAtMs: nowMs,
+    level: retirementLevelOf(observation),
+    answer: Object.freeze({rebuiltAfter: rebuild.restartClass}),
+    answeredAtMs: nowMs,
+    rebuiltAfter: rebuild.restartClass,
+  });
+}
+
+/**
  * R-1f: propose REMOVE_PEER of the source through the witness replica while
  * the source is still a voter and its row is gone or retiring. At most one
  * attempt is in flight; a repeat after a leader, term or membership change,
@@ -447,6 +336,7 @@ function shouldIssueRetirementAttempt(owner, attempt, observation) {
  */
 async function redriveReplaceSourceRetirement(owner, operation, observation) {
   const state = readOwnerState(owner);
+  rebuildLostRetirementAttempt(owner, state, operation, observation);
   const attempt =
     state.retirementAttemptByOperationId.get(operation.operationId) || null;
   if (!shouldIssueRetirementAttempt(owner, attempt, observation)) {
@@ -489,7 +379,7 @@ function recordReplaceSourceRemovalEffect(owner, operation, response) {
 }
 
 function isRemovalEffectResendDue(owner, operation) {
-  const effect = STATE_BY_OWNER.get(owner)?.removalEffectByOperationId
+  const effect = readOwnerState(owner).removalEffectByOperationId
     .get(operation.operationId);
   return !effect ||
     nowMsOf(owner) - effect.sentAtMs >= REPLACE_REMOVAL_PENDING_ESCALATION_MS;
@@ -509,11 +399,71 @@ function isSourceRowRetiring(sourceRow) {
     RETIRING_SOURCE_ROW_STATUSES.has(sourceRow.lifecycleStatus);
 }
 
+/**
+ * Whether the operation is over as far as this owner can observe: its own
+ * copy, or the replicated row a terminal written anywhere lands in.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @return {boolean}
+ */
+function isReplaceOperationTerminalObserved(owner, operation) {
+  const cachedRow = owner.repository.getReplicaOperationRowFromCache?.(
+    operation.operationId) || null;
+  return owner.repository.isOperationTerminal(operation) ||
+    (cachedRow !== null && cachedRow.completed_at !== null &&
+      cachedRow.completed_at !== undefined);
+}
+
+/**
+ * The owner waits: its bounded diagnostic, the fallback and the wake. A
+ * decision that was in flight when the operation's terminal was observed
+ * records nothing and arms nothing (BR17): its state is released instead.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {string} reason
+ * @param {Object} context - {observation, entryLevel}.
+ * @return {boolean} false (the operation did not progress).
+ */
 function waitForReplaceOwner(owner, operation, reason, context) {
-  recordReplaceWaitDiagnostic(owner, operation, reason,
-    context.observation || null);
-  owner.armReplaceOwnerWait?.(operation, reason, context.entryLevel || null);
+  if (recordReplaceOwnerWait(owner, operation, reason, context)) {
+    owner.armReplaceOwnerWait?.(operation, reason, context.entryLevel || null);
+  }
   return false;
+}
+
+/**
+ * S9: record one owner wait as its bounded diagnostic, classified from what
+ * the waiting decision read (its witness observation, the source's row when
+ * it was read, R-1f's admissibility). A wait observed after the operation's
+ * terminal records nothing and releases its state instead (BR17).
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {string} reason
+ * @param {Object} [context] - {observation, sourceRow, retirementAdmissible}.
+ * @return {boolean} Whether the wait was recorded (the operation is live).
+ */
+function recordReplaceOwnerWait(owner, operation, reason, context = {}) {
+  if (isReplaceOperationTerminalObserved(owner, operation)) {
+    owner.clearDeferredSafetyBlockState?.(operation.operationId);
+    clearReplaceOwnerState(owner, operation.operationId);
+    return false;
+  }
+  const observation = context.observation || null;
+  recordReplaceWaitDiagnostic(owner, operation, reason, observation, {
+    ownerPhase: classifyReplaceOwnerPhase({
+      workflowStep: operation.workflowStep,
+      handoffAttemptUnresolved: isReplaceHandoffAttemptUnresolved(
+        owner, operation.operationId, observation),
+      sourceRetired: false,
+      sourceRowClass: context.sourceRow ?
+        sourceRowClassOf(context.sourceRow) : REPLACE_SOURCE_ROW_CLASS.UNKNOWN,
+    }),
+    stalenessClass: isTargetFailureDetectorDead(owner, operation) ?
+      REPLACE_OWNER_STALENESS_CLASS.TARGET_FAILED :
+      REPLACE_OWNER_STALENESS_CLASS.NEVER_STALE_BY_AGE,
+    retirementAdmissible: context.retirementAdmissible === true,
+  });
+  return true;
 }
 
 async function handleReplaceTargetDeath(owner, operation, decision, context) {
@@ -535,6 +485,24 @@ async function handleReplaceTargetDeath(owner, operation, decision, context) {
 }
 
 /**
+ * A STOPPING REPLACE another writer moved there without an intent: the
+ * owner records its intent now, from a fresh witness read (C0 is that
+ * read's commit index), before deciding anything from the witness.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @return {Promise<boolean>} Whether the intent is durable.
+ */
+async function recordAdoptedReplaceIntent(owner, operation) {
+  const witness = await readReplaceWitnessMembership(owner, operation);
+  if (witness.state !== PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER &&
+      witness.state !== PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT) {
+    return false;
+  }
+  return owner.persistReplaceRemovalIntent(operation,
+    buildReplaceRemovalIntentMetadata(operation, witness));
+}
+
+/**
  * The STOPPING owner: one decision per entry from fresh authoritative
  * state (R-1e, T5', R-1f, D2).
  * @param {Object} owner
@@ -548,13 +516,18 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
   if (owner.repository.isOperationTerminal(operation)) {
     return false;
   }
+  if (replaceIntentEntryOf(operation) === null &&
+      !await recordAdoptedReplaceIntent(owner, operation)) {
+    return waitForReplaceOwner(owner, operation,
+      REPLACE_WAIT_REASON.REMOVAL_INTENT_NOT_DURABLE, context);
+  }
   const decision = await decideReplaceCompletion(owner, operation);
   const waitContext = {...context, observation: decision.observation};
   if (decision.verdict === REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED) {
     await owner.completeOperation(operation);
     return true;
   }
-  if (isTargetFailureDetectorDead(owner, operation)) {
+  if (isReplaceTargetGone(owner, operation)) {
     return handleReplaceTargetDeath(owner, operation, decision, context);
   }
   if (decision.verdict === REPLACE_COMPLETION_VERDICT.UNAVAILABLE) {
@@ -566,25 +539,26 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
     return waitForReplaceOwner(owner, operation,
       REPLACE_WAIT_REASON.SOURCE_ROW_UNAVAILABLE, waitContext);
   }
-  if (!isSourceRowRetiring(sourceRow) &&
-      !isSourceUnreachableAtIntent(operation)) {
+  const retirementAdmissible = isSourceRowRetiring(sourceRow) ||
+    isSourceUnreachableAtIntent(operation);
+  const rowContext = {...waitContext, sourceRow, retirementAdmissible};
+  if (!retirementAdmissible) {
     if (!isRemovalEffectResendDue(owner, operation)) {
       // The effect was delivered and the source's row has not retired yet:
       // wait for its lifecycle (or the membership) to move.
       return waitForReplaceOwner(owner, operation,
-        REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING, waitContext);
+        REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING, rowContext);
     }
     // T5': no effect is recorded (or its backstop window passed) and the
     // source's lifecycle has not retired - (re-)send its removal effect
     // through the same remove-safety evaluation.
-    recordReplaceWaitDiagnostic(owner, operation,
-      REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING,
-      decision.observation);
+    recordReplaceOwnerWait(owner, operation,
+      REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING, rowContext);
     return owner.executeReplaceSourceRemovalEffect(operation);
   }
   await redriveReplaceSourceRetirement(owner, operation, decision.observation);
   return waitForReplaceOwner(owner, operation,
-    REPLACE_WAIT_REASON.SOURCE_MEMBERSHIP_REMOVAL_PENDING, waitContext);
+    REPLACE_WAIT_REASON.SOURCE_MEMBERSHIP_REMOVAL_PENDING, rowContext);
 }
 
 function waitAdmission(reason, witness = null) {
@@ -605,11 +579,10 @@ function waitAdmission(reason, witness = null) {
  * @return {Object} Frozen admission.
  */
 function revalidateReplaceSourceRemovalEffect(owner, operation, entryLevel) {
-  const cachedRow = owner.repository.getReplicaOperationRowFromCache?.(
-    operation.operationId) || null;
-  const cachedTerminal = cachedRow !== null &&
-    cachedRow.completed_at !== null && cachedRow.completed_at !== undefined;
-  if (owner.repository.isOperationTerminal(operation) || cachedTerminal ||
+  if (isDeferredVisibilitySnapshot(operation)) {
+    return waitAdmission(REPLACE_WAIT_REASON.DEFERRED_VISIBILITY);
+  }
+  if (isReplaceOperationTerminalObserved(owner, operation) ||
       operation.workflowStep !== WORKFLOW_STEP.STOPPING ||
       isTargetFailureDetectorDead(owner, operation)) {
     return waitAdmission(REPLACE_WAIT_REASON.EFFECT_REVALIDATION_MOVED);
@@ -635,6 +608,10 @@ function revalidateReplaceSourceRemovalEffect(owner, operation, entryLevel) {
  * @return {Promise<Object>} Frozen {admission, reason?, witness?}.
  */
 async function admitReplaceSourceRemovalEffect(owner, operation, entryLevel) {
+  if (isDeferredVisibilitySnapshot(operation)) {
+    // BR12: no intent and no effect from a deferred snapshot.
+    return waitAdmission(REPLACE_WAIT_REASON.DEFERRED_VISIBILITY);
+  }
   if (operation.workflowStep === WORKFLOW_STEP.ACTIVE) {
     const witness = await readReplaceWitnessMembership(owner, operation);
     if (witness.state !== PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER &&
@@ -700,9 +677,7 @@ async function adoptObservedReplaceSourceRetirement(owner, operation) {
  * @return {boolean}
  */
 function isReplaceExemptFromTimeBudget(operation) {
-  return isPartitionReplace(operation) &&
-    (operation?.workflowStep === WORKFLOW_STEP.ACTIVE ||
-      operation?.workflowStep === WORKFLOW_STEP.STOPPING);
+  return isPartitionReplaceOwnerPhase(operation);
 }
 
 /**
@@ -715,13 +690,53 @@ function isReplaceExemptFromTimeBudget(operation) {
 function recordReplaceBudgetDiagnostic(owner, operation) {
   const previous = readReplaceOwnerDiagnostic(owner, operation.operationId);
   return recordReplaceWaitDiagnostic(owner, operation,
-    previous?.reason || REPLACE_WAIT_REASON.BUDGET_ELAPSED, null);
+    previous?.reason || REPLACE_WAIT_REASON.BUDGET_ELAPSED, null, {
+      ownerPhase: previous?.ownerPhase,
+      stalenessClass: previous?.stalenessClass,
+      retirementAdmissible: previous?.retirementAdmissible,
+    });
+}
+
+function sourceRowClassOf(sourceRow) {
+  if (sourceRow.state === STOPPING_OBSERVATION_UNAVAILABLE) {
+    return REPLACE_SOURCE_ROW_CLASS.UNKNOWN;
+  }
+  if (sourceRow.state === STOPPING_OBSERVATION_ABSENT ||
+      sourceRow.lifecycleStatus === ReplicaStatus.REMOVED ||
+      sourceRow.lifecycleStatus === ReplicaStatus.FAILED) {
+    return REPLACE_SOURCE_ROW_CLASS.GONE;
+  }
+  return sourceRow.lifecycleStatus === ReplicaStatus.REMOVING ?
+    REPLACE_SOURCE_ROW_CLASS.RETIRING : REPLACE_SOURCE_ROW_CLASS.ADMISSIBLE;
+}
+
+/**
+ * The operation's owner phase (Φ1-Φ6) from fresh reads: the witness verdict,
+ * the source's row, and the owner's own attempt state.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @return {Promise<string>} A REPLACE_OWNER_PHASE member, or
+ *   REPLACE_NOT_IN_OWNER_PHASE.
+ */
+async function readReplaceOwnerPhase(owner, operation) {
+  const decision = await decideReplaceCompletion(owner, operation);
+  const sourceRow = await observeReplaceSourceRow(owner, operation);
+  return classifyReplaceOwnerPhase({
+    workflowStep: operation?.workflowStep,
+    handoffAttemptUnresolved: isReplaceHandoffAttemptUnresolved(
+      owner, operation?.operationId, decision.observation),
+    sourceRetired:
+      decision.verdict === REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED,
+    sourceRowClass: sourceRowClassOf(sourceRow),
+  });
 }
 
 export {
   REPLACE_COMPLETION_VERDICT,
+  REPLACE_POST_INTENT_FAILURE,
   REPLACE_EFFECT_ADMISSION,
   REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED,
+  REPLACE_TARGET_DEAD_BEFORE_INTENT,
   REPLACE_TARGET_REMOVED_BEFORE_ACTIVE,
   REPLACE_WAIT_REASON,
   adoptObservedReplaceSourceRetirement,
@@ -733,11 +748,13 @@ export {
   decideReplaceCompletion,
   isPartitionReplace,
   isReplaceExemptFromTimeBudget,
+  isReplaceOperationTerminalObserved,
   isReplaceRemovalIntentDurable,
-  isReplaceTerminalFailureAdmitted,
   isTargetFailureDetectorDead,
   readReplaceOwnerDiagnostic,
+  readReplaceOwnerPhase,
   recordReplaceBudgetDiagnostic,
+  recordReplaceOwnerWait,
   recordReplaceSourceRemovalEffect,
   reconcileReplaceStoppingOwner,
   recordReplaceWaitDiagnostic,

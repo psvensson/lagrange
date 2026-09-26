@@ -19,8 +19,8 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from '../../s
 // observed 56x replace_remove_safety_blocked wedge). The completed election ACK is a fresh
 // successor signal independent of those lagging rows.
 //
-// Faithfulness: we drive the REAL buildPriorityPublicationLeaderRemoveSafetySnapshot and the
-// REAL isCompletedReplacementElectionSafeForPriorityRecovery; only the external-state leaf
+// Faithfulness: we drive the REAL buildPriorityPublicationLeaderRemoveSafetySnapshot (the
+// completed-election fast path is superseded; see the note below); only the external-state leaf
 // helpers (role/leader-id resolvers, evidence readers, voter-evidence) are stubbed
 // deterministically — exactly mirroring the row-staleness an event-loop-starved node produces.
 
@@ -35,7 +35,6 @@ const HEALTHY_NODE = 'node-healthy';
 const PARTITION_ID = 'replica_operations-p1'; // priority, non-publication: skip publication gates
 const SOURCE_REPLICA_ID = 'replica_operations-p1-r2'; // surplus voter being drained (the leader)
 const REPLACEMENT_REPLICA_ID = 'replica_operations-p1-r3';
-const OTHER_REPLICA_ID = 'replica_operations-p1-r9';
 
 function roleFromRow(row) {
   if (row?.raft_role === 'leader') {
@@ -118,14 +117,6 @@ function buildWedgeSnapshot(safety) {
   );
 }
 
-function evaluateFastPath(safety, snapshot) {
-  return safety.isCompletedReplacementElectionSafeForPriorityRecovery(
-    snapshot,
-    replacementFollowerRow,
-    {operation: replaceOperation(), priorityRecoveryCompletionSafe: false},
-  );
-}
-
 test('R1 repro: the rows ALONE never authorize removal off a starved rejoiner — the snapshot ' +
   'defers (with Lever A, by driving the voter-ready replacement election, not re-asking the source)', (t) => {
   const safety = makeSafety();
@@ -156,56 +147,11 @@ test('R1 repro: the rows ALONE never authorize removal off a starved rejoiner �
   t.end();
 });
 
-test('R1 PROMOTED (unconditional): the EXACT replacement\'s completed election ACK ' +
-  'authorizes source removal despite the lagging source-leader rows', (t) => {
-  const safety = makeSafety();
-  const snapshot = buildWedgeSnapshot(safety);
-
-  t.equal(
-    evaluateFastPath(safety, snapshot),
-    true,
-    'the completed election ACK is accepted as proof of succession → SAFE → the drain ' +
-      'progresses (R1 is now always active)',
-  );
-  t.end();
-});
-
-test('R1 SAFETY: a NO-ack case is NEVER authorized', (t) => {
-  const safety = makeSafety({electionCompletedReplicaIds: []});
-  const snapshot = buildWedgeSnapshot(safety);
-
-  t.equal(
-    evaluateFastPath(safety, snapshot),
-    false,
-    'no completed election evidence → not authorized: R1 is evidence-gated, not a bypass ' +
-      'of the safety check',
-  );
-  t.end();
-});
-
-test('R1 SAFETY: an election completed for a DIFFERENT replica does NOT authorize removal ' +
-  '(requires the EXACT replacement)', (t) => {
-  const safety = makeSafety({electionCompletedReplicaIds: [OTHER_REPLICA_ID]});
-  const snapshot = buildWedgeSnapshot(safety);
-
-  t.equal(
-    evaluateFastPath(safety, snapshot),
-    false,
-    'completion evidence for another replica is not proof THIS replacement is the successor',
-  );
-  t.end();
-});
-
-test('R1 SAFETY: a replacement that is NOT voter-ready is NEVER authorized ' +
-  '(preserves the voter-ready floor — the worst case must be a transient re-election, ' +
-  'never a quorum/spread loss)', (t) => {
-  const safety = makeSafety({voterEvidenceSufficient: false});
-  const snapshot = buildWedgeSnapshot(safety);
-
-  t.equal(
-    evaluateFastPath(safety, snapshot),
-    false,
-    'replacement not voter-ready → no genuine successor candidate → not authorized',
-  );
-  t.end();
-});
+// SUPERSEDED (R09), quest replace-source-removal-owner, BR11 / amendment-1
+// step 7: the tests that stood here drove the CL-043 / R1 completed-election
+// fast path (isCompletedReplacementElectionSafeForPriorityRecovery), which
+// is deleted: a REPLACE's removal is authorized only by a fresh read of its
+// target leading (replace-named-handoff-attempt.test.js "BR11 ..."), and
+// the completed-election evidence authorizes nothing
+// (colocated-follower-remove-safety.test.js "CL-043 is unreachable ...").
+// The R1 repro above (rows alone never authorize removal) still stands.

@@ -8,6 +8,7 @@ import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
 import {
+  REPLACE_TARGET_DEAD_BEFORE_INTENT,
   REPLACE_TARGET_REMOVED_BEFORE_ACTIVE,
   isPartitionReplace,
   isReplaceExemptFromTimeBudget,
@@ -15,6 +16,9 @@ import {
   recordReplaceBudgetDiagnostic,
 } from './operation-workflow-replace-owner.js';
 
+import {
+  observedReplaceTargetStatus,
+} from './operation-workflow-replace-surviving-membership.js';
 const {
   ACTIVE_REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES,
@@ -49,22 +53,26 @@ const {
   createTopLevelOperationBudget,
 } = SHARED;
 
-// A partition REPLACE's target gone or failed: after the intent the STOPPING
-// owner decides target death (D2); before it (A10) the REPLACE never
-// completed and nothing about the source was changed.
+// A partition REPLACE's target gone (REMOVED) or dead (the failure
+// detector's FAILED) is a premise change (D2), decided before anything else
+// re-drives the REPLACE: after the intent the STOPPING owner classifies it
+// from committed membership; before it (A10 and D2 pre-effect) nothing about
+// the source was changed, so the REPLACE fails with the source retained.
 async function reconcilePartitionReplaceTargetStatus(
   owner, operation, reconciledStatus) {
   const targetGone = reconciledStatus === ReplicaStatus.REMOVED;
-  if (isReplaceRemovalIntentDurable(operation) &&
-      (targetGone || reconciledStatus === ReplicaStatus.FAILED)) {
+  if (!isPartitionReplace(operation) ||
+      (!targetGone && reconciledStatus !== ReplicaStatus.FAILED)) {
+    return false;
+  }
+  if (isReplaceRemovalIntentDurable(operation)) {
     await owner.runReplaceStoppingOwner(operation);
     return true;
   }
-  if (targetGone && isPartitionReplace(operation)) {
-    await owner.failOperation(operation, REPLACE_TARGET_REMOVED_BEFORE_ACTIVE);
-    return true;
-  }
-  return false;
+  await owner.failOperation(operation, targetGone ?
+    REPLACE_TARGET_REMOVED_BEFORE_ACTIVE :
+    REPLACE_TARGET_DEAD_BEFORE_INTENT);
+  return true;
 }
 
 class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecoveryObservation {
@@ -216,6 +224,11 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       actualStatus,
     );
 
+    if (await reconcilePartitionReplaceTargetStatus(
+      this, operation, reconciledStatus)) {
+      return true;
+    }
+
     if (this.isTargetCreateAdmissionProgress(operation, reconciledStatus)) {
       await this.updateStep(operation, WORKFLOW_STEP.CREATING);
       return true;
@@ -261,10 +274,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       return true;
     }
 
-    if (await reconcilePartitionReplaceTargetStatus(
-      this, operation, reconciledStatus)) {
-      return true;
-    }
     if (reconciledStatus === ReplicaStatus.REMOVED) {
       if (operation.type !== OperationType.ADD) {
         await this.completeOperation(operation);
@@ -431,6 +440,10 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       );
       return true;
     case OPERATION_LIFECYCLE_ACTION.EXECUTE_ACTIVE_REPLACE: {
+      if (await reconcilePartitionReplaceTargetStatus(this, operation,
+        observedReplaceTargetStatus(this, operation))) {
+        return true;
+      }
       if (await this.reconcileActiveReplaceSourceRemovalProgress(operation)) {
         return true;
       }

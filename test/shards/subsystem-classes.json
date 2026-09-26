@@ -12,7 +12,7 @@
     "distributed-harness": 167,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 248,
+    "placement-rebalance": 251,
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2213,
-  "digest": "fnv1a32-d7de258f",
+  "censusSize": 2216,
+  "digest": "fnv1a32-169ff207",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f57c134b",
+  "observationDigest": "fnv1a32-3cd2b31e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1533,7 +1533,6 @@
     "test/rebalancer/cl-036-publications-quorum-escape.test.js": "placement-rebalance",
     "test/rebalancer/cl-038-source-removed-handoff-terminates.test.js": "placement-rebalance",
     "test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js": "placement-rebalance",
-    "test/rebalancer/cl-043-surplus-drain-completed-election-terminates.test.js": "placement-rebalance",
     "test/rebalancer/cleanup-moves-failed-replicas.property.test.js": "placement-rebalance",
     "test/rebalancer/cluster-readiness-gate.test.js": "placement-rebalance",
     "test/rebalancer/cluster-readiness-signal.property.test.js": "placement-rebalance",
@@ -1671,9 +1670,13 @@
     "test/rebalancer/remove-active-dispatch-redrive.test.js": "placement-rebalance",
     "test/rebalancer/remove-workflow-step-progression.property.test.js": "placement-rebalance",
     "test/rebalancer/removed-replica-cleanup-debt-owner.test.js": "placement-rebalance",
+    "test/rebalancer/replace-dispatch-epoch-gate-scope.test.js": "placement-rebalance",
+    "test/rebalancer/replace-drain-hand-back.test.js": "placement-rebalance",
     "test/rebalancer/replace-named-handoff-attempt.test.js": "placement-rebalance",
     "test/rebalancer/replace-owner-lease-causal.test.js": "placement-rebalance",
     "test/rebalancer/replace-owner-lease-verdict-property.test.js": "placement-rebalance",
+    "test/rebalancer/replace-owner-phase-staleness.test.js": "placement-rebalance",
+    "test/rebalancer/replace-owner-recovery-equivalence.test.js": "placement-rebalance",
     "test/rebalancer/replace-owner-wake.test.js": "placement-rebalance",
     "test/rebalancer/replace-remove-safety-wake-property.test.js": "placement-rebalance",
     "test/rebalancer/replace-replica-workflow.test.js": "placement-rebalance",
@@ -8063,6 +8066,18 @@
         "src/rebalancer/executor-outcome-emitter.js"
       ]
     },
+    "test/rebalancer/replace-dispatch-epoch-gate-scope.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-constants.js"
+      ]
+    },
+    "test/rebalancer/replace-drain-hand-back.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
     "test/rebalancer/replace-named-handoff-attempt.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
@@ -8074,6 +8089,16 @@
       ]
     },
     "test/rebalancer/replace-owner-lease-verdict-property.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/replace-owner-phase-staleness.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/replace-owner-recovery-equivalence.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
       ]

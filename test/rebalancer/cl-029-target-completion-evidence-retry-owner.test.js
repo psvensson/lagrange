@@ -1641,6 +1641,13 @@ test(
         const store = createCasBackedReplicaOperationStore(operation);
         const harness = createHarness(store);
         const {owner} = harness;
+        // Its removal intent was recorded against the witness's commit index
+        // (quest replace-source-removal-owner: R-1a completes only a REPLACE
+        // with a recorded intent, C0).
+        Object.assign(operation.stepsHistory.at(-1), {
+          replaceRemovalIntent: true,
+          replaceWitnessCommitIndex: harness.witness.commitIndex,
+        });
 
         // The armed retry owner: retained ACTIVE evidence plus its timed
         // retry, exactly what the visibility-deferral loop holds

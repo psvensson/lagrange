@@ -111,10 +111,6 @@ function makeHandoff({
   instance.getCriticalReplicaRowsForSafety = async () =>
     currentVoterReadyRows;
   instance.isNodeReadyForRouting = () => true;
-  instance.resolvePriorityPublicationReplacementLeaderCandidateRow = async () =>
-    replacementFollowerRow;
-  instance.hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound =
-    () => false;
   instance.isReplaceSourceLeaderHandoffRequiredPartition = () => true;
   instance.evaluatePriorityRecoveryCompletionRemoveSafety = async () =>
     instance.buildSafeRemoveSafetyEvaluation();
@@ -169,8 +165,13 @@ async function evaluateHandoff({
   );
 }
 
-test('remove-safety owner: an explicit follower with a distinct same-node leader ' +
-  'sibling is removed without promoting the replacement', async (t) => {
+// SUPERSEDED (R09), BR11 (quest replace-source-removal-owner): this case used
+// to pass the removal once any non-source replica led. Only a fresh read of
+// the REPLACE target itself leading authorizes it; a co-located sibling
+// leading gets the one named-target handoff first.
+test('remove-safety owner: an explicit follower with a distinct same-node ' +
+  'leader sibling gets the named-target handoff before its removal',
+async (t) => {
   // The co-located sibling leads, as the witness's own port reports.
   const {instance} = makeHandoff({witnessLeader: LEADER_REPLICA_ID});
   const evaluation = await evaluateRemoveSafety(
@@ -180,13 +181,23 @@ test('remove-safety owner: an explicit follower with a distinct same-node leader
 
   t.equal(
     evaluation.classification,
-    REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
-    'a fresh leader other than the source makes the source removal leadership-safe',
+    REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
+    'a leader other than the target does not authorize the removal',
   );
   t.equal(
-    evaluation.handoffRequest,
-    null,
-    'safe follower removal does not request a replacement leader election',
+    evaluation.handoffRequest?.requestReplicaId,
+    TARGET_REPLICA_ID,
+    'the one handoff names the REPLACE target',
+  );
+  const targetLeads = makeHandoff({witnessLeader: TARGET_REPLICA_ID});
+  const authorized = await evaluateRemoveSafety(
+    targetLeads.instance,
+    replaceOperation(),
+  );
+  t.equal(
+    authorized.classification,
+    REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
+    'the target leading (fresh read) makes the removal leadership-safe',
   );
   t.end();
 });
@@ -292,5 +303,38 @@ test('snapshot exposes the existing replacement-election state for the stale-fol
     PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_REPLACEMENT_LEADER_ELECTION,
     'negative control remains on the explicit replacement-election branch',
   );
+  t.end();
+});
+
+// R09 (BR11, amendment-1 step 7), quest replace-source-removal-owner: the
+// CL-043 completed-election authorization never decides a REPLACE - not on
+// the publication-wait path either, the one path of this gate a REPLACE
+// still falls through to.
+test('CL-043 is unreachable for a REPLACE: completed-election evidence on ' +
+  'the publication-wait path authorizes no removal', async (t) => {
+  const {instance, currentVoterReadyRows} =
+    makeHandoff({partitionId: PUBLICATION_PARTITION_ID});
+  const observedAt = Date.now();
+  instance.normalizePriorityPublicationStatus = () => 'ACK_PENDING';
+  instance.readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety =
+    async () => ({publicationStatus: 'ACK_PENDING'});
+  instance.getPriorityPublicationReplacementLeaderElectionEvidence = () => ({
+    observedAt,
+    replacementReplicaId: TARGET_REPLICA_ID,
+    completedReplicaIds: [TARGET_REPLICA_ID],
+  });
+  instance.getPriorityPublicationLeaderHandoffEvidence = () => ({
+    observedAt,
+    sourceReplicaId: SOURCE_REPLICA_ID,
+  });
+  const evaluation = await instance.evaluatePriorityPublicationLeaderRemoveSafety(
+    replaceOperation(PUBLICATION_PARTITION_ID),
+    sourceFollowerRow,
+    replacementFollowerRow,
+    {currentVoterReadyRows, priorityRecoveryCompletionSafe: true},
+  );
+  t.not(evaluation?.classification,
+    REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
+    'completed-election evidence does not make the REPLACE removal safe');
   t.end();
 });
