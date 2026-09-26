@@ -12,7 +12,7 @@
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 246,
+    "placement-rebalance": 247,
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
@@ -25,8 +25,8 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2198,
-  "digest": "fnv1a32-02b6b7b0",
+  "censusSize": 2199,
+  "digest": "fnv1a32-1c9be984",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-2d8463cb",
   "classes": {
@@ -1667,6 +1667,7 @@
     "test/rebalancer/replace-owner-wake.test.js": "placement-rebalance",
     "test/rebalancer/replace-remove-safety-wake-property.test.js": "placement-rebalance",
     "test/rebalancer/replace-replica-workflow.test.js": "placement-rebalance",
+    "test/rebalancer/replace-source-planner-set-exclusion.test.js": "placement-rebalance",
     "test/rebalancer/replace-source-removal-owner.test.js": "placement-rebalance",
     "test/rebalancer/replica-inventory.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-confirmation-authority-read.test.js": "placement-rebalance",

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1932,
+    "unit": 1933,
     "integration": 75,
     "bootstrap": 184,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2198,
-  "digest": "fnv1a32-6238d77d",
+  "censusSize": 2199,
+  "digest": "fnv1a32-844fc9bc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1648,6 +1648,7 @@
     "test/rebalancer/replace-owner-wake.test.js": "unit",
     "test/rebalancer/replace-remove-safety-wake-property.test.js": "unit",
     "test/rebalancer/replace-replica-workflow.test.js": "unit",
+    "test/rebalancer/replace-source-planner-set-exclusion.test.js": "unit",
     "test/rebalancer/replace-source-removal-owner.test.js": "unit",
     "test/rebalancer/replica-inventory.test.js": "unit",
     "test/rebalancer/replica-operation-confirmation-authority-read.test.js": "unit",

@@ -2,7 +2,8 @@ import {NUM} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {isExplicitNonLeaderRaftRole} from
   '../raft/replica-voter-readiness.js';
-import {ReplicaStatus} from './replica-status.js';
+import {OperationType, ReplicaStatus} from './replica-status.js';
+import {normalizeReplicaOperationRecord} from './replica-operation-liveness.js';
 import {
   REPLICA_INVENTORY_EFFECTIVE_VIEW,
   effectiveReplicaCountAfterOperations,
@@ -61,6 +62,27 @@ function createEntityPartitionRowResolver(systemTableCache, entityId) {
     }
     return partitionRow;
   };
+}
+
+// Checklist (iv) of the REPLACE owner directive (amendment-1 step 4): a
+// non-terminal REPLACE owns the removal of its source, so the replicas the
+// per-node excess counts leave every such source out. Set exclusion over the
+// in-flight set (every non-terminal operation on the entity, drain phase
+// included) is idempotent against row state: a source whose row already
+// reads REMOVING or is gone is not in the placement set to begin with.
+function excludeNonTerminalReplaceSources(replicas, inFlightOperations, nowMs) {
+  const sourceReplicaIds = new Set();
+  for (const operation of inFlightOperations) {
+    const record = normalizeReplicaOperationRecord(operation, {nowMs});
+    if (record.type === OperationType.REPLACE && record.sourceReplicaId) {
+      sourceReplicaIds.add(record.sourceReplicaId);
+    }
+  }
+  if (sourceReplicaIds.size === 0) {
+    return replicas;
+  }
+  return replicas.filter((replica) =>
+    !sourceReplicaIds.has(replica.replica_id || replica.service_id));
 }
 
 function countDistinctActiveReplicaNodes(replicas) {
@@ -164,6 +186,11 @@ class MovePlannerMoveCalculationMethods {
       const status = replica?.status || ReplicaStatus.ACTIVE;
       return status === ReplicaStatus.ACTIVE && !!replica?.node_id;
     });
+    const countedPlacementReplicas = excludeNonTerminalReplaceSources(
+      activePlacementReplicas,
+      this.getEntityInFlightOperations(),
+      this.resolveMovePlannerNowMs(),
+    );
     const targetNodeIds = targetState.targetNodes;
     const isDegradedPlacement = !!targetState?.degraded;
     const nodesWithAddTransitional =
@@ -198,6 +225,15 @@ class MovePlannerMoveCalculationMethods {
     const cleanupOnlyWhilePending =
       pendingCount > 0 && !this.isControlPlanePriorityPartition() ||
       inventory.provenance.topologyIncreaseUsable !== true;
+    // A non-terminal REPLACE's drain phase is not a pending (topology
+    // blocking) operation, so cleanupOnlyWhilePending alone would let a
+    // topology cleanup REMOVE take a bystander for the surplus the REPLACE
+    // itself owns. While a source is excluded, a cleanup REMOVE is admitted
+    // only above target in the counted replicas.
+    const replaceSourceExcludedCount =
+      activePlacementReplicas.length - countedPlacementReplicas.length;
+    const cleanupCountGuarded =
+      cleanupOnlyWhilePending || replaceSourceExcludedCount > 0;
 
     // Count target replicas per node
     const targetCounts = new Map();
@@ -303,7 +339,7 @@ class MovePlannerMoveCalculationMethods {
 
     // Group active placement replicas by node for removal selection
     const replicasByNode = new Map();
-    for (const replica of activePlacementReplicas) {
+    for (const replica of countedPlacementReplicas) {
       if (replica && replica.node_id) {
         if (!replicasByNode.has(replica.node_id)) {
           replicasByNode.set(replica.node_id, []);
@@ -499,7 +535,7 @@ class MovePlannerMoveCalculationMethods {
       activePlacementReplicas.length >= targetReplicaCount &&
       addMoves.length > 0;
     const totalHealthyAfterAdds =
-      activePlacementReplicas.length + addMoves.length;
+      countedPlacementReplicas.length + addMoves.length;
     const candidateRemoves = [];
 
     // Generate REMOVE moves for over-represented nodes
@@ -530,12 +566,12 @@ class MovePlannerMoveCalculationMethods {
             PLACEMENT_CURE_CONDITION.OVER_REPRESENTATION,
         );
         const reason = surplusCure.moveReason;
-        if (cleanupOnlyWhilePending && isTopologyCleanupReason(reason)) {
+        if (cleanupCountGuarded && isTopologyCleanupReason(reason)) {
           const existingCleanupRemoves = candidateRemoves.filter((move) =>
             isTopologyCleanupReason(move.reason),
           ).length;
           if (
-            activePlacementReplicas.length - existingCleanupRemoves <=
+            countedPlacementReplicas.length - existingCleanupRemoves <=
             targetReplicaCount
           ) {
             this.logger.debug(REBALANCER_LOG_MSG.DEFER_REMOVE_DETAIL, {
@@ -543,8 +579,9 @@ class MovePlannerMoveCalculationMethods {
               replicaId,
               nodeId,
               reason,
-              cleanupOnlyWhilePending: true,
-              activePlacementReplicaCount: activePlacementReplicas.length,
+              cleanupOnlyWhilePending,
+              replaceSourceExcludedCount,
+              activePlacementReplicaCount: countedPlacementReplicas.length,
               existingCleanupRemoves,
               targetReplicaCount,
             });
@@ -613,7 +650,7 @@ class MovePlannerMoveCalculationMethods {
           prioritySpreadMonotonicSafe:
             priorityRemoveSafety.monotonicSafe === true,
           standaloneSafe:
-            activePlacementReplicas.length - candidateRemoves.length >
+            countedPlacementReplicas.length - candidateRemoves.length >
             targetReplicaCount,
         });
         scheduledRemoveReplicaIds.add(replicaId);
