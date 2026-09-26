@@ -29,8 +29,9 @@
  *  - a MAJORITY of its configuration's voters - of the incoming voters and,
  *    in a joint configuration, of the outgoing voters too - each read
  *    through the same per-member witness read, confirm term == term_A and
- *    leader == leaderId_A (the leader counts for itself; a higher term,
- *    another leader, an unreadable or unresolved voter counts against).
+ *    name leaderId_A or no leader yet (the leader counts for itself; a
+ *    higher term, a different named leader, an unreadable or unresolved
+ *    voter counts against).
  * Why that suffices: commitIndex_A is the leader's own commit index, so a
  * majority already acknowledged those entries (Raft's commit rule); no
  * follower commit index is needed. Currentness is election safety: a
@@ -194,13 +195,18 @@ async function readFirstAnswer(owner, operation) {
   return authorityUnavailable(REPLACE_COMPLETION_AUTHORITY_WAIT.NO_ANSWER);
 }
 
-// Whether one voter's own answer confirms the leader's: it still
-// recognises the leader's term and the leader (election safety; the
-// leader's commit index is its own proof of a majority's acknowledgement).
+// Whether one voter's own answer confirms the leader's: it is at the
+// leader's term and names that leader or none. A voter at term_A has not
+// voted in a higher term, and a term has one leader, so a voter that has not
+// yet heard from term_A's leader (raft-rs sets it on the leader's first
+// message) confirms as well; a DIFFERENT named leader or a higher term counts
+// against. The leader's commit index is its own proof of a majority's
+// acknowledgement (Raft's commit rule).
 function confirmsLeaderAnswer(observation, leaderAnswer) {
+  const named = observation.leaderReplicaId ?? null;
   return isAnswered(observation) &&
     Number(observation.term) === Number(leaderAnswer.term) &&
-    observation.leaderReplicaId === leaderAnswer.leaderReplicaId;
+    (named === null || named === leaderAnswer.leaderReplicaId);
 }
 
 function voterSetsOf(leaderAnswer) {
