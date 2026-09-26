@@ -163,11 +163,12 @@ function isReplaceRemovalIntentDurable(operation) {
     operation?.workflowStep === WORKFLOW_STEP.STOPPING;
 }
 
+// C0: the witness commit index recorded with the first removal intent; NaN
+// when no intent is recorded, which no commit index satisfies.
 function witnessCommitIndexAtIntent(operation) {
-  const recorded = Number(
-    replaceIntentEntryOf(operation)?.[REPLACE_INTENT_FIELD.WITNESS_COMMIT_INDEX],
-  );
-  return Number.isFinite(recorded) ? recorded : 0;
+  const entry = replaceIntentEntryOf(operation);
+  return entry === null ? Number.NaN :
+    Number(entry[REPLACE_INTENT_FIELD.WITNESS_COMMIT_INDEX]);
 }
 
 function isSourceUnreachableAtIntent(operation) {
@@ -500,6 +501,24 @@ async function handleReplaceTargetDeath(owner, operation, decision, context) {
 }
 
 /**
+ * A STOPPING REPLACE another writer moved there without an intent: the
+ * owner records its intent now, from a fresh witness read (C0 is that
+ * read's commit index), before deciding anything from the witness.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @return {Promise<boolean>} Whether the intent is durable.
+ */
+async function recordAdoptedReplaceIntent(owner, operation) {
+  const witness = await readReplaceWitnessMembership(owner, operation);
+  if (witness.state !== PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER &&
+      witness.state !== PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT) {
+    return false;
+  }
+  return owner.persistReplaceRemovalIntent(operation,
+    buildReplaceRemovalIntentMetadata(operation, witness));
+}
+
+/**
  * The STOPPING owner: one decision per entry from fresh authoritative
  * state (R-1e, T5', R-1f, D2).
  * @param {Object} owner
@@ -512,6 +531,11 @@ async function handleReplaceTargetDeath(owner, operation, decision, context) {
 async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
   if (owner.repository.isOperationTerminal(operation)) {
     return false;
+  }
+  if (replaceIntentEntryOf(operation) === null &&
+      !await recordAdoptedReplaceIntent(owner, operation)) {
+    return waitForReplaceOwner(owner, operation,
+      REPLACE_WAIT_REASON.REMOVAL_INTENT_NOT_DURABLE, context);
   }
   const decision = await decideReplaceCompletion(owner, operation);
   const waitContext = {...context, observation: decision.observation};

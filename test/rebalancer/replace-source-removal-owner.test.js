@@ -214,9 +214,20 @@ test('W4 (R-1f): a retired source still in the configuration is re-driven ' +
   'once per changed level, never on an unchanged wake', async (t) => {
   const harness = await createHarness({sourceStatus: ReplicaStatus.FAILED});
   try {
+    // A STOPPING row another writer left without an intent: the owner
+    // records its intent (C0) from a fresh witness read first.
     harness.operation.workflowStep = WORKFLOW_STEP.STOPPING;
     harness.operation.status = ReplicaStatus.ACTIVE;
+    harness.operation.stepsHistory = [...harness.operation.stepsHistory,
+      {step: WORKFLOW_STEP.STOPPING, timestamp: Date.now()}];
+    await harness.coordinator.repository.persistOperationUpdate(
+      harness.operation);
     await harness.coordinator.reconcileOperationProgress(harness.operation);
+    t.equal(parseSteps(harness.coordinator.repository
+      .getReplicaOperationRowFromCache(harness.operation.operationId))
+      .find((entry) => entry?.replaceRemovalIntent === true)
+      ?.replaceWitnessCommitIndex, INTENT_COMMIT_INDEX,
+    'the adopted intent records C0 from the fresh witness read');
     t.equal(harness.witness.retirements.length, 1,
       'REMOVE_PEER of the source is proposed through the witness');
     t.equal(harness.witness.retirements[0]?.sourceReplicaId,
@@ -504,3 +515,58 @@ test('W9 (R11/A11.1): the terminal-transition repair is not a second route ' +
       }
     });
 });
+
+test('W10 (C0): the removal intent\'s witness commit index is recorded at ' +
+  'the first intent write and preserved; never re-derived as 0',
+async (t) => {
+  const harness = await createHarness();
+  try {
+    await driveToRemovalIntent(harness);
+    const recorded = await persistedOperation(harness);
+    // Another writer's STOPPING (no intent metadata) is what the durable
+    // row holds when this owner's own intent write lands idempotently.
+    const bareStopping = {
+      ...recorded,
+      stepsHistory: recorded.stepsHistory.map((entry) =>
+        entry?.step === WORKFLOW_STEP.STOPPING ?
+          {step: entry.step, timestamp: entry.timestamp} : entry),
+    };
+    await harness.coordinator.repository.persistOperationUpdate(bareStopping);
+    enforceDurableStepCas(harness);
+    const stale = staleActiveCopy(recorded);
+    t.ok(await harness.owner.persistReplaceRemovalIntent(stale, {
+      replaceRemovalIntent: true,
+      replaceWitnessReplicaId: TARGET_REPLICA_ID,
+      replaceWitnessNodeId: TARGET_NODE_ID,
+      replaceWitnessCommitIndex: INTENT_COMMIT_INDEX,
+      replaceSourceUnreachable: false,
+    }), 'the intent is durable (idempotently)');
+    const durable = await persistedOperation(harness);
+    const intent = parseStepsFromOperation(durable).find((entry) =>
+      entry?.replaceRemovalIntent === true);
+    t.equal(intent?.replaceWitnessCommitIndex, INTENT_COMMIT_INDEX,
+      'the idempotent intent write still records C0 durably');
+    // A second intent write never replaces the first C0.
+    await harness.owner.persistReplaceRemovalIntent(staleActiveCopy(durable), {
+      replaceRemovalIntent: true,
+      replaceWitnessCommitIndex: INTENT_COMMIT_INDEX + 5,
+    });
+    const again = parseStepsFromOperation(await persistedOperation(harness))
+      .filter((entry) => entry?.replaceRemovalIntent === true);
+    t.same(again.map((entry) => entry.replaceWitnessCommitIndex),
+      [INTENT_COMMIT_INDEX], 'the first C0 is preserved');
+    // AN11 on the preserved C0: a lagging absence completes nothing.
+    harness.witness.sourceVoter = false;
+    harness.witness.commitIndex = INTENT_COMMIT_INDEX - 1;
+    await harness.coordinator.reconcileOperationProgress(
+      await persistedOperation(harness));
+    t.equal((await persistedOperation(harness)).workflowStep,
+      WORKFLOW_STEP.STOPPING, 'an absence below C0 is not a retirement');
+  } finally {
+    await harness.coordinator.shutdown();
+  }
+});
+
+function parseStepsFromOperation(operation) {
+  return Array.isArray(operation?.stepsHistory) ? operation.stepsHistory : [];
+}
