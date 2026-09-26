@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
 import {createConsensusHoldLog} from './partition-consensus-hold-log.js';
 import {
   PARTITION_WRITE_RELEASE_CAUSE,
@@ -6,6 +7,7 @@ import {
 } from './partition-write-kernel.js';
 
 const {
+  PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_RAFT_EVIDENCE,
   PARTITION_SERVICE_REASON,
@@ -114,4 +116,27 @@ function wirePartitionRaftLifecycleEvents(
   });
 }
 
-export {wirePartitionRaftLifecycleEvents};
+/**
+ * Relay the port's consensus announcements as the partition service's own
+ * CONSENSUS_OBSERVED event, as data: the applied ConfState transition (the
+ * first observation after (re)construction included), the leader and the
+ * term. A wake-up for the REPLACE owner (design S5.2), never an authority.
+ * Called whenever the port is (re)created, so the relay follows the live
+ * port.
+ * @param {Object} service - The partition service.
+ */
+function relayPartitionConsensusObservations(service) {
+  const emit = (fields) => service.emit(
+    PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED,
+    {partitionId: service.partitionId, replicaId: service.replicaId,
+      ...fields},
+  );
+  service.raft.subscribe(RAFT_EVENT.MEMBERSHIP_CHANGED, (observation) =>
+    emit({confState: observation?.confState ?? null,
+      commitIndex: observation?.commitIndex ?? null}));
+  service.raft.subscribe(RAFT_EVENT.LEADER_CHANGE, (leaderReplicaId) =>
+    emit({leaderReplicaId: leaderReplicaId ?? null}));
+  service.raft.subscribe(RAFT_EVENT.TERM_CHANGE, (term) => emit({term}));
+}
+
+export {relayPartitionConsensusObservations, wirePartitionRaftLifecycleEvents};

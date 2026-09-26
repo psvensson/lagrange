@@ -14,6 +14,7 @@ import {
 import {admitPartitionRaftPeer} from
   './partition-service-raft-membership-administration.js';
 import {
+  relayPartitionConsensusObservations,
   wirePartitionRaftLifecycleEvents,
 } from './partition-service-raft-lifecycle-wiring.js';
 import {PartitionServiceCoreBase} from './partition-service-core-base.js';
@@ -487,6 +488,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     // retrying an impossible truncation every heartbeat. Log it as the
     // durable operator-visible signal; repair itself rides the existing
     // typed append-fail -> leader catch-up/install route.
+    relayPartitionConsensusObservations(this);
     this.raft.subscribe(
       RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE,
       (observation) => {

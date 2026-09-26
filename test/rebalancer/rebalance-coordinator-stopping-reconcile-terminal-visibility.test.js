@@ -1,3 +1,8 @@
+import {
+  REPLACE_WAIT_REASON,
+  readReplaceOwnerDiagnostic,
+} from '../../src/rebalancer/operation-workflow-replace-owner.js';
+import {createReplaceWitness} from './replace-witness-fixture.js';
 import {OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_DISPATCH_ASSERTION, PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_OPERATION_ID, PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_STEP_ASSERTION, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, PRIORITY_RECOVERY_COMPLETION_STATE, ReplicaOperationMessageType, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, WORKFLOW_STEP, buildPriorityDrainOwnerUnavailableReadinessService, buildPriorityDrainReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
 
 test('RebalanceCoordinator removes a priority REPLACE source follower after ' +
@@ -244,11 +249,20 @@ async (t) => {
   const TEST_OPERATION_ID = 'priority-drain-stopping-converged';
   const TEST_NOW_MS = Date.now();
   const deliveries = [];
+  // The source removal is confirmed where it counts (quest
+  // replace-source-removal-owner, C1/R-1a): the witness replica's committed
+  // configuration no longer holds the source.
+  const witness = createReplaceWitness({sourceVoter: false});
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
     enableTimeouts: false,
+    replaceWitness: false,
     messageRouter: {
       async deliver(target, payload) {
+        const witnessAnswer = witness.answer(payload);
+        if (witnessAnswer) {
+          return witnessAnswer;
+        }
         deliveries.push({target, payload});
         return {
           acknowledged: true,
@@ -334,11 +348,20 @@ async (t) => {
   const TEST_OPERATION_ID = 'priority-drain-stopping-spread-satisfied';
   const TEST_NOW_MS = Date.now();
   const deliveries = [];
+  // The source removal is confirmed where it counts (quest
+  // replace-source-removal-owner, C1/R-1a): the witness replica's committed
+  // configuration no longer holds the source.
+  const witness = createReplaceWitness({sourceVoter: false});
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
     enableTimeouts: false,
+    replaceWitness: false,
     messageRouter: {
       async deliver(target, payload) {
+        const witnessAnswer = witness.answer(payload);
+        if (witnessAnswer) {
+          return witnessAnswer;
+        }
         deliveries.push({target, payload});
         return {
           acknowledged: true,
@@ -937,12 +960,23 @@ test('RebalanceCoordinator defers critical REPLACE STOPPING timeout when ' +
       ReplicaStatus.REMOVING,
       'timeout reconciliation should not fail a critical STOPPING row under visibility pressure',
     );
+    // SUPERSEDED (R09) by the owner decisions of 2026-09-25 (approved
+    // REPLACE design, D2), quest replace-source-removal-owner: this pinned
+    // the transition-retry grace as the retry owner of an unavailable
+    // STOPPING observation. A post-intent REPLACE now has one owner: it waits
+    // visibly (bounded diagnostic) with the 1 s backstop armed and its wake
+    // registered; nothing else re-drives it.
     t.equal(
-      coordinator.workflowOwner.hasActiveTransitionRetryGrace(
-        TEST_OPERATION_ID,
-      ),
+      coordinator.workflowOwner.safetyDeferredRetryTimerByOperationId.has(
+        TEST_OPERATION_ID),
       true,
-      'critical STOPPING visibility pressure should arm transition retry grace',
+      'critical STOPPING visibility pressure arms the owner backstop',
+    );
+    t.equal(
+      readReplaceOwnerDiagnostic(coordinator.workflowOwner,
+        TEST_OPERATION_ID)?.reason,
+      REPLACE_WAIT_REASON.SOURCE_ROW_UNAVAILABLE,
+      'and records why the owner waits',
     );
   } finally {
     await coordinator.shutdown();

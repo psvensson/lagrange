@@ -191,10 +191,9 @@ const PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON = Object.freeze({
   COMMAND_UNKNOWN: 'committed-command-unknown',
 });
 
-// What the committed-entry application did with one committed command
-// (R07): a failed statement is a deterministic outcome that consumes the
-// entry; a command type it does not know fails the application closed,
-// never a silent no-op.
+// What the committed-entry application did with one committed command (R07):
+// a failed statement is a deterministic outcome that consumes the entry; an
+// unknown command type fails the application closed, never a silent no-op.
 const PARTITION_COMMITTED_COMMAND_OUTCOME = Object.freeze({
   APPLIED: 'applied',
   REPLAYED: 'replayed',
@@ -253,6 +252,7 @@ const PARTITION_SERVICE_EVENT = Object.freeze({
   CDC_CATCHUP_STARTED: 'cdcCatchupStarted',
   CDC_CATCHUP_COMPLETED: 'cdcCatchupCompleted',
   SHUTDOWN: 'shutdown',
+  CONSENSUS_OBSERVED: 'consensusObserved',
 });
 
 const PARTITION_SERVICE_REASON = Object.freeze({

@@ -1,4 +1,5 @@
 import {NodeService} from '../node/node-service.js';
+import {replicaConsensusEventsOf} from '../node/replica-handler-membership-relay.js';
 import {
   BOOTSTRAP_ERROR,
   BOOTSTRAP_LOG_MSG,
@@ -72,6 +73,7 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
         rebalanceCoordinator: this.rebalanceCoordinator,
         bootstrapReadinessState: this.bootstrapReadinessState,
         executorOutcomeEmitter: this.replicaHandler?.executorOutcomeEmitter,
+        replicaConsensusEvents: replicaConsensusEventsOf(this.replicaHandler),
         wasmComponentDriver: this.runtimeDrivers.wasmComponentDriver,
         controlPlaneWriteRetryTimeoutMs: this.config.controlPlaneWriteRetryTimeoutMs,
         controlPlaneWriteRetryBaseDelayMs: this.config.controlPlaneWriteRetryBaseDelayMs,

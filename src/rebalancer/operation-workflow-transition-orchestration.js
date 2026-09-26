@@ -341,6 +341,7 @@ class OperationWorkflowTransitionOrchestration
    * @param {string} previousStep
    * @param {number} now
    * @param {string} persistedStatus
+   * @param {Object} [stepMetadata] - Fields recorded on the new step entry.
    * @return {Object} {projectedOperation, currentStepsHistory}
    * @private
    */
@@ -351,14 +352,15 @@ class OperationWorkflowTransitionOrchestration
     previousStep,
     now,
     persistedStatus,
+    stepMetadata,
   ) {
-    const stepEntry = this.buildOperationTransitionStepEntry(
+    const stepEntry = Object.assign(this.buildOperationTransitionStepEntry(
       operation,
       step,
       transitionReason,
       previousStep,
       now,
-    );
+    ), stepMetadata);
     const currentStepsHistory =
       normalizeOperationWorkflowTransitionStepsHistory(operation);
     const projectedOperation = {
@@ -374,7 +376,10 @@ class OperationWorkflowTransitionOrchestration
     return {projectedOperation, currentStepsHistory};
   }
 
-  async updateStep(operation, step, reason) {
+  // options (optional): {stepMetadata} recorded on the new step entry;
+  // {requireDurable}: counts only a committed durable write - the REPLACE
+  // removal-intent boundary (quest replace-source-removal-owner).
+  async updateStep(operation, step, reason, options) {
     const previousStep = operation.workflowStep;
     if (previousStep === step) {
       return false;
@@ -391,6 +396,7 @@ class OperationWorkflowTransitionOrchestration
         previousStep,
         now,
         persistedStatus,
+        options?.stepMetadata,
       );
     const persistFn = async () =>
       this.persistProjectedStepTransition(
@@ -428,6 +434,7 @@ class OperationWorkflowTransitionOrchestration
           operation,
           step,
           error,
+          options,
         ) ||
         !this.recordPriorityDispatchDeferredLocalProgress(
           operation,
@@ -604,11 +611,14 @@ class OperationWorkflowTransitionOrchestration
    * @param {Object|null} operation
    * @param {string} step
    * @param {Error|Object} errorLike
+   * @param {Object} [options] - updateStep options; requireDurable refuses.
    * @return {boolean}
    * @private
    */
-  shouldUsePriorityDispatchDeferredLocalProgress(operation, step, errorLike) {
-    if (!isRetryableControlPlaneError(errorLike)) {
+  shouldUsePriorityDispatchDeferredLocalProgress(
+    operation, step, errorLike, options) {
+    if (options?.requireDurable === true ||
+        !isRetryableControlPlaneError(errorLike)) {
       return false;
     }
     if (

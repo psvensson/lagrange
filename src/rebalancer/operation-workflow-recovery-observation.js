@@ -6,6 +6,11 @@ import {
   shouldClearStoppingObservationDeferrals,
 } from './operation-workflow-stopping-starvation.js';
 
+import {
+  adoptObservedReplaceSourceRetirement,
+  isPartitionReplace,
+  isReplaceRemovalIntentDurable,
+} from './operation-workflow-replace-owner.js';
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES,
@@ -646,6 +651,10 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
   }
 
   async reconcileStoppingOperationProgress(operation) {
+    if (isReplaceRemovalIntentDurable(operation)) {
+      const result = await this.runReplaceStoppingOwner(operation);
+      return result?.success === true;
+    }
     const removingReplicaId =
       operation.type === OperationType.REPLACE ?
         this.repository.getReplaceSourceReplicaId(operation) :
@@ -727,6 +736,15 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     return false;
   }
 
+  // BR7: the effect is observed without a recorded intent; record it and
+  // let the STOPPING owner decide from committed membership.
+  async adoptActiveReplaceSourceRetirement(operation) {
+    if (await adoptObservedReplaceSourceRetirement(this, operation)) {
+      await this.runReplaceStoppingOwner(operation);
+    }
+    return true;
+  }
+
   async reconcileActiveReplaceSourceRemovalProgress(operation) {
     if (
       operation?.type !== OperationType.REPLACE ||
@@ -748,11 +766,19 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
     );
     const actualStatus = stoppingReplicaObservation.lifecycleStatus;
 
-    if (this.isActiveReplaceSourceRetirementObserved(
-      operation,
-      removingReplicaId,
-      stoppingReplicaObservation,
-    )) {
+    const sourceRetirementObserved =
+      this.isActiveReplaceSourceRetirementObserved(
+        operation,
+        removingReplicaId,
+        stoppingReplicaObservation,
+      );
+    if (
+      isPartitionReplace(operation) &&
+      (sourceRetirementObserved || actualStatus === ReplicaStatus.REMOVING)
+    ) {
+      return this.adoptActiveReplaceSourceRetirement(operation);
+    }
+    if (sourceRetirementObserved) {
       if (!await this.confirmActiveReplicaTerminalHandoff(operation)) {
         return true;
       }

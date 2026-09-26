@@ -6,15 +6,6 @@ import {
   resolvePriorityRemoveSafetyMembershipSnapshot,
 } from './operation-workflow-remove-safety-membership.js';
 import {
-  resolvePriorityPublicationReplacementLeaderCandidateState,
-  resolvePriorityPublicationReplacementLeaderCandidateAction,
-  resolvePriorityPublicationCompletedWithoutOwnershipReplicaIds,
-} from './operation-workflow-replacement-leader-state.js';
-import {
-  hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound,
-  resolvePriorityPublicationReplacementLeaderCandidateRow,
-} from './operation-workflow-replacement-leader-resolution.js';
-import {
   applyObservedOperationState,
   adoptMostAdvancedObservedReplaceState,
 } from './operation-workflow-observed-state.js';
@@ -393,50 +384,11 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
     );
   }
 
-  /**
-   * @param {Object} options
-   * @return {string}
-   * @private
-   */
-  resolvePriorityPublicationReplacementLeaderCandidateState(options = {}) {
-    return resolvePriorityPublicationReplacementLeaderCandidateState(options);
-  }
-
-  /**
-   * @param {string} state
-   * @return {string}
-   * @private
-   */
-  resolvePriorityPublicationReplacementLeaderCandidateAction(state) {
-    return resolvePriorityPublicationReplacementLeaderCandidateAction(state);
-  }
-
-  resolvePriorityPublicationCompletedWithoutOwnershipReplicaIds(
-    electionEvidence,
-    candidateRows,
-    hasReplacementLeaderOwnership,
-  ) {
-    return resolvePriorityPublicationCompletedWithoutOwnershipReplicaIds(
-      electionEvidence,
-      candidateRows,
-      hasReplacementLeaderOwnership,
-      (row) => this.getReplicaRowIdentity(row),
-    );
-  }
-
-  hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound(
-    operation,
-    currentVoterReadyRows,
-    operationReplicaId,
-    replacementReplicaRow,
-  ) {
-    return hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound(
-      this,
-      operation,
-      currentVoterReadyRows,
-      operationReplicaId,
-      replacementReplicaRow,
-    );
+  // The H-B' replacement-leader retarget is deleted (quest
+  // replace-source-removal-owner, amendment-1 step 2): a REPLACE's handoff
+  // names its own target only, so no retarget candidate exists (R09).
+  hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound() {
+    return false;
   }
 
   /**
@@ -450,16 +402,8 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
   async resolvePriorityPublicationReplacementLeaderCandidateRow(
     operation,
     replacementReplicaRow,
-    currentVoterReadyRows,
-    operationReplicaId,
   ) {
-    return resolvePriorityPublicationReplacementLeaderCandidateRow(
-      this,
-      operation,
-      replacementReplicaRow,
-      currentVoterReadyRows,
-      operationReplicaId,
-    );
+    return replacementReplicaRow || null;
   }
 
   /**

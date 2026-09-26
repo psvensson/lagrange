@@ -55,7 +55,10 @@ const TARGET_THRESHOLD = 12;
 // 2026-09-24: tightened 1814 -> 1813 on the checker's hint after the ready
 // node's publication advancement read its published set from the snapshot
 // owner instead of normalizing the row itself (cutover seed parity).
-const BASELINE_COUNT = 1813;
+// 2026-09-25: tightened 1813 -> 1811 on the checker's hint after the REPLACE
+// owner deleted the replacement-leader retarget resolution (H-B', quest
+// replace-source-removal-owner).
+const BASELINE_COUNT = 1811;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

@@ -72,16 +72,6 @@ export const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_PARTITION_ID =
   'sql_write_operations-p1';
 export const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE = 'partition';
 export const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE = 'follower';
-export const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SOURCE_ACTIVE_ASSERTION =
-  'remote owner unavailable priority drain should settle without dispatch';
-export const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SOURCE_STOPPING_ASSERTION =
-  'remote owner unavailable source-removal drain should settle without dispatch';
-export const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_TERMINAL_ASSERTION =
-  'remote owner unavailable ACTIVE replacement should become terminal';
-export const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SYNCING_ASSERTION =
-  'remote owner unavailable SYNCING replacement should become terminal';
-export const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_STOPPING_ASSERTION =
-  'remote owner unavailable STOPPING replacement should become terminal';
 export const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_NO_DELIVERY_ASSERTION =
   'remote owner unavailable priority drain should not replay source removal';
 export const PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_DISPATCH_ASSERTION =

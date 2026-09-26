@@ -4,10 +4,21 @@ import {raftRsMembershipAdministration} from
 import {
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
   RAFT_MEMBERSHIP_OPERATION,
+  RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
   RAFT_OPERATION_OUTCOME,
 } from '../raft/raft-operation-port-constants.js';
+import {recoveryRetryWindowMsOf} from '../raft/raft-rs-runtime-tuning.js';
+import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
+  './partition-replica-membership-constants.js';
+import {computeReplicaElectionTimeouts} from
+  '../raft/replica-election-timeouts.js';
 
-const {PARTITION_SERVICE_LOG_MSG, RaftRole} = PARTITION_SERVICE_SHARED;
+const {
+  PARTITION_SERVICE_LOG_MSG,
+  PARTITION_SERVICE_VALUE,
+  RaftRole,
+} = PARTITION_SERVICE_SHARED;
+
 // A refused admission leaves a peer the services cache names outside the
 // configuration, which an operator needs to see; every other decision is
 // routine.
@@ -134,4 +145,126 @@ function admitPartitionRaftPeer(service, {replicaIdentity, peerAddress}) {
   return Object.freeze(admission);
 }
 
-export {admitPartitionRaftPeer, reservePartitionRaftPeerIdentity};
+/**
+ * The leadership-transfer abort window of the group, maximised over its
+ * replica indices: raft-rs aborts a transfer after the leader's
+ * election_timeout, which each replica derives from its own jittered timing.
+ * @param {Object} service - The partition service.
+ * @return {number|null} Milliseconds, or null when the timing is unknown.
+ */
+function leadershipTransferWindowMaxMsOf(service) {
+  const timing = service.raftTimingConfig;
+  const replicaIds = Array.isArray(service.replicaIds) ?
+    service.replicaIds : [];
+  if (!timing || replicaIds.length === 0) {
+    return null;
+  }
+  let windowMs = 0;
+  for (const replicaId of replicaIds) {
+    const {electionMinMs} = computeReplicaElectionTimeouts({
+      replicaId,
+      replicaIds,
+      baseElectionMinMs: timing.baseElectionMinMs,
+      baseElectionMaxMs: timing.baseElectionMaxMs,
+      electionJitterPerReplicaMs:
+        PARTITION_SERVICE_VALUE.ELECTION_JITTER_PER_REPLICA_MS,
+    });
+    windowMs = Math.max(windowMs, recoveryRetryWindowMsOf({
+      ...timing,
+      electionMinMs,
+    }));
+  }
+  return windowMs > 0 ? windowMs : null;
+}
+
+function voterMembershipStateOf(service, status, sourceReplicaIdentity) {
+  const identityOfPeerId = new Map((status.peers || []).map((peer) =>
+    [String(peer.peerId), peer.replicaIdentity]));
+  identityOfPeerId.set(String(status.peerId), service.replicaId);
+  const confState = status.confState || {};
+  const voterIds = [
+    ...(confState.voters || []),
+    ...(confState.votersOutgoing || []),
+  ].map(String);
+  let unresolved = false;
+  for (const peerId of voterIds) {
+    const identity = identityOfPeerId.get(peerId);
+    if (identity === sourceReplicaIdentity) {
+      return PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER;
+    }
+    if (typeof identity !== 'string' || identity.length === 0) {
+      unresolved = true;
+    }
+  }
+  return unresolved ?
+    PARTITION_REPLICA_MEMBERSHIP_STATE.UNRESOLVED :
+    PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT;
+}
+
+/**
+ * This replica's own committed configuration and leadership, read from its
+ * port (the core), with the named voter's state in it. Never a row.
+ * @param {Object} service - The partition service (the witness replica).
+ * @param {string} sourceReplicaIdentity - The voter asked about.
+ * @return {Promise<Object>} Frozen observation.
+ */
+async function readPartitionReplicaMembership(service, sourceReplicaIdentity) {
+  const status = typeof service?.raft?.readStatus === 'function' ?
+    await service.raft.readStatus() : null;
+  if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK || !status.confState) {
+    return Object.freeze({
+      state: PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE,
+      replicaId: service?.replicaId || null,
+      reason: status?.reason || null,
+    });
+  }
+  return Object.freeze({
+    state: voterMembershipStateOf(service, status, sourceReplicaIdentity),
+    replicaId: service.replicaId,
+    partitionId: service.partitionId,
+    term: status.term,
+    commitIndex: status.commitIndex,
+    leaderReplicaId: status.leaderId ?? null,
+    role: status.role,
+    transferWindowMaxMs: leadershipTransferWindowMaxMsOf(service),
+  });
+}
+
+/**
+ * Propose the removal of one voter through this replica's port: reserve its
+ * identity (so the proposal names a raft peer this replica can address),
+ * then REMOVE_PEER in the port's canonical shape. raft-rs forwards a
+ * follower's proposal to its leader; removing a non-member is a no-op, so a
+ * repeat is harmless. The answer is what the port said.
+ * @param {Object} service - The partition service.
+ * @param {string} replicaIdentity - The voter to remove.
+ * @return {Promise<Object>} {outcome, portOutcome, reason}.
+ */
+async function retirePartitionRaftPeer(service, replicaIdentity) {
+  const reservation = reservePartitionRaftPeerIdentity(
+    service, replicaIdentity);
+  if (reservation.outcome !== RAFT_MEMBERSHIP_RESERVATION_OUTCOME.RESERVED) {
+    return Object.freeze({
+      outcome: RAFT_MEMBERSHIP_ADMISSION_OUTCOME.REFUSED,
+      portOutcome: null,
+      reason: reservation.reason || reservation.outcome,
+    });
+  }
+  let answered;
+  try {
+    answered = await service.raft.proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
+      replicaIdentity,
+    });
+  } catch (error) {
+    answered = {reason: error?.message || String(error)};
+  }
+  return Object.freeze(admissionOfPortAnswer(answered));
+}
+
+export {
+  admitPartitionRaftPeer,
+  readPartitionReplicaMembership,
+  reservePartitionRaftPeerIdentity,
+  retirePartitionRaftPeer,
+};

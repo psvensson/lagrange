@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "9efd97b479007f63db80b2bb0ffc8a54711bd6024ff3c194f0534a35f9f04a8b"
+    "sourceSha256": "789ae0215f5d351cae0b09e223d13131fda94508b0de29c46454d856ac8af0f4"
   },
   "layerDirection": [
     "raw_observation",
@@ -19,7 +19,7 @@
   "metrics": {
     "moduleCount": 68,
     "publicExportCount": 755,
-    "importEdgeCount": 312,
+    "importEdgeCount": 310,
     "crossLayerEdgeCount": 93,
     "layerDirectionViolationCount": 45,
     "largestStronglyConnectedComponent": 1,
@@ -4980,26 +4980,6 @@
       "from": "src/rebalancer/priority-recovery-superseded-target.js",
       "specifier": "./operation-workflow-replace-replay.js",
       "to": "src/rebalancer/operation-workflow-replace-replay.js",
-      "targetModule": false,
-      "sourceLayer": "owner_decision",
-      "targetLayer": null,
-      "crossLayer": false,
-      "conformsToLayerDirection": null
-    },
-    {
-      "from": "src/rebalancer/priority-recovery-superseded-target.js",
-      "specifier": "./operation-workflow-replacement-leader-resolution.js",
-      "to": "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
-      "targetModule": false,
-      "sourceLayer": "owner_decision",
-      "targetLayer": null,
-      "crossLayer": false,
-      "conformsToLayerDirection": null
-    },
-    {
-      "from": "src/rebalancer/priority-recovery-superseded-target.js",
-      "specifier": "./operation-workflow-replacement-leader-state.js",
-      "to": "src/rebalancer/operation-workflow-replacement-leader-state.js",
       "targetModule": false,
       "sourceLayer": "owner_decision",
       "targetLayer": null,

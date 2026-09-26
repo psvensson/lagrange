@@ -21,6 +21,7 @@ import {
   STARTUP_AUTHORITY_STATE,
   buildStartupAuthoritySnapshotFromPlanningAnswer,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
+import {installReplaceWitnesses} from '../rebalancer/replace-witness-fixture.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
 import {
   initializeEnvironment,
@@ -650,6 +651,11 @@ async function runFormationCadenceScenario() {
       }, REPLICA_ACTIVATION_MS);
     },
   });
+  // The self-move REPLACE's target configuration, as its owner reads it
+  // (quest replace-source-removal-owner, C1): the source leaves it when the
+  // modelled self-move reaches its terminal.
+  const replaceWitnesses = installReplaceWitnesses(
+    coordinator.workflowOwner.messageRouter);
 
   // Per-partition rebalancer loop analogue: one attempt per wake, a typed
   // retryable skip re-arms the priority retry cadence, any completion wakes
@@ -741,6 +747,7 @@ async function runFormationCadenceScenario() {
     refreshStartupAuthority();
 
     timeSource.setTimeout(() => {
+      replaceWitnesses.witnessFor(selfMove.operationId).commitRemoval();
       coordinator
         .completeOperation({...selfMove, workflowStep: WORKFLOW_STEP.STOPPING})
         .then(() => {

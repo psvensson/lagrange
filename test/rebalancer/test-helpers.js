@@ -23,6 +23,14 @@ import {
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  PARTITION_REPLICA_MEMBERSHIP_STATE,
+} from '../../src/partition/partition-replica-membership-constants.js';
+import {
+  ReplicaOperationField,
+  ReplicaOperationMessageType,
+  ReplicaOperationResponseStatus,
+} from '../../src/rebalancer/replica-operation-constants.js';
 
 const SYSTEM_TABLE_PRIMARY_KEY_FIELD = {
   [SYSTEM_TABLE_NAME.NODES]: 'node_id',
@@ -423,6 +431,131 @@ function createMockMessageRouter(options = {}) {
   };
 }
 
+// The REPLACE witness replica's answers in the fixture world (quest
+// replace-source-removal-owner): the target's committed configuration is
+// modelled from the fixture's services rows - the source is a voter until
+// its row is REMOVED or deleted (a REMOVING row is still a voter until its
+// removal commits; the leader's row-driven peer reconciliation commits it
+// when the row leaves; a row the fixture never had is still a voter) - and
+// the leader from the
+// partition row (or the row carrying raft_role leader). A test whose subject
+// is the committed-membership contract itself passes its own witness double
+// (replace-witness-fixture.js) instead.
+const FIXTURE_RETIRING_ROW_STATUSES = Object.freeze(new Set([
+  'removed',
+]));
+const FIXTURE_WITNESS_COMMIT_INDEX = 1;
+const FIXTURE_WITNESS_TRANSFER_WINDOW_MS = 1000;
+
+function fixturePartitionRows(cache, partitionId) {
+  if (typeof cache?.filter !== 'function') {
+    return [];
+  }
+  return cache.filter(SYSTEM_TABLE_NAME.SERVICES, (row) =>
+    row?.partition_id === partitionId) || [];
+}
+
+// The leader the witness reports: the partition row's leader node, else the
+// row the fixture marks leader, else (a fixture that names no leader) the
+// replacement itself - leadership already off the source.
+function fixtureWitnessLeader(cache, partitionId, rows, targetReplicaId) {
+  const partitionRow = typeof cache?.get === 'function' ?
+    cache.get(SYSTEM_TABLE_NAME.PARTITIONS, partitionId) : null;
+  const leaderNodeId = partitionRow?.leader_node_id || null;
+  const leaderRow = rows.find((row) =>
+    (leaderNodeId && row?.node_id === leaderNodeId) ||
+    (!leaderNodeId && String(row?.raft_role || '').toLowerCase() === 'leader'));
+  return leaderRow?.replica_id || leaderRow?.service_id ||
+    (leaderNodeId ? null : targetReplicaId);
+}
+
+// The services rows the fixture deleted: a deleted source row is the fixture
+// world's committed removal; a row the fixture never had is not.
+const FIXTURE_DELETED_SERVICE_IDS = new WeakMap();
+
+function trackFixtureServiceDeletions(cache) {
+  if (!cache || typeof cache.delete !== 'function' ||
+      FIXTURE_DELETED_SERVICE_IDS.has(cache)) {
+    return;
+  }
+  const deleted = new Set();
+  FIXTURE_DELETED_SERVICE_IDS.set(cache, deleted);
+  const baseDelete = cache.delete.bind(cache);
+  cache.delete = (tableName, key, ...rest) => {
+    if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+      deleted.add(key);
+    }
+    return baseDelete(tableName, key, ...rest);
+  };
+  if (typeof cache.upsert === 'function') {
+    const baseUpsert = cache.upsert.bind(cache);
+    cache.upsert = (tableName, row, ...rest) => {
+      if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+        deleted.delete(row?.service_id);
+        deleted.delete(row?.replica_id);
+      }
+      return baseUpsert(tableName, row, ...rest);
+    };
+  }
+}
+
+function answerFixtureReplaceWitness(cache, payload) {
+  const type = payload?.type;
+  if (type === ReplicaOperationMessageType.RETIRE_REPLICA_PEER) {
+    return {
+      status: ReplicaOperationResponseStatus.INITIATED,
+      [ReplicaOperationField.PROPOSAL]: {outcome: 'PROPOSED'},
+    };
+  }
+  if (type !== ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP) {
+    return undefined;
+  }
+  const partitionId = payload[ReplicaOperationField.PARTITION_ID];
+  const sourceReplicaId = payload[ReplicaOperationField.SOURCE_REPLICA_ID];
+  const rows = fixturePartitionRows(cache, partitionId);
+  const sourceRow = rows.find((row) =>
+    row?.replica_id === sourceReplicaId || row?.service_id === sourceReplicaId);
+  const deletedSource = FIXTURE_DELETED_SERVICE_IDS.get(cache)
+    ?.has(sourceReplicaId) === true;
+  const sourceVoter = !deletedSource &&
+    !FIXTURE_RETIRING_ROW_STATUSES.has(
+      String(sourceRow?.status || '').toLowerCase());
+  return {
+    status: ReplicaOperationResponseStatus.COMPLETED,
+    [ReplicaOperationField.MEMBERSHIP]: {
+      state: sourceVoter ?
+        PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER :
+        PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT,
+      replicaId: payload[ReplicaOperationField.REPLICA_ID],
+      partitionId,
+      term: 1,
+      commitIndex: FIXTURE_WITNESS_COMMIT_INDEX,
+      leaderReplicaId: fixtureWitnessLeader(cache, partitionId, rows,
+        payload[ReplicaOperationField.REPLICA_ID]),
+      transferWindowMaxMs: FIXTURE_WITNESS_TRANSFER_WINDOW_MS,
+    },
+  };
+}
+
+/**
+ * A router whose witness messages the fixture world answers; every other
+ * message reaches the test's own router unchanged.
+ * @param {Object} router
+ * @param {Object} cache
+ * @return {Object}
+ */
+function withFixtureReplaceWitness(router, cache) {
+  if (!router || typeof router.deliver !== 'function') {
+    return router;
+  }
+  const deliver = router.deliver.bind(router);
+  router.deliver = async (target, payload, options) => {
+    const answer = answerFixtureReplaceWitness(cache, payload);
+    return answer === undefined ? deliver(target, payload, options) : answer;
+  };
+  return router;
+}
+
 /**
  * Create a mock SQL query engine.
  * @param {Object} options - Engine options.
@@ -537,7 +670,11 @@ function createTestCoordinator(options = {}) {
   const mockCache = options.systemTableCache || createMockCache(cacheData);
   const mockPolicyService = options.tablePolicyService ||
     createMockPolicyService(cacheData);
-  const mockMessageRouter = options.messageRouter || createMockMessageRouter();
+  trackFixtureServiceDeletions(mockCache);
+  const mockMessageRouter = options.replaceWitness === false ?
+    options.messageRouter || createMockMessageRouter() :
+    withFixtureReplaceWitness(
+      options.messageRouter || createMockMessageRouter(), mockCache);
 
   // Track operations via SQL engine (not CDC)
   const trackedOperations = new Map();
@@ -1093,4 +1230,5 @@ export {
   initializeSpreadTestEnvironment,
   installActualReplicaObservationResolver,
   isAddLikeMoveResult,
+  withFixtureReplaceWitness,
 };

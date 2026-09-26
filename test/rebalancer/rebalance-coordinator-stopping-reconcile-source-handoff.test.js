@@ -104,6 +104,18 @@ test('RebalanceCoordinator dispatches source handoff instead of draining a ' +
       };
     };
 
+    // SUPERSEDED IN PART (R09) by the owner decision of 2026-09-25 (approved
+    // REPLACE design, amendment-1 step 2), quest replace-source-removal-owner:
+    // a source that is merely still active no longer forces a source-side
+    // handoff; the handoff follows the fresh leader the target replica
+    // reports, and it is the one named-target attempt. This scenario's
+    // source leads (the partition's leader row names its node).
+    coordinator.systemTableCache.merge(
+      SYSTEM_TABLE_NAME.PARTITIONS,
+      TEST_PARTITION_ID,
+      {partition_id: TEST_PARTITION_ID,
+        leader_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID},
+    );
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconcileResult =
       await coordinator.workflowOwner.reconcileOperationProgress(operation);
@@ -124,6 +136,10 @@ test('RebalanceCoordinator dispatches source handoff instead of draining a ' +
       deliveries[0]?.payload?.type,
       ReplicaOperationMessageType.STEP_DOWN_REPLICA,
       'source-present priority recovery drain should honor source handoff safety',
+    );
+    t.ok(
+      deliveries[0]?.target?.startsWith(PRIORITY_DRAIN_TEST_TARGET_NODE_ID),
+      'the handoff names the replacement target, never the source leg',
     );
     t.equal(
       persistedOperation?.workflowStep,

@@ -7,6 +7,12 @@ const RAFT_EVENT = Object.freeze({
   COMMIT: 'commit',
   TERM_CHANGE: 'term change',
   COMMITTED_PREFIX_DIVERGENCE: 'committed prefix divergence',
+  // The group's applied ConfState differs from the one last announced, or
+  // this is the first announcement since the group was (re)constructed or
+  // restored. Carries {confState, commitIndex} as data: a wake-up, never an
+  // authority - a listener re-reads status (quest replace-source-removal-
+  // owner, design S5.2 / amendment-1 step 1).
+  MEMBERSHIP_CHANGED: 'membership changed',
 });
 
 const RAFT_OPERATION_OUTCOME = Object.freeze({

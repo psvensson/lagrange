@@ -1,4 +1,5 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {replicaConsensusEventsOf} from '../node/replica-handler-membership-relay.js';
 import {NodeJoiningCdcSubscriptionAndBackfill} from './node-joining-cdc-subscription-and-backfill.js';
 import {
   attachRuntimeServiceRebalancerOwner,
@@ -417,6 +418,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       rebalanceCoordinator: this.rebalanceCoordinator,
       bootstrapReadinessState: this.bootstrapReadinessState,
       executorOutcomeEmitter: this.replicaHandler?.executorOutcomeEmitter,
+      replicaConsensusEvents: replicaConsensusEventsOf(this.replicaHandler),
       wasmComponentDriver: this.runtimeDrivers.wasmComponentDriver,
       controlPlaneWriteRetryTimeoutMs: this.config.controlPlaneWriteRetryTimeoutMs,
       controlPlaneWriteRetryBaseDelayMs: this.config.controlPlaneWriteRetryBaseDelayMs,

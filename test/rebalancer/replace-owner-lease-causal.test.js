@@ -147,17 +147,18 @@ function createCausalCluster(seedOwnerRoutingReady) {
         ReplicaStatus.ACTIVE,
     );
   }
-  // The replacement's own election evidence (the owner's precondition for
-  // removing a follower source) - owner-local state, not the verdict.
-  owner.workflowOwner
-    .getPriorityPublicationReplacementLeaderElectionEvidenceMap()
-    .set(LEASE_VERDICT_OPERATION_ID, Object.freeze({
-      completedReplicaIds: Object.freeze([LEASE_VERDICT_REPLICA.TARGET]),
-      notFoundReplicaIds: Object.freeze([]),
-      observedAt: world.nowMs,
-      replacementReplicaId: LEASE_VERDICT_REPLICA.TARGET,
-      responseStatus: ReplicaOperationResponseStatus.COMPLETED,
-    }));
+  // The replacement leads (the owner's precondition for removing its
+  // source). SUPERSEDED (R09) by the owner decision of 2026-09-25 (approved
+  // REPLACE design, amendment-1 step 2, BR11): this was modelled as completed
+  // replacement-election evidence in the owner's evidence map (CL-043); a
+  // REPLACE's leader is now read fresh from its target replica, which the
+  // fixture witness answers from the partition's leader row.
+  owner.systemTableCache.merge(
+    SYSTEM_TABLE_NAME.PARTITIONS,
+    LEASE_VERDICT_PARTITION_ID,
+    {partition_id: LEASE_VERDICT_PARTITION_ID,
+      leader_node_id: LEASE_VERDICT_NODE.TARGET},
+  );
   return {owner, seed, world, sourceNode, ownerDispatches, seedDispatches};
 }
 

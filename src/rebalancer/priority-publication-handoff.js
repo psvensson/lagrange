@@ -4,6 +4,17 @@ import {classifySystemPartition} from '../bootstrap/system-partition-classificat
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
+import {
+  REPLACE_HANDOFF_DECISION,
+  beginReplaceHandoffAttempt,
+  decideReplaceNamedHandoff,
+  recordReplaceHandoffAnswer,
+} from './operation-workflow-replace-handoff-attempt.js';
+import {isPartitionReplace} from './operation-workflow-replace-owner.js';
+import {
+  readReplaceWitnessMembership,
+  replaceReplicaIdsOf,
+} from './operation-workflow-replace-witness.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -19,6 +30,14 @@ const {
   ReplicaOperationResponseStatus,
   resolveOperationHandlerType,
 } = SHARED;
+
+// The publication waits the leader-safety snapshot still decides for a
+// REPLACE (they gate on the publication partition, not on leadership).
+const REPLACE_PUBLICATION_WAIT_STATES = Object.freeze(new Set([
+  PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE
+    .PUBLICATION_STATUS_UNAVAILABLE,
+  PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.WAIT_PUBLICATION_PUBLISHED,
+]));
 
 const PRIORITY_RECOVERY_PLANNING_REUSE_LITERAL = Object.freeze({
   OPERATION_WORKFLOW_OWNER: 'operation_workflow_owner',
@@ -86,6 +105,13 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
       PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.NOT_APPLICABLE
     ) {
       return null;
+    }
+
+    if (
+      isPartitionReplace(operation) &&
+      !REPLACE_PUBLICATION_WAIT_STATES.has(safetySnapshot.state)
+    ) {
+      return this.evaluateReplaceNamedHandoffSafety(operation);
     }
 
     if (
@@ -222,6 +248,108 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     );
   }
 
+  /**
+   * A REPLACE's leadership gate (amendment-1 step 2): the witness's fresh
+   * leader decides, and the only handoff is a named-target attempt to the
+   * REPLACE's own target. Superseded for REPLACE (R09): the completed
+   * election evidence (CL-043, BR11) and the row-observed ownership wait
+   * (BR3).
+   * @param {Object} operation
+   * @return {Promise<Object>} A remove-safety evaluation.
+   */
+  async evaluateReplaceNamedHandoffSafety(operation) {
+    const replicaIds = replaceReplicaIdsOf(this, operation);
+    const witness = await readReplaceWitnessMembership(this, operation);
+    const decision = decideReplaceNamedHandoff(
+      this, operation, witness, replicaIds);
+    if (decision.state === REPLACE_HANDOFF_DECISION.LEADERSHIP_SAFE) {
+      return this.buildSafeRemoveSafetyEvaluation();
+    }
+    if (decision.state === REPLACE_HANDOFF_DECISION.TARGET_NOT_FOUND) {
+      return this.buildFailedRemoveSafetyEvaluation(
+        OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
+          operation.partitionId +
+          OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_REPLICA_2 +
+          replicaIds.targetReplicaId +
+          OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_LEADER_ELECTION_RETURNED_NOT_FOUND,
+      );
+    }
+    const pendingMessage =
+      OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
+      operation.partitionId +
+      OPERATION_WORKFLOW_OWNER_LITERAL.SOURCE_LEADER +
+      replicaIds.sourceReplicaId +
+      OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_LEADER_OWNERSHIP_PENDING_BEFORE_SAFE_REMOVAL;
+    if (decision.state !== REPLACE_HANDOFF_DECISION.ISSUE) {
+      return this.buildDeferredRemoveSafetyEvaluationForOperation(
+        operation, pendingMessage);
+    }
+    return this.buildDeferredRemoveSafetyEvaluationForOperation(
+      operation,
+      pendingMessage,
+      {
+        handoffRequest: Object.freeze({
+          dispatchNodeId: operation.targetNodeId,
+          messageType: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
+          requestReason: ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
+          requestReplicaId: replicaIds.targetReplicaId,
+          // The attempt opens when the request actually leaves (dispatch).
+          replaceAttempt: true,
+        }),
+      },
+    );
+  }
+
+  /**
+   * F-b / TC5: a REPLACE's handoff leaves only while the operation is still
+   * the non-terminal one that decided it (live and cached), in a source
+   * removal phase. Otherwise nothing is sent and no attempt opens.
+   * @param {Object} operation
+   * @return {boolean}
+   */
+  isReplaceHandoffStillOwned(operation) {
+    const cachedRow = this.repository.getReplicaOperationRowFromCache?.(
+      operation.operationId) || null;
+    const cachedTerminal = cachedRow !== null &&
+      cachedRow.completed_at !== null && cachedRow.completed_at !== undefined;
+    return !this.repository.isOperationTerminal(operation) &&
+      !cachedTerminal &&
+      this.repository.isReplaceRemoveDispatchPhase(operation);
+  }
+
+  /**
+   * A REPLACE's named-target attempt (F-b): it opens only when the request
+   * leaves under the still-owning operation, and its answer - a delivery
+   * failure is a refusal - is applied to the attempt it names.
+   * @param {Object} operation
+   * @param {Object} handoffRequest
+   * @param {string} target
+   * @param {Object} request
+   * @return {Promise<Object|null>}
+   */
+  async dispatchReplaceHandoffAttempt(
+    operation, handoffRequest, target, request) {
+    if (!this.isReplaceHandoffStillOwned(operation)) {
+      return null;
+    }
+    const attemptSeq = beginReplaceHandoffAttempt(this, operation.operationId);
+    let response = null;
+    try {
+      response = await this.messageRouter.deliver(target, {
+        ...request,
+        [ReplicaOperationField.ATTEMPT_SEQ]: attemptSeq,
+      }, {
+        targetNodeId: handoffRequest.dispatchNodeId,
+        deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
+      });
+    } catch (_error) {
+      response = null;
+    }
+    recordReplaceHandoffAnswer(this, operation.operationId, response,
+      attemptSeq);
+    return response || null;
+  }
+
   async dispatchRemoveSafetyHandoffRequest(operation, handoffRequest) {
     if (
       !operation ||
@@ -251,6 +379,10 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     };
     if (handoffRequest.requestReason) {
       request[ReplicaOperationField.REASON] = handoffRequest.requestReason;
+    }
+    if (handoffRequest.replaceAttempt === true) {
+      return this.dispatchReplaceHandoffAttempt(
+        operation, handoffRequest, target, request);
     }
 
     // R3 (slow-rejoiner-progress-or-evict): anchor the first source-leader handoff ATTEMPT
@@ -288,6 +420,12 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     removeSafetyEvaluation,
     response,
   ) {
+    // E11: a REPLACE's answered attempt is followed by one fresh decision
+    // (the leader may already be the target, e.g. ALREADY_LEADER); an
+    // unresolved attempt then waits for its resolution.
+    if (removeSafetyEvaluation?.handoffRequest?.replaceAttempt === true) {
+      return true;
+    }
     const snapshot =
       await this.buildRemoveSafetyHandoffContinuationSnapshot(
         operation,

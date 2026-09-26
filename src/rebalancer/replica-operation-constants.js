@@ -8,6 +8,12 @@ const ReplicaOperationMessageType = Object.freeze({
   CREATE_REPLICA: MESSAGE_TYPE.CREATE_REPLICA,
   REMOVE_REPLICA: MESSAGE_TYPE.REMOVE_REPLICA,
   STEP_DOWN_REPLICA: MESSAGE_TYPE.STEP_DOWN_REPLICA,
+  // The REPLACE owner's reads and proposals through the witness (target)
+  // replica's handler (quest replace-source-removal-owner, amendment-1
+  // step 3): its committed configuration and leadership, and a REMOVE_PEER
+  // of the source through its port.
+  READ_REPLICA_MEMBERSHIP: MESSAGE_TYPE.READ_REPLICA_MEMBERSHIP,
+  RETIRE_REPLICA_PEER: MESSAGE_TYPE.RETIRE_REPLICA_PEER,
 });
 
 const ReplicaOperationReason = Object.freeze({
@@ -32,6 +38,12 @@ const ReplicaOperationField = Object.freeze({
   ENTITY_TYPE: FIELD.ENTITY_TYPE,
   ENTITY_ID: FIELD.ENTITY_ID,
   REASON: FIELD.REASON,
+  SOURCE_REPLICA_ID: 'sourceReplicaId',
+  // A REPLACE handoff attempt's sequence, echoed by the handler so a late
+  // answer of an earlier attempt is dropped.
+  ATTEMPT_SEQ: 'attemptSeq',
+  MEMBERSHIP: 'membership',
+  PROPOSAL: 'proposal',
 });
 
 const ReplicaOperationResponseStatus = Object.freeze({

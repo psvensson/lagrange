@@ -1,4 +1,4 @@
-import {OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_NO_DELIVERY_ASSERTION, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_OPERATION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_PARTITION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SOURCE_ACTIVE_ASSERTION, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SOURCE_STOPPING_ASSERTION, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_STOPPING_ASSERTION, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_STOPPING_OPERATION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SYNCING_ASSERTION, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SYNCING_OPERATION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_TERMINAL_ASSERTION, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_OPERATION_ID, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STATUS_ASSERTION, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STEP_ASSERTION, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_TRANSITION_ASSERTION, PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID, RAFT_ROLE, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, WORKFLOW_STEP, buildPriorityDrainOwnerUnavailableReadinessService, buildPriorityDrainReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
+import {OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_NO_DELIVERY_ASSERTION, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_OPERATION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_PARTITION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_STOPPING_OPERATION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SYNCING_OPERATION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_OPERATION_ID, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STATUS_ASSERTION, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STEP_ASSERTION, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_TRANSITION_ASSERTION, PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID, RAFT_ROLE, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, WORKFLOW_STEP, buildPriorityDrainOwnerUnavailableReadinessService, buildPriorityDrainReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
 
 test('RebalanceCoordinator does not let stale failed target cache override ' +
   'authoritative ACTIVE target during priority REPLACE drain', async (t) => {
@@ -240,7 +240,7 @@ test('RebalanceCoordinator does not let stale active target cache override ' +
   }
 });
 
-test('RebalanceCoordinator releases remote-owned ACTIVE priority REPLACE ' +
+test('RebalanceCoordinator hands back (never releases) a remote-owned ACTIVE priority REPLACE ' +
   'when the canonical owner is no longer repair-eligible and spread is ' +
   'satisfied', async (t) => {
   const TEST_PARTITION_ID = PRIORITY_DRAIN_TEST_REMOTE_RELEASE_PARTITION_ID;
@@ -343,10 +343,17 @@ test('RebalanceCoordinator releases remote-owned ACTIVE priority REPLACE ' +
     const persistedOperation =
       await coordinator.getOperation(TEST_OPERATION_ID);
 
+    // SUPERSEDED (R09) by the owner decisions of 2026-09-25 (approved
+    // REPLACE design R-1b/R-1c, D2; amendment-1 §4), quest
+    // replace-source-removal-owner: this pinned the drain RELEASING (closing
+    // as REMOVED) a remote-owned REPLACE whose owner read unavailable. The
+    // drain now never closes a partition REPLACE: it hands it back to its
+    // owner; only a pre-intent REPLACE with a failure-detector-dead target
+    // may be failed remotely (R-1c), and this target is alive.
     t.equal(
       reconciled,
-      true,
-      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SOURCE_ACTIVE_ASSERTION,
+      false,
+      'the drain does not settle the ACTIVE REPLACE',
     );
     t.equal(
       deliveries.length,
@@ -355,15 +362,15 @@ test('RebalanceCoordinator releases remote-owned ACTIVE priority REPLACE ' +
     );
     t.equal(
       persistedOperation?.workflowStep,
-      WORKFLOW_STEP.REMOVED,
-      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_TERMINAL_ASSERTION,
+      WORKFLOW_STEP.ACTIVE,
+      'the ACTIVE REPLACE is left to its owner, not released',
     );
   } finally {
     await coordinator.shutdown();
   }
 });
 
-test('RebalanceCoordinator releases remote-owned SYNCING priority REPLACE ' +
+test('RebalanceCoordinator hands back (never releases) a remote-owned SYNCING priority REPLACE ' +
   'when the target is active and canonical owner is no longer repair-eligible',
 async (t) => {
   const TEST_PARTITION_ID = PRIORITY_DRAIN_TEST_REMOTE_RELEASE_PARTITION_ID;
@@ -467,10 +474,17 @@ async (t) => {
     const persistedOperation =
       await coordinator.getOperation(TEST_OPERATION_ID);
 
+    // SUPERSEDED (R09) by the owner decisions of 2026-09-25 (approved
+    // REPLACE design R-1b/R-1c, D2; amendment-1 §4), quest
+    // replace-source-removal-owner: this pinned the drain RELEASING (closing
+    // as REMOVED) a remote-owned REPLACE whose owner read unavailable. The
+    // drain now never closes a partition REPLACE: it hands it back to its
+    // owner; only a pre-intent REPLACE with a failure-detector-dead target
+    // may be failed remotely (R-1c), and this target is alive.
     t.equal(
       reconciled,
-      true,
-      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SOURCE_ACTIVE_ASSERTION,
+      false,
+      'the drain does not settle the SYNCING REPLACE',
     );
     t.equal(
       deliveries.length,
@@ -479,15 +493,15 @@ async (t) => {
     );
     t.equal(
       persistedOperation?.workflowStep,
-      WORKFLOW_STEP.REMOVED,
-      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SYNCING_ASSERTION,
+      WORKFLOW_STEP.SYNCING,
+      'the SYNCING REPLACE is left to its owner, not released',
     );
   } finally {
     await coordinator.shutdown();
   }
 });
 
-test('RebalanceCoordinator releases remote-owned STOPPING priority REPLACE ' +
+test('RebalanceCoordinator hands back (never releases) a remote-owned STOPPING priority REPLACE ' +
   'when the canonical owner is no longer repair-eligible and source removal ' +
   'is in flight', async (t) => {
   const TEST_PARTITION_ID = PRIORITY_DRAIN_TEST_REMOTE_RELEASE_PARTITION_ID;
@@ -591,10 +605,17 @@ test('RebalanceCoordinator releases remote-owned STOPPING priority REPLACE ' +
     const persistedOperation =
       await coordinator.getOperation(TEST_OPERATION_ID);
 
+    // SUPERSEDED (R09) by the owner decisions of 2026-09-25 (approved
+    // REPLACE design R-1b/R-1c, D2; amendment-1 §4), quest
+    // replace-source-removal-owner: this pinned the drain RELEASING (closing
+    // as REMOVED) a remote-owned REPLACE whose owner read unavailable. The
+    // drain now never closes a partition REPLACE: it hands it back to its
+    // owner; only a pre-intent REPLACE with a failure-detector-dead target
+    // may be failed remotely (R-1c), and this target is alive.
     t.equal(
       reconciled,
-      true,
-      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SOURCE_STOPPING_ASSERTION,
+      false,
+      'the drain does not settle the STOPPING REPLACE',
     );
     t.equal(
       deliveries.length,
@@ -603,8 +624,8 @@ test('RebalanceCoordinator releases remote-owned STOPPING priority REPLACE ' +
     );
     t.equal(
       persistedOperation?.workflowStep,
-      WORKFLOW_STEP.REMOVED,
-      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_STOPPING_ASSERTION,
+      WORKFLOW_STEP.STOPPING,
+      'the STOPPING REPLACE is left to its owner, not released',
     );
   } finally {
     await coordinator.shutdown();

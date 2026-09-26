@@ -722,10 +722,11 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     );
   }
 
-  async executeOperationInternal(operation) {
+  async executeOperationInternal(operation, options = {}) {
     return DISPATCH_RESPONSE_RECONCILE.executeOperationInternal.call(
       this,
       operation,
+      options,
     );
   }
 

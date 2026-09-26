@@ -165,10 +165,16 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
         ReplicaOperationMessageType.REMOVE_REPLICA,
         'the second dispatch should be source removal',
       );
+      // SUPERSEDED (R09) by the owner decisions of 2026-09-25 (D2 and the
+      // approved REPLACE design, amendment-1 step 3), quest
+      // replace-source-removal-owner: the removal intent (STOPPING) is now
+      // written durably BEFORE the REMOVE_REPLICA effect, so a retryable
+      // effect timeout leaves the operation at STOPPING, not ACTIVE; it is
+      // still not failed and the retry re-sends the same effect.
       t.equal(
         operation.workflowStep,
-        WORKFLOW_STEP.ACTIVE,
-        'the operation should stay at ACTIVE while retryable source removal is pending',
+        WORKFLOW_STEP.STOPPING,
+        'the durable removal intent precedes the retryable source removal',
       );
       t.equal(
         deferredTimers.length,
@@ -180,13 +186,14 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
         await coordinator.queryOperationById(operation.operationId);
       t.equal(
         persistedBeforeRetry?.workflowStep,
-        WORKFLOW_STEP.ACTIVE,
-        'the durable row should not be failed after a retryable timeout',
+        WORKFLOW_STEP.STOPPING,
+        'the durable row holds the removal intent, not a failure, after a ' +
+          'retryable timeout',
       );
       t.equal(
         persistedBeforeRetry?.status,
-        ReplicaStatus.ACTIVE,
-        'the durable row should keep the target-ready status before retry',
+        ReplicaStatus.REMOVING,
+        'the durable row records source removal in progress before retry',
       );
 
       await deferredTimers[0].fn();

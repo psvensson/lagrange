@@ -1,5 +1,14 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
+  REPLACE_COMPLETION_VERDICT,
+  buildReplaceCompletionRefusal,
+  buildReplaceFailureRefusal,
+  clearReplaceOwnerState,
+  decideReplaceCompletion,
+  isPartitionReplace,
+  isReplaceTerminalFailureAdmitted,
+} from './operation-workflow-replace-owner.js';
+import {
   OperationWorkflowTransitionOrchestration,
 } from './operation-workflow-transition-orchestration.js';
 import {
@@ -255,6 +264,7 @@ class OperationWorkflowTransitionPersistence
     });
     this.clearPriorityActiveReplaceRetry(operation?.operationId || null);
     this.clearExecutorOutcomeRetry(operation?.operationId);
+    clearReplaceOwnerState(this, operation?.operationId);
   }
 
   /**
@@ -328,6 +338,15 @@ class OperationWorkflowTransitionPersistence
       operation.completedAt !== undefined
     ) {
       return ALREADY_TERMINAL_TRANSITION_OUTCOME;
+    }
+    // R-1a (quest replace-source-removal-owner): every success edge of a
+    // partition REPLACE ends here, and none completes while its source is
+    // still a committed voter on the witness replica.
+    if (isPartitionReplace(operation)) {
+      const decision = await decideReplaceCompletion(this, operation);
+      if (decision.verdict !== REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED) {
+        return buildReplaceCompletionRefusal(decision);
+      }
     }
     const previousStep = operation.workflowStep;
     const stepEntry = this.buildOperationTransitionStepEntry(
@@ -455,6 +474,24 @@ class OperationWorkflowTransitionPersistence
       operation.completedAt !== undefined
     ) {
       return ALREADY_TERMINAL_TRANSITION_OUTCOME;
+    }
+    // D2: after a partition REPLACE's durable removal intent, only target
+    // death with the source still a voter may end it FAILED; every
+    // elapsed-time or heuristic failure is refused (typed) here.
+    if (
+      isPartitionReplace(operation) &&
+      !isReplaceTerminalFailureAdmitted(operation, options)
+    ) {
+      this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILURE_REFUSED_AFTER_INTENT,
+        {
+          operationId: operation.operationId,
+          partitionId: operation.partitionId,
+          workflowStep: operation.workflowStep,
+          errorMessage: this.normalizeErrorMessage(errorMessage, null),
+        },
+      );
+      return buildReplaceFailureRefusal();
     }
     const normalizedError = this.normalizeErrorMessage(
       errorMessage,

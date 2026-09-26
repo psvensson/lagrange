@@ -4,6 +4,11 @@ import {
   isTerminalTransitionOutcomeSettled,
 } from './operation-workflow-terminal-reservation-release.js';
 
+import {
+  REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED,
+  isPartitionReplace,
+  isTargetFailureDetectorDead,
+} from './operation-workflow-replace-owner.js';
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   FAILURE_LOG_LEVEL,
@@ -36,6 +41,19 @@ const {
   normalizeNodeIdList,
   resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence,
 } = SHARED;
+
+// The drain actions a non-owner may settle: a superseded target, and a
+// completion - except a partition REPLACE's, which its owner completes from
+// committed membership (R-1b hands it back).
+function isRemoteSettleDrainAction(operation, drainAction) {
+  if (drainAction ===
+      OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET) {
+    return true;
+  }
+  return drainAction ===
+      OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN &&
+    !isPartitionReplace(operation);
+}
 
 class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
   resolvePriorityRecoveryOperationDrainSourceObservationKey(observation) {
@@ -371,12 +389,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_LANE_PARKED :
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_OWNER;
     }
-    if (
-      drainAction ===
-        OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN ||
-      drainAction ===
-        OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET
-    ) {
+    if (isRemoteSettleDrainAction(operation, drainAction)) {
       return (
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_SETTLE_ALLOWED
       );
@@ -636,8 +649,13 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       return isTerminalTransitionOutcomeSettled(
         await this.failOperation(
           operation,
-          OPERATION_WORKFLOW_OWNER_LITERAL
-            .PRIORITY_RECOVERY_DRAIN_STALE_WITHOUT_RETIREMENT_EVIDENCE,
+          // R-1c names its own settlement; step-age staleness before the
+          // intent keeps the drain's message.
+          isPartitionReplace(operation) &&
+            isTargetFailureDetectorDead(this, operation) ?
+            REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED :
+            OPERATION_WORKFLOW_OWNER_LITERAL
+              .PRIORITY_RECOVERY_DRAIN_STALE_WITHOUT_RETIREMENT_EVIDENCE,
           {logLevel: FAILURE_LOG_LEVEL.WARN},
         ),
       );

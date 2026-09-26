@@ -5,6 +5,15 @@ import {
   evaluateRemoveSafety,
 } from '../../src/rebalancer/operation-workflow-remove-safety-evaluator.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from '../../src/rebalancer/priority-publication-safety-shared.js';
+import {createReplaceWitness} from './replace-witness-fixture.js';
+
+// SUPERSEDED IN PART (R09) by the owner decision of 2026-09-25 (approved
+// REPLACE design, amendment-1 step 2, BR3), quest replace-source-removal-owner:
+// for a REPLACE the leader is no longer inferred from services rows (the
+// co-located sibling, leader_node_id): it is the fresh leader the target
+// replica's own port reports (the witness). Each case below now gives the
+// witness the leader its scenario describes; the rows stay as the stale
+// corroboration they are, and the decisions are the corrected contract's.
 
 const {
   OperationType,
@@ -71,7 +80,12 @@ function replaceOperation(partitionId = PARTITION_ID) {
   };
 }
 
-function makeHandoff({partitionId = PARTITION_ID, rows = null} = {}) {
+function makeHandoff({
+  partitionId = PARTITION_ID,
+  rows = null,
+  witnessLeader = SOURCE_REPLICA_ID,
+} = {}) {
+  const witness = createReplaceWitness({leaderReplicaId: witnessLeader});
   const currentVoterReadyRows = rows || [
     sourceFollowerRow,
     coLocatedLeaderRow,
@@ -88,7 +102,9 @@ function makeHandoff({partitionId = PARTITION_ID, rows = null} = {}) {
     isOperationTerminal: () => false,
     isReplaceRemovePhase: () => true,
   };
-  instance.messageRouter = null;
+  instance.messageRouter = {
+    deliver: async (_target, payload) => witness.answer(payload) ?? null,
+  };
   instance.isRemoveInitialDispatchPhase = () => false;
   instance.resolveTimeoutCheckNowMs = () => 0;
   instance.isConcurrentOperationTargetUncontactable = async () => false;
@@ -138,8 +154,10 @@ async function evaluateHandoff({
   partitionId = PARTITION_ID,
   sourceRow = sourceFollowerRow,
   rows,
+  witnessLeader,
 } = {}) {
-  const {instance, currentVoterReadyRows} = makeHandoff({partitionId, rows});
+  const {instance, currentVoterReadyRows} =
+    makeHandoff({partitionId, rows, witnessLeader});
   return instance.evaluatePriorityPublicationLeaderRemoveSafety(
     replaceOperation(partitionId),
     sourceRow,
@@ -153,7 +171,8 @@ async function evaluateHandoff({
 
 test('remove-safety owner: an explicit follower with a distinct same-node leader ' +
   'sibling is removed without promoting the replacement', async (t) => {
-  const {instance} = makeHandoff();
+  // The co-located sibling leads, as the witness's own port reports.
+  const {instance} = makeHandoff({witnessLeader: LEADER_REPLICA_ID});
   const evaluation = await evaluateRemoveSafety(
     instance,
     replaceOperation(),
@@ -162,7 +181,7 @@ test('remove-safety owner: an explicit follower with a distinct same-node leader
   t.equal(
     evaluation.classification,
     REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
-    'the authoritative leader node plus explicit per-replica roles identify the source as the follower',
+    'a fresh leader other than the source makes the source removal leadership-safe',
   );
   t.equal(
     evaluation.handoffRequest,
@@ -172,8 +191,8 @@ test('remove-safety owner: an explicit follower with a distinct same-node leader
   t.end();
 });
 
-test('stale-follower safeguard: without a distinct same-node leader sibling, ' +
-  'leader_node_id still drives a replacement election', async (t) => {
+test('stale-follower safeguard: a lone follower row cannot overrule the ' +
+  'witness, which still sees the source leading', async (t) => {
   const evaluation = await evaluateHandoff({
     rows: [sourceFollowerRow, peerFollowerRow, replacementFollowerRow],
   });
@@ -181,11 +200,16 @@ test('stale-follower safeguard: without a distinct same-node leader sibling, ' +
   t.equal(
     evaluation.classification,
     REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
-    'a lone follower row cannot overrule the canonical leader node',
+    'a lone follower row cannot overrule the leader the witness reports',
   );
   t.ok(
     evaluation.handoffRequest,
-    'the existing saturated-node recovery path still drives the replacement election',
+    'the source leads, so the one named-target handoff is issued',
+  );
+  t.equal(
+    evaluation.handoffRequest.requestReplicaId,
+    TARGET_REPLICA_ID,
+    'the handoff names the REPLACE target',
   );
   t.end();
 });

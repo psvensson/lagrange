@@ -30,6 +30,9 @@ import {PartitionServiceRowOwner} from '../partition/partition-service-row-owner
 import {createSystemMetadataGatewayRequiredError} from '../control-plane/system-metadata-access-error.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
+import {TrackedServiceRegistry} from './replica-handler-membership-relay.js';
+import {assignReplicaHandlerMembershipMethods} from
+  './replica-handler-membership-methods.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   REPLICA_HANDLER_ADDRESS,
@@ -125,8 +128,15 @@ class ReplicaHandler extends EventEmitter {
         controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
         systemTableCache: this.systemTableCache,
       });
-    // Track live service references by replica_id (needed for shutdown, voter-readiness)
-    this.localServices = new Map();
+    // Track live service references by replica_id (needed for shutdown,
+    // voter-readiness); the registry also relays each tracked service's
+    // consensus observations to the REPLACE owner (design S5.2).
+    this.localServices = new TrackedServiceRegistry();
+    this.consensusEvents = Object.freeze({
+      subscribe: (listener) =>
+        this.localServices.subscribeConsensusObservations?.(listener) ||
+        (() => {}),
+    });
     // Backward-compatible replica metadata map used by lifecycle tests.
     this.localReplicas = new Map();
     // Track in-progress operations by operationId
@@ -168,6 +178,7 @@ assignReplicaHandlerCreateMethods(ReplicaHandler);
 assignReplicaHandlerRemoveRequestMethods(ReplicaHandler);
 assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler);
 assignReplicaHandlerStatusMethods(ReplicaHandler);
+assignReplicaHandlerMembershipMethods(ReplicaHandler);
 assignReplicaHandlerVoterReadinessMethods(ReplicaHandler);
 assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler);
 assignReplicaHandlerRuntimeMethods(ReplicaHandler, {

@@ -431,6 +431,9 @@ function openGroupInCurrentRuntime(group, opening) {
     return created.result;
   }
   group.handle = created.value;
+  // Every (re)construction and restore announces its first observed
+  // configuration again: a listener's baseline must be level-correct.
+  group.announcedConfStateKey = null;
   if (!opening.restore) {
     const confState = invokeCore(group, CORE_OPERATION.CONF_STATE);
     if (!confState.ok) {
@@ -984,7 +987,7 @@ function announce(group, expectedGeneration) {
   const now = status.value;
   const before = group.lastStatus;
   group.lastStatus = now;
-  recordStatusObservation(group, expectedGeneration, now);
+  const observed = recordStatusObservation(group, expectedGeneration, now);
   if (before && now.raftState !== before.raftState) {
     group.emit(ROLE[now.raftState] || ROLE[0]);
   }
@@ -997,6 +1000,36 @@ function announce(group, expectedGeneration) {
       semanticLeaderIdentity(group, now.lead),
     );
   }
+  if (observed.ok) {
+    announceMembership(group, observed.value.confState, now);
+  }
+}
+
+// The configuration's voter-bearing and learner parts as one comparable key.
+function confStateKeyOf(confState) {
+  const sorted = (ids) => [...(ids || [])].map(String).sort();
+  return JSON.stringify([
+    sorted(confState.voters),
+    sorted(confState.votersOutgoing),
+    sorted(confState.learners),
+    sorted(confState.learnersNext),
+    confState.autoLeave === true,
+  ]);
+}
+
+// The applied ConfState is announced when it differs from the one last
+// announced, and first after every (re)construction: the transition the core
+// itself applied, never a prediction or a row.
+function announceMembership(group, confState, status) {
+  const key = confStateKeyOf(confState);
+  if (key === group.announcedConfStateKey) {
+    return;
+  }
+  group.announcedConfStateKey = key;
+  group.emit(RUNTIME_EVENT.MEMBERSHIP_CHANGED, {
+    confState,
+    commitIndex: Number(status.commit),
+  });
 }
 
 // The core's facts about a group (raw status and configuration); shaping them
@@ -1394,6 +1427,7 @@ function createRuntimeDispatcher(request) {
     handle: null,
     lastStatus: null,
     statusObservation: null,
+    announcedConfStateKey: null,
     health: USABLE,
     recovery: null,
     entered: 0,

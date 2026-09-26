@@ -1,9 +1,19 @@
 import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OperationWorkflowRecoveryDrain} from './operation-workflow-recovery-drain.js';
+import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
-  clearRemoveSafetyReadinessWaiter,
-  shutdownRemoveSafetyReadinessWake,
-} from './operation-workflow-remove-safety-readiness-wake.js';
+  attachReplicaConsensusEvents,
+  captureReplaceOwnerLevel,
+  clearReplaceOwnerWaiter,
+  registerReplaceOwnerWaiter,
+  shutdownReplaceOwnerWake,
+} from './operation-workflow-replace-owner-wake.js';
+import {
+  REPLACE_WAIT_REASON,
+  clearAllReplaceOwnerState,
+  reconcileReplaceStoppingOwner,
+  recordReplaceWaitDiagnostic,
+} from './operation-workflow-replace-owner.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
   applyPriorityRecoveryDispatchPendingOwnerProgress,
@@ -32,6 +42,10 @@ const {
   WORKFLOW_STEP,
   classifySystemPartition,
 } = SHARED;
+const {
+  REBALANCER_SKIP_REASON,
+  ReplicaOperationResponseStatus,
+} = OPERATION_WORKFLOW_OWNER_SHARED;
 
 class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain {
   async getPriorityRecoveryDecisionSnapshotForPartitionOperations(
@@ -388,16 +402,113 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
       return;
     }
     this.clearSafetyDeferredRetry(operationId);
-    clearRemoveSafetyReadinessWaiter(this, operationId);
+    clearReplaceOwnerWaiter(this, operationId);
     this.safetyDeferredLogStateByOperationId.delete(operationId);
   }
 
   /**
-   * Release owner-local deferred retry state, including the remove-safety
-   * readiness wake's subscription and waiters.
+   * The REPLACE owner waits: the 1 s fallback is armed (the liveness
+   * backstop) and the wait is registered with the single REPLACE-owner wake
+   * against the level captured before the waiting decision's reads.
+   * @param {Object} operation
+   * @param {string} reason - REPLACE_WAIT_REASON.
+   * @param {Object|null} entryLevel
+   * @return {boolean}
+   */
+  armReplaceOwnerWait(operation, reason, entryLevel) {
+    this.scheduleDeferredSafetyRetry(operation, reason, reason);
+    return registerReplaceOwnerWaiter(this, operation, entryLevel);
+  }
+
+  /**
+   * T5': the STOPPING owner re-sends the source's removal effect through the
+   * same remove-safety evaluation and effect boundary.
+   * @param {Object} operation
+   * @return {Promise<Object>}
+   */
+  executeReplaceSourceRemovalEffect(operation) {
+    return this.executeOperationInternal(operation, {
+      replaceStoppingEffect: true,
+    });
+  }
+
+  /**
+   * Persist a REPLACE's removal intent: the STOPPING CAS with its witness
+   * metadata, counted only when the durable write committed.
+   * @param {Object} operation
+   * @param {Object} stepMetadata
+   * @return {Promise<boolean>}
+   */
+  async persistReplaceRemovalIntent(operation, stepMetadata) {
+    try {
+      return await this.updateStep(operation, WORKFLOW_STEP.STOPPING,
+        undefined, {stepMetadata, requireDurable: true});
+    } catch (error) {
+      this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.REPLACE_SOURCE_REMOVAL_WAITING,
+        {operationId: operation?.operationId || null,
+          reason: REPLACE_WAIT_REASON.REMOVAL_INTENT_NOT_DURABLE,
+          error: error?.message || String(error)});
+      return false;
+    }
+  }
+
+  /**
+   * Run the STOPPING owner of a partition REPLACE and answer as an execute
+   * result: the T5' re-send's own result; COMPLETED when the owner reached a
+   * terminal; IN_PROGRESS while it waits.
+   * @param {Object} operation
+   * @return {Promise<Object>}
+   */
+  async runReplaceStoppingOwner(operation) {
+    const entryLevel = captureReplaceOwnerLevel(this, operation);
+    const outcome = await reconcileReplaceStoppingOwner(
+      this, operation, {entryLevel});
+    if (outcome && typeof outcome === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT) {
+      return outcome;
+    }
+    // Progress completed or failed the operation; a wait keeps its source
+    // removal in progress under the same owner.
+    return this.buildSuccessfulOperationResult(operation.operationId, {
+      status: outcome === true ?
+        ReplicaOperationResponseStatus.COMPLETED :
+        OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
+    });
+  }
+
+  /**
+   * The removal-effect boundary said wait: record it and arm the owner's
+   * wake against the level the SAFE evaluation started from.
+   * @param {Object} operation
+   * @param {Object} effect
+   * @param {Object|null} entryLevel - Captured before the SAFE evaluation.
+   * @return {Object}
+   */
+  waitReplaceSourceRemovalEffect(operation, effect, entryLevel) {
+    recordReplaceWaitDiagnostic(this, operation, effect.reason,
+      effect.witness || null);
+    this.armReplaceOwnerWait(operation, effect.reason, entryLevel);
+    return this.buildSkippedOperationResult(
+      REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+      operation.operationId,
+      {deferReason: effect.reason},
+    );
+  }
+
+  /**
+   * @param {Object|null} source - The node's partition consensus relay.
+   * @return {boolean}
+   */
+  attachReplicaConsensusEvents(source) {
+    return attachReplicaConsensusEvents(this, source);
+  }
+
+  /**
+   * Release owner-local deferred retry state, including the REPLACE-owner
+   * wake's subscriptions, waiters and in-memory attempt state.
    */
   shutdown() {
-    shutdownRemoveSafetyReadinessWake(this);
+    shutdownReplaceOwnerWake(this);
+    clearAllReplaceOwnerState(this);
     super.shutdown();
   }
 

@@ -167,6 +167,8 @@ class ControlPlaneSetup {
    *   rebalance coordinator.
    * @param {Object} options.executorOutcomeEmitter - Optional executor
    *   outcome emitter shared with executor handlers.
+   * @param {Object} [options.replicaConsensusEvents] - The replica handler's
+   *   partition consensus relay ({subscribe}); the REPLACE owner's wake.
    * @return {Promise<Object>} Object containing heartbeatService,
    *   leaseService, endpointService, dispatchService, and
    *   rebalanceCoordinator.
@@ -194,6 +196,7 @@ class ControlPlaneSetup {
       bootstrapReadinessState,
       getLocalClusterIncarnationFence,
       executorOutcomeEmitter,
+      replicaConsensusEvents,
       controlPlaneWriteRetryTimeoutMs,
       controlPlaneWriteRetryBaseDelayMs,
       controlPlaneWriteRetryMaxDelayMs,
@@ -370,6 +373,10 @@ class ControlPlaneSetup {
       rebalanceCoordinator.controlPlaneSystemTableGateway =
         controlPlaneSystemTableGateway;
     }
+    // The REPLACE owner subscribes to the node's partition consensus relay
+    // (quest replace-source-removal-owner, design S5.2).
+    rebalanceCoordinator.attachReplicaConsensusEvents?.(
+      replicaConsensusEvents || null);
     if (!rebalanceCoordinator.bootstrapReadinessState &&
         bootstrapReadinessState) {
       rebalanceCoordinator.bootstrapReadinessState = bootstrapReadinessState;

@@ -7,6 +7,13 @@ import {
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
+import {
+  REPLACE_TARGET_REMOVED_BEFORE_ACTIVE,
+  isPartitionReplace,
+  isReplaceExemptFromTimeBudget,
+  isReplaceRemovalIntentDurable,
+  recordReplaceBudgetDiagnostic,
+} from './operation-workflow-replace-owner.js';
 
 const {
   ACTIVE_REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES,
@@ -41,6 +48,24 @@ const {
   createChildTimeoutBudget,
   createTopLevelOperationBudget,
 } = SHARED;
+
+// A partition REPLACE's target gone or failed: after the intent the STOPPING
+// owner decides target death (D2); before it (A10) the REPLACE never
+// completed and nothing about the source was changed.
+async function reconcilePartitionReplaceTargetStatus(
+  owner, operation, reconciledStatus) {
+  const targetGone = reconciledStatus === ReplicaStatus.REMOVED;
+  if (isReplaceRemovalIntentDurable(operation) &&
+      (targetGone || reconciledStatus === ReplicaStatus.FAILED)) {
+    await owner.runReplaceStoppingOwner(operation);
+    return true;
+  }
+  if (targetGone && isPartitionReplace(operation)) {
+    await owner.failOperation(operation, REPLACE_TARGET_REMOVED_BEFORE_ACTIVE);
+    return true;
+  }
+  return false;
+}
 
 class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecoveryObservation {
   isRuntimeServiceActiveCacheHandoffAligned(operation) {
@@ -236,6 +261,10 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       return true;
     }
 
+    if (await reconcilePartitionReplaceTargetStatus(
+      this, operation, reconciledStatus)) {
+      return true;
+    }
     if (reconciledStatus === ReplicaStatus.REMOVED) {
       if (operation.type !== OperationType.ADD) {
         await this.completeOperation(operation);
@@ -382,6 +411,12 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       });
       return true;
     case OPERATION_LIFECYCLE_ACTION.FAIL_STOPPING_RECOVERY:
+      if (isReplaceRemovalIntentDurable(operation)) {
+        // D2: recovery of a post-intent REPLACE resumes its owner; it never
+        // re-enables a timer- or restart-driven FAILED.
+        await this.runReplaceStoppingOwner(operation);
+        return true;
+      }
       await this.failOperation(
         operation,
         OPERATION_WORKFLOW_OWNER_LITERAL.NODE_RECOVERY_DASH_INCOMPLETE_REMOVAL_OPERATION,
@@ -646,6 +681,13 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     const stepExceeded = this.isOperationStepTimedOut(operation, now);
     const budgetExhausted = !stepAllocation.allowed;
 
+    if ((stepExceeded || budgetExhausted) &&
+        isReplaceExemptFromTimeBudget(operation)) {
+      // S9 / D2: the budget is a diagnostic for a REPLACE at ACTIVE or
+      // STOPPING; it never changes the operation's state.
+      recordReplaceBudgetDiagnostic(this, operation);
+      return;
+    }
     if (stepExceeded || budgetExhausted) {
       const timeoutClassification = budgetExhausted ?
         stepAllocation.timeoutClassification :

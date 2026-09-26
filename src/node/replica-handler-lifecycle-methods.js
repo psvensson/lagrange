@@ -64,6 +64,12 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
         response = await this.handleRemoveReplica(payload);
       } else if (type === ReplicaOperationMessageType.STEP_DOWN_REPLICA) {
         response = await this.handleStepDownReplica(payload);
+      } else if (
+        type === ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP
+      ) {
+        response = await this.handleReadReplicaMembership(payload);
+      } else if (type === ReplicaOperationMessageType.RETIRE_REPLICA_PEER) {
+        response = await this.handleRetireReplicaPeer(payload);
       } else {
         const unknownMessageType =
           REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE;
@@ -72,9 +78,14 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
           {error: unknownMessageType(type)},
         );
       }
-      // Include correlationId in response for RPC matching
+      // Include correlationId in response for RPC matching; a request's
+      // attempt sequence is echoed so the requester drops a late answer of
+      // an earlier attempt.
+      const attemptSeq = payload?.[ReplicaOperationField.ATTEMPT_SEQ];
       return {
         ...response,
+        ...(attemptSeq === undefined ? {} :
+          {[ReplicaOperationField.ATTEMPT_SEQ]: attemptSeq}),
         correlationId,
       };
     }

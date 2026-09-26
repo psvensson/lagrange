@@ -30,6 +30,7 @@ import {
   OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED,
 } from '../../src/rebalancer/priority-publication-safety-shared.js';
 
+import {createReplaceWitness} from './replace-witness-fixture.js';
 const {OperationType, REMOVE_SAFETY_EVALUATION_CLASSIFICATION} = SHARED;
 
 const PARTITION_ID = 'replica_operations-p1';
@@ -142,7 +143,15 @@ function makeOwner(service, {prototype = PriorityRecoverySupersededTarget} = {})
     isOperationTerminal: () => false,
     isReplaceRemovePhase: () => true,
   };
-  owner.messageRouter = null;
+  // The REPLACE's leadership is read from its target replica's own port
+  // (quest replace-source-removal-owner, amendment-1 step 2): here the
+  // co-located sibling leads, which is what these rows describe.
+  const witness = createReplaceWitness({
+    leaderReplicaId: coLocatedLeaderRow.replica_id,
+  });
+  owner.messageRouter = {
+    deliver: async (_target, payload) => witness.answer(payload) ?? null,
+  };
   owner.isRemoveInitialDispatchPhase = () => false;
   owner.resolveTimeoutCheckNowMs = () => 0;
   owner.isConcurrentOperationTargetUncontactable = async () => false;
@@ -212,9 +221,20 @@ test('2. when the two contracts disagree, the authoritative one decides removal'
       available: PROCEED, authoritative: DEFER});
     const evaluation = await evaluateRemoveSafety(
       makeOwner(service), replaceOperation());
-    t.not(evaluation?.classification,
-      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
-      'AVAILABLE evidence saying "proceed" cannot make a removal safe');
+    // SUPERSEDED IN PART (R09) by the owner decision of 2026-09-25 (approved
+    // REPLACE design, amendment-1 step 2, BR3), quest
+    // replace-source-removal-owner: this assertion pinned "not SAFE", which
+    // came from the row-ambiguous leader of this scenario (the source and
+    // its leader sibling share a node), not from the planning contract. The
+    // REPLACE's leader is now read fresh from its target replica, so the
+    // witness is differential: the same authoritative answer with the
+    // opposite AVAILABLE answer decides the same way.
+    const opposite = readinessService({
+      available: DEFER, authoritative: DEFER});
+    const oppositeEvaluation = await evaluateRemoveSafety(
+      makeOwner(opposite.service), replaceOperation());
+    t.equal(evaluation?.classification, oppositeEvaluation?.classification,
+      'AVAILABLE evidence saying "proceed" or "defer" changes nothing');
     t.ok(calls.authoritative > 0, 'the owner surface was read');
     t.equal(calls.available, 0,
       'and the AVAILABLE surface took no part in the safety decision');

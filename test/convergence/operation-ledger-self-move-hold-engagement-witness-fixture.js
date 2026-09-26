@@ -26,6 +26,7 @@ import {
   STARTUP_AUTHORITY_STATE,
   buildStartupAuthoritySnapshotFromPlanningAnswer,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
+import {installReplaceWitnesses} from '../rebalancer/replace-witness-fixture.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
 import {
   initializeEnvironment,
@@ -1187,6 +1188,11 @@ async function runSelfMovePlannedBeforeAddsScenario(
       status: DELIVERY_ACKNOWLEDGED_STATUS,
     });
   };
+  // The self-move REPLACE's target configuration, as its owner reads it
+  // (quest replace-source-removal-owner, C1): the source leaves it at the
+  // modelled source-removal terminal.
+  const replaceWitnesses = installReplaceWitnesses(
+    seed.workflowOwner.messageRouter);
 
   // Placement actuals of the REPLACE. Default profile: the moved replica row
   // changes node at the terminal (run 21-22-08's source removal). A profile
@@ -1265,6 +1271,7 @@ async function runSelfMovePlannedBeforeAddsScenario(
           timeSource.setTimeout(() => {
             row.workflow_step = WORKFLOW_STEP.STOPPING;
             row.status = WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.STOPPING];
+            replaceWitnesses.witnessFor(operationId).commitRemoval();
             completeOnSeed(operationOf(operationId)).then(() => {
               applySelfMoveTerminalPlacement();
               syncSeedCache();

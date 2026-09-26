@@ -9,6 +9,7 @@ import {classifySystemPartition} from '../bootstrap/system-partition-classificat
 import {UNIFIED_SERVICE_TYPE} from
   '../constants/unified-service-lifecycle.js';
 
+import {isReplaceRemovalIntentDurable} from './operation-workflow-replace-owner.js';
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -48,6 +49,13 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
   }
 
   async handleStopPhaseSatisfiedResponse(operation, responseStatus) {
+    // A partition REPLACE's stop-phase answer (the source's lifecycle
+    // retired) is not its completion: the STOPPING owner decides from the
+    // witness's committed configuration (R-1a) and re-drives the membership
+    // removal (R-1f) (quest replace-source-removal-owner).
+    if (isReplaceRemovalIntentDurable(operation)) {
+      return this.runReplaceStoppingOwner(operation);
+    }
     try {
       if (operation?.workflowStep !== WORKFLOW_STEP.STOPPING) {
         await this.updateStep(operation, WORKFLOW_STEP.STOPPING);

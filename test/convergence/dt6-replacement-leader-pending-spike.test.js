@@ -2,6 +2,23 @@ import {test} from '../../src/test-helpers/tap.js';
 import {PriorityPublicationHandoff} from '../../src/rebalancer/priority-publication-handoff.js';
 import {PriorityRecoverySupersededTarget} from '../../src/rebalancer/priority-recovery-superseded-target.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from '../../src/rebalancer/priority-publication-safety-shared.js';
+import {createReplaceWitness} from '../rebalancer/replace-witness-fixture.js';
+
+// SUPERSEDED IN PART (R09) by the owner decision of 2026-09-25 (approved
+// REPLACE design, amendment-1 step 2: BR3, BR9-BR11), quest
+// replace-source-removal-owner. A REPLACE's leadership gate is no longer the
+// row-observed WAIT_REPLACEMENT_LEADER_OWNERSHIP snapshot and its Lever A
+// escalation: it is the fresh leader the target replica's own port reports
+// (the witness), and the one handoff is a named-target attempt to the
+// REPLACE's own target. The wedge below (a starved source leading, rows
+// stale) is therefore driven by the witness whether or not the pre-Lever-A
+// stall guard is re-imposed on the row snapshot, which no longer decides. The
+// red-on-revert handle moves to the witness: the source leading drives the
+// target's election; an unreadable witness waits (no drive); the target
+// leading is SAFE. The voter-evidence gate of test 4 was an input of the
+// row snapshot; the named attempt can only ever name the REPLACE's target
+// (raft-rs itself refuses a transfer to a learner and catches a lagging
+// transferee up before its TimeoutNow), which test 4 now pins.
 
 // ============================================================================
 // DT6 fidelity-spike: the rolling-restart COORDINATION-tail kill-gate root
@@ -124,8 +141,16 @@ function replaceOperation() {
 // Host the REAL handoff emitter (PriorityPublicationHandoff) on deterministic leaf
 // readers. `stallMs` lets us model the source-handoff stall age; the starved source
 // never produces handoff evidence (its cooperative timer never fires).
-function makeHandoff({stallMs = 1000} = {}) {
+function makeHandoff({
+  stallMs = 1000,
+  witness = createReplaceWitness({leaderReplicaId: SOURCE_REPLICA_ID}),
+} = {}) {
   const instance = Object.create(PriorityPublicationHandoff.prototype);
+  // The target replica's port, as the REPLACE owner reads it: the starved
+  // source still leads.
+  instance.messageRouter = {
+    deliver: async (_target, payload) => witness.answer(payload) ?? null,
+  };
   instance.repository = {
     getReplaceSourceReplicaId: (op) => op?.sourceReplicaId ?? null,
     getReplaceTargetReplicaId: (op) => op?.targetReplicaId ?? null,
@@ -192,8 +217,8 @@ function evaluate(handoff) {
 // PRE-Lever-A code a fresh handoff never escalated, so the snapshot fell back to the
 // cooperative WAIT. This isolates the SINGLE conjunct the commit removed.
 // ----------------------------------------------------------------------------
-function makeRevertedHandoff() {
-  const instance = makeHandoff({stallMs: 1000}); // FRESH: < 30s
+function makeRevertedHandoff(options = {}) {
+  const instance = makeHandoff({stallMs: 1000, ...options}); // FRESH: < 30s
   const realBuilder =
     PriorityPublicationHandoff.prototype
       .buildPriorityPublicationLeaderRemoveSafetySnapshot;
@@ -240,16 +265,16 @@ function makeRevertedHandoff() {
 //    `replacement_leader_pending` label with NO handoffRequest -> pure WAIT on the
 //    dead cooperative timer -> the REPLACE stays in-flight -> oracle FAILs.
 // ============================================================================
-test('replacement_leader_pending WEDGE (Lever A reverted): a fresh source-leader ' +
-  'handoff off a starved rejoiner DEFERs in WAIT_REPLACEMENT_LEADER_OWNERSHIP with ' +
-  'the docker `replacement_leader_pending` label and NO drive (re-defers forever)', async (t) => {
+test('SUPERSEDED WEDGE (R09): with the pre-Lever-A stall guard re-imposed on ' +
+  'the row snapshot, the witness-led named handoff still DRIVES the target ' +
+  'election - the row snapshot no longer decides a REPLACE', async (t) => {
   const handoff = makeRevertedHandoff();
   const evaluation = await evaluate(handoff);
 
   t.equal(
     evaluation.classification,
     REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
-    'the REPLACE is DEFERred (not SAFE) — removal is not authorized',
+    'the REPLACE is DEFERred (not SAFE) - removal is not authorized',
   );
   // The two fields the docker analyzer classifies on
   // (analyze-replace-safety-blocks.js:44,56).
@@ -259,21 +284,18 @@ test('replacement_leader_pending WEDGE (Lever A reverted): a fresh source-leader
     'deferReason is the umbrella replace_remove_safety_blocked',
   );
   t.ok(
-    String(evaluation.error).includes(REPLACEMENT_LEADER_LABEL_MATCH),
-    'errorMessage matches the replacement_leader_pending sub-reason probe',
-  );
-  t.ok(
     String(evaluation.error).includes(REPLACEMENT_LEADER_PENDING_MESSAGE),
     'errorMessage is the exact REPLACEMENT_LEADER_OWNERSHIP_PENDING constant',
   );
-  // The convergence discriminator: NO handoffRequest -> nothing drives the
-  // replacement election -> the cooperative source timer never fires -> the
-  // REPLACE re-defers forever -> inFlightReplicaOperationCount never reaches 0.
   t.equal(
-    evaluation.handoffRequest,
-    null,
-    'the WAIT deferral carries NO drive — it waits on the dead cooperative timer ' +
-      '(inFlightReplicaOperationCount > 0 forever -> convergence oracle FAILs)',
+    evaluation.handoffRequest?.requestReplicaId,
+    REPLACEMENT_REPLICA_ID,
+    'the deferral drives the target\'s election: no wait on the dead timer',
+  );
+  t.equal(
+    evaluation.handoffRequest?.dispatchNodeId,
+    HEALTHY_NODE,
+    'the drive is dispatched to the healthy target node',
   );
   t.end();
 });
@@ -319,31 +341,40 @@ test('Lever A ENABLED (live src): the SAME wedge IMMEDIATELY drives the voter-re
 //    source, the ONLY change between #1 and #2 is Lever A's immediate escalation.
 //    This is the genuine red-on-revert pin: revert -> WAIT (no drive); live -> DRIVE.
 // ============================================================================
-test('red-on-revert pin: the ONLY behavioural change is the drive — reverted Lever A ' +
-  'WAITs (handoffRequest=null), live Lever A DRIVEs (handoffRequest set); both keep ' +
-  'the replacement_leader_pending label, so the label text alone is NOT the ' +
-  'discriminator — the handoffRequest is', async (t) => {
-  const reverted = await evaluate(makeRevertedHandoff());
+test('red-on-revert pin (R09: the witness is the handle): the source leading ' +
+  'DRIVES, an unreadable witness WAITs with no drive, the target leading is ' +
+  'SAFE; both deferrals keep the replacement_leader_pending label', async (t) => {
   const live = await evaluate(makeHandoff({stallMs: 1000}));
+  const unreadable = await evaluate(makeHandoff({
+    stallMs: 1000,
+    witness: createReplaceWitness({
+      leaderReplicaId: SOURCE_REPLICA_ID, available: false}),
+  }));
+  const targetLeads = await evaluate(makeHandoff({
+    stallMs: 1000,
+    witness: createReplaceWitness({leaderReplicaId: REPLACEMENT_REPLICA_ID}),
+  }));
 
-  // Same docker label on BOTH (the honest fidelity nuance).
-  for (const [name, ev] of [['reverted', reverted], ['live', live]]) {
+  // Same docker label on both deferrals (the honest fidelity nuance).
+  for (const [name, ev] of [['unreadable', unreadable], ['live', live]]) {
     t.equal(ev.deferReason, REPLACE_REMOVE_SAFETY_BLOCKED,
       `${name}: same umbrella deferReason`);
     t.ok(String(ev.error).includes(REPLACEMENT_LEADER_LABEL_MATCH),
       `${name}: same replacement_leader_pending label substring`);
   }
 
-  // The discriminator flips with the lever.
-  t.equal(reverted.handoffRequest, null,
-    'reverted: WAITs on the dead cooperative timer (no drive) -> wedge');
+  t.equal(unreadable.handoffRequest, null,
+    'unreadable witness: nothing is concluded, nothing is driven');
   t.ok(live.handoffRequest,
-    'live: DRIVEs the replacement election immediately -> progress');
+    'source leading: DRIVEs the target election immediately -> progress');
   t.not(
-    Boolean(reverted.handoffRequest),
+    Boolean(unreadable.handoffRequest),
     Boolean(live.handoffRequest),
-    'reverting Lever A removes the drive — a true red-on-revert handle',
+    'the witness\'s fresh read is the drive\'s one input',
   );
+  t.equal(targetLeads.classification,
+    REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
+    'target leading: the source removal is leadership-safe');
   t.end();
 });
 
@@ -352,8 +383,8 @@ test('red-on-revert pin: the ONLY behavioural change is the drive — reverted L
 //    replacement never escalates — it stays the cooperative source-handoff path
 //    (so the lever can never drive a stale node to leadership / split-brain).
 // ============================================================================
-test('SAFETY: a NON-voter-ready replacement never escalates under Lever A — it keeps ' +
-  'the cooperative source-handoff (the lever cannot drive a stale node to leadership)', async (t) => {
+test('SAFETY (R09): the drive only ever names the REPLACE\'s own target - ' +
+  'row voter evidence neither widens nor redirects it', async (t) => {
   const handoff = makeHandoff({stallMs: 1000});
   handoff.isPriorityActiveReplaceTopologyVoterEvidenceSufficient = () => false;
   const evaluation = await evaluate(handoff);
@@ -363,13 +394,15 @@ test('SAFETY: a NON-voter-ready replacement never escalates under Lever A — it
     REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
     'still a DEFER',
   );
-  // With no voter-ready replacement to elect, escalation is suppressed and the gate
-  // falls back to re-asking the SOURCE (the cooperative source handoff path), whose
-  // drive (if any) targets the source replica, never the replacement.
-  t.not(
+  t.equal(
     evaluation.handoffRequest?.requestReplicaId,
     REPLACEMENT_REPLICA_ID,
-    'no escalation drive to the non-voter-ready replacement',
+    'the one transferee is the REPLACE target (never a third replica)',
+  );
+  t.equal(
+    evaluation.handoffRequest?.dispatchNodeId,
+    HEALTHY_NODE,
+    'dispatched to the target\'s node only',
   );
   t.end();
 });

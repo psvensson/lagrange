@@ -269,8 +269,8 @@ test('RebalanceCoordinator completes ACTIVE REPLACE when source removal is alrea
     }
   });
 
-test('RebalanceCoordinator completes non-ADD target REMOVED status during ' +
-  'reconciliation', async (t) => {
+test('RebalanceCoordinator fails a REPLACE whose target is REMOVED before ' +
+  'its removal intent during reconciliation', async (t) => {
   const TEST_PARTITION_ID = 'mg-2';
   const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r2';
   const TEST_OPERATION_ID = 'reconcile-removal-completes-replace';
@@ -325,15 +325,20 @@ test('RebalanceCoordinator completes non-ADD target REMOVED status during ' +
       true,
       'reconcileOperationProgress should consume authoritative REMOVED state for REPLACE',
     );
+    // SUPERSEDED (R09) by the owner decision of 2026-09-25 (approved REPLACE
+    // design, A10), quest replace-source-removal-owner: a REPLACE whose
+    // TARGET replica is REMOVED before its removal intent did not replace
+    // anything - its source was never touched - so it now FAILS with
+    // replace_target_removed_before_active instead of "completing".
     t.equal(
       persistedOperation?.workflowStep,
-      WORKFLOW_STEP.REMOVED,
-      'reconcileOperationProgress should complete non-ADD operations on REMOVED status',
+      WORKFLOW_STEP.FAILED,
+      'a REPLACE whose target is gone before its intent fails',
     );
     t.equal(
-      persistedOperation?.status,
-      ReplicaStatus.REMOVED,
-      'reconciled REMOVED status should be terminal for non-ADD operations',
+      persistedOperation?.errorMessage,
+      'replace_target_removed_before_active',
+      'with the named A10 reason',
     );
   } finally {
     await coordinator.shutdown();

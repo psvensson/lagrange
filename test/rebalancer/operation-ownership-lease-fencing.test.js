@@ -71,9 +71,6 @@ import {
   OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED,
 } from '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
 import {
-  OPERATION_WORKFLOW_OWNER_SHARED,
-} from '../../src/rebalancer/operation-workflow-owner-shared.js';
-import {
   WORKFLOW_STEP_TO_STATUS,
 } from '../../src/rebalancer/replica-operation-progress.js';
 import {
@@ -93,7 +90,6 @@ import {
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 
-const {OPERATION_LIFECYCLE_ACTION} = OPERATION_WORKFLOW_OWNER_SHARED;
 const {
   PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE,
   PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE,
@@ -469,6 +465,9 @@ const PRIORITY_PARTITION_ID = 'sql_transactions-p1';
 const TEST_SOURCE_NODE_ID = 'lease-node-source';
 const WITNESS_OBSERVED_AT_MS = LIVE_LEASE_OBSERVED_AT_MS;
 const ROUTING_READINESS_VALUES = Object.freeze([true, false]);
+// The R-1c settlement: the unavailable owner's REPLACE failed with its
+// source retained (the target is dead).
+const R1C_SETTLEMENT_MESSAGE = 'replace_owner_unavailable_source_retained';
 const DRAIN_SETTLEMENT = Object.freeze({
   COMPLETE: 'complete',
   FAIL: 'fail',
@@ -667,8 +666,11 @@ function buildPriorityReplaceOperation(phase, leaseState) {
 // target observation) that is NOT a verdict input, and records every
 // settlement. The verdict itself runs unstubbed; only its routing probe is
 // set per cell.
-function armDrainOwner(owner, {phase, routingReady, sourceState, stepStale}) {
+function armDrainOwner(owner, {
+  phase, routingReady, sourceState, stepStale, targetDead = false,
+}) {
   const settlements = [];
+  const failMessages = [];
   owner.timeSource = {now: () => WITNESS_OBSERVED_AT_MS};
   owner.isNodeReadyForRouting = () => routingReady;
   owner.readAvailablePriorityRecoveryPlanningSnapshot = async () => null;
@@ -685,16 +687,17 @@ function armDrainOwner(owner, {phase, routingReady, sourceState, stepStale}) {
     });
   owner.isPriorityRecoveryOperationDrainStepStale = () => stepStale;
   owner.repository.getObservedReplicaStatusFromCache = () =>
-    phase.targetStatus;
+    targetDead ? ReplicaStatus.FAILED : phase.targetStatus;
   owner.completeOperation = async () => {
     settlements.push(DRAIN_SETTLEMENT.COMPLETE);
     return WITNESS_COMMITTED_TRANSITION_OUTCOME;
   };
-  owner.failOperation = async () => {
+  owner.failOperation = async (_operation, message) => {
     settlements.push(DRAIN_SETTLEMENT.FAIL);
+    failMessages.push(message);
     return WITNESS_COMMITTED_TRANSITION_OUTCOME;
   };
-  return settlements;
+  return {settlements, failMessages};
 }
 
 async function sweepDrainCell(cell, phase, drainEvidence) {
@@ -703,7 +706,7 @@ async function sweepDrainCell(cell, phase, drainEvidence) {
   try {
     const owner = coordinator.workflowOwner;
     const operation = buildPriorityReplaceOperation(phase, cell.leaseState);
-    const settlements = armDrainOwner(owner, {
+    const {settlements, failMessages} = armDrainOwner(owner, {
       phase,
       routingReady: cell.routingReady,
       ...drainEvidence,
@@ -714,16 +717,29 @@ async function sweepDrainCell(cell, phase, drainEvidence) {
     const snapshot =
       await owner.buildPriorityRecoveryOperationDrainSnapshot(operation);
     await owner.reconcilePriorityRecoveryOperationDrain(operation, snapshot);
-    return {recordedOwner, snapshot, settlements};
+    return {recordedOwner, snapshot, settlements, failMessages};
   } finally {
     await coordinator.shutdown();
   }
 }
 
+// SUPERSEDED (R09) by the owner decisions of 2026-09-25 (approved REPLACE
+// design R-1b/R-1c/A6, owner decision D2; amendment-1 step 3 and §4), quest
+// replace-source-removal-owner. These two callers were witnessed with the L2
+// "un-wedge" release and a step-age stale-FAIL of a REPLACE whose lease had
+// lapsed and whose owner read unready. Under the completed design:
+//  - R-1b: the drain never releases (closes) a partition REPLACE, whatever
+//    the lease and the heuristic say; it hands the REPLACE back to its owner;
+//  - A6/S9: a REPLACE at ACTIVE or STOPPING is never stale by step age
+//    (earlier steps keep the existing staleness policy);
+//  - R-1c: at ACTIVE the only non-owner FAIL has the owner unavailable (the
+//    unchanged lease verdict) AND the target replica marked FAILED by the
+//    failure detector;
+//  - D2: after the intent (STOPPING) no remote FAIL at all.
+// L1 (a live lease never releases, settles or skips) holds in every cell.
 test(
-  'live-lease verdict polarity, caller 1 (drain release): a live owner ' +
-    'lease never releases the REPLACE; an expired/absent lease with an ' +
-    'unready owner still releases it (L2 un-wedge)',
+  'live-lease verdict polarity, caller 1 (drain release): R-1b - the drain ' +
+    'never releases a partition REPLACE in any lease or routing cell',
   async (t) => {
     for (const phase of WITNESS_REPLACE_PHASES) {
       for (const cell of enumerateLeaseCells()) {
@@ -735,59 +751,55 @@ test(
         const label = describeCell(cell, phase);
         t.equal(outcome.recordedOwner, TEST_REMOTE_NODE_ID,
           `the leased target is the recorded owner: ${label}`);
-        const released = expectRemoteOwnerUnavailable(
-          cell.leaseState,
-          cell.routingReady,
-        );
-        t.equal(
-          outcome.snapshot.state ===
-            PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.OWNER_UNAVAILABLE_RELEASED,
-          released,
-          `release decision: ${label}`,
-        );
-        t.same(
-          outcome.settlements,
-          released ? [DRAIN_SETTLEMENT.COMPLETE] : [],
-          `settlements: ${label}`,
-        );
+        t.not(outcome.snapshot.state,
+          PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.OWNER_UNAVAILABLE_RELEASED,
+          `never released: ${label}`);
+        t.same(outcome.settlements, [], `no settlement: ${label}`);
       }
     }
   },
 );
 
 test(
-  'live-lease verdict polarity, caller 2 (stale-FAIL remote settle): a ' +
-    'live owner lease never stale-FAILs the REPLACE remotely; an ' +
-    'expired/absent lease with an unready owner still settles it (L2)',
+  'live-lease verdict polarity, caller 2 (stale-FAIL remote settle): R-1c - ' +
+    'an ACTIVE REPLACE is failed remotely only with an unavailable owner and ' +
+    'a dead target; a STOPPING one never; step age alone fails neither',
   async (t) => {
-    for (const phase of WITNESS_REPLACE_PHASES) {
-      for (const cell of enumerateLeaseCells()) {
-        const outcome = await sweepDrainCell(cell, phase, {
-          sourceState:
-            PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.EVIDENCE_UNAVAILABLE,
-          stepStale: true,
-        });
-        const label = describeCell(cell, phase);
-        t.equal(
-          outcome.snapshot.action,
-          OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_DRAIN_STALE,
-          `the drain classifies the stale FAIL: ${label}`,
-        );
-        const settled = expectRemoteOwnerUnavailable(
-          cell.leaseState,
-          cell.routingReady,
-        );
-        t.equal(
-          outcome.snapshot.ownerState ===
-            PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_SETTLE_ALLOWED,
-          settled,
-          `remote settle permission: ${label}`,
-        );
-        t.same(
-          outcome.settlements,
-          settled ? [DRAIN_SETTLEMENT.FAIL] : [],
-          `settlements: ${label}`,
-        );
+    for (const targetDead of [false, true]) {
+      for (const phase of WITNESS_REPLACE_PHASES) {
+        for (const cell of enumerateLeaseCells()) {
+          const outcome = await sweepDrainCell(cell, phase, {
+            sourceState:
+              PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE
+                .EVIDENCE_UNAVAILABLE,
+            stepStale: true,
+            targetDead,
+          });
+          const label = `${describeCell(cell, phase)} targetDead=${targetDead}`;
+          // STOPPING (D2): never. ACTIVE (S9/A6): only R-1c, a dead target.
+          // SYNCING (pre-ACTIVE): the existing step-stale policy still applies.
+          const settledStep = phase.step === WORKFLOW_STEP.SYNCING ||
+            (phase.step === WORKFLOW_STEP.ACTIVE && targetDead);
+          const settled = settledStep &&
+            expectRemoteOwnerUnavailable(cell.leaseState, cell.routingReady);
+          t.equal(
+            outcome.snapshot.ownerState ===
+              PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE
+                .REMOTE_SETTLE_ALLOWED,
+            settled,
+            `remote settle permission: ${label}`,
+          );
+          t.same(
+            outcome.settlements,
+            settled ? [DRAIN_SETTLEMENT.FAIL] : [],
+            `settlements: ${label}`,
+          );
+          if (settled && phase.step === WORKFLOW_STEP.ACTIVE) {
+            t.same(outcome.failMessages,
+              [R1C_SETTLEMENT_MESSAGE],
+              `R-1c names its settlement (source retained): ${label}`);
+          }
+        }
       }
     }
   },

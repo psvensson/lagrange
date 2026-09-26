@@ -10,6 +10,15 @@ import {
 } from './replica-operation-step-policy.js';
 import {resolveOperationCurrentStepEntry} from './operation-step-age.js';
 import {
+  isPartitionReplace,
+  isReplaceExemptFromTimeBudget,
+  isReplaceRemovalIntentDurable,
+  isTargetFailureDetectorDead,
+} from './operation-workflow-replace-owner.js';
+import {
+  runDeferredSafetyReentryTurn,
+} from './operation-workflow-dispatch-rearm-evidence.js';
+import {
   resolveOperationDrainOwnerAvailability,
 } from './operation-owner-availability-policy.js';
 
@@ -45,6 +54,7 @@ function extendOrphanSweepWithFencedAdoptions({
   return sweepOps;
 }
 
+const REPLACE_TIMEOUT_REENTRY_BOUNDARY = 'replace_timeout_reentry';
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
@@ -171,6 +181,20 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     return Date.now();
   }
 
+  // R-1e (step 5): the sweep re-enters a locally owned post-intent REPLACE
+  // through its one owner decision, in the owner's retained turn (a held
+  // lane is waited out, never joined and lost). It never forces an outcome;
+  // the owner decides from fresh authoritative state.
+  routeTimeoutSweepToReplaceOwner(operation, tasks) {
+    if (!isReplaceRemovalIntentDurable(operation) ||
+        !this.repository.isOperationLocallyOwned(operation)) {
+      return false;
+    }
+    tasks.push(runDeferredSafetyReentryTurn(this, operation,
+      {boundary: REPLACE_TIMEOUT_REENTRY_BOUNDARY}));
+    return true;
+  }
+
   async checkTimeouts() {
     if (this.isShuttingDown || !this.isInitialized) {
       return;
@@ -233,6 +257,10 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
 
     for (const operation of incompleteOps) {
       if (this.repository.isOperationTerminal(operation)) {
+        continue;
+      }
+      if (this.routeTimeoutSweepToReplaceOwner(
+        operation, timeoutReconcileTasks)) {
         continue;
       }
       const operationDrainSnapshot =
@@ -697,6 +725,11 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     releaseEvidence = null,
     operation = null,
   ) {
+    if (this.isReplaceDrainOwnerUnavailableWithDeadTarget(
+      operation, releaseEvidence)) {
+      return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE
+        .STALE_WITHOUT_RETIREMENT_EVIDENCE;
+    }
     if (!completion || typeof completion !== 'object') {
       return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.EVIDENCE_UNAVAILABLE;
     }
@@ -738,12 +771,30 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
   // RECOVERING_DISPATCH_PARKED (NOOP) and the lane claims on the incumbents'
   // terminal. Without fresh evidence — never parked, or a lane silent for a
   // full PENDING_TIMEOUT_MS — the stale rules below apply unchanged.
+  // R-1c (quest replace-source-removal-owner): the only non-owner FAIL of a
+  // partition REPLACE is one whose owner is unavailable (the lease verdict)
+  // before its removal intent, with its target replica marked FAILED by the
+  // failure detector. An expired lease plus an unready heuristic alone never
+  // fails a live owner's REPLACE (A5/BR4).
+  isReplaceDrainOwnerUnavailableWithDeadTarget(operation, releaseEvidence) {
+    return isPartitionReplace(operation) &&
+      !isReplaceRemovalIntentDurable(operation) &&
+      releaseEvidence?.remoteOwnerUnavailable === true &&
+      isTargetFailureDetectorDead(this, operation);
+  }
+
   resolvePriorityRecoveryOperationDrainStaleState(
     mappedState,
     completion,
     operation,
     sourceState,
   ) {
+    // A6 / S9 / D2: a partition REPLACE at ACTIVE or STOPPING is never
+    // stale by step age; the drain holds it for its owner (R-1b), and R-1c
+    // is decided above. Earlier steps keep the existing staleness policy.
+    if (isReplaceExemptFromTimeBudget(operation)) {
+      return mappedState;
+    }
     const staleState = this.resolvePriorityRecoveryOperationDrainStepStaleState(
       mappedState,
       completion,
@@ -888,7 +939,10 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       sourceSnapshot?.state ||
       PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.EVIDENCE_UNAVAILABLE;
     return Object.freeze({
+      // R-1b: a partition REPLACE is never released (closed) by the drain;
+      // its source removal is its owner's, and the drain hands it back.
       releaseEligibleReplace:
+        !isPartitionReplace(operation) &&
         this.isPriorityRecoveryOperationDrainReleaseEligibleReplace(operation),
       completionAccepted,
       sourceRemovalPending:

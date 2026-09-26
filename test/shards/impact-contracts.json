@@ -560,6 +560,29 @@
         "test/query/partition-write-answer-consumers.test.js",
         "test/query/write-path-internal-pacing.test.js"
       ]
+    },
+    "replace-owner-membership-observation": {
+      "description": "The REPLACE owner decides source removal, completion and its leadership handoff only from the witness replica's own consensus state: the operation port announces its applied configuration (MEMBERSHIP_CHANGED, first observation after every construction included), the partition service relays it with leader and term changes, the replica handler's tracked-service registry is the node's one relay of them, and the READ_REPLICA_MEMBERSHIP / RETIRE_REPLICA_PEER seam reads the committed voters (incoming and outgoing), commit index and leader, and proposes REMOVE_PEER, through that replica's port. The owner consumes that observation as its wake level and its completion and handoff input; no row, prediction or second membership view decides them.",
+      "owners": [
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/partition/partition-service-raft-lifecycle-wiring.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/node/replica-handler-membership-relay.js",
+        "src/node/replica-handler-membership-methods.js",
+        "src/rebalancer/operation-workflow-replace-owner.js",
+        "src/rebalancer/operation-workflow-replace-owner-wake.js",
+        "src/rebalancer/operation-workflow-replace-handoff-attempt.js",
+        "src/rebalancer/operation-workflow-replace-witness.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-backend/membership-changed-event.test.js",
+        "test/raft/raft-rs-backend/replica-membership-witness.test.js",
+        "test/node/replica-handler-membership-relay.test.js",
+        "test/node/replica-handler-replica-membership.test.js",
+        "test/rebalancer/replace-source-removal-owner.test.js",
+        "test/rebalancer/replace-owner-wake.test.js",
+        "test/rebalancer/replace-named-handoff-attempt.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -1040,6 +1063,40 @@
         "test/partition/partition-write-typed-releases.test.js",
         "test/query/partition-write-answer-consumers.test.js",
         "test/query/write-path-internal-pacing.test.js"
+      ]
+    },
+    "replace-owner-membership-observation": {
+      "description": "A change to how a replica announces, relays or answers its committed configuration, leader or term must keep the REPLACE owner's wake, completion (C1) and named handoff correct, and a change to the owner must keep reading that observation and nothing else.",
+      "endpoints": [
+        {
+          "id": "replica-consensus-observation",
+          "owners": [
+            "src/raft/raft-rs-runtime-owner.js",
+            "src/partition/partition-service-raft-lifecycle-wiring.js",
+            "src/partition/partition-service-raft-membership-administration.js",
+            "src/node/replica-handler-membership-relay.js",
+            "src/node/replica-handler-membership-methods.js"
+          ]
+        },
+        {
+          "id": "replace-owner",
+          "owners": [
+            "src/rebalancer/operation-workflow-replace-owner.js",
+            "src/rebalancer/operation-workflow-replace-owner-wake.js",
+            "src/rebalancer/operation-workflow-replace-handoff-attempt.js",
+            "src/rebalancer/operation-workflow-replace-witness.js"
+          ]
+        }
+      ],
+      "contract": "replace-owner-membership-observation",
+      "witnessTests": [
+        "test/raft/raft-rs-backend/membership-changed-event.test.js",
+        "test/raft/raft-rs-backend/replica-membership-witness.test.js",
+        "test/node/replica-handler-membership-relay.test.js",
+        "test/node/replica-handler-replica-membership.test.js",
+        "test/rebalancer/replace-source-removal-owner.test.js",
+        "test/rebalancer/replace-owner-wake.test.js",
+        "test/rebalancer/replace-named-handoff-attempt.test.js"
       ]
     }
   }

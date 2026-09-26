@@ -100,7 +100,8 @@ function describeCell(cell) {
     cell.step,
     cell.observerNodeId,
     cell.sourceObservation ?? 'source_absent',
-    cell.targetStatus === null ? 'target_absent' : 'target_present',
+    cell.targetStatus === null ? 'target_absent' :
+      `target_${cell.targetStatus ?? 'present'}`,
     cell.targetVisibility || 'target_as_built',
     cell.leaseCell,
     cell.ownerRoutingReady ? 'heuristic_ready' : 'heuristic_unready',
@@ -589,6 +590,21 @@ const STALE_TYPE_STEPS = expectedTypeSteps(
   PRIORITY_RECOVERY_OPERATION_DRAIN_OPERATION_TYPES,
   PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS,
 );
+// Superseded (R09, quest replace-source-removal-owner, amendment-1 step 3):
+// the drain settles a partition REPLACE only through its owner. R-1b: the
+// drain never releases (closes) one, so the release route admits no
+// partition-REPLACE (type, step) and its settlement anchor is replaced by
+// the R-1b assertion below. R-1c / A6 / D2: the only non-owner FAIL is an
+// unavailable owner's pre-intent REPLACE whose target the failure detector
+// marked FAILED (REPLACE/ACTIVE is admitted through that cell), and a
+// REPLACE past its durable removal intent (STOPPING) is never failed
+// remotely.
+const RELEASE_SETTLE_TYPE_STEPS = Object.freeze([]);
+const TERMINAL_TYPE_STEPS = new Set(TYPE_STEPS.rows
+  .filter(({terminal}) => terminal)
+  .map(({type, step}) => typeStepKey(type, step)));
+const STALE_SETTLE_TYPE_STEPS = STALE_TYPE_STEPS.filter((key) =>
+  key !== typeStepKey(OperationType.REPLACE, WORKFLOW_STEP.STOPPING));
 
 // Decision anchors: the drain decision each entry takes.
 const RELEASE_DECISION = Object.freeze({
@@ -679,18 +695,20 @@ const DRAIN_ROUTES = Object.freeze([
     },
     decision: RELEASE_DECISION,
     effect: RELEASE_EFFECT,
-    admitted: RELEASE_TYPE_STEPS,
+    admitted: RELEASE_SETTLE_TYPE_STEPS,
+    neverSettles: true,
   },
   {
     name: 'stale-FAIL',
     grid: {
       sourceObservations: NO_RETIREMENT_SOURCE_OBSERVATIONS,
-      targetStatuses: [ReplicaStatus.ACTIVE, null],
+      // FAILED: the failure detector's dead target (R-1c).
+      targetStatuses: [ReplicaStatus.ACTIVE, null, ReplicaStatus.FAILED],
       stale: true,
     },
     decision: STALE_DECISION,
     effect: STALE_EFFECT,
-    admitted: STALE_TYPE_STEPS,
+    admitted: STALE_SETTLE_TYPE_STEPS,
   },
 ]);
 
@@ -728,6 +746,19 @@ for (const entry of DRAIN_ENTRIES) {
         [],
         'the verdict decides the route at every admitted (type, step)',
       );
+      if (route.neverSettles) {
+        t.same(
+          [...outcomes.values()]
+            .filter(({cell, outcome}) =>
+              cell.type === OperationType.REPLACE &&
+              !TERMINAL_TYPE_STEPS.has(typeStepKey(cell.type, cell.step)) &&
+              (route.decision.isUnwedged(outcome) ||
+                route.effect.isUnwedged(outcome)))
+            .map(({cell}) => describeCell(cell)),
+          [],
+          'R-1b: the drain never releases a partition REPLACE',
+        );
+      }
       const effectDecided = collectVerdictDecided(outcomes, route.effect);
       for (const key of effectDecided) {
         EFFECT_DECIDED_BY_ROUTE.get(route.name).add(key);

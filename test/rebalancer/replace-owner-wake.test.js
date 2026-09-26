@@ -39,6 +39,7 @@ import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {createTestCoordinator} from './test-helpers.js';
+import {createReplaceWitness} from './replace-witness-fixture.js';
 
 const {
   OPERATION_OWNER_ACTION,
@@ -208,6 +209,9 @@ async function createDeferredReplaceHarness(profile) {
   LoggingService.getInstance().initialize({level: 'error'});
   const deliveries = [];
   const fallbackTimers = [];
+  // The target replica's committed configuration still holds the source,
+  // and a peer leads (leadership is already off the source).
+  const witness = createReplaceWitness({leaderReplicaId: `${partitionId}-r2`});
   const readiness = createReadinessFake({
     [SOURCE_NODE_ID]: LEVEL.READY,
     [PEER_NODE_ID]: LEVEL.READY,
@@ -230,6 +234,10 @@ async function createDeferredReplaceHarness(profile) {
     },
     messageRouter: {
       deliver: async (target, payload) => {
+        const witnessAnswer = witness.answer(payload);
+        if (witnessAnswer) {
+          return witnessAnswer;
+        }
         deliveries.push({target, payload});
         return {
           acknowledged: true,
@@ -304,7 +312,7 @@ async function createDeferredReplaceHarness(profile) {
     LoggingService.resetInstance();
   };
   return {
-    profile, coordinator, owner, operation, readiness, fallbackTimers,
+    profile, coordinator, owner, operation, readiness, fallbackTimers, witness,
     evaluations, deferErrors, hooks, removeDeliveries, readStep, shutdown,
     flipReady: () =>
       readiness.setLevel(profile.wakingNodeId, LEVEL.READY),
