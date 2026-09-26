@@ -28,7 +28,7 @@
   "censusSize": 2216,
   "digest": "fnv1a32-169ff207",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3cd2b31e",
+  "observationDigest": "fnv1a32-6ec9e1b7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7170,6 +7170,7 @@
         "src/control-plane/replica-dispatch-readiness-capture.js",
         "src/node/replica-handler-committed-membership-methods.js",
         "src/node/replica-handler-create-methods.js",
+        "src/node/replica-handler-membership-methods.js",
         "src/node/replica-handler-runtime-metadata-methods.js",
         "src/node/replica-lifecycle-manager.js",
         "src/partition/partition-service-core-base.js",
@@ -7185,6 +7186,8 @@
         "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
         "src/rebalancer/operation-workflow-owner-ports.js",
         "src/rebalancer/operation-workflow-replace-owner-wake.js",
+        "src/rebalancer/operation-workflow-replace-surviving-membership.js",
+        "src/rebalancer/operation-workflow-replace-witness.js",
         "src/rebalancer/rebalance-coordinator-operation-creation.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
@@ -7347,11 +7350,14 @@
     },
     "test/raft/raft-rs-backend/participation-gate.test.js": {
       "files": [
+        "src/partition/partition-replica-membership-constants.js",
+        "src/partition/partition-service-raft-membership-administration.js",
         "src/raft/raft-provider-contract-constants.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
-        "src/raft/raft-rs-runtime-owner.js"
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/replica-operation-progress.js"
       ]
     },
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": {

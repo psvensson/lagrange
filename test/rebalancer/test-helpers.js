@@ -538,6 +538,8 @@ function answerFixtureReplaceWitness(cache, payload) {
       partitionId,
       term: 1,
       commitIndex: FIXTURE_WITNESS_COMMIT_INDEX,
+      // A fixture witness is a caught-up member: its gate is open (O1).
+      gateOpen: true,
       leaderReplicaId: fixtureWitnessLeader(cache, partitionId, rows,
         payload[ReplicaOperationField.REPLICA_ID]),
       transferWindowMaxMs: FIXTURE_WITNESS_TRANSFER_WINDOW_MS,

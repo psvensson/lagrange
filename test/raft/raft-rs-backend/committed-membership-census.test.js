@@ -164,3 +164,38 @@ test('T7: the boundary\'s values are imported from their owner, never ' +
       `no stamp kind ${kind} is written by hand`);
   }
 });
+
+// Integration (I3): the REPLACE owner's witness reads - its target, and in a
+// D2 target death the surviving members, source first - are ONE caller of the
+// committed-membership read with different addressees: each goes through the
+// READ_REPLICA_MEMBERSHIP message to that replica's handler, whose one
+// reader is the port-backed witness read. No REPLACE module reads a port,
+// a status or a row for membership on its own.
+test('T7 (integration): the REPLACE target and surviving-member reads are ' +
+  'the witness caller - one message, one handler reader, one port read',
+() => {
+  const replaceModules = FILES.filter(({relative}) =>
+    /^src\/rebalancer\/(operation-workflow-replace|priority-publication-handoff)/u
+      .test(relative));
+  assert.deepEqual(replaceModules.filter(({code}) =>
+    /READ_REPLICA_MEMBERSHIP/u.test(code)).map(({relative}) => relative),
+  ['src/rebalancer/operation-workflow-replace-witness.js'],
+  'one sender of the witness message');
+  assert.deepEqual(replaceModules.filter(({code}) =>
+    /\.readStatus\(|\.confState\b|READ_COMMITTED_MEMBERSHIP/u.test(code))
+    .map(({relative}) => relative),
+  // The MEMBERSHIP_CHANGED wake key only (declared above): a wake-up.
+  ['src/rebalancer/operation-workflow-replace-owner-wake.js'],
+  'no REPLACE module reads a port or a status itself');
+  const surviving = FILES.find(({relative}) => relative ===
+    'src/rebalancer/operation-workflow-replace-surviving-membership.js').code;
+  assert.match(surviving, /readReplaceWitnessMembership\(owner, operation, member\)/u,
+    'the surviving-member read is the witness read with another addressee');
+  assert.equal(/messageRouter|\.deliver\(/u.test(surviving), false,
+    'and has no delivery of its own');
+  assert.deepEqual(filesMatching(/readPartitionReplicaMembership\(/u)
+    .filter((file) => file !==
+      'src/partition/partition-service-raft-membership-administration.js'),
+  ['src/node/replica-handler-membership-methods.js'],
+  'the witness message has one handler reader');
+});

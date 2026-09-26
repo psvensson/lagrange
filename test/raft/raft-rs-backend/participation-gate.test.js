@@ -48,6 +48,21 @@ import {
 import {RAFT_PARTITION_NODE_REQUEST} from
   '../../../src/raft/raft-provider-contract-constants.js';
 import {RealTimeSource} from '../../../src/time/time-source.js';
+import {
+  REPLACE_COMPLETION_VERDICT,
+  decideReplaceCompletion,
+} from '../../../src/rebalancer/operation-workflow-replace-owner.js';
+import {readPartitionReplicaMembership} from
+  '../../../src/partition/partition-service-raft-membership-administration.js';
+import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
+  '../../../src/partition/partition-replica-membership-constants.js';
+import {
+  ReplicaOperationField,
+  ReplicaOperationResponseStatus,
+} from '../../../src/rebalancer/replica-operation-constants.js';
+import {OperationType} from
+  '../../../src/rebalancer/replica-operation-progress.js';
+import {SERVICE_TYPE} from '../../../src/constants/index.js';
 
 const PARTITION_ID = 'o1-gate-partition';
 const SETTLE_ROUNDS = 600;
@@ -395,43 +410,52 @@ function trapCoreThrough(cluster, replicaId) {
   }
 }
 
+// H1 + self: genesis {a}; +b, -b, +b, -a, so C_j = {b} while the target's
+// replay passes through the configuration {t} - its transient sole-voter
+// view, in which the committed voter b is absent. The target is left there
+// (applied = the removal of b), below its gate.
+function formH1TransientTarget(cluster, cap) {
+  assert.ok(settle(cluster, () => leaderOf(cluster) === 'h1-a', ['h1-a']),
+    'setup: the sole founder leads');
+  const genesis = genesisPeerIds(cluster, ['h1-a']);
+  cluster.addReplica('h1-b', ['h1-a', 'h1-b']);
+  commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.ADD_PEER, 'h1-b',
+    ['h1-a']);
+  commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, 'h1-b',
+    ['h1-a']);
+  const transient = durableAppliedState(cluster.replica('h1-a').dbFile,
+    PARTITION_ID).appliedIndex;
+  commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.ADD_PEER, 'h1-b',
+    ['h1-a']);
+  commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, 'h1-a',
+    ['h1-a', 'h1-b']);
+  cluster.isolate('h1-a');
+  assert.equal(leaderOf(cluster), 'h1-b',
+    'setup: the re-added identity leads the group {b}');
+  const stamp = oracleStamp(cluster, 'h1-b', genesis);
+  assert.deepEqual(stamp.voters, [cluster.raftPeerIdOf('h1-b')],
+    'setup: C_j = {b}');
+
+  cap.value = transient;
+  addTarget(cluster, stamp);
+  commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.ADD_PEER, TARGET,
+    ['h1-b']);
+  assert.ok(settle(cluster, () =>
+    targetDurable(cluster).applied.appliedIndex === transient, ['h1-b']),
+  'setup: the target applied up to the removal of b');
+  assert.deepEqual(targetDurable(cluster).applied.voters,
+    [cluster.raftPeerIdOf(TARGET)],
+    'setup: the target view is the transient sole-voter configuration');
+  return {transient, stamp};
+}
+
 test('T4 (H1 + self): a runtime reconstruction at the transient sole-voter ' +
   'index of the target never leads', () => {
   const cap = {value: Number.POSITIVE_INFINITY};
   const cluster = createCluster(['h1-a'],
     {rewriteToTarget: cappedDelivery(cap)});
   try {
-    assert.ok(settle(cluster, () => leaderOf(cluster) === 'h1-a', ['h1-a']),
-      'setup: the sole founder leads');
-    const genesis = genesisPeerIds(cluster, ['h1-a']);
-    cluster.addReplica('h1-b', ['h1-a', 'h1-b']);
-    commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.ADD_PEER, 'h1-b',
-      ['h1-a']);
-    commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, 'h1-b',
-      ['h1-a']);
-    const transient = durableAppliedState(cluster.replica('h1-a').dbFile,
-      PARTITION_ID).appliedIndex;
-    commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.ADD_PEER, 'h1-b',
-      ['h1-a']);
-    commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, 'h1-a',
-      ['h1-a', 'h1-b']);
-    cluster.isolate('h1-a');
-    assert.equal(leaderOf(cluster), 'h1-b',
-      'setup: the re-added identity leads the group {b}');
-    const stamp = oracleStamp(cluster, 'h1-b', genesis);
-    assert.deepEqual(stamp.voters, [cluster.raftPeerIdOf('h1-b')],
-      'setup: C_j = {b}');
-
-    cap.value = transient;
-    addTarget(cluster, stamp);
-    commitChange(cluster, RAFT_MEMBERSHIP_OPERATION.ADD_PEER, TARGET,
-      ['h1-b']);
-    assert.ok(settle(cluster, () =>
-      targetDurable(cluster).applied.appliedIndex === transient, ['h1-b']),
-    'setup: the target applied up to the removal of b');
-    assert.deepEqual(targetDurable(cluster).applied.voters,
-      [cluster.raftPeerIdOf(TARGET)],
-      'setup: the target view is the transient sole-voter configuration');
+    const {stamp} = formH1TransientTarget(cluster, cap);
     const before = targetDurable(cluster);
 
     const trapped = trapCoreThrough(cluster, 'h1-b');
@@ -500,6 +524,67 @@ test('T4 (restart between j and a): a target restarted from its durable ' +
       cluster.node(TARGET).readStatus().gateOpen === true, founders),
     'the gate opens once the restored target applies its AddNode');
     assert.equal(targetDurable(cluster).applied.admissionIndex, admission);
+  } finally {
+    cluster.dispose();
+  }
+});
+
+// B12 (committed-read amendment 1, cross-branch interlock): the REPLACE
+// owner's R-1a decision reads its witness through the port's committed-
+// membership read (WITNESS purpose). A witness below its participation gate
+// shows the transient H1+self absence of b - a committed voter the whole
+// time - with a commit index at or past C0 (here the pre-intent floor). R-1a
+// must WAIT on it, never answer SOURCE_RETIRED.
+function replaceOwnerReadingThrough(cluster, sourceReplicaId) {
+  const service = {raft: cluster.node(TARGET), replicaId: TARGET,
+    partitionId: PARTITION_ID, replicaIds: [], raftTimingConfig: null};
+  return {
+    repository: {
+      getReplaceSourceReplicaId: () => sourceReplicaId,
+      getReplaceTargetReplicaId: () => TARGET,
+      getObservedReplicaStatusFromCache: () => 'active',
+    },
+    messageRouter: {
+      deliver: async () => ({
+        status: ReplicaOperationResponseStatus.COMPLETED,
+        [ReplicaOperationField.MEMBERSHIP]:
+          await readPartitionReplicaMembership(service, sourceReplicaId),
+      }),
+    },
+  };
+}
+
+test('B12: R-1a waits on a witness below its gate that transiently shows ' +
+  'a committed voter absent, and retires only once the gate is open',
+async () => {
+  const cap = {value: Number.POSITIVE_INFINITY};
+  const cluster = createCluster(['h1-a'],
+    {rewriteToTarget: cappedDelivery(cap)});
+  try {
+    formH1TransientTarget(cluster, cap);
+    const owner = replaceOwnerReadingThrough(cluster, 'h1-b');
+    const operation = {operationId: 'b12-replace', type: OperationType.REPLACE,
+      entityType: SERVICE_TYPE.PARTITION, partitionId: PARTITION_ID,
+      replicaId: TARGET, targetNodeId: 'b12-target-node'};
+    const below = await decideReplaceCompletion(owner, operation);
+    assert.equal(below.observation.state,
+      PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT,
+      'setup: the below-gate witness shows the committed voter b absent');
+    assert.equal(below.observation.gateOpen, false,
+      'setup: the witness observation carries its closed gate');
+    assert.notEqual(below.verdict, REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED,
+      'R-1a never retires a source from a below-gate witness');
+    assert.equal(below.verdict,
+      REPLACE_COMPLETION_VERDICT.WITNESS_BELOW_GATE, 'it waits, typed');
+
+    cap.value = Number.POSITIVE_INFINITY;
+    assert.ok(settle(cluster, () =>
+      cluster.node(TARGET).readStatus().gateOpen === true, ['h1-b']),
+    'setup: the target catches up and its gate opens');
+    const open = await decideReplaceCompletion(owner, operation);
+    assert.equal(open.observation.gateOpen, true);
+    assert.equal(open.verdict, REPLACE_COMPLETION_VERDICT.STILL_VOTER,
+      'at the gate the witness sees b as the committed voter it is');
   } finally {
     cluster.dispose();
   }

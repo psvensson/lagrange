@@ -9,7 +9,8 @@
  *   W2  C1: completion is refused while the witness still counts the source
  *       as a voter, and granted once the removal is committed;
  *   W3  AN11: an absence read below the intent's commit index is not a
- *       retirement;
+ *       retirement, nor is one read from a witness below its participation
+ *       gate (B12);
  *   W4  R-1f: a retired-but-still-voting source is re-driven through the
  *       witness once per changed level, never on a wake that changed nothing;
  *   W5  D2/P4: time passing the former 60 s / 300 s budgets fails nothing
@@ -206,7 +207,15 @@ test('W3 (AN11): an absence read below the intent\'s commit index is not ' +
     await harness.owner.completeOperation(harness.operation);
     t.equal((await persistedOperation(harness)).workflowStep,
       WORKFLOW_STEP.STOPPING, 'the stale absence completes nothing');
+    // B12: an absence at or past C0 read from a witness still below its
+    // participation gate (a replaying target's transient view) is no
+    // retirement either.
     harness.witness.commitIndex = INTENT_COMMIT_INDEX + 1;
+    harness.witness.gateOpen = false;
+    await harness.owner.completeOperation(harness.operation);
+    t.equal((await persistedOperation(harness)).workflowStep,
+      WORKFLOW_STEP.STOPPING, 'a below-gate absence completes nothing');
+    harness.witness.gateOpen = true;
     await harness.owner.completeOperation(harness.operation);
     t.equal((await persistedOperation(harness)).workflowStep,
       WORKFLOW_STEP.REMOVED, 'the current absence completes it');

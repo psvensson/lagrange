@@ -35,6 +35,9 @@ export function createReplaceWitness(options = {}) {
     sourceVoter: options.sourceVoter !== false,
     available: options.available !== false,
     commitIndex: options.commitIndex ?? DEFAULT_COMMIT_INDEX,
+    // The witness's participation gate (O1): open unless a test holds it
+    // below its gate.
+    gateOpen: options.gateOpen !== false,
     term: options.term ?? 1,
     transferWindowMaxMs:
       options.transferWindowMaxMs ?? DEFAULT_TRANSFER_WINDOW_MS,
@@ -71,6 +74,7 @@ export function createReplaceWitness(options = {}) {
             partitionId: payload[ReplicaOperationField.PARTITION_ID],
             term: witness.term,
             commitIndex: witness.commitIndex,
+            gateOpen: witness.gateOpen,
             leaderReplicaId: witness.leaderReplicaId,
             transferWindowMaxMs: witness.transferWindowMaxMs,
           },
