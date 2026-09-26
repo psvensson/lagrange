@@ -4,7 +4,18 @@ import {
   RAFT_EVENT,
   RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_MEMBERSHIP_OPERATION,
+  RAFT_OPERATION,
 } from './raft-operation-port-constants.js';
+import {
+  COMMITTED_MEMBERSHIP_ANSWER_KIND,
+  COMMITTED_MEMBERSHIP_READ_PURPOSE,
+  COMMITTED_MEMBERSHIP_REFUSAL,
+} from './raft-committed-membership-constants.js';
+import {bootstrapOfRequest} from './raft-rs-bootstrap-membership.js';
+import {committedMembershipRefusal} from
+  './raft-rs-committed-membership-read.js';
+import {participationGateClosed} from './raft-rs-participation-gate.js';
+import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
 import {RAFT_PARTITION_NODE_REQUEST} from
   './raft-provider-contract-constants.js';
 import {RaftRsPeerIdentityRegistry} from './raft-rs-peer-identity.js';
@@ -41,6 +52,7 @@ const EVENTS = new Set([
   RAFT_EVENT.TERM_CHANGE,
   RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE,
   RAFT_EVENT.MEMBERSHIP_CHANGED,
+  RAFT_EVENT.GATE_OPENED,
 ]);
 const EVENT_ALIAS = Object.freeze({
   'term-change': RAFT_EVENT.TERM_CHANGE,
@@ -104,9 +116,11 @@ function normalizedConfChange(change, registry) {
       (item) => deepFreeze({...item}))})};
   }
   const changeType = {
-    [RAFT_MEMBERSHIP_OPERATION.ADD_PEER]: 0,
-    [RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER]: 1,
-    [RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER]: 2,
+    [RAFT_MEMBERSHIP_OPERATION.ADD_PEER]: RAFT_RS_CONF_CHANGE_TYPE.ADD_NODE,
+    [RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER]:
+      RAFT_RS_CONF_CHANGE_TYPE.REMOVE_NODE,
+    [RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER]:
+      RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
   }[change?.type];
   if (changeType === undefined) {
     return {refusal: RAFT_MEMBERSHIP_CHANGE_REFUSAL.UNKNOWN_OPERATION};
@@ -136,9 +150,20 @@ function createRaftRsOperationPort(request) {
     request, RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS);
   const registry = new RaftRsPeerIdentityRegistry(database);
   const peerId = registry.registerReplica(replicaIdentity);
-  const voters = required(
-    request, RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS)
-    .map((identity) => registry.registerReplica(identity));
+  // The bootstrap peer ids are address hints: each is reserved so the
+  // replica can name and reach it. The configuration the group opens from is
+  // the bootstrap membership's (a genesis of these ids when none is given).
+  const bootstrapPeerIds = required(
+    request, RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS);
+  for (const identity of bootstrapPeerIds) {
+    registry.registerReplica(identity);
+  }
+  const bootstrap = bootstrapOfRequest({
+    membership: request[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP],
+    bootstrapPeerIds,
+    registry,
+    peerId,
+  });
   const lifecycle = new RaftRsReplicaLifecycleOwner({
     db: database, groupId, peerId, replicaIdentity,
   });
@@ -149,7 +174,9 @@ function createRaftRsOperationPort(request) {
       registry.registerReplica(joiningReplicaIdentity),
   });
   const listeners = new Map();
+  let schedulingRequested = false;
   const emit = (eventName, ...args) => {
+    rearmOnGateOpened(eventName);
     for (const listener of listeners.get(eventName) || []) {
       listener(...args.map((value) => deepFreeze(value)));
     }
@@ -164,7 +191,7 @@ function createRaftRsOperationPort(request) {
     groupId,
     replicaIdentity,
     peerId,
-    voters,
+    bootstrap,
     timing,
     timers,
     sendToPeer: required(
@@ -206,6 +233,7 @@ function createRaftRsOperationPort(request) {
   const enqueueStep = (envelope) =>
     dispatch(() => dispatcher.enqueueStep(envelope));
   const stopScheduling = () => {
+    schedulingRequested = false;
     if (timer !== null) {
       timers.clearInterval(timer);
       timer = null;
@@ -219,10 +247,25 @@ function createRaftRsOperationPort(request) {
     timer = timers.setInterval(() => execute({type: 'tick'}), tickIntervalMs);
     timer.unref?.();
   };
+  // Scheduling starts only while the participation gate is open (O1 gate):
+  // asked while it is closed, the start is refused typed and remembered, and
+  // the runtime owner's GATE_OPENED re-arms it in the drain that opened the
+  // gate.
   const startScheduling = () => dispatch(() => {
+    if (!dispatcher.participationGateOpen()) {
+      schedulingRequested = true;
+      return participationGateClosed();
+    }
     scheduleTicks();
     return coreOk('scheduling-started');
   });
+  function rearmOnGateOpened(eventName) {
+    if (eventName === RAFT_EVENT.GATE_OPENED && schedulingRequested &&
+        !closed) {
+      schedulingRequested = false;
+      scheduleTicks();
+    }
+  }
   const subscribe = (eventName, listener) => {
     const normalizedEventName = EVENT_ALIAS[eventName] || eventName;
     if (!EVENTS.has(normalizedEventName)) {
@@ -270,6 +313,19 @@ function createRaftRsOperationPort(request) {
     tick: () => execute({type: 'tick'}),
     campaign: () => execute({type: 'campaign'}),
     readStatus: () => execute({type: 'read-status'}),
+    // The committed configuration as frozen data ({purpose} is a
+    // COMMITTED_MEMBERSHIP_READ_PURPOSE; a bootstrap read by default).
+    [RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP]: (readRequest) => {
+      const answered = execute({
+        type: RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP,
+        purpose: readRequest?.purpose ??
+          COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP,
+      });
+      return answered?.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED ||
+        answered?.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED ?
+        answered :
+        committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD);
+    },
     configureTick: (nextTiming) => dispatch(() => {
       const command = typeof nextTiming === 'number' ?
         {tickIntervalMs: nextTiming} : nextTiming;

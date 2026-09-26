@@ -33,13 +33,14 @@ function runIsolatedEffects(effects) {
  * position `{index, term, effects}`; `effects.afterCommit` runs after the
  * transaction commits and `effects.afterRollback` runs when it rolls back,
  * before the failure is rethrown.
- * @param {Object} options - The store, group, entry, configuration and the
- *   application callback.
+ * @param {Object} options - The store, group, entry, configuration, the
+ *   application callback, and whether the entry admits this replica (its
+ *   participation gate's admission index is written with it).
  * @return {{escapedEffectFailures: number}} How many post-commit effects
  *   threw past the application's own reporting.
  */
 function applyCommittedEntryTransaction({store, groupId, entry, confState,
-  applyCommittedEntry}) {
+  applyCommittedEntry, admitted = false}) {
   const effects = {afterCommit: [], afterRollback: []};
   try {
     store.transaction(() => {
@@ -52,6 +53,11 @@ function applyCommittedEntryTransaction({store, groupId, entry, confState,
         }
       }
       store.putAppliedState(groupId, entry.index, confState);
+      // The entry that admitted this replica as a voter: its index is the
+      // participation gate's admission index, durable with the entry itself.
+      if (admitted) {
+        store.putAdmissionIndex(groupId, entry.index);
+      }
     });
   } catch (error) {
     runIsolatedEffects(effects.afterRollback);

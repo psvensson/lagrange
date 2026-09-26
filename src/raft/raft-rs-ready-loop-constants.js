@@ -7,6 +7,15 @@ const RAFT_RS_ENTRY_TYPE = Object.freeze({
   CONF_CHANGE_V2: 2,
 });
 
+// raft-rs eraftpb ConfChangeType, as the binding decodes a committed
+// configuration entry ({changes: [{changeType, nodeId}]}) and as a proposal
+// names one change.
+const RAFT_RS_CONF_CHANGE_TYPE = Object.freeze({
+  ADD_NODE: 0,
+  REMOVE_NODE: 1,
+  ADD_LEARNER_NODE: 2,
+});
+
 const RAFT_RS_CONF_CHANGE_ENTRY_TYPES = Object.freeze([
   RAFT_RS_ENTRY_TYPE.CONF_CHANGE,
   RAFT_RS_ENTRY_TYPE.CONF_CHANGE_V2,
@@ -23,6 +32,7 @@ const RAFT_RS_CYCLE_OUTCOME = Object.freeze({
 
 export {
   RAFT_RS_CONF_CHANGE_ENTRY_TYPES,
+  RAFT_RS_CONF_CHANGE_TYPE,
   RAFT_RS_CYCLE_OUTCOME,
   RAFT_RS_ENTRY_TYPE,
 };

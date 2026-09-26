@@ -1,3 +1,5 @@
+import {PARTICIPATION_GATE} from './raft-committed-membership-constants.js';
+
 const RAFT_EVENT = Object.freeze({
   DATA: 'data',
   LEADER: 'leader',
@@ -13,6 +15,20 @@ const RAFT_EVENT = Object.freeze({
   // authority - a listener re-reads status (quest replace-source-removal-
   // owner, design S5.2 / amendment-1 step 1).
   MEMBERSHIP_CHANGED: 'membership changed',
+  // The replica's applied index crossed its participation gate
+  // (max(bootstrapIndex, admissionIndex)) in this drain. Carries
+  // {bootstrapIndex, admissionIndex, appliedIndex} as data; the port re-arms
+  // the scheduling it was asked for while the gate was closed (committed-
+  // read amendment 1, section 3.3).
+  GATE_OPENED: PARTICIPATION_GATE.GATE_OPENED,
+});
+
+// The operations of the port beyond the scheduling and proposal surface,
+// named once: the one read of the committed configuration, answered as frozen
+// data from the runtime owner's recorded observation (committed-read
+// amendment 1, section 3.1).
+const RAFT_OPERATION = Object.freeze({
+  READ_COMMITTED_MEMBERSHIP: 'readCommittedMembership',
 });
 
 const RAFT_OPERATION_OUTCOME = Object.freeze({
@@ -119,6 +135,7 @@ export {
   RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
+  RAFT_OPERATION,
   RAFT_OPERATION_OUTCOME,
   RAFT_PEER_PROGRESS_PROBE_REASON,
 };

@@ -18,10 +18,11 @@ import {
 } from './raft-rs-core-constants.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {admitRaftRsMessage} from './raft-rs-ingress.js';
+import {RAFT_RS_MESSAGE_TYPE} from './raft-rs-ingress-constants.js';
 import {
-  RAFT_RS_MESSAGE_TYPE,
-  RAFT_RS_TRANSPORT_PROTOCOL,
-} from './raft-rs-ingress-constants.js';
+  recordInboundStepRefusal,
+  sendMessages,
+} from './raft-rs-peer-delivery.js';
 import {
   decideLeadershipTransfer,
   droppedByLeadershipTransfer,
@@ -47,10 +48,7 @@ import {
   FOLLOWER_RAFT_STATE,
   HEALTHY,
   INBOUND_DRAIN_DELAY_MS,
-  INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT,
   NO_LEADER,
-  PEER_DELIVERY_OBSERVATION_LIMIT,
-  PEER_DELIVERY_OUTCOME,
   PERSISTENCE_ADMISSION_WAIT,
   RECOVERY_REQUIRED,
   ROLE,
@@ -67,6 +65,20 @@ import {
   tuningOf,
 } from './raft-rs-runtime-tuning.js';
 import {shapeGroupObservation} from './raft-rs-status-observation.js';
+import {
+  admitsReplica,
+  createdParticipationGate,
+  recordAppliedEntry,
+  durableRecordMissing,
+  participationGateClosed,
+  participationGateColumns,
+  participationObservation,
+  requiresDurableRecord,
+  restoredParticipationGate,
+  settleParticipationGate,
+} from './raft-rs-participation-gate.js';
+import {answerCommittedMembership} from
+  './raft-rs-committed-membership-read.js';
 import {applyCommittedEntryTransaction} from
   './raft-rs-application-transaction-owner.js';
 import {
@@ -405,8 +417,8 @@ function invokeCoreAt(group, expectedGeneration, operation, ...args) {
 function createNodeArguments(group, {restore, record}) {
   const base = {
     id: group.peerId,
-    peers: restore ? [] : group.voters,
-    learners: [],
+    peers: restore ? [] : group.bootstrap.voters,
+    learners: restore ? [] : group.bootstrap.learners,
     applied: restore ? record.appliedIndex : RAFT_RS_INITIAL_APPLIED,
     ...tuningOf(group.timing),
   };
@@ -424,8 +436,29 @@ function createNodeArguments(group, {restore, record}) {
   };
 }
 
+// The participation gate an opening establishes (O1 gate): restored from the
+// durable record, or created from the bootstrap; a replica that must restore
+// and holds no record is refused before the core is entered (O4).
+function openingParticipationRefusal(group, opening) {
+  if (opening.restore) {
+    group.gate = restoredParticipationGate(opening.record);
+    group.appliedIndex = BigInt(opening.record.appliedIndex);
+    return null;
+  }
+  if (requiresDurableRecord(group.bootstrap)) {
+    return durableRecordMissing();
+  }
+  group.gate = createdParticipationGate(group.bootstrap, group.peerId);
+  group.appliedIndex = BigInt(RAFT_RS_INITIAL_APPLIED);
+  return null;
+}
+
 function openGroupInCurrentRuntime(group, opening) {
   group.handle = null;
+  const refused = openingParticipationRefusal(group, opening);
+  if (refused !== null) {
+    return refused;
+  }
   const created = invokeCore(group, 'create_node',
     createNodeArguments(group, opening));
   if (!created.ok) {
@@ -441,14 +474,15 @@ function openGroupInCurrentRuntime(group, opening) {
       return confState.result;
     }
     try {
-      group.store.putAppliedState(
-        group.groupId, RAFT_RS_INITIAL_APPLIED, confState.value);
+      group.store.putBootstrapAppliedState(group.groupId, confState.value,
+        participationGateColumns(group.gate));
     } catch (error) {
       return groupHostFailure(group, RUNTIME_PHASE.BOOTSTRAP_PERSISTENCE,
         error);
     }
   }
   group.health = USABLE;
+  settleParticipationGate(group);
   return outcome(CORE_OK, {
     reason: opening.restore ? RUNTIME_REASON.RESTORED : RUNTIME_REASON.CREATED,
   });
@@ -474,7 +508,10 @@ function resumeAfterReconstruction(group, expectedGeneration) {
   if (!conf.ok) {
     return conf.result;
   }
-  if (isSoleVoter(conf.value, group.peerId)) {
+  // The gate from the durable record decides before the configuration does:
+  // a reconstruction below it never campaigns, even as a transient sole
+  // voter of a replayed configuration.
+  if (group.gateOpen && isSoleVoter(conf.value, group.peerId)) {
     return campaignGroup(group, expectedGeneration);
   }
   announce(group, expectedGeneration);
@@ -717,114 +754,6 @@ function thenMaybe(value, continuation) {
     value.then(continuation) : continuation(value);
 }
 
-// A delivery to one peer is that peer's transport outcome. Raft re-sends
-// what a peer did not receive (the next append or heartbeat), so a failed
-// delivery drops the message, is recorded against the peer, and leaves the
-// Ready - its persistence, its application and the group's role and runtime -
-// exactly as it was. Later messages of the same batch to a peer that just
-// failed are dropped with it rather than waited on again.
-function recordPeerDelivery(group, raftPeerId, observation) {
-  const key = String(raftPeerId);
-  group.peerDelivery.delete(key);
-  group.peerDelivery.set(key, deepFreeze(observation));
-  if (group.peerDelivery.size > PEER_DELIVERY_OBSERVATION_LIMIT) {
-    group.peerDelivery.delete(group.peerDelivery.keys().next().value);
-  }
-}
-
-// A delivered envelope the core refused to step (a response from a peer it
-// holds no progress for, a proposal it drops, a local-only message type): the
-// core's own refusal record, kept per sender with how many of that sender's
-// envelopes it has refused, oldest sender evicted first past the
-// bound. An observation for the group's status; it answers nothing.
-function recordInboundStepRefusal(group, envelope, refused) {
-  const sender = String(envelope.message?.from ?? envelope.from);
-  const previous = group.inboundStepRefusals.get(sender);
-  group.inboundStepRefusals.delete(sender);
-  group.inboundStepRefusals.set(sender, deepFreeze({
-    from: sender,
-    msgType: envelope.message?.msgType ?? null,
-    outcome: refused.outcome,
-    reason: refused.reason,
-    phase: refused.phase,
-    refusalCount: (previous?.refusalCount ?? 0) + 1,
-  }));
-  if (group.inboundStepRefusals.size >
-      INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT) {
-    group.inboundStepRefusals.delete(
-      group.inboundStepRefusals.keys().next().value);
-  }
-}
-
-function peerDeliveryFailed(group, raftPeerId, phase, cause, failedPeers) {
-  const previous = group.peerDelivery.get(String(raftPeerId));
-  recordPeerDelivery(group, raftPeerId, {
-    outcome: PEER_DELIVERY_OUTCOME.FAILED,
-    phase,
-    reason: String(cause?.message || cause || RUNTIME_REASON.DELIVERY_FAILED),
-    consecutiveFailures: previous?.outcome === PEER_DELIVERY_OUTCOME.FAILED ?
-      previous.consecutiveFailures + 1 : 1,
-  });
-  failedPeers.add(String(raftPeerId));
-  return null;
-}
-
-function settlePeerDelivery(group, raftPeerId, delivery, failedPeers) {
-  if (delivery && typeof delivery === 'object' &&
-      (delivery.noHandler === true || delivery.deferRetry === true ||
-        delivery.acknowledged === false || delivery.error)) {
-    return peerDeliveryFailed(group, raftPeerId,
-      delivery.noHandler ? RUNTIME_PHASE.SEND_NO_HANDLER : RUNTIME_PHASE.SEND,
-      delivery.error || delivery.reason, failedPeers);
-  }
-  recordPeerDelivery(group, raftPeerId, {
-    outcome: PEER_DELIVERY_OUTCOME.DELIVERED, consecutiveFailures: 0,
-  });
-  return null;
-}
-
-function deliverToPeer(group, message, failedPeers) {
-  let address;
-  try {
-    address = group.resolvePeerAddress(message.to);
-  } catch (error) {
-    return peerDeliveryFailed(group, message.to,
-      RUNTIME_PHASE.ADDRESS_RESOLUTION, error, failedPeers);
-  }
-  let delivered;
-  try {
-    delivered = group.sendToPeer(address, {
-      protocol: RAFT_RS_TRANSPORT_PROTOCOL,
-      groupId: group.groupId,
-      from: message.from,
-      to: message.to,
-      message,
-    });
-  } catch (error) {
-    return peerDeliveryFailed(group, message.to, RUNTIME_PHASE.SEND, error,
-      failedPeers);
-  }
-  if (delivered && typeof delivered.then === 'function') {
-    return Promise.resolve(delivered).then(
-      (delivery) => settlePeerDelivery(group, message.to, delivery,
-        failedPeers),
-      (error) => peerDeliveryFailed(group, message.to, RUNTIME_PHASE.SEND,
-        error, failedPeers));
-  }
-  return settlePeerDelivery(group, message.to, delivered, failedPeers);
-}
-
-function sendMessages(group, messages, index = 0, failedPeers = new Set()) {
-  if (index >= messages.length) {
-    return null;
-  }
-  const message = messages[index];
-  const delivered = failedPeers.has(String(message.to)) ? null :
-    deliverToPeer(group, message, failedPeers);
-  return thenMaybe(delivered, () =>
-    sendMessages(group, messages, index + 1, failedPeers));
-}
-
 function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
   if (RAFT_RS_CONF_CHANGE_ENTRY_TYPES.includes(entry.entryType)) {
     const decoded = invokeCoreAt(
@@ -843,7 +772,7 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
     if (!set.ok) {
       return set.result;
     }
-    return applied;
+    return {...applied, decoded: decoded.value};
   }
   return invokeCoreAt(
     group, expectedGeneration, CORE_OPERATION.CONF_STATE);
@@ -859,6 +788,8 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
   if (!resolvedConfState.ok) {
     return resolvedConfState.result;
   }
+  const admitted = admitsReplica(group.gate, resolvedConfState.decoded,
+    group.peerId, BigInt(entry.index));
   try {
     applyCommittedEntryTransaction({
       store: group.store,
@@ -866,12 +797,14 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
       entry,
       confState: resolvedConfState.value,
       applyCommittedEntry: group.applyCommittedEntry,
+      admitted,
     });
   } catch (error) {
     group.applyTransactionRolledBack?.();
     return groupHostFailure(group, RUNTIME_PHASE.APPLICATION,
       applicationFailureOf(error));
   }
+  recordAppliedEntry(group, BigInt(entry.index), admitted);
   return applyEntries(group, expectedGeneration, entries, index + 1);
 }
 
@@ -1048,6 +981,7 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
     return conf;
   }
   return {ok: true, value: {status: status.value, confState: conf.value,
+    participation: participationObservation(group.gate, group.appliedIndex),
     runtimeHealth, runtimeGeneration}};
 }
 
@@ -1125,6 +1059,9 @@ function readStatusObserved(group) {
 }
 
 function campaignGroup(group, expectedGeneration) {
+  if (!group.gateOpen) {
+    return participationGateClosed();
+  }
   const status = invokeCoreAt(group, expectedGeneration, 'status');
   if (!status.ok) {
     return status.result;
@@ -1288,6 +1225,9 @@ function performCommand(group, command, expectedGeneration) {
     'propose': ['propose', [command.bytes]],
     'propose-conf-change': ['propose_conf_change_v2', [command.change]],
   }[command.type];
+  if (primitive && !group.gateOpen) {
+    return participationGateClosed();
+  }
   if (!primitive) {
     return outcome(CORE_REFUSED, {
       reason: RUNTIME_REASON.UNKNOWN_OPERATION,
@@ -1399,6 +1339,19 @@ function runScheduledInboundDrain(group) {
   }
 }
 
+// A status read and the committed-membership read answer from the recorded
+// observation without queueing; every other command takes the group's turn.
+function executeCommand(group, command) {
+  if (command?.type === RUNTIME_COMMAND.READ_STATUS) {
+    return readStatusNow(group);
+  }
+  if (command?.type === RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP) {
+    return thenMaybe(readStatusNow(group), (status) =>
+      answerCommittedMembership(group, status, command.purpose));
+  }
+  return enqueue(group, () => perform(group, command));
+}
+
 function snapshotEnvelope(envelope) {
   return deepFreeze({
     ...envelope,
@@ -1414,7 +1367,10 @@ function createRuntimeDispatcher(request) {
     groupId: request.groupId,
     replicaIdentity: request.replicaIdentity,
     peerId: request.peerId,
-    voters: request.voters,
+    bootstrap: request.bootstrap,
+    gate: null,
+    appliedIndex: null,
+    gateOpen: false,
     timing: request.timing,
     timers: request.timers,
     store,
@@ -1449,7 +1405,7 @@ function createRuntimeDispatcher(request) {
     opening.result;
   if (opening.ok && opened.outcome !== CORE_OK) {
     groups.delete(group.key);
-    throw new Error(opened.reason);
+    throw Object.assign(new Error(opened.reason), {consensus: opened});
   }
   const first = opening.ok ? invokeCore(group, 'status') : {ok: false};
   if (first.ok) {
@@ -1481,9 +1437,8 @@ function createRuntimeDispatcher(request) {
       scheduleInboundDrain(group);
       return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_ENQUEUED});
     }),
-    execute: Object.freeze((command) =>
-      command?.type === RUNTIME_COMMAND.READ_STATUS ? readStatusNow(group) :
-        enqueue(group, () => perform(group, command))),
+    execute: Object.freeze((command) => executeCommand(group, command)),
+    participationGateOpen: Object.freeze(() => group.gateOpen === true),
     configureTiming: Object.freeze((timing) => {
       group.timing = deepFreeze({...group.timing, ...timing});
       return true;

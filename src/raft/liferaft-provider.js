@@ -9,8 +9,13 @@ import {createRaftOperationPort, deepFreeze} from './raft-operation-port.js';
 import {
   RAFT_LEADERSHIP_TRANSFER_REASON,
   RAFT_MEMBERSHIP_OPERATION,
+  RAFT_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
+import {
+  COMMITTED_MEMBERSHIP_ANSWER_KIND,
+  COMMITTED_MEMBERSHIP_REFUSAL,
+} from './raft-committed-membership-constants.js';
 import {RAFT_EVENT, RAFT_ROLE} from './constants.js';
 
 // The liferaft option keys a partition group's node is constructed with. They
@@ -349,6 +354,12 @@ class LiferaftProvider {
         return deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK});
       },
       readStatus: status,
+      // liferaft holds no committed configuration: the read is refused
+      // typed, never answered from its local peer list.
+      [RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP]: () => deepFreeze({
+        kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED,
+        reason: COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE,
+      }),
       configureTick: (timing = {}) => {
         if (Number.isFinite(timing.heartbeatMs)) {
           node.beat = timing.heartbeatMs;

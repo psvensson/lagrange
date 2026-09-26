@@ -127,6 +127,9 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     // owner's observation; each was dropped and answered nothing).
     inboundStepRefusals: [...group.inboundStepRefusals.values()],
     confState,
+    // The participation gate recorded with this observation, and the applied
+    // index the configuration above was applied at (O1 gate).
+    ...observation.participation,
     runtimeHealth: observation.runtimeHealth,
     groupHealth: group.health,
     runtimeGeneration: observation.runtimeGeneration,

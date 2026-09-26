@@ -53,6 +53,9 @@ const RUNTIME_COMMAND = Object.freeze({
   // Leadership moved to one voter through the core's own MsgTransferLeader,
   // validated against the core's status and configuration in the same turn.
   TRANSFER_LEADERSHIP: 'transfer-leadership',
+  // The committed-membership read, answered from the recorded observation
+  // like a status read (committed-read amendment 1, section 3.1).
+  READ_COMMITTED_MEMBERSHIP: 'read-committed-membership',
 });
 const RUNTIME_EVENT = Object.freeze({
   TERM_CHANGE: RAFT_EVENT.TERM_CHANGE,
