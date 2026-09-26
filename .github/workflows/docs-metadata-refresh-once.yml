@@ -1,0 +1,88 @@
+name: docs-metadata-refresh-once
+
+# Temporary execution workspace. This workflow must never be merged to main.
+on:
+  push:
+    branches: [ops/docs-metadata-refresh-20260926]
+
+permissions:
+  contents: read
+
+jobs:
+  generate-blobs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the exact documentation head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: 3de458e742d561e8c2e351207fde30eb3b1bd749
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run the existing metadata owner
+        run: npm run -s test:metadata:refresh
+      - name: Verify scope and publish generated blob objects only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import pathlib
+          import subprocess
+          import tempfile
+
+          expected_head = '3de458e742d561e8c2e351207fde30eb3b1bd749'
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          if head != expected_head:
+              raise SystemExit('Refusing metadata from an unexpected source head')
+
+          # These are the two outputs reported by the unchanged PR gate.
+          expected_prefixes = {
+              'test/shards/impact-graph-seal.json': 'aff7ce7c1',
+              'test/shards/subsystem-classes.json': 'b84942cf5',
+          }
+          changed = set(subprocess.check_output(
+              ['git', 'diff', '--name-only', 'HEAD'], text=True).splitlines())
+          if changed != set(expected_prefixes):
+              raise SystemExit(f'Refusing unexpected generated scope: {sorted(changed)}')
+
+          verified = {}
+          for name, prefix in expected_prefixes.items():
+              data = pathlib.Path(name).read_bytes()
+              blob = hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+              if not blob.startswith(prefix):
+                  raise SystemExit(f'Generator output differs from the prior CI diff: {name}')
+              verified[name] = (data, blob)
+
+          # Create immutable Git objects, not commits or branches. The PR will
+          # consume these exact generator outputs through its normal gate.
+          for name, (data, expected_blob) in verified.items():
+              payload = {
+                  'content': base64.b64encode(data).decode('ascii'),
+                  'encoding': 'base64',
+              }
+              with tempfile.NamedTemporaryFile(mode='w', suffix='.json') as tmp:
+                  json.dump(payload, tmp)
+                  tmp.flush()
+                  response = subprocess.check_output([
+                      'gh', 'api', '--method', 'POST',
+                      'repos/psvensson/lagrange/git/blobs', '--input', tmp.name,
+                  ], text=True)
+              actual = json.loads(response)['sha']
+              if actual != expected_blob:
+                  raise SystemExit(f'Published blob identity mismatch: {name}')
+              print(json.dumps({'sourceHead': head, 'path': name, 'blobSha': actual}))
+          PY
