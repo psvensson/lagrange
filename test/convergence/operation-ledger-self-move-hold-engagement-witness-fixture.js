@@ -1191,7 +1191,7 @@ async function runSelfMovePlannedBeforeAddsScenario(
   // The self-move REPLACE's target configuration as its owner reads it (quest
   // replace-source-removal-owner, C1): the source leaves it at the terminal.
   const replaceWitnesses = installReplaceWitnesses(
-    seed.workflowOwner.messageRouter);
+    seed.workflowOwner.messageRouter, {addressedLeads: true});
 
   // Placement actuals of the REPLACE. Default profile: the moved replica row
   // changes node at the terminal (run 21-22-08's source removal). A profile

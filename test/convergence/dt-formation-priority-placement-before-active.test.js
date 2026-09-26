@@ -375,8 +375,10 @@ t.test(
     fixture.coordinator.systemTableCache = cache;
     // The REPLACE target's own configuration, as the REPLACE owner reads it
     // (quest replace-source-removal-owner, C1): the source is a voter until
-    // the tick's physical move commits its removal.
-    const witness = createReplaceWitness();
+    // the tick's physical move commits its removal. F1: the witness answers
+    // as the group's leader (the completion authority is the leader's
+    // answer; the planner picks the target, so it is not known up front).
+    const witness = createReplaceWitness({addressedLeads: true});
     const router = fixture.coordinator.messageRouter;
     const baseDeliver = router.deliver.bind(router);
     router.deliver = async (target, payload, options) =>
