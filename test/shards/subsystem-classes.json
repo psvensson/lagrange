@@ -16,7 +16,7 @@
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
-    "services-runtime": 169,
+    "services-runtime": 170,
     "solver-tooling": 7,
     "storage-partition": 151,
     "storage-raft": 102,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2172,
-  "digest": "fnv1a32-77f90537",
+  "censusSize": 2173,
+  "digest": "fnv1a32-470e05c7",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-31298d2c",
+  "observationDigest": "fnv1a32-864bbe93",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -998,6 +998,7 @@
     "test/integration/pgwire-bootstrap.integration.test.js": "pgwire-compat",
     "test/integration/pgwire-rebalance.integration.test.js": "pgwire-compat",
     "test/integration/preflight-critical-path-hops.integration.test.js": "control-plane",
+    "test/integration/public-binding-cell-invocation-seam.integration.test.js": "services-runtime",
     "test/integration/raft-leader-election.integration.test.js": "storage-raft",
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "cdc-metadata",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "transport-messaging",
@@ -6007,6 +6008,22 @@
     "test/integration/preflight-critical-path-hops.integration.test.js": {
       "env": [
         "LAGRANGE_TEST_MACHINE_FACTOR"
+      ]
+    },
+    "test/integration/public-binding-cell-invocation-seam.integration.test.js": {
+      "files": [
+        "src/control-plane/owners/deployment-binding-contract.js",
+        "src/embedded-lagrange.js",
+        "src/service/call-cell-batch-executor.js",
+        "src/service/call-cell-routing-contract.js",
+        "src/service/service-local-oci-layout-builder.js",
+        "test/integration/helpers/public-binding-consumer.js",
+        "test/integration/helpers/public-binding-seam-harness.js",
+        "test/wasm-service/fixtures/call-cell-world/guest.js"
+      ],
+      "directories": [
+        "src",
+        "wit"
       ]
     },
     "test/integration/raft-leader-election.integration.test.js": {

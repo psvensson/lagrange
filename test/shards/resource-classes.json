@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2155,
+    "ordinary": 2156,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2172,
-  "digest": "fnv1a32-1b6d1f5f",
+  "censusSize": 2173,
+  "digest": "fnv1a32-11eedb5a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -978,6 +978,7 @@
     "test/integration/pgwire-bootstrap.integration.test.js": "ordinary",
     "test/integration/pgwire-rebalance.integration.test.js": "ordinary",
     "test/integration/preflight-critical-path-hops.integration.test.js": "ordinary",
+    "test/integration/public-binding-cell-invocation-seam.integration.test.js": "ordinary",
     "test/integration/raft-leader-election.integration.test.js": "ordinary",
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "ordinary",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "ordinary",
