@@ -140,8 +140,10 @@ const RATCHET_TARGETS = [
     // 2026-09-26: tightened 791/30451 -> 788/30356 after the two
     // replacement-election nudge tests of the quorum-conditioned tail moved
     // onto one shared scenario runner (checker hint).
+    // 2026-09-26: tightened duplicated lines 30356 -> 30347 after the CL-043
+    // completed-election tests were superseded (checker hint).
     baselineCloneGroupCount: 788,
-    baselineDuplicatedLineCount: 30356,
+    baselineDuplicatedLineCount: 30347,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
