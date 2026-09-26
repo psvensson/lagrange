@@ -133,7 +133,8 @@ function relayPartitionConsensusObservations(service) {
   );
   service.raft.subscribe(RAFT_EVENT.MEMBERSHIP_CHANGED, (observation) =>
     emit({confState: observation?.confState ?? null,
-      commitIndex: observation?.commitIndex ?? null}));
+      commitIndex: observation?.commitIndex ?? null,
+      appliedIndex: observation?.appliedIndex ?? null}));
   service.raft.subscribe(RAFT_EVENT.LEADER_CHANGE, (leaderReplicaId) =>
     emit({leaderReplicaId: leaderReplicaId ?? null}));
   service.raft.subscribe(RAFT_EVENT.TERM_CHANGE, (term) => emit({term}));

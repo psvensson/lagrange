@@ -224,6 +224,7 @@ async function readPartitionReplicaMembership(service, sourceReplicaIdentity) {
     partitionId: service.partitionId,
     term: status.term,
     commitIndex: status.commitIndex,
+    appliedIndex: status.appliedIndex,
     leaderReplicaId: status.leaderId ?? null,
     role: status.role,
     transferWindowMaxMs: leadershipTransferWindowMaxMsOf(service),

@@ -95,7 +95,9 @@ async function deliverToReplaceWitness(owner, operation, messageType) {
  * @param {Object} owner
  * @param {Object} operation
  * @return {Promise<Object>} Frozen observation (a membership state plus
- *   commitIndex, leaderReplicaId, term, transferWindowMaxMs).
+ *   commitIndex, appliedIndex - the witness runtime's applied index of the
+ *   same observation its configuration came from; commit may run ahead of
+ *   it - leaderReplicaId, term, transferWindowMaxMs).
  */
 async function readReplaceWitnessMembership(owner, operation) {
   const {response, reason} = await deliverToReplaceWitness(

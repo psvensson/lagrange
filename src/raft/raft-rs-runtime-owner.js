@@ -435,6 +435,8 @@ function openGroupInCurrentRuntime(group, opening) {
   // Every (re)construction and restore announces its first observed
   // configuration again: a listener's baseline must be level-correct.
   group.announcedConfStateKey = CONF_STATE_NOT_ANNOUNCED;
+  group.appliedIndex = Number(opening.restore ? opening.record.appliedIndex :
+    RAFT_RS_INITIAL_APPLIED);
   if (!opening.restore) {
     const confState = invokeCore(group, CORE_OPERATION.CONF_STATE);
     if (!confState.ok) {
@@ -872,6 +874,9 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
     return groupHostFailure(group, RUNTIME_PHASE.APPLICATION,
       applicationFailureOf(error));
   }
+  // The runtime's own applied index: the entry whose configuration the core
+  // now holds, recorded durably with it in the same transaction.
+  group.appliedIndex = Number(entry.index);
   return applyEntries(group, expectedGeneration, entries, index + 1);
 }
 
@@ -1002,7 +1007,7 @@ function announce(group, expectedGeneration) {
     );
   }
   if (observed.ok) {
-    announceMembership(group, observed.value.confState, now);
+    announceMembership(group, observed.value, now);
   }
 }
 
@@ -1021,7 +1026,7 @@ function confStateKeyOf(confState) {
 // The applied ConfState is announced when it differs from the one last
 // announced, and first after every (re)construction: the transition the core
 // itself applied, never a prediction or a row.
-function announceMembership(group, confState, status) {
+function announceMembership(group, {confState, appliedIndex}, status) {
   const key = confStateKeyOf(confState);
   if (key === group.announcedConfStateKey) {
     return;
@@ -1030,6 +1035,7 @@ function announceMembership(group, confState, status) {
   group.emit(RUNTIME_EVENT.MEMBERSHIP_CHANGED, {
     confState,
     commitIndex: Number(status.commit),
+    appliedIndex,
   });
 }
 
@@ -1047,8 +1053,11 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
   if (!conf.ok) {
     return conf;
   }
+  // The applied index is the runtime's own, read in the same turn as the
+  // configuration: the index whose apply left the core holding it (commit
+  // may run ahead of it), never the core's status.applied.
   return {ok: true, value: {status: status.value, confState: conf.value,
-    runtimeHealth, runtimeGeneration}};
+    appliedIndex: group.appliedIndex, runtimeHealth, runtimeGeneration}};
 }
 
 function shapeGroupStatus(group, observation) {
@@ -1429,6 +1438,7 @@ function createRuntimeDispatcher(request) {
     lastStatus: null,
     statusObservation: null,
     announcedConfStateKey: CONF_STATE_NOT_ANNOUNCED,
+    appliedIndex: Number(RAFT_RS_INITIAL_APPLIED),
     health: USABLE,
     recovery: null,
     entered: 0,

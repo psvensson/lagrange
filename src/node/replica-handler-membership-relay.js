@@ -86,7 +86,7 @@ class TrackedServiceRegistry extends Map {
 
   /**
    * @param {Function} listener - Receives {partitionId, replicaId} with
-   *   {confState, commitIndex}, {leaderReplicaId} or {term}.
+   *   {confState, commitIndex, appliedIndex}, {leaderReplicaId} or {term}.
    * @return {Function} Unsubscribe.
    */
   subscribeConsensusObservations(listener) {
