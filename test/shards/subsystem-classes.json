@@ -19,16 +19,16 @@
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 153,
-    "storage-raft": 119,
+    "storage-raft": 120,
     "test-infrastructure": 136,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2210,
-  "digest": "fnv1a32-23e3b6f9",
+  "censusSize": 2211,
+  "digest": "fnv1a32-48be3773",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a0b77d2c",
+  "observationDigest": "fnv1a32-32022d06",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1446,6 +1446,7 @@
     "test/raft/raft-rs-backend/committed-membership-target-validation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/conf-state-authority.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-ready-loop.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "storage-raft",
     "test/raft/raft-rs-backend/election-safety.test.js": "storage-raft",
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
@@ -7173,6 +7174,18 @@
     "test/raft/raft-rs-backend/durable-ready-loop.test.js": {
       "files": [
         "src/raft/raft-rs-host-contract.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js": {
+      "files": [
+        "src/bootstrap/node-joining-publication-activation.js",
+        "src/config/configuration-manager.js",
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-progress.js"
       ]
     },
     "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": {
