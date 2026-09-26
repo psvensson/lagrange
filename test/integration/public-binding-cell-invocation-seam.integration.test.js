@@ -36,11 +36,14 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 
 import {test} from '../../src/test-helpers/tap.js';
-import {managedSleep} from '../../src/test-helpers/managed-timers.js';
+import {
+  managedSleep,
+  reportOpenHandlesOnTeardown,
+} from '../../src/test-helpers/managed-timers.js';
+import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 import {CALL_CELL_ROUTE_ERROR_CODE} from
   '../../src/service/call-cell-routing-contract.js';
-import {getUniquePort} from './helpers/cluster-test-helpers.js';
 import {
   CONSUMER_RETRY_OUTCOME,
   LIFECYCLE_SQL,
@@ -53,12 +56,12 @@ import {
 import {
   acceptsConnections,
   buildCallArtifact,
-  disablePgwire,
   enablePasswordPgwire,
   planShardPartitions,
   readCoordinationSlotCounts,
   splitTableOnce,
   startSeamRuntime,
+  stopPlacedPgwireReplicas,
   useSingleNodeReplicaShape,
 } from './helpers/public-binding-seam-harness.js';
 import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
@@ -68,6 +71,8 @@ const SEAM_WAIT_MS = scaleByMachineFactor(60_000);
 const SEAM_POLL_MS = 100;
 const CONSUMER_RETRY_PAUSE_MS = 250;
 const PGWIRE_LOOPBACK = '127.0.0.1';
+const NODE_LISTENER_PORT_COUNT = 3;
+const seamPorts = createPortAllocator(import.meta.url);
 const PROBE_GUARD_SUBJECT =
   'public-binding-invocation-seam starts an embedded runtime';
 const TEMPORARY_PREFIX = 'lagrange-public-binding-seam-';
@@ -95,7 +100,11 @@ const OPERATION_STATUS = Object.freeze({
 const TABLE = 'seam_ratings';
 const TABLE_DDL =
   `CREATE TABLE ${TABLE} (id INTEGER PRIMARY KEY, score REAL, label TEXT)`;
-const ROW_INSERT = `INSERT INTO ${TABLE} (id, score, label) VALUES (?, ?, ?)`;
+// The application facade binds integers, strings, booleans, null and bytes
+// only (src/query/application-database-input.js rejects non-integer
+// numbers), so the REAL score the guest requires travels as a literal.
+const rowInsert = (score) =>
+  `INSERT INTO ${TABLE} (id, score, label) VALUES (?, ${score}, ?)`;
 const LOW_RANGE = Object.freeze({FIRST: 1, LAST: 10});
 const HIGH_RANGE = Object.freeze({FIRST: 1001, LAST: 1010});
 const SCORE_FRACTION = 0.25;
@@ -147,8 +156,6 @@ const CONSUMER_RETRY_CODES = Object.freeze(new Set([
   CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
 ]));
 const OWNER_CODE_DETAIL_FIELD = 'ownerCode';
-const PORT_BLOCK_NOT_CONTIGUOUS =
-  'test port allocator did not return a contiguous REST/admin/transport block';
 
 function seamRows() {
   const rows = [];
@@ -240,20 +247,8 @@ function ownerCodeOf(observed) {
   }
 }
 
-// The listener model derives admin = REST + 1 and transport = REST + 2, so
-// the REST block reserves three consecutive allocator ports before the
-// PG-wire port is drawn.
-function allocateSeamPorts() {
-  const restPort = getUniquePort();
-  const reserved = [getUniquePort(), getUniquePort()];
-  if (reserved[0] !== restPort + 1 || reserved[1] !== restPort + 2) {
-    throw new Error(PORT_BLOCK_NOT_CONTIGUOUS);
-  }
-  return Object.freeze({pgwirePort: getUniquePort(), restPort});
-}
-
-// Owner errors are frozen (ApplicationDatabaseError); tap cannot annotate a
-// frozen rejection, so surface its typed fields on a plain Error instead.
+// Owner errors can be frozen (ApplicationDatabaseError); tap cannot annotate
+// a frozen rejection, so surface its typed fields on a plain Error instead.
 async function readable(operation) {
   try {
     return await operation();
@@ -273,7 +268,7 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
   'seam: Artifact, Binding, key-anchored call, no topology in consumer input',
 {timeout: SEAM_TEST_TIMEOUT_MS}, async (t) => {
   refuseUnderProbe(PROBE_GUARD_SUBJECT);
-  process.prependListener('unhandledRejection', (r) => console.error('DEBUG-UNHANDLED', r?.code, r?.message, r?.stack, r?.cause));
+  reportOpenHandlesOnTeardown(t);
   const clock = {startedAt: Date.now(), marks: {}};
   const mark = (label) => {
     clock.marks[label] = Date.now() - clock.startedAt;
@@ -288,12 +283,15 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
 
   // Deploy-time tooling runs beside runtime start (the CLI's build step).
   const artifactBuild = buildCallArtifact(root, SERVICE_IDENTITY);
-  const ports = allocateSeamPorts();
+  // REST, admin (= REST + 1) and transport (= REST + 2) derive from one
+  // base, so the base comes from a consecutive block of the allocator.
+  const [restPort] = seamPorts.getPortBlock(NODE_LISTENER_PORT_COUNT);
+  const pgwirePort = seamPorts.getPort();
   const runtime = await startSeamRuntime({
     credentials: CREDENTIALS,
     dataDir: path.join(root, 'node-data'),
     nodeId: NODE_ID,
-    restPort: ports.restPort,
+    restPort,
   });
   // Harness: the application facade reads system tables and performs the
   // operator PG-wire enablement; the consumer only gets host:port.
@@ -303,17 +301,19 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
   let endpoint = null;
   t.teardown(async () => {
     const stopStartedAt = Date.now();
-    const listenerClosed = endpoint ?
-      await disablePgwire(db, endpoint, wait()) : true;
+    const stoppedReplicas = endpoint ?
+      await stopPlacedPgwireReplicas(runtime, db) : [];
     await runtime.handle.stop();
     runtime.restoreEnvironment();
-    t.comment(`teardown: pgwire listener closed by scale-down=${
-      listenerClosed}; stop ms=${Date.now() - stopStartedAt}; rest port ` +
+    t.comment(`teardown: harness-stopped pgwire replicas=${
+      JSON.stringify(stoppedReplicas)}; stop ms=${
+      Date.now() - stopStartedAt}; rest accepting after stop=${
+      await acceptsConnections(PGWIRE_LOOPBACK, restPort)}; pgwire ` +
       `accepting after stop=${
-        await acceptsConnections(PGWIRE_LOOPBACK, ports.restPort)}`);
+        await acceptsConnections(PGWIRE_LOOPBACK, pgwirePort)}`);
   });
   mark('runtimeStarted');
-  endpoint = await enablePasswordPgwire(db, ports.pgwirePort, wait());
+  endpoint = await enablePasswordPgwire(db, pgwirePort, wait());
   mark('pgwireListening');
 
   // The application owns its schema through the public facade.
@@ -323,7 +323,7 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
     await db.query(TABLE_DDL, []);
     mark('tableCreated');
     for (const row of rows) {
-      await db.query(ROW_INSERT, [row.id, row.score, row.label]);
+      await db.query(rowInsert(row.score), [row.id, row.label]);
     }
   });
   mark('rowsInserted');

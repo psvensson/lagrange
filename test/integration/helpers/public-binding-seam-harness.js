@@ -74,9 +74,9 @@ const PGWIRE_ENABLED_REPLICA_COUNT = 1;
 const PGWIRE_ENABLE_SQL =
   'UPDATE service_definitions SET replica_count = ?, runtime_config = ? ' +
   'WHERE service_id = ?';
-const PGWIRE_DISABLED_REPLICA_COUNT = 0;
-const PGWIRE_DISABLE_SQL =
-  'UPDATE service_definitions SET replica_count = ? WHERE service_id = ?';
+const PGWIRE_REPLICAS_SQL =
+  'SELECT service_id FROM services WHERE service_id LIKE ?';
+const PGWIRE_REPLICA_SUFFIX_PATTERN = '-r%';
 const PGWIRE_ENDPOINT_SQL =
   'SELECT address, port FROM service_endpoints WHERE protocol = ?';
 const COORDINATION_SLOTS_SQL =
@@ -109,7 +109,6 @@ const MANIFEST_HASH_ALGORITHM = 'sha256';
 const MANIFEST_HASH_ENCODING = 'hex';
 const HARNESS_ERROR = Object.freeze({
   ENDPOINT_TIMEOUT: 'sys-postgres-wire did not publish a postgresql endpoint',
-  LISTENER_STILL_OPEN: 'sys-postgres-wire listener still accepts connections',
   MANIFEST_INVALID: 'seam manifest rejected by the manifest owner',
   SPLIT_TIMEOUT: 'managed split did not produce two routable partitions',
 });
@@ -160,8 +159,20 @@ async function startSeamRuntime(options) {
   return {
     engine: internalRuntime.startupOwner.sqlQueryEngine,
     handle,
+    runtimeDriverRegistry: internalRuntime.startupOwner.runtimeDriverRegistry,
     restoreEnvironment,
   };
+}
+
+// The application facade rejects with frozen ApplicationDatabaseError
+// values; tap cannot annotate a frozen rejection, so harness reads rethrow
+// the typed {code, message} on a plain Error.
+async function harnessQuery(db, sql, params) {
+  try {
+    return await db.query(sql, params);
+  } catch (error) {
+    throw new Error(`${error?.code}: ${error?.message}`);
+  }
 }
 
 async function pollUntil(read, wait, failureMessage) {
@@ -183,7 +194,7 @@ async function pollUntil(read, wait, failureMessage) {
  * @return {Promise<{host: string, port: number}>} Published endpoint.
  */
 async function enablePasswordPgwire(db, port, wait) {
-  await db.query(PGWIRE_ENABLE_SQL, [
+  await harnessQuery(db, PGWIRE_ENABLE_SQL, [
     PGWIRE_ENABLED_REPLICA_COUNT,
     JSON.stringify({
       authMode: PGWIRE_PASSWORD_MODE,
@@ -194,7 +205,8 @@ async function enablePasswordPgwire(db, port, wait) {
     PGWIRE_SERVICE_ID,
   ]);
   const row = await pollUntil(async () => {
-    const result = await db.query(PGWIRE_ENDPOINT_SQL, [PGWIRE_PROTOCOL]);
+    const result = await harnessQuery(
+      db, PGWIRE_ENDPOINT_SQL, [PGWIRE_PROTOCOL]);
     return result.rows[0] || null;
   }, wait, HARNESS_ERROR.ENDPOINT_TIMEOUT);
   return Object.freeze({host: row.address, port: Number(row.port)});
@@ -212,29 +224,29 @@ function acceptsConnections(host, port) {
 }
 
 /**
- * Operator symmetric teardown: scale the listener back to zero and wait
- * until the real module has closed it.
+ * Harness teardown for a FINDING, not a product path: the embedded
+ * `stop()` leaves the placed sys-postgres-wire listener bound, because
+ * ServiceRuntimeLifecycle.shutdown() stops only drivers exposing
+ * `shutdown()` and NativeJsDriver has none (src/runtime/native-js-driver.js;
+ * src/runtime/service-runtime-lifecycle-operation-methods.js). Before the
+ * runtime stops, the harness stops each placed PG-wire replica through the
+ * driver's own `stop()` so the test process can exit.
  *
+ * @param {object} runtime - {engine, runtimeDriverRegistry} from startSeamRuntime.
  * @param {object} db - Application database facade.
- * @param {{host: string, port: number}} endpoint - Published endpoint.
- * @param {{deadlineMs: number, pause: Function}} wait - Bounded wait.
- * @return {Promise<boolean>} Whether the listener closed in time.
+ * @return {Promise<string[]>} Stopped replica service ids.
  */
-async function disablePgwire(db, endpoint, wait) {
-  await db.query(PGWIRE_DISABLE_SQL, [
-    PGWIRE_DISABLED_REPLICA_COUNT,
-    PGWIRE_SERVICE_ID,
+async function stopPlacedPgwireReplicas(runtime, db) {
+  const result = await harnessQuery(db, PGWIRE_REPLICAS_SQL, [
+    `${PGWIRE_SERVICE_ID}${PGWIRE_REPLICA_SUFFIX_PATTERN}`,
   ]);
-  try {
-    await pollUntil(
-      async () => !(await acceptsConnections(endpoint.host, endpoint.port)),
-      wait,
-      HARNESS_ERROR.LISTENER_STILL_OPEN,
-    );
-    return true;
-  } catch {
-    return false;
+  const driver = runtime.runtimeDriverRegistry.getDriver(RUNTIME_KIND.NATIVE_JS);
+  const stopped = [];
+  for (const row of result.rows) {
+    await driver.stop({serviceId: row.service_id});
+    stopped.push(row.service_id);
   }
+  return stopped;
 }
 
 /**
@@ -296,7 +308,7 @@ function planShardPartitions(engine, statement) {
  * @return {Promise<Map<string, number>>} invocation id -> slot count.
  */
 async function readCoordinationSlotCounts(db) {
-  const result = await db.query(COORDINATION_SLOTS_SQL, []);
+  const result = await harnessQuery(db, COORDINATION_SLOTS_SQL, []);
   const counts = new Map();
   for (const row of result.rows) {
     counts.set(row.invocation_id, (counts.get(row.invocation_id) || 0) + 1);
@@ -371,11 +383,11 @@ async function buildCallArtifact(root, identity) {
 export {
   acceptsConnections,
   buildCallArtifact,
-  disablePgwire,
   enablePasswordPgwire,
   planShardPartitions,
   readCoordinationSlotCounts,
   splitTableOnce,
   startSeamRuntime,
+  stopPlacedPgwireReplicas,
   useSingleNodeReplicaShape,
 };

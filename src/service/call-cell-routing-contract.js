@@ -28,6 +28,119 @@ const CALL_CELL_ROUTE_ERROR_CODE = Object.freeze({
   TARGET_STALE: 'call_cell_target_stale',
   TRANSPORT_FAILED: 'call_cell_transport_failed',
 });
+// Which party a routing code blames. REQUEST: the request, its Binding or
+// its authority is refused before any dispatch. PLACEMENT: the target,
+// topology or capacity (re-resolvable). APPLICATION: the component or its
+// declared bounds. DELIVERY: a dispatched run/reduce whose outcome the
+// runtime cannot prove.
+const CALL_CELL_FAILURE_ORIGIN = Object.freeze({
+  APPLICATION: 'application',
+  DELIVERY: 'delivery',
+  PLACEMENT: 'placement',
+  REQUEST: 'request',
+});
+// The public, topology-neutral outcome classes of one CALL invocation.
+// They add no semantics: each is derived from the owner classification
+// (terminal / retryable / ambiguous) plus the execution evidence carried
+// on the CallCellRoutingError, by publicCallOutcomeOf below.
+const CALL_OUTCOME_CLASS = Object.freeze({
+  DEFINITELY_NOT_EXECUTED: 'definitely_not_executed',
+  OUTCOME_UNCERTAIN: 'outcome_uncertain',
+  RETRYABLE_STALE_TARGET: 'retryable_stale_target',
+  SUCCESS: 'success',
+  TEMPORARILY_UNAVAILABLE: 'temporarily_unavailable',
+  TERMINAL_APPLICATION_FAILURE: 'terminal_application_failure',
+});
+// A caller may retry automatically only where guest code provably did not
+// run for the invocation (docs/execution-semantics.md "Retries").
+const CALL_OUTCOME_RETRY_SAFE_CLASSES = Object.freeze([
+  CALL_OUTCOME_CLASS.RETRYABLE_STALE_TARGET,
+  CALL_OUTCOME_CLASS.TEMPORARILY_UNAVAILABLE,
+]);
+const CALL_OUTCOME_UNCLASSIFIED_MESSAGE =
+  'Call invocation failed with an unclassified outcome';
+// One declaration per routing code: its failure origin and the
+// topology-free message a caller receives in place of the internal
+// diagnostic (which may name nodes, partitions or invocation ids).
+// Exhaustive over CALL_CELL_ROUTE_ERROR_CODE.
+const CALL_CELL_ROUTE_ERROR_PUBLIC = Object.freeze({
+  [CALL_CELL_ROUTE_ERROR_CODE.ACK_ONLY]: Object.freeze({
+    message: 'Call Cell acknowledged the invocation without an outcome',
+    origin: CALL_CELL_FAILURE_ORIGIN.DELIVERY,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.AUTHENTICATION_FAILED]: Object.freeze({
+    message: 'Call invocation is not authenticated',
+    origin: CALL_CELL_FAILURE_ORIGIN.REQUEST,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.AUTHORIZATION_FAILED]: Object.freeze({
+    message: 'Call invocation is not authorized',
+    origin: CALL_CELL_FAILURE_ORIGIN.REQUEST,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.BATCH_BOUND_EXCEEDED]: Object.freeze({
+    message: 'Call shard batch exceeds its declared bound',
+    origin: CALL_CELL_FAILURE_ORIGIN.APPLICATION,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.COMPONENT_FAILED]: Object.freeze({
+    message: 'Call Cell component failed',
+    origin: CALL_CELL_FAILURE_ORIGIN.APPLICATION,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.DEADLINE_EXHAUSTED]: Object.freeze({
+    message: 'Call invocation deadline exhausted',
+    origin: CALL_CELL_FAILURE_ORIGIN.REQUEST,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.HANDLER_FAILED]: Object.freeze({
+    message: 'Call Cell delivery failed after dispatch',
+    origin: CALL_CELL_FAILURE_ORIGIN.DELIVERY,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE]: Object.freeze({
+    message: 'Call Cell is not yet ready where the selected data lives',
+    origin: CALL_CELL_FAILURE_ORIGIN.PLACEMENT,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS]: Object.freeze({
+    message: 'Call invocation arguments are invalid',
+    origin: CALL_CELL_FAILURE_ORIGIN.REQUEST,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.INVALID_COMPONENT_RESULT]: Object.freeze({
+    message: 'Call Cell component returned an invalid result',
+    origin: CALL_CELL_FAILURE_ORIGIN.APPLICATION,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.NOT_INVOCABLE]: Object.freeze({
+    message: 'Call Binding is not invocable',
+    origin: CALL_CELL_FAILURE_ORIGIN.REQUEST,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.REDUCE_INCOMPLETE]: Object.freeze({
+    message: 'Call reduction did not receive a complete partial set',
+    origin: CALL_CELL_FAILURE_ORIGIN.DELIVERY,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.ROUTE_AMBIGUOUS]: Object.freeze({
+    message: 'Call Binding name is ambiguous',
+    origin: CALL_CELL_FAILURE_ORIGIN.REQUEST,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.ROUTE_NOT_FOUND]: Object.freeze({
+    message: 'Call Binding not found',
+    origin: CALL_CELL_FAILURE_ORIGIN.REQUEST,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE]: Object.freeze({
+    message: 'Call Binding has no ready Cell',
+    origin: CALL_CELL_FAILURE_ORIGIN.PLACEMENT,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.SHUTTING_DOWN]: Object.freeze({
+    message: 'Call ingress is shutting down',
+    origin: CALL_CELL_FAILURE_ORIGIN.PLACEMENT,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.STATEMENT_INVALID]: Object.freeze({
+    message: 'Call Binding declared statement is invalid',
+    origin: CALL_CELL_FAILURE_ORIGIN.REQUEST,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE]: Object.freeze({
+    message: 'Call target moved while the invocation was routed',
+    origin: CALL_CELL_FAILURE_ORIGIN.PLACEMENT,
+  }),
+  [CALL_CELL_ROUTE_ERROR_CODE.TRANSPORT_FAILED]: Object.freeze({
+    message: 'Call Cell transport failed after dispatch',
+    origin: CALL_CELL_FAILURE_ORIGIN.DELIVERY,
+  }),
+});
 const CALL_CELL_ROUTE_ERROR_NAME = 'CallCellRoutingError';
 const CALL_CELL_INVOCATION_ID_PREFIX = 'call-invocation-';
 // Wire prefix the runtime invocation owner stamps onto every emitted
@@ -93,8 +206,87 @@ class CallCellRoutingError extends Error {
     this.ambiguous =
       this.classification === CALL_CELL_ROUTE_CLASSIFICATION.AMBIGUOUS;
     this.invoked = options.invoked === true;
+    // Invocation-level execution evidence: the invocation owner records
+    // that guest code of THIS invocation may have run (another shard's
+    // run, or a later reduce) even when this dispatch itself did not.
+    this.invocationExecutionStarted =
+      options.invocationExecutionStarted === true;
     this.preserveReplicaState = options.preserveReplicaState === true;
   }
+}
+
+function declaredCallFailure(error) {
+  return error instanceof CallCellRoutingError ?
+    CALL_CELL_ROUTE_ERROR_PUBLIC[error.code] :
+    undefined;
+}
+
+/**
+ * Whether a failure proves that no guest code ran for the invocation: a
+ * typed request/placement refusal the owner classified non-ambiguous, not
+ * invoked, with no invocation-level execution evidence.
+ *
+ * @param {*} error - Any thrown value.
+ * @return {boolean} True only when non-execution is proven.
+ */
+function callFailureProvesNoExecution(error) {
+  const declared = declaredCallFailure(error);
+  return declared !== undefined &&
+    (declared.origin === CALL_CELL_FAILURE_ORIGIN.REQUEST ||
+      declared.origin === CALL_CELL_FAILURE_ORIGIN.PLACEMENT) &&
+    error.classification !== CALL_CELL_ROUTE_CLASSIFICATION.AMBIGUOUS &&
+    error.invoked !== true &&
+    error.invocationExecutionStarted !== true;
+}
+
+/**
+ * Record on a surfaced failure that guest code of its invocation may have
+ * run. Only the invocation owner calls this; non-routing values carry no
+ * evidence field and are already unclassified.
+ *
+ * @param {*} error - The failure the invocation owner surfaces.
+ * @return {*} The same value.
+ */
+function recordInvocationExecutionStarted(error) {
+  if (error instanceof CallCellRoutingError) {
+    error.invocationExecutionStarted = true;
+  }
+  return error;
+}
+
+function deriveCallOutcomeClass(error, declared) {
+  if (declared.origin === CALL_CELL_FAILURE_ORIGIN.APPLICATION) {
+    return CALL_OUTCOME_CLASS.TERMINAL_APPLICATION_FAILURE;
+  }
+  if (!callFailureProvesNoExecution(error)) {
+    return CALL_OUTCOME_CLASS.OUTCOME_UNCERTAIN;
+  }
+  if (error.classification === CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE) {
+    return error.code === CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE ?
+      CALL_OUTCOME_CLASS.RETRYABLE_STALE_TARGET :
+      CALL_OUTCOME_CLASS.TEMPORARILY_UNAVAILABLE;
+  }
+  return CALL_OUTCOME_CLASS.DEFINITELY_NOT_EXECUTED;
+}
+
+/**
+ * The public outcome of a failed CALL invocation: its class, whether an
+ * automatic retry is safe, and the topology-free message a caller sees.
+ * Anything this owner cannot classify is OUTCOME_UNCERTAIN.
+ *
+ * @param {*} error - The failure the invocation surfaced.
+ * @return {{outcomeClass: string, retrySafe: boolean, message: string}}
+ */
+function publicCallOutcomeOf(error) {
+  const declared = declaredCallFailure(error);
+  const outcomeClass = declared ?
+    deriveCallOutcomeClass(error, declared) :
+    CALL_OUTCOME_CLASS.OUTCOME_UNCERTAIN;
+  return Object.freeze({
+    message: declared ? declared.message : CALL_OUTCOME_UNCLASSIFIED_MESSAGE,
+    outcomeClass,
+    retrySafe: CALL_OUTCOME_RETRY_SAFE_CLASSES.includes(outcomeClass),
+  });
 }
 
 function createCallRoutingFailure(code, message, options = {}) {
@@ -293,14 +485,19 @@ function normalizeCallArguments(value) {
 }
 
 export {
+  CALL_CELL_FAILURE_ORIGIN,
   CALL_CELL_INVOCATION_ID_PREFIX,
   CALL_CELL_PARTIAL_KEY_PREFIX,
   CALL_CELL_ROUTE_CLASSIFICATION,
   CALL_CELL_ROUTE_ERROR_CODE,
+  CALL_CELL_ROUTE_ERROR_PUBLIC,
   CALL_CELL_ROUTE_MESSAGE_TYPE,
   CALL_CELL_ROUTE_OPERATION,
+  CALL_OUTCOME_CLASS,
+  CALL_OUTCOME_RETRY_SAFE_CLASSES,
   CallCellRoutingError,
   assertCallBaseInvocationId,
+  callFailureProvesNoExecution,
   createCallChildInvocationId,
   createCallInvocationIdentity,
   createCallInvocationIntentDigest,
@@ -311,4 +508,6 @@ export {
   normalizeCallComponentResult,
   normalizeEmittedPartialEntries,
   parseCallInvocationIdentity,
+  publicCallOutcomeOf,
+  recordInvocationExecutionStarted,
 };
