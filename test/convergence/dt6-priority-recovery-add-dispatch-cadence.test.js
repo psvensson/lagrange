@@ -22,6 +22,8 @@ import {
   buildStartupAuthoritySnapshotFromPlanningAnswer,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
 import {installReplaceWitnesses} from '../rebalancer/replace-witness-fixture.js';
+import {withFixtureCommittedMembership} from
+  '../rebalancer/committed-membership-fixture.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
 import {
   initializeEnvironment,
@@ -430,6 +432,8 @@ function injectDispatchAckLatency({coordinator, timeSource, onSent, onAcked}) {
       }, DISPATCH_ACK_LATENCY_MS),
     );
   };
+  // The committed-membership read of a join is the fixture world's (O1).
+  withFixtureCommittedMembership(router, null);
 }
 
 // Real-owner observation: every serialized create-budget admission turn

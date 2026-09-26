@@ -28,7 +28,7 @@
   "censusSize": 2213,
   "digest": "fnv1a32-d7de258f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f8219eae",
+  "observationDigest": "fnv1a32-f57c134b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3803,17 +3803,20 @@
     },
     "test/convergence/dt-formation-barrier-spread-release-oscillation.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt-formation-priority-placement-before-active.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt-ledger-completion-continuity-discriminator.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt-local-leader-seed-safety-merge.test.js": {
@@ -3907,12 +3910,14 @@
     "test/convergence/dt6-formation-ledger-quorum-spread-first.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
-        "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js"
+        "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-formation-ledger-spread-completion-self-move-interlock-deadlock.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-leadership-migration-network.test.js": {
@@ -3959,32 +3964,38 @@
     },
     "test/convergence/dt6-operation-ledger-self-move-hold-engagement.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-operation-ledger-self-move-holder-release.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-operation-ledger-terminal-hold.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-priority-recovery-drain-parked-self-move.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js": {
@@ -4060,7 +4071,8 @@
     },
     "test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-rebalancer-timeout-detection-network.test.js": {
@@ -4072,7 +4084,8 @@
     },
     "test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-rebalancer-timeout-loop-network.test.js": {
@@ -4098,7 +4111,8 @@
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-provider-contract-constants.js",
         "src/raft/raft-rs-application-transaction-owner.js",
-        "src/raft/raft-rs-ready-loop-constants.js"
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/convergence/dt6-zombie-transaction-lifecycle.test.js": {
@@ -8326,7 +8340,8 @@
     },
     "test/rebalancer/timeout-triggers-failure.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/rebalancer/committed-membership-fixture.js"
       ]
     },
     "test/rebalancer/unified-rebalancer-affinity-policy-refetch-parity.test.js": {

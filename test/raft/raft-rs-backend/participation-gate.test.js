@@ -273,6 +273,9 @@ test('T4 (H6, |D|=2): a target below its gate on the silent-skew prefix ' +
       'an explicit campaign below the gate is refused typed');
     assert.deepEqual(termAndVote(targetDurable(cluster)), termAndVote(before),
       'O-d: the refused campaign raised no term');
+    const write = cluster.node(TARGET).propose('below-the-gate');
+    assert.equal(write.reason, PARTICIPATION_GATE.GATE_CLOSED,
+      'a write below the gate is refused typed, not a generic unavailability');
     assert.notEqual(roleOf(cluster, TARGET), LEADER_ROLE);
     assert.equal(cluster.node(TARGET).readStatus().gateOpen, false);
   } finally {

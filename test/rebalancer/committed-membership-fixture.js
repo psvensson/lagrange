@@ -90,21 +90,49 @@ function answerFixtureCommittedMembership(cache, payload) {
   };
 }
 
+const FIXTURE_WRAPPED = Symbol('fixture committed-membership router');
+
 /**
- * A router whose committed-membership reads the fixture world answers.
+ * A router whose committed-membership reads the fixture world answers. The
+ * wrap is sticky: a test that later assigns its own `deliver` still has the
+ * read answered by the fixture, and every other message reaches the test's
+ * own deliver.
  * @param {Object} router - The test's router.
  * @param {Object} cache - The fixture's cache.
  * @return {Object} The same router.
  */
 function withFixtureCommittedMembership(router, cache) {
-  if (!router || typeof router.deliver !== 'function') {
+  if (!router || typeof router.deliver !== 'function' ||
+      router[FIXTURE_WRAPPED] === true) {
     return router;
   }
-  const deliver = router.deliver.bind(router);
-  router.deliver = async (target, payload, options) => {
+  // Every deliver ever assigned, oldest first. A witness that wraps "the
+  // original deliver" reads this accessor and gets the wrapper back, so a
+  // nested call through it reaches the next older assignment, never itself.
+  const assigned = [router.deliver.bind(router)];
+  let depth = 0;
+  const wrapped = (target, payload, options) => {
     const answer = answerFixtureCommittedMembership(cache, payload);
-    return answer === undefined ? deliver(target, payload, options) : answer;
+    if (answer !== undefined) {
+      return Promise.resolve(answer);
+    }
+    const level = Math.min(depth, assigned.length - 1);
+    depth += 1;
+    try {
+      return assigned[assigned.length - 1 - level](target, payload, options);
+    } finally {
+      depth -= 1;
+    }
   };
+  Object.defineProperty(router, FIXTURE_WRAPPED, {value: true});
+  Object.defineProperty(router, 'deliver', {
+    configurable: true,
+    enumerable: true,
+    get: () => wrapped,
+    set: (deliver) => {
+      assigned.push(deliver);
+    },
+  });
   return router;
 }
 
