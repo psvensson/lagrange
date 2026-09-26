@@ -565,13 +565,15 @@
       "description": "The public Application Database seam (createEmbeddedLagrange -> openApplicationDatabase -> query/transaction): public result shape, typed errors, statement policy, and behaviour through embedded processes.",
       "owners": [
         "src/query/application-database.js",
+        "src/query/application-database-result.js",
         "src/query/application-database-error.js",
         "src/query/application-database-statement-policy.js",
         "src/embedded-lagrange.js"
       ],
       "tests": [
         "test/query/application-database.test.js",
-        "test/release/embedded-node-worker-contract.test.js"
+        "test/release/embedded-node-worker-contract.test.js",
+        "test/integration/public-application-database-multinode.integration.test.js"
       ]
     }
   },

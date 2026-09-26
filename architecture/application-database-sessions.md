@@ -85,6 +85,11 @@ also carries the unexported transaction-control capability. Only the facade's
 transaction owner can create that record. There is no second SQL parser and no
 raw-text transaction classifier.
 
+The same policy owner refuses `EXPLAIN DISTRIBUTED` to application sessions
+with `DIAGNOSTIC_STATEMENT_RESERVED`: SqlCore's EXPLAIN branch consults it
+before the planner runs, because the answer is the distributed plan (cluster
+topology); operator sessions without the application marker are unaffected.
+
 `db.query()` called from an active callback delegates to that callback's
 transaction queue. It cannot allocate an autocommit session that bypasses the
 transaction's failure state.
@@ -123,6 +128,27 @@ One `AsyncLocalStorage` instance per facade detects same-facade active nesting.
 Separate top-level concurrent callbacks receive distinct session ids. A closed
 record inherited by a delayed descendant is not considered nested, while a
 captured transaction handle remains closed permanently.
+
+## Public result shape
+
+Every successful `db.query()` and `tx.query()` resolves to one shape, projected
+by the facade (`src/query/application-database-result.js`) from SqlCore's
+internal result: a frozen null-prototype `{rows, affectedRows}`.
+
+- `rows` is a fresh array of plain objects holding the statement's own row
+  data (own enumerable data properties copied; `BLOB` values stay bytes). A
+  statement that produced no rows returns `[]`. Row-level internals are
+  already removed by SqlCore's owner projection
+  (`TableCreationService.stripPartitionDetails`).
+- `affectedRows` is the engine-reported mutation count when it is a safe
+  non-negative integer, otherwise `0` (reads and DDL report none).
+
+Nothing else crosses the boundary: no partitions, read-authority witnesses,
+participant results, distributed plan, fan-out metrics or HLC timestamps. The
+application names rows only by its own primary-key values; that is its whole
+routing identity. This is an intended behaviour change from the earlier raw
+pass-through; the pgwire adapter and other SqlCore consumers keep SqlCore's
+internal result.
 
 ## Strict public input contract
 
@@ -168,7 +194,8 @@ captured transaction handle remains closed permanently.
 | Invalid query/params/callback | `INVALID_ARGUMENT` | Reject before executing SQL. |
 | Raw transaction-control SQL | `TRANSACTION_CONTROL_RESERVED` | Canonical parsed-AST boundary refuses it. |
 | `SqlCore` returns `success:false` | Preserved owned `errorCode`, or `QUERY_FAILED` | Throw immutable `ApplicationDatabaseError`; copy only known retry/deferred metadata. |
-| `SqlCore` throws | Preserved primitive `code`, or `QUERY_FAILED` | Wrap with `cause`; never spread the thrown value. |
+| `SqlCore` throws | Preserved primitive `code`, or `QUERY_FAILED` | The `cause` is a frozen null-prototype `{code, message}` of primitive strings (or `null`); the thrown engine error (stack, participant, node, partition or address fields) never reaches the application. |
+| `EXPLAIN DISTRIBUTED` from an application session | `DIAGNOSTIC_STATEMENT_RESERVED` | Refused by the statement policy before the planner runs. |
 | Nested active callback transaction | `TRANSACTION_NESTED` | Refuse before `BEGIN`. |
 | Transaction handle after draining/settlement | `TRANSACTION_CLOSED` | Refuse before reaching `SqlCore`. |
 | Callback/statement failure after `BEGIN`, before commit | Original typed error | Attempt one rollback. A rollback failure is normalized into the immutable `rollbackError` field without replacing the original error. |

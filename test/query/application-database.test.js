@@ -1,3 +1,4 @@
+import {Buffer} from 'node:buffer';
 import {test} from '../../src/test-helpers/tap.js';
 import {createBoundApplicationDatabaseRuntime} from
   '../../src/query/application-database.js';
@@ -11,6 +12,8 @@ import {SQLParser} from '../../src/query/sql-parser.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {createApplicationRuntimeGeneration} from
   '../../src/query/application-runtime-generation.js';
+import {findTopologyLeaks} from
+  '../integration/helpers/public-surface-leak.js';
 
 function createCore(handler = null) {
   const calls = [];
@@ -78,6 +81,32 @@ test('canonical SQLQueryEngine refuses raw application transaction control',
     );
     t.equal(result.success, false);
     t.equal(result.errorCode, 'TRANSACTION_CONTROL_RESERVED');
+    await engine.shutdown();
+  });
+
+test('canonical SQLQueryEngine refuses EXPLAIN DISTRIBUTED to application sessions',
+  async (t) => {
+    const engine = new SQLQueryEngine();
+    const explain = 'EXPLAIN DISTRIBUTED SELECT id FROM images WHERE id = ?';
+    const refused = await engine.executeQuery(explain, ['a'],
+      createApplicationDatabaseExecutionOptions('application:images:test'));
+    t.equal(refused.success, false);
+    t.equal(refused.errorCode, 'DIAGNOSTIC_STATEMENT_RESERVED',
+      'the planner is never consulted for an application session');
+    t.notOk('rows' in refused, 'no plan rows are returned');
+    // Without a system cache the planner itself throws for an operator
+    // session: reaching it is the proof that only applications are refused.
+    const operator = await engine.executeQuery(explain, ['a'], {})
+      .catch((error) => ({plannerReached: true, error: error.message}));
+    t.not(operator.errorCode, 'DIAGNOSTIC_STATEMENT_RESERVED',
+      'operator (non-application) sessions keep EXPLAIN DISTRIBUTED');
+    t.equal(operator.plannerReached, true, 'the operator call reached the planner');
+
+    const db = createBoundApplicationDatabaseRuntime(engine)
+      .openApplicationDatabase({applicationId: 'images'});
+    const error = await captureRejection(db.query(explain, ['a']));
+    t.ok(error instanceof ApplicationDatabaseError);
+    t.equal(error.code, 'DIAGNOSTIC_STATEMENT_RESERVED');
     await engine.shutdown();
   });
 
@@ -347,7 +376,8 @@ test('canonical failure metadata uses own data properties only', async (t) => {
   t.equal(thrownError.message, 'owned message');
   t.equal(thrownError.deferred, true);
   t.equal(thrownError.retryAfterMs, 7);
-  t.equal(thrownError.cause, thrown);
+  t.same({...thrownError.cause}, {code: 'OWNED_CODE', message: 'owned message'},
+    'a SqlCore-thrown cause is reduced to its primitive code and message');
 });
 
 test('failure normalization rejects hostile proxies and invalid retry delays',
@@ -369,7 +399,8 @@ test('failure normalization rejects hostile proxies and invalid retry delays',
     const db = runtime.openApplicationDatabase({applicationId: 'images'});
     const proxyError = await captureRejection(db.query('SELECT proxy'));
     t.equal(proxyError.code, 'QUERY_FAILED');
-    t.equal(proxyError.cause, hostile);
+    t.same({...proxyError.cause}, {code: null, message: null},
+      'a hostile proxy cause is never read through or retained');
     for (let index = 0; index < retries.length; index++) {
       const error = await captureRejection(db.query('SELECT retry'));
       t.equal(error.retryAfterMs, index === 1 ? 0 : null);
@@ -459,7 +490,8 @@ test('pre-existing pending callback promise admits statements until settlement',
     t.equal(await transaction, 'settled');
     const after = await captureRejection(captured.query('SELECT after'));
 
-    t.equal(during.success, true);
+    t.same({...during}, {affectedRows: 0, rows: []},
+      'the admitted statement settled with the public result shape');
     t.equal(after.code, 'TRANSACTION_CLOSED');
     t.same(core.calls.map(({sql}) => sql),
       ['BEGIN', 'SELECT during', 'COMMIT']);
@@ -503,7 +535,8 @@ test('query called before same-microtask settlement is admitted and drained',
     releaseQuery();
 
     t.equal(await transaction, 'settled');
-    t.equal((await queryPromise).success, true);
+    t.same({...(await queryPromise)}, {affectedRows: 0, rows: []},
+      'the admitted statement settled with the public result shape');
     t.same(core.calls.map(({sql}) => sql),
       ['BEGIN', 'SELECT before settlement', 'COMMIT']);
   });
@@ -683,3 +716,115 @@ test('runtime generation close is single-flight for concurrent callers',
     await Promise.all([first, second]);
     t.pass('both close callers drained');
   });
+
+const RAW_NODE_ID = '6a6be293-dbd7-4a81-999d-1153f09d18e1';
+const RAW_PARTITION_ID = 'images-p1';
+
+function rawEngineSelect(rows) {
+  return {
+    success: true,
+    rows,
+    count: rows.length,
+    partitions: [RAW_PARTITION_ID],
+    readAuthorityWitnesses: [{partitionId: RAW_PARTITION_ID,
+      servingNodeId: RAW_NODE_ID, servingReplicaId: `${RAW_PARTITION_ID}-r1`,
+      term: 3, role: 'follower'}],
+    timestamp: `1790412099886-0-${RAW_NODE_ID}`,
+    distributedMetrics: {fanout: {partitionLatencies: [
+      {partitionId: RAW_PARTITION_ID}]}},
+    distributedPlan: {fragmentPlans: [{partitionId: RAW_PARTITION_ID}]},
+  };
+}
+
+function rawEngineWrite(affectedRows) {
+  return {
+    success: true,
+    operation: 'UPDATE',
+    affectedRows,
+    rows: [],
+    partitions: [RAW_PARTITION_ID],
+    participantResults: [{partitionId: RAW_PARTITION_ID,
+      acceptingNodeId: RAW_NODE_ID}],
+    distributedPlan: {planId: 'dqp-1'},
+  };
+}
+
+function assertPublicResult(t, result, label) {
+  t.equal(Object.getPrototypeOf(result), null, `${label}: null prototype`);
+  t.ok(Object.isFrozen(result), `${label}: frozen`);
+  t.same(Reflect.ownKeys(result).sort(), ['affectedRows', 'rows'],
+    `${label}: exactly {rows, affectedRows}`);
+  t.same(findTopologyLeaks(result, {forbiddenValues: [RAW_NODE_ID,
+    RAW_PARTITION_ID]}), [], `${label}: no topology`);
+}
+
+test('query results are projected to the public {rows, affectedRows} shape',
+  async (t) => {
+    const engineRow = {id: 'img:1', body: Buffer.from([1, 2]), note: 'n'};
+    const results = [
+      rawEngineSelect([engineRow]),
+      rawEngineWrite(2),
+      rawEngineWrite(-1),
+      rawEngineWrite(1.5),
+      {success: true},
+    ];
+    const core = createCore(async () => results.shift());
+    const runtime = createBoundApplicationDatabaseRuntime(core);
+    const db = runtime.openApplicationDatabase({applicationId: 'images'});
+
+    const read = await db.query('SELECT read');
+    assertPublicResult(t, read, 'read');
+    t.same(read.rows, [engineRow], 'row values are preserved');
+    t.not(read.rows[0], engineRow, 'rows are copies, not engine objects');
+    t.equal(Object.getPrototypeOf(read.rows[0]), Object.prototype,
+      'rows are plain objects');
+    t.ok(Buffer.isBuffer(read.rows[0].body), 'BLOB values stay bytes');
+    t.equal(read.affectedRows, 0, 'a read reports zero affected rows');
+
+    const write = await db.query('UPDATE write');
+    assertPublicResult(t, write, 'write');
+    t.equal(write.affectedRows, 2);
+    t.same(write.rows, []);
+    t.equal((await db.query('UPDATE negative')).affectedRows, 0,
+      'an invalid engine count is not exposed');
+    t.equal((await db.query('UPDATE fractional')).affectedRows, 0);
+    const bare = await db.query('CREATE TABLE bare (id TEXT PRIMARY KEY)');
+    assertPublicResult(t, bare, 'ddl');
+    t.same(bare.rows, [], 'a statement without rows returns no rows');
+  });
+
+test('transaction statements return the public shape too', async (t) => {
+  const core = createCore(async (sql) => sql === 'SELECT inside' ?
+    rawEngineSelect([{id: 'a'}]) :
+    rawEngineWrite(1));
+  const runtime = createBoundApplicationDatabaseRuntime(core);
+  const db = runtime.openApplicationDatabase({applicationId: 'images'});
+  const seen = await db.transaction(async (tx) => {
+    const write = await tx.query('UPDATE inside');
+    const read = await tx.query('SELECT inside');
+    return {read, write};
+  });
+  assertPublicResult(t, seen.write, 'tx write');
+  assertPublicResult(t, seen.read, 'tx read');
+  t.equal(seen.write.affectedRows, 1);
+  t.same(seen.read.rows, [{id: 'a'}]);
+});
+
+test('a SqlCore-thrown failure never exposes the raw engine error', async (t) => {
+  const thrown = new Error('participant failure');
+  thrown.code = 'DISTRIBUTED_PARTICIPANT_FAILURE';
+  thrown.participantNodeId = RAW_NODE_ID;
+  thrown.participantAddress = `${RAW_NODE_ID}/partition/${RAW_PARTITION_ID}-r1`;
+  const core = createCore(async () => {
+    throw thrown;
+  });
+  const runtime = createBoundApplicationDatabaseRuntime(core);
+  const db = runtime.openApplicationDatabase({applicationId: 'images'});
+  const error = await captureRejection(db.query('INSERT failing'));
+  t.equal(error.code, 'DISTRIBUTED_PARTICIPANT_FAILURE');
+  t.not(error.cause, thrown, 'the raw thrown value is not the cause');
+  t.equal(Object.getPrototypeOf(error.cause), null);
+  t.ok(Object.isFrozen(error.cause));
+  t.same(findTopologyLeaks(error, {forbiddenValues: [RAW_NODE_ID]}), [],
+    'no topology through the error or its cause chain');
+});
