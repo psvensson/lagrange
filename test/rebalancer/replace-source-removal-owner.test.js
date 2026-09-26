@@ -28,6 +28,10 @@ import {
 import {
   ReplicaOperationMessageType,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {
+  TERMINAL_TRANSITION_REPAIR_CAUSE,
+  armTerminalTransitionRepair,
+} from '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
 import {createTestCoordinator} from './test-helpers.js';
 import {createReplaceWitness} from './replace-witness-fixture.js';
 
@@ -440,4 +444,63 @@ test('W8 (D2 boundary is durable): a stale in-memory copy cannot FAIL a ' +
   } finally {
     await harness.coordinator.shutdown();
   }
+});
+
+async function fireHeldTimers(harness) {
+  for (const handle of harness.heldTimers.splice(0)) {
+    await handle.fn();
+  }
+}
+
+test('W9 (R11/A11.1): the terminal-transition repair is not a second route ' +
+  'to a REPLACE terminal', async (t) => {
+  await t.test('a retained REMOVED is re-decided by R-1a before it is ' +
+    're-asserted', async (t) => {
+    const harness = await createHarness();
+    try {
+      await driveToRemovalIntent(harness);
+      const persisted = await persistedOperation(harness);
+      // A REMOVED projection held for repair while the source is still a
+      // committed voter on the witness.
+      armTerminalTransitionRepair(harness.owner, {
+        ...persisted,
+        workflowStep: WORKFLOW_STEP.REMOVED,
+        status: ReplicaStatus.REMOVED,
+        completedAt: Date.now(),
+      }, TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED);
+      await fireHeldTimers(harness);
+      t.equal((await persistedOperation(harness)).workflowStep,
+        WORKFLOW_STEP.STOPPING, 'the repair writes no REMOVED while the ' +
+          'source is a voter');
+      t.notOk(harness.owner.terminalTransitionRepairStateByOperationId.has(
+        harness.operation.operationId), 'the repair stood down');
+    } finally {
+      await harness.coordinator.shutdown();
+    }
+  });
+  await t.test('a refused FAILED is not re-asserted past the durable intent',
+    async (t) => {
+      const harness = await createHarness();
+      try {
+        await driveToRemovalIntent(harness);
+        enforceDurableStepCas(harness);
+        const repository = harness.coordinator.repository;
+        const baseRead = repository
+          .queryReplicaOperationPersistenceAuthorityOperation.bind(repository);
+        repository.queryReplicaOperationPersistenceAuthorityOperation =
+          async (operation, options) => {
+            const read = await baseRead(operation, options);
+            return read ? staleActiveCopy(read) : read;
+          };
+        await harness.owner.failOperation(
+          staleActiveCopy(harness.operation), 'Timeout in ACTIVE step');
+        repository.queryReplicaOperationPersistenceAuthorityOperation = baseRead;
+        await fireHeldTimers(harness);
+        await fireHeldTimers(harness);
+        t.equal((await persistedOperation(harness)).workflowStep,
+          WORKFLOW_STEP.STOPPING, 'no repair write crossed the intent');
+      } finally {
+        await harness.coordinator.shutdown();
+      }
+    });
 });

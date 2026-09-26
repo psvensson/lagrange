@@ -6,8 +6,10 @@ import {
   clearReplaceOwnerState,
   decideReplaceCompletion,
   isPartitionReplace,
-  admitReplaceTerminalFailure,
 } from './operation-workflow-replace-owner.js';
+import {
+  admitReplaceTerminalFailure,
+} from './operation-workflow-replace-terminal-admission.js';
 import {
   OperationWorkflowTransitionOrchestration,
 } from './operation-workflow-transition-orchestration.js';
@@ -306,6 +308,7 @@ class OperationWorkflowTransitionPersistence
     projectedOperation,
     transitionOutcome,
     step,
+    persistOptions = {},
   ) {
     this.clearTransitionRetry(operation.operationId);
     // Release only on a proven terminal: lost-to-other-terminal
@@ -331,6 +334,7 @@ class OperationWorkflowTransitionPersistence
         this,
         projectedOperation,
         TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED,
+        persistOptions,
       );
     }
     this.clearDeferredSafetyBlockState(operation.operationId);
@@ -603,7 +607,8 @@ class OperationWorkflowTransitionPersistence
         afterCommit: async () => {
           await this.confirmCommittedTransitionPersistence(
             projectedOperation,
-            {terminalTransitionRepair: true},
+            {terminalTransitionRepair: true,
+              repairPersistOptions: failureAdmission.persistOptions},
           );
         },
       },
@@ -617,6 +622,7 @@ class OperationWorkflowTransitionPersistence
         projectedOperation,
         transitionOutcome,
         WORKFLOW_STEP.FAILED,
+        failureAdmission.persistOptions,
       );
       return transitionOutcome;
     }

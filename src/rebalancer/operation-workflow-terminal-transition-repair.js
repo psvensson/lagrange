@@ -6,6 +6,9 @@ import {
 import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
 } from './replica-operation-update-disposition.js';
+import {
+  isReplaceTerminalRepairAdmitted,
+} from './operation-workflow-replace-terminal-admission.js';
 
 const {
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -107,7 +110,8 @@ function adoptConfirmedWinningTerminalIntoRepair(
  * @param {Object} projectedOperation - The terminal projection that committed.
  * @param {string} cause - TERMINAL_TRANSITION_REPAIR_CAUSE member.
  */
-function armTerminalTransitionRepair(owner, projectedOperation, cause) {
+function armTerminalTransitionRepair(owner, projectedOperation, cause,
+  persistOptions = {}) {
   const operationId = String(projectedOperation?.operationId || '').trim();
   if (operationId.length === 0 || owner.isShuttingDown) {
     return;
@@ -119,6 +123,7 @@ function armTerminalTransitionRepair(owner, projectedOperation, cause) {
     projectedOperation:
       existingState?.projectedOperation ||
       owner.cloneOperationSnapshot(projectedOperation),
+    persistOptions: existingState?.persistOptions || persistOptions,
     attempt,
   });
   if (owner.terminalTransitionRepairTimerByOperationId.has(operationId)) {
@@ -224,9 +229,24 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
       if (!heldState || owner.isShuttingDown) {
         return;
       }
+      if (!await isReplaceTerminalRepairAdmitted(owner,
+        heldState.projectedOperation, heldState.persistOptions)) {
+        // The REPLACE owner decides this terminal again from fresh state;
+        // the retained one is not re-asserted (R11).
+        owner.logger.warn(
+          REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ABANDONED,
+          {operationId, workflowStep:
+            heldState.projectedOperation?.workflowStep || null,
+          partitionId: heldState.projectedOperation?.partitionId || null,
+          attempt: heldState.attempt},
+        );
+        clearTerminalTransitionRepair(owner, operationId);
+        return;
+      }
       const persistResult = await owner.repository.persistOperationUpdate(
         heldState.projectedOperation,
         {
+          ...heldState.persistOptions,
           terminalTransition: true,
           confirmPersistence: false,
           disableSystemWriteSession: true,
