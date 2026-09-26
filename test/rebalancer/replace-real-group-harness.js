@@ -301,8 +301,12 @@ class RealGroup {
 
   electLeader(preferred) {
     this.cluster.tickers = [preferred];
-    const elected = this.cluster.settle(() => this.leader() === preferred,
-      {rounds: ELECTION_ROUNDS});
+    // Elected and applied its first entry: a leader's committed stamp names
+    // a committed index j > 0 (the port validates every stamp).
+    const elected = this.cluster.settle(() => this.leader() === preferred &&
+      durableAppliedState(this.cluster.replica(preferred).dbFile,
+        this.partitionId)?.appliedIndex > 0,
+    {rounds: ELECTION_ROUNDS});
     if (!elected) {
       throw new Error(`setup: ${preferred} did not become leader`);
     }

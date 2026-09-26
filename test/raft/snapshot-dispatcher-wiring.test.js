@@ -41,6 +41,8 @@ import {
 } from '../../src/transport/inproc-transport.js';
 import {createSealedSourceGeneration} from './snapshot-catchup-fixture.js';
 import {waitForCondition} from './bulk-transfer-socket-fixture.js';
+import {genesisStamp} from
+  '../../src/raft/raft-committed-membership-stamp.js';
 
 // S6 Phase A link 2 guard (quest raft-snapshot-live-rebuild): the
 // onSnapshotCatchupNeeded dispatcher seam is set on services built through
@@ -201,6 +203,7 @@ test('PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam',
           tableName: STATE_TABLE,
           replicaId: REPLICA_ID,
           replicaIds: [REPLICA_ID],
+          bootstrapMembership: genesisStamp([REPLICA_ID]),
           nodeId: NODE_ID,
           dbPath,
           schema: {

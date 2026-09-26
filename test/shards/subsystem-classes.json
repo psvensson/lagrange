@@ -28,7 +28,7 @@
   "censusSize": 2224,
   "digest": "fnv1a32-24788f25",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-600a268e",
+  "observationDigest": "fnv1a32-d01c95a1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7423,6 +7423,7 @@
     },
     "test/raft/raft-rs-backend/operation-port-throw-containment.test.js": {
       "files": [
+        "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-provider-contract-constants.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
         "src/raft/raft-rs-runtime-tuning.js"
@@ -7445,6 +7446,7 @@
       "files": [
         "src/partition/partition-service-core-base.js",
         "src/partition/partition-service.js",
+        "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port.js"
       ],
@@ -7643,6 +7645,11 @@
       ],
       "directories": [
         "data"
+      ]
+    },
+    "test/raft/snapshot-dispatcher-wiring.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js"
       ]
     },
     "test/raft/snapshot-gated-compaction-catchup.test.js": {
