@@ -9,7 +9,7 @@
     "cli-tooling": 96,
     "control-plane": 193,
     "convergence-topology": 91,
-    "distributed-harness": 168,
+    "distributed-harness": 169,
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 240,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2173,
-  "digest": "fnv1a32-2521e821",
+  "censusSize": 2174,
+  "digest": "fnv1a32-2f638b49",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-e35a3412",
+  "observationDigest": "fnv1a32-dc92351f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -826,6 +826,7 @@
     "test/distributed/harness/__tests__/disk-full-under-load-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/distributed-failure-analyzer-load-metrics-fallback.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/distributed-matrix-plan.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/docker-build-context.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/docker-provider.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/examples-catalog-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/failure-bundle-dominant-reason-denoise.test.js": "distributed-harness",
@@ -4006,8 +4007,6 @@
     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -4096,8 +4095,6 @@
     "test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4118,8 +4115,6 @@
     "test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4140,8 +4135,6 @@
     "test/distributed/harness/__tests__/cluster-active-gate-selected-transport-closed-owner-recovery-projection.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4162,8 +4155,6 @@
     "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4184,8 +4175,6 @@
     "test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4206,8 +4195,6 @@
     "test/distributed/harness/__tests__/cluster-active-wait-bounded-diagnostics-retention.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -4218,8 +4205,6 @@
     "test/distributed/harness/__tests__/cluster-active-wait-readiness-failure.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
@@ -4231,8 +4216,6 @@
     "test/distributed/harness/__tests__/cluster-active-wait-snapshot-retention.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
@@ -4244,8 +4227,6 @@
     "test/distributed/harness/__tests__/cluster-bootstrap-api-wait.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4266,8 +4247,6 @@
     "test/distributed/harness/__tests__/cluster-control-snapshot-owner-recovery-late-floor.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-constants.js",
         "src/admin/static/playback-viewer.html",
@@ -4290,8 +4269,6 @@
     "test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4312,8 +4289,6 @@
     "test/distributed/harness/__tests__/cluster-lifecycle-active-wait-suite.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4334,8 +4309,6 @@
     "test/distributed/harness/__tests__/cluster-load-readiness-no-progress-elapsed-budget.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4356,8 +4329,6 @@
     "test/distributed/harness/__tests__/cluster-load-readiness-stable-window-forward-dating.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
@@ -4369,8 +4340,6 @@
     "test/distributed/harness/__tests__/cluster-log-incarnation-restart-order.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4391,8 +4360,6 @@
     "test/distributed/harness/__tests__/cluster-node-handle-query.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4413,8 +4380,6 @@
     "test/distributed/harness/__tests__/cluster-partition-env.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4435,8 +4400,6 @@
     "test/distributed/harness/__tests__/cluster-probe-active-state-readiness.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4457,8 +4420,6 @@
     "test/distributed/harness/__tests__/cluster-probe-control-snapshot-coverage.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4479,8 +4440,6 @@
     "test/distributed/harness/__tests__/cluster-probe-load-publication-gate.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4501,8 +4460,6 @@
     "test/distributed/harness/__tests__/cluster-probe-startup-snapshot-projection.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4523,8 +4480,6 @@
     "test/distributed/harness/__tests__/cluster-publication-membership-count.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4545,8 +4500,6 @@
     "test/distributed/harness/__tests__/cluster-quiescence-observer-cohort.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4567,8 +4520,6 @@
     "test/distributed/harness/__tests__/cluster-restart-recovery-held.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4589,8 +4540,6 @@
     "test/distributed/harness/__tests__/cluster-runtime-environment-allowlist.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4611,8 +4560,6 @@
     "test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4634,8 +4581,6 @@
     "test/distributed/harness/__tests__/cluster-stop-load-config-readiness.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4656,8 +4601,6 @@
     "test/distributed/harness/__tests__/cluster.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4747,6 +4690,13 @@
       ],
       "directories": [
         "test/distributed/config"
+      ]
+    },
+    "test/distributed/harness/__tests__/docker-build-context.test.js": {
+      "files": [
+        "Dockerfile",
+        "package-lock.json",
+        "package.json"
       ]
     },
     "test/distributed/harness/__tests__/docker-provider.test.js": {
@@ -4882,8 +4832,6 @@
     "test/distributed/harness/__tests__/logging-publication-queue-source-identity.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-control-snapshot.js",
         "src/admin/static/playback-viewer.html",
@@ -4914,8 +4862,6 @@
     "test/distributed/harness/__tests__/memory-soak-enforcement-oracle.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4959,8 +4905,6 @@
     "test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5239,8 +5183,6 @@
     "test/distributed/harness/__tests__/restart-recovery-handoff-failure-barrier.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5287,8 +5229,6 @@
       "files": [
         ".dockerignore",
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5441,8 +5381,6 @@
     "test/distributed/harness/__tests__/startup-runtime-handoff-readiness-projection.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
@@ -5535,8 +5473,6 @@
     "test/distributed/harness/__tests__/unexpected-node-exit-sweep.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5604,8 +5540,6 @@
     "test/distributed/harness/transaction-recovery-poison-row-live-contract.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/static/playback-viewer.html",
         "src/query/query-constants.js",
         "src/utils/canonical-json-data.js",
@@ -5737,8 +5671,6 @@
     "test/helm/lagrange-node-admin-default-deny.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/static/playback-viewer.html",
         "src/cli/USER_GUIDE.md",
         "src/cli/cli-constants.js",
@@ -9668,8 +9600,6 @@
     "test/scripts/stop-distributed-harness-containers.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "scripts/rerun-failed-distributed-scenarios.sh",
         "scripts/run-all-distributed-scenarios.sh",
         "src/admin/static/playback-viewer.html",

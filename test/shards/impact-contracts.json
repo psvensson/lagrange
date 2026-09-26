@@ -570,6 +570,17 @@
       "tests": [
         "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js"
       ]
+    },
+    "harness-docker-build-context": {
+      "description": "The distributed-harness image build context is derived from the Dockerfile's COPY sources; changing either must re-run the parity falsifier.",
+      "owners": [
+        "Dockerfile",
+        "test/distributed/harness/docker-build-context.js"
+      ],
+      "tests": [
+        "test/distributed/harness/__tests__/docker-build-context.test.js",
+        "test/distributed/harness/__tests__/docker-provider.test.js"
+      ]
     }
   },
   "coupledPairs": {
