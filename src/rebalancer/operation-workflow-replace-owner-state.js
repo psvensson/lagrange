@@ -15,6 +15,10 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {replaceReplicaIdsOf} from './operation-workflow-replace-witness.js';
 import {
+  ReplicaOperationField,
+  ReplicaOperationVisibilityClass,
+} from './replica-operation-constants.js';
+import {
   REPLACE_ATTEMPT_NOT_REBUILT,
   REPLACE_NOT_IN_OWNER_PHASE,
   REPLACE_OWNER_STALENESS_CLASS,
@@ -189,8 +193,21 @@ function releaseAllReplaceOwnerState(owner) {
   STATE_BY_OWNER.delete(owner);
 }
 
+/**
+ * BR12: whether the owner holds this copy only as a deferred-visibility
+ * snapshot; an effect boundary (the removal effect, a handoff issue) waits
+ * on it.
+ * @param {Object} operation
+ * @return {boolean}
+ */
+function isDeferredVisibilitySnapshot(operation) {
+  return operation?.[ReplicaOperationField.VISIBILITY_CLASS] ===
+    ReplicaOperationVisibilityClass.DEFERRED_SNAPSHOT;
+}
+
 export {
   REPLACE_DIAGNOSTIC_SEVERITY,
+  isDeferredVisibilitySnapshot,
   REPLACE_INTENT_FIELD,
   REPLACE_REMOVAL_PENDING_ESCALATION_MS,
   nowMsOf,

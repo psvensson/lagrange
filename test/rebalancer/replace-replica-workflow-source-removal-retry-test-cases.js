@@ -420,6 +420,22 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
 
         sourceRemovalBlocked = false;
         await deferredTimers[0].fn();
+        for (let attempt = 0; attempt < 10; attempt++) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+        // SUPERSEDED (R09), quest replace-source-removal-owner, BR12: this
+        // retry used to act on its deferred-visibility snapshot and send the
+        // source removal. The deferred class now WAITS at the effect
+        // boundary; the owner's next fire, on a fresh read, sends it.
+        t.equal(
+          deliveries.length,
+          1,
+          'the retry that read deferred visibility sends no source removal',
+        );
+        const freshRetry = deferredTimers.at(-1);
+        t.not(freshRetry, deferredTimers[0],
+          'the waiting owner re-arms its fallback');
+        await freshRetry.fn();
         for (let attempt = 0; attempt < 10 && deliveries.length < 2; attempt++) {
           await new Promise((resolve) => setImmediate(resolve));
         }
@@ -429,7 +445,7 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
         t.equal(
           deliveries.length,
           2,
-          'the deferred retry should recover from deferred empty visibility and continue with source removal',
+          'the next retry, on a fresh read, continues with source removal',
         );
         t.equal(
           deliveries[1]?.payload?.type,

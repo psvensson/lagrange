@@ -305,3 +305,22 @@ test('no retarget: a target that reports its replica missing fails the ' +
     await harness.shutdown();
   }
 });
+
+test('BR12: no handoff leaves on a deferred-visibility snapshot', async (t) => {
+  const harness = await createHarness();
+  try {
+    await harness.coordinator.repository.persistOperationUpdate(
+      harness.operation);
+    const snapshot = harness.owner.resolveDeferredRetryVisibleOperation(
+      {operation: null, deferredOutcome: {reasonCode: 'visibility_deferred'}},
+      harness.operation);
+    await harness.coordinator.executeOperation(snapshot);
+    t.equal(harness.stepDowns().length, 0,
+      'the deferred snapshot issues no handoff');
+    await harness.coordinator.executeOperation(harness.operation);
+    t.equal(harness.stepDowns().length, 1,
+      'control: the fresh copy issues the named-target handoff');
+  } finally {
+    await harness.shutdown();
+  }
+});

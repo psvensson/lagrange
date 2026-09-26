@@ -55,6 +55,7 @@ import {
 } from './operation-workflow-replace-handoff-attempt.js';
 import {
   REPLACE_INTENT_FIELD,
+  isDeferredVisibilitySnapshot,
   REPLACE_REMOVAL_PENDING_ESCALATION_MS,
   nowMsOf,
   readOwnerState,
@@ -121,6 +122,8 @@ const REPLACE_WAIT_REASON = Object.freeze({
   TARGET_DEAD_WITNESS_UNAVAILABLE: 'target_dead_witness_unavailable',
   REMOVAL_INTENT_NOT_DURABLE: 'removal_intent_not_durable',
   EFFECT_REVALIDATION_MOVED: 'effect_revalidation_inputs_moved',
+  // BR12: the owner's copy is a deferred-visibility snapshot.
+  DEFERRED_VISIBILITY: 'deferred_visibility_snapshot',
   // A former step or operation budget elapsed while no other wait was
   // recorded (a diagnostic only).
   BUDGET_ELAPSED: 'former_time_budget_elapsed',
@@ -609,6 +612,9 @@ function waitAdmission(reason, witness = null) {
  * @return {Object} Frozen admission.
  */
 function revalidateReplaceSourceRemovalEffect(owner, operation, entryLevel) {
+  if (isDeferredVisibilitySnapshot(operation)) {
+    return waitAdmission(REPLACE_WAIT_REASON.DEFERRED_VISIBILITY);
+  }
   if (isReplaceOperationTerminalObserved(owner, operation) ||
       operation.workflowStep !== WORKFLOW_STEP.STOPPING ||
       isTargetFailureDetectorDead(owner, operation)) {
@@ -635,6 +641,10 @@ function revalidateReplaceSourceRemovalEffect(owner, operation, entryLevel) {
  * @return {Promise<Object>} Frozen {admission, reason?, witness?}.
  */
 async function admitReplaceSourceRemovalEffect(owner, operation, entryLevel) {
+  if (isDeferredVisibilitySnapshot(operation)) {
+    // BR12: no intent and no effect from a deferred snapshot.
+    return waitAdmission(REPLACE_WAIT_REASON.DEFERRED_VISIBILITY);
+  }
   if (operation.workflowStep === WORKFLOW_STEP.ACTIVE) {
     const witness = await readReplaceWitnessMembership(owner, operation);
     if (witness.state !== PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER &&

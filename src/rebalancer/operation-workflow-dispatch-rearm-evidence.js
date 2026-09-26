@@ -1,5 +1,9 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
+  ReplicaOperationField,
+  ReplicaOperationVisibilityClass,
+} from './replica-operation-constants.js';
+import {
   CREATE_REARM_DISPATCH_OPERATION_TYPES,
   DISPATCH_PENDING_WORKFLOW_STEPS,
   REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS,
@@ -463,7 +467,13 @@ function resolveDeferredRetryVisibleOperation(
     return visibilityObservation.operation;
   }
   if (visibilityObservation?.deferredOutcome && fallbackOperation) {
-    return owner.cloneOperationSnapshot(fallbackOperation);
+    // BR12: the copy is the previous snapshot, marked as such so an effect
+    // boundary waits on it rather than acting.
+    return {
+      ...owner.cloneOperationSnapshot(fallbackOperation),
+      [ReplicaOperationField.VISIBILITY_CLASS]:
+        ReplicaOperationVisibilityClass.DEFERRED_SNAPSHOT,
+    };
   }
   return null;
 }

@@ -12,6 +12,9 @@ import {
 } from './operation-workflow-replace-handoff-attempt.js';
 import {isPartitionReplace} from './operation-workflow-replace-owner.js';
 import {
+  isDeferredVisibilitySnapshot,
+} from './operation-workflow-replace-owner-state.js';
+import {
   readReplaceWitnessMembership,
   replaceReplicaIdsOf,
 } from './operation-workflow-replace-witness.js';
@@ -308,6 +311,10 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
    * @return {boolean}
    */
   isReplaceHandoffStillOwned(operation) {
+    if (isDeferredVisibilitySnapshot(operation)) {
+      // BR12: a deferred-visibility snapshot issues no handoff.
+      return false;
+    }
     const cachedRow = this.repository.getReplicaOperationRowFromCache?.(
       operation.operationId) || null;
     const cachedTerminal = cachedRow !== null &&

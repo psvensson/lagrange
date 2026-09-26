@@ -650,3 +650,35 @@ test('W12 (D2 pre-effect): target death before the intent fails the ' +
       `target ${targetStatus}: the source is sent no removal`);
   }
 });
+
+// BR12: an operation copy the owner holds only as a deferred-visibility
+// snapshot (the authoritative read deferred; the copy is the previous
+// snapshot) is not grounds for an effect: the removal effect and the
+// handoff both WAIT on it, and a fresh read proceeds.
+async function deferredSnapshotOf(harness) {
+  const fresh = await persistedOperation(harness);
+  return harness.owner.resolveDeferredRetryVisibleOperation(
+    {operation: null, deferredOutcome: {reasonCode: 'visibility_deferred'}},
+    fresh);
+}
+
+test('W13 (BR12): a deferred-visibility snapshot waits at the removal ' +
+  'effect boundary', async (t) => {
+  const harness = await createHarness();
+  try {
+    harness.operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+    harness.operation.status = ReplicaStatus.ACTIVE;
+    await harness.coordinator.repository.persistOperationUpdate(
+      harness.operation);
+    await harness.coordinator.executeOperation(
+      await deferredSnapshotOf(harness));
+    t.equal(removalEffects(harness.deliveries).length, 0,
+      'no REMOVE_REPLICA leaves on a deferred snapshot');
+    await harness.coordinator.executeOperation(
+      await persistedOperation(harness));
+    t.equal(removalEffects(harness.deliveries).length, 1,
+      'control: a fresh read of the same state sends the effect');
+  } finally {
+    await harness.coordinator.shutdown();
+  }
+});
