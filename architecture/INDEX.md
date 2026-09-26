@@ -69,6 +69,7 @@ architecture, read
 | How do nodes form a cluster? | [Bootstrap](bootstrap.md) |
 | How does PostgreSQL-wire ingress work? | [PostgreSQL wire](postgres-wire.md) |
 | Which runtime component owns a concern? | [Runtime components](runtime-components.md) |
+| How does an application operate across nodes without seeing topology? | [Application consumers and the distributed public seam](images-distributed-public-seam.md) |
 
 ## Important current boundaries
 
