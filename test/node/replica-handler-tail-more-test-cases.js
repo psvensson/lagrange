@@ -698,7 +698,11 @@ export async function registerReplicaHandlerTailMoreTests({
       handler.shutdown();
     });
 
-  t.test('handleRemoveReplica continues durable cleanup after retryable removing-status pressure',
+  // Lead ruling (fix-f5 follow-up): a removal effect never proceeds without
+  // a durable REMOVING row. A REMOVING write that exhausts its retry on
+  // retryable pressure defers the REMOVE typed (no outcome, no cleanup);
+  // the durable owner re-dispatches it.
+  t.test('handleRemoveReplica defers the removal when retryable pressure keeps its removing-status write from landing',
     async (t) => {
       const TEST_PRESSURED_REMOVE_OPERATION_ID = 'op-pressured-remove-1';
       const TEST_PRESSURED_REMOVE_PARTITION_ID = 'partition-pressured-remove-1';
@@ -770,11 +774,10 @@ export async function registerReplicaHandlerTailMoreTests({
         },
       });
 
-      const removed = waitForReplicaEvent(
-        handler,
-        'replicaRemoved',
-        'replicaRemovalFailed',
-      );
+      const events = [];
+      handler.on('replicaRemoved', () => events.push('replicaRemoved'));
+      handler.on('replicaRemovalFailed',
+        () => events.push('replicaRemovalFailed'));
 
       const response = await handler.handleRemoveReplica({
         operationId: TEST_PRESSURED_REMOVE_OPERATION_ID,
@@ -788,21 +791,30 @@ export async function registerReplicaHandlerTailMoreTests({
         ReplicaOperationResponseStatus.INITIATED,
         'pressured removing-status write should not reject remove admission',
       );
-      await removed;
+      for (let turn = 0; turn < 20 &&
+        handler.inProgressOperations.size > 0; turn += 1) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
 
       t.equal(
         removingWriteAttempts,
         1,
-        'removing status write should be attempted before durable cleanup',
+        'removing status write is attempted',
       );
-      t.notOk(
-        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_PRESSURED_REMOVE_REPLICA_ID),
-        'durable service row cleanup should still complete',
+      t.equal(handler.inProgressOperations.size, 0,
+        'the REMOVE was answered deferred, not left in progress');
+      t.same(events, [], 'no removal outcome: the operation stays ' +
+        'non-terminal for re-dispatch');
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_PRESSURED_REMOVE_REPLICA_ID)
+          ?.status,
+        ReplicaStatus.ACTIVE,
+        'no cleanup: the durable service row is untouched',
       );
       t.equal(
         handler.getLocalReplica(TEST_PRESSURED_REMOVE_REPLICA_ID)?.status,
-        ReplicaStatus.REMOVED,
-        'local replica tracking should converge to removed',
+        ReplicaStatus.ACTIVE,
+        'local tracking is the durable status again',
       );
 
       handler.shutdown();

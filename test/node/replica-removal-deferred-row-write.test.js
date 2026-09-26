@@ -1,38 +1,42 @@
 /**
- * Verification replace-owner round 1, V2: removeReplicaAsync awaited the
- * consensus exit only when the REMOVING row write landed. A retryable
- * control-plane failure that exhausted the row write's retry answered
- * `published: false`, and the handler retired the port at once - the
- * pre-F2 order - although the wait never reads the row (it reads the port's
- * applied configuration). In a two-voter group {s, t} the RemoveNode(s)
- * then had no second ack.
+ * A removal effect never proceeds without a durable REMOVING row (lead
+ * ruling, mirroring the REPLACE's durable-intent rule; replace-owner round 1
+ * V2 and the fix-f5 follow-up). When the REMOVING write exhausts its retry
+ * on a retryable control-plane failure, the handler neither waits nor
+ * retires: it answers the REMOVE with the typed retryable deferral of its
+ * status-write family (no executor outcome - the operation stays
+ * non-terminal and the durable owner re-dispatches it), clears its
+ * in-progress record, and leaves the port live and the replica a full
+ * consensus participant. The 30 s exit backstop starts only once a REMOVING
+ * row is durable - then the row-driven owner is the one proposer.
  *
- * Now the handler waits whenever its port is live, whatever the row write
- * answered (a FAILED replica still skips it: the failure detector's
- * verdict). The production handler removes a follower of a two-voter group
- * over its real port; its REMOVING write fails retryable; the leader
- * proposes RemoveNode(s) while it waits: the removal commits with s's ack,
- * s leaves on its own applied removal, then retires.
- * Oracles: the leader's durable log fold, s's durable applied configuration
- * at the moment its durable lifecycle row changed.
+ * Production sequence, a two-voter group whose LEADER is removed (its own
+ * row-driven retirement proposes its RemoveNode, round 2 F-1): the first
+ * REMOVE's REMOVING write fails retryable -> deferred, nothing retired, the
+ * source still a committed voter; the re-dispatched REMOVE's write lands ->
+ * the REMOVING row reaches the replicas' row-driven retirement, RemoveNode
+ * commits, the source leaves on its own applied removal and retires.
+ * Oracles: a survivor's durable applied configuration, the source's durable
+ * lifecycle row against its value at setup.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {CDC_OPERATION} from '../../src/constants/index.js';
+import {EXECUTOR_OUTCOME_TYPE} from
+  '../../src/rebalancer/executor-outcome-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
 import {REPLICA_CONSENSUS_EXIT_REASON} from
   '../../src/node/replica-removal-consensus-exit.js';
-import {retirePartitionRaftPeer} from
-  '../../src/partition/partition-service-raft-membership-administration.js';
+import {retireRaftPeerFromAuthoritativeServiceChange} from
+  '../../src/partition/partition-service-raft-peer-cache-reconciliation.js';
 import {PartitionNodeCluster} from
   '../raft/raft-rs-backend/partition-node-cluster.js';
-import {
-  durableAppliedState,
-  durableHardState,
-  foldAt,
-  logFold,
-} from '../raft/raft-rs-backend/committed-membership-oracles.js';
+import {durableAppliedState} from
+  '../raft/raft-rs-backend/committed-membership-oracles.js';
 import {createMockCache} from '../rebalancer/test-helpers.js';
 import {
   createRemovalSourceHandler,
@@ -41,8 +45,9 @@ import {
 
 const PARTITION_ID = 'users-p8';
 const SOURCE = `${PARTITION_ID}-r1`;
-const LEADER = `${PARTITION_ID}-r2`;
+const PEER = `${PARTITION_ID}-r2`;
 const ROUNDS = 400;
+const QUIET_LOGGER = Object.freeze({debug() {}, info() {}, warn() {}});
 
 function serviceRow(replicaId, status) {
   const nodeId = `${replicaId}-node`;
@@ -59,22 +64,23 @@ function nextTurns(turns = 20) {
   return chain;
 }
 
-test('a REMOVING row write deferred by a retryable failure still waits for ' +
-  'the source\'s applied removal before it retires', async (t) => {
+test('a REMOVING row that cannot be made durable defers the REMOVE typed: ' +
+  'no wait, no retirement, port live; the re-dispatched REMOVE completes',
+async (t) => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   ConfigurationManager.getInstance().initialize({});
   LoggingService.getInstance().initialize({level: 'error'});
   const cluster = new PartitionNodeCluster({partitionId: PARTITION_ID,
-    replicaIds: [SOURCE, LEADER]});
-  cluster.tickers = [LEADER];
-  t.ok(cluster.settle(() => cluster.leaderReplicaId() === LEADER,
-    {rounds: ROUNDS}), 'setup: the other voter leads');
-  const peerIds = [SOURCE, LEADER].map((replicaId) =>
-    String(cluster.raftPeerIdOf(replicaId)));
+    replicaIds: [SOURCE, PEER]});
+  cluster.tickers = [SOURCE];
+  t.ok(cluster.settle(() => cluster.leaderReplicaId() === SOURCE &&
+    durableAppliedState(cluster.replica(PEER).dbFile, PARTITION_ID)
+      ?.appliedIndex > 0, {rounds: ROUNDS}), 'setup: the source leads');
+  const sourcePeerId = String(cluster.raftPeerIdOf(SOURCE));
   const cache = createMockCache({services: [
     serviceRow(SOURCE, ReplicaStatus.ACTIVE),
-    serviceRow(LEADER, ReplicaStatus.ACTIVE)]});
+    serviceRow(PEER, ReplicaStatus.ACTIVE)]});
   const source = createRemovalSourceHandler({cluster, replicaId: SOURCE,
     partitionId: PARTITION_ID, nodeId: `${SOURCE}-node`, cache,
     rowOf: (status) => serviceRow(SOURCE, status)});
@@ -85,45 +91,67 @@ test('a REMOVING row write deferred by a retryable failure still waits for ' +
     LoggingService.resetInstance();
   });
   // The REMOVING write exhausts its retry on a retryable control-plane
-  // failure (every other status write goes through).
+  // failure while `rowWriteFails` holds; every other write goes through.
+  const rowWriteFails = {value: true};
   const persist = source.handler.persistReplicaStatusWithRetry
     .bind(source.handler);
   source.handler.persistReplicaStatusWithRetry = async (id, status, data) => {
-    if (status === ReplicaStatus.REMOVING) {
+    if (status === ReplicaStatus.REMOVING && rowWriteFails.value) {
       throw Object.assign(new Error('control-plane write deferred'),
         {deferRetry: true});
     }
     return persist(id, status, data);
   };
   const sourceDb = cluster.replica(SOURCE).dbFile;
-  const leaderDb = cluster.replica(LEADER).dbFile;
   const lifecycleAtSetup = durableLifecycleState(sourceDb, PARTITION_ID);
-  const committedVoters = () => foldAt(logFold(leaderDb, PARTITION_ID,
-    peerIds), Number(durableHardState(leaderDb, PARTITION_ID).commit)).voters;
+  const survivorVoters = () => durableAppliedState(
+    cluster.replica(PEER).dbFile, PARTITION_ID).voters;
+  const removeOutcomes = () => source.outcomes.filter(([type]) =>
+    type === EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED ||
+    type === EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_FAILED);
 
-  await source.removeRequest('op-deferred-row');
+  // The first REMOVE: its REMOVING row cannot be made durable.
+  await source.removeRequest('op-deferred-row-1');
+  await nextTurns();
+  cluster.tickers = [SOURCE, PEER];
+  cluster.settle(() => false, {rounds: 40});
   await nextTurns();
   t.not(cache.get('services', SOURCE)?.status, ReplicaStatus.REMOVING,
     'setup: the REMOVING row write did not land');
+  t.equal(source.handler.inProgressOperations.size, 0,
+    'the REMOVE was answered (deferred), not left waiting');
+  t.same(removeOutcomes(), [],
+    'no terminal outcome: the operation stays non-terminal for re-dispatch');
+  t.same(source.exits, [], 'no consensus-exit wait was entered');
   t.equal(durableLifecycleState(sourceDb, PARTITION_ID), lifecycleAtSetup,
-    'the source is not retired while the committed configuration names it');
+    'the source is not retired');
+  t.equal(cluster.node(SOURCE).readStatus().outcome,
+    RAFT_OPERATION_OUTCOME.CORE_OK, 'its port is live');
+  t.ok(survivorVoters().includes(sourcePeerId),
+    'it is still a committed voter');
 
-  await retirePartitionRaftPeer({raft: cluster.node(LEADER),
-    partitionId: PARTITION_ID, replicaId: LEADER}, SOURCE);
-  let retiredWithApplied = null;
-  for (let round = 0; round < 40 && retiredWithApplied === null; round += 1) {
+  // The durable owner re-dispatches; the REMOVING write now lands.
+  rowWriteFails.value = false;
+  await source.removeRequest('op-deferred-row-2');
+  await nextTurns();
+  const retiringRow = cache.get('services', SOURCE);
+  t.equal(retiringRow?.status, ReplicaStatus.REMOVING,
+    'the re-dispatched REMOVE made the REMOVING row durable');
+  for (const replicaId of [SOURCE, PEER]) {
+    retireRaftPeerFromAuthoritativeServiceChange({
+      raft: cluster.node(replicaId), replicaId, partitionId: PARTITION_ID,
+      replicaIds: [SOURCE, PEER], peerAddresses: [], logger: QUIET_LOGGER,
+    }, CDC_OPERATION.UPDATE, retiringRow);
+  }
+  for (let round = 0; round < 40 && source.exits.length === 0; round += 1) {
     cluster.settle(() => false, {rounds: 10});
     await nextTurns();
-    if (durableLifecycleState(sourceDb, PARTITION_ID) !== lifecycleAtSetup) {
-      retiredWithApplied =
-        durableAppliedState(sourceDb, PARTITION_ID).voters;
-    }
   }
-  t.same(committedVoters(), [peerIds[1]],
-    'RemoveNode(source) committed in {source, leader}: the source acked it');
-  t.same(retiredWithApplied, [peerIds[1]],
-    'when it retired, its own applied configuration no longer named it');
+  t.notOk(survivorVoters().includes(sourcePeerId),
+    'RemoveNode(source) committed');
   t.same(source.exits.map((exit) => exit.reason),
     [REPLICA_CONSENSUS_EXIT_REASON.REMOVAL_APPLIED],
-    'it left consensus on its own applied removal');
+    'the source left consensus on its own applied removal');
+  t.not(durableLifecycleState(sourceDb, PARTITION_ID), lifecycleAtSetup,
+    'then it retired');
 });

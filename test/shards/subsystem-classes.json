@@ -28,7 +28,7 @@
   "censusSize": 2235,
   "digest": "fnv1a32-6a3e8fe3",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f2908a1f",
+  "observationDigest": "fnv1a32-8d34e360",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -6470,12 +6470,15 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/node/replica-handler-constants.js",
         "src/node/replica-removal-consensus-exit.js",
-        "src/partition/partition-service-raft-membership-administration.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
