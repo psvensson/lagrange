@@ -39,6 +39,7 @@
  *   Physical-leadership witness — only recorded exact-target election
  *                           evidence CONTINUEs a remove-safety handoff.
  */
+import {createReplaceWitness} from '../rebalancer/replace-witness-fixture.js';
 import t from 'tap';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -576,12 +577,27 @@ t.test(
     owner.repository.replicaOperationAuthoritativeVisibilityTimeoutMs = 5;
     try {
       const durable = await coordinator.queryOperationById('op-terminal-1');
+      // Quest replace-source-removal-owner (R11/A11.1): the repair re-runs
+      // R-1a before it re-asserts a REPLACE's REMOVED, so this REMOVED is one
+      // R-1a admitted: its intent (C0) is recorded and the witness (the
+      // target's own port) reads the source absent.
+      const witness = createReplaceWitness({sourceVoter: false});
+      const baseDeliver = owner.messageRouter.deliver.bind(owner.messageRouter);
+      owner.messageRouter.deliver = async (target, payload, options) =>
+        witness.answer(payload) ?? baseDeliver(target, payload, options);
       const projectedTerminal = {
         ...durable,
         status: 'removed',
         workflowStep: 'REMOVED',
         updatedAt: now + 10,
         completedAt: now + 10,
+        stepsHistory: [...durable.stepsHistory, {
+          step: 'STOPPING',
+          timestamp: now + 5,
+          sourceReplicaId: syncingRow.source_replica_id,
+          replaceRemovalIntent: true,
+          replaceWitnessCommitIndex: witness.commitIndex,
+        }],
       };
 
       // The terminal write never landed durably (failed authoritative

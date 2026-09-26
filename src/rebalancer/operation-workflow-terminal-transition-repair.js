@@ -7,7 +7,7 @@ import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
 } from './replica-operation-update-disposition.js';
 import {
-  isReplaceTerminalRepairAdmitted,
+  admitReplaceTerminalRepair,
 } from './operation-workflow-replace-terminal-admission.js';
 
 const {
@@ -229,8 +229,9 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
       if (!heldState || owner.isShuttingDown) {
         return;
       }
-      if (!await isReplaceTerminalRepairAdmitted(owner,
-        heldState.projectedOperation, heldState.persistOptions)) {
+      const repairAdmission = await admitReplaceTerminalRepair(owner,
+        heldState.projectedOperation, heldState.persistOptions);
+      if (!repairAdmission.admitted) {
         // The REPLACE owner decides this terminal again from fresh state;
         // the retained one is not re-asserted (R11).
         owner.logger.warn(
@@ -246,7 +247,7 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
       const persistResult = await owner.repository.persistOperationUpdate(
         heldState.projectedOperation,
         {
-          ...heldState.persistOptions,
+          ...repairAdmission.persistOptions,
           terminalTransition: true,
           confirmPersistence: false,
           disableSystemWriteSession: true,

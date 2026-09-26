@@ -64,30 +64,46 @@ async function admitReplaceTerminalFailure(owner, operation, options = {}) {
  * R11 / A11.1: the terminal-transition repair re-asserts a retained terminal
  * projection later; for a partition REPLACE it is never a second route to a
  * terminal. A retained REMOVED is re-decided by R-1a now; a retained FAILED
- * is written only as the CAS it was admitted with, and only while the
- * durable row still holds that step.
+ * is written only as the step CAS it was admitted with, while the durable
+ * row still holds that step.
+ * The repair's admission and the options its write carries. A retained
+ * FAILED armed without admission options (an older arm) is admitted again
+ * now, from the durable step, exactly as failOperation admits it.
  * @param {Object} owner
- * @param {Object} projectedOperation - The retained terminal projection.
- * @param {Object} persistOptions - The options the terminal was admitted
- *   with ({expectedWorkflowStep} for a REPLACE FAILED).
- * @return {Promise<boolean>} Whether the repair may re-assert it.
+ * @param {Object} projectedOperation
+ * @param {Object} persistOptions
+ * @return {Promise<Object>} Frozen {admitted, persistOptions}.
  */
-async function isReplaceTerminalRepairAdmitted(owner, projectedOperation,
+async function admitReplaceTerminalRepair(owner, projectedOperation,
   persistOptions = {}) {
   if (!isPartitionReplace(projectedOperation)) {
-    return true;
+    return Object.freeze({admitted: true, persistOptions});
   }
   if (projectedOperation.workflowStep === WORKFLOW_STEP.REMOVED) {
     const decision = await decideReplaceCompletion(owner, projectedOperation);
-    return decision.verdict === REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED;
+    return Object.freeze({
+      admitted: decision.verdict === REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED,
+      persistOptions,
+    });
   }
+  const durableStep = await readReplaceDurableStep(owner, projectedOperation);
   const expectedStep = persistOptions.expectedWorkflowStep;
-  return typeof expectedStep === 'string' &&
-    await readReplaceDurableStep(owner, projectedOperation) === expectedStep;
+  if (typeof expectedStep === 'string') {
+    return Object.freeze({admitted: durableStep === expectedStep,
+      persistOptions});
+  }
+  const admission = await admitReplaceTerminalFailure(owner,
+    {...projectedOperation, workflowStep: durableStep},
+    {replacePostIntentFailure: projectedOperation.errorMessage});
+  return Object.freeze({
+    admitted: admission.admitted,
+    persistOptions: {...persistOptions,
+      expectedWorkflowStep: admission.expectedWorkflowStep},
+  });
 }
 
 export {
   admitReplaceTerminalFailure,
-  isReplaceTerminalRepairAdmitted,
+  admitReplaceTerminalRepair,
   readReplaceDurableStep,
 };
