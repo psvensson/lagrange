@@ -2,9 +2,14 @@ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {raftRsMembershipAdministration} from
   '../raft/raft-rs-membership-administration.js';
 import {
+  COMMITTED_MEMBERSHIP_ANSWER_KIND,
+  COMMITTED_MEMBERSHIP_READ_PURPOSE,
+} from '../raft/raft-committed-membership-constants.js';
+import {
   RAFT_EVENT,
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
   RAFT_MEMBERSHIP_OPERATION,
+  RAFT_OPERATION,
   RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
   RAFT_OPERATION_OUTCOME,
 } from '../raft/raft-operation-port-constants.js';
@@ -226,18 +231,13 @@ function leadershipTransferWindowMaxMsOf(service) {
   return windowMs > 0 ? windowMs : null;
 }
 
-function voterMembershipStateOf(service, status, sourceReplicaIdentity) {
-  const identityOfPeerId = new Map((status.peers || []).map((peer) =>
-    [String(peer.peerId), peer.replicaIdentity]));
-  identityOfPeerId.set(String(status.peerId), service.replicaId);
-  const confState = status.confState || {};
-  const voterIds = [
-    ...(confState.voters || []),
-    ...(confState.votersOutgoing || []),
-  ].map(String);
+// The named voter's state in one committed-membership answer: a voter of
+// the incoming or outgoing configuration, absent, or unresolved when an id of
+// the configuration has no identity this replica reserved.
+function voterMembershipStateOf(answer, sourceReplicaIdentity) {
   let unresolved = false;
-  for (const peerId of voterIds) {
-    const identity = identityOfPeerId.get(peerId);
+  for (const peerId of [...answer.voters, ...answer.votersOutgoing]) {
+    const identity = answer.identities[peerId];
     if (identity === sourceReplicaIdentity) {
       return PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER;
     }
@@ -251,30 +251,36 @@ function voterMembershipStateOf(service, status, sourceReplicaIdentity) {
 }
 
 /**
- * This replica's own committed configuration and leadership, read from its
- * port (the core), with the named voter's state in it. Never a row.
+ * This replica's own committed configuration and leadership, read through
+ * its port's one committed-membership read (a witness read: this replica's
+ * own applied configuration, whether it leads or not), with the named
+ * voter's state in it. Never a row. The observation carries the applied
+ * index of the answered configuration and the participation gate, so its
+ * reader can tell a replica still below its gate (owner decision O1, B12).
  * @param {Object} service - The partition service (the witness replica).
  * @param {string} sourceReplicaIdentity - The voter asked about.
  * @return {Promise<Object>} Frozen observation.
  */
 async function readPartitionReplicaMembership(service, sourceReplicaIdentity) {
-  const status = typeof service?.raft?.readStatus === 'function' ?
-    await service.raft.readStatus() : null;
-  if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK || !status.confState) {
+  const read = service?.raft?.[RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP];
+  const answer = typeof read === 'function' ? await read({
+    purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS}) : null;
+  if (answer?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED) {
     return Object.freeze({
       state: PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE,
       replicaId: service?.replicaId || null,
-      reason: status?.reason || null,
+      reason: answer?.reason || null,
     });
   }
   return Object.freeze({
-    state: voterMembershipStateOf(service, status, sourceReplicaIdentity),
+    state: voterMembershipStateOf(answer, sourceReplicaIdentity),
     replicaId: service.replicaId,
     partitionId: service.partitionId,
-    term: status.term,
-    commitIndex: status.commitIndex,
-    leaderReplicaId: status.leaderId ?? null,
-    role: status.role,
+    term: answer.term,
+    commitIndex: answer.commitIndex,
+    appliedIndex: answer.appliedIndex,
+    gateOpen: answer.gateOpen,
+    leaderReplicaId: answer.leaderId ?? null,
     transferWindowMaxMs: leadershipTransferWindowMaxMsOf(service),
   });
 }
