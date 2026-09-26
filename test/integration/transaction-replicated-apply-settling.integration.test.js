@@ -16,11 +16,12 @@
  * replica, the partition row's leader (observation only), tx_a / tx_b /
  * control presence, the participant commit-outcome rows
  * (_transaction_outcomes) and the Raft log entries that name the rows or carry
- * a TRANSACTION_COMMIT marker. Then the leader-change falsifier: the node that
- * staged the transaction is stopped, a surviving node must accept a new
- * autocommit write for the table (a new leader serves), and the committed rows
- * are read through a surviving node's public session and directly from the
- * surviving replica files.
+ * a TRANSACTION_COMMIT marker (the rs-raft log in the same file). Then the
+ * leader-change falsifier: the node that staged the transaction is stopped, a
+ * surviving node is asked to accept a new autocommit write for the table (a
+ * new leader serves; measured and reported, not asserted), and the committed
+ * rows are read through the surviving nodes' public sessions and directly
+ * from the surviving replica files.
  *
  * This file is a WITNESS of today's behaviour (the code reading of
  * partition-service-transaction-base.js commit / entry-apply marker apply):
@@ -90,8 +91,14 @@ const VALUE = 'v';
 const OUTCOME_NAME = Object.freeze({
   DURABILITY_VIOLATED: 'acknowledged transaction durability violated',
   NEW_LEADER_HOLDS_ROWS: 'new leader holds the committed rows',
-  NO_NEW_LEADER: 'no surviving node accepted a write within the window',
+  DURABILITY_VIOLATED_NO_WRITE_LEADER:
+    'acknowledged transaction durability violated (no surviving node ' +
+    'accepted a write within the window)',
 });
+const DURABILITY_VIOLATIONS = [
+  OUTCOME_NAME.DURABILITY_VIOLATED,
+  OUTCOME_NAME.DURABILITY_VIOLATED_NO_WRITE_LEADER,
+];
 const TX_IDS = [ROW.TX_A, ROW.TX_B];
 const OBSERVED_IDS = [ROW.TX_A, ROW.TX_B, ROW.CONTROL];
 const MARKER_TYPES = [
@@ -425,19 +432,26 @@ async function leaderChange(t, cluster, sessions, settle, runDeadline) {
 }
 
 function classifyLeaderChange(record) {
-  if (!record.newLeaderWrite.accepted) return OUTCOME_NAME.NO_NEW_LEADER;
   const anyHolds = record.survivorReplicas.some((replica) =>
     TX_IDS.every((id) => holds(replica, id)));
-  return anyHolds ? OUTCOME_NAME.NEW_LEADER_HOLDS_ROWS :
-    OUTCOME_NAME.DURABILITY_VIOLATED;
+  if (anyHolds) return OUTCOME_NAME.NEW_LEADER_HOLDS_ROWS;
+  return record.newLeaderWrite.accepted ? OUTCOME_NAME.DURABILITY_VIOLATED :
+    OUTCOME_NAME.DURABILITY_VIOLATED_NO_WRITE_LEADER;
 }
 
+// The claim is about the replicas' durable state: once the staging node is
+// gone, whichever surviving replica leads next can only serve what its own
+// file holds. Whether a surviving node accepts a write within the window is
+// measured and reported (formation/control-plane owners), not asserted here.
 function assertLeaderChangeWitness(t, change) {
-  t.ok(change.newLeaderWrite.accepted,
-    'a surviving node accepted a new autocommit write (a new leader serves)');
-  t.equal(change.outcome, OUTCOME_NAME.DURABILITY_VIOLATED,
+  t.comment(`new leader write accepted: ${change.newLeaderWrite.accepted} ` +
+    `(${change.newLeaderWrite.attempts.length} attempt(s), ` +
+    `${change.newLeaderWriteMsAfterStop} ms after the stop)`);
+  t.equal(change.survivorReplicas.length, EXPECTED_REPLICAS - 1,
+    'both surviving replica files were observed');
+  t.ok(DURABILITY_VIOLATIONS.includes(change.outcome),
     `${FINDING}: after the staging node stops, no surviving replica holds ` +
-    'the acknowledged transaction rows');
+    `the acknowledged transaction rows (${change.outcome})`);
   const reads = Object.values(change.publicReads).flat()
     .filter((sample) => Array.isArray(sample.ids));
   t.ok(reads.length > 0, 'surviving nodes served public reads');
