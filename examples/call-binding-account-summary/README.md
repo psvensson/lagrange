@@ -20,6 +20,30 @@ POST /accounts/summary
 The authored service is one file:
 [`lagrange.service.js`](lagrange.service.js).
 
+Keep that file separate from
+[`run-call-binding-account-summary.js`](run-call-binding-account-summary.js).
+The service file is the application-facing example. The runner is a proof
+harness: it starts a disposable node, creates and splits the table, deploys the
+service, exercises refusal and replay, and checks the results.
+
+## What to notice before reading the code
+
+Four details prevent the most common misreadings:
+
+- The SQL selector is fixed when the operation is deployed. `accountId` does
+  **not** become a SQL parameter; `run()` filters the bounded local row batch.
+- `run()` executes once per selected partition on that partition leader's host.
+  The selected rows stay there.
+- Only values sent through `emit(key, value)` participate in the coordinated
+  result. The object returned by `run()` is per-shard bookkeeping.
+- `reduce()` runs only after every expected shard has produced a valid,
+  disjoint partial set. One failed shard means no partial answer.
+
+A useful reading order in `lagrange.service.js` is `summarizeRun` ->
+`summarizeReduce` -> `handleAccountSummary` -> the final `defineService`
+declaration. That order follows the data from partition-local work back to the
+HTTP response.
+
 ## What the developer writes
 
 ```js

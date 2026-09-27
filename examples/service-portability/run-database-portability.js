@@ -1,5 +1,14 @@
 #!/usr/bin/env node
 
+/**
+ * Compatibility proof harness for the ordinary app/ image.
+ *
+ * Build the application once, run that exact image against stock PostgreSQL and
+ * Lagrange, require identical /rankings results, then verify that bad password
+ * and bad-CA connections fail closed. The harness is Lagrange-aware so the
+ * application does not have to be.
+ */
+
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
 import {randomUUID} from 'node:crypto';

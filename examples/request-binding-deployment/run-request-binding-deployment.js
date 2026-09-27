@@ -1,5 +1,14 @@
 #!/usr/bin/env node
 
+/**
+ * End-to-end proof harness for component.wat.
+ *
+ * The runner builds the readable WAT into a component, boots the real example
+ * node owners, deploys through lifecycle SQL, waits for a ready Cell, and checks
+ * matched, denied, and unmatched HTTP requests. It intentionally uses production
+ * routing/lifecycle pieces so the example proves the real path rather than a mock.
+ */
+
 import assert from 'node:assert/strict';
 import {mkdtemp, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';

@@ -56,12 +56,17 @@ const RATINGS_TOP_QUALITY_SQL = `
   LIMIT 10
 `;
 const TOP_N = 10;
+// Application policy deliberately kept outside SQL. The prior dampens tiny
+// samples; the confidence penalty further favors rankings supported by more
+// observations. The same constants are used by every comparison path.
 const QUALITY_RANKING = Object.freeze({
   priorMean: 3.5,
   priorWeight: 25,
   confidencePenalty: 0.5,
 });
 
+// Score one movie from already-local aggregate statistics. This is the policy
+// Lagrange can apply before exchanging candidates with other shards.
 function confidenceAdjustedScore(avgRating, ratingCount, options = {}) {
   const config = {...QUALITY_RANKING, ...options};
   const count = Number(ratingCount);
@@ -75,6 +80,8 @@ function confidenceAdjustedScore(avgRating, ratingCount, options = {}) {
   return bayesianMean - config.confidencePenalty / Math.sqrt(count);
 }
 
+// Reference implementation for raw rows. The stronger SQL baseline performs
+// this grouping inside PostgreSQL instead of pulling all ratings to the app.
 function aggregateRatings(rows) {
   const stats = new Map();
   for (const row of rows) {
@@ -112,6 +119,8 @@ function normalizeAggregateRow(row) {
   };
 }
 
+// Deterministic tie-breaking matters because the demo compares ordered results
+// across independent execution paths, not merely set membership.
 function rankMovieQuality(aggregateRows, limit = TOP_N) {
   return aggregateRows
     .map(normalizeAggregateRow)

@@ -46,6 +46,20 @@ change. The Lagrange stage runs in a separate application container, uses
 password authentication, validates the server certificate, and keeps the demo
 private key outside the application image.
 
+### Read the application separately from the runner
+
+[`app/server.js`](app/server.js) is intentionally ordinary application code.
+It knows PostgreSQL, not Lagrange. The much larger
+[`run-database-portability.js`](run-database-portability.js) is the harness
+that builds one image, points it at two databases, checks parity, and performs
+the wrong-password and wrong-CA refusal tests.
+
+The application recreates a tiny fixture table inside each `/rankings` request.
+That is a determinism device for this compatibility proof, not a recommended
+production schema pattern. It makes every stage self-contained while exercising
+DDL, parameter binding, transactions, filtering, ordering, and result decoding
+through the same unmodified `pg` client code.
+
 ## Run it
 
 Prerequisites: Node.js 20+ and a running [Docker](https://docs.docker.com/)
