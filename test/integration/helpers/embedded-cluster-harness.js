@@ -288,10 +288,11 @@ async function labelled(label, observation) {
 }
 
 /**
- * Submit the formation write witness exactly once after the readiness owners
- * authorize it. Retrying CREATE TABLE would submit a fresh operation for the
- * same deterministic schema intent after a terminal rejection and obscure
- * the first failure rather than establish readiness.
+ * Submit the formation write witness exactly once after priority placement
+ * establishes the preconditions for an attempt. CREATE remains the mutation
+ * and admission authority. Retrying CREATE TABLE would submit a fresh
+ * operation for the same deterministic schema intent after a terminal
+ * rejection and obscure the first failure rather than establish readiness.
  *
  * @param {Function} queryRows - application query executor
  * @return {Promise<void>}
@@ -597,10 +598,11 @@ function createEmbeddedCluster(t, options = {}) {
       `${expectedCount} active nodes`));
   }
 
-  // Once the canonical readiness owners authorize application mutations,
-  // submit one application-level CREATE TABLE IF NOT EXISTS + INSERT through
-  // the public session on the seed. A rejection is terminal evidence: do not
-  // retry the same deterministic schema intent under a new operation id.
+  // Once current priority placement establishes the preconditions for an
+  // application-write attempt, submit one CREATE TABLE IF NOT EXISTS + INSERT
+  // through the public session on the seed. CREATE remains the mutation and
+  // admission authority. A rejection is terminal evidence: do not retry the
+  // same deterministic schema intent under a new operation id.
   async function waitForApplicationWrites() {
     const startedAt = Date.now();
     await withLogDigest(runApplicationWriteProbe(seedQueryRows));

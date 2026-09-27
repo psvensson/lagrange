@@ -101,10 +101,10 @@ seed-projected `planning_snapshot_refresh_pending` states. Those projections
 are not the canonical formation-completion event.
 
 The remaining preflight was cancelled through the controller rather than
-spending six more formation deadlines. The controller exited 130, the copied
-placement log ends `Terminated`, and a subsequent normal lab fleet probe
-reported tv-dator ready with its machine lock free. The preserved placement
-log is
+spending six more formation deadlines. The copied placement log preserves the
+first file's TAP failure. The controller cancellation exited 130, and a
+subsequent normal lab fleet probe reported tv-dator ready with its machine lock
+free. The preserved placement log is
 `test-output/placement/788fca7cbc2a-mujmpyka-2712098-tv-dator.log`.
 
 The follow-up correction therefore removes the stale per-peer readiness
