@@ -102,6 +102,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       let priorMutationDeliveryMayHaveBeenAttempted = false;
       const shouldRetryDeferredCanonicalMutation =
         this.canUseReplicaOperationMutationIngress(mutation?.operation);
+      const operationCreationInsert =
+        mutation?.operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT;
       while (true) {
         const queryOptions = this.buildOperationMutationQueryOptions(
           options,
@@ -123,7 +125,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         const preSubmissionRouteUnavailable =
           result?.deliveryDisposition ===
             QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE;
-        if (!preSubmissionRouteUnavailable) {
+        if (operationCreationInsert && !preSubmissionRouteUnavailable) {
           priorMutationDeliveryMayHaveBeenAttempted = true;
         }
         const bindPriorMutationDeliveryAttempt = (failureResult) => ({
@@ -134,7 +136,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           priorMutationDeliveryMayHaveBeenAttempted: true,
         });
         if (!this.isRetryableOperationPersistError(result)) {
-          return preSubmissionRouteUnavailable &&
+          return operationCreationInsert &&
+              preSubmissionRouteUnavailable &&
               priorMutationDeliveryMayHaveBeenAttempted ?
             bindPriorMutationDeliveryAttempt(result) : result;
         }
@@ -145,13 +148,16 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         if (recoveredAfterRetryableFailure) {
           return {success: true, recoveredAfterRetryableFailure: true};
         }
-        // A canonical zero-candidate outcome proves this invocation stopped
-        // before delivery. Do not retry it into a later invocation that could
-        // submit and erase that pre-effect fact. Conversely, an earlier
-        // non-pre-submission result makes the aggregate attempt ambiguous;
-        // retain that monotonic evidence so a later zero-candidate result
-        // cannot be translated into operation-creation re-entry.
-        if (preSubmissionRouteUnavailable) {
+        // For the operation-creation INSERT, a canonical zero-candidate
+        // outcome proves this invocation stopped before delivery. Do not retry
+        // it into a later invocation that could submit and erase that
+        // pre-effect fact. Conversely, an earlier non-pre-submission result
+        // makes the aggregate attempt ambiguous; retain that monotonic
+        // evidence so a later zero-candidate result cannot be translated into
+        // operation-creation re-entry. Lifecycle UPDATEs keep their existing
+        // bounded retry owner: this disposition proves the current UPDATE was
+        // never submitted, so its next invocation is not mutation replay.
+        if (operationCreationInsert && preSubmissionRouteUnavailable) {
           return priorMutationDeliveryMayHaveBeenAttempted ?
             bindPriorMutationDeliveryAttempt(result) : result;
         }
