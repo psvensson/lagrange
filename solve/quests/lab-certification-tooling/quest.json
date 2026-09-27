@@ -1,0 +1,42 @@
+{
+  "schema": "solve-quest/2",
+  "id": "lab-certification-tooling",
+  "class": "process",
+  "epic": "apparatus-release-consolidation",
+  "statement": "The existing home-lab test owner provides a sanctioned exact-commit certification verb: an operator can run one named classified test file or the canonical convergence-probes shard on an explicitly named ready lab machine at an explicitly named commit, repeat it a positive bounded number of times, and stop after the first red repetition. Every repetition reuses the existing machine-wide lab lock, thermal gate, classified runner, streamed verdicts, and result-ledger collection; changed/all/smoke/gate/postpush behavior remains unchanged, and --base-sha remains valid only for changed.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/lab-certification-tooling/evidence/receipt.json",
+      "requiredReceipts": [
+        "certification-cli-contract",
+        "canonical-and-named-profile-plans",
+        "repeat-and-first-red-policy",
+        "existing-lab-execution-path"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-owner-only",
+      "statement": "Extend scripts/lab/lagrange-lab.js and scripts/lab/probe.js only: no raw SSH entry point, new remote execution mechanism, new loose script, workflow, or lifecycle src/ change."
+    },
+    {
+      "id": "exact-placement-inputs",
+      "statement": "The named-file and convergence-probes profiles refuse unless both --sha and --on are explicit; --sha resolves once to the exact full commit and --on is selected from the fleet discovered for that run."
+    },
+    {
+      "id": "owners-remain-authoritative",
+      "statement": "The canonical convergence-probes shard is read through its existing path owner, test files are classified by the classified runner's plan, and every repetition traverses the existing lock, thermal, classified-runner, streaming, and result-copy path without retry or timeout widening."
+    },
+    {
+      "id": "profiles-preserved",
+      "statement": "Plain changed, smoke, gate, postpush, and all invocations preserve their existing commands; lane/split behavior remains limited to changed/all; --base-sha remains accepted only for changed."
+    },
+    {
+      "id": "bounded-repetitions",
+      "statement": "Repeat is a positive bounded integer. A red repetition remains red; stop-on-first-red stops only later repetitions and never converts, retries, or hides the red result."
+    }
+  ],
+  "sealedAt": "33885263f5214524065d6336a172905d7e81ada4"
+}

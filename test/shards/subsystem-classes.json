@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 147,
     "storage-raft": 95,
-    "test-infrastructure": 135,
+    "test-infrastructure": 137,
     "transactions": 14,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2158,
-  "digest": "fnv1a32-3d93846d",
+  "censusSize": 2160,
+  "digest": "fnv1a32-f548a2f0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-155236e9",
+  "observationDigest": "fnv1a32-96f21979",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1889,7 +1889,9 @@
     "test/scripts/impact-proof-cone.test.js": "test-infrastructure",
     "test/scripts/install-git-hooks-stdout-purity.test.js": "test-infrastructure",
     "test/scripts/inventory-ordinal-segments.test.js": "test-infrastructure",
+    "test/scripts/lab-certification-tooling.test.js": "test-infrastructure",
     "test/scripts/lab-fleet-discovery.test.js": "test-infrastructure",
+    "test/scripts/lab-test-base.test.js": "test-infrastructure",
     "test/scripts/lab-worker-provisioning.test.js": "test-infrastructure",
     "test/scripts/list-commands.test.js": "test-infrastructure",
     "test/scripts/local-corpus.test.js": "test-infrastructure",
@@ -7149,13 +7151,22 @@
         "Dockerfile",
         "README.md",
         "RELEASE.md",
+        "docs/development/home-lab.md",
+        "docs/development/solver-runbook.md",
         "docs/dockerhub-overview.md",
         "package.json",
         "scripts/checks/run-golden-capability-guard-scenarios.js",
+        "scripts/lab/harness.js",
+        "scripts/lab/probe.js",
         "scripts/release-notes.js",
+        "scripts/run-classified-test-files.js",
         "src/public-api.js",
         "test/manifests/project-hardening-proof-manifest.json",
         "test/manifests/project-hardening-proof-postpush-manifest.json"
+      ],
+      "directories": [
+        ".github",
+        "scripts"
       ]
     },
     "test/release/public-api-side-effect-boundary.test.js": {
@@ -7684,6 +7695,7 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -7709,6 +7721,7 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -7748,6 +7761,7 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -8365,9 +8379,14 @@
     "test/scripts/home-lab-cli-guidelines.test.js": {
       "files": [
         "Dockerfile",
+        "package-lock.json",
+        "package.json",
         "scripts/check-guideline-decision-boundaries-baseline.json",
         "scripts/check-guideline-literals-baseline.json",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/lab.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local-three-node.json",
         "test/distributed/config/local.json",
@@ -8378,6 +8397,11 @@
         "scripts/lab",
         "src",
         "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
       ]
     },
     "test/scripts/impact-contract-registry.test.js": {
@@ -8526,12 +8550,41 @@
         "src/query/partition-resolver.js"
       ]
     },
+    "test/scripts/lab-certification-tooling.test.js": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/test-primary-classification-constants.js",
+        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/lab.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/query/distributed-merge-engine.test.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
     "test/scripts/lab-fleet-discovery.test.js": {
       "files": [
         ".github/workflows/full-corpus-canary.yml",
+        "Dockerfile",
         "package-lock.json",
         "package.json",
-        "scripts/run-classified-test-files.js"
+        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local-three-node.json",
+        "test/distributed/config/local.json",
+        "test/distributed/run.js"
       ],
       "env": [
         "APPDATA",
@@ -8541,13 +8594,39 @@
         "XDG_CONFIG_HOME"
       ]
     },
+    "test/scripts/lab-test-base.test.js": {
+      "files": [
+        "Dockerfile",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data",
+        "solve/quests",
+        "src/test-helpers",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
     "test/scripts/lab-worker-provisioning.test.js": {
       "files": [
         ".github/workflows/full-corpus-canary.yml",
         "package-lock.json",
         "package.json",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/lab.js",
-        "scripts/run-classified-test-files.js"
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js"
       ],
       "env": [
         "APPDATA",
@@ -8570,12 +8649,14 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
         "test/shards/primary-classes.json"
       ],
       "directories": [
@@ -8844,6 +8925,7 @@
         "scripts/checks/impact-proof-cone-constants.js",
         "scripts/checks/push-gate-change-proof.js",
         "scripts/checks/test-primary-classification.js",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/checks/test-timeout-declarations.js",
         "scripts/generate-test-primary-classes.js",
         "scripts/generate-test-resource-classes.js",
@@ -9004,8 +9086,10 @@
       "files": [
         "package-lock.json",
         "package.json",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
         "test/address/address-manager.test.js",
         "test/bootstrap/_min-test.test.js",
         "test/examples/service-compiler-account-summary-parity.test.js",
@@ -9133,9 +9217,11 @@
         "package-lock.json",
         "package.json",
         "scripts/check-subsystem.js",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
         "scripts/solve/commands.js",
         "src/query/sql-query-engine.js",
         "src/rebalancer/move-planner.js",
@@ -9161,9 +9247,11 @@
       "files": [
         "package-lock.json",
         "package.json",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
         "test/shards/primary-classes.json",
         "test/shards/selection-golden-corpus.json"
       ],
@@ -9308,13 +9396,19 @@
         "README.md",
         "package-lock.json",
         "package.json",
+        "scripts/checks/test-resource-classification-constants.js",
         "scripts/lab/probe.js",
         "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/query/budget-limit-error.test.js",
         "test/query/distributed-merge-engine.test.js",
-        "test/scripts/check-operation-dispatch-completion-owner.test.js"
+        "test/scripts/check-operation-dispatch-completion-owner.test.js",
+        "test/shards/primary-classes.json"
       ],
       "directories": [
-        "data/storage-load"
+        "data/storage-load",
+        "test"
       ],
       "env": [
         "APPDATA",
