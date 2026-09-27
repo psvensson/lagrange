@@ -113,6 +113,45 @@ function parsePositiveInteger(value, flag) {
   return normalized;
 }
 
+function applyMatrixValueFlag(parsed, arg, next) {
+  if (arg === MATRIX_FLAG.TARGET && next) {
+    parsed.target = next;
+    return MATRIX_FLAG_VALUE_OFFSET;
+  } else if (arg === MATRIX_FLAG.PROFILE && next) {
+    parsed.profile = next;
+    return MATRIX_FLAG_VALUE_OFFSET;
+  } else if (arg === MATRIX_FLAG.NODES && next) {
+    parsed.nodes = csv(next);
+    return MATRIX_FLAG_VALUE_OFFSET;
+  }
+  return undefined;
+}
+
+function applyMatrixConfigFlag(parsed, arg, next) {
+  if (arg === MATRIX_FLAG.NODES_PER_HOST && next) {
+    parsed.nodesPerHost = parsePositiveInteger(next, arg);
+    return MATRIX_FLAG_VALUE_OFFSET;
+  } else if (arg === MATRIX_FLAG.GCP_TEMPLATE && next) {
+    parsed.gcpTemplate = next;
+    return MATRIX_FLAG_VALUE_OFFSET;
+  } else if (arg === MATRIX_FLAG.REPORT_ROOT && next) {
+    parsed.reportRoot = next;
+    return MATRIX_FLAG_VALUE_OFFSET;
+  }
+  return undefined;
+}
+
+function applyMatrixBooleanFlag(parsed, arg) {
+  if (arg === MATRIX_FLAG.DRY_RUN) {
+    parsed.dryRun = true;
+    return MATRIX_FIRST_POSITION;
+  } else if (arg === MATRIX_FLAG.HELP) {
+    parsed.help = true;
+    return MATRIX_FIRST_POSITION;
+  }
+  return undefined;
+}
+
 function parseArgs(argv) {
   const parsed = {
     target: DISTRIBUTED_EXECUTION_TARGET.LOCAL,
@@ -138,30 +177,13 @@ function parseArgs(argv) {
       continue;
     }
     const next = argv[index + MATRIX_FLAG_VALUE_OFFSET];
-    if (arg === MATRIX_FLAG.TARGET && next) {
-      parsed.target = next;
-      index += MATRIX_FLAG_VALUE_OFFSET;
-    } else if (arg === MATRIX_FLAG.PROFILE && next) {
-      parsed.profile = next;
-      index += MATRIX_FLAG_VALUE_OFFSET;
-    } else if (arg === MATRIX_FLAG.NODES && next) {
-      parsed.nodes = csv(next);
-      index += MATRIX_FLAG_VALUE_OFFSET;
-    } else if (arg === MATRIX_FLAG.NODES_PER_HOST && next) {
-      parsed.nodesPerHost = parsePositiveInteger(next, arg);
-      index += MATRIX_FLAG_VALUE_OFFSET;
-    } else if (arg === MATRIX_FLAG.GCP_TEMPLATE && next) {
-      parsed.gcpTemplate = next;
-      index += MATRIX_FLAG_VALUE_OFFSET;
-    } else if (arg === MATRIX_FLAG.REPORT_ROOT && next) {
-      parsed.reportRoot = next;
-      index += MATRIX_FLAG_VALUE_OFFSET;
-    } else if (arg === MATRIX_FLAG.DRY_RUN) {
-      parsed.dryRun = true;
-    } else if (arg === MATRIX_FLAG.HELP) {
-      parsed.help = true;
-    } else {
+    const consumed = applyMatrixValueFlag(parsed, arg, next) ??
+      applyMatrixConfigFlag(parsed, arg, next) ??
+      applyMatrixBooleanFlag(parsed, arg);
+    if (consumed === undefined) {
       parsed.passthrough.push(arg);
+    } else {
+      index += consumed;
     }
   }
 
