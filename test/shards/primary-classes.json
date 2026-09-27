@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 1909,
-    "integration": 79,
+    "integration": 80,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2177,
-  "digest": "fnv1a32-2b25171d",
+  "censusSize": 2178,
+  "digest": "fnv1a32-2b744fa4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -963,6 +963,7 @@
     "test/integration/leader-routable-system-writes.integration.test.js": "integration",
     "test/integration/load-channel-resilience.integration.test.js": "integration",
     "test/integration/managed-split-admission-reliability.integration.test.js": "integration",
+    "test/integration/membership-consistency-publication-wait.test.js": "integration",
     "test/integration/membership-consistency.integration.test.js": "integration",
     "test/integration/message-group-multi-join-formation.integration.test.js": "convergence-probe",
     "test/integration/message-group-service-handler-services-row.integration.test.js": "integration",

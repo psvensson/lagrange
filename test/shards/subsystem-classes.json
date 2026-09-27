@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 252,
+    "bootstrap-membership": 253,
     "cdc-metadata": 56,
     "cli-tooling": 96,
     "control-plane": 193,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2177,
-  "digest": "fnv1a32-281521e8",
+  "censusSize": 2178,
+  "digest": "fnv1a32-c1a8fb1a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3e0f37ee",
+  "observationDigest": "fnv1a32-6fb925c1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -982,6 +982,7 @@
     "test/integration/leader-routable-system-writes.integration.test.js": "query-sql",
     "test/integration/load-channel-resilience.integration.test.js": "transport-messaging",
     "test/integration/managed-split-admission-reliability.integration.test.js": "storage-partition",
+    "test/integration/membership-consistency-publication-wait.test.js": "bootstrap-membership",
     "test/integration/membership-consistency.integration.test.js": "bootstrap-membership",
     "test/integration/message-group-multi-join-formation.integration.test.js": "transport-messaging",
     "test/integration/message-group-service-handler-services-row.integration.test.js": "services-runtime",
@@ -5902,6 +5903,16 @@
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json"
+      ]
+    },
+    "test/integration/membership-consistency-publication-wait.test.js": {
+      "files": [
+        "src/control-plane/active-node-publication-snapshots.js",
+        "src/control-plane/control-plane-gateway-registry.js",
+        "src/control-plane/control-plane-publications-leadership.js",
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/diagnostics/formation-turn-attribution.js"
       ]
     },
     "test/integration/membership-consistency.integration.test.js": {

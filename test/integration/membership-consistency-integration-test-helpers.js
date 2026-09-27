@@ -14,10 +14,13 @@ import {NODE_STATUS} from '../../src/node/node-constants.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {STATE, TABLES} from '../../src/constants/index.js';
 import {
-  MEMBERSHIP_PUBLICATION_KIND,
+  MEMBERSHIP_PUBLICATION_READ_SOURCE,
   MEMBERSHIP_PUBLICATION_STATUS,
 } from '../../src/control-plane/membership-publication-row-contract.js';
-import {resolvePublishedActiveNodeIds} from
+import {
+  resolveLatestPublicationRow,
+  resolvePublishedActiveNodeIds,
+} from
   '../../src/control-plane/active-node-publication-snapshots.js';
 import {getRegisteredControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-gateway-registry.js';
@@ -495,51 +498,6 @@ async function waitForPlacementEligible(readinessService, nodeId) {
   });
 }
 
-// Whether the cache holds a settled publication of exactly these members:
-// the latest membership epoch is PUBLISHED (not still collecting its acks)
-// and names them.
-function isPublishedMembershipSettled(cache, expectedNodeIds) {
-  const latestRow = (cache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [])
-    .filter((row) => row.publication_kind === MEMBERSHIP_PUBLICATION_KIND)
-    .reduce((latest, row) =>
-      (!latest || row.publication_epoch > latest.publication_epoch ?
-        row : latest), null);
-  return latestRow?.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
-    (readPublishedActiveNodeIds(cache) || []).slice().sort().join(',') ===
-      expectedNodeIds;
-}
-
-/**
- * Record every PUBLISHED membership epoch the publication owner commits into
- * the cache, from the cache's own change events (no epoch is missed between
- * polls): epoch -> its members.
- * @param {SystemTableCache} cache
- * @return {object} {hasPublished(nodeId), stop()}
- */
-function recordPublishedMemberships(cache) {
-  const membersByEpoch = new Map();
-  const listener = (tableName, _operation, row) => {
-    if (
-      tableName === TABLES.CONTROL_PLANE_PUBLICATIONS &&
-      row?.publication_kind === MEMBERSHIP_PUBLICATION_KIND &&
-      row?.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED
-    ) {
-      membersByEpoch.set(row.publication_epoch,
-        [...(row.published_active_node_ids || [])]);
-    }
-  };
-  cache.onCacheChange(listener);
-  return {
-    hasPublished(nodeId) {
-      return [...membersByEpoch.values()].some((members) =>
-        members.includes(nodeId));
-    },
-    stop() {
-      cache.offCacheChange(listener);
-    },
-  };
-}
-
 // Whether a rebalancer's own readiness read holds the node eligible: the
 // verdict for the decision dimension it reads, judged by its own rule.
 function isEligibleForReader(readinessService, reader, nodeId) {
@@ -550,42 +508,147 @@ function isEligibleForReader(readinessService, reader, nodeId) {
   );
 }
 
+function normalizedNodeIds(nodeIds) {
+  return [...new Set(Array.isArray(nodeIds) ? nodeIds : [])].sort();
+}
+
+function publicationMatchesPlacement(publication, settledPoint) {
+  if (publication?.status !== MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED) {
+    return false;
+  }
+  const actualNodeIds = normalizedNodeIds(publication.publishedActiveNodeIds);
+  if (Array.isArray(settledPoint.publishedNodeIds)) {
+    return actualNodeIds.join(',') ===
+      normalizedNodeIds(settledPoint.publishedNodeIds).join(',');
+  }
+  return normalizedNodeIds(settledPoint.requiredPublishedNodeIds)
+    .every((nodeId) => actualNodeIds.includes(nodeId));
+}
+
+function publicationPlacementIdentity(publication) {
+  if (!publication) return null;
+  return JSON.stringify([
+    publication.publicationId || null,
+    publication.publicationEpoch || 0,
+    publication.status || null,
+    normalizedNodeIds(publication.publishedActiveNodeIds),
+  ]);
+}
+
+async function readAuthoritativeMembershipPublication(publicationService) {
+  const publication = await publicationService.getLatestClusterPublication({
+    readSource: MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
+  });
+  return resolveLatestPublicationRow({latestPublicationRow: publication});
+}
+
+function terminalPublicationOutcome(publicationService, publication) {
+  const status = publication?.status || null;
+  const terminal = status !== MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
+    publicationService.isTerminalPublicationStatus?.(status) === true;
+  return terminal ? {
+    settled: false,
+    terminal: true,
+    publicationStatus: status,
+    reasonCode: publication.reasonCode || null,
+    value: null,
+  } : null;
+}
+
+function subscribeToReadinessOwner(readinessService, nodeId) {
+  let generation = 0;
+  let release = null;
+  const unsubscribe = readinessService.subscribeReadinessPlanningSnapshots(
+    (event) => {
+      if (event?.ownerKey !== nodeId) return;
+      generation += 1;
+      release?.();
+      release = null;
+    },
+  );
+  return {
+    generation: () => generation,
+    next(observedGeneration) {
+      if (generation !== observedGeneration) return Promise.resolve();
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    },
+    unsubscribe,
+  };
+}
+
+async function tryOwnerFacingPlacement(owners, settledPoint, read) {
+  const publicationService = owners.membershipPublicationService;
+  const readinessService = owners.controlPlaneReadinessService;
+  const firstPublication = await readAuthoritativeMembershipPublication(
+    publicationService,
+  );
+  const firstTerminal = terminalPublicationOutcome(
+    publicationService,
+    firstPublication,
+  );
+  if (firstTerminal) return firstTerminal;
+
+  const dimensions = [...new Set(settledPoint.readers.map((reader) =>
+    reader.resolveNodeReadinessDecisionDimension()))];
+  await Promise.all(dimensions.map((decisionDimension) =>
+    readinessService.getNodeReadiness(settledPoint.eligibleNodeId, {
+      decisionDimension,
+    })));
+
+  const secondPublication = await readAuthoritativeMembershipPublication(
+    publicationService,
+  );
+  const secondTerminal = terminalPublicationOutcome(
+    publicationService,
+    secondPublication,
+  );
+  if (secondTerminal) return secondTerminal;
+  if (
+    publicationPlacementIdentity(firstPublication) !==
+      publicationPlacementIdentity(secondPublication) ||
+    !publicationMatchesPlacement(secondPublication, settledPoint) ||
+    !settledPoint.readers.every((reader) =>
+      isEligibleForReader(
+        readinessService,
+        reader,
+        settledPoint.eligibleNodeId,
+      ))
+  ) {
+    return {settled: false, terminal: false, value: null};
+  }
+  return {settled: true, terminal: false, value: read()};
+}
+
 /**
- * Take a synchronous placement read only at a settled point: the published
- * epoch names exactly `publishedNodeIds` and is PUBLISHED, and every reader
- * (a rebalancer) holds `eligibleNodeId` eligible through its own readiness
- * read. Every publication write returns the readiness verdict to
- * planning_snapshot_refresh_pending until its next evaluation, so the settled
- * point is re-checked after that evaluation and `read` runs in the same
- * synchronous step: no publication can land between the check and the read.
+ * Take a synchronous placement read only at one owner generation. Subscription
+ * precedes the first authoritative publication read, so an event before waiter
+ * registration is covered by the immediate recheck. A weaker readiness result
+ * cannot release the waiter. The publication owner is then read authoritatively
+ * again and its identity plus every reader's synchronous readiness verdict are
+ * checked in the same turn as `read`.
  * @param {object} owners - seedOwners(bootstrapService).
- * @param {object} settledPoint - {publishedNodeIds, eligibleNodeId, readers}.
+ * @param {object} settledPoint - publication and readiness preconditions.
  * @param {Function} read - The synchronous read.
- * @return {Promise<{settled: boolean, value: *}>}
+ * @return {Promise<object>} settled value or terminal publication refusal.
  */
 async function readAtSettledPlacement(owners, settledPoint, read) {
-  const expected = [...settledPoint.publishedNodeIds].sort().join(',');
   const readinessService = owners.controlPlaneReadinessService;
-  const {eligibleNodeId, readers} = settledPoint;
-  let value = null;
-  const settled = await waitForCondition(async () => {
-    if (!isPublishedMembershipSettled(owners.cache, expected)) {
-      return false;
+  const wake = subscribeToReadinessOwner(
+    readinessService,
+    settledPoint.eligibleNodeId,
+  );
+  try {
+    while (true) {
+      const observedGeneration = wake.generation();
+      const outcome = await tryOwnerFacingPlacement(owners, settledPoint, read);
+      if (outcome.settled || outcome.terminal) return outcome;
+      await wake.next(observedGeneration);
     }
-    // The asynchronous owner evaluation schedules the planning snapshot
-    // refresh. The readers' synchronous verdicts are checked below.
-    await readinessService.getNodeReadiness(eligibleNodeId);
-    if (
-      !isPublishedMembershipSettled(owners.cache, expected) ||
-      !readers.every((reader) =>
-        isEligibleForReader(readinessService, reader, eligibleNodeId))
-    ) {
-      return false;
-    }
-    value = read();
-    return true;
-  });
-  return {settled, value};
+  } finally {
+    wake.unsubscribe();
+  }
 }
 
 /**
@@ -626,7 +689,6 @@ export {
   initializeTestEnvironment,
   readAtSettledPlacement,
   readPublishedActiveNodeIds,
-  recordPublishedMemberships,
   seedOwners,
   shutdownOrFail,
   waitForCondition,

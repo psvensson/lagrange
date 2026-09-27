@@ -59,7 +59,6 @@ import {
   initializeTestEnvironment,
   readAtSettledPlacement,
   readPublishedActiveNodeIds,
-  recordPublishedMemberships,
   seedOwners,
   shutdownOrFail,
   waitForCondition,
@@ -243,21 +242,15 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         owners.controlPlaneReadinessService, seedNodeId);
       t.equal(eligible, true, 'readiness owner should hold the seed placement-eligible');
 
-      // A node row READY on a live lease. The publication owner's committed
-      // event proves admission before the fixture expires the lease by a
-      // second committed row update.
-      const publications = recordPublishedMemberships(owners.cache);
+      // A node row READY on a live lease. The publication owner's canonical
+      // read and the readiness owner's snapshot event prove admission before
+      // the fixture expires the lease by a second committed row update.
       const now = Date.now();
       const shortLeaseNode = createNodeEntry('short-lease-node', {
         ready_lease_expires_at: now + TEST_TIMEOUTS.TEST_TIMEOUT,
       });
       await owners.cdcIntegrationService.insertSystemTableRow(
         SYSTEM_TABLE_NAME.NODES, shortLeaseNode);
-      t.equal(await waitForCondition(() =>
-        publications.hasPublished('short-lease-node')), true,
-      'the publication owner publishes the row it witnessed READY on a live ' +
-      'lease');
-      publications.stop();
 
       // The real rebalancer over the seed's real owners
       const rebalancer = new UnifiedRebalancer({
@@ -281,6 +274,14 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       // Record state change to start stabilization
       rebalancer.recordStateChange('test_trigger');
 
+      const livePlacement = await readAtSettledPlacement(owners, {
+        publishedNodeIds: [seedNodeId, 'short-lease-node'],
+        eligibleNodeId: seedNodeId,
+        readers: [rebalancer],
+      }, () => rebalancer.getAvailableNodes().map((node) => node.node_id));
+      t.equal(livePlacement.settled, true,
+        'the publication owner publishes the live member before expiry');
+
       await owners.cdcIntegrationService.updateSystemTableRow(
         SYSTEM_TABLE_NAME.NODES,
         {node_id: 'short-lease-node'},
@@ -290,10 +291,15 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         .getNodeReadiness('short-lease-node');
       t.equal(expiredReadiness?.dimensions?.placementEligible, false,
         'the readiness owner holds the expired member not placement-eligible');
-      // was: 'short-lease node should not be available after lease expiry'
-      t.notOk(rebalancer.getAvailableNodes()
-        .some((node) => node.node_id === 'short-lease-node'),
-      'the placement owner does not offer the member whose lease expired');
+      const afterExpiry = await readAtSettledPlacement(owners, {
+        requiredPublishedNodeIds: [seedNodeId],
+        eligibleNodeId: seedNodeId,
+        readers: [rebalancer],
+      }, () => rebalancer.getAvailableNodes().map((node) => node.node_id));
+      t.equal(afterExpiry.settled, true,
+        'the post-expiry owner generation settles for the rebalancer');
+      t.same(afterExpiry.value, [seedNodeId],
+        'the seed remains available and the expired member is absent');
 
       // Stabilization timing can race with short lease windows under fast tests.
       // Verify API behavior without enforcing a brittle exact timing boundary.
@@ -588,8 +594,6 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         }),
       );
       const publishedNodeIds = [seedNodeId, 'node-2', 'node-3'];
-      t.equal(await waitForPublishedMembership(systemTableCache, publishedNodeIds),
-        true, 'the publication owner publishes the node rows it witnessed READY');
 
       // Create two rebalancers simulating partition leaders on different nodes
       rebalancer1 = new UnifiedRebalancer({

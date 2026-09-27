@@ -345,15 +345,13 @@ back.
 The exact-head publication diagnostic at
 `3ab4accb42cc62051da1042a093b81ac062773d0` failed
 `test/integration/membership-consistency.integration.test.js` on both
-controller attempts. The retained controller summaries are in
-`test-output/reports/test-results.ndjson`; the detailed attempts are
-`.tap/test-results/test/integration/membership-consistency.integration.test.js.attempt-1.tap`
-and the adjacent `.tap`. The first failure in each attempt was the stale
-publication assertion. The same attempts also showed that a raw seed
-publication/cache wait and an independently refreshed placement-eligible
-answer did not establish the atomic owner boundary consumed by a rebalancer:
-one run observed an empty available set after those helpers succeeded, and the
-concurrent rebalancers consequently returned failure.
+controller attempts. The append-only retained summary ledger
+`test-output/reports/test-results.ndjson` records the two original red attempts
+at 109 assertions in 127398 ms and 126774 ms, followed by the later focused
+diagnostic and repair runs. The `.tap/test-results` filenames are mutable runner
+slots and have since been overwritten; they do not retain the original pair
+and are not evidence for it. The first failure named by both retained summary
+records was the stale-publication assertion.
 
 The retained Carinas placement stream is
 `test-output/placement/3ab4accb42cc-mujvd8id-3081823-carinas-windows.log`.
@@ -362,32 +360,47 @@ standalone retry first failed bootstrap on `EADDRINUSE` and then cascaded. That
 retry is infrastructure evidence only; the controller and controller retry
 both bootstrapped successfully and reproduced the publication fixture red.
 
-The stale-window fixture had two valid owner states that its assertion
-collapsed incorrectly. Before the seed-naming publication arrived, the
-follower could either have no membership row yet or hold the preceding real
-`PUBLISHED` epoch with `published_active_node_ids=[]`. The rebalancer correctly
-represented the latter as an empty `Set`, not `null`; in both states the
-semantic fact is that the seed is not yet a published placement member. The
-short-lease and concurrent fixtures likewise treated READY node rows as if
-they would remain unpublished, although the real publication owner can admit
-and publish them.
+This is classification A, a fixture/evidence-owner defect. The observed owner
+timeline was: bootstrap first committed a real empty `PUBLISHED` membership
+epoch; a later epoch named the seed; subsequent READY node-row mutations could
+advance membership again and invalidate the readiness planning generation.
+The old fixture independently accepted a raw cache membership match and a
+placement-eligible answer, then let the rebalancer read after either generation
+had advanced. Those two successful booleans did not prove the same owner
+generation. In the stale window the follower could therefore have no
+membership row or the preceding valid empty published epoch. The rebalancer's
+empty `Set` was a correct representation of the latter, not a production
+defect. The short-lease and concurrent fixtures also incorrectly assumed that
+READY node rows would remain unpublished although the publication owner can
+admit them.
 
 The repair keeps those semantic properties and changes only the test/harness
-owner boundary. It records the publication owner's committed `PUBLISHED`
-event for the live short-lease member, expires that lease with a second
-committed row update, and proves the readiness and placement owners exclude
-the expired member. Concurrent rebalancers now take their synchronous read
-only when the latest membership epoch is `PUBLISHED` with the exact expected
-members and each reader's own readiness decision dimension is current; the
-epoch and readiness facts are rechecked in the same synchronous step as the
-placement read. The stale-window assertion proves the seed is absent rather
-than prescribing the owner's empty-state representation. There is no
-production source change, sleep, timeout increase, retry, resource workaround,
-or weaker rebalance-success assertion.
+owner boundary. The waiter subscribes to the readiness planning owner before
+its first read, reads the latest membership through the publication owner's
+authoritative surface, drives the readers' canonical readiness dimensions,
+then re-reads the publication identity and synchronous readiness in the same
+turn as placement consumption. A terminal owner refusal returns its status and
+reason without opening placement. A publication immediately preceding
+registration is found by the initial authoritative recheck rather than a
+timeout. Deterministic helper proofs cover weaker readiness staying closed,
+canonical publication release, that pre-registration event, terminal failure,
+and exactly-once setup/membership mutation. The lease fixture now also proves
+the exact post-expiry available set remains `[seedNodeId]`; concurrent
+rebalancer success assertions remain unchanged.
 
-A focused local run of the repaired integration file passed 112 assertions in
-126712 ms. Focused ESLint and strict scoped complexity were also green. No
-full corpus or publisher was run. The sealed STOP checkpoint
+The first implementation commit `3e7cb624efea970f0849b2711acefc6568c5a749`
+passed the single integration file on tv-dator (112 assertions in 145604 ms,
+CPU 57 C and NVMe 46 C), but independent verification rejected its raw-row
+selection and weakened lease assertion. That run is retained as superseded
+diagnostic evidence in
+`test-output/placement/3e7cb624efea-mujwu2uk-3114796-tv-dator.log`; it is not
+the corrected-head proof. There is no production source change, sleep, timeout
+increase, mutation retry, resource workaround, or weaker rebalance-success
+assertion. On the corrected worktree, the deterministic owner-wait tests passed
+21 assertions in 903 ms and the membership integration passed 112 assertions
+in 135626 ms. Focused ESLint plus strict scoped cyclomatic and cognitive
+complexity were green. No full corpus or publisher was run. The sealed STOP
+checkpoint
 `292b7204334cf47617e675dd9b12bc708b682886` remains unchanged, and the quest
 remains `SEALED / PUBLICATION_BLOCKED` until a normal publisher succeeds and
 the remote branch SHA is independently read back.
