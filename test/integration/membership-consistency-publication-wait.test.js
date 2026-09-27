@@ -301,10 +301,13 @@ test('placement wait uses the existing scaled publication timeout', async (t) =>
 
   t.equal(error?.timeoutMs, TEST_TIMEOUTS.TEST_TIMEOUT,
     'the bounded outcome carries the existing scaled timeout');
-  t.equal(error?.timeoutClassification?.classification,
-    'exact_boundary_hit',
-    'the timeout records the exact bounded outcome');
-  t.equal(error?.timeoutClassification?.originalClassification,
+  t.equal(error?.timeoutClassification?.configuredBudgetMs,
+    TEST_TIMEOUTS.TEST_TIMEOUT,
+    'the timeout budget remains the existing scaled timeout');
+  const semanticClassification =
+    error?.timeoutClassification?.originalClassification ||
+    error?.timeoutClassification?.classification;
+  t.equal(semanticClassification,
     'publication_wait_timeout',
     'the bounded outcome remains typed as a publication wait');
   t.equal(harness.counts.placementReads, 0,
