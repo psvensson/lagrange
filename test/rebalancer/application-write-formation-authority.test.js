@@ -390,6 +390,38 @@ test('route loss after final admission revalidation returns typed pre-effect ' +
   t.equal(state.insertAttempts, 0, 'no operation insert was submitted');
 });
 
+test('pre-submission route loss remains inside the lifecycle UPDATE retry ' +
+  'owner', async (t) => {
+  const preSubmissionRouteLoss = {
+    success: false,
+    error: 'Partition service not found',
+    deliveryDisposition:
+      QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
+  };
+  const retryHarness = createGatewayRetryRepository([
+    preSubmissionRouteLoss,
+    {success: true, changes: 1},
+  ]);
+
+  const result =
+    await retryHarness.repository
+      .executeReplicaOperationGatewayMutationWithRetry(
+        {operation: 'update'},
+        {onRetryableFailure: async () => false},
+      );
+
+  t.equal(
+    result.success,
+    true,
+    'a proven pre-submission UPDATE gap converges through its existing retry',
+  );
+  t.equal(
+    retryHarness.getInvocationCount(),
+    2,
+    'the UPDATE retries only after the route owner proves no submission',
+  );
+});
+
 test('an earlier possible delivery cannot be relabeled by later route loss',
   async (t) => {
     const ambiguousDelivery = {
