@@ -109,6 +109,14 @@ function serviceRow(replicaId, nodeId, raftRole) {
   };
 }
 
+function confirmedDelivery(response) {
+  return response === null ? null : {
+    acknowledged: true,
+    deliveryState: 'delivered',
+    ...response,
+  };
+}
+
 async function createHarness({stepDownResponse} = {}) {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
@@ -129,13 +137,14 @@ async function createHarness({stepDownResponse} = {}) {
         }
         deliveries.push({target, payload});
         if (payload?.type === ReplicaOperationMessageType.STEP_DOWN_REPLICA) {
-          return stepDownResponse ? stepDownResponse(payload) : {
-            status: ReplicaOperationResponseStatus.COMPLETED,
-            handoffBranch:
-              REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REQUESTED,
-          };
+          return confirmedDelivery(stepDownResponse ?
+            stepDownResponse(payload) : {
+              status: ReplicaOperationResponseStatus.COMPLETED,
+              handoffBranch:
+                REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REQUESTED,
+            });
         }
-        return {acknowledged: true,
+        return {acknowledged: true, deliveryState: 'delivered',
           status: ReplicaOperationResponseStatus.INITIATED};
       },
       getConnectionState: () => 'connected',

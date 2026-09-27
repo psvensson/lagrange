@@ -121,25 +121,6 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       // Check if replica exists
       const replica = this.getLocalReplica(replicaId);
       if (!replica) {
-        try {
-          await this.reconcileRemovedReplicaCleanup(replicaId, partitionId);
-        } catch (error) {
-          this.logger.error(REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED, {
-            operationId,
-            replicaId,
-            partitionId,
-            error: error.message,
-            stack: error.stack,
-          });
-          return this.buildReplicaOperationResponse(
-            ReplicaOperationResponseStatus.ERROR,
-            {
-              error: error.message,
-              replicaId,
-              nodeId: this.nodeId,
-            },
-          );
-        }
         this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_NOT_FOUND, {
           replicaId,
           nodeId: this.nodeId,

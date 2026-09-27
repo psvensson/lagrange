@@ -393,7 +393,8 @@ export async function registerReplicaHandlerTailTests({
       handler.shutdown();
     });
 
-  t.test('handleRemoveReplica cleans service row when local replica is missing',
+  t.test('handleRemoveReplica never infers cleanup authority from a missing ' +
+    'local replica',
     async (t) => {
       const TEST_MISSING_CLEANUP_OPERATION_ID =
         'missing-local-cleanup-op';
@@ -415,7 +416,7 @@ export async function registerReplicaHandlerTailTests({
         node_id: TEST_MISSING_CLEANUP_NODE_ID,
         replica_id: TEST_MISSING_CLEANUP_REPLICA_ID,
         raft_role: RAFT_ROLE.FOLLOWER,
-        status: ReplicaStatus.ACTIVE,
+        status: ReplicaStatus.FAILED,
         address: TEST_MISSING_CLEANUP_SERVICE_ADDRESS,
         created_at: Date.now(),
         updated_at: Date.now(),
@@ -441,6 +442,10 @@ export async function registerReplicaHandlerTailTests({
       });
 
       handler.initialize();
+      let cleanupCalls = 0;
+      handler.cleanupReplicaResources = async () => {
+        cleanupCalls += 1;
+      };
 
       const response = await handler.handleRemoveReplica({
         operationId: TEST_MISSING_CLEANUP_OPERATION_ID,
@@ -454,14 +459,15 @@ export async function registerReplicaHandlerTailTests({
         ReplicaOperationResponseStatus.NOT_FOUND,
         'missing local replica should keep the existing response contract',
       );
-      t.notOk(
+      t.equal(
         originalCacheGet(
           SYSTEM_TABLE_NAME.SERVICES,
           TEST_MISSING_CLEANUP_REPLICA_ID,
-        ),
-        'missing local replica should still delete durable service truth',
+        )?.status,
+        ReplicaStatus.FAILED,
+        'missing local state cannot erase a durable FAILED row',
       );
-      t.ok(
+      t.notOk(
         mockCDC.operations.some((op) =>
           op.type === 'delete' &&
           op.tableName === SYSTEM_TABLE_NAME.SERVICES &&
@@ -471,8 +477,10 @@ export async function registerReplicaHandlerTailTests({
             TEST_MISSING_CLEANUP_PARTITION_ID &&
           op.whereClause?.node_id === TEST_MISSING_CLEANUP_NODE_ID,
         ),
-        'missing local replica should route one authoritative services-row delete',
+        'missing local state cannot route an authoritative services-row delete',
       );
+      t.equal(cleanupCalls, 0,
+        'missing local state cannot authorize filesystem cleanup');
 
       handler.shutdown();
     });

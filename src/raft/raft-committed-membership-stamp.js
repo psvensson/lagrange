@@ -13,6 +13,8 @@
 // on arrival and never falls back to rows; the replica list a stamp yields is
 // an address-hint list in ascending raft peer id order, never membership.
 
+import {types as nodeUtilTypes} from 'node:util';
+
 import {
   BOOTSTRAP_MEMBERSHIP_SOURCE,
   COMMITTED_MEMBERSHIP_ANSWER_KIND,
@@ -31,6 +33,11 @@ const ownHas = Object.hasOwn;
 const ownKeys = Reflect.ownKeys;
 const getPrototype = Object.getPrototypeOf;
 const arrayIsArray = Array.isArray;
+const isProxy = nodeUtilTypes.isProxy;
+const numberIsFinite = Number.isFinite;
+const numberIsSafeInteger = Number.isSafeInteger;
+const objectIs = Object.is;
+const bigIntFn = globalThis.BigInt;
 const OBJECT_PROTOTYPE = Object.prototype;
 const ARRAY_PROTOTYPE = Array.prototype;
 const DATA_DESCRIPTOR_VALUE = 'value';
@@ -86,7 +93,7 @@ function invalid(defect) {
 }
 
 function ownDataValue(record, field) {
-  if (record === null || typeof record !== TYPE_OBJECT) {
+  if (record === null || typeof record !== TYPE_OBJECT || isProxy(record)) {
     return null;
   }
   const descriptor = ownDescriptor(record, field);
@@ -95,7 +102,8 @@ function ownDataValue(record, field) {
 }
 
 function isOrdinaryRecord(value) {
-  if (value === null || typeof value !== TYPE_OBJECT || arrayIsArray(value)) {
+  if (value === null || typeof value !== TYPE_OBJECT || isProxy(value) ||
+      arrayIsArray(value)) {
     return false;
   }
   const prototype = getPrototype(value);
@@ -131,14 +139,15 @@ function isCanonicalPeerId(value) {
     }
   }
   try {
-    return BigInt(value) <= ((1n << 63n) - 1n);
+    return bigIntFn(value) <= ((1n << 63n) - 1n);
   } catch {
     return false;
   }
 }
 
 function canonicalArray(value, itemIsValid) {
-  if (!arrayIsArray(value) || getPrototype(value) !== ARRAY_PROTOTYPE ||
+  if (isProxy(value) || !arrayIsArray(value) ||
+      getPrototype(value) !== ARRAY_PROTOTYPE ||
       value.length > COMMITTED_MEMBERSHIP_MAX_PEERS) {
     return null;
   }
@@ -170,7 +179,7 @@ function hasDuplicates(values) {
 }
 
 function isCanonicalIndex(value, {positive = false} = {}) {
-  return Number.isSafeInteger(value) && !Object.is(value, -0) &&
+  return numberIsSafeInteger(value) && !objectIs(value, -0) &&
     value >= (positive ? 1 : 0);
 }
 
@@ -259,7 +268,7 @@ function canonicalCommittedScalars(stamp) {
   const leaderId = ownDataValue(stamp, 'leaderId').value;
   const gateOpen = ownDataValue(stamp, 'gateOpen').value;
   if (!isCanonicalIndex(appliedIndex, {positive: true})) {
-    return {defect: Object.is(appliedIndex, -0) ?
+    return {defect: objectIs(appliedIndex, -0) ?
       COMMITTED_MEMBERSHIP_STAMP_DEFECT.MALFORMED :
       COMMITTED_MEMBERSHIP_STAMP_DEFECT.NO_BOOTSTRAP_INDEX};
   }
@@ -429,7 +438,7 @@ function hasValidObservationPeerSets(incoming, outgoing) {
 }
 
 function hasValidTransferWindow(value) {
-  return value === null || (Number.isFinite(value) && value > 0);
+  return value === null || (numberIsFinite(value) && value > 0);
 }
 
 function isOptionalObservationReplicaId(value) {

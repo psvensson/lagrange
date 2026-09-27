@@ -74,13 +74,16 @@ export function createReplaceWitness(options = {}) {
       if (type === ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP) {
         witness.reads.push(payload);
         if (!witness.available) {
-          return {status: ReplicaOperationResponseStatus.ERROR,
+          return {acknowledged: true, deliveryState: 'delivered',
+            status: ReplicaOperationResponseStatus.ERROR,
             error: 'witness unavailable'};
         }
         const leaderReplicaId = witness.addressedLeads ?
           payload[ReplicaOperationField.REPLICA_ID] :
           witness.leaderReplicaId;
         return {
+          acknowledged: true,
+          deliveryState: 'delivered',
           status: ReplicaOperationResponseStatus.COMPLETED,
           [ReplicaOperationField.MEMBERSHIP]: {
             state: witness.sourceVoter ?
@@ -106,6 +109,8 @@ export function createReplaceWitness(options = {}) {
           witness.commitRemoval();
         }
         return {
+          acknowledged: true,
+          deliveryState: 'delivered',
           status: ReplicaOperationResponseStatus.INITIATED,
           [ReplicaOperationField.PROPOSAL]: {outcome: PORT_OUTCOME_PROPOSED},
         };

@@ -1,6 +1,11 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {
+  OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
+  ROUTER_NO_CONNECTION_ERROR_CODE,
+  WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
+} from '../../src/transport/message-router-shared-vocabulary.js';
+import {
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   TRANSPORT_DELIVERY_OUTCOME_STATE,
   buildTransportDeliveryOutcome,
@@ -65,8 +70,41 @@ test('transport delivery outcome fails closed when ACK contradicts delivery meta
         expectedState: TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED,
       },
       {
+        label: 'no connection',
+        value: {
+          acknowledged: true,
+          errorCode: ROUTER_NO_CONNECTION_ERROR_CODE,
+        },
+        expectedState: TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED,
+      },
+      {
+        label: 'queue backpressure',
+        value: {
+          acknowledged: true,
+          errorCode: OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
+        },
+        expectedState: TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED,
+      },
+      {
+        label: 'connect timeout',
+        value: {
+          acknowledged: true,
+          errorCode: WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
+        },
+        expectedState: TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED,
+      },
+      {
         label: 'explicit failed delivery state',
         value: {acknowledged: true, deliveryState: 'failed'},
+        expectedState: TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED,
+      },
+      {
+        label: 'completed response carrying a raw error',
+        value: {
+          acknowledged: true,
+          status: 'completed',
+          error: 'connection failed',
+        },
         expectedState: TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED,
       },
     ];
@@ -76,6 +114,12 @@ test('transport delivery outcome fails closed when ACK contradicts delivery meta
       t.equal(outcome.deliveryState, expectedState,
         `${label}: ACK cannot erase contradictory transport state`);
     }
+    t.equal(classifyTransportDeliveryOutcome({
+      acknowledged: true,
+      status: 'error',
+      error: 'application refused the request',
+    }).deliveryState, TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED,
+    'confirmed delivery preserves an application refusal for its caller');
   });
 
 test('message router normalizes local delivery results onto the shared delivery grammar',

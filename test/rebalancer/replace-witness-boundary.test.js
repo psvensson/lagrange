@@ -24,6 +24,10 @@ import {
 } from '../../src/rebalancer/operation-workflow-replace-witness.js';
 import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
   '../../src/partition/partition-replica-membership-constants.js';
+import {
+  OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
+  ROUTER_NO_CONNECTION_ERROR_CODE,
+} from '../../src/transport/message-router-shared-vocabulary.js';
 
 function operation() {
   return {
@@ -145,7 +149,10 @@ test('ACK cannot expose an application-looking witness across contradictory ' +
   const cases = [
     {deferRetry: true, retryAfterMs: 25},
     {errorCode: 'ROUTER_CONNECTION_CLOSED'},
+    {errorCode: ROUTER_NO_CONNECTION_ERROR_CODE},
+    {errorCode: OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE},
     {deliveryState: 'failed'},
+    {error: 'connection failed'},
   ];
   for (const conflict of cases) {
     const target = owner({

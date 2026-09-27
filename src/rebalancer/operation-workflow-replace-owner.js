@@ -585,15 +585,15 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
       return waitForReplaceOwner(owner, operation,
         REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING, rowContext);
     }
-    // T5': no effect is recorded (or its backstop window passed) and the
-    // source's lifecycle has not retired - (re-)send its removal effect
-    // through the same remove-safety evaluation.
+    // T5': when the backstop is due and lifecycle has not retired, re-send
+    // the removal effect through the same remove-safety evaluation.
     const result = await owner.executeReplaceSourceRemovalEffect(operation);
+    const waitReason = result?.deferReason ||
+      REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING;
     // Reinstall the dispatch-cleared wait against the entry level.
-    if (recordReplaceOwnerWait(owner, operation,
-      REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING, rowContext)) {
-      owner.armReplaceOwnerWait?.(operation, REPLACE_WAIT_REASON
-        .SOURCE_REMOVAL_EFFECT_PENDING, context.entryLevel || null);
+    if (recordReplaceOwnerWait(owner, operation, waitReason, rowContext)) {
+      owner.armReplaceOwnerWait?.(operation, waitReason,
+        context.entryLevel || null);
     }
     return result;
   }
