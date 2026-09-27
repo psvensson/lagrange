@@ -417,7 +417,39 @@ resource workaround, or weaker rebalance-success assertion. On the final
 correction worktree, the deterministic owner-wait tests passed 41 assertions in
 2936 ms and the membership integration passed 113 assertions in 137052 ms.
 Focused ESLint plus strict scoped cyclomatic and cognitive complexity were
-green. No final-head lab corpus or publisher was run. The sealed STOP checkpoint
+green.
+
+Independent verification approved exact candidate
+`42835833491c6c95a3cb3153634b3deb484853ed`. That candidate then ran both
+focused files on tv-dator through the repository lab controller with this exact
+placement configuration:
+
+```sh
+LAGRANGE_LAB_AGENT=codex:stop-publication-closeout node --input-type=module -e \
+  "import {labTestCommit,labTestDeps,runLabTest} from './scripts/lab/probe.js'; \
+  const root=process.cwd(); \
+  const files=['test/integration/membership-consistency-publication-wait.test.js', \
+  'test/integration/membership-consistency.integration.test.js']; \
+  const commit=labTestCommit({root,sha:'42835833491c6c95a3cb3153634b3deb484853ed'}); \
+  const status=await runLabTest({plan:[{resourceClass:'exclusive',files,jobs:1}], \
+  costs:[{file:files[0],ms:2910,jobs:1},{file:files[1],ms:137052,jobs:1}], \
+  commit,on:'tv-dator',root,env:process.env},labTestDeps({root})); \
+  process.exitCode=status;"
+```
+
+The normal machine lock and thermal policy admitted the exclusive two-file,
+`jobs=1` lane at CPU 63 C and NVMe 46 C. The deterministic waiter passed 41
+assertions in 3780 ms and the full membership integration passed 113 assertions
+in 147478 ms, for 2/2 files and 154 assertions total. Both placement results
+were attempt 1 with `retriedOnce=false`. The retained stream is
+`test-output/placement/42835833491c-mujyxe2d-3144684-tv-dator.log`; its adjacent
+`.err` is empty, and consolidated results were copied to
+`test-output/reports/test-results-tv-dator.ndjson`. Post-run fleet readback
+reported tv-dator ready with no gaps and the machine lock free with no holder.
+
+Candidate `42835833491c6c95a3cb3153634b3deb484853ed` is ready for the final
+change-cone/prepush gate. No publisher or full corpus was run. The sealed STOP
+checkpoint
 `292b7204334cf47617e675dd9b12bc708b682886` remains unchanged, and the quest
 remains `SEALED / PUBLICATION_BLOCKED` until a normal publisher succeeds and
 the remote branch SHA is independently read back.
