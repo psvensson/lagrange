@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1893,
+    "unit": 1894,
     "integration": 75,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2157,
-  "digest": "fnv1a32-e860aeef",
+  "censusSize": 2158,
+  "digest": "fnv1a32-57138f23",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1459,6 +1459,7 @@
     "test/random/random-source.test.js": "unit",
     "test/rebalancer/add-workflow-step-progression.property.test.js": "unit",
     "test/rebalancer/admission-real-size-estimates.test.js": "unit",
+    "test/rebalancer/application-write-formation-authority.test.js": "unit",
     "test/rebalancer/assignment-epoch-fencing.test.js": "unit",
     "test/rebalancer/assignment-epoch-manager.test.js": "unit",
     "test/rebalancer/assignment-epoch.test.js": "unit",

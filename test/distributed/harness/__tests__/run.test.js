@@ -181,7 +181,6 @@ describe('report metadata source fingerprint', () => {
   });
 });
 
-
 describe('distributed execution metadata', () => {
   it('records target profile and physical hosts without adding a raft selector',
     () => {

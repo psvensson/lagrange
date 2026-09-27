@@ -12,7 +12,7 @@
     "distributed-harness": 166,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 240,
+    "placement-rebalance": 241,
     "query-sql": 160,
     "release-packaging": 11,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2157,
-  "digest": "fnv1a32-4dcd180e",
+  "censusSize": 2158,
+  "digest": "fnv1a32-02615835",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6a89e74c",
+  "observationDigest": "fnv1a32-7afbe5a2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1478,6 +1478,7 @@
     "test/random/random-source.test.js": "runtime-primitives",
     "test/rebalancer/add-workflow-step-progression.property.test.js": "placement-rebalance",
     "test/rebalancer/admission-real-size-estimates.test.js": "placement-rebalance",
+    "test/rebalancer/application-write-formation-authority.test.js": "placement-rebalance",
     "test/rebalancer/assignment-epoch-fencing.test.js": "placement-rebalance",
     "test/rebalancer/assignment-epoch-manager.test.js": "placement-rebalance",
     "test/rebalancer/assignment-epoch.test.js": "placement-rebalance",
@@ -6462,6 +6463,7 @@
     "test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js": {
       "files": [
         "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation-admission.js",
         "src/rebalancer/rebalance-coordinator-operation-creation.js"
       ]
     },
@@ -6725,6 +6727,17 @@
     "test/rebalancer/admission-real-size-estimates.test.js": {
       "files": [
         "src/rebalancer/rebalance-coordinator.js"
+      ]
+    },
+    "test/rebalancer/application-write-formation-authority.test.js": {
+      "files": [
+        "src/control-plane/readiness-planning-version-contract.js",
+        "src/query/sql-query-engine-initial-partition-provisioning.js",
+        "src/rebalancer/provisioning-admission-policy.js",
+        "src/rebalancer/rebalance-coordinator.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/rebalancer/assignment-epoch-fencing.test.js": {

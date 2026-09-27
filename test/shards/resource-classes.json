@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2140,
+    "ordinary": 2141,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2157,
-  "digest": "fnv1a32-0399b135",
+  "censusSize": 2158,
+  "digest": "fnv1a32-ac88be9f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1458,6 +1458,7 @@
     "test/random/random-source.test.js": "ordinary",
     "test/rebalancer/add-workflow-step-progression.property.test.js": "ordinary",
     "test/rebalancer/admission-real-size-estimates.test.js": "ordinary",
+    "test/rebalancer/application-write-formation-authority.test.js": "ordinary",
     "test/rebalancer/assignment-epoch-fencing.test.js": "ordinary",
     "test/rebalancer/assignment-epoch-manager.test.js": "ordinary",
     "test/rebalancer/assignment-epoch.test.js": "ordinary",

@@ -147,6 +147,7 @@ class SQLQueryEngineProvisionTargetMethods {
       lastAdmissionProbe = await this.probeProvisioningTargetAdmission({
         partitionId,
         targetNodeIds: resolvedNodeIds,
+        schemaJobId: options.schemaJobId,
       });
       return (
         lastAdmissionProbe.maximumProvisionableReplicaCount >=
