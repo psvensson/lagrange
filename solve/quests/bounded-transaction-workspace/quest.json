@@ -1,0 +1,80 @@
+{
+  "schema": "solve-quest/2",
+  "id": "bounded-transaction-workspace",
+  "class": "product",
+  "epic": "measured-storage-path",
+  "statement": "Preparing a private writable transaction workspace must not require copying, serializing, scanning, or rewriting the complete partition state before the transaction can proceed. Workspace startup cost must be bounded by transaction/workspace activity rather than total historical partition size, while preserving the SQL semantics promised by the distributed-transaction contract. A fresh verifier proves on a reference host and a slower supported lab host that a very-large-base/tiny-fixed-transaction series is fleet-safe under the audited liveness budget and insensitive to unrelated database growth, while a small-base/large-transaction series attributes legitimate cost to transaction work; authoritative apply remains healthy, pre-commit effects remain private, intended SQLite semantics and deterministic effects are retained, memory/temp-disk/handle/cleanup state are bounded, crash cleanup is safe, and the mechanism has one semantic owner and one lifecycle.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/bounded-transaction-workspace/evidence/receipt.json",
+      "requiredReceipts": [
+        "workspace-preparation-does-not-traverse-total-state",
+        "startup-is-fleet-safe-under-audited-liveness-budget",
+        "cost-is-insensitive-to-unrelated-database-growth",
+        "authoritative-apply-remains-healthy",
+        "pre-commit-effects-remain-private",
+        "intended-sqlite-semantics-and-determinism-are-retained",
+        "memory-temp-disk-handles-and-cleanup-are-bounded",
+        "crash-restart-cleanup-is-safe",
+        "no-second-semantic-database-owner-exists",
+        "workspace-has-one-owner-and-one-lifecycle"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "stop-checkpoint-is-fixed-evidence",
+      "statement": "quest/distributed-transaction-replicated-apply at 292b7204334cf47617e675dd9b12bc708b682886 is the immutable design-gate STOP checkpoint. Its green finalized harness, slower-host 32/128/256 MiB measurements (68.69/210.19/436.08 ms), full-serialization critical path, SQLite WAL-header (2,2) to rollback-journal (1,1) normalization finding, and public-apply continuity are retained as evidence; no production transaction-apply repair is added to that branch."
+    },
+    {
+      "id": "no-contract-reduction",
+      "statement": "The rejected mechanism is not rescued with a total-partition-size cap, machine- or throughput-dependent limit, slow-node exception, reduced split threshold, inflated liveness budget, or Raft-entry bound. Any later transaction bound attaches only to actual transaction work or replicated-entry size."
+    },
+    {
+      "id": "complexity-class-before-implementation",
+      "statement": "Two read-only design challengers classify candidates by transaction-critical startup complexity before production implementation. Any candidate fundamentally O(total partition bytes) is rejected unless exact snapshot work is proven outside the liveness-critical path without moving that work to first read, first write, execution, finalization, or cleanup."
+    },
+    {
+      "id": "full-intended-sql-semantics",
+      "statement": "The workspace preserves the transaction language's intended SQLite semantics for existing rows, indexes, uniqueness, foreign keys, triggers, expressions, BLOBs, and multiple statements. It is not silently replaced by a key/value write set or a dependency subset that unrestricted SQL cannot soundly determine; a semantic reduction requires an owner REDESIGN decision."
+    },
+    {
+      "id": "isolation-determinism-and-live-owner",
+      "statement": "Before replicated commit authority, workspace writes are invisible in the authoritative live partition. The same authoritative starting state and canonical input derive the same replicated effects, and workspace preparation/execution never monopolizes the authoritative SQLite writer or apply path across distributed consensus."
+    },
+    {
+      "id": "bounded-resources-and-crash-lifecycle",
+      "statement": "Memory, temporary storage, handles, cleanup state, and lifetime have explicit bounds. A crash before replicated commit authority leaves the authoritative database unmodified, and orphaned artifacts are recognizable and safely disposable."
+    },
+    {
+      "id": "reuse-without-forced-reuse",
+      "statement": "Snapshot, backup/serialize, page/WAL, temporary-database, immutable-view, filesystem-clone, Raft-snapshot, and partition split/movement facilities are censused before adding infrastructure. A proven owner is reused only when semantics and complexity match; an existing O(total bytes) primitive is not forced onto the critical path."
+    },
+    {
+      "id": "candidate-classes-and-no-silent-fallback",
+      "statement": "The design challenge covers page-level copy-on-write, snapshot plus writable overlay, filesystem COW with an explicit safe non-copy fallback, same-database staging, logical/minimal workspaces, and a continuously maintained second image. Unsupported filesystem COW fails explicitly; it never silently falls back to a full byte copy, and no second semantic database owner is accepted."
+    },
+    {
+      "id": "performance-falsifier-precedes-production",
+      "statement": "Before production implementation, the performance witness varies unrelated database size across at least small, medium, and substantially larger equivalent databases while holding a tiny transaction footprint fixed; separately exercises a small base with a large transaction; measures workspace creation, first read, first write, execution, finalization, and cleanup; records resource use and public apply health; and runs on at least the reference and a slower supported lab host."
+    },
+    {
+      "id": "budget-audit-is-independent",
+      "statement": "A read-only audit names the liveness-budget owner, start event, required finish event, overrun consequence, and effect of public apply continuing. It may correct the phase or budget with owner evidence, but may not relax either to rescue full serialization; the rejected O(total partition bytes) mechanism remains rejected."
+    },
+    {
+      "id": "adjacent-storage-concerns-stay-adjacent",
+      "statement": "Separating or compacting unbounded rs-raft history and bounding transaction batches by the rs-raft maximum entry size remain adjacent concerns. Neither is evidence that workspace startup is independent of all partition bytes."
+    },
+    {
+      "id": "design-probe-only-until-gate",
+      "statement": "At seal, scope is limited to records, read-only design investigation, checker/harness construction, generated fixtures, and lab probes. No production src change or distributed-transaction apply implementation begins until the design gate returns PROVE and scope is explicitly widened; REDESIGN or REJECT is recorded and stops."
+    },
+    {
+      "id": "fresh-verification-before-resumption",
+      "statement": "The stopped distributed-transaction quest is resumed from its recorded design only after a fresh verifier approves all ten doneWhen receipts against current-head evidence; a green harness alone, design reading alone, or compaction-only improvement is insufficient."
+    }
+  ],
+  "sealedAt": "292b7204334cf47617e675dd9b12bc708b682886"
+}

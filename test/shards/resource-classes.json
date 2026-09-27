@@ -5,10 +5,10 @@
     "ordinary": 2159,
     "cpu-heavy": 0,
     "external-toolchain": 14,
-    "exclusive": 3
+    "exclusive": 4
   },
-  "censusSize": 2176,
-  "digest": "fnv1a32-084c6c3c",
+  "censusSize": 2177,
+  "digest": "fnv1a32-f38f2bf1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1112,6 +1112,7 @@
     "test/packaging/single-executable-completeness.property.test.js": "ordinary",
     "test/partition/ack-extraction-from-response.property.test.js": "ordinary",
     "test/partition/adjacent-partition-merging.property.test.js": "ordinary",
+    "test/partition/bounded-transaction-workspace-falsifier.integration.test.js": "exclusive",
     "test/partition/cdc-buffer-replay-robustness.test.js": "ordinary",
     "test/partition/cdc-event-buffer.property.test.js": "ordinary",
     "test/partition/cdc-event-buffer.test.js": "ordinary",

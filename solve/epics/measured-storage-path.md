@@ -13,10 +13,12 @@ quests:
   - numeric-key-routing
   - log-group-commit
   - message-group-log-bound
+  - bounded-transaction-workspace
 authorizes:
   - scripts/checks/storage-load-report.js
   - scripts/checks/test-subsystem-classification-constants.js
   - scripts/quest-evidence/numeric-key-routing.js
+  - scripts/quest-evidence/bounded-transaction-workspace
   - src/live-query/live-query-group.js
   - test/storage-load
   - test/partition
@@ -25,6 +27,7 @@ authorizes:
   - test/message-group
   - test/shards
   - data/storage-load
+  - data/bounded-transaction-workspace
   - .gitignore
   - src/partition/key-range-manager.js
   - src/partition/split-key-comparator.js
@@ -36,6 +39,7 @@ authorizes:
   - src/message-group
   - package.json
   - solve/epics
+  - solve/quests/bounded-transaction-workspace
   - docs
 ---
 
@@ -83,6 +87,16 @@ scenario imports its vocabulary from there.
   corpora are serialised around it, never alongside another heavy run.
 
 ## Quests, in order
+
+**bounded-transaction-workspace** -- design/probe prerequisite to replicated
+distributed-transaction apply. It starts with a complexity falsifier and two
+read-only design challenges. No production source path is authorized at seal:
+the quest must first identify a workspace whose transaction-critical startup
+does not copy, serialize, scan, or rewrite the complete partition, audit the
+real liveness budget, and measure the candidate on reference and slower lab
+hosts. If that design gate says PROVE, production scope may be widened
+explicitly for the chosen owner; REDESIGN or REJECT stops without weakening
+the transaction contract.
 
 **storage-load-harness** — the scenario exists: `npm run soak:storage`
 starts a seed and two joiners in one process, creates a handful of

@@ -1,0 +1,58 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "bounded-transaction-workspace",
+  "status": "fail",
+  "generatedAt": "2026-09-27T00:00:00.000Z",
+  "receipts": [
+    {
+      "id": "workspace-preparation-does-not-traverse-total-state",
+      "passed": false,
+      "detail": "No candidate has passed the complexity witness."
+    },
+    {
+      "id": "startup-is-fleet-safe-under-audited-liveness-budget",
+      "passed": false,
+      "detail": "The liveness budget and candidate startup have not been jointly verified."
+    },
+    {
+      "id": "cost-is-insensitive-to-unrelated-database-growth",
+      "passed": false,
+      "detail": "No fixed-footprint size series exists for a candidate."
+    },
+    {
+      "id": "authoritative-apply-remains-healthy",
+      "passed": false,
+      "detail": "No candidate has been measured under concurrent apply traffic."
+    },
+    {
+      "id": "pre-commit-effects-remain-private",
+      "passed": false,
+      "detail": "No candidate isolation witness exists."
+    },
+    {
+      "id": "intended-sqlite-semantics-and-determinism-are-retained",
+      "passed": false,
+      "detail": "No candidate semantics matrix exists."
+    },
+    {
+      "id": "memory-temp-disk-handles-and-cleanup-are-bounded",
+      "passed": false,
+      "detail": "No candidate resource envelope exists."
+    },
+    {
+      "id": "crash-restart-cleanup-is-safe",
+      "passed": false,
+      "detail": "No candidate crash/restart witness exists."
+    },
+    {
+      "id": "no-second-semantic-database-owner-exists",
+      "passed": false,
+      "detail": "No candidate ownership proof exists."
+    },
+    {
+      "id": "workspace-has-one-owner-and-one-lifecycle",
+      "passed": false,
+      "detail": "No candidate owner and lifecycle have been accepted."
+    }
+  ]
+}
