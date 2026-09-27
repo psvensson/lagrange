@@ -12,6 +12,8 @@ import {
   normalizeTarget,
 } from '../distributed-matrix-plan.js';
 
+const arrayMap = Function.call.bind(Array.prototype.map);
+
 const RUN_ID = '20260924T151500Z';
 const REPORT_ROOT = 'test-output/reports/distributed-matrix';
 const EXPECTED_CANONICAL_COUNT = 24;
@@ -51,7 +53,7 @@ test('distributed matrix topology profile derives unique real scenarios', (t) =>
   const entries = listDistributedMatrixEntries(
     DISTRIBUTED_MATRIX_PROFILE.TOPOLOGY,
   );
-  assert.deepEqual(entries.map(entryKey), EXPECTED_TOPOLOGY_ENTRIES);
+  assert.deepEqual(arrayMap(entries, entryKey), EXPECTED_TOPOLOGY_ENTRIES);
   t.end();
 });
 
@@ -70,8 +72,8 @@ test('distributed matrix plan changes target without changing scenarios', (t) =>
   });
 
   assert.deepEqual(
-    local.map((entry) => [entry.config, entry.scenario]),
-    lab.map((entry) => [entry.config, entry.scenario]),
+    arrayMap(local, (entry) => [entry.config, entry.scenario]),
+    arrayMap(lab, (entry) => [entry.config, entry.scenario]),
   );
   assert.equal(local[0].target, DISTRIBUTED_EXECUTION_TARGET.LOCAL);
   assert.equal(lab[0].target, DISTRIBUTED_EXECUTION_TARGET.LAB);

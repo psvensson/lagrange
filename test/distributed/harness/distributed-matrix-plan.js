@@ -10,6 +10,11 @@ import {
   TOPOLOGY_FAILURE_GATE_MATRIX,
 } from './scenario-registry.js';
 
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringEndsWith = Function.call.bind(String.prototype.endsWith);
+const stringPadStart = Function.call.bind(String.prototype.padStart);
+
 const DISTRIBUTED_MATRIX_CONFIG_DIRECTORY = 'test/distributed/config';
 const DISTRIBUTED_MATRIX_REPORT_SUFFIX = '.report.json';
 const DISTRIBUTED_MATRIX_CONFIG_SUFFIX = '.json';
@@ -29,7 +34,7 @@ const DISTRIBUTED_MATRIX_ERROR_GCP_TEMPLATE =
 
 function normalizeProfile(profile) {
   const normalized = profile || DISTRIBUTED_MATRIX_PROFILE.CANONICAL;
-  if (!Object.values(DISTRIBUTED_MATRIX_PROFILE).includes(normalized)) {
+  if (!arrayIncludes(Object.values(DISTRIBUTED_MATRIX_PROFILE), normalized)) {
     throw new Error(`Unknown distributed matrix profile: ${normalized}`);
   }
   return normalized;
@@ -37,7 +42,7 @@ function normalizeProfile(profile) {
 
 function normalizeTarget(target) {
   const normalized = target || DISTRIBUTED_EXECUTION_TARGET.LOCAL;
-  if (!Object.values(DISTRIBUTED_EXECUTION_TARGET).includes(normalized)) {
+  if (!arrayIncludes(Object.values(DISTRIBUTED_EXECUTION_TARGET), normalized)) {
     throw new Error(`Unknown distributed matrix target: ${normalized}`);
   }
   return normalized;
@@ -69,11 +74,14 @@ function listDistributedMatrixEntries(profile = DISTRIBUTED_MATRIX_PROFILE.CANON
   if (normalizedProfile === DISTRIBUTED_MATRIX_PROFILE.TOPOLOGY) {
     return listTopologyScenarioEntries();
   }
-  return CANONICAL_SCENARIO_MATRIX.map((entry) => Object.freeze({...entry}));
+  return arrayMap(
+    CANONICAL_SCENARIO_MATRIX,
+    (entry) => Object.freeze({...entry}),
+  );
 }
 
 function configStem(configName) {
-  return configName.endsWith(DISTRIBUTED_MATRIX_CONFIG_SUFFIX) ?
+  return stringEndsWith(configName, DISTRIBUTED_MATRIX_CONFIG_SUFFIX) ?
     configName.slice(0, -DISTRIBUTED_MATRIX_CONFIG_SUFFIX.length) :
     configName;
 }
@@ -92,12 +100,12 @@ function buildDistributedMatrixExecutionPlan({
 
   const entries = listDistributedMatrixEntries(normalizedProfile);
   const total = entries.length;
-  return entries.map((entry, index) => {
-    const ordinal = String(index + DISTRIBUTED_MATRIX_FIRST_INDEX)
-      .padStart(
-        DISTRIBUTED_MATRIX_INDEX_WIDTH,
-        DISTRIBUTED_MATRIX_INDEX_FILL,
-      );
+  return arrayMap(entries, (entry, index) => {
+    const ordinal = stringPadStart(
+      String(index + DISTRIBUTED_MATRIX_FIRST_INDEX),
+      DISTRIBUTED_MATRIX_INDEX_WIDTH,
+      DISTRIBUTED_MATRIX_INDEX_FILL,
+    );
     const reportName = [
       ordinal,
       configStem(entry.config),
