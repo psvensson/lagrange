@@ -330,6 +330,9 @@ async function measureShadowWorkspace(t, context, evidence, sink) {
       `${sample.targetMiB} MiB sample scrubbed the history-shaped fixture`);
     t.equal(sample.afterScrub.pageCount, sample.opened.pageCount,
       `${sample.targetMiB} MiB scrub did not undo already-copied pages`);
+    t.ok(sample.readyMs < SHADOW_COPY_LIVENESS_BUDGET_MS,
+      `${sample.targetMiB} MiB shadow became usable within the hard liveness ` +
+      `budget: ${JSON.stringify(compactCopySample(sample))}`);
   }
   return measurement;
 }
