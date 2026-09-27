@@ -95,3 +95,24 @@ did not measure this owner-thread slice.
 This correction cannot rescue serialization. Full-image work is still
 unbounded in total user-data bytes and remains rejected by the prerequisite's
 frozen complexity claim.
+
+## Append-only publication checkpoint
+
+On 2026-09-27 the clean branch
+`quest/distributed-transaction-replicated-apply` was verified again at exact
+HEAD `292b7204334cf47617e675dd9b12bc708b682886`. Its quest-only range from
+`33885263f` has no `src/` delta, and the remote branch did not exist.
+
+The non-force push was refused by the repository's exact-checkout pre-push
+gate after its static checks and corpus ratchets passed. The placed whole
+corpus repeatedly failed
+`test/integration/transaction-concurrent-read-outage.integration.test.js` on
+`tv-dator` during formation. Nothing was pushed, and
+`refs/heads/quest/distributed-transaction-replicated-apply` therefore still
+has no remote SHA to record. The full attempt is retained in the prerequisite
+evidence record
+`publication-attempt-stop-quest-2026-09-27.md`.
+
+No force, history rewrite, `--no-verify`, or unreceipted test-stage skip was
+used. The STOP verdict and immutable evidence head are unchanged; only remote
+publication is unresolved.
