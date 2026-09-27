@@ -9,7 +9,7 @@
     "cli-tooling": 96,
     "control-plane": 193,
     "convergence-topology": 91,
-    "distributed-harness": 166,
+    "distributed-harness": 167,
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 240,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2157,
-  "digest": "fnv1a32-4dcd180e",
+  "censusSize": 2158,
+  "digest": "fnv1a32-3d93846d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6a89e74c",
+  "observationDigest": "fnv1a32-155236e9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -888,6 +888,7 @@
     "test/distributed/harness/__tests__/restart-recovery-handoff-failure-barrier.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/rolling-restart-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/root-cause-invariants.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/run-source-identity.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/run.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scale-certification-receipt-freshness.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scale-evidence-contract.test.js": "distributed-harness",
@@ -5197,6 +5198,11 @@
         "test/distributed/config/local.json"
       ]
     },
+    "test/distributed/harness/__tests__/run-source-identity.test.js": {
+      "directories": [
+        "src"
+      ]
+    },
     "test/distributed/harness/__tests__/run.test.js": {
       "files": [
         ".dockerignore",
@@ -5222,7 +5228,6 @@
         "test/distributed/run.js"
       ],
       "directories": [
-        "src",
         "test/distributed/config",
         "test/distributed/scenarios"
       ],

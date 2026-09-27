@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1893,
+    "unit": 1894,
     "integration": 75,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2157,
-  "digest": "fnv1a32-e860aeef",
+  "censusSize": 2158,
+  "digest": "fnv1a32-59baf212",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -869,6 +869,7 @@
     "test/distributed/harness/__tests__/restart-recovery-handoff-failure-barrier.test.js": "unit",
     "test/distributed/harness/__tests__/rolling-restart-scenario.test.js": "unit",
     "test/distributed/harness/__tests__/root-cause-invariants.test.js": "unit",
+    "test/distributed/harness/__tests__/run-source-identity.test.js": "unit",
     "test/distributed/harness/__tests__/run.test.js": "unit",
     "test/distributed/harness/__tests__/scale-certification-receipt-freshness.test.js": "unit",
     "test/distributed/harness/__tests__/scale-evidence-contract.test.js": "unit",
