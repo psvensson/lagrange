@@ -618,3 +618,77 @@ The witness flips when the ACTIVE transaction stops owning the replica's
 connection. The stale-leader, never-caught-up and orphaned-BEGIN
 observations are recorded in the evidence JSON and in this document, but
 not asserted: they depend on timing.
+
+## Shadow workspace copy cost (2026-09-27)
+
+Evidence only; no production implementation. Test head f1ff6e6d2 extends
+`transaction-active-owns-connection.integration.test.js` with
+F-TX-SHADOW-COPY-FULL-FILE.
+
+### Method
+
+- A fresh RF=3 cluster and a steady user-table partition are formed.
+- A worker-owned public application session continuously autocommits rows to
+  the table, so apply traffic continues while the parent measures SQLite.
+- A separate connection to the published leader's replica adds a synthetic
+  history-shaped `_raft_rs_shadow_copy_history_fixture`. It does not mutate
+  any real Raft row. Targets are 32, 128 and 256 MiB full-file images.
+- At each target the synchronous candidate path is timed:
+  `db.serialize()` -> normalize the owned image's SQLite WAL header -> open
+  the Buffer as an anonymous database -> drop every `_raft_rs_*` table.
+- This measures copy cost on the real live replica file under apply traffic.
+  It does not block the leader process itself. T-A above separately measures
+  the consensus result when that process's event loop is blocked.
+
+### Two mechanisms found before the timing result
+
+1. `db.serialize()` copies the full file before the shadow can scrub Raft
+   tables. Dropping the tables leaves page count unchanged. In the 32 MiB
+   Lenovo sample, a later `VACUUM` took 1.30 ms and reduced the shadow to
+   0.04 MiB, but the full 32.18 MiB had already been copied and opened.
+   Therefore the BEGIN cap is full-file/history bytes, not scrubbed live-state
+   bytes.
+2. The serialized image retains SQLite WAL header versions `(2,2)`.
+   better-sqlite3 opens a Buffer as an anonymous database, which has no WAL
+   sidecar path; its first statement failed `SQLITE_CANTOPEN` on the first
+   tv-dator lab attempt (fd8f3e094,
+   `active-owns-connection-2026-09-27T05-56-48-365Z/`). Normalizing the two
+   owned header bytes to rollback-journal `(1,1)` made the image usable. The
+   measured normalization cost was about 0.003 ms.
+
+### Lab measurements
+
+The hard bound is 350 ms wall clock and is not scaled by the test machine
+factor: it comes from the real rs-raft election interval.
+
+| host | factor | image | serialize | open | scrub | usable total | result |
+|---|---:|---:|---:|---:|---:|---:|---|
+| lenovo-laptop | 2.18 | 32.18 MiB | 34.15 ms | 18.78 ms | 15.76 ms | 68.69 ms | under |
+| lenovo-laptop | 2.18 | 128.43 MiB | 112.61 ms | 66.36 ms | 31.22 ms | 210.19 ms | under |
+| lenovo-laptop | 2.18 | 256.68 MiB | 243.85 ms | 135.31 ms | 56.91 ms | **436.08 ms** | **over** |
+
+- tv-dator, factor 1.39, f1ff6e6d2: all three targets were under 350 ms; the
+  file passed 36 assertions in 118.3 s and the four-file exclusive cone was
+  green (81 assertions).
+- lenovo-laptop, factor 2.18, f1ff6e6d2: 32 and 128 MiB were under; 256 MiB
+  was over. Raw evidence:
+  `active-owns-connection-2026-09-27T06-27-03-666Z/` on that host.
+- The high-rate public driver also crossed the traffic split criterion during
+  the Lenovo run, so the later T-A phase saw split-child replica files. The
+  copy numbers were already complete and are valid; the final harness runs
+  T-A before copy traffic so that the two observations do not contaminate
+  each other.
+
+### Gate consequence
+
+The default storage split threshold is 10 GiB. A full-file copy already
+crossed the liveness bound at 256 MiB on one lab host, and rs-raft history is
+not compacted at this head because the live checkpoint pipeline is the legacy
+`_raft_state`/`_raft_log` pipeline. A 32 MiB full-file cap had ample measured
+margin, but it would remove explicit transactions from larger or older
+partitions well before the promised split boundary.
+
+The design gate is therefore **STOP**, not a proposal for that weaker
+transaction contract. The workspace needs a larger owner (paged/overlay
+snapshot) or a revived rs-raft compaction owner plus a lifecycle size
+invariant before transaction repair implementation starts.
