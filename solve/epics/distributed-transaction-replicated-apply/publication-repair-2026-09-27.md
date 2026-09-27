@@ -274,16 +274,19 @@ preflight requirement, but the quest remains `SEALED / PUBLICATION_BLOCKED`
 until the normal publisher succeeds and the remote branch SHA is independently
 read back.
 
-## Exact-head publication gate fixture failure
+## Exact-head publication evidence loss and diagnostic fixture failure
 
 The next normal publication attempt ran exact head
-`5b43d26972fb983773ea656c07807d993a535dd7`. Its five acceptance commands
-before the change proof were green: focused contracts, static analysis, model
-contracts, owner-debt report inputs, and golden capability guard scenarios.
-The retained acceptance receipt is
-`test-output/acceptance/project-hardening-proof-postpush-2026-09-27T11-40-33-126Z.report.json`.
+`5b43d26972fb983773ea656c07807d993a535dd7`. Its acceptance summary was
+`PASS 5 / FAIL 1`: focused contracts, static analysis, model contracts,
+owner-debt report inputs, and golden capability guard scenarios passed, while
+the change proof failed. The exact checkout and receipt were then deleted, so
+the original gate's terminal failing file and detailed evidence are not
+recoverable. In particular,
+`test-output/acceptance/project-hardening-proof-postpush-2026-09-27T11-40-33-126Z.report.json`
+is an unretained historical path, not a retained artifact.
 
-The full-corpus change proof then failed on lenovo-laptop in
+A later exact-head diagnostic run found a red on lenovo-laptop in
 `test/convergence/dt6-learner-promotion-proof-channel-wake.test.js`, subtest
 `proof-wakes-on-services-row-visibility`. The first run and its standalone
 retry both stopped in `createFiveNodeFixture()` before the tested proof-channel
@@ -291,9 +294,12 @@ wake property: the fixture required leader commit index 6 after admitting the
 three live followers, while the core reported 7. The other eleven subtests in
 that file passed on both attempts. The retained stream is
 `test-output/placement/5b43d26972fb-mujsx7fs-3025563-lenovo-laptop.log`.
+That diagnostic was interrupted before controller fallback and a final verdict,
+so it neither recovers nor identifies the original gate's terminal failure.
 
-This is a pre-existing fixture/evidence-owner defect, not production behavior,
-branch-introduced behavior, or infrastructure. The exact-index assertion
+The later DT6 red is a pre-existing fixture/evidence-owner defect, not
+production behavior, branch-introduced behavior, or infrastructure. This
+classification applies only to that diagnostic red. The exact-index assertion
 entered with `f4fd88e177`, and none of the fixture or its two DT6 consumers
 changed between the sealed STOP checkpoint and `5b43d2697`. A concurrent
 services-cache reconcile can queue a redundant add before the preceding add is
