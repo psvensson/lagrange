@@ -53,6 +53,11 @@ test('bounded-workspace falsifier rejects full serialization by byte count',
       }, `${sample.targetMiB} MiB preserves the serialized WAL-header finding`);
       t.equal(sample.authoritativeUnchanged, true,
         `${sample.targetMiB} MiB private effects do not mutate the source`);
+      t.same(sample.firstRead, {id: 1, value: 7},
+        `${sample.targetMiB} MiB indexed first read sees the base snapshot`);
+      t.equal(sample.semantics.blobBytes,
+        BOUNDED_TRANSACTION_WORKSPACE_FALSIFIER.TRANSACTION_BLOB_BYTES,
+        `${sample.targetMiB} MiB BLOB semantics execute`);
       t.equal(sample.semantics.insertedAuditRows,
         BOUNDED_TRANSACTION_WORKSPACE_FALSIFIER.FIXED_TRANSACTION_ROWS,
         `${sample.targetMiB} MiB trigger semantics execute`);
@@ -67,5 +72,8 @@ test('bounded-workspace falsifier rejects full serialization by byte count',
       'small-base/large-transaction cost is measured separately');
     t.equal(report.smallBaseLargeTransaction.authoritativeUnchanged, true,
       'the large private transaction also leaves the source unchanged');
+    t.equal(report.smallBaseLargeTransaction.semantics.insertedAuditRows,
+      BOUNDED_TRANSACTION_WORKSPACE_FALSIFIER.LARGE_TRANSACTION_ROWS,
+      'large-transaction trigger effects scale with transaction work');
     t.end();
   });
