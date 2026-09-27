@@ -177,6 +177,44 @@ independent capture time. CREATE and INSERT remain one-shot. CREATE still owns
 the refreshed operation-specific provisioning and capacity decision, and a
 denial is surfaced directly without a retry, sleep, or extended timeout.
 
+## Exact-handoff preflight and settling-witness classification
+
+The verifier-approved checkpoint
+`7af1997428e1d3536413af3d6d0fe5f0f38ff474` ran the exact seven-file
+exclusive cone on tv-dator at `jobs=1`, after the normal lock and thermal
+checks. The repaired formation path reached the transaction properties:
+`transaction-active-owns-connection` passed 33 assertions and the target
+`transaction-concurrent-read-outage` witness passed five assertions. The
+focused handoff regression passed 18 assertions. Six of seven files passed;
+the sole red was the later replicated-apply settling witness.
+
+That red occurred before the settling witness established its transaction
+property. Its evidence recorded CREATE as `served:true` after 30619 ms with
+no transport rejection. In the same interval the table-creation owner logged
+`Initial table partition provisioning failed` because it timed out waiting for
+a routable `settle_rows` partition service. Later routing observations showed
+one and then two service rows, but no canonical leader. The transaction's
+first INSERT then failed with `No leader available for write operation`.
+
+This is a quest-evidence harness defect, not a transaction-apply result and
+not lab infrastructure. A transient provisioning timeout becomes a fulfilled
+durable schema-job result with `contractState=pending`, `nextAction=retry` and
+an exact `jobId`. The quest's `serveStatement` helper classified any fulfilled
+IPC query as readiness and discarded that owner contract. Both that helper
+and the settling witness entered at `72d878ece`; its parent has no equivalent
+witness and no production `src/` changed at that boundary. The settling file
+itself is unchanged from `72d878ece` through `7af199742`. Earlier runs of that
+same witness reached the property when CREATE converged quickly, which makes
+the missing schema-lifecycle precondition timing-dependent.
+
+The settling witness now submits CREATE exactly once and retains its canonical
+schema-job contract. A ready/proceed result advances immediately. A
+pending/retry result is followed only through read-only SELECTs of the exact
+`schema_operations.job_id`; `SUCCEEDED` advances, `FAILED` fails directly, and
+the existing CREATE/run deadline bounds a job that stays pending. No CREATE or
+transaction retry, arbitrary sleep, enlarged timeout, production source
+change, or weaker transaction assertion is introduced.
+
 ## Design verdict remains sealed
 
 The liveness wording is corrected for future work: there is no configured

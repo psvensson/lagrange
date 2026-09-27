@@ -49,10 +49,12 @@ import {
   createEmbeddedCluster,
   decodeExposure,
   describeExposedError,
-  serveStatement,
 } from './helpers/embedded-cluster-harness.js';
 import {observeTableReplicas} from './helpers/replica-sqlite-observer.js';
 import {createEvidenceSink} from './helpers/replicated-apply-evidence.js';
+import {
+  createTableAndAwaitSchemaProvisioning,
+} from './helpers/schema-provisioning-job-observer.js';
 import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
 
 const FINDING = 'F-TX-REPLICATED-APPLY';
@@ -303,12 +305,17 @@ async function runSettlingExperiment(t, cluster, evidence, runDeadline, sink) {
   const [seed] = cluster.nodes;
   const sessions = await openSessions(cluster.nodes);
   const seedSession = sessions.get(seed.nodeId);
-  evidence.phases.create = await serveStatement(t, seed, seedSession,
-    SQL.CREATE, [], WINDOW_MS.CREATE);
+  evidence.phases.create = await createTableAndAwaitSchemaProvisioning({
+    createSql: SQL.CREATE,
+    deadlineMs: scaledDeadline(WINDOW_MS.CREATE, runDeadline),
+    pollIntervalMs: POLL_MS,
+    query: (sql, params) => seed.query(seedSession, sql, params),
+    sleep: (ms) => managedSleep(t, ms),
+  });
   sink.write(evidence, cluster.nodes);
-  if (!evidence.phases.create.served) {
-    t.fail(`CREATE TABLE was never served: ${JSON.stringify(
-      evidence.phases.create.rejections.slice(-3))}`);
+  if (!evidence.phases.create.ready) {
+    t.fail(`CREATE TABLE schema job was not ready: ${JSON.stringify(
+      evidence.phases.create)}`);
     return;
   }
 

@@ -5,9 +5,27 @@ import {
   readLocalControlSnapshot,
   runApplicationWriteProbe,
 } from './helpers/embedded-cluster-harness.js';
+import {
+  SCHEMA_JOB_SQL,
+  createTableAndAwaitSchemaProvisioning,
+} from './helpers/schema-provisioning-job-observer.js';
+import {
+  EMBEDDED_STEP_OUTCOME,
+  expose,
+} from './helpers/embedded-node-protocol.js';
 
 const NODE_ID = Object.freeze({SEED: 'seed-node', JOINER: 'joiner-node'});
 const EXPECTED_NODE_IDS = Object.freeze([NODE_ID.SEED, NODE_ID.JOINER]);
+
+const fulfilled = (value) => ({
+  outcome: EMBEDDED_STEP_OUTCOME.FULFILLED,
+  value: expose(value),
+});
+
+const schemaRow = (jobId, status, extra = {}) => fulfilled({
+  rows: [{job_id: jobId, status, current_step: status,
+    reason_codes: '[]', attempt_count: 1, ...extra}],
+});
 
 function snapshot({handoffState = 'complete', runtimePromotionAllowed = true,
   nextAction = 'admit_active_gate',
@@ -126,6 +144,83 @@ test('embedded formation submits its DDL witness once', async (t) => {
   'the first DDL rejection is surfaced directly');
   t.equal(createAttempts, 1, 'DDL is submitted exactly once');
   t.equal(insertAttempts, 0, 'a rejected DDL cannot fall through to INSERT');
+});
+
+test('pending CREATE waits read-only for its exact durable schema job',
+  async (t) => {
+    const jobId = 'schema-job-settling';
+    let nowMs = 0;
+    let createAttempts = 0;
+    let observations = 0;
+    const jobOutcomes = [
+      schemaRow(jobId, 'PENDING'),
+      schemaRow(jobId, 'SUCCEEDED', {completed_at: 250}),
+    ];
+    const result = await createTableAndAwaitSchemaProvisioning({
+      createSql: 'CREATE TABLE witness (id TEXT PRIMARY KEY)',
+      deadlineMs: 1000,
+      now: () => nowMs,
+      pollIntervalMs: 250,
+      query: async (sql, params) => {
+        if (sql === SCHEMA_JOB_SQL) {
+          observations++;
+          t.same(params, [jobId], 'only the returned durable job is observed');
+          return jobOutcomes.shift();
+        }
+        createAttempts++;
+        return fulfilled({success: true, jobId, contractState: 'pending',
+          nextAction: 'retry'});
+      },
+      sleep: async (ms) => {
+        nowMs += ms;
+      },
+    });
+    t.equal(result.ready, true, 'SUCCEEDED is the readiness event');
+    t.equal(result.create.contractState, 'pending',
+      'the fulfilled pending contract is retained, not called ready');
+    t.equal(result.job.status, 'SUCCEEDED', 'terminal owner state is retained');
+    t.equal(createAttempts, 1, 'CREATE is submitted exactly once');
+    t.equal(observations, 2, 'pending requires another read-only observation');
+  });
+
+test('schema job failure and deadline are deterministic', async (t) => {
+  const jobId = 'schema-job-terminal';
+  const pendingCreate = fulfilled({success: true, jobId,
+    contractState: 'pending', nextAction: 'retry'});
+  const failed = await createTableAndAwaitSchemaProvisioning({
+    createSql: 'CREATE TABLE failed_witness (id TEXT PRIMARY KEY)',
+    deadlineMs: 1000,
+    now: () => 0,
+    pollIntervalMs: 250,
+    query: async (sql) => sql === SCHEMA_JOB_SQL ?
+      schemaRow(jobId, 'FAILED', {error_code: 'PROVISION_FAILED',
+        error_message: 'canonical failure'}) : pendingCreate,
+    sleep: async () => {},
+  });
+  t.equal(failed.ready, false, 'FAILED never opens the transaction witness');
+  t.equal(failed.failure, 'canonical failure',
+    'the durable owner failure is surfaced directly');
+
+  let nowMs = 0;
+  let createAttempts = 0;
+  const bounded = await createTableAndAwaitSchemaProvisioning({
+    createSql: 'CREATE TABLE bounded_witness (id TEXT PRIMARY KEY)',
+    deadlineMs: 500,
+    now: () => nowMs,
+    pollIntervalMs: 250,
+    query: async (sql) => {
+      if (sql === SCHEMA_JOB_SQL) return schemaRow(jobId, 'RUNNING');
+      createAttempts++;
+      return pendingCreate;
+    },
+    sleep: async (ms) => {
+      nowMs += ms;
+    },
+  });
+  t.equal(bounded.ready, false, 'deadline leaves a pending job closed');
+  t.equal(bounded.failure, 'schema provisioning deadline reached',
+    'deadline failure is explicit');
+  t.equal(createAttempts, 1, 'deadline never retries CREATE');
 });
 
 test('embedded control-snapshot observation is bounded', async (t) => {
