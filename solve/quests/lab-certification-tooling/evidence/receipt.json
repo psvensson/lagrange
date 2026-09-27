@@ -1,0 +1,42 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "lab-certification-tooling",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/home-lab-cli-guidelines.test.js": "694e96f5e3b2872e71fc08d3a27eb76409bf75004df789a03f11af4416b97f40",
+    "test/scripts/lab-certification-tooling.test.js": "21945256f2f256f50db9f6504e3e6649ff234a3a0faefb636add527c8275addf",
+    "test/scripts/lab-test-base.test.js": "bbc86dc4398b5213013268d584c182f846076f22c18d809184b0b5be772f0b39",
+    "test/scripts/test-placement.test.js": "b4f6e0943331729df6bb7825c27d0006a4dd6c9988904247f53e51a9e234043b"
+  },
+  "generatedAt": "2026-09-27T17:03:04.611Z",
+  "receipts": [
+    {
+      "id": "certification-cli-contract",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/home-lab-cli-guidelines.test.js test/scripts/lab-certification-tooling.test.js test/scripts/test-placement.test.js test/scripts/lab-test-base.test.js",
+      "detail": "The focused CLI witness requires explicit --sha and --on for file and convergence-probes, bounds repeat at 1..100, refuses values for stop-on-first-red, and preserves lane/split/base-sha boundaries; the command-surface witness keeps the prior profiles present. Both modified unit files complete below two seconds.",
+      "testFile": "test/scripts/lab-certification-tooling.test.js"
+    },
+    {
+      "id": "canonical-and-named-profile-plans",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/lab-certification-tooling.test.js",
+      "detail": "The named profile preserves its exact file and the convergence profile consumes the canonical convergence-probes shard, which the existing classified planner accepts whole.",
+      "testFile": "test/scripts/lab-certification-tooling.test.js"
+    },
+    {
+      "id": "repeat-and-first-red-policy",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/lab-certification-tooling.test.js",
+      "detail": "A red repetition remains the aggregate verdict; keep-going runs the requested count and stop-on-first-red prevents only later repetitions from starting.",
+      "testFile": "test/scripts/lab-certification-tooling.test.js"
+    },
+    {
+      "id": "existing-lab-execution-path",
+      "passed": true,
+      "command": "LAGRANGE_CHECK_BASE=HEAD npm test && npm run test:static",
+      "detail": "After the verifier repair, the quest-delta proof passed 183 files and the full static chain passed. Static trace binds runLabCertification to the unchanged runLabTest/startLabShare/startRemoteShard route; the existing placement suite exercises that route's lock, thermal, streaming, and relay contracts. The focused stub is narrower: it proves each sequential repetition supplies the exact SHA and named machine to runLabTest, requests the normal holder purpose and ledger, and invokes the normal copy boundary with two distinguishable records.",
+      "testFile": "test/scripts/test-placement.test.js"
+    }
+  ]
+}

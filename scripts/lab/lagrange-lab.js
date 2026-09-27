@@ -15,7 +15,8 @@ import {initK3sServer, joinK3sNode, k3sKubectl, syncK3sLabels} from './k3s.js';
 import {configureRunner, runnerLabels} from './runner.js';
 import {
   WORKER_SETUP_FILE, copyWorkerSetup, discoverFleet, fleetRequirement, formatFleet,
-  labTestCommit, labTestDeps, labTestSelectorArgs, probeRemoteNode, recordFleet, runLabTest,
+  labConvergenceCertificationFiles, labNamedCertificationFiles, labTestCommit, labTestDeps,
+  labTestSelectorArgs, probeRemoteNode, recordFleet, runLabTest, runLabTestRepetitions,
   workerCloneUrl, workerSetupScript,
 } from './probe.js';
 import {
@@ -32,11 +33,28 @@ import {parse as parseYaml} from 'yaml';
 
 // A hand lab run: the profiles that are a plan of test files, the lanes it
 // may name (the classified runner's own, and all of them), and its flags.
-const LAB_TEST_PROFILE = Object.freeze({CHANGED: 'changed', ALL: 'all'});
+const LAB_TEST_PROFILE = Object.freeze({
+  CHANGED: 'changed',
+  ALL: 'all',
+  FILE: 'file',
+  CONVERGENCE_PROBES: 'convergence-probes',
+});
+const LAB_TEST_LANE_PROFILES = Object.freeze([
+  LAB_TEST_PROFILE.CHANGED,
+  LAB_TEST_PROFILE.ALL,
+]);
+const LAB_TEST_FILE_PLAN_PROFILES = Object.freeze(Object.values(LAB_TEST_PROFILE));
+const LAB_TEST_CERTIFICATION_PROFILES = Object.freeze([
+  LAB_TEST_PROFILE.FILE,
+  LAB_TEST_PROFILE.CONVERGENCE_PROBES,
+]);
 const LAB_TEST_LANE_ALL = 'all';
 const LAB_TEST_LANES = Object.freeze([...CLASSIFIED_LANES, LAB_TEST_LANE_ALL]);
 const LAB_TEST_FLAG = Object.freeze({LANE: 'lane', ON: 'on', SHA: 'sha', BASE_SHA: 'base-sha',
-  SPLIT: 'split'});
+  SPLIT: 'split', REPEAT: 'repeat', STOP_ON_FIRST_RED: 'stop-on-first-red'});
+const LAB_TEST_REPEAT_DEFAULT = 1;
+const LAB_TEST_REPEAT_MAX = 100;
+const LAB_TEST_REPEAT_PATTERN = /^[1-9]\d*$/u;
 const LAB_TEST_CHOICE = '|';
 const USAGE = [
   'Lagrange home lab\n\n',
@@ -60,11 +78,15 @@ const USAGE = [
   '  lab k3s cordon|uncordon NAME --server SERVER\n',
   '  lab k3s drain NAME --server SERVER\n',
   '  lab test changed|smoke|gate|postpush|all\n',
-  `  lab test ${Object.values(LAB_TEST_PROFILE).join(LAB_TEST_CHOICE)} --lane `,
+  `  lab test ${[LAB_TEST_PROFILE.CHANGED, LAB_TEST_PROFILE.ALL].join(LAB_TEST_CHOICE)} --lane `,
   `${LAB_TEST_LANES.join(LAB_TEST_CHOICE)} [--on NAME] [--sha COMMIT] [--split]\n`,
   `  lab test ${LAB_TEST_PROFILE.CHANGED} --lane LANE [--sha COMMIT] --base-sha COMMIT\n`,
   '      (--base-sha: the commit the change cone is measured from; ',
   'default the merge base with origin/main)\n',
+  `  lab test ${LAB_TEST_PROFILE.FILE} TEST_FILE --sha COMMIT --on NAME `,
+  '[--repeat N] [--stop-on-first-red]\n',
+  `  lab test ${LAB_TEST_PROFILE.CONVERGENCE_PROBES} --sha COMMIT --on NAME `,
+  '[--repeat N] [--stop-on-first-red]\n',
   '  lab fleet [--json]\n',
   '  lab provision [--output FILE] [--copy NAME]\n',
 ].join('');
@@ -143,6 +165,17 @@ const ERROR_TEXT = Object.freeze({
   NO_COMMIT_NAME: '--sha needs a commit',
   NO_BASE_NAME: '--base-sha needs a commit',
   BASE_NEEDS_CHANGED: '--base-sha measures the change cone: it takes the changed profile',
+  CERTIFICATION_NEEDS_ON: 'exact lab certification needs --on NAME',
+  CERTIFICATION_NEEDS_SHA: 'exact lab certification needs --sha COMMIT',
+  CERTIFICATION_TAKES_NO_LANE: 'exact lab certification selects its profile: it takes no --lane',
+  CERTIFICATION_TAKES_NO_SPLIT: 'exact lab certification runs on one named machine: it takes no --split',
+  FILE_NEEDS_NAME: 'the file profile needs TEST_FILE',
+  FILE_TAKES_ONE_NAME: 'the file profile takes exactly one TEST_FILE',
+  CONVERGENCE_TAKES_NO_NAME: 'the convergence-probes profile takes no TEST_FILE',
+  REPEAT_NEEDS_CERTIFICATION: '--repeat takes the file or convergence-probes profile',
+  STOP_NEEDS_CERTIFICATION: '--stop-on-first-red takes the file or convergence-probes profile',
+  STOP_TAKES_NO_VALUE: '--stop-on-first-red takes no value',
+  INVALID_REPEAT: '--repeat must be a positive integer no greater than ',
   NOT_THE_RUNNER: ' no longer runs the classified runner: ',
   NO_LANE_FILES: ' has no files in lane ',
 });
@@ -454,35 +487,97 @@ async function commandK3s(action, args) {
 
 async function commandTest(profile, args) {
   const selected = TEST_PROFILE_COMMANDS[profile];
-  if (!selected) throw new Error(`Unknown test profile: ${profile}`);
-  if (!Object.values(LAB_TEST_FLAG).some((flag) => Object.hasOwn(args.flags, flag))) {
+  const handProfile = LAB_TEST_FILE_PLAN_PROFILES.includes(profile);
+  if (!selected && !handProfile) throw new Error(`Unknown test profile: ${profile}`);
+  const hasHandFlag = Object.values(LAB_TEST_FLAG)
+    .some((flag) => Object.hasOwn(args.flags, flag));
+  if (!hasHandFlag && !LAB_TEST_CERTIFICATION_PROFILES.includes(profile)) {
     await run(NPM, [...selected]);
     return;
   }
-  const request = labTestRequest(profile, args.flags);
+  const request = labTestRequest(profile, args.flags,
+    args.positional.slice(POSITIONAL.NAME));
+  if (LAB_TEST_CERTIFICATION_PROFILES.includes(profile)) {
+    process.exitCode = await runLabCertification(profile, request);
+    return;
+  }
+  process.exitCode = await runOneLabTest(profile, request);
+}
+
+async function runOneLabTest(profile, request) {
   const commit = labTestCommit({root: FLEET_REPO_ROOT, sha: request.sha});
   try {
     const plan = await labTestPlan(profile, request, commit);
-    process.exitCode = await runLabTest({
-      plan,
-      costs: estimateFileCosts(plan, lastResultsRoots(FLEET_REPO_ROOT)),
-      commit,
-      on: request.on,
-      split: request.split,
-      root: FLEET_REPO_ROOT,
-    }, labTestDeps({root: FLEET_REPO_ROOT}));
+    return await runLabTestPlan(plan, request, commit);
   } finally {
     commit.release();
   }
 }
 
+// Resolve and prepare the exact commit once, before the first repetition. Its
+// planning checkout stays alive until the requested sequence settles; each
+// normal run still bundles that same commit and acquires the machine lock.
+async function runLabCertification(profile, request) {
+  const commit = labTestCommit({root: FLEET_REPO_ROOT, sha: request.sha});
+  try {
+    const plan = await labTestPlan(profile, request, commit);
+    const heldCommit = {...commit, release: () => {}};
+    return await runLabTestRepetitions({repeat: request.repeat,
+      stopOnFirstRed: request.stopOnFirstRed},
+    () => runLabTestPlan(plan, request, heldCommit));
+  } finally {
+    commit.release();
+  }
+}
+
+function runLabTestPlan(plan, request, commit) {
+  return runLabTest({
+    plan,
+    costs: estimateFileCosts(plan, lastResultsRoots(FLEET_REPO_ROOT)),
+    commit,
+    on: request.on,
+    split: request.split,
+    root: FLEET_REPO_ROOT,
+  }, labTestDeps({root: FLEET_REPO_ROOT}));
+}
+
 // Everything a hand lab run can refuse, refused before the inventory, the
 // tree or any machine is looked at.
-function labTestRequest(profile, flags) {
-  if (!Object.values(LAB_TEST_PROFILE).includes(profile)) {
+function labTestRequest(profile, flags, names = []) {
+  if (!LAB_TEST_FILE_PLAN_PROFILES.includes(profile)) {
     throw new Error(`the ${profile}${ERROR_TEXT.NOT_A_FILE_PLAN}` +
-      `${Object.values(LAB_TEST_PROFILE).join(LAB_TEST_CHOICE)}`);
+      `${LAB_TEST_LANE_PROFILES.join(LAB_TEST_CHOICE)}`);
   }
+  const baseSha = labTestBaseSha(profile, flags);
+  const repeat = labTestRepeat(profile, flags);
+  const stopOnFirstRed = labTestStopOnFirstRed(profile, flags);
+  if (flags[LAB_TEST_FLAG.ON] === true) throw new Error(ERROR_TEXT.NO_MACHINE_NAME);
+  if (flags[LAB_TEST_FLAG.SHA] === true) throw new Error(ERROR_TEXT.NO_COMMIT_NAME);
+  const common = {baseSha, repeat, stopOnFirstRed};
+  return LAB_TEST_CERTIFICATION_PROFILES.includes(profile) ?
+    labCertificationRequest(profile, flags, names, common) :
+    labLaneTestRequest(flags, common);
+}
+
+function labCertificationRequest(profile, flags, names, common) {
+  if (flags[LAB_TEST_FLAG.LANE] !== undefined) {
+    throw new Error(ERROR_TEXT.CERTIFICATION_TAKES_NO_LANE);
+  }
+  if (flags[LAB_TEST_FLAG.SPLIT] !== undefined) {
+    throw new Error(ERROR_TEXT.CERTIFICATION_TAKES_NO_SPLIT);
+  }
+  if (typeof flags[LAB_TEST_FLAG.SHA] !== 'string') {
+    throw new Error(ERROR_TEXT.CERTIFICATION_NEEDS_SHA);
+  }
+  if (typeof flags[LAB_TEST_FLAG.ON] !== 'string') {
+    throw new Error(ERROR_TEXT.CERTIFICATION_NEEDS_ON);
+  }
+  return {...common, lane: LAB_TEST_LANE_ALL, split: false,
+    on: flags[LAB_TEST_FLAG.ON], sha: flags[LAB_TEST_FLAG.SHA],
+    namedFile: labTestNamedFile(profile, names)};
+}
+
+function labLaneTestRequest(flags, common) {
   const lane = flags[LAB_TEST_FLAG.LANE];
   if (typeof lane !== 'string') throw new Error(ERROR_TEXT.NO_LANE);
   if (!LAB_TEST_LANES.includes(lane)) {
@@ -491,10 +586,41 @@ function labTestRequest(profile, flags) {
   const split = flags[LAB_TEST_FLAG.SPLIT];
   if (split !== undefined && split !== true) throw new Error(ERROR_TEXT.SPLIT_TAKES_NO_VALUE);
   if (split && lane !== LAB_TEST_LANE_ALL) throw new Error(ERROR_TEXT.SPLIT_NEEDS_ALL);
-  if (flags[LAB_TEST_FLAG.ON] === true) throw new Error(ERROR_TEXT.NO_MACHINE_NAME);
-  if (flags[LAB_TEST_FLAG.SHA] === true) throw new Error(ERROR_TEXT.NO_COMMIT_NAME);
-  return {lane, split: split === true, on: flags[LAB_TEST_FLAG.ON] ?? null,
-    sha: flags[LAB_TEST_FLAG.SHA] ?? null, baseSha: labTestBaseSha(profile, flags)};
+  return {...common, lane, split: split === true, on: flags[LAB_TEST_FLAG.ON] ?? null,
+    sha: flags[LAB_TEST_FLAG.SHA] ?? null, namedFile: null};
+}
+
+function labTestNamedFile(profile, names) {
+  if (profile === LAB_TEST_PROFILE.FILE) {
+    if (names.length === 0) throw new Error(ERROR_TEXT.FILE_NEEDS_NAME);
+    if (names.length > 1) throw new Error(ERROR_TEXT.FILE_TAKES_ONE_NAME);
+    return names[0];
+  }
+  if (names.length > 0) throw new Error(ERROR_TEXT.CONVERGENCE_TAKES_NO_NAME);
+  return null;
+}
+
+function labTestRepeat(profile, flags) {
+  const value = flags[LAB_TEST_FLAG.REPEAT];
+  if (value === undefined) return LAB_TEST_REPEAT_DEFAULT;
+  if (!LAB_TEST_CERTIFICATION_PROFILES.includes(profile)) {
+    throw new Error(ERROR_TEXT.REPEAT_NEEDS_CERTIFICATION);
+  }
+  if (value === true || !LAB_TEST_REPEAT_PATTERN.test(value) ||
+      Number(value) > LAB_TEST_REPEAT_MAX) {
+    throw new Error(`${ERROR_TEXT.INVALID_REPEAT}${LAB_TEST_REPEAT_MAX}`);
+  }
+  return Number(value);
+}
+
+function labTestStopOnFirstRed(profile, flags) {
+  const value = flags[LAB_TEST_FLAG.STOP_ON_FIRST_RED];
+  if (value === undefined) return false;
+  if (!LAB_TEST_CERTIFICATION_PROFILES.includes(profile)) {
+    throw new Error(ERROR_TEXT.STOP_NEEDS_CERTIFICATION);
+  }
+  if (value !== true) throw new Error(ERROR_TEXT.STOP_TAKES_NO_VALUE);
+  return true;
 }
 
 // The commit the change cone is measured from, or null for the selector's own
@@ -511,12 +637,19 @@ function labTestBaseSha(profile, flags) {
 // lane filters, the change cone through the selector (from --base-sha when
 // named), and the chosen lane of the classified plan of those files - planned
 // from the commit's own tree.
-async function labTestPlan(profile, {lane, baseSha}, commit) {
-  const files = profile === LAB_TEST_PROFILE.ALL ?
-    corpusFiles(commit.gitRoot, TEST_PROFILE_COMMANDS[profile].at(-1)) :
-    (await capture(process.execPath, labTestSelectorArgs({sha: commit.sha, baseSha}),
+async function labTestPlan(profile, {lane, baseSha, namedFile}, commit) {
+  let files;
+  if (profile === LAB_TEST_PROFILE.FILE) {
+    files = labNamedCertificationFiles(namedFile);
+  } else if (profile === LAB_TEST_PROFILE.CONVERGENCE_PROBES) {
+    files = labConvergenceCertificationFiles(commit.gitRoot);
+  } else if (profile === LAB_TEST_PROFILE.ALL) {
+    files = corpusFiles(commit.gitRoot, TEST_PROFILE_COMMANDS[profile].at(-1));
+  } else {
+    files = (await capture(process.execPath, labTestSelectorArgs({sha: commit.sha, baseSha}),
       {cwd: FLEET_REPO_ROOT, timeoutMs: LAB_TEST_SELECT_DEADLINE_MS}))
       .split(LAB_TEST_LINE).filter(Boolean);
+  }
   const plan = planClassifiedTestFiles(commit.gitRoot, files, lastResultsRoots(FLEET_REPO_ROOT));
   const chosen = lane === LAB_TEST_LANE_ALL ? plan :
     plan.filter((entry) => entry.resourceClass === lane);

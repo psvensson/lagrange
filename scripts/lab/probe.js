@@ -6,6 +6,9 @@ import path from 'node:path';
 import {StringDecoder} from 'node:string_decoder';
 
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
+import {
+  CONVERGENCE_PROBES_SHARD_PATH,
+} from '../checks/test-primary-classification-constants.js';
 import {LANE_JOBS_CAP_ENV, RESOURCE_CLASS_EXCLUSIVE}
   from '../checks/test-resource-classification-constants.js';
 import {THERMAL_REFUSAL_LINE} from '../checks/wait-for-thermal-headroom.js';
@@ -2221,6 +2224,8 @@ const LAB_TEST_RESULTS_EXTENSION = '.ndjson';
 const LAB_TEST_KIB_PER_GIB = 1024 * 1024;
 const LAB_TEST_MEMORY_DIGITS = 1;
 const LAB_TEST_FAILED = 1;
+const LAB_TEST_PROFILE_LINE = /\r?\n/u;
+const LAB_TEST_REPETITION_PREFIX = 'lab test: repetition ';
 const LAB_TEST_GIT = Object.freeze({
   RESOLVE: Object.freeze(['rev-parse', '--verify', '--quiet', '--end-of-options']),
   COMMIT_SUFFIX: '^{commit}',
@@ -2241,6 +2246,37 @@ const LAB_TEST_TEXT = Object.freeze({
   COPIED: 'results copied to ',
   LANES: ', ',
 });
+
+// The named profile stays exactly what the operator named; the convergence
+// profile reads the one curated shard owned by primary test classification.
+export function labNamedCertificationFiles(namedFile) {
+  return [namedFile];
+}
+
+export function labConvergenceCertificationFiles(gitRoot) {
+  return fs.readFileSync(path.join(gitRoot, CONVERGENCE_PROBES_SHARD_PATH), TEXT_UTF8)
+    .split(LAB_TEST_PROFILE_LINE).map((line) => line.trim()).filter(Boolean);
+}
+
+/**
+ * Repeat one normal lab run. A red repetition is retained as the aggregate
+ * status; stop-on-first-red only prevents later repetitions from starting.
+ * @param {{repeat: number, stopOnFirstRed?: boolean, write?: Function}} input
+ * @param {Function} run repetition -> Promise<status>
+ * @return {Promise<number>}
+ */
+export async function runLabTestRepetitions({repeat, stopOnFirstRed = false,
+  write = (line) => process.stdout.write(`${line}${PLACEMENT_NEWLINE}`)}, run) {
+  let aggregate = 0;
+  for (let repetition = 1; repetition <= repeat; repetition += 1) {
+    if (repeat > 1) write(`${LAB_TEST_REPETITION_PREFIX}${repetition}/${repeat}`);
+    const status = await run(repetition);
+    if (status === 0) continue;
+    aggregate = LAB_TEST_FAILED;
+    if (stopOnFirstRed) break;
+  }
+  return aggregate;
+}
 
 function gitMust(root, args) {
   const result = gitAt(root, args);

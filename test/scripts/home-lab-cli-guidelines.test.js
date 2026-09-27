@@ -53,6 +53,10 @@ const USAGE = [
   '  lab test changed --lane LANE [--sha COMMIT] --base-sha COMMIT\n',
   '      (--base-sha: the commit the change cone is measured from; ',
   'default the merge base with origin/main)\n',
+  '  lab test file TEST_FILE --sha COMMIT --on NAME ',
+  '[--repeat N] [--stop-on-first-red]\n',
+  '  lab test convergence-probes --sha COMMIT --on NAME ',
+  '[--repeat N] [--stop-on-first-red]\n',
   '  lab fleet [--json]\n',
   '  lab provision [--output FILE] [--copy NAME]\n',
 ].join('');

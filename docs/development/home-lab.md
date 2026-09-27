@@ -373,6 +373,35 @@ configuration; `--base-sha` pairs with `--sha` as the other end of the range.
 It applies only to the `changed` profile. It narrows what the lab runs; the
 push gate still proves the full range against `origin/main`.
 
+### Run an exact certification sample on one lab machine
+
+For a bounded certification sample, run either one named classified test file
+or the canonical convergence-probes shard. Both forms require the commit and
+machine to be explicit:
+
+```bash
+node scripts/lab.js test file test/integration/example.test.js \
+  --sha <commit> --on tv-dator --repeat 3 --stop-on-first-red
+
+node scripts/lab.js test convergence-probes \
+  --sha <commit> --on tv-dator --repeat 3 --stop-on-first-red
+```
+
+`--sha` is resolved to one full commit before the first repetition, and every
+repetition sends that same commit. `--on` is an inventory name selected from
+the ready fleet discovered for that run; there is no default certification
+host. `--repeat` defaults to one and accepts 1 through 100. A red repetition
+always makes the command red. `--stop-on-first-red` prevents only later
+repetitions from starting; it does not retry or reclassify the failure.
+
+These profiles use the normal lab-test path: the existing machine-wide lock,
+thermal gate, classified runner, streamed verdicts, and copied result ledger.
+The convergence profile reads `test/shards/convergence-probes.txt`, the same
+curated shard as `npm run test:convergence-probes`; it does not keep a second
+test list. They do not accept `--lane`, `--split`, or `--base-sha`.
+`--base-sha` remains exclusive to `lab test changed` because only that profile
+has a change cone.
+
 ## Run the distributed matrix on local, lab, or GCP targets
 
 The canonical scenario matrix has one owner:

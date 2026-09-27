@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 151,
     "storage-raft": 102,
-    "test-infrastructure": 136,
+    "test-infrastructure": 137,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2172,
-  "digest": "fnv1a32-77f90537",
+  "censusSize": 2173,
+  "digest": "fnv1a32-26fafb31",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-31298d2c",
+  "observationDigest": "fnv1a32-7f602b50",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1901,6 +1901,7 @@
     "test/scripts/impact-proof-cone.test.js": "test-infrastructure",
     "test/scripts/install-git-hooks-stdout-purity.test.js": "test-infrastructure",
     "test/scripts/inventory-ordinal-segments.test.js": "test-infrastructure",
+    "test/scripts/lab-certification-tooling.test.js": "test-infrastructure",
     "test/scripts/lab-fleet-discovery.test.js": "test-infrastructure",
     "test/scripts/lab-test-base.test.js": "test-infrastructure",
     "test/scripts/lab-worker-provisioning.test.js": "test-infrastructure",
@@ -8849,6 +8850,28 @@
     "test/scripts/inventory-ordinal-segments.test.js": {
       "files": [
         "src/query/partition-resolver.js"
+      ]
+    },
+    "test/scripts/lab-certification-tooling.test.js": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/test-primary-classification-constants.js",
+        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/lab.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/query/distributed-merge-engine.test.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
       ]
     },
     "test/scripts/lab-fleet-discovery.test.js": {

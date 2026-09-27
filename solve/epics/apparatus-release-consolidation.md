@@ -33,6 +33,7 @@ quests:
   - lane-parallelism-measurement
   - fleet-capability-discovery
   - test-placement
+  - lab-certification-tooling
 authorizes:
   - scripts
   - test
