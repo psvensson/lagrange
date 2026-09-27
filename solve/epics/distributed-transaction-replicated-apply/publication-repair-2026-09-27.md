@@ -340,6 +340,58 @@ preflight is green, but the quest remains `SEALED / PUBLICATION_BLOCKED` until
 the normal publisher succeeds and the remote branch SHA is independently read
 back.
 
+## Membership-consistency publication fixture repair
+
+The exact-head publication diagnostic at
+`3ab4accb42cc62051da1042a093b81ac062773d0` failed
+`test/integration/membership-consistency.integration.test.js` on both
+controller attempts. The retained controller summaries are in
+`test-output/reports/test-results.ndjson`; the detailed attempts are
+`.tap/test-results/test/integration/membership-consistency.integration.test.js.attempt-1.tap`
+and the adjacent `.tap`. The first failure in each attempt was the stale
+publication assertion. The same attempts also showed that a raw seed
+publication/cache wait and an independently refreshed placement-eligible
+answer did not establish the atomic owner boundary consumed by a rebalancer:
+one run observed an empty available set after those helpers succeeded, and the
+concurrent rebalancers consequently returned failure.
+
+The retained Carinas placement stream is
+`test-output/placement/3ab4accb42cc-mujvd8id-3081823-carinas-windows.log`.
+Its initial exclusive run reached the same fixture assertions, while its
+standalone retry first failed bootstrap on `EADDRINUSE` and then cascaded. That
+retry is infrastructure evidence only; the controller and controller retry
+both bootstrapped successfully and reproduced the publication fixture red.
+
+The stale-window fixture had two valid owner states that its assertion
+collapsed incorrectly. Before the seed-naming publication arrived, the
+follower could either have no membership row yet or hold the preceding real
+`PUBLISHED` epoch with `published_active_node_ids=[]`. The rebalancer correctly
+represented the latter as an empty `Set`, not `null`; in both states the
+semantic fact is that the seed is not yet a published placement member. The
+short-lease and concurrent fixtures likewise treated READY node rows as if
+they would remain unpublished, although the real publication owner can admit
+and publish them.
+
+The repair keeps those semantic properties and changes only the test/harness
+owner boundary. It records the publication owner's committed `PUBLISHED`
+event for the live short-lease member, expires that lease with a second
+committed row update, and proves the readiness and placement owners exclude
+the expired member. Concurrent rebalancers now take their synchronous read
+only when the latest membership epoch is `PUBLISHED` with the exact expected
+members and each reader's own readiness decision dimension is current; the
+epoch and readiness facts are rechecked in the same synchronous step as the
+placement read. The stale-window assertion proves the seed is absent rather
+than prescribing the owner's empty-state representation. There is no
+production source change, sleep, timeout increase, retry, resource workaround,
+or weaker rebalance-success assertion.
+
+A focused local run of the repaired integration file passed 112 assertions in
+126712 ms. Focused ESLint and strict scoped complexity were also green. No
+full corpus or publisher was run. The sealed STOP checkpoint
+`292b7204334cf47617e675dd9b12bc708b682886` remains unchanged, and the quest
+remains `SEALED / PUBLICATION_BLOCKED` until a normal publisher succeeds and
+the remote branch SHA is independently read back.
+
 ## Design verdict remains sealed
 
 The liveness wording is corrected for future work: there is no configured

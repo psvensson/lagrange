@@ -57,7 +57,9 @@ import {
   createNodeHosts,
   createReplicaPropagation,
   initializeTestEnvironment,
+  readAtSettledPlacement,
   readPublishedActiveNodeIds,
+  recordPublishedMemberships,
   seedOwners,
   shutdownOrFail,
   waitForCondition,
@@ -168,8 +170,10 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         Boolean(followerCache.get(SYSTEM_TABLE_NAME.NODES, seedNodeId)));
       t.equal(rowDelivered, true,
         'follower should hold the seed node row before the publication arrives');
-      t.equal(readPublishedActiveNodeIds(followerCache), null,
-        'follower should hold no publication yet');
+      t.notOk(
+        (readPublishedActiveNodeIds(followerCache) || []).includes(seedNodeId),
+        'follower should not yet hold a publication naming the seed',
+      );
 
       const hosts = createNodeHosts(followerCache, {nodeId: followerNodeId});
       rebalancer = new UnifiedRebalancer({
@@ -187,9 +191,9 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       rebalancer.initialize();
 
       // was: 'rebalancer should see stale membership (1 node)'
-      t.equal(rebalancer.getPublishedActiveNodeIdSet(), null,
-        'rebalancer should see no published membership while the publication ' +
-        'is in flight (seed row present, not yet published)');
+      t.notOk(rebalancer.getPublishedActiveNodeIdSet()?.has(seedNodeId),
+        'rebalancer should not see the seed while its naming publication is ' +
+        'in flight');
       t.same(rebalancer.getAvailableNodes().map((node) => node.node_id), [],
         'rebalancer should have no member to place on before the publication');
 
@@ -239,14 +243,21 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         owners.controlPlaneReadinessService, seedNodeId);
       t.equal(eligible, true, 'readiness owner should hold the seed placement-eligible');
 
-      // A node row with a short lease, present but never published: the
-      // publication owner admits only nodes it can witness.
+      // A node row READY on a live lease. The publication owner's committed
+      // event proves admission before the fixture expires the lease by a
+      // second committed row update.
+      const publications = recordPublishedMemberships(owners.cache);
       const now = Date.now();
       const shortLeaseNode = createNodeEntry('short-lease-node', {
-        ready_lease_expires_at: now + 50, // Expires in 50ms
+        ready_lease_expires_at: now + TEST_TIMEOUTS.TEST_TIMEOUT,
       });
       await owners.cdcIntegrationService.insertSystemTableRow(
         SYSTEM_TABLE_NAME.NODES, shortLeaseNode);
+      t.equal(await waitForCondition(() =>
+        publications.hasPublished('short-lease-node')), true,
+      'the publication owner publishes the row it witnessed READY on a live ' +
+      'lease');
+      publications.stop();
 
       // The real rebalancer over the seed's real owners
       const rebalancer = new UnifiedRebalancer({
@@ -270,26 +281,19 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       // Record state change to start stabilization
       rebalancer.recordStateChange('test_trigger');
 
-      // Every nodes-table write returns the readiness owner's verdict to
-      // planning_snapshot_refresh_pending until the next evaluation; drive it
-      // before each read, as the owners' own consumers do.
-      await waitForPlacementEligible(owners.controlPlaneReadinessService, seedNodeId);
-      // was: 'should have nodes available initially'
-      t.same(rebalancer.getAvailableNodes().map((node) => node.node_id),
-        [seedNodeId],
-        'available nodes should be the published set (the seed) while the ' +
-        'short-lease row is present but unpublished');
-
-      // Wait for lease to expire (but less than stabilization period)
-      await new Promise((r) => setTimeout(r, 60));
-
-      await waitForPlacementEligible(owners.controlPlaneReadinessService, seedNodeId);
+      await owners.cdcIntegrationService.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES,
+        {node_id: 'short-lease-node'},
+        {ready_lease_expires_at: Date.now() - 1},
+      );
+      const expiredReadiness = await owners.controlPlaneReadinessService
+        .getNodeReadiness('short-lease-node');
+      t.equal(expiredReadiness?.dimensions?.placementEligible, false,
+        'the readiness owner holds the expired member not placement-eligible');
       // was: 'short-lease node should not be available after lease expiry'
-      t.same(rebalancer.getAvailableNodes().map((node) => node.node_id),
-        [seedNodeId],
-        'an unpublished row stays unavailable after its lease expires: a ' +
-        'member leaving on lease expiry is a republication by the ' +
-        'publication owner, not a row read');
+      t.notOk(rebalancer.getAvailableNodes()
+        .some((node) => node.node_id === 'short-lease-node'),
+      'the placement owner does not offer the member whose lease expired');
 
       // Stabilization timing can race with short lease windows under fast tests.
       // Verify API behavior without enforcing a brittle exact timing boundary.
@@ -568,7 +572,9 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       const cdcService = owners.cdcIntegrationService;
       const now = Date.now();
 
-      // Additional node rows, present but unpublished: not members.
+      // Additional READY node rows are publication-owner inputs. Await the
+      // resulting committed membership instead of assuming the rows remain
+      // unpublished while the rebalancers are created.
       await cdcService.insertSystemTableRow(
         SYSTEM_TABLE_NAME.NODES,
         createNodeEntry('node-2', {
@@ -581,6 +587,9 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
           ready_lease_expires_at: now + TEST_TIMEOUTS.READY_LEASE_DURATION,
         }),
       );
+      const publishedNodeIds = [seedNodeId, 'node-2', 'node-3'];
+      t.equal(await waitForPublishedMembership(systemTableCache, publishedNodeIds),
+        true, 'the publication owner publishes the node rows it witnessed READY');
 
       // Create two rebalancers simulating partition leaders on different nodes
       rebalancer1 = new UnifiedRebalancer({
@@ -614,18 +623,24 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       rebalancer1.setLeader(true);
       rebalancer2.setLeader(true);
 
-      // Both rebalancers see the same available nodes (the node-row writes
-      // above returned the readiness verdict to refresh-pending; drive it).
-      await waitForPlacementEligible(owners.controlPlaneReadinessService, seedNodeId);
-      const nodes1 = rebalancer1.getAvailableNodes();
-      const nodes2 = rebalancer2.getAvailableNodes();
+      // Both readers consume one settled owner boundary: the latest committed
+      // membership and the readiness generation their own decision dimension
+      // reads are checked again in the same synchronous placement step.
+      const settled = await readAtSettledPlacement(owners, {
+        publishedNodeIds,
+        eligibleNodeId: seedNodeId,
+        readers: [rebalancer1, rebalancer2],
+      }, () => [rebalancer1.getAvailableNodes(), rebalancer2.getAvailableNodes()]);
+      t.equal(settled.settled, true,
+        'the membership epoch settles for both rebalancers');
+      const [nodes1, nodes2] = settled.value;
 
       t.equal(nodes1.length, nodes2.length,
         'both rebalancers should see same node count');
       // was: 'should see at least seed node'
       t.same(nodes1.map((node) => node.node_id), [seedNodeId],
-        'both rebalancers should see the published set: the seed, not the ' +
-        'unpublished node rows');
+        'both rebalancers see the published members the readiness owner ' +
+        'holds placement-eligible');
 
       // Trigger rebalance on both (simulating concurrent decisions)
       rebalancer1.lastStateChangeTime = now - TEST_TIMEOUTS.STABILIZATION_PERIOD - 1;
