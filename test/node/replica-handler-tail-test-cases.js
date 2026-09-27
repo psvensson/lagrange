@@ -745,6 +745,17 @@ export async function registerReplicaHandlerTailTests({
         ),
         'authoritative service row should remain until delete succeeds',
       );
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES,
+          TEST_REMOVE_DELETE_FAILURE_REPLICA_ID)?.status,
+        ReplicaStatus.REMOVING,
+        'a cleanup failure preserves the durable removal intent',
+      );
+      t.equal(
+        handler.getLocalReplica(TEST_REMOVE_DELETE_FAILURE_REPLICA_ID)?.status,
+        ReplicaStatus.REMOVING,
+        'local lifecycle remains aligned with the durable removal intent',
+      );
 
       handler.shutdown();
     });

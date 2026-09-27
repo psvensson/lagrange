@@ -478,7 +478,7 @@ export async function registerReplicaHandlerTailMoreTests({
     handler.shutdown();
   });
 
-  t.test('handleRemoveReplica removes failed replicas without forcing an invalid removing transition',
+  t.test('handleRemoveReplica moves failed replicas through the durable removing protocol',
     async (t) => {
       const TEST_FAILED_REMOVE_OPERATION_ID = 'op-failed-remove-1';
       const TEST_FAILED_REMOVE_PARTITION_ID = 'partition-failed-remove-1';
@@ -546,14 +546,14 @@ export async function registerReplicaHandlerTailMoreTests({
       );
       await removed;
 
-      t.notOk(
+      t.ok(
         mockCDC.operations.some((op) =>
           op.type === 'update' &&
           op.tableName === SYSTEM_TABLE_NAME.SERVICES &&
           op.whereClause?.service_id === TEST_FAILED_REMOVE_REPLICA_ID &&
           op.data.status === ReplicaStatus.REMOVING,
         ),
-        'failed source removal should skip the invalid failed-to-removing status write',
+        'failed source removal should publish REMOVING before cleanup',
       );
       t.notOk(
         cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_FAILED_REMOVE_REPLICA_ID),
@@ -604,6 +604,8 @@ export async function registerReplicaHandlerTailMoreTests({
       });
       const mockCDC = createMockCDCService(cache);
       let replicaState = ReplicaStatus.ACTIVE;
+      let removingAttempts = 0;
+      let durableRemovingObserved = false;
       let durableRemovalCompleted = false;
       const raceReplicaStateMachine = {
         getState() {
@@ -611,8 +613,14 @@ export async function registerReplicaHandlerTailMoreTests({
         },
         transition(_replicaId, newState) {
           if (newState === ReplicaStatus.REMOVING) {
-            replicaState = ReplicaStatus.FAILED;
-            return false;
+            removingAttempts += 1;
+            if (removingAttempts === 1) {
+              replicaState = ReplicaStatus.FAILED;
+              return false;
+            }
+            replicaState = ReplicaStatus.REMOVING;
+            durableRemovingObserved = true;
+            return true;
           }
           replicaState = newState;
           return true;
@@ -669,6 +677,11 @@ export async function registerReplicaHandlerTailMoreTests({
         'the canonical async remove path should stay active through the failed-state race',
       );
       await removed;
+
+      t.equal(removingAttempts, 2,
+        'the status boundary retries removal after the concurrent FAILED');
+      t.equal(durableRemovingObserved, true,
+        'the race still converges through durable REMOVING before cleanup');
 
       t.notOk(
         cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_LATE_FAILED_REMOVE_REPLICA_ID),

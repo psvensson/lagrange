@@ -30,6 +30,10 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from './replica-operation-constants.js';
+import {
+  classifyTransportDeliveryOutcome,
+  isDeliveredTransportDeliveryOutcome,
+} from '../transport/transport-semantic-outcome.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -49,10 +53,12 @@ const COMMITTED_MEMBERSHIP_READ_ERROR = Object.freeze({
  * @param {string} reason - A COMMITTED_MEMBERSHIP_REFUSAL.
  * @return {Error} The error, with code/errorCode = reason.
  */
-function committedMembershipReadRefused(partitionId, reason) {
+function committedMembershipReadRefused(partitionId, reason, options = {}) {
   return Object.assign(new Error(COMMITTED_MEMBERSHIP_READ_ERROR.refused(
     partitionId, reason)), {code: reason, errorCode: reason,
-    retryable: true});
+    retryable: true, deferRetry: options.deferRetry === true,
+    retryAfterMs: Number.isFinite(options.retryAfterMs) ?
+      options.retryAfterMs : null});
 }
 
 function leaderNodeHintOf(owner, partitionId) {
@@ -75,25 +81,34 @@ function nodeIdOfLeaderAddress(leaderAddress) {
 async function askNode(owner, nodeId, partitionId) {
   const unreadable = {reason: COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE};
   try {
-    const response = await owner.messageRouter.deliver(
-      `${nodeId}${REPLICA_HANDLER_TARGET_SUFFIX}`,
-      {
-        [ReplicaOperationField.TYPE]:
-          ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP,
-        [ReplicaOperationField.PARTITION_ID]: partitionId,
-      },
-      {
-        targetNodeId: nodeId,
-        deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
-        timeoutMs: REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
-      },
+    const response = classifyTransportDeliveryOutcome(
+      await owner.messageRouter.deliver(
+        `${nodeId}${REPLICA_HANDLER_TARGET_SUFFIX}`,
+        {
+          [ReplicaOperationField.TYPE]:
+            ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP,
+          [ReplicaOperationField.PARTITION_ID]: partitionId,
+        },
+        {
+          targetNodeId: nodeId,
+          deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
+          timeoutMs: REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
+        },
+      ),
     );
-    return response?.status === ReplicaOperationResponseStatus.COMPLETED &&
+    if (!isDeliveredTransportDeliveryOutcome(response) ||
+        response.noHandler === true) {
+      return {...unreadable, deferRetry: true,
+        retryAfterMs: response.retryAfterMs};
+    }
+    return response.status === ReplicaOperationResponseStatus.COMPLETED &&
       response[ReplicaOperationField.MEMBERSHIP] ?
       response[ReplicaOperationField.MEMBERSHIP] : unreadable;
-  } catch {
+  } catch (error) {
     // A delivery failure or timeout is the typed unreadable outcome.
-    return unreadable;
+    const delivery = classifyTransportDeliveryOutcome(error);
+    return {...unreadable, deferRetry: delivery.deferRetry === true,
+      retryAfterMs: delivery.retryAfterMs};
   }
 }
 
@@ -128,7 +143,8 @@ async function readCommittedMembershipStamp(owner, partitionId) {
     throw committedMembershipReadRefused(partitionId,
       answer.reason === COMMITTED_MEMBERSHIP_REFUSAL.NOT_LEADER ?
         COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE :
-        answer.reason ?? COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE);
+        answer.reason ?? COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE,
+      answer);
   }
   // Nothing the target would refuse is persisted: a leader that has not
   // applied its first entry answers no committed index yet.
@@ -136,7 +152,7 @@ async function readCommittedMembershipStamp(owner, partitionId) {
   if (!validation.valid) {
     throw committedMembershipReadRefused(partitionId, validation.reason);
   }
-  return stamp;
+  return validation.stamp;
 }
 
 /**

@@ -26,9 +26,8 @@ const RAFT_EVENT = Object.freeze({
   // of a member apply without changing the configuration key), or the
   // core's pending configuration index (every proposed conf entry, and a new
   // leader's last index) was reached without one. Carries {appliedIndex,
-  // confChangeEntries, admissible} (admissible: the core would now take a
-  // conf-change proposal). The admission re-drive's wake-up (verification
-  // V2); MEMBERSHIP_CHANGED keeps its configuration-key meaning.
+  // confChangeEntries}. The admission re-drive's wake-up (verification V2);
+  // MEMBERSHIP_CHANGED keeps its configuration-key meaning.
   CONF_CHANGE_APPLIED: 'conf change applied',
 });
 

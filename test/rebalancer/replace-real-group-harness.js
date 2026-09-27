@@ -782,6 +782,16 @@ async function answerWitnessRead(world, payload) {
   };
 }
 
+// READ_COMMITTED_MEMBERSHIP answered from the same real raft group's
+// committed/applied oracle. The transport facet remains explicit: callers
+// must never infer delivery merely from the application response body.
+function answerCommittedMembershipRead(world) {
+  return {
+    status: ReplicaOperationResponseStatus.COMPLETED,
+    [ReplicaOperationField.MEMBERSHIP]: world.group.oracleStamp(),
+  };
+}
+
 // RETIRE_REPLICA_PEER: the production seam proposes REMOVE_PEER through the
 // named replica's own port.
 async function answerRetirement(world, payload) {
@@ -816,6 +826,8 @@ async function answerHeldStepDown(world, payload) {
 }
 
 const MESSAGE_ANSWERS = Object.freeze({
+  [ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP]:
+    answerCommittedMembershipRead,
   [ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP]: answerWitnessRead,
   [ReplicaOperationMessageType.RETIRE_REPLICA_PEER]: answerRetirement,
   [ReplicaOperationMessageType.STEP_DOWN_REPLICA]: answerHeldStepDown,
@@ -825,7 +837,7 @@ const MESSAGE_ANSWERS = Object.freeze({
 async function deliver(world, target, payload) {
   world.deliveries.push({target, payload});
   const answer = MESSAGE_ANSWERS[payload?.[ReplicaOperationField.TYPE]];
-  return answer ? answer(world, payload) :
+  return answer ? {acknowledged: true, ...await answer(world, payload)} :
     {acknowledged: true, status: ReplicaOperationResponseStatus.INITIATED};
 }
 
@@ -876,6 +888,7 @@ function startCoordinator(world) {
     nodeId: world.ownerNodeId,
     enableTimeouts: false,
     replaceWitness: false,
+    committedMembershipFixture: false,
     systemTableCache: world.cache,
     messageRouter: {
       deliver: (target, payload) => deliver(world, target, payload),

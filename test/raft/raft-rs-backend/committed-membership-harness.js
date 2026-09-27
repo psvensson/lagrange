@@ -234,8 +234,9 @@ function createCommittedMembershipHarness(partitionId) {
       if (!handlers.has(nodeId)) {
         throw new Error(`no node ${nodeId}`);
       }
-      return handlers.get(nodeId).handleMessage({payload: request,
-        correlationId: `read-${this.delivered.length}`});
+      return {acknowledged: true,
+        ...await handlers.get(nodeId).handleMessage({payload: request,
+          correlationId: `read-${this.delivered.length}`})};
     },
   };
   const dbPathOf = ([replicaId]) => path.join(directory, 'partitions',

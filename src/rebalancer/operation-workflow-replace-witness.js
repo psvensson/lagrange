@@ -24,6 +24,15 @@ import {
 } from '../partition/partition-replica-membership-constants.js';
 import {assertCanonicalRebalancerEntityIdentity} from
   './rebalancer-entity-identity.js';
+import {
+  classifyTransportDeliveryOutcome,
+  isDeferredTransportDeliveryOutcome,
+  isDeliveredTransportDeliveryOutcome,
+} from '../transport/transport-semantic-outcome.js';
+import {canonicalReplaceMembershipObservation} from
+  '../raft/raft-committed-membership-stamp.js';
+import {COMMITTED_MEMBERSHIP_REFUSAL} from
+  '../raft/raft-committed-membership-constants.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -41,10 +50,13 @@ function replaceReplicaIdsOf(owner, operation) {
   return {sourceReplicaId, targetReplicaId};
 }
 
-function unavailableWitness(reason) {
+function unavailableWitness(reason, delivery = null) {
   return Object.freeze({
     state: PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE,
     reason: reason || null,
+    deferRetry: delivery?.deferRetry === true,
+    retryAfterMs: Number.isFinite(delivery?.retryAfterMs) ?
+      delivery.retryAfterMs : null,
   });
 }
 
@@ -60,6 +72,76 @@ function buildReplaceWitnessRequest(operation, messageType, replicaIds,
   };
 }
 
+function unavailableWitnessDelivery() {
+  return {
+    outcome: ReplaceWitnessDeliveryOutcome.IDENTITY_UNAVAILABLE,
+    reason: ReplaceWitnessDeliveryOutcome.IDENTITY_UNAVAILABLE,
+  };
+}
+
+function replaceWitnessHandlerType(operation) {
+  try {
+    return resolveOperationHandlerType(
+      assertCanonicalRebalancerEntityIdentity(operation).entityType);
+  } catch {
+    return null;
+  }
+}
+
+function hasReplaceWitnessRoute(replicaIds, readReplicaId, targetNodeId) {
+  return Boolean(replicaIds.sourceReplicaId && readReplicaId && targetNodeId);
+}
+
+function replaceWitnessDestination(owner, operation, member) {
+  const replicaIds = replaceReplicaIdsOf(owner, operation);
+  const readReplicaId = member?.replicaId || replicaIds.targetReplicaId;
+  const targetNodeId = member?.nodeId || operation?.targetNodeId || null;
+  const handlerType = replaceWitnessHandlerType(operation);
+  if (!hasReplaceWitnessRoute(replicaIds, readReplicaId, targetNodeId) ||
+      handlerType === null ||
+      typeof owner.messageRouter?.deliver !==
+        OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION) {
+    return null;
+  }
+  return {replicaIds, readReplicaId, targetNodeId, handlerType};
+}
+
+function classifyReplaceWitnessResponse(response) {
+  if (isDeliveredTransportDeliveryOutcome(response) &&
+      response.noHandler !== true) {
+    return {outcome: ReplaceWitnessDeliveryOutcome.DELIVERED, response};
+  } else if (response.noHandler === true ||
+      isDeferredTransportDeliveryOutcome(response)) {
+    return {
+      outcome: ReplaceWitnessDeliveryOutcome.DELIVERY_DEFERRED,
+      reason: response.reasonCode ||
+        ReplaceWitnessDeliveryOutcome.DELIVERY_DEFERRED,
+      deferRetry: true,
+      retryAfterMs: response.retryAfterMs,
+    };
+  } else {
+    return {
+      outcome: ReplaceWitnessDeliveryOutcome.DELIVERY_FAILED,
+      reason: response.reasonCode || response.error ||
+        ReplaceWitnessDeliveryOutcome.DELIVERY_FAILED,
+      deferRetry: false,
+      retryAfterMs: response.retryAfterMs,
+    };
+  }
+}
+
+function classifyReplaceWitnessError(error) {
+  const response = classifyTransportDeliveryOutcome(error);
+  const deferred = isDeferredTransportDeliveryOutcome(response);
+  return {
+    outcome: deferred ? ReplaceWitnessDeliveryOutcome.DELIVERY_DEFERRED :
+      ReplaceWitnessDeliveryOutcome.DELIVERY_FAILED,
+    reason: response.reasonCode || error?.message || String(error),
+    deferRetry: deferred,
+    retryAfterMs: response.retryAfterMs,
+  };
+}
+
 /**
  * Deliver a witness message to one replica of the partition: the REPLACE
  * target t unless another member is named (D2 target death only).
@@ -71,46 +153,28 @@ function buildReplaceWitnessRequest(operation, messageType, replicaIds,
  */
 async function deliverToReplaceWitness(owner, operation, messageType,
   member = null) {
-  const replicaIds = replaceReplicaIdsOf(owner, operation);
-  const readReplicaId = member?.replicaId || replicaIds.targetReplicaId;
-  const targetNodeId = member?.nodeId || operation?.targetNodeId || null;
-  if (!replicaIds.sourceReplicaId || !readReplicaId ||
-      !targetNodeId ||
-      typeof owner.messageRouter?.deliver !==
-        OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION) {
-    return {
-      outcome: ReplaceWitnessDeliveryOutcome.IDENTITY_UNAVAILABLE,
-      reason: ReplaceWitnessDeliveryOutcome.IDENTITY_UNAVAILABLE,
-    };
+  const destination = replaceWitnessDestination(owner, operation, member);
+  if (destination === null) {
+    return unavailableWitnessDelivery();
   }
   // The operation's own typed entity identity (never a partition default):
   // an operation without a canonical one has no witness to address.
-  let handlerType;
+  const {replicaIds, readReplicaId, targetNodeId, handlerType} = destination;
   try {
-    handlerType = resolveOperationHandlerType(
-      assertCanonicalRebalancerEntityIdentity(operation).entityType);
-  } catch {
-    return {
-      outcome: ReplaceWitnessDeliveryOutcome.IDENTITY_UNAVAILABLE,
-      reason: ReplaceWitnessDeliveryOutcome.IDENTITY_UNAVAILABLE,
-    };
-  }
-  try {
-    const response = await owner.messageRouter.deliver(
-      `${targetNodeId}/service/${handlerType}`,
-      buildReplaceWitnessRequest(operation, messageType, replicaIds,
-        readReplicaId),
-      {
-        targetNodeId,
-        deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
-      },
+    const response = classifyTransportDeliveryOutcome(
+      await owner.messageRouter.deliver(
+        `${targetNodeId}/service/${handlerType}`,
+        buildReplaceWitnessRequest(operation, messageType, replicaIds,
+          readReplicaId),
+        {
+          targetNodeId,
+          deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
+        },
+      ),
     );
-    return {outcome: ReplaceWitnessDeliveryOutcome.DELIVERED, response};
+    return classifyReplaceWitnessResponse(response);
   } catch (error) {
-    return {
-      outcome: ReplaceWitnessDeliveryOutcome.DELIVERY_FAILED,
-      reason: error?.message || String(error),
-    };
+    return classifyReplaceWitnessError(error);
   }
 }
 
@@ -126,15 +190,18 @@ async function deliverToReplaceWitness(owner, operation, messageType,
  *   it - leaderReplicaId, term, transferWindowMaxMs).
  */
 async function readReplaceWitnessMembership(owner, operation, member = null) {
-  const {response, reason} = await deliverToReplaceWitness(
+  const delivery = await deliverToReplaceWitness(
     owner, operation, ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP,
     member);
+  const {response, reason} = delivery;
   const membership = response?.[ReplicaOperationField.MEMBERSHIP];
   if (response?.status !== ReplicaOperationResponseStatus.COMPLETED ||
-      !membership || typeof membership.state !== 'string') {
-    return unavailableWitness(reason || response?.status || null);
+      !membership) {
+    return unavailableWitness(reason || response?.status || null, delivery);
   }
-  return Object.freeze({...membership});
+  const canonical = canonicalReplaceMembershipObservation(membership);
+  return canonical || unavailableWitness(
+    COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE, delivery);
 }
 
 export {

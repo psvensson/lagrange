@@ -9,6 +9,7 @@ import {test} from 'node:test';
 
 import {
   BOOTSTRAP_MEMBERSHIP_SOURCE,
+  COMMITTED_MEMBERSHIP_REFUSAL,
   COMMITTED_MEMBERSHIP_STAMP_DEFECT,
   COMMITTED_MEMBERSHIP_STAMP_KIND,
 } from '../../../src/raft/raft-committed-membership-constants.js';
@@ -19,6 +20,8 @@ import {bootstrapOfRequest} from
   '../../../src/raft/raft-rs-bootstrap-membership.js';
 import {deriveRaftRsPeerId} from
   '../../../src/raft/raft-rs-peer-identity.js';
+import {readCommittedMembershipStamp} from
+  '../../../src/rebalancer/committed-membership-bootstrap-read.js';
 
 const REPLICA_ID = 'adversarial-bootstrap-r1';
 const PEER_ID = deriveRaftRsPeerId(REPLICA_ID);
@@ -32,7 +35,7 @@ function committedStamp(overrides = {}) {
     appliedIndex: 1,
     commitIndex: 1,
     term: 1,
-    leaderId: PEER_ID,
+    leaderId: REPLICA_ID,
     gateOpen: true,
     identities: {[PEER_ID]: REPLICA_ID},
     ...overrides,
@@ -83,6 +86,7 @@ test('bootstrap decoder rejects non-canonical numerics, peer arrays and ' +
     ['negative-zero applied', committedStamp({appliedIndex: -0})],
     ['coercing peer id', committedStamp({voters: [{toString: () => PEER_ID}]})],
     ['duplicate peer id', committedStamp({voters: [PEER_ID, PEER_ID]})],
+    ['peer in voter and learner sets', committedStamp({learners: [PEER_ID]})],
     ['oversized peer set', committedStamp({
       voters: Array.from({length: 1025}, () => PEER_ID),
     })],
@@ -111,3 +115,26 @@ test('bootstrap consumers use the canonical snapshot returned by validation',
     assert.deepEqual(validation.stamp.voters, [PEER_ID],
       'the decoded membership is immutable caller-independent data');
   });
+
+test('bootstrap reads require semantic delivery even when the router ACKs ' +
+  'before finding a handler', async () => {
+  const owner = {
+    nodeId: 'bootstrap-reader-node',
+    systemTableCache: {get: () => null},
+    messageRouter: {deliver: async () => ({
+      acknowledged: true,
+      noHandler: true,
+      deferRetry: true,
+      retryAfterMs: 275,
+      status: 'completed',
+      membership: committedStamp(),
+    })},
+  };
+  await assert.rejects(
+    readCommittedMembershipStamp(owner, 'adversarial-bootstrap-p1'),
+    (error) => error?.code ===
+        COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE &&
+      error.deferRetry === true && error.retryAfterMs === 275,
+    'ACK plus no-handler is unreadable and retains the retry contract',
+  );
+});

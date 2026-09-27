@@ -34,7 +34,10 @@ import {
   armTerminalTransitionRepair,
 } from '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
 import {createTestCoordinator} from './test-helpers.js';
-import {createReplaceWitness} from './replace-witness-fixture.js';
+import {
+  createReplaceWitness,
+  deliveredReplaceWitnessResponse,
+} from './replace-witness-fixture.js';
 
 const PARTITION_ID = 'users-p1';
 const SOURCE_NODE_ID = 'seed-node';
@@ -86,7 +89,7 @@ async function createHarness({
       const answered = member ? member.answer(payload) :
         witness.answer(payload);
       if (answered) {
-        return answered;
+        return deliveredReplaceWitnessResponse(answered);
       }
       const operationId = payload?.operationId || null;
       deliveries.push({

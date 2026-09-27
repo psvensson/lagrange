@@ -260,14 +260,10 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       this.fenceReplicaServingAdmissionForRemoval(replicaId, replica);
       // Track in-progress operation
       this.trackReplicaRemovalOperation(operationId, partitionId, replicaId);
-      const removalIngressStatus =
-        replica.status === ReplicaStatus.FAILED ?
-          ReplicaStatus.FAILED :
-          ReplicaStatus.REMOVING;
       this.setLocalReplica(replicaId, {
         replicaId,
         partitionId,
-        status: removalIngressStatus,
+        status: ReplicaStatus.REMOVING,
         service: replica.service || this.getTrackedService(replicaId),
       });
       // Start async removal after ACK has returned.

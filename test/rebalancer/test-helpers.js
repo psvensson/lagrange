@@ -568,7 +568,15 @@ function withFixtureReplaceWitness(router, cache) {
   const deliver = router.deliver.bind(router);
   router.deliver = async (target, payload, options) => {
     const answer = answerFixtureReplaceWitness(cache, payload);
-    return answer === undefined ? deliver(target, payload, options) : answer;
+    return answer === undefined ? deliver(target, payload, options) : {
+      acknowledged: true,
+      noHandler: false,
+      deliveryState: 'delivered',
+      deferRetry: false,
+      errorCode: null,
+      retryAfterMs: null,
+      ...answer,
+    };
   };
   return router;
 }
@@ -690,12 +698,13 @@ function createTestCoordinator(options = {}) {
   trackFixtureServiceDeletions(mockCache);
   // The committed-membership read is always the fixture world's (owner
   // decision O1); the REPLACE witness double is opt-out.
-  const mockMessageRouter = withFixtureCommittedMembership(
-    options.replaceWitness === false ?
-      options.messageRouter || createMockMessageRouter() :
-      withFixtureReplaceWitness(
-        options.messageRouter || createMockMessageRouter(), mockCache),
-    mockCache);
+  const witnessRouter = options.replaceWitness === false ?
+    options.messageRouter || createMockMessageRouter() :
+    withFixtureReplaceWitness(
+      options.messageRouter || createMockMessageRouter(), mockCache);
+  const mockMessageRouter = options.committedMembershipFixture === false ?
+    witnessRouter :
+    withFixtureCommittedMembership(witnessRouter, mockCache);
 
   // Track operations via SQL engine (not CDC)
   const trackedOperations = new Map();

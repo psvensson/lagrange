@@ -125,7 +125,7 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
               existing?.address || this.buildTrackedServiceAddress(replicaId),
           });
         }
-        const transitionResult = await Promise.resolve(
+        let transitionResult = await Promise.resolve(
           this.replicaStateMachine.transition(replicaId, newStatus, {
             partitionId,
             nodeId: existing?.node_id || this.nodeId,
@@ -137,6 +137,34 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
               existing?.address || this.buildTrackedServiceAddress(replicaId),
           }),
         );
+        // REMOVING is the one convergent cleanup intent. A concurrent
+        // failure observation may win between the snapshot above and the
+        // transition attempt; FAILED is not deletion authority, so retry the
+        // newly-valid FAILED -> REMOVING edge at this same persistence
+        // boundary instead of abandoning the durable removal protocol.
+        if (transitionResult === false &&
+            newStatus === ReplicaStatus.REMOVING) {
+          const latest = this.replicaStateMachine?.getState?.(replicaId);
+          const latestState = typeof latest === REPLICA_HANDLER_TYPEOF.STRING ?
+            latest : latest?.state;
+          if (latestState === ReplicaStatus.REMOVING) {
+            transitionResult = true;
+          } else if (latestState === ReplicaStatus.FAILED) {
+            transitionResult = await Promise.resolve(
+              this.replicaStateMachine.transition(replicaId, newStatus, {
+                partitionId,
+                nodeId: existing?.node_id || this.nodeId,
+                errorMessage: additionalData.errorMessage,
+                serviceId: existing?.service_id || replicaId,
+                serviceType:
+                  existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
+                serviceAddress:
+                  existing?.address ||
+                  this.buildTrackedServiceAddress(replicaId),
+              }),
+            );
+          }
+        }
         if (transitionResult === false) {
           throw new Error(
             `Replica state transition rejected for ${replicaId}: ${newStatus}`,

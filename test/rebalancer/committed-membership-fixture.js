@@ -84,6 +84,12 @@ function answerFixtureCommittedMembership(cache, payload) {
     return undefined;
   }
   return {
+    acknowledged: true,
+    noHandler: false,
+    deliveryState: 'delivered',
+    deferRetry: false,
+    errorCode: null,
+    retryAfterMs: null,
     status: ReplicaOperationResponseStatus.COMPLETED,
     [ReplicaOperationField.MEMBERSHIP]: fixtureCommittedMembershipAnswer(
       cache, payload[ReplicaOperationField.PARTITION_ID]),

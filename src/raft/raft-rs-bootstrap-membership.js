@@ -28,6 +28,8 @@ import {
 import {ascendingPeerIdOrder} from './raft-rs-committed-membership-read.js';
 import {validateBootstrapMembershipStamp} from
   './raft-committed-membership-stamp.js';
+import {validateDurableRecordBootstrap} from
+  './raft-committed-membership-stamp.js';
 import {deepFreeze} from './raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {RUNTIME_PHASE} from './raft-rs-runtime-owner-constants.js';
@@ -86,20 +88,23 @@ function committedBootstrap(membership, registry, peerId) {
  *   or invalid stamp.
  */
 function bootstrapOfRequest({membership, registry, peerId}) {
-  if (membership?.kind === BOOTSTRAP_MEMBERSHIP_SOURCE.DURABLE_RECORD) {
-    return Object.freeze({source: membership.kind, voters: [], learners: [],
+  const durableRecord = validateDurableRecordBootstrap(membership);
+  if (durableRecord.valid) {
+    return Object.freeze({source: durableRecord.stamp.kind,
+      voters: [], learners: [],
       bootstrapIndex: null, selfCommittedVoter: false});
   }
   const validation = validateBootstrapMembershipStamp(membership);
   if (!validation.valid) {
     throw stampDefect(validation.defect);
   }
-  if (membership.kind === BOOTSTRAP_MEMBERSHIP_SOURCE.COMMITTED) {
-    return Object.freeze(committedBootstrap(membership, registry, peerId));
+  const canonical = validation.stamp;
+  if (canonical.kind === BOOTSTRAP_MEMBERSHIP_SOURCE.COMMITTED) {
+    return Object.freeze(committedBootstrap(canonical, registry, peerId));
   }
   return Object.freeze({
-    source: membership.kind,
-    voters: membership.founders.map((identity) =>
+    source: canonical.kind,
+    voters: canonical.founders.map((identity) =>
       registry.registerReplica(identity)),
     learners: [],
     bootstrapIndex: GENESIS_BOOTSTRAP_INDEX,

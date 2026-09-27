@@ -262,6 +262,8 @@ const PORT_DEFECT_CASES = Object.freeze({
   [COMMITTED_MEMBERSHIP_STAMP_DEFECT.MISSING]: () => null,
   [COMMITTED_MEMBERSHIP_STAMP_DEFECT.UNKNOWN_KIND]: (stamp) =>
     ({...stamp, kind: 'not-a-kind'}),
+  [COMMITTED_MEMBERSHIP_STAMP_DEFECT.MALFORMED]: (stamp) =>
+    Object.create(stamp),
   [COMMITTED_MEMBERSHIP_STAMP_DEFECT.NO_BOOTSTRAP_INDEX]: (stamp) =>
     ({...stamp, appliedIndex: 0}),
   [COMMITTED_MEMBERSHIP_STAMP_DEFECT.JOINT]: (stamp) =>
@@ -478,6 +480,7 @@ function replaceOwnerOver(model, target, source) {
       (replicaId) => ({replica_id: replicaId, node_id: `${replicaId}-node`})),
     messageRouter: {
       deliver: async (_target, payload) => ({
+        acknowledged: true,
         status: ReplicaOperationResponseStatus.COMPLETED,
         [ReplicaOperationField.MEMBERSHIP]:
           await readPartitionReplicaMembership(serviceOf(model,

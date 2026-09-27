@@ -87,6 +87,10 @@ const COMMITTED_MEMBERSHIP_REFUSAL = Object.freeze({
 const COMMITTED_MEMBERSHIP_STAMP_DEFECT = Object.freeze({
   MISSING: 'stamp-missing',
   UNKNOWN_KIND: 'stamp-unknown-kind',
+  // The value is not the exact own-data schema: inherited/accessor fields,
+  // exotic arrays, coercing values, unsafe numerics and oversized payloads
+  // all fail as one distributed-input class.
+  MALFORMED: 'stamp-malformed',
   NO_BOOTSTRAP_INDEX: 'stamp-without-committed-index',
   JOINT: 'stamp-joint',
   NO_VOTERS: 'stamp-without-voters',
@@ -94,6 +98,11 @@ const COMMITTED_MEMBERSHIP_STAMP_DEFECT = Object.freeze({
   IDENTITY_UNRESOLVED: 'stamp-identity-unresolved',
   NO_FOUNDERS: 'stamp-without-founders',
 });
+
+// A membership answer is control-plane data, not an allocation surface.
+// This is deliberately far above supported replica factors while bounding
+// all validation and canonicalization work at the distributed boundary.
+const COMMITTED_MEMBERSHIP_MAX_PEERS = 1024;
 
 // The frozen answer of a COMMITTED read, field by field. Ids are raft peer
 // ids as decimal strings; `identities` maps each of them to its Lagrange
@@ -135,6 +144,7 @@ export {
   COMMITTED_MEMBERSHIP_REFUSAL,
   COMMITTED_MEMBERSHIP_STAMP_DEFECT,
   COMMITTED_MEMBERSHIP_STAMP_KIND,
+  COMMITTED_MEMBERSHIP_MAX_PEERS,
   PARTICIPATION_GATE,
   PARTICIPATION_GATE_PHASE,
 };

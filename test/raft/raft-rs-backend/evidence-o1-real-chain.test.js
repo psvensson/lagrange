@@ -565,7 +565,9 @@ test('anchor: GENESIS is refused where discovery shows a replica outside ' +
       {leaderNodeId: 'node-a'}));
     assert.equal(founding.existingReplicaCount, 0,
       'rows naming a leader and the founders do not make a founder a joiner');
-    assert.deepEqual(founding.bootstrapMembership, stamp);
+    assert.equal(Object.getPrototypeOf(founding.bootstrapMembership), null,
+      'the accepted stamp is the canonical own-data snapshot');
+    assert.deepEqual({...founding.bootstrapMembership}, stamp);
   } finally {
     await harness.dispose();
   }

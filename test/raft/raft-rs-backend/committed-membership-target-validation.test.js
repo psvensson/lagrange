@@ -89,6 +89,8 @@ const DEFECT_CASES = Object.freeze({
   [COMMITTED_MEMBERSHIP_STAMP_DEFECT.MISSING]: () => null,
   [COMMITTED_MEMBERSHIP_STAMP_DEFECT.UNKNOWN_KIND]: (stamp) =>
     ({...stamp, kind: 'unknown-kind'}),
+  [COMMITTED_MEMBERSHIP_STAMP_DEFECT.MALFORMED]: (stamp) =>
+    Object.create(stamp),
   [COMMITTED_MEMBERSHIP_STAMP_DEFECT.NO_BOOTSTRAP_INDEX]: (stamp) =>
     ({...stamp, appliedIndex: 0}),
   [COMMITTED_MEMBERSHIP_STAMP_DEFECT.JOINT]: (stamp) =>

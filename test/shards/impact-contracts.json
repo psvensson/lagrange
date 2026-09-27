@@ -562,8 +562,28 @@
         "test/query/write-path-internal-pacing.test.js"
       ]
     },
+    "committed-bootstrap-stamp": {
+      "description": "Every join bootstrap is one canonical own-data stamp read from the group leader before operation persistence, carried unchanged through creation, decoded at the target, and enforced by the raft-rs participation gate; rows remain discovery only and an unreadable or malformed distributed answer fails closed.",
+      "owners": [
+        "src/node/replica-handler-committed-membership-methods.js",
+        "src/rebalancer/committed-membership-bootstrap-read.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation.js",
+        "src/query/sql-query-engine-initial-partition-provisioning.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-bootstrap-membership.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js",
+        "test/raft/raft-rs-backend/evidence-o1-gate-histories.test.js",
+        "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+        "test/raft/raft-rs-backend/committed-membership-target-validation.test.js",
+        "test/raft/raft-rs-backend/committed-membership-adversarial-boundary.test.js"
+      ]
+    },
     "replace-owner-membership-observation": {
-      "description": "The REPLACE owner decides source removal, completion and its leadership handoff only from the witness replica's own consensus state: the operation port announces its applied configuration (MEMBERSHIP_CHANGED, first observation after every construction included), the partition service relays it with leader and term changes, the replica handler's tracked-service registry is the node's one relay of them, and the READ_REPLICA_MEMBERSHIP / RETIRE_REPLICA_PEER seam reads the committed voters (incoming and outgoing), commit index and leader, and proposes REMOVE_PEER, through that replica's port. The owner consumes that observation as its wake level and its completion and handoff input; no row, prediction or second membership view decides them.",
+      "description": "The REPLACE owner decides source removal, completion and its leadership handoff only from decoded replica consensus observations. The target is a wake and route; the deciding answer must be the leader's own applied-at-commit configuration and a majority of that configuration must corroborate its term and leader identity. The operation port announces applied membership, the partition and node layers relay it, and READ_REPLICA_MEMBERSHIP / RETIRE_REPLICA_PEER read or mutate through the port. Rows never decide membership.",
       "owners": [
         "src/raft/raft-rs-runtime-owner.js",
         "src/partition/partition-service-raft-lifecycle-wiring.js",
@@ -571,6 +591,7 @@
         "src/node/replica-handler-membership-relay.js",
         "src/node/replica-handler-membership-methods.js",
         "src/rebalancer/operation-workflow-replace-owner.js",
+        "src/rebalancer/operation-workflow-replace-surviving-membership.js",
         "src/rebalancer/operation-workflow-replace-owner-wake.js",
         "src/rebalancer/operation-workflow-replace-handoff-attempt.js",
         "src/rebalancer/operation-workflow-replace-witness.js"
@@ -582,7 +603,10 @@
         "test/node/replica-handler-replica-membership.test.js",
         "test/rebalancer/replace-source-removal-owner.test.js",
         "test/rebalancer/replace-owner-wake.test.js",
-        "test/rebalancer/replace-named-handoff-attempt.test.js"
+        "test/rebalancer/replace-named-handoff-attempt.test.js",
+        "test/rebalancer/replace-real-group-completion.test.js",
+        "test/rebalancer/replace-real-group-scheduling.test.js",
+        "test/rebalancer/replace-witness-boundary.test.js"
       ]
     }
   },
@@ -1066,8 +1090,38 @@
         "test/query/write-path-internal-pacing.test.js"
       ]
     },
+    "committed-bootstrap-stamp": {
+      "description": "The leader-read producer and target/raft consumer must agree on one canonical committed bootstrap stamp, including its fail-closed transport and shape boundary.",
+      "endpoints": [
+        {
+          "id": "committed-stamp-reader",
+          "owners": [
+            "src/node/replica-handler-committed-membership-methods.js",
+            "src/rebalancer/committed-membership-bootstrap-read.js",
+            "src/rebalancer/rebalance-coordinator-operation-creation.js",
+            "src/query/sql-query-engine-initial-partition-provisioning.js"
+          ]
+        },
+        {
+          "id": "committed-stamp-consumer",
+          "owners": [
+            "src/raft/raft-committed-membership-stamp.js",
+            "src/raft/raft-rs-bootstrap-membership.js",
+            "src/raft/raft-rs-operation-port.js",
+            "src/raft/raft-rs-runtime-owner.js"
+          ]
+        }
+      ],
+      "contract": "committed-bootstrap-stamp",
+      "witnessTests": [
+        "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js",
+        "test/raft/raft-rs-backend/evidence-o1-gate-histories.test.js",
+        "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+        "test/raft/raft-rs-backend/committed-membership-target-validation.test.js"
+      ]
+    },
     "replace-owner-membership-observation": {
-      "description": "A change to how a replica announces, relays or answers its committed configuration, leader or term must keep the REPLACE owner's wake, completion (C1) and named handoff correct, and a change to the owner must keep reading that observation and nothing else.",
+      "description": "A change to how a replica announces, relays or answers its configuration, leader or term must keep the REPLACE owner's wakes, majority-current leader authority, completion and named handoff correct; a change to the owner must keep using only decoded consensus observations.",
       "endpoints": [
         {
           "id": "replica-consensus-observation",
@@ -1083,6 +1137,7 @@
           "id": "replace-owner",
           "owners": [
             "src/rebalancer/operation-workflow-replace-owner.js",
+            "src/rebalancer/operation-workflow-replace-surviving-membership.js",
             "src/rebalancer/operation-workflow-replace-owner-wake.js",
             "src/rebalancer/operation-workflow-replace-handoff-attempt.js",
             "src/rebalancer/operation-workflow-replace-witness.js"
@@ -1097,7 +1152,10 @@
         "test/node/replica-handler-replica-membership.test.js",
         "test/rebalancer/replace-source-removal-owner.test.js",
         "test/rebalancer/replace-owner-wake.test.js",
-        "test/rebalancer/replace-named-handoff-attempt.test.js"
+        "test/rebalancer/replace-named-handoff-attempt.test.js",
+        "test/rebalancer/replace-real-group-completion.test.js",
+        "test/rebalancer/replace-real-group-scheduling.test.js",
+        "test/rebalancer/replace-witness-boundary.test.js"
       ]
     }
   }

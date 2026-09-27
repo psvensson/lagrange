@@ -138,9 +138,23 @@ export function installReplaceWitnesses(router, options = {}) {
     const operationId = payload?.[ReplicaOperationField.OPERATION_ID];
     const answered = typeof operationId === 'string' ?
       witnessFor(operationId).answer(payload) : undefined;
-    return answered ?? baseDeliver(target, payload, deliverOptions);
+    return answered === undefined ?
+      baseDeliver(target, payload, deliverOptions) :
+      deliveredReplaceWitnessResponse(answered);
   };
   return {witnessFor};
+}
+
+/**
+ * Model the router facet only after a fixture handler produced an application
+ * answer. Transport-negative tests bypass this helper and supply their own
+ * delivery outcome, so an application-looking body cannot manufacture ACK.
+ * @param {Object} answered - The invoked fixture handler's response.
+ * @return {Object} A production-shaped delivered router response.
+ */
+export function deliveredReplaceWitnessResponse(answered) {
+  return {acknowledged: true, noHandler: false, deliveryState: 'delivered',
+    deferRetry: false, errorCode: null, retryAfterMs: null, ...answered};
 }
 
 /**

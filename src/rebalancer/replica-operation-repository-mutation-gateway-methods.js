@@ -102,20 +102,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       const shouldRetryDeferredCanonicalMutation =
         this.canUseReplicaOperationMutationIngress(mutation?.operation);
       while (true) {
-        const queryOptions = this.buildOperationMutationQueryOptions(
-          options,
-          retryAttempt,
-        );
-        let result = null;
-        try {
-          result = await this.executeReplicaOperationGatewayMutation(
-            mutation,
-            queryOptions,
-            fallback,
-          );
-        } catch (error) {
-          result = error;
-        }
+        const result = await this.executeReplicaOperationGatewayMutationAttempt(
+          mutation, options, fallback, retryAttempt);
         if (result.success || !this.isRetryableOperationPersistError(result)) {
           return result;
         }
@@ -154,6 +142,31 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           remainingMs,
         );
         await this.waitForOperationPersistRetry(waitMs);
+      }
+    }
+
+    async executeReplicaOperationGatewayMutationAttempt(
+      mutation,
+      options,
+      fallback,
+      retryAttempt,
+    ) {
+      if (typeof options.beforeAttempt === 'function' &&
+          await options.beforeAttempt() !== true) {
+        return {success: false, admissionRefused: true};
+      }
+      const queryOptions = this.buildOperationMutationQueryOptions(
+        options,
+        retryAttempt,
+      );
+      try {
+        return await this.executeReplicaOperationGatewayMutation(
+          mutation,
+          queryOptions,
+          fallback,
+        );
+      } catch (error) {
+        return error;
       }
     }
 

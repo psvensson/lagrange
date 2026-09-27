@@ -31,6 +31,7 @@ const ReplicaOperationReason = Object.freeze({
 // (whose reason is the error's own message).
 const ReplaceWitnessDeliveryOutcome = Object.freeze({
   DELIVERED: 'witness_delivered',
+  DELIVERY_DEFERRED: 'witness_delivery_deferred',
   IDENTITY_UNAVAILABLE: 'witness_identity_unavailable',
   DELIVERY_FAILED: 'witness_delivery_failed',
 });

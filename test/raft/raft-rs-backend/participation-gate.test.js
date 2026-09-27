@@ -553,6 +553,7 @@ function replaceOwnerReadingThrough(cluster, sourceReplicaId) {
       (replicaId) => ({replica_id: replicaId, node_id: `${replicaId}-node`})),
     messageRouter: {
       deliver: async (_target, payload) => ({
+        acknowledged: true,
         status: ReplicaOperationResponseStatus.COMPLETED,
         [ReplicaOperationField.MEMBERSHIP]: await readPartitionReplicaMembership(
           serviceOf(payload[ReplicaOperationField.REPLICA_ID]),

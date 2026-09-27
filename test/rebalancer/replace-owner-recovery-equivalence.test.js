@@ -55,7 +55,10 @@ import {
   readReplaceOwnerPhase,
 } from '../../src/rebalancer/operation-workflow-replace-owner.js';
 import {createMockCache, createTestCoordinator} from './test-helpers.js';
-import {createReplaceWitness} from './replace-witness-fixture.js';
+import {
+  createReplaceWitness,
+  deliveredReplaceWitnessResponse,
+} from './replace-witness-fixture.js';
 import {
   createPublishedPlanningReadinessService,
 } from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
@@ -215,7 +218,7 @@ function sourceRowStatus(world) {
 async function deliver(world, target, payload) {
   const witnessAnswer = world.witness.answer(payload);
   if (witnessAnswer) {
-    return witnessAnswer;
+    return deliveredReplaceWitnessResponse(witnessAnswer);
   }
   if (payload?.type === ReplicaOperationMessageType.REMOVE_REPLICA) {
     if (world.holdNextEffect) {
@@ -233,7 +236,8 @@ async function deliver(world, target, payload) {
   }
   if (payload?.type === ReplicaOperationMessageType.STEP_DOWN_REPLICA) {
     world.stepDowns.push(payload);
-    return {status: ReplicaOperationResponseStatus.COMPLETED,
+    return {acknowledged: true,
+      status: ReplicaOperationResponseStatus.COMPLETED,
       handoffBranch: REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REQUESTED};
   }
   return {acknowledged: true, status: ReplicaOperationResponseStatus.INITIATED};

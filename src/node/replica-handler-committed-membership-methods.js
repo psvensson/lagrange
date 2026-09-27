@@ -137,21 +137,22 @@ function assignReplicaHandlerCommittedMembershipMethods(ReplicaHandler) {
         throw bootstrapMembershipRefusedError(partitionId, validation.reason,
           validation.defect);
       }
-      const committed = bootstrapMembership.kind ===
+      const canonical = validation.stamp;
+      const committed = canonical.kind ===
         COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED;
       // A founder that already holds a durable record (a RESTART_CREATE
       // after its index-0 write) is restored from that record by its port:
       // the record, not the stamp, is the authority, so there is one group.
       if (!committed && discoveredOutsideFounders(observedServices,
-        bootstrapMembership.founders)) {
+        canonical.founders)) {
         throw bootstrapMembershipRefusedError(partitionId,
           COMMITTED_MEMBERSHIP_REFUSAL.GENESIS_REFUSED_GROUP_EXISTS);
       }
       return {
-        bootstrapMembership,
-        replicaIds: replicaIdsOfStamp(bootstrapMembership, replicaId),
+        bootstrapMembership: canonical,
+        replicaIds: replicaIdsOfStamp(canonical, replicaId),
         existingReplicaCount: committed ?
-          bootstrapMembership.voters.length : 0,
+          canonical.voters.length : 0,
       };
     }
   }

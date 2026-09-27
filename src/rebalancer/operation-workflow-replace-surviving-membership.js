@@ -136,8 +136,8 @@ const REPLACE_COMPLETION_AUTHORITY_WAIT = Object.freeze({
   NO_ANSWER: 'completion_authority_no_answer',
   // The leader's configuration is applied below its commit index (F-3).
   APPLIED_BEHIND_COMMIT: 'completion_authority_applied_behind_commit',
-  // No majority of the configuration confirmed the leader's term, leader
-  // and commit index (V1: possibly a deposed leader).
+  // No majority of the configuration confirmed the leader's term and
+  // identity (V1: possibly a deposed leader).
   NOT_CORROBORATED: 'completion_authority_not_corroborated',
 });
 

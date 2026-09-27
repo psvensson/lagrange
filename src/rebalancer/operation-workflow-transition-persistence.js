@@ -402,16 +402,21 @@ class OperationWorkflowTransitionPersistence
         now;
     };
 
-    const persistFn = async () => {
-      return this.repository.persistOperationUpdate(
-        projectedOperation,
-        {
-          ...this.buildOperationTransitionPersistOptions(),
-          terminalTransition: true,
-          returnDisposition: true,
-        },
-      );
+    const persistOptions = {
+      ...this.buildOperationTransitionPersistOptions(),
+      terminalTransition: true,
+      returnDisposition: true,
     };
+    if (isPartitionReplace(operation)) {
+      persistOptions.terminalAdmission = async () => {
+        const current = await decideReplaceCompletion(this, operation);
+        return current.verdict ===
+          REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED;
+      };
+    }
+    const persistFn = async () =>
+      this.repository.persistOperationUpdate(projectedOperation,
+        persistOptions);
     const transitionOutcome = await this.executeAtomicTransition(
       operation,
       finalStep,
@@ -434,6 +439,7 @@ class OperationWorkflowTransitionPersistence
         projectedOperation,
         transitionOutcome,
         finalStep,
+        persistOptions,
       );
       return transitionOutcome;
     }

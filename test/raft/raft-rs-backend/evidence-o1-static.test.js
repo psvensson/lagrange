@@ -108,7 +108,7 @@ test('enumerations: every refusal of the boundary is decided at one named ' +
     portOpening: ['DURABLE_RECORD_MISSING'],
   });
   assertClassifies('STAMP_DEFECT', COMMITTED_MEMBERSHIP_STAMP_DEFECT, {
-    shape: ['MISSING', 'UNKNOWN_KIND'],
+    shape: ['MISSING', 'UNKNOWN_KIND', 'MALFORMED'],
     committed: ['NO_BOOTSTRAP_INDEX', 'JOINT', 'NO_VOTERS',
       'IDENTITY_MISMATCH', 'IDENTITY_UNRESOLVED'],
     genesis: ['NO_FOUNDERS'],

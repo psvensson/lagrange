@@ -149,6 +149,9 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
               operation,
               errorResult,
             ),
+          // A terminal authority check belongs at the mutation attempt, not
+          // at the caller that projected the row. Retry attempts repeat it.
+          beforeAttempt: options.terminalAdmission,
         },
         {
           sql: this.resolveOperationUpdateSql(
@@ -161,6 +164,14 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           ),
         },
       );
+      if (result.admissionRefused === true) {
+        return buildOperationUpdatePersistResult(
+          options,
+          false,
+          REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+          null,
+        );
+      }
       if (!result.success) {
         return this.resolveFailedOperationUpdateResult(
           operation,

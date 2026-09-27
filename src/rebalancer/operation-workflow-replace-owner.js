@@ -8,7 +8,6 @@
  * configuration, so the source is in t's ConfState until a committed
  * RemoveNode takes it out); the source replica's lifecycle row; the target
  * replica's failure-detector verdict.
- * Canonical output:
  *  - R-1a decideReplaceCompletion: SOURCE_RETIRED iff the source is absent
  *    from the witness's voters and outgoing voters at a commit index at
  *    least the one recorded with the removal intent; otherwise STILL_VOTER or
@@ -589,9 +588,14 @@ async function reconcileReplaceStoppingOwner(owner, operation, context = {}) {
     // T5': no effect is recorded (or its backstop window passed) and the
     // source's lifecycle has not retired - (re-)send its removal effect
     // through the same remove-safety evaluation.
-    recordReplaceOwnerWait(owner, operation,
-      REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING, rowContext);
-    return owner.executeReplaceSourceRemovalEffect(operation);
+    const result = await owner.executeReplaceSourceRemovalEffect(operation);
+    // Reinstall the dispatch-cleared wait against the entry level.
+    if (recordReplaceOwnerWait(owner, operation,
+      REPLACE_WAIT_REASON.SOURCE_REMOVAL_EFFECT_PENDING, rowContext)) {
+      owner.armReplaceOwnerWait?.(operation, REPLACE_WAIT_REASON
+        .SOURCE_REMOVAL_EFFECT_PENDING, context.entryLevel || null);
+    }
+    return result;
   }
   await redriveReplaceSourceRetirement(owner, operation, decision.observation);
   return waitForReplaceOwner(owner, operation,
@@ -767,7 +771,6 @@ async function readReplaceOwnerPhase(owner, operation) {
     sourceRowClass: sourceRowClassOf(sourceRow),
   });
 }
-
 export {
   REPLACE_COMPLETION_VERDICT,
   REPLACE_POST_INTENT_FAILURE,
