@@ -1,6 +1,7 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {QueryExecutorBase} from './query-executor-base.js';
 import {
+  QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
   buildPartitionExecutionFailureResult,
   resolvePartitionRetryDelayMs,
 } from './query-execution-budget.js';
@@ -74,6 +75,21 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         errorMessage,
         details,
       });
+    let candidateDeliveryAttempted = false;
+    const buildPreSubmissionRouteFailureResult = (
+      errorMessage,
+      details = {},
+    ) => {
+      const failureResult = buildFailureResult(errorMessage, details);
+      if (candidateDeliveryAttempted) {
+        return failureResult;
+      }
+      return {
+        ...failureResult,
+        deliveryDisposition:
+          QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
+      };
+    };
 
     // Validate dependencies
     if (!this.messageRouter) {
@@ -191,9 +207,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           if (hasRoutableService && attempt < maxAttempts) {
             lastError = ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE;
             if (!(await waitForRetryBudget(this.leaderRetryDelayMs))) {
-              return {
-                ...buildFailureResult(lastError, lastFailureDetails),
-              };
+              return buildPreSubmissionRouteFailureResult(
+                lastError,
+                lastFailureDetails,
+              );
             }
             continue;
           }
@@ -204,9 +221,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           ) {
             lastError = ERRORS.PARTITION_SERVICE_NOT_FOUND;
             if (!(await waitForRetryBudget(this.leaderRetryDelayMs))) {
-              return {
-                ...buildFailureResult(lastError, lastFailureDetails),
-              };
+              return buildPreSubmissionRouteFailureResult(
+                lastError,
+                lastFailureDetails,
+              );
             }
             continue;
           }
@@ -215,17 +233,15 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               partitionId,
               attempts: attempt,
             });
-            return {
-              ...buildFailureResult(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE),
-            };
+            return buildPreSubmissionRouteFailureResult(
+              ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+            );
           }
           if (!hasRoutableService) {
             this.logNoServiceForPartition(partitionId, routingSnapshot);
-            return {
-              ...buildFailureResult(
-                QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND,
-              ),
-            };
+            return buildPreSubmissionRouteFailureResult(
+              QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND,
+            );
           }
         } else {
           // §1.10/§1.12: Reads get bounded retries so routing
@@ -285,6 +301,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           continue;
         }
         candidateState.markAttemptedAddress(address);
+        candidateDeliveryAttempted = true;
         this.notifyHedgeDeliveryObserver(
           executionOptions,
           partitionId,

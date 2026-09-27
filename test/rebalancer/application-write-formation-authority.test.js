@@ -3,6 +3,18 @@ import {readFileSync, readdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
+import {ReplicaOperationRepository} from
+  '../../src/rebalancer/replica-operation-repository.js';
+import {QueryExecutor} from '../../src/query/query-executor.js';
+import {
+  QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
+} from '../../src/query/query-execution-budget.js';
+import {ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
@@ -105,6 +117,84 @@ function createAdmissionOwner() {
   return {owner, state};
 }
 
+function createReplicaOperationRouteHarness(options = {}) {
+  const partitionId =
+    INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS];
+  const nodeId = options.nodeId || 'replica-operation-leader';
+  const address = `${nodeId}/partition/replica_operations-p1-r1`;
+  const partition = {
+    partition_id: partitionId,
+    table_name: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    leader_node_id:
+      Object.prototype.hasOwnProperty.call(options, 'leaderNodeId') ?
+        options.leaderNodeId : nodeId,
+  };
+  const service = {
+    service_id: 'replica_operations-p1-r1',
+    replica_id: 'replica_operations-p1-r1',
+    service_type: 'partition',
+    partition_id: partitionId,
+    node_id: nodeId,
+    raft_role: options.raftRole || 'leader',
+    address,
+    status: 'active',
+  };
+  let routerDeliveries = 0;
+  const systemCache = {
+    get(tableName, key) {
+      return tableName === SYSTEM_TABLE_NAME.PARTITIONS && key === partitionId ?
+        partition : null;
+    },
+    filter(tableName, predicate) {
+      if (tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
+        return [partition].filter(predicate);
+      }
+      if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+        return [service].filter(predicate);
+      }
+      return [];
+    },
+  };
+  const queryExecutor = new QueryExecutor({
+    nodeId,
+    systemCache,
+    messageRouter: {
+      async deliver() {
+        routerDeliveries += 1;
+        return {success: true};
+      },
+    },
+  });
+  return {
+    address,
+    partitionId,
+    queryExecutor,
+    service,
+    getRouterDeliveries: () => routerDeliveries,
+  };
+}
+
+function createGatewayRetryRepository(results) {
+  const repository = Object.create(ReplicaOperationRepository.prototype);
+  let invocationCount = 0;
+  repository.timeSource = {now: () => 0};
+  repository.canUseReplicaOperationMutationIngress = () => true;
+  repository.buildOperationMutationQueryOptions = () => ({});
+  repository.executeReplicaOperationGatewayMutation = async () => {
+    const result = results[Math.min(invocationCount, results.length - 1)];
+    invocationCount += 1;
+    return result;
+  };
+  repository.isRetryableOperationPersistError = () => true;
+  repository.shouldShortCircuitDeferredMutationRetry = () => false;
+  repository.resolveOperationMutationRemainingRetryMs = () => 100;
+  repository.shouldRotateOperationMutationSessionOnRetry = () => false;
+  repository.resolveOperationMutationRetryDelayMs = () => 0;
+  repository.waitForOperationPersistRetry = async () => {};
+  repository.isShuttingDownRequested = () => false;
+  return {repository, getInvocationCount: () => invocationCount};
+}
+
 test('F1 stable READY observation admits exactly one first operation effect',
   async (t) => {
     const {owner, state} = createAdmissionOwner();
@@ -153,7 +243,213 @@ test('the observation is bound to decision-relevant move authority',
       {code: 'OPERATION_CREATION_ADMISSION_REENTER'},
       'a caller cannot reuse interactive admission for a different work class',
     );
+    await t.rejects(
+      owner.createOperation({
+        ...TEST_MOVE,
+        membershipPublicationEpoch: 0,
+        operationCreationAdmission: decision.operationCreationAdmission,
+      }),
+      {code: 'OPERATION_CREATION_ADMISSION_REENTER'},
+      'an unbound admission cannot be reused by an epoch-bound move',
+    );
     t.equal(state.insertAttempts, 0);
+  });
+
+test('operation creation route observation consumes canonical write candidates',
+  async (t) => {
+    const canonicalRoute = createReplicaOperationRouteHarness();
+    const {owner} = createAdmissionOwner();
+    delete owner.observeReplicaOperationMutationRoute;
+    owner.sqlQueryEngine = {queryExecutor: canonicalRoute.queryExecutor};
+
+    const admitted = await owner.checkProvisioningAdmission(TEST_MOVE);
+    t.equal(admitted.allowed, true, 'the canonical leader write route admits');
+    t.equal(
+      admitted.operationCreationAdmission.routeObservation.routingSnapshot
+        .candidateCount,
+      1,
+      'admission consumes the canonical candidate owner result',
+    );
+
+    canonicalRoute.queryExecutor.markTemporarilyUnroutableAddress(
+      canonicalRoute.partitionId,
+      canonicalRoute.address,
+      canonicalRoute.service,
+    );
+    const denied = await owner.checkProvisioningAdmission(TEST_MOVE);
+    t.equal(
+      denied.allowed,
+      false,
+      'a canonical leader quarantined by the write owner denies admission',
+    );
+    t.match(denied.reasonCodes, ['replica_operation_route_unavailable']);
+    t.equal(
+      denied.routeObservation.routingSnapshot.routableServiceCount,
+      1,
+      'the readiness-routable row remains visible in diagnostics',
+    );
+    t.equal(
+      denied.routeObservation.routingSnapshot.candidateCount,
+      0,
+      'the canonical write owner removes the temporarily unroutable endpoint',
+    );
+    t.equal(
+      canonicalRoute.getRouterDeliveries(),
+      0,
+      'route observation performs no delivery effect',
+    );
+
+    const recoveryRoute = createReplicaOperationRouteHarness({
+      leaderNodeId: null,
+      raftRole: 'follower',
+    });
+    const {owner: recoveryOwner} = createAdmissionOwner();
+    delete recoveryOwner.observeReplicaOperationMutationRoute;
+    recoveryOwner.sqlQueryEngine = {queryExecutor: recoveryRoute.queryExecutor};
+    const recoveryAdmission =
+      await recoveryOwner.checkProvisioningAdmission(TEST_MOVE);
+    t.equal(
+      recoveryAdmission.allowed,
+      true,
+      'the canonical system-table recovery route remains admitted',
+    );
+    t.equal(
+      recoveryRoute.getRouterDeliveries(),
+      0,
+      'recovery-route observation also remains side-effect free',
+    );
+  });
+
+test('route loss after final admission revalidation returns typed pre-effect ' +
+  're-entry', async (t) => {
+  const routeHarness = createReplicaOperationRouteHarness();
+  routeHarness.queryExecutor.markTemporarilyUnroutableAddress(
+    routeHarness.partitionId,
+    routeHarness.address,
+    routeHarness.service,
+  );
+  routeHarness.queryExecutor.isShuttingDownRequested = () => true;
+  const routeFailure = await routeHarness.queryExecutor.executeOnPartition(
+    routeHarness.partitionId,
+    'INSERT INTO replica_operations(operation_id) VALUES (?)',
+    ['op-route-barrier'],
+    false,
+    false,
+    false,
+    {
+      routingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    },
+  );
+  t.equal(
+    routeFailure.deliveryDisposition,
+    QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
+    'zero canonical candidates carries the QueryExecutor-owned pre-effect fact',
+  );
+  t.equal(
+    routeHarness.getRouterDeliveries(),
+    0,
+    'the typed route loss occurs before any router submission',
+  );
+
+  const gateway = Object.create(ControlPlaneSystemTableGateway.prototype);
+  const gatewayFailure = gateway.normalizeMutationResult(routeFailure);
+  const retryHarness = createGatewayRetryRepository([gatewayFailure]);
+  const retryFailure =
+    await retryHarness.repository
+      .executeReplicaOperationGatewayMutationWithRetry(
+        {operation: 'insert'},
+        {onRetryableFailure: async () => false},
+      );
+  t.equal(
+    retryHarness.getInvocationCount(),
+    1,
+    'confirmed pre-submission route loss does not retry into delivery',
+  );
+  const persistError =
+    retryHarness.repository.buildOperationPersistError(retryFailure);
+  t.equal(
+    persistError.deliveryDisposition,
+    QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
+    'gateway and repository preserve the owner disposition structurally',
+  );
+
+  const {owner, state} = createAdmissionOwner();
+  owner.persistNewOperation = async () => {
+    throw persistError;
+  };
+  const admission = await owner.checkProvisioningAdmission(TEST_MOVE);
+  await t.rejects(
+    owner.createOperation({
+      ...TEST_MOVE,
+      operationCreationAdmission: admission.operationCreationAdmission,
+    }),
+    {code: 'OPERATION_CREATION_ADMISSION_REENTER'},
+    'the admission boundary translates only the typed pre-effect disposition',
+  );
+  t.equal(state.insertAttempts, 0, 'no operation insert was submitted');
+});
+
+test('an earlier possible delivery cannot be relabeled by later route loss',
+  async (t) => {
+    const ambiguousDelivery = {
+      success: false,
+      error: 'Mutation delivery result is ambiguous',
+      deferRetry: true,
+    };
+    const preSubmissionRouteLoss = {
+      success: false,
+      error: 'Partition service not found',
+      deliveryDisposition:
+        QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
+    };
+    const retryHarness = createGatewayRetryRepository([
+      ambiguousDelivery,
+      preSubmissionRouteLoss,
+    ]);
+    const retryFailure =
+      await retryHarness.repository
+        .executeReplicaOperationGatewayMutationWithRetry(
+          {operation: 'insert'},
+          {onRetryableFailure: async () => false},
+        );
+    t.equal(
+      retryHarness.getInvocationCount(),
+      2,
+      'the witness reaches route loss after one possibly-submitted invocation',
+    );
+    t.equal(
+      retryFailure.priorMutationDeliveryMayHaveBeenAttempted,
+      true,
+      'the aggregate result retains monotonic possible-delivery evidence',
+    );
+
+    const persistError =
+      retryHarness.repository.buildOperationPersistError(retryFailure);
+    const {owner} = createAdmissionOwner();
+    owner.persistNewOperation = async () => {
+      throw persistError;
+    };
+    const admission = await owner.checkProvisioningAdmission(TEST_MOVE);
+    let observedError = null;
+    try {
+      await owner.createOperation({
+        ...TEST_MOVE,
+        operationCreationAdmission: admission.operationCreationAdmission,
+      });
+    } catch (error) {
+      observedError = error;
+    }
+    t.equal(
+      observedError,
+      persistError,
+      'the admission boundary preserves the ambiguous persistence failure',
+    );
+    t.not(
+      observedError?.code,
+      'OPERATION_CREATION_ADMISSION_REENTER',
+      'a later zero-candidate result cannot claim that no prior effect exists',
+    );
   });
 
 test('F3 a post-READY authority transition refuses before operation insert',

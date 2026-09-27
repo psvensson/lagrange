@@ -1,38 +1,38 @@
 {
   "schema": "test-receipt/1",
   "quest": "application-write-formation-authority",
-  "status": "fail",
-  "generatedAt": "2026-09-27T00:00:00.000Z",
+  "status": "pass",
+  "generatedAt": "2026-09-27T19:19:45.000Z",
   "receipts": [
     {
       "id": "stable-ready-first-write-admitted",
-      "passed": false,
-      "command": "not yet established",
-      "detail": "F1 is the sealed red property: formation readiness currently does not prove that the first application mutation is admissible under the same authoritative state."
+      "passed": true,
+      "command": "node --test test/rebalancer/application-write-formation-authority.test.js",
+      "detail": "F1 proves one immutable composite RebalanceCoordinator observation is revalidated at the persistence boundary and stable authority produces exactly one durable operation insert attempt."
     },
     {
       "id": "pending-operation-prevents-false-readiness",
-      "passed": false,
-      "command": "not yet established",
-      "detail": "F2 has no direct owner-level witness yet."
+      "passed": true,
+      "command": "node --test test/rebalancer/application-write-formation-authority.test.js",
+      "detail": "F2 and the decision-dimension table prove unavailable replica_operations routing and a pending entity-operation predicate each prevent PROCEED before any insert."
     },
     {
       "id": "post-ready-transition-safe",
-      "passed": false,
-      "command": "not yet established",
-      "detail": "F3 has no direct owner-level witness yet."
+      "passed": true,
+      "command": "node --test test/rebalancer/application-write-formation-authority.test.js test/query/sql-query-engine-provision-partition-quorum.test.js",
+      "detail": "F3 proves a changed readiness identity returns typed OPERATION_CREATION_ADMISSION_REENTER before insert; the cohort witness proves a prior deterministic bootstrap-held child remains PENDING and is reused rather than poisoned when a later target re-enters."
     },
     {
       "id": "stale-generation-cannot-win",
-      "passed": false,
-      "command": "not yet established",
-      "detail": "F4 has no direct owner-level witness yet."
+      "passed": true,
+      "command": "node --test test/rebalancer/application-write-formation-authority.test.js",
+      "detail": "F4 proves a stale G observation cannot insert, while re-entry at current G+2 preserves the deterministic operation identity and inserts once."
     },
     {
       "id": "transaction-active-end-to-end-confirmation",
-      "passed": false,
-      "command": "not yet established",
-      "detail": "T-A remains an end-to-end reproducer, not the primary property proof."
+      "passed": true,
+      "command": "tv-dator exact-SHA lab runs of test/integration/transaction-active-owns-connection.integration.test.js at carrier 603ef01ef1adcec49d6548a9513effc83df1f998",
+      "detail": "Initial post-fix pass plus 3/3 confirmation runs were green with 33 assertions each and zero retries. Durable controller transcripts: /tmp/application-write-formation-ta-tv-dator-pass2.log and /tmp/application-write-formation-ta-tv-dator-confirm{1,2,3}.log."
     }
   ]
 }

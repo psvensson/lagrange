@@ -14,11 +14,20 @@ import {
   planningIdentitiesEqual,
 } from '../control-plane/readiness-planning-semantic-generation.js';
 import {
+  QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
+} from '../query/query-execution-budget.js';
+import {
   normalizeRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
+import {
+  MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
+  assertMembershipPublicationEpochBinding,
+} from './replica-operation-membership-epoch-binding.js';
 
 const OPERATION_CREATION_ADMISSION_ERROR_CODE =
   'OPERATION_CREATION_ADMISSION_REENTER';
+const OPERATION_CREATION_MOVE_EPOCH_BINDING_SOURCE =
+  'operation_creation_move_identity';
 const OPERATION_CREATION_ADMISSION_REASON = Object.freeze({
   IDENTITY_CHANGED: 'readiness_planning_identity_changed',
   IDENTITY_UNAVAILABLE: 'readiness_planning_identity_unavailable',
@@ -46,6 +55,18 @@ function arrayOrEmpty(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function resolveMoveMembershipPublicationEpoch(move) {
+  const binding = assertMembershipPublicationEpochBinding(
+    move?.membershipPublicationEpoch,
+    {
+      source: OPERATION_CREATION_MOVE_EPOCH_BINDING_SOURCE,
+      operationId: move?.operationId || move?.operationIntentId,
+    },
+  );
+  return binding.state === MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE.BOUND ?
+    binding.epoch : null;
+}
+
 function buildMoveIdentity(move = {}) {
   const {entityType, entityId} = normalizeRebalancerEntityIdentity(move);
   return Object.freeze({
@@ -59,9 +80,7 @@ function buildMoveIdentity(move = {}) {
     operationId: stringOrEmpty(move.operationId),
     operationIntentId: stringOrEmpty(move.operationIntentId),
     replicaIntentId: stringOrEmpty(move.replicaIntentId),
-    membershipPublicationEpoch:
-      Number.isInteger(move.membershipPublicationEpoch) ?
-        move.membershipPublicationEpoch : null,
+    membershipPublicationEpoch: resolveMoveMembershipPublicationEpoch(move),
     controlPlaneMutationWorkClass:
       stringOrEmpty(move.controlPlaneMutationWorkClass),
     priorityRecoveryOperationCreationRequired:
@@ -171,46 +190,14 @@ function buildUnavailableRouteObservation() {
   });
 }
 
-function readRoutingSnapshot(queryExecutor, partitionId) {
-  try {
-    return queryExecutor.getPartitionRoutingSnapshot(
-      partitionId,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    );
-  } catch {
-    return null;
-  }
-}
-
-function resolveRecoveryRoutingContract(
-  queryExecutor,
-  partitionId,
-  routingSnapshot,
-) {
-  const resolver =
-    queryExecutor?.resolveCanonicalLeaderGapRecoveryRoutingContract;
-  if (typeof resolver !== 'function') return null;
-  return resolver.call(
-    queryExecutor,
-    partitionId,
-    routingSnapshot,
-    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    false,
-  );
-}
-
-function buildRouteObservation(routingSnapshot, recoveryContract) {
+function buildRouteObservation(candidateResolution) {
+  const routingSnapshot = candidateResolution?.routingSnapshot || null;
+  const candidates = arrayOrEmpty(candidateResolution?.candidates);
   const routableServices = arrayOrEmpty(routingSnapshot?.routableServices);
   const canonicalLeaderNodeId =
     typeof routingSnapshot?.canonicalLeaderNodeId === 'string' ?
       routingSnapshot.canonicalLeaderNodeId : null;
-  const canonicalLeaderRoutable = routableServices.some(
-    (service) => service?.node_id === canonicalLeaderNodeId,
-  );
-  const recoveryRouteAvailable =
-    recoveryContract?.recoveryCandidateWidening === true &&
-    routableServices.length > 0;
-  const allowed = canonicalLeaderRoutable || recoveryRouteAvailable;
+  const allowed = candidates.length > 0;
   return Object.freeze({
     allowed,
     reasonCode: allowed ? null :
@@ -221,6 +208,7 @@ function buildRouteObservation(routingSnapshot, recoveryContract) {
       canonicalLeaderRoutingGapState:
         routingSnapshot.canonicalLeaderRoutingGapState || null,
       routableServiceCount: routableServices.length,
+      candidateCount: candidates.length,
     }) : null,
   });
 }
@@ -247,17 +235,24 @@ const operationCreationAdmissionMethods = {
       INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS];
     if (
       !partitionId ||
-      typeof queryExecutor?.getPartitionRoutingSnapshot !== 'function'
+      typeof queryExecutor?.resolvePartitionServiceCandidates !== 'function'
     ) {
       return buildUnavailableRouteObservation();
     }
-    const routingSnapshot = readRoutingSnapshot(queryExecutor, partitionId);
-    const recoveryContract = resolveRecoveryRoutingContract(
-      queryExecutor,
-      partitionId,
-      routingSnapshot,
-    );
-    return buildRouteObservation(routingSnapshot, recoveryContract);
+    try {
+      const candidateResolution =
+        queryExecutor.resolvePartitionServiceCandidates(
+          partitionId,
+          false,
+          false,
+          false,
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+          {allowReadinessAuthoritativeRefresh: false},
+        );
+      return buildRouteObservation(candidateResolution);
+    } catch {
+      return buildUnavailableRouteObservation();
+    }
   },
 
   async runOperationCreationAdmissionGates(move, moveIdentity) {
@@ -430,10 +425,32 @@ const operationCreationAdmissionMethods = {
         move,
         move.operationCreationAdmission,
       ) : null;
-    const persistResult = await this.persistNewOperation(
-      operation,
-      persistenceOptions,
-    );
+    let persistResult;
+    try {
+      persistResult = await this.persistNewOperation(
+        operation,
+        persistenceOptions,
+      );
+    } catch (error) {
+      if (
+        error?.deliveryDisposition !==
+          QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE ||
+        error?.priorMutationDeliveryMayHaveBeenAttempted === true
+      ) {
+        throw error;
+      }
+      throw this.createOperationCreationAdmissionReentryError(
+        buildDeniedObservation({
+          moveIdentity: buildMoveIdentity(move),
+          planningIdentity:
+            this.captureOperationCreationPlanningIdentity(move?.nodeId),
+          reasonCodes: [
+            OPERATION_CREATION_ADMISSION_REASON.ROUTE_UNAVAILABLE,
+          ],
+          routeObservation: buildUnavailableRouteObservation(),
+        }),
+      );
+    }
     return {operationCreationAdmission, persistResult};
   },
 };
