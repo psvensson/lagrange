@@ -43,6 +43,48 @@ const {
   getRemainingBudgetMs,
 } = SQL_QUERY_ENGINE_SHARED;
 
+function getInitialPlanningStepEntry(operation) {
+  if (!Array.isArray(operation?.stepsHistory)) {
+    return null;
+  }
+  const initialStepEntry = operation.stepsHistory[0];
+  if (!initialStepEntry || typeof initialStepEntry !== LOCAL_STR_OBJECT) {
+    return null;
+  }
+  return initialStepEntry;
+}
+
+function isDurableSchemaPlanningOperation(schemaJobId, operation) {
+  const targetNodeId = String(
+    operation?.targetNodeId || operation?.nodeId || '',
+  ).trim();
+  if (!targetNodeId) {
+    return false;
+  }
+  const deterministicIntent = buildSchemaProvisioningChildIntent(
+    schemaJobId,
+    targetNodeId,
+  );
+  if (operation?.operationId !== deterministicIntent.operationIntentId) {
+    return false;
+  }
+  if (operation?.replicaId !== deterministicIntent.replicaIntentId) {
+    return false;
+  }
+  return getInitialPlanningStepEntry(operation)?.[
+    OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED
+  ] === true;
+}
+
+function shouldRetainDurableSchemaPlanningOperations(context, operations) {
+  const schemaJobId = String(context?.schemaJobId || '').trim();
+  if (!schemaJobId || !Array.isArray(operations) || operations.length === 0) {
+    return false;
+  }
+  return operations.every((operation) =>
+    isDurableSchemaPlanningOperation(schemaJobId, operation));
+}
+
 class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatementExecution {
   async provisionInitialTablePartition(context) {
     const cancellationToken = resolveQueryCancellationToken(context);
@@ -551,11 +593,20 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           },
         );
       } else {
-        await this.abortProvisioningPlanningOperations(
-          partitionId,
-          createdPlanningOperations,
-          QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_ABORTED_PRE_DISPATCH,
-        );
+        const retryable = !hasExplicitMinimumRoutableReplicaCount;
+        const retainDurableSchemaPlanningOperations =
+          retryable &&
+          shouldRetainDurableSchemaPlanningOperations(
+            context,
+            createdPlanningOperations,
+          );
+        if (!retainDurableSchemaPlanningOperations) {
+          await this.abortProvisioningPlanningOperations(
+            partitionId,
+            createdPlanningOperations,
+            QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_ABORTED_PRE_DISPATCH,
+          );
+        }
         this.throwProvisioningInsufficientTargets({
           partitionId,
           targetReplicaCount,
@@ -572,7 +623,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
             ),
           rejectedTargetNodePlans,
           maximumProvisionableReplicaCount,
-          retryable: !hasExplicitMinimumRoutableReplicaCount,
+          retryable,
         });
       }
     }
