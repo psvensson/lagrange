@@ -215,6 +215,38 @@ the existing CREATE/run deadline bounds a job that stays pending. No CREATE or
 transaction retry, arbitrary sleep, enlarged timeout, production source
 change, or weaker transaction assertion is introduced.
 
+## Shared formation schema-lifecycle correction
+
+The verifier-approved checkpoint
+`31892a19140f64426f17b12bc18b224cef1a0912` selected the same seven-file
+exclusive cone on tv-dator at `jobs=1`, with the normal machine lock and a
+green thermal check (CPU 58 C, NVMe 47 C). The first file,
+`transaction-active-owns-connection.integration.test.js`, failed during
+`cluster.formCluster()` before its transaction property began: two assertions
+ran in 100486 ms. The one-shot INSERT into
+`embedded_harness_write_probe` was rejected because the table partition had no
+leader after its initial provisioning failed to establish a routable cohort.
+The CREATE had been fulfilled with a durable pending schema job, but the shared
+formation harness still treated transport fulfillment as table readiness.
+
+The remaining six files were cancelled through the lab controller after that
+pre-property classification. The controller exited 130, its copied `.err`
+records `Terminated`, and a subsequent normal fleet probe reported tv-dator
+ready with its machine lock free. The preserved artifacts are
+`test-output/placement/31892a19140f-mujpsuob-2819074-tv-dator.log` and its
+adjacent `.err` and `.sh` files. The remote evidence named by the TAP output is
+`/home/peter/projects/lagrange/test-output/transaction-replicated-apply/active-owns-connection-2026-09-27T11-07-57-423Z/active-owns-connection.json`.
+
+The shared formation write probe now uses the same schema-lifecycle observer as
+the settling witness. It submits CREATE exactly once; a ready/proceed contract
+advances immediately, while a pending/retry contract is observed read-only by
+its exact durable job id until `SUCCEEDED`. `FAILED` or the existing total
+formation deadline prevents INSERT. Only after schema readiness does the probe
+submit INSERT exactly once. The completed exact-cohort
+`publicationActiveGateHandoff` remains the preceding formation precondition;
+no retry, new sleep, larger budget, production change, or weaker transaction
+assertion is introduced.
+
 ## Design verdict remains sealed
 
 The liveness wording is corrected for future work: there is no configured

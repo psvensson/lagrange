@@ -42,6 +42,9 @@ import {
   encodeParam,
   exposedProperty,
 } from './embedded-node-protocol.js';
+import {
+  createTableAndAwaitSchemaProvisioning,
+} from './schema-provisioning-job-observer.js';
 import {scaleByMachineFactor} from './test-machine-factor.js';
 
 const EMBEDDED_NODE_ROLE = Object.freeze({
@@ -297,13 +300,28 @@ async function labelled(label, observation) {
  * for the same deterministic schema intent after a terminal rejection and
  * obscure the first failure rather than establish readiness.
  *
- * @param {Function} queryRows - application query executor
- * @return {Promise<void>}
+ * @param {Function} query - raw application query executor
+ * @param {Object} options - lifecycle observation dependencies and bound
+ * @return {Promise<Object>} schema readiness evidence
  */
-async function runApplicationWriteProbe(queryRows) {
-  await labelled('create', queryRows(CLUSTER_SQL.WRITE_PROBE_TABLE));
-  await labelled('insert', queryRows(CLUSTER_SQL.WRITE_PROBE_INSERT,
-    [randomUUID(), Date.now()]));
+async function runApplicationWriteProbe(query, options) {
+  const {deadlineMs, now = Date.now, sleep} = options;
+  const create = await labelled('create',
+    createTableAndAwaitSchemaProvisioning({
+      createSql: CLUSTER_SQL.WRITE_PROBE_TABLE,
+      deadlineMs,
+      now,
+      pollIntervalMs: EMBEDDED_CLUSTER_BUDGET_MS.POLL_INTERVAL,
+      query,
+      sleep,
+    }));
+  if (!create.ready || now() >= deadlineMs) {
+    throw new Error(`create: ${create.failure ||
+      'formation deadline reached after schema provisioning'}`);
+  }
+  await labelled('insert', query(CLUSTER_SQL.WRITE_PROBE_INSERT,
+    [randomUUID(), now()]).then(fulfilledRows));
+  return {create};
 }
 
 async function pollUntil(t, budgetMs, read, satisfied, describe) {
@@ -610,12 +628,16 @@ function createEmbeddedCluster(t, options = {}) {
     return node;
   }
 
-  async function seedQueryRows(sql, params = []) {
+  async function seedQuery(sql, params = []) {
     const seed = nodes[0];
     harnessSession ??= await seed.openApplicationDatabase(
       EMBEDDED_CLUSTER_VALUE.HARNESS_APPLICATION_ID,
     );
-    return fulfilledRows(await seed.query(harnessSession, sql, params));
+    return seed.query(harnessSession, sql, params);
+  }
+
+  async function seedQueryRows(sql, params = []) {
+    return fulfilledRows(await seedQuery(sql, params));
   }
 
   function logDigest() {
@@ -647,9 +669,16 @@ function createEmbeddedCluster(t, options = {}) {
   // on the seed. CREATE remains the mutation and admission authority. A
   // rejection is terminal evidence: do not retry the same deterministic schema
   // intent under a new operation id.
-  async function waitForApplicationWrites() {
+  async function waitForApplicationWrites(
+    deadlineMs = Date.now() + scaleByMachineFactor(
+      EMBEDDED_CLUSTER_BUDGET_MS.APPLICATION_WRITES,
+    ),
+  ) {
     const startedAt = Date.now();
-    await withLogDigest(runApplicationWriteProbe(seedQueryRows));
+    await withLogDigest(runApplicationWriteProbe(seedQuery, {
+      deadlineMs,
+      sleep: (ms) => managedSleep(t, ms),
+    }));
     return {attempts: 1, elapsedMs: Date.now() - startedAt};
   }
 
@@ -689,7 +718,7 @@ function createEmbeddedCluster(t, options = {}) {
     await waitForApplicationWritePreconditions(remaining());
     const applicationWritePreconditionsAfterActiveMs =
       Date.now() - preconditionsStartedAt;
-    const writes = await waitForApplicationWrites();
+    const writes = await waitForApplicationWrites(deadline);
     return {
       activeMs,
       applicationWritePreconditionsAfterActiveMs,
