@@ -1,3 +1,7 @@
+import {
+  QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
+} from '../query/query-execution-budget.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
   'replica-operation';
@@ -95,6 +99,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     ) {
       const startedAt = this.timeSource.now();
       let retryAttempt = 0;
+      let priorMutationDeliveryMayHaveBeenAttempted = false;
       const shouldRetryDeferredCanonicalMutation =
         this.canUseReplicaOperationMutationIngress(mutation?.operation);
       while (true) {
@@ -112,8 +117,26 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         } catch (error) {
           result = error;
         }
-        if (result.success || !this.isRetryableOperationPersistError(result)) {
+        if (result.success) {
           return result;
+        }
+        const preSubmissionRouteUnavailable =
+          result?.deliveryDisposition ===
+            QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE;
+        if (!preSubmissionRouteUnavailable) {
+          priorMutationDeliveryMayHaveBeenAttempted = true;
+        }
+        const bindPriorMutationDeliveryAttempt = (failureResult) => ({
+          ...(failureResult && typeof failureResult === 'object' ?
+            failureResult : {}),
+          success: false,
+          error: this.getOperationPersistErrorMessage(failureResult),
+          priorMutationDeliveryMayHaveBeenAttempted: true,
+        });
+        if (!this.isRetryableOperationPersistError(result)) {
+          return preSubmissionRouteUnavailable &&
+              priorMutationDeliveryMayHaveBeenAttempted ?
+            bindPriorMutationDeliveryAttempt(result) : result;
         }
         const recoveredAfterRetryableFailure =
           typeof options?.onRetryableFailure === 'function' ?
@@ -121,6 +144,16 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
             false;
         if (recoveredAfterRetryableFailure) {
           return {success: true, recoveredAfterRetryableFailure: true};
+        }
+        // A canonical zero-candidate outcome proves this invocation stopped
+        // before delivery. Do not retry it into a later invocation that could
+        // submit and erase that pre-effect fact. Conversely, an earlier
+        // non-pre-submission result makes the aggregate attempt ambiguous;
+        // retain that monotonic evidence so a later zero-candidate result
+        // cannot be translated into operation-creation re-entry.
+        if (preSubmissionRouteUnavailable) {
+          return priorMutationDeliveryMayHaveBeenAttempted ?
+            bindPriorMutationDeliveryAttempt(result) : result;
         }
         if (
           this.shouldShortCircuitDeferredMutationRetry(result) &&
@@ -343,6 +376,15 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         errorResult.outcome.length > 0
       ) {
         error.outcome = errorResult.outcome;
+      }
+      if (
+        typeof errorResult?.deliveryDisposition === 'string' &&
+        errorResult.deliveryDisposition.length > 0
+      ) {
+        error.deliveryDisposition = errorResult.deliveryDisposition;
+      }
+      if (errorResult?.priorMutationDeliveryMayHaveBeenAttempted === true) {
+        error.priorMutationDeliveryMayHaveBeenAttempted = true;
       }
       if (errorResult?.cause && !error.cause) {
         error.cause = errorResult.cause;

@@ -112,6 +112,7 @@ const DECODE_CONSUMERS = Object.freeze([
   'src/rebalancer/unified-rebalancer-move-execution.js',
   'src/rebalancer/operation-workflow-dispatch-response-reconcile.js',
   'src/rebalancer/unified-rebalancer-rebalance-loop.js',
+  'src/rebalancer/rebalance-coordinator-operation-creation-admission.js',
 ]);
 // Encode, SQL-text, schema, and pass-through sites: they mention the field
 // but never interpret its value.
