@@ -1,8 +1,8 @@
 {
   "schema": "test-receipt/1",
   "quest": "application-write-formation-authority",
-  "status": "pass",
-  "generatedAt": "2026-09-27T19:19:45.000Z",
+  "status": "fail",
+  "generatedAt": "2026-09-27T20:36:00.000Z",
   "receipts": [
     {
       "id": "stable-ready-first-write-admitted",
@@ -30,9 +30,9 @@
     },
     {
       "id": "transaction-active-end-to-end-confirmation",
-      "passed": true,
-      "command": "tv-dator exact-SHA lab runs of test/integration/transaction-active-owns-connection.integration.test.js at carrier 603ef01ef1adcec49d6548a9513effc83df1f998",
-      "detail": "Initial post-fix pass plus 3/3 confirmation runs were green with 33 assertions each and zero retries. Durable controller transcripts: /tmp/application-write-formation-ta-tv-dator-pass2.log and /tmp/application-write-formation-ta-tv-dator-confirm{1,2,3}.log."
+      "passed": false,
+      "command": "tv-dator exact-SHA lab runs of test/integration/transaction-active-owns-connection.integration.test.js at carrier 82499b8a761cc47728936505696e5df97350184d",
+      "detail": "The focused run passed 33 assertions, but confirmation 1/3 stopped red before the transaction assertions. The authoritative operation_ledger_quorum_concentrated predicate correctly withheld schema-child admission while an inherited replica_operations REPLACE source-removal wedge overlapped two ambiguous-success storage-reservation replay storms. No schema child was inserted. The prior carrier 603ef01ef1adcec49d6548a9513effc83df1f998 also failed a controlled same-host comparison later in formation, so this is not evidence for weakening composite admission; resolving it requires a separate reservation lost-result and/or REPLACE handoff owner decision. Durable controller transcripts: /tmp/application-write-formation-ta-tv-dator-ae3e6d887-pass1.log, /tmp/application-write-formation-ta-tv-dator-ae3e6d887-confirmation-3x.log, and /tmp/application-write-formation-ta-tv-dator-603-after-ae3-red.log."
     }
   ]
 }
