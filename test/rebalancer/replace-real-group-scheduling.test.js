@@ -67,6 +67,39 @@ import {
   waitUntil,
 } from './replace-real-group-harness.js';
 
+test('T5-prime installs the canonical waiter and fallback before returning ' +
+  'from a re-sent removal effect', async (t) => {
+  const world = await openReplaceWorld({
+    replicaCount: 1,
+    sourceLeads: true,
+    sourceHandler: true,
+    removingWriteFails: true,
+  });
+  try {
+    await driveToIntent(world);
+    world.group.advance(100);
+    await settleTurns();
+    world.removingWriteFails = false;
+    world.clockOffsetMs += 61_000;
+    const before = world.removeEffects.length;
+    await world.coordinator.reconcileOperationProgress(
+      await readPersisted(world));
+    await settleTurns();
+    t.ok(world.removeEffects.length > before, 'the T5-prime resend occurred');
+
+    const outcome = await runToQuiescence(world, {
+      rounds: 8,
+      useFallback: false,
+    });
+    t.equal(outcome.workflowStep, WORKFLOW_STEP.REMOVED,
+      'row/membership wakes converge without waiting for the K1 sweep');
+    t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), false,
+      'completion follows the committed removal');
+  } finally {
+    await disposeWorld(world);
+  }
+});
+
 function diagnosticReason(world) {
   return readReplaceOwnerDiagnostic(world.coordinator.workflowOwner,
     world.operation.operationId)?.reason ?? null;

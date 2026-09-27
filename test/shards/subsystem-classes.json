@@ -12,23 +12,23 @@
     "distributed-harness": 167,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 254,
+    "placement-rebalance": 255,
     "query-sql": 161,
     "release-packaging": 11,
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
     "storage-partition": 155,
-    "storage-raft": 133,
+    "storage-raft": 134,
     "test-infrastructure": 136,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2238,
-  "digest": "fnv1a32-cae2ea41",
+  "censusSize": 2240,
+  "digest": "fnv1a32-a1d78a0c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-162001d4",
+  "observationDigest": "fnv1a32-a07eb94b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1451,6 +1451,7 @@
     "test/raft/raft-rs-backend/admission-redrive.test.js": "storage-raft",
     "test/raft/raft-rs-backend/backend-seam.test.js": "storage-raft",
     "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/committed-membership-adversarial-boundary.test.js": "storage-raft",
     "test/raft/raft-rs-backend/committed-membership-census.test.js": "storage-raft",
     "test/raft/raft-rs-backend/committed-membership-read.test.js": "storage-raft",
     "test/raft/raft-rs-backend/committed-membership-stamp.test.js": "storage-raft",
@@ -1705,6 +1706,7 @@
     "test/rebalancer/replace-source-planner-set-exclusion.test.js": "placement-rebalance",
     "test/rebalancer/replace-source-removal-owner.test.js": "placement-rebalance",
     "test/rebalancer/replace-temporary-extra-voter-planner.test.js": "placement-rebalance",
+    "test/rebalancer/replace-witness-boundary.test.js": "placement-rebalance",
     "test/rebalancer/replica-inventory.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-confirmation-authority-read.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-insert-retry-idempotency.test.js": "placement-rebalance",
@@ -7290,6 +7292,12 @@
         "src/rebalancer/replica-operation-progress.js"
       ]
     },
+    "test/raft/raft-rs-backend/committed-membership-adversarial-boundary.test.js": {
+      "files": [
+        "src/raft/raft-rs-bootstrap-membership.js",
+        "src/raft/raft-rs-peer-identity.js"
+      ]
+    },
     "test/raft/raft-rs-backend/committed-membership-census.test.js": {
       "files": [
         "src/bootstrap/bootstrap-service-replica-registration-methods.js",
@@ -8558,6 +8566,12 @@
     "test/rebalancer/replace-temporary-extra-voter-planner.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/replace-witness-boundary.test.js": {
+      "files": [
+        "src/partition/partition-replica-membership-constants.js",
+        "src/rebalancer/replica-operation-progress.js"
       ]
     },
     "test/rebalancer/replica-operation-membership-epoch-binding.test.js": {

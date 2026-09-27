@@ -221,6 +221,48 @@ test('P1 sink: completeOperation refuses while the source is a committed ' +
   }
 });
 
+test('P1 terminal boundary: re-admission after the decision but before the ' +
+  'terminal mutation refuses REMOVED', async (t) => {
+  const world = await openReplaceWorld({sourceLeads: false});
+  try {
+    world.eventsSuppressed = true;
+    await driveToIntent(world);
+    world.group.commitChange(
+      RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER,
+      world.sourceReplicaId,
+    );
+    t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), false,
+      'setup: the source left the committed configuration');
+
+    const repository = world.coordinator.repository;
+    const persist = repository.persistOperationUpdate.bind(repository);
+    let injected = false;
+    repository.persistOperationUpdate = async (operation, options) => {
+      if (!injected && options?.terminalTransition === true &&
+          operation?.workflowStep === WORKFLOW_STEP.REMOVED) {
+        injected = true;
+        setSourceRow(world, ReplicaStatus.ACTIVE);
+        world.group.commitChange(
+          RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
+          world.sourceReplicaId,
+        );
+      }
+      return persist(operation, options);
+    };
+
+    const outcome = await world.coordinator.completeOperation(
+      await readPersisted(world));
+    t.equal(injected, true, 'the final-boundary race was exercised');
+    t.equal(outcome.committed, false, 'the stale completion is refused');
+    t.equal((await readPersisted(world)).workflowStep, WORKFLOW_STEP.STOPPING,
+      'REMOVED was not persisted after re-admission');
+    t.equal(world.group.sourceCommittedVoter(world.sourceReplicaId), true,
+      'the oracle confirms the changed committed membership');
+  } finally {
+    await disposeWorld(world);
+  }
+});
+
 test('P1 edge (STOPPING owner via reconcileOperationProgress): the ' +
   'membership decides, not the source row', async (t) => {
   const world = await openReplaceWorld({sourceHandler: true});

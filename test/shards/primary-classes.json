@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1972,
+    "unit": 1974,
     "integration": 75,
     "bootstrap": 184,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2238,
-  "digest": "fnv1a32-bc1517be",
+  "censusSize": 2240,
+  "digest": "fnv1a32-b4d0711b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1432,6 +1432,7 @@
     "test/raft/raft-rs-backend/admission-redrive.test.js": "unit",
     "test/raft/raft-rs-backend/backend-seam.test.js": "unit",
     "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js": "unit",
+    "test/raft/raft-rs-backend/committed-membership-adversarial-boundary.test.js": "unit",
     "test/raft/raft-rs-backend/committed-membership-census.test.js": "unit",
     "test/raft/raft-rs-backend/committed-membership-read.test.js": "unit",
     "test/raft/raft-rs-backend/committed-membership-stamp.test.js": "unit",
@@ -1686,6 +1687,7 @@
     "test/rebalancer/replace-source-planner-set-exclusion.test.js": "unit",
     "test/rebalancer/replace-source-removal-owner.test.js": "unit",
     "test/rebalancer/replace-temporary-extra-voter-planner.test.js": "unit",
+    "test/rebalancer/replace-witness-boundary.test.js": "unit",
     "test/rebalancer/replica-inventory.test.js": "unit",
     "test/rebalancer/replica-operation-confirmation-authority-read.test.js": "unit",
     "test/rebalancer/replica-operation-insert-retry-idempotency.test.js": "unit",

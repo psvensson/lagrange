@@ -7,10 +7,9 @@
  * solve/report/ledger-surplus-drain-stale-actuals-2026-08-22/).
  *
  * The matrix already admits CREATING -> REMOVING; refusing SYNCING ->
- * REMOVING was an omission, not a design decision. FAILED stays terminal for
- * lifecycle transitions by design: the removal executor's FAILED tolerance
- * skips the REMOVING write and proceeds to durable cleanup, so FAILED ->
- * REMOVING must remain invalid.
+ * REMOVING was an omission, not a design decision.  Removal intent has one
+ * durable shape for every prior lifecycle state, including FAILED: the
+ * executor must publish REMOVING before consensus exit or cleanup.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -87,27 +86,27 @@ test('a SYNCING replica accepts the removal transition so a failed ADD ' +
     'the admitted removal must be able to reach REMOVED');
 });
 
-test('FAILED stays terminal for lifecycle transitions: the executor skip ' +
-  'tolerance, not a matrix edge, owns failed-replica removal', async (t) => {
-  initializeTestEnvironment();
-  const stateMachine = new ReplicaStateMachine({
-    nodeId: 'test-node',
-    cdcIntegrationService: createMockCDCService(),
-  });
-  const replicaId = 'replica_operations-p1-r5';
-  await driveReplicaTo(stateMachine, replicaId, [
-    ReplicaState.PENDING,
-    ReplicaState.FAILED,
-  ]);
+test('FAILED enters the same durable REMOVING protocol as every removal',
+  async (t) => {
+    initializeTestEnvironment();
+    const stateMachine = new ReplicaStateMachine({
+      nodeId: 'test-node',
+      cdcIntegrationService: createMockCDCService(),
+    });
+    const replicaId = 'replica_operations-p1-r5';
+    await driveReplicaTo(stateMachine, replicaId, [
+      ReplicaState.PENDING,
+      ReplicaState.FAILED,
+    ]);
 
-  const admitted = await stateMachine.transition(
-    replicaId,
-    ReplicaState.REMOVING,
-    {partitionId: 'replica_operations-p1', reason: 'must-stay-invalid'},
-  );
-  t.equal(admitted, false,
-    'FAILED -> REMOVING must remain invalid; failed replicas take the ' +
-    'durable-cleanup skip path that deletes the row directly');
-  t.same(VALID_TRANSITIONS[ReplicaState.FAILED], [ReplicaState.REMOVED],
-    'the FAILED row of the matrix must keep exactly its terminal edge');
-});
+    const admitted = await stateMachine.transition(
+      replicaId,
+      ReplicaState.REMOVING,
+      {partitionId: 'replica_operations-p1', reason: 'durable-remove-intent'},
+    );
+    t.equal(admitted !== false, true,
+      'FAILED -> REMOVING publishes the same durable removal intent');
+    t.same(VALID_TRANSITIONS[ReplicaState.FAILED], [ReplicaState.REMOVING],
+      'FAILED has no direct durable-cleanup bypass');
+    t.equal(stateMachine.getState(replicaId)?.state, ReplicaState.REMOVING);
+  });
