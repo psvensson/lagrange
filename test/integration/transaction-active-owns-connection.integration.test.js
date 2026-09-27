@@ -31,6 +31,8 @@
  */
 
 import {hostname} from 'node:os';
+import {performance} from 'node:perf_hooks';
+import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 import {managedSleep} from '../../src/test-helpers/managed-timers.js';
 import {
@@ -46,11 +48,15 @@ import {
   serveStatement,
 } from './helpers/embedded-cluster-harness.js';
 import {logLinesBetween} from './helpers/node-log-window.js';
-import {observeTableReplicas} from './helpers/replica-sqlite-observer.js';
+import {
+  listReplicaFiles,
+  observeTableReplicas,
+} from './helpers/replica-sqlite-observer.js';
 import {createEvidenceSink} from './helpers/replicated-apply-evidence.js';
 import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
 
 const FINDING = 'F-TX-ACTIVE-OWNS-CONNECTION';
+const SHADOW_FINDING = 'F-TX-SHADOW-COPY-FULL-FILE';
 const APPLICATION_ID = 'transaction-active-owns-connection';
 const CLUSTER_SIZE = 3;
 const EXPECTED_REPLICAS = 3;
@@ -79,6 +85,12 @@ const SQL = Object.freeze({
     'WHERE table_name = ?',
 });
 const VALUE = 'v';
+const BYTES_PER_MIB = 1024 * 1024;
+const SHADOW_COPY_LIVENESS_BUDGET_MS = 350;
+const SHADOW_HISTORY_TABLE = '_raft_rs_shadow_copy_history_fixture';
+const SHADOW_HISTORY_CHUNK_BYTES = 256 * 1024;
+const SHADOW_HISTORY_BATCH_ROWS = 8;
+const SHADOW_COPY_TARGET_MIB = Object.freeze([32, 128, 256]);
 const SENTINEL_PREFIX = 'steady-';
 const ROW_SUFFIX = Object.freeze({
   TX: 'tx',
@@ -143,6 +155,158 @@ function publicAnswer(outcome) {
   return {acknowledged: false, error: describeExposedError(outcome.value),
     ...Object.fromEntries(PUBLIC_ERROR_FIELDS.map((field) =>
       [field, exposedProperty(outcome.value, field)]))};
+}
+
+function databaseShape(db) {
+  const pageCount = db.pragma('page_count', {simple: true});
+  const pageSize = db.pragma('page_size', {simple: true});
+  const freelistCount = db.pragma('freelist_count', {simple: true});
+  return {freelistCount, pageCount, pageSize,
+    logicalBytes: pageCount * pageSize};
+}
+
+function quoteIdentifier(name) {
+  return `"${name.replaceAll('"', '""')}"`;
+}
+
+async function growHistoryFixture(t, db, targetBytes) {
+  db.exec(`CREATE TABLE IF NOT EXISTS ${quoteIdentifier(SHADOW_HISTORY_TABLE)} ` +
+    '(id INTEGER PRIMARY KEY, payload BLOB NOT NULL)');
+  const insert = db.prepare(`INSERT INTO ${quoteIdentifier(SHADOW_HISTORY_TABLE)} ` +
+    '(payload) VALUES (zeroblob(?))');
+  const insertBatch = db.transaction(() => {
+    for (let index = 0; index < SHADOW_HISTORY_BATCH_ROWS; index++) {
+      insert.run(SHADOW_HISTORY_CHUNK_BYTES);
+    }
+  });
+  let shape = databaseShape(db);
+  while (shape.logicalBytes < targetBytes) {
+    insertBatch();
+    await managedSleep(t, 1);
+    shape = databaseShape(db);
+  }
+  return shape;
+}
+
+function measureShadowCopy(db, compact) {
+  const source = databaseShape(db);
+  const rssBefore = process.memoryUsage().rss;
+  const serializeStarted = performance.now();
+  const image = db.serialize();
+  const serializeMs = performance.now() - serializeStarted;
+  const openStarted = performance.now();
+  const shadow = new Database(image);
+  const openMs = performance.now() - openStarted;
+  const opened = databaseShape(shadow);
+  const tableNames = shadow.prepare(
+    'SELECT name FROM sqlite_master WHERE type = \'table\' ORDER BY name',
+  ).all().map((row) => row.name);
+  const scrubbedTables = tableNames.filter((name) =>
+    name.startsWith('_raft_rs_'));
+  shadow.pragma('foreign_keys = OFF');
+  const scrubStarted = performance.now();
+  shadow.transaction(() => {
+    for (const name of scrubbedTables) {
+      shadow.exec(`DROP TABLE ${quoteIdentifier(name)}`);
+    }
+  })();
+  const scrubMs = performance.now() - scrubStarted;
+  const afterScrub = databaseShape(shadow);
+  const readyMs = serializeMs + openMs + scrubMs;
+  let vacuum = null;
+  if (compact) {
+    const vacuumStarted = performance.now();
+    shadow.exec('VACUUM');
+    vacuum = {ms: performance.now() - vacuumStarted,
+      shape: databaseShape(shadow)};
+  }
+  const rssWhileOpen = process.memoryUsage().rss;
+  shadow.close();
+  return {afterScrub, imageBytes: image.length, openMs, opened, readyMs,
+    rssBefore, rssWhileOpen, scrubMs, scrubbedTables, serializeMs, source,
+    vacuum};
+}
+
+function compactCopySample(sample) {
+  return {
+    targetMiB: sample.targetMiB,
+    imageMiB: Number((sample.imageBytes / BYTES_PER_MIB).toFixed(2)),
+    serializeMs: Number(sample.serializeMs.toFixed(2)),
+    openMs: Number(sample.openMs.toFixed(2)),
+    scrubMs: Number(sample.scrubMs.toFixed(2)),
+    readyMs: Number(sample.readyMs.toFixed(2)),
+    livenessBudgetMs: SHADOW_COPY_LIVENESS_BUDGET_MS,
+    pageCountBefore: sample.opened.pageCount,
+    pageCountAfterScrub: sample.afterScrub.pageCount,
+    freePagesAfterScrub: sample.afterScrub.freelistCount,
+    vacuumMs: sample.vacuum === null ? null :
+      Number(sample.vacuum.ms.toFixed(2)),
+    vacuumMiB: sample.vacuum === null ? null :
+      Number((sample.vacuum.shape.logicalBytes / BYTES_PER_MIB).toFixed(2)),
+  };
+}
+
+async function measureShadowWorkspace(t, context, evidence, sink) {
+  const {cluster, seed, joiner, sessions} = context;
+  const partitionAnswer = await seed.query(sessions.seedAuto, SQL.PARTITION,
+    [TABLE]);
+  const partitionRows = publicAnswer(partitionAnswer).acknowledged ?
+    decodeExposure(partitionAnswer.value).rows : [];
+  const partition = partitionRows[0];
+  if (!partition) throw new Error(`partition row absent for ${TABLE}`);
+  const leader = cluster.nodes.find((node) =>
+    node.nodeId === partition.leader_node_id);
+  if (!leader) {
+    throw new Error(`published leader ${partition.leader_node_id} is absent`);
+  }
+  const replica = listReplicaFiles(leader).find((file) =>
+    file.partitionId === partition.partition_id);
+  if (!replica) {
+    throw new Error(`leader replica file absent for ${partition.partition_id}`);
+  }
+  const measurement = {
+    finding: SHADOW_FINDING,
+    model: 'synchronous db.serialize -> open -> drop _raft_rs_*',
+    livenessBudgetMs: SHADOW_COPY_LIVENESS_BUDGET_MS,
+    partitionId: partition.partition_id,
+    measuredNodeId: leader.nodeId,
+    replicaId: replica.replicaId,
+    targetsMiB: SHADOW_COPY_TARGET_MIB,
+    samples: [],
+  };
+  evidence.shadowCopy = measurement;
+  const db = new Database(replica.path, {timeout: 30000});
+  const started = await joiner.startTraffic(sessions.joinerAuto, SQL.INSERT,
+    'shadow-copy-apply-', VALUE);
+  await managedSleep(t, 100);
+  try {
+    for (const targetMiB of SHADOW_COPY_TARGET_MIB) {
+      const growth = await growHistoryFixture(t, db,
+        targetMiB * BYTES_PER_MIB);
+      const sample = {...measureShadowCopy(db, targetMiB ===
+        SHADOW_COPY_TARGET_MIB[0]), growth, targetMiB};
+      measurement.samples.push(sample);
+      sink.write(evidence);
+      t.comment(`${SHADOW_FINDING}: ${JSON.stringify(compactCopySample(sample))}`);
+    }
+  } finally {
+    db.close();
+    measurement.applyTraffic = await joiner.stopTraffic(started.trafficKey);
+    sink.write(evidence);
+  }
+  t.ok(measurement.applyTraffic.attempted > 0,
+    'public-session apply traffic ran during the copy measurement');
+  t.ok(measurement.applyTraffic.fulfilled > 0,
+    'the background public-session traffic committed commands');
+  for (const sample of measurement.samples) {
+    t.ok(sample.imageBytes >= sample.targetMiB * BYTES_PER_MIB,
+      `${sample.targetMiB} MiB sample serialized the full target image`);
+    t.ok(sample.scrubbedTables.includes(SHADOW_HISTORY_TABLE),
+      `${sample.targetMiB} MiB sample scrubbed the history-shaped fixture`);
+    t.equal(sample.afterScrub.pageCount, sample.opened.pageCount,
+      `${sample.targetMiB} MiB scrub did not undo already-copied pages`);
+  }
+  return measurement;
 }
 
 // One autocommit write, timed from issue; a harness request that exceeds its
@@ -311,6 +475,7 @@ test(`${FINDING} (T-A): an ACTIVE transaction vs autocommit durability`,
         'a sentinel autocommit row reached all three replicas first ' +
         `(${JSON.stringify(evidence.steady)})`);
       if (!evidence.steady.steady) return;
+      await measureShadowWorkspace(t, context, evidence, sink);
       for (const [index, decision] of [EMBEDDED_HOLD_DECISION.ROLLBACK,
         EMBEDDED_HOLD_DECISION.COMMIT].entries()) {
         const record = await runVariant(t, context, decision, `v${index}-`);

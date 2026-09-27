@@ -20,7 +20,9 @@ const EMBEDDED_WORKER_OP = Object.freeze({
   QUERY: 'query',
   RELEASE_TRANSACTION: 'releaseTransaction',
   START: 'start',
+  START_TRAFFIC: 'startTraffic',
   STOP: 'stop',
+  STOP_TRAFFIC: 'stopTraffic',
   TRANSACTION: 'transaction',
 });
 
@@ -203,12 +205,10 @@ function describeExposedError(snapshot) {
 }
 
 export {
-  BYTES_TYPE,
   EMBEDDED_HOLD_DECISION,
   EMBEDDED_STEP_OUTCOME,
   EMBEDDED_WORKER_EVENT,
   EMBEDDED_WORKER_OP,
-  EXPOSURE_KIND,
   decodeExposure,
   decodeParams,
   describeExposedError,

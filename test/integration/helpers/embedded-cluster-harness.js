@@ -62,8 +62,6 @@ const EMBEDDED_CLUSTER_BUDGET_MS = Object.freeze({
   // served write), so a stalled formation fails with a log digest inside the
   // suite's own budget instead of being killed silently by the runner.
   FORMATION_TOTAL: 150000,
-  VISIBILITY_WINDOW: 20000,
-  VISIBILITY_POLL: 100,
   POLL_INTERVAL: 250,
 });
 
@@ -244,47 +242,6 @@ async function stopNode(t, node) {
     node.child.kill(SIGKILL);
     await exited;
   }
-}
-
-/**
- * Run one statement and require that the application received a result.
- * @return {Promise<{outcome: string, value: *}>}
- */
-async function mustQuery(node, sessionKey, sql, params = []) {
-  const outcome = await node.query(sessionKey, sql, params);
-  if (outcome.outcome !== EMBEDDED_STEP_OUTCOME.FULFILLED) {
-    throw new Error(`${sql} rejected: ${describeExposedError(outcome.value)}`);
-  }
-  return outcome;
-}
-
-/**
- * Poll a read through one node's public session until `satisfied(rows)`.
- * Cross-node visibility is eventual (follower-local reads, no documented
- * staleness bound), so the window is bounded and measured, never assumed.
- * @return {Promise<{outcome: Object, rows: Object[], windowMs: number}>}
- */
-async function readUntil(t, node, sessionKey, sql, params, satisfied,
-  windowMs = EMBEDDED_CLUSTER_BUDGET_MS.VISIBILITY_WINDOW) {
-  const startedAt = Date.now();
-  const deadline = startedAt + scaleByMachineFactor(windowMs);
-  let last = null;
-  while (Date.now() < deadline) {
-    last = await node.query(sessionKey, sql, params);
-    if (
-      last.outcome === EMBEDDED_STEP_OUTCOME.FULFILLED &&
-      satisfied(fulfilledRows(last))
-    ) {
-      return {outcome: last, rows: fulfilledRows(last),
-        windowMs: Date.now() - startedAt};
-    }
-    await managedSleep(t, EMBEDDED_CLUSTER_BUDGET_MS.VISIBILITY_POLL);
-  }
-  const observed = last?.outcome === EMBEDDED_STEP_OUTCOME.FULFILLED ?
-    JSON.stringify(decodeExposure(last.value)) :
-    describeExposedError(last?.value);
-  throw new Error(`not visible within ${windowMs} ms (x factor): ` +
-    `${sql} ${JSON.stringify(params)} last=${observed}`);
 }
 
 /**
@@ -491,6 +448,16 @@ function createEmbeddedCluster(t, options = {}) {
         {decision, holdKey}),
       `release transaction on ${nodeId}`,
     );
+    node.startTraffic = async (sessionKey, sql, idPrefix, value) => requireOk(
+      await node.channel.request(EMBEDDED_WORKER_OP.START_TRAFFIC,
+        {idPrefix, sessionKey, sql, value}),
+      `start traffic on ${nodeId}`,
+    );
+    node.stopTraffic = async (trafficKey) => requireOk(
+      await node.channel.request(EMBEDDED_WORKER_OP.STOP_TRAFFIC,
+        {trafficKey}),
+      `stop traffic on ${nodeId}`,
+    );
     return node;
   }
 
@@ -638,18 +605,11 @@ function createEmbeddedCluster(t, options = {}) {
 }
 
 export {
-  EMBEDDED_CLUSTER_BUDGET_MS,
   EMBEDDED_HOLD_DECISION,
-  EMBEDDED_NODE_ROLE,
   EMBEDDED_STEP_OUTCOME,
-  EMBEDDED_WORKER_OP,
   createEmbeddedCluster,
   decodeExposure,
   describeExposedError,
-  encodeParam,
   exposedProperty,
-  fulfilledRows,
-  mustQuery,
-  readUntil,
   serveStatement,
 };

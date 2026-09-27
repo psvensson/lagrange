@@ -209,4 +209,4 @@ function observeTableReplicas(nodes, query) {
       observation.hasTable === true || observation.observationError);
 }
 
-export {listReplicaFiles, observeReplicaFile, observeTableReplicas};
+export {listReplicaFiles, observeTableReplicas};

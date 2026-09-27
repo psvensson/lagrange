@@ -135,22 +135,7 @@ function findTopologyLeaks(value, options = {}) {
   return leaks;
 }
 
-/**
- * Assert that a received value exposes no topology.
- * @param {object} t - tap test
- * @param {*} value - live value or exposure snapshot
- * @param {string} label - what the value is (for the assertion message)
- * @param {object} [options] - see findTopologyLeaks
- * @return {boolean} whether the assertion passed
- */
-function assertNoTopologyLeak(t, value, label, options = {}) {
-  const leaks = findTopologyLeaks(value, options);
-  return t.same(leaks, [], `${label} exposes no topology`);
-}
-
 export {
   SESSION_KEY_FRAGMENT,
-  TOPOLOGY_KEY_FRAGMENTS,
-  assertNoTopologyLeak,
   findTopologyLeaks,
 };

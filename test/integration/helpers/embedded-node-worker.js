@@ -35,6 +35,8 @@ const sessions = new Map();
 let nextSessionKey = 1;
 const holds = new Map();
 let nextHoldKey = 1;
+const traffic = new Map();
+let nextTrafficKey = 1;
 
 function requireSession(sessionKey) {
   const db = sessions.get(sessionKey);
@@ -108,6 +110,47 @@ async function releaseTransaction(holdKey, decision) {
   return {transaction: await hold.transaction};
 }
 
+// A public-session write loop owned by this application process. Keeping the
+// driver outside the parent lets a parent-side synchronous SQLite measurement
+// observe a replica while real commands continue to enter through the public
+// API. The loop records only counts and its last public error; it never reaches
+// into runtime internals.
+function startTraffic(db, message) {
+  const trafficKey = nextTrafficKey++;
+  const state = {attempted: 0, fulfilled: 0, lastError: null,
+    stopping: false};
+  state.done = (async () => {
+    while (!state.stopping) {
+      const id = `${message.idPrefix}${state.attempted}`;
+      state.attempted++;
+      try {
+        await db.query(message.sql, [id, message.value]);
+        state.fulfilled++;
+      } catch (error) {
+        state.lastError = expose(error);
+      }
+    }
+    return {attempted: state.attempted, fulfilled: state.fulfilled,
+      lastError: state.lastError};
+  })();
+  traffic.set(trafficKey, state);
+  return {trafficKey};
+}
+
+async function stopTraffic(trafficKey) {
+  const state = traffic.get(trafficKey);
+  if (!state) return {attempted: 0, fulfilled: 0, lastError: null};
+  state.stopping = true;
+  const result = await state.done;
+  traffic.delete(trafficKey);
+  return result;
+}
+
+async function stopAllTraffic() {
+  const keys = [...traffic.keys()];
+  return Promise.all(keys.map(stopTraffic));
+}
+
 function requireRuntime() {
   if (!runtime) throw new Error(RUNTIME_NOT_STARTED_MESSAGE);
   return runtime;
@@ -118,6 +161,9 @@ const handlers = {
     runtime = createEmbeddedLagrange({configuration: message.configuration});
     await runtime.start();
     return {started: true};
+  },
+  async [WORKER_OP.START_TRAFFIC](message) {
+    return startTraffic(requireSession(message.sessionKey), message);
   },
   async [WORKER_OP.OPEN_SESSION](message) {
     const db = requireRuntime().openApplicationDatabase(message.options);
@@ -141,8 +187,12 @@ const handlers = {
     return releaseTransaction(message.holdKey, message.decision);
   },
   async [WORKER_OP.STOP]() {
+    await stopAllTraffic();
     if (runtime) await runtime.stop();
     return {stopped: true};
+  },
+  async [WORKER_OP.STOP_TRAFFIC](message) {
+    return stopTraffic(message.trafficKey);
   },
 };
 
