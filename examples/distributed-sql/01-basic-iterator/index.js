@@ -1,5 +1,10 @@
 'use strict';
 
+// Legacy mechanics example: one callback batch arrives for one partition.
+// For each input row, issue a bounded lookup and collect the rows produced by
+// that lookup. The current public analogue is a call Binding whose fixed
+// selector feeds partition-local `run()` code; new services should use that
+// surface rather than `partition_callback`.
 module.exports.run = async function run(ctx, batch) {
   const rows = [];
   for (const inputRow of batch.rows || []) {
