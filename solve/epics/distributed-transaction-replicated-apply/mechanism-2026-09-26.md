@@ -678,6 +678,9 @@ factor: it comes from the real rs-raft election interval.
   copy numbers were already complete and are valid; the final harness runs
   T-A before copy traffic so that the two observations do not contaminate
   each other.
+- Final harness verification: lenovo-laptop, b515eea3e, factor 2.18. The
+  reordered transaction/measurement file passed 33 assertions in 227.0 s;
+  its four-file exclusive cone passed 78 assertions with no failures.
 
 ### Gate consequence
 
