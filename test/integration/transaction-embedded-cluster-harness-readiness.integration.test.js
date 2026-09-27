@@ -1,27 +1,36 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  isApplicationWriteReadinessSatisfied,
+  areApplicationWriteFormationPreconditionsSatisfied,
+  readLocalControlSnapshot,
   runApplicationWriteProbe,
 } from './helpers/embedded-cluster-harness.js';
 
 const NODE_ID = Object.freeze({SEED: 'seed-node', JOINER: 'joiner-node'});
 const EXPECTED_NODE_IDS = Object.freeze([NODE_ID.SEED, NODE_ID.JOINER]);
 
-function readiness({writable = true, publicationHealthy = true} = {}) {
+function readiness({writable = true, publicationHealthy = true,
+  provisioningEligible = true, placementEligible = true} = {}) {
   return {
     dimensions: {
       controlPlaneWritable: writable,
       metadataPublicationHealthy: publicationHealthy,
+      placementEligible,
+      provisioningEligible,
     },
   };
 }
 
-function snapshot({placementSatisfied = true,
+function snapshot({placementSatisfied = true, snapshotState = 'fresh',
+  placementCapturedAt = 1234,
   seed = readiness(), joiner = readiness()} = {}) {
   return {
+    capturedAt: 1234,
+    snapshotObservation: {state: snapshotState},
     controlPlaneDiagnostics: {
       currentPriorityPlacementObservation: {
+        capturedAt: placementCapturedAt,
         satisfied: placementSatisfied,
+        state: 'available',
       },
       readinessByNodeId: {
         [NODE_ID.SEED]: seed,
@@ -31,38 +40,66 @@ function snapshot({placementSatisfied = true,
   };
 }
 
-test('embedded formation consumes authoritative write-readiness before DDL',
+test('embedded formation consumes authoritative preconditions before DDL',
   (t) => {
     t.equal(
-      isApplicationWriteReadinessSatisfied({nodes: EXPECTED_NODE_IDS},
+      areApplicationWriteFormationPreconditionsSatisfied(
+        {nodes: EXPECTED_NODE_IDS},
         EXPECTED_NODE_IDS),
       false,
       'active-node visibility alone is not application-write readiness',
     );
     t.equal(
-      isApplicationWriteReadinessSatisfied(
+      areApplicationWriteFormationPreconditionsSatisfied(
+        snapshot({snapshotState: 'stale_but_usable'}), EXPECTED_NODE_IDS),
+      false,
+      'a stale control snapshot cannot release the formation precondition',
+    );
+    t.equal(
+      areApplicationWriteFormationPreconditionsSatisfied(
+        snapshot({placementCapturedAt: 1233}), EXPECTED_NODE_IDS),
+      false,
+      'priority placement must belong to the same snapshot capture',
+    );
+    t.equal(
+      areApplicationWriteFormationPreconditionsSatisfied(
         snapshot({placementSatisfied: false}), EXPECTED_NODE_IDS),
       false,
       'unsatisfied canonical priority placement keeps DDL closed',
     );
     t.equal(
-      isApplicationWriteReadinessSatisfied(snapshot({
+      areApplicationWriteFormationPreconditionsSatisfied(snapshot({
         joiner: readiness({publicationHealthy: false}),
       }), EXPECTED_NODE_IDS),
       false,
       'every expected node must report healthy metadata publication',
     );
     t.equal(
-      isApplicationWriteReadinessSatisfied(snapshot({
+      areApplicationWriteFormationPreconditionsSatisfied(snapshot({
         seed: readiness({writable: false}),
       }), EXPECTED_NODE_IDS),
       false,
       'every expected node must report its control plane writable',
     );
     t.equal(
-      isApplicationWriteReadinessSatisfied(snapshot(), EXPECTED_NODE_IDS),
+      areApplicationWriteFormationPreconditionsSatisfied(snapshot({
+        seed: readiness({provisioningEligible: false}),
+      }), EXPECTED_NODE_IDS),
+      false,
+      'every expected node must be provisioning eligible',
+    );
+    t.equal(
+      areApplicationWriteFormationPreconditionsSatisfied(snapshot({
+        joiner: readiness({placementEligible: false}),
+      }), EXPECTED_NODE_IDS),
+      false,
+      'capacity-derived placement eligibility is a formation precondition',
+    );
+    t.equal(
+      areApplicationWriteFormationPreconditionsSatisfied(
+        snapshot(), EXPECTED_NODE_IDS),
       true,
-      'the readiness owner and placement owner jointly authorize the probe',
+      'the readiness and placement owners establish formation preconditions',
     );
     t.end();
   });
@@ -81,4 +118,24 @@ test('embedded formation submits its authorized DDL witness once', async (t) => 
   'the first DDL rejection is surfaced directly');
   t.equal(createAttempts, 1, 'DDL is submitted exactly once');
   t.equal(insertAttempts, 0, 'a rejected DDL cannot fall through to INSERT');
+});
+
+test('embedded control-snapshot observation is bounded', async (t) => {
+  let observedSignal = null;
+  const stalledFetch = (_url, options) => {
+    observedSignal = options.signal;
+    return new Promise((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => {
+        const error = new Error('bounded observation aborted');
+        error.name = 'AbortError';
+        reject(error);
+      }, {once: true});
+    });
+  };
+  await t.rejects(
+    readLocalControlSnapshot(t, {adminPort: 1}, 1, stalledFetch),
+    {name: 'AbortError'},
+    'a stalled admin observation cannot escape its remaining budget',
+  );
+  t.equal(observedSignal?.aborted, true, 'the request signal is aborted');
 });

@@ -81,12 +81,19 @@ const EMBEDDED_CLUSTER_VALUE = Object.freeze({
 
 const ADMIN_CONTROL_SNAPSHOT = Object.freeze({
   PATH: '/api/admin/control-snapshot?scope=local',
+  CAPTURED_AT: 'capturedAt',
   CONTROL_PLANE_DIAGNOSTICS: 'controlPlaneDiagnostics',
   CURRENT_PRIORITY_PLACEMENT: 'currentPriorityPlacementObservation',
   READINESS_BY_NODE_ID: 'readinessByNodeId',
   DIMENSIONS: 'dimensions',
+  SNAPSHOT_OBSERVATION: 'snapshotObservation',
+  STATE: 'state',
+  FRESH: 'fresh',
+  AVAILABLE: 'available',
   CONTROL_PLANE_WRITABLE: 'controlPlaneWritable',
   METADATA_PUBLICATION_HEALTHY: 'metadataPublicationHealthy',
+  PLACEMENT_ELIGIBLE: 'placementEligible',
+  PROVISIONING_ELIGIBLE: 'provisioningEligible',
 });
 
 const CLUSTER_SQL = Object.freeze({
@@ -307,7 +314,7 @@ async function pollUntil(t, budgetMs, read, satisfied, describe) {
   let last;
   while (Date.now() < deadline) {
     try {
-      last = await read();
+      last = await read(referenceBudgetUntil(deadline));
       if (satisfied(last)) return last;
     } catch (error) {
       // An observation that fails is "not yet", recorded for the timeout.
@@ -320,16 +327,46 @@ async function pollUntil(t, budgetMs, read, satisfied, describe) {
 }
 
 /**
- * Consume the control-snapshot owners' answer instead of attempting schema
- * DDL as a readiness probe. A schema operation submitted before priority
- * placement and mutation readiness converge can become durably terminal; a
- * later retry of the same deterministic schema intent cannot repair that.
+ * Consume the control-snapshot owners' formation preconditions before the
+ * one-shot schema operation asks its operation-specific admission owner. The
+ * dimensions below are intentionally not called CREATE authorization:
+ * provisioning still owns its estimated-byte capacity decision and a denial
+ * from that owner is surfaced without retry.
  *
  * @param {Object} snapshot - local admin control snapshot
  * @param {string[]} expectedNodeIds - nodes owned by this formation
- * @return {boolean} whether application DDL may be attempted
+ * @return {boolean} whether application DDL formation preconditions hold
  */
-function isApplicationWriteReadinessSatisfied(snapshot, expectedNodeIds) {
+function isCurrentFormationSnapshot(snapshot, placement) {
+  const observation = snapshot?.[
+    ADMIN_CONTROL_SNAPSHOT.SNAPSHOT_OBSERVATION
+  ];
+  return observation?.[ADMIN_CONTROL_SNAPSHOT.STATE] ===
+      ADMIN_CONTROL_SNAPSHOT.FRESH &&
+    placement?.[ADMIN_CONTROL_SNAPSHOT.STATE] ===
+      ADMIN_CONTROL_SNAPSHOT.AVAILABLE &&
+    placement?.[ADMIN_CONTROL_SNAPSHOT.CAPTURED_AT] ===
+      snapshot?.[ADMIN_CONTROL_SNAPSHOT.CAPTURED_AT] &&
+    placement?.satisfied === true;
+}
+
+function nodeMeetsApplicationWriteFormationPreconditions(readiness) {
+  const dimensions = readiness?.[ADMIN_CONTROL_SNAPSHOT.DIMENSIONS];
+  return dimensions?.[
+    ADMIN_CONTROL_SNAPSHOT.CONTROL_PLANE_WRITABLE
+  ] === true && dimensions?.[
+    ADMIN_CONTROL_SNAPSHOT.METADATA_PUBLICATION_HEALTHY
+  ] === true && dimensions?.[
+    ADMIN_CONTROL_SNAPSHOT.PROVISIONING_ELIGIBLE
+  ] === true && dimensions?.[
+    ADMIN_CONTROL_SNAPSHOT.PLACEMENT_ELIGIBLE
+  ] === true;
+}
+
+function areApplicationWriteFormationPreconditionsSatisfied(
+  snapshot,
+  expectedNodeIds,
+) {
   const diagnostics = snapshot?.[
     ADMIN_CONTROL_SNAPSHOT.CONTROL_PLANE_DIAGNOSTICS
   ];
@@ -339,34 +376,46 @@ function isApplicationWriteReadinessSatisfied(snapshot, expectedNodeIds) {
   const readinessByNodeId = diagnostics?.[
     ADMIN_CONTROL_SNAPSHOT.READINESS_BY_NODE_ID
   ];
-  if (placement?.satisfied !== true) {
+  if (!isCurrentFormationSnapshot(snapshot, placement)) {
     return false;
   }
   if (!Array.isArray(expectedNodeIds) || expectedNodeIds.length === 0) {
     return false;
   }
   if (!readinessByNodeId || typeof readinessByNodeId !== 'object') return false;
-  return expectedNodeIds.every((nodeId) => {
-    const dimensions = readinessByNodeId[nodeId]?.[
-      ADMIN_CONTROL_SNAPSHOT.DIMENSIONS
-    ];
-    return dimensions?.[
-      ADMIN_CONTROL_SNAPSHOT.CONTROL_PLANE_WRITABLE
-    ] === true && dimensions?.[
-      ADMIN_CONTROL_SNAPSHOT.METADATA_PUBLICATION_HEALTHY
-    ] === true;
-  });
+  return expectedNodeIds.every((nodeId) =>
+    nodeMeetsApplicationWriteFormationPreconditions(
+      readinessByNodeId[nodeId],
+    ));
 }
 
-async function readLocalControlSnapshot(node) {
-  const response = await fetch(
-    `http://${EMBEDDED_CLUSTER_VALUE.LOOPBACK_HOST}:${node.adminPort}` +
-      ADMIN_CONTROL_SNAPSHOT.PATH,
+async function readLocalControlSnapshot(
+  t,
+  node,
+  budgetMs,
+  fetchSnapshot = fetch,
+) {
+  const controller = new AbortController();
+  const timer = managedTimeout(
+    t,
+    () => controller.abort(),
+    scaleByMachineFactor(Math.max(MIN_REMAINING_BUDGET_MS, budgetMs)),
   );
-  if (!response.ok) {
-    throw new Error(`control snapshot request failed with HTTP ${response.status}`);
+  try {
+    const response = await fetchSnapshot(
+      `http://${EMBEDDED_CLUSTER_VALUE.LOOPBACK_HOST}:${node.adminPort}` +
+        ADMIN_CONTROL_SNAPSHOT.PATH,
+      {signal: controller.signal},
+    );
+    if (!response.ok) {
+      throw new Error(
+        `control snapshot request failed with HTTP ${response.status}`,
+      );
+    }
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
   }
-  return response.json();
 }
 
 function parseLogLine(line) {
@@ -578,13 +627,14 @@ function createEmbeddedCluster(t, options = {}) {
     return {attempts: 1, elapsedMs: Date.now() - startedAt};
   }
 
-  async function waitForApplicationWriteReadiness(budgetMs) {
+  async function waitForApplicationWritePreconditions(budgetMs) {
     const expectedNodeIds = nodes.map((node) => node.nodeId);
     return withLogDigest(pollUntil(t, budgetMs,
-      () => readLocalControlSnapshot(nodes[0]),
-      (snapshot) => isApplicationWriteReadinessSatisfied(
+      (observationBudgetMs) => readLocalControlSnapshot(
+        t, nodes[0], observationBudgetMs),
+      (snapshot) => areApplicationWriteFormationPreconditionsSatisfied(
         snapshot, expectedNodeIds),
-      `authoritative application-write readiness for ${expectedNodeIds.length} nodes`));
+      `application-write formation preconditions for ${expectedNodeIds.length} nodes`));
   }
 
   // Form a cluster of `size` processes (seed + joiners, each waited to
@@ -608,14 +658,14 @@ function createEmbeddedCluster(t, options = {}) {
         `${budgetMs} ms (x factor): ${error.message}\nnode logs:\n${logDigest()}`);
     }
     const activeMs = Date.now() - startedAt;
-    const readinessStartedAt = Date.now();
-    await waitForApplicationWriteReadiness(remaining());
-    const applicationWriteReadinessAfterActiveMs =
-      Date.now() - readinessStartedAt;
+    const preconditionsStartedAt = Date.now();
+    await waitForApplicationWritePreconditions(remaining());
+    const applicationWritePreconditionsAfterActiveMs =
+      Date.now() - preconditionsStartedAt;
     const writes = await waitForApplicationWrites();
     return {
       activeMs,
-      applicationWriteReadinessAfterActiveMs,
+      applicationWritePreconditionsAfterActiveMs,
       nodeStartMs: nodes.map((node) => node.startMs),
       writesServedAfterActiveMs: writes.elapsedMs,
       writeAttempts: writes.attempts,
@@ -691,7 +741,8 @@ export {
   decodeExposure,
   describeExposedError,
   exposedProperty,
-  isApplicationWriteReadinessSatisfied,
+  areApplicationWriteFormationPreconditionsSatisfied,
+  readLocalControlSnapshot,
   runApplicationWriteProbe,
   serveStatement,
 };

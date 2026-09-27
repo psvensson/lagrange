@@ -50,11 +50,26 @@ formation admission rather than a transaction-assertion defect.
 
 ## Deterministic correction
 
-The embedded formation harness now consumes existing readiness-owner output
-from the seed's local admin control snapshot before it submits application
-DDL. It requires the canonical current priority-placement observation to be
-satisfied and every expected node to report both `controlPlaneWritable` and
-`metadataPublicationHealthy`.
+The first repair checkpoint, `50834c2e2`, was rejected by an independent
+verifier before lab execution. Its gate consumed canonical readiness-owner
+output but did not match CREATE's provisioning enforcement: ordinary CREATE
+also consumes `provisioningEligible` and an operation-specific capacity
+decision. Its admin fetch also lacked a request bound, so one stalled request
+could escape the remaining formation deadline.
+
+The amended embedded formation harness consumes existing readiness-owner
+output from the seed's fresh local admin control snapshot before it submits
+application DDL. It requires a current satisfied priority-placement
+observation and every expected node to report `controlPlaneWritable`,
+`metadataPublicationHealthy`, `provisioningEligible`, and the capacity-derived
+`placementEligible`. Every snapshot request is aborted at the remaining
+formation budget.
+
+These are formation preconditions, not CREATE authorization. The one-shot
+CREATE remains the operation-specific authoritative decision because its
+provisioning owner separately evaluates the operation's estimated bytes
+against fresh capacity. A denial there is legitimate direct evidence and is
+not retried by the harness.
 
 After that owner-authorized readiness transition, the harness submits the
 CREATE exactly once and the INSERT exactly once. A rejection is surfaced
