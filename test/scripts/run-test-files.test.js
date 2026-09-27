@@ -8,6 +8,7 @@ import {
   RETRY_FAILED_ONCE_ENABLED,
   RETRY_FAILED_ONCE_ENV,
   TEST_NODE_ARGS,
+  TEST_RESULTS_LEDGER_ROTATE_BYTES,
   analyzeTapOutput,
   readBoundedOutput,
   filterTestFiles,
@@ -26,6 +27,8 @@ const EMPTY_FIXTURE = `${FIXTURE_DIRECTORY}/empty.fixture.mjs`;
 const GIT_ENVIRONMENT_FIXTURE = `${FIXTURE_DIRECTORY}/git-environment.fixture.mjs`;
 const RUNAWAY_DIRECTIVE_FIXTURE =
   `${FIXTURE_DIRECTORY}/tap-runaway-directive.fixture.mjs`;
+const FAILS_ONCE_FIXTURE = `${FIXTURE_DIRECTORY}/fails-once.fixture.mjs`;
+const HANGS_FIXTURE = `${FIXTURE_DIRECTORY}/hangs.fixture.mjs`;
 
 describe('run-test-files', () => {
   const temporaryDirectories = [];
@@ -500,5 +503,134 @@ describe('an unanalysable output fails the file', () => {
     const [result] = outcome.results;
     assert.equal(result.ok, true);
     assert.equal(result.outputDropped, 0, 'nothing is dropped from a normal file');
+  });
+});
+
+// One per-file result ledger (process change 2026-09-23): every attempt of
+// every file appends one line, a retry keeps the first attempt's output beside
+// the second instead of overwriting it, a pass on retry is a finding printed
+// with its first failure line, and a timeout carries the host's load, sampled
+// at the kill.
+describe('per-file result ledger', () => {
+  const temporaryDirectories = [];
+  const RETRY_ENV = {[RETRY_FAILED_ONCE_ENV]: RETRY_FAILED_ONCE_ENABLED};
+
+  afterEach(async () => {
+    await Promise.all(temporaryDirectories.splice(0).map((directory) =>
+      rm(directory, {recursive: true, force: true})));
+  });
+
+  async function scratch() {
+    const directory = await mkdtemp(path.join(tmpdir(), 'run-test-files-ledger-'));
+    temporaryDirectories.push(directory);
+    return {
+      ledgerFile: path.join(directory, 'reports', 'test-results.ndjson'),
+      marker: path.join(directory, 'fails-once.marker'),
+      resultsDirectory: path.join(directory, 'results'),
+    };
+  }
+
+  const ledgerLines = (ledgerFile) => fs.readFileSync(ledgerFile, 'utf8')
+    .split('\n').filter((line) => line.length > 0).map((line) => JSON.parse(line));
+
+  it('records both attempts of a file that passes on retry, and keeps the first', async () => {
+    const {ledgerFile, marker, resultsDirectory} = await scratch();
+    const options = {
+      env: {RUN_TEST_FILES_FAILS_ONCE_MARKER: marker},
+      jobs: 1,
+      ledgerFile,
+      print: false,
+      resultsDirectory,
+    };
+    const summary = await runTestFiles([FAILS_ONCE_FIXTURE], options);
+    assert.equal(summary.failed, 1, 'the first attempt is red');
+
+    const lines = [];
+    const exitCode = await retryFailedOnce(summary, options,
+      {env: RETRY_ENV, write: (line) => lines.push(line)});
+    assert.equal(exitCode, 0, 'a pass on retry is green');
+    assert.ok(lines.includes(`# retried-once pass ${FAILS_ONCE_FIXTURE}\n`),
+      'the line the placement controller reads is unchanged');
+    assert.equal(lines.at(-1),
+      `# finding passed-on-retry ${FAILS_ONCE_FIXTURE}: ` +
+      'not ok 1 - fails once, then passes\n',
+      'the pass on retry is a finding, with its first failure line');
+
+    const [first, second, ...rest] = ledgerLines(ledgerFile);
+    assert.deepEqual(rest, [], 'one line per attempt');
+    assert.deepEqual(Object.keys(first).sort(), ['assertions', 'attempt',
+      'durationMs', 'file', 'firstFailureLine', 'ok', 'retriedOnce']);
+    assert.equal(first.file, FAILS_ONCE_FIXTURE);
+    assert.equal(first.attempt, 1);
+    assert.equal(first.ok, false);
+    assert.equal(first.retriedOnce, false);
+    assert.equal(first.firstFailureLine, 'not ok 1 - fails once, then passes');
+    assert.ok(first.assertions >= 1);
+    assert.ok(Number.isInteger(first.durationMs) && first.durationMs >= 0);
+    assert.equal(second.file, FAILS_ONCE_FIXTURE);
+    assert.equal(second.attempt, 2);
+    assert.equal(second.ok, true);
+    assert.equal(second.retriedOnce, true);
+    assert.equal(second.firstFailureLine, null);
+
+    const tap = path.join(resultsDirectory, `${FAILS_ONCE_FIXTURE}.tap`);
+    const retained = path.join(resultsDirectory,
+      `${FAILS_ONCE_FIXTURE}.attempt-1.tap`);
+    assert.match(fs.readFileSync(retained, 'utf8'),
+      /^not ok 1 - fails once, then passes$/mu,
+      'the first attempt\'s output is retained, not overwritten');
+    const latest = fs.readFileSync(tap, 'utf8');
+    assert.match(latest, /^ok 1 - fails once, then passes$/mu);
+    assert.doesNotMatch(latest, /^not ok /mu, 'the second attempt is the .tap');
+  });
+
+  it('a file that times out carries the budget and the host load', async () => {
+    const {ledgerFile, resultsDirectory} = await scratch();
+    const budgetMs = 1500;
+    const summary = await runTestFiles([HANGS_FIXTURE, TAP_PASS_FIXTURE],
+      {jobs: 2, ledgerFile, print: false, resultsDirectory, timeoutMs: budgetMs});
+    assert.equal(summary.failed, 1);
+    const byFile = Object.fromEntries(ledgerLines(ledgerFile)
+      .map((line) => [line.file, line]));
+
+    const {timeout} = byFile[HANGS_FIXTURE];
+    assert.equal(byFile[HANGS_FIXTURE].ok, false);
+    assert.deepEqual(Object.keys(timeout).sort(), ['budgetMs', 'cores',
+      'elapsedMs', 'freeMemMb', 'load1', 'machineFactor']);
+    assert.equal(timeout.budgetMs, budgetMs);
+    assert.ok(timeout.elapsedMs >= budgetMs);
+    assert.ok(Number.isFinite(timeout.load1) && timeout.load1 >= 0);
+    assert.ok(Number.isInteger(timeout.cores) && timeout.cores >= 1);
+    assert.ok(Number.isFinite(timeout.freeMemMb) && timeout.freeMemMb > 0);
+    assert.ok(timeout.machineFactor >= 1);
+    assert.equal(typeof byFile[HANGS_FIXTURE].firstFailureLine, 'string');
+    const hung = summary.results.find((result) => result.file === HANGS_FIXTURE);
+    assert.match(hung.reasons.join(' '),
+      /test process timed out after \d+ms of a \d+ms budget; at the kill load1=/u,
+      'the printed reason carries the same facts');
+
+    assert.equal(byFile[TAP_PASS_FIXTURE].ok, true);
+    assert.equal(Object.hasOwn(byFile[TAP_PASS_FIXTURE], 'timeout'), false,
+      'only a timed-out file carries the load fields');
+  });
+
+  it('is bounded: a ledger past its bound starts over, keeping one generation', async () => {
+    const {ledgerFile, resultsDirectory} = await scratch();
+    fs.mkdirSync(path.dirname(ledgerFile), {recursive: true});
+    fs.writeFileSync(ledgerFile, '');
+    fs.truncateSync(ledgerFile, TEST_RESULTS_LEDGER_ROTATE_BYTES + 1);
+    await runTestFiles([TAP_PASS_FIXTURE],
+      {jobs: 1, ledgerFile, print: false, resultsDirectory});
+    assert.equal(ledgerLines(ledgerFile).length, 1, 'the new ledger holds this run');
+    const previous = path.join(path.dirname(ledgerFile),
+      'test-results.previous.ndjson');
+    assert.equal(fs.statSync(previous).size, TEST_RESULTS_LEDGER_ROTATE_BYTES + 1,
+      'the full one is kept as the previous generation');
+  });
+
+  it('a library caller that names no ledger writes none', async () => {
+    const {ledgerFile, resultsDirectory} = await scratch();
+    await runTestFiles([TAP_PASS_FIXTURE], {jobs: 1, print: false, resultsDirectory});
+    assert.equal(fs.existsSync(ledgerFile), false);
   });
 });

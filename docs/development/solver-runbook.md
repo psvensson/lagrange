@@ -177,6 +177,40 @@ is green; the next publish reports a red one first (`publish: !!! the local
 corpus was RED`). The hosted `full-corpus-canary` runs only by hand. Fix one-way
 ratchets rather than raising their baselines.
 
+Thermal headroom is the classified runner's to gate
+(`scripts/run-classified-test-files.js`), on every host it runs on - the
+controller, the local corpus and every placed lab shard alike. Before each lane
+batch it asks the one thermal owner, `scripts/checks/wait-for-thermal-headroom.js`
+(lm-sensors, else the Linux sysfs; Intel or AMD, each temperature named by
+the source that answered), and prints its decision in the run's stream, which
+a placed run relays: `thermal: ok cpu 61C (k10temp/Tctl) nvme 66C
+(nvme/Sensor 2)`, `thermal: hold ... waiting 30s` (the batch waits),
+`thermal: unmeasurable (no sensors)` (said once; the run proceeds). A host
+that measures only one of the two gates on that one. A host still hot after the owner's twenty polls ends
+the run with the typed refusal `thermal-headroom-exhausted`: exit 75, no batch
+started hot, and a summary line naming every file not run. Placement reports
+such a host as `placement: host-thermal-unfit NAME` and sends its unproved
+files on as it does a held host's: to the next ready host the run has not
+tried, else the controller, never again to that host in the same run; the
+local corpus records the refusal as lost, not red. A lab shard also caps every
+lane at the host's own processor count less one (`LAGRANGE_LANE_JOBS_CAP`,
+shown in its `placement-env` line). `LAGRANGE_SKIP_THERMAL_GATE=1` is the one
+skip, and every gated batch carries it so a runner nested in a test does not
+gate twice.
+
+Lab hosts are shared by agents across projects through one machine-wide lock
+per host and a holder record beside it (`docs/development/home-lab.md`,
+"Sharing the lab between agents and projects"). Heavy work reaches a lab host
+only through `lab test`, placement or `lab harness run` - never a raw ssh
+runner invocation, which takes no lock and which no other agent can see. A
+placed shard waits for a held host no longer than its own estimate (at most
+30 minutes); still held, the host is reported as
+`placement: host-busy NAME held-by AGENT since STARTED`, and the shard goes to
+the next ready host, then to the controller - the one re-placement a hot host
+gets too. `lab fleet` shows who holds each
+machine; set `LAGRANGE_LAB_AGENT` (for example `claude:SESSION`) to name
+yourself in the record.
+
 `solve land` proves the quest delta, not the branch: its `npm test` runs with
 the change-proof base pinned to `HEAD` (the index it is about to commit
 differs from HEAD by exactly the staged quest scope), and it announces that

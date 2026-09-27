@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {test} from 'node:test';
 
 import {
@@ -45,6 +48,15 @@ const USAGE = [
   '  lab k3s cordon|uncordon NAME --server SERVER\n',
   '  lab k3s drain NAME --server SERVER\n',
   '  lab test changed|smoke|gate|postpush|all\n',
+  '  lab test changed|all --lane ordinary|cpu-heavy|external-toolchain|bootstrap|exclusive|all ',
+  '[--on NAME] [--sha COMMIT] [--split]\n',
+  '  lab test changed --lane LANE [--sha COMMIT] --base-sha COMMIT\n',
+  '      (--base-sha: the commit the change cone is measured from; ',
+  'default the merge base with origin/main)\n',
+  '  lab test file TEST_FILE --sha COMMIT --on NAME ',
+  '[--repeat N] [--stop-on-first-red]\n',
+  '  lab test convergence-probes --sha COMMIT --on NAME ',
+  '[--repeat N] [--stop-on-first-red]\n',
   '  lab fleet [--json]\n',
   '  lab provision [--output FILE] [--copy NAME]\n',
 ].join('');
@@ -59,6 +71,18 @@ const HARNESS_NO_FAST_LOCAL = '--no-fast-local';
 
 function lab(...args) {
   return spawnSync(process.execPath, [LAB_CLI, ...args], {encoding: UTF8});
+}
+
+// Against an empty inventory of its own: a refusal must come before the
+// inventory, the tree or any machine is looked at.
+function labWithoutInventory(...args) {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-cli-'));
+  try {
+    return spawnSync(process.execPath, [LAB_CLI, ...args],
+      {encoding: UTF8, env: {...process.env, LAGRANGE_LAB_HOME: home}, timeout: 60000});
+  } finally {
+    fs.rmSync(home, {recursive: true, force: true});
+  }
 }
 
 test('the lab CLI carries no raw literal outside a named constant owner', async () => {
@@ -82,6 +106,29 @@ test('the lab CLI still states its command surface and refuses an unknown comman
     assert.equal(refused.status, EXIT_FAILURE, `${command} exits non-zero`);
     assert.ok(refused.stderr.includes(`Unknown lab command: ${command}`),
       `${command} is named as unknown: ${refused.stderr}`);
+  }
+});
+
+test('a hand lab run refuses what it cannot run before it looks at anything', () => {
+  for (const [args, refusal] of [
+    [['test', 'gate', '--lane', 'exclusive'],
+      'lab: the gate profile is an acceptance manifest, not a file plan: --lane takes changed|all'],
+    [['test', 'all', '--lane', 'no-such-lane'],
+      'lab: unknown lane no-such-lane: ordinary|cpu-heavy|external-toolchain|bootstrap|' +
+        'exclusive|all'],
+    [['test', 'all', '--on', 'somewhere'], 'lab: a lab test run names its lane with --lane'],
+    [['test', 'all', '--lane', 'exclusive', '--split'],
+      'lab: --split divides the whole corpus: it takes --lane all'],
+    [['test', 'all', '--lane', 'all', '--split', '--on'], 'lab: --on needs a machine name'],
+    [['test', 'changed', '--lane', 'all', '--base-sha'], 'lab: --base-sha needs a commit'],
+    [['test', 'all', '--lane', 'all', '--base-sha', 'main'],
+      'lab: --base-sha measures the change cone: it takes the changed profile'],
+    [['test', 'changed', '--base-sha', 'main'], 'lab: a lab test run names its lane with --lane'],
+  ]) {
+    const refused = labWithoutInventory(...args);
+    assert.equal(refused.status, EXIT_FAILURE, `${args.join(' ')} exits non-zero`);
+    assert.equal(refused.stderr, `${refusal}\n`, args.join(' '));
+    assert.equal(refused.stdout, '', 'and runs nothing');
   }
 });
 
