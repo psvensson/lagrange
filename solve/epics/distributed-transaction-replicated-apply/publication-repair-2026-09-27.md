@@ -292,16 +292,19 @@ A later exact-head diagnostic run found a red on lenovo-laptop in
 retry both stopped in `createFiveNodeFixture()` before the tested proof-channel
 wake property: the fixture required leader commit index 6 after admitting the
 three live followers, while the core reported 7. The other eleven subtests in
-that file passed on both attempts. The retained stream is
+that file passed on both attempts. The then-local diagnostic stream was
 `test-output/placement/5b43d26972fb-mujsx7fs-3025563-lenovo-laptop.log`.
-That diagnostic was interrupted before controller fallback and a final verdict,
-so it neither recovers nor identifies the original gate's terminal failure.
+It is not retained now. That diagnostic was interrupted before controller
+fallback and a final verdict, so it neither recovers nor identifies the
+original gate's terminal failure.
 
-The later DT6 red is a pre-existing fixture/evidence-owner defect, not
-production behavior, branch-introduced behavior, or infrastructure. This
-classification applies only to that diagnostic red. The exact-index assertion
-entered with `f4fd88e177`, and none of the fixture or its two DT6 consumers
-changed between the sealed STOP checkpoint and `5b43d2697`. A concurrent
+The later DT6 red exposes a fixture/evidence-owner defect and does not establish
+a production defect: core index 7 was a real observation, while the fixture's
+fixed interpretation of it was defective. This classification applies only to
+that diagnostic red. The exact-index assertion was branch-introduced with
+`f4fd88e177`, but it predates the sealed `292b7204` STOP checkpoint and was not
+introduced by the `292b7204..5b43d269` publication-repair range. None of the
+fixture or its two DT6 consumers changed in that range. A concurrent
 services-cache reconcile can queue a redundant add before the preceding add is
 visible in committed membership; that may consume another log position without
 changing the committed voter set. The fixture incorrectly treated one predicted
