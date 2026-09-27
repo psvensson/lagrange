@@ -50,14 +50,27 @@ and invocation mechanism around it has changed.
 
 Six copyable examples, ordered from basic to advanced:
 
-1. `01-basic-iterator` - iterate partition rows in a callback.
-2. `02-stage-batching` - process rows in bounded batches.
-3. `03-plan-reduce-by-key` - a plan stage plus per-key reduction.
-4. `04-nested-bounded-call` - a callback issuing a bounded nested call.
-5. `05-guardrail-failure` - what happens when a callback exceeds its limits.
-6. `06-wasm-remote-replica` - a JavaScript-envelope **lifecycle rehearsal**
-   (see the capability notes below - this is *not* a real WebAssembly
-   component).
+1. `01-basic-iterator` - **row-by-row local lookup.** One partition batch
+   arrives, each input row drives a bounded lookup, and the callback returns
+   rows annotated with the partition that processed them. Read this for the
+   simplest picture of "work is already running beside one partition."
+2. `02-stage-batching` - **bounded nested staging.** Distinct node IDs are
+   looked up in one bounded query, then its result is delivered to a stage
+   callback two rows at a time. This separates SQL result size from callback
+   batch size.
+3. `03-plan-reduce-by-key` - **exchange compact records, then reduce.** Rows
+   are emitted under `status` keys and the reduce stage receives grouped
+   records. The current analogue is call-Binding `emit()` plus `reduce()`.
+4. `04-nested-bounded-call` - **nested work with an explicit bound.** Each
+   outer row may query `config`, but `LIMIT 1` keeps the nested work
+   proportional to the input batch instead of creating unbounded fan-out.
+5. `05-guardrail-failure` - **a negative example.** It deliberately attempts
+   an unbounded nested call. The expected result is refusal, demonstrating
+   that boundedness is enforced rather than left to caller discipline.
+6. `06-wasm-remote-replica` - **historical routing/lifecycle rehearsal.** It
+   performs a bounded lookup while exercising the old `wasm_component` route,
+   but the artifact is a JavaScript envelope, not a genuine WebAssembly
+   component. Use the request-Binding examples for the current WASI path.
 
 Each example directory contains:
 
