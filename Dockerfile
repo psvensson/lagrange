@@ -25,6 +25,7 @@ WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY package.json ./
 COPY src/ ./src/
+COPY vendor/raft-rs-wasm/ ./vendor/raft-rs-wasm/
 
 # Release provenance, set by release.yml (--build-arg VERSION/VCS_REF/
 # BUILD_DATE). OCI labels are the only per-tag metadata surface registries

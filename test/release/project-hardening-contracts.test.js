@@ -13,7 +13,7 @@ import {
   validatePgwireRuntimeConfig,
 } from '../../src/runtime/pgwire-descriptor.js';
 import {PGWIRE_DEFAULT} from '../../src/runtime/pgwire-runtime-module.js';
-import {RAFT_RS_BINDING_LAYOUT} from '../../src/raft/raft-rs-core-constants.js';
+import {RAFT_RS_WASM_FILE} from '../../src/raft/raft-rs-core-constants.js';
 
 const UTF8 = 'utf8';
 const RUNTIME_IMAGE_STAGE = /^FROM \S+ AS runtime$/mu;
@@ -456,7 +456,10 @@ describe('project hardening contracts', () => {
       // The runtime owner resolves the binding at the layout root the
       // constants name, relative to the directory that holds src/; the image
       // must carry it there or the rs-raft backend cannot load in it.
-      const bindingRoot = `${RAFT_RS_BINDING_LAYOUT.ROOT.join('/')}/`;
+      const bindingRoot = [
+        RAFT_RS_WASM_FILE.VENDOR_DIRECTORY,
+        RAFT_RS_WASM_FILE.DIRECTORY,
+      ].join('/') + '/';
       const runtimeStage = dockerfile.slice(
         dockerfile.search(RUNTIME_IMAGE_STAGE));
       const contextCopies = runtimeStage.match(CONTEXT_COPY) || [];
