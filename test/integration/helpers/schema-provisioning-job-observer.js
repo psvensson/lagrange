@@ -76,6 +76,29 @@ function createContractProjection(outcome) {
   };
 }
 
+function projectSchemaJobStatus(projection) {
+  switch (projection.status) {
+  case SCHEMA_PROVISIONING_JOB_STATUS.SUCCEEDED:
+    return {...projection, readiness: SCHEMA_READINESS.READY};
+  case SCHEMA_PROVISIONING_JOB_STATUS.FAILED:
+    return {
+      ...projection,
+      readiness: SCHEMA_READINESS.FAILED,
+      errorMessage:
+        projection.errorMessage || 'schema provisioning job FAILED',
+    };
+  case SCHEMA_PROVISIONING_JOB_STATUS.PENDING:
+  case SCHEMA_PROVISIONING_JOB_STATUS.RUNNING:
+    return {...projection, readiness: SCHEMA_READINESS.OBSERVING};
+  default:
+    return {
+      ...projection,
+      readiness: SCHEMA_READINESS.FAILED,
+      errorMessage: `unknown schema job status: ${String(projection.status)}`,
+    };
+  }
+}
+
 function schemaJobProjection(outcome, jobId) {
   if (outcome?.outcome !== EMBEDDED_STEP_OUTCOME.FULFILLED) {
     return {
@@ -98,27 +121,7 @@ function schemaJobProjection(outcome, jobId) {
     errorMessage: row.error_message,
     completedAt: row.completed_at,
   };
-  if (row.status === SCHEMA_PROVISIONING_JOB_STATUS.SUCCEEDED) {
-    return {...projection, readiness: SCHEMA_READINESS.READY};
-  }
-  if (row.status === SCHEMA_PROVISIONING_JOB_STATUS.FAILED) {
-    return {
-      ...projection,
-      readiness: SCHEMA_READINESS.FAILED,
-      errorMessage: row.error_message || 'schema provisioning job FAILED',
-    };
-  }
-  if (
-    row.status === SCHEMA_PROVISIONING_JOB_STATUS.PENDING ||
-    row.status === SCHEMA_PROVISIONING_JOB_STATUS.RUNNING
-  ) {
-    return {...projection, readiness: SCHEMA_READINESS.OBSERVING};
-  }
-  return {
-    ...projection,
-    readiness: SCHEMA_READINESS.FAILED,
-    errorMessage: `unknown schema job status: ${String(row.status)}`,
-  };
+  return projectSchemaJobStatus(projection);
 }
 
 function buildObservationResult(startedAt, now, create, job, observations) {
