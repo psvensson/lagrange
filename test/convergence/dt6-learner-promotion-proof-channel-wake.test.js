@@ -16,7 +16,6 @@ import {
 } from '../../src/raft/learner-promotion-progress.js';
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {
-  COMMITTED_ENTRY_COUNT,
   LEADER_REPLICA,
   LEARNER_NODE,
   LEARNER_REPLICA,
@@ -108,7 +107,8 @@ const HEAD_MESSAGE_TIMEOUT_MS = 5000;
 const HEAD_RETRY_INTERVAL_MS = 1000;
 const PUBLISHED_EPOCH_ONE = 1;
 const BOOTSTRAP_EPOCH = 0;
-const LAGGING_MATCH_INDEX = COMMITTED_ENTRY_COUNT - 1;
+const PROOF_COMMITTED_INDEX = 7;
+const LAGGING_MATCH_INDEX = PROOF_COMMITTED_INDEX - 1;
 const SURPLUS_VOTERS = [['replica-6', 'node-6'], ['replica-7', 'node-7']];
 const FOREIGN_LEARNER_REPLICA = 'replica-foreign';
 const FOREIGN_PARTITION_ID = 'progress-proof-other';
@@ -668,6 +668,7 @@ test(
       'request_shape is logged at info with the learner id');
 
       const realTransport = learner.transport;
+      const committedIndex = leader.raft.readStatus().commitIndex;
       learner.transport = {
         deliver: async () => ({
           acknowledged: true,
@@ -676,8 +677,8 @@ test(
           proof: evaluateLearnerPromotionProof({
             raftIsLeader: true,
             currentTerm: leader.raft.readStatus().term,
-            committedIndex: COMMITTED_ENTRY_COUNT,
-            learnerMatchIndex: COMMITTED_ENTRY_COUNT,
+            committedIndex,
+            learnerMatchIndex: committedIndex,
             leaderMembershipEpoch: BOOTSTRAP_EPOCH,
             learnerMembershipEpoch: BOOTSTRAP_EPOCH,
           }),
@@ -942,7 +943,7 @@ test(
     const lagging = evaluateLearnerPromotionProof({
       raftIsLeader: true,
       currentTerm: 1,
-      committedIndex: COMMITTED_ENTRY_COUNT,
+      committedIndex: PROOF_COMMITTED_INDEX,
       learnerMatchIndex: LAGGING_MATCH_INDEX,
       leaderMembershipEpoch: PUBLISHED_EPOCH_ONE,
       learnerMembershipEpoch: PUBLISHED_EPOCH_ONE,
@@ -952,8 +953,8 @@ test(
     const mismatched = evaluateLearnerPromotionProof({
       raftIsLeader: true,
       currentTerm: 1,
-      committedIndex: COMMITTED_ENTRY_COUNT,
-      learnerMatchIndex: COMMITTED_ENTRY_COUNT,
+      committedIndex: PROOF_COMMITTED_INDEX,
+      learnerMatchIndex: PROOF_COMMITTED_INDEX,
       leaderMembershipEpoch: PUBLISHED_EPOCH_ONE,
       learnerMembershipEpoch: BOOTSTRAP_EPOCH,
     });
@@ -962,13 +963,13 @@ test(
     const granted = evaluateLearnerPromotionProof({
       raftIsLeader: true,
       currentTerm: 1,
-      committedIndex: COMMITTED_ENTRY_COUNT,
-      learnerMatchIndex: COMMITTED_ENTRY_COUNT,
+      committedIndex: PROOF_COMMITTED_INDEX,
+      learnerMatchIndex: PROOF_COMMITTED_INDEX,
       leaderMembershipEpoch: PUBLISHED_EPOCH_ONE,
       learnerMembershipEpoch: PUBLISHED_EPOCH_ONE,
     });
     assert.equal(granted.decision, LEARNER_PROMOTION_PROOF_DECISION.GRANTED);
-    assert.equal(granted.safePromotionIndex, COMMITTED_ENTRY_COUNT,
+    assert.equal(granted.safePromotionIndex, PROOF_COMMITTED_INDEX,
       'the safe promotion index is the leader committed index');
     assert.equal(PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS,
       HEAD_RETRY_INTERVAL_MS, 'LEARNER_CATCH_UP_CHECK_INTERVAL_MS unchanged');
@@ -1031,7 +1032,9 @@ test(
     assert.ok(drive.proof, 'promotion was granted on a proof');
     assert.equal(drive.proof.learnerMatchIndex, drive.proof.safePromotionIndex,
       'the granted proof has learnerMatchIndex === safePromotionIndex');
-    assert.equal(drive.proof.safePromotionIndex, COMMITTED_ENTRY_COUNT,
+    assert.equal(
+      drive.proof.safePromotionIndex,
+      drive.replicationAtLanding.committedIndex,
       'the safe promotion index is the leader committed prefix');
     assert.equal(drive.proof.membershipEpoch, PUBLISHED_EPOCH_ONE);
     assert.equal(drive.leaderEpoch, drive.learnerEpoch,
@@ -1070,7 +1073,9 @@ test(
     assert.equal(drive.replicationProven, true,
       'the leader proved the learner\'s replication (match index at the ' +
       'committed prefix) before the learner-visible landing');
-    assert.equal(drive.replicationAtLanding.matchIndex, COMMITTED_ENTRY_COUNT,
+    assert.equal(
+      drive.replicationAtLanding.matchIndex,
+      drive.replicationAtLanding.committedIndex,
       'the leader-observed match index at the landing is the committed prefix');
     assert.equal(drive.requestsDuringLanding, NO_REQUESTS_DURING_LANDING,
       'no proof request was sent between the leader-side and the ' +

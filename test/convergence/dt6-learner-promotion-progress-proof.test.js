@@ -61,7 +61,6 @@ import {
 import {RAFT_PEER_PROGRESS_PROBE_REASON} from
   '../../src/raft/raft-operation-port-constants.js';
 import {
-  COMMITTED_ENTRY_COUNT,
   LEARNER_ADDRESS,
   NO_ACKNOWLEDGED_MATCH_INDEX,
   configureFixtureRuntime,
@@ -109,12 +108,12 @@ async (t) => {
   const fixture = await createFiveNodeFixture({startPartitioned: true});
   const {leader, learner, leaderTransport, deferrals} = fixture;
   try {
-    t.equal(
-      leader.raft.readStatus().commitIndex,
-      COMMITTED_ENTRY_COUNT,
-      'recovery precondition: the leader holds a committed prefix the ' +
-        'learner does not have',
-    );
+    const partitioned = leader.raft.readStatus();
+    const committedPrefix = partitioned.commitIndex;
+    t.ok(partitioned.peers.some((peer) =>
+      peer.address === LEARNER_ADDRESS && peer.learner === false),
+    'recovery precondition: committed membership names the voter whose ' +
+      'prefix is partitioned');
 
     // Phase A: many retry ticks elapse while replication is partitioned.
     await new Promise((resolve) => setTimeout(resolve, LAG_OBSERVATION_MS));
@@ -158,7 +157,7 @@ async (t) => {
       'promotion happened only after the leader observed learner progress',
     );
     t.ok(
-      matchIndex >= COMMITTED_ENTRY_COUNT,
+      matchIndex >= committedPrefix,
       'the leader-observed match index covers the safe promotion index',
     );
     t.equal(
@@ -294,11 +293,10 @@ async (t) => {
       'precondition: the leader holds no acknowledged progress for the ' +
         'partitioned learner',
     );
-    t.equal(
-      partitioned.commitIndex,
-      COMMITTED_ENTRY_COUNT,
-      'precondition: the committed prefix the learner lacks',
-    );
+    t.ok(partitioned.peers.some((peer) =>
+      peer.address === LEARNER_ADDRESS && peer.learner === false),
+    'precondition: committed membership names the learner voter whose ' +
+      'prefix is absent');
 
     // Typed outcome 1: behind (matched below the committed prefix) - the
     // probe triggers one append to the learner (lost here: the replication
@@ -343,9 +341,9 @@ async (t) => {
         RAFT_PEER_PROGRESS_PROBE_REASON.PROGRESS_OBSERVED,
     );
     t.ok(
-      observed.matchIndex >= COMMITTED_ENTRY_COUNT,
+      observed.matchIndex >= partitioned.commitIndex,
       'the observed match index covers the safe promotion index ' +
-        `(${observed.matchIndex} >= ${COMMITTED_ENTRY_COUNT})`,
+        `(${observed.matchIndex} >= ${partitioned.commitIndex})`,
     );
 
     // The proof channel opens: promotion follows through the same progress

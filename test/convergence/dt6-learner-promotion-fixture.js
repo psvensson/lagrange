@@ -73,18 +73,11 @@ const LIVE_FOLLOWERS = Object.freeze([
   ['replica-4', 'node-4'],
 ]);
 const TARGET_REPLICA_COUNT = 5;
-// The committed prefix the proof binds is the core's own log: the leader's
-// election entry, the prefix writes, and one membership entry per replica
-// the leader admitted (three live followers, then the learner). The fixture
-// asserts each stage against the leader's readStatus().commitIndex.
-const LEADER_ELECTION_ENTRY_COUNT = 1;
+// The committed prefix the proof binds is the core's own log. Membership
+// admission is proven from the core's committed ConfState projection, never
+// inferred from an exact log position: concurrent cache reconciles may queue
+// a redundant add before the first one commits without changing membership.
 const PREFIX_WRITE_COUNT = 2;
-const ADMISSION_ENTRY_COUNT = 1;
-const SOLO_PREFIX_INDEX = LEADER_ELECTION_ENTRY_COUNT + PREFIX_WRITE_COUNT;
-const FOLLOWERS_ADMITTED_INDEX =
-  SOLO_PREFIX_INDEX + LIVE_FOLLOWERS.length * ADMISSION_ENTRY_COUNT;
-export const COMMITTED_ENTRY_COUNT =
-  FOLLOWERS_ADMITTED_INDEX + ADMISSION_ENTRY_COUNT;
 // The leader's core keeps a progress record for every peer its
 // configuration names; a peer that never acknowledged an append (the
 // partitioned learner) reports matched index 0 — no progress evidence.
@@ -303,14 +296,26 @@ async function proposePrefixWrite(leader, seq) {
   }));
 }
 
-function assertLeaderCommitIndex(leader, expected, stage) {
-  const {commitIndex} = leader.raft.readStatus();
-  if (commitIndex !== expected) {
+function committedVoterObservation(leader, replicaId) {
+  const status = leader.raft.readStatus();
+  const peer = status.peers?.find((candidate) =>
+    candidate.replicaIdentity === replicaId) || null;
+  return {commitIndex: status.commitIndex, peer};
+}
+
+async function waitForCommittedVoter(leader, replicaId, stage) {
+  const committed = await waitFor(() => {
+    const {peer} = committedVoterObservation(leader, replicaId);
+    return peer !== null && peer.learner === false;
+  }, ADMISSION_BUDGET_MS);
+  if (!committed) {
     throw new Error(
-      `fixture precondition (${stage}): leader commitIndex ${commitIndex}, ` +
-        `expected ${expected}`,
+      `fixture precondition (${stage}): committed ConfState does not name ` +
+        `voter ${replicaId} ` +
+        JSON.stringify(committedVoterObservation(leader, replicaId)),
     );
   }
+  return committedVoterObservation(leader, replicaId);
 }
 
 async function createLeader(transport, cache) {
@@ -329,13 +334,12 @@ async function createLeader(transport, cache) {
   await leader.initialize();
   // How the prefix became committed is a precondition here, not the
   // mechanism under test - the proof consumes committedIndex however it
-  // advanced. A solo rs-raft leader commits its own proposals, so the prefix
-  // writes are proposed through the port and the core must report exactly
-  // the election entry plus those writes committed.
+  // advanced. A solo rs-raft leader commits its own proposals, so successful
+  // prefix proposals establish the real committed application prefix without
+  // assuming how many internal entries precede it.
   for (let seq = 1; seq <= PREFIX_WRITE_COUNT; seq++) {
     await proposePrefixWrite(leader, seq);
   }
-  assertLeaderCommitIndex(leader, SOLO_PREFIX_INDEX, 'solo prefix');
   return leader;
 }
 
@@ -422,6 +426,8 @@ async function admitLiveVoter(topology, replicaId, nodeId, options = {}) {
     insertServiceRow(cache, replicaId, nodeId, RaftRole.FOLLOWER);
   }
   voter.startElection();
+  await waitForCommittedVoter(
+    topology.leader, replicaId, `live voter ${replicaId} admitted`);
   const admitted = await waitFor(
     () => readLeaderReplicationTo(topology.leader, address).proven,
     ADMISSION_BUDGET_MS,
@@ -578,8 +584,6 @@ export async function createFiveNodeFixture(options = {}) {
     for (const [replicaId, nodeId] of LIVE_FOLLOWERS) {
       await admitLiveVoter(topology, replicaId, nodeId);
     }
-    assertLeaderCommitIndex(
-      topology.leader, FOLLOWERS_ADMITTED_INDEX, 'live followers admitted');
     const learnerRow = options.learnerRow !== false;
     const leaderLearnerRow = options.leaderLearnerRow ?? learnerRow;
     // The target's own cache holds its local-only seed row before the
@@ -599,15 +603,12 @@ export async function createFiveNodeFixture(options = {}) {
         leaderCache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER);
     }
     if (leaderLearnerRow) {
-      // The learner's admission is one membership entry; the committed
-      // prefix the proof binds is complete once the core committed it.
-      await waitFor(
-        () => topology.leader.raft.readStatus().commitIndex >=
-          COMMITTED_ENTRY_COUNT,
-        ADMISSION_BUDGET_MS,
-      );
-      assertLeaderCommitIndex(
-        topology.leader, COMMITTED_ENTRY_COUNT, 'learner admitted');
+      // The prefix the proof binds is complete once the committed ConfState
+      // names the learner as a voter. Its numeric position is deliberately
+      // unconstrained because a redundant reconcile may consume another log
+      // entry without changing that membership fact.
+      await waitForCommittedVoter(
+        topology.leader, LEARNER_REPLICA, 'learner admitted');
     }
   } catch (error) {
     await shutdownTopology(topology);

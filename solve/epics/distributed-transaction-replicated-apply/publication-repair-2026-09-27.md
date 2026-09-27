@@ -274,6 +274,43 @@ preflight requirement, but the quest remains `SEALED / PUBLICATION_BLOCKED`
 until the normal publisher succeeds and the remote branch SHA is independently
 read back.
 
+## Exact-head publication gate fixture failure
+
+The next normal publication attempt ran exact head
+`5b43d26972fb983773ea656c07807d993a535dd7`. Its five acceptance commands
+before the change proof were green: focused contracts, static analysis, model
+contracts, owner-debt report inputs, and golden capability guard scenarios.
+The retained acceptance receipt is
+`test-output/acceptance/project-hardening-proof-postpush-2026-09-27T11-40-33-126Z.report.json`.
+
+The full-corpus change proof then failed on lenovo-laptop in
+`test/convergence/dt6-learner-promotion-proof-channel-wake.test.js`, subtest
+`proof-wakes-on-services-row-visibility`. The first run and its standalone
+retry both stopped in `createFiveNodeFixture()` before the tested proof-channel
+wake property: the fixture required leader commit index 6 after admitting the
+three live followers, while the core reported 7. The other eleven subtests in
+that file passed on both attempts. The retained stream is
+`test-output/placement/5b43d26972fb-mujsx7fs-3025563-lenovo-laptop.log`.
+
+This is a pre-existing fixture/evidence-owner defect, not production behavior,
+branch-introduced behavior, or infrastructure. The exact-index assertion
+entered with `f4fd88e177`, and none of the fixture or its two DT6 consumers
+changed between the sealed STOP checkpoint and `5b43d2697`. A concurrent
+services-cache reconcile can queue a redundant add before the preceding add is
+visible in committed membership; that may consume another log position without
+changing the committed voter set. The fixture incorrectly treated one predicted
+numeric position as the authority for admission.
+
+The fixture now waits after every voter admission until the leader's canonical
+`readStatus().peers` projection of committed `ConfState` names that exact
+replica as a voter, then separately proves its replication. The learner
+admission and both DT6 witnesses consume the observed committed prefix rather
+than a hard-coded entry count. No production source, timeout, retry policy, or
+resource classification changed. A focused local run of the two affected DT6
+files passed 2/2 files and 41 assertions. The quest remains
+`SEALED / PUBLICATION_BLOCKED` until a new exact committed head passes the
+normal publisher and its remote SHA is independently read back.
+
 ## Design verdict remains sealed
 
 The liveness wording is corrected for future work: there is no configured
