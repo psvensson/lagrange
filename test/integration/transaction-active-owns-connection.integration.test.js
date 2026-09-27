@@ -91,6 +91,14 @@ const SHADOW_HISTORY_TABLE = '_raft_rs_shadow_copy_history_fixture';
 const SHADOW_HISTORY_CHUNK_BYTES = 256 * 1024;
 const SHADOW_HISTORY_BATCH_ROWS = 8;
 const SHADOW_COPY_TARGET_MIB = Object.freeze([32, 128, 256]);
+// sqlite3_serialize materializes WAL contents but preserves the database
+// header's WAL read/write versions. better-sqlite3 opens a Buffer as an
+// anonymous database, where WAL has no sidecar path and the first statement
+// fails SQLITE_CANTOPEN. The serialized image is exclusively ours, so the
+// shadow path must normalize those two header bytes before opening it.
+const SQLITE_HEADER = Object.freeze({READ_VERSION_OFFSET: 18,
+  WRITE_VERSION_OFFSET: 19, ROLLBACK_JOURNAL_VERSION: 1,
+  WAL_JOURNAL_VERSION: 2});
 const SENTINEL_PREFIX = 'steady-';
 const ROW_SUFFIX = Object.freeze({
   TX: 'tx',
@@ -194,6 +202,16 @@ function measureShadowCopy(db, compact) {
   const serializeStarted = performance.now();
   const image = db.serialize();
   const serializeMs = performance.now() - serializeStarted;
+  const headerBefore = {
+    readVersion: image[SQLITE_HEADER.READ_VERSION_OFFSET],
+    writeVersion: image[SQLITE_HEADER.WRITE_VERSION_OFFSET],
+  };
+  const normalizeStarted = performance.now();
+  image[SQLITE_HEADER.READ_VERSION_OFFSET] =
+    SQLITE_HEADER.ROLLBACK_JOURNAL_VERSION;
+  image[SQLITE_HEADER.WRITE_VERSION_OFFSET] =
+    SQLITE_HEADER.ROLLBACK_JOURNAL_VERSION;
+  const normalizeMs = performance.now() - normalizeStarted;
   const openStarted = performance.now();
   const shadow = new Database(image);
   const openMs = performance.now() - openStarted;
@@ -212,7 +230,7 @@ function measureShadowCopy(db, compact) {
   })();
   const scrubMs = performance.now() - scrubStarted;
   const afterScrub = databaseShape(shadow);
-  const readyMs = serializeMs + openMs + scrubMs;
+  const readyMs = serializeMs + normalizeMs + openMs + scrubMs;
   let vacuum = null;
   if (compact) {
     const vacuumStarted = performance.now();
@@ -222,9 +240,9 @@ function measureShadowCopy(db, compact) {
   }
   const rssWhileOpen = process.memoryUsage().rss;
   shadow.close();
-  return {afterScrub, imageBytes: image.length, openMs, opened, readyMs,
-    rssBefore, rssWhileOpen, scrubMs, scrubbedTables, serializeMs, source,
-    vacuum};
+  return {afterScrub, headerBefore, imageBytes: image.length, normalizeMs,
+    openMs, opened, readyMs, rssBefore, rssWhileOpen, scrubMs, scrubbedTables,
+    serializeMs, source, vacuum};
 }
 
 function compactCopySample(sample) {
@@ -232,6 +250,8 @@ function compactCopySample(sample) {
     targetMiB: sample.targetMiB,
     imageMiB: Number((sample.imageBytes / BYTES_PER_MIB).toFixed(2)),
     serializeMs: Number(sample.serializeMs.toFixed(2)),
+    headerBefore: sample.headerBefore,
+    normalizeMs: Number(sample.normalizeMs.toFixed(4)),
     openMs: Number(sample.openMs.toFixed(2)),
     scrubMs: Number(sample.scrubMs.toFixed(2)),
     readyMs: Number(sample.readyMs.toFixed(2)),
@@ -266,7 +286,8 @@ async function measureShadowWorkspace(t, context, evidence, sink) {
   }
   const measurement = {
     finding: SHADOW_FINDING,
-    model: 'synchronous db.serialize -> open -> drop _raft_rs_*',
+    model: 'synchronous db.serialize -> normalize WAL header -> open -> ' +
+      'drop _raft_rs_*',
     livenessBudgetMs: SHADOW_COPY_LIVENESS_BUDGET_MS,
     partitionId: partition.partition_id,
     measuredNodeId: leader.nodeId,
@@ -301,6 +322,10 @@ async function measureShadowWorkspace(t, context, evidence, sink) {
   for (const sample of measurement.samples) {
     t.ok(sample.imageBytes >= sample.targetMiB * BYTES_PER_MIB,
       `${sample.targetMiB} MiB sample serialized the full target image`);
+    t.same(sample.headerBefore, {
+      readVersion: SQLITE_HEADER.WAL_JOURNAL_VERSION,
+      writeVersion: SQLITE_HEADER.WAL_JOURNAL_VERSION,
+    }, `${sample.targetMiB} MiB source image retained its WAL header`);
     t.ok(sample.scrubbedTables.includes(SHADOW_HISTORY_TABLE),
       `${sample.targetMiB} MiB sample scrubbed the history-shaped fixture`);
     t.equal(sample.afterScrub.pageCount, sample.opened.pageCount,
