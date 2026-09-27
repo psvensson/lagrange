@@ -57,10 +57,18 @@ also consumes `provisioningEligible` and an operation-specific capacity
 decision. Its admin fetch also lacked a request bound, so one stalled request
 could escape the remaining formation deadline.
 
+The second repair checkpoint, `4e240ceca`, was also rejected before lab
+execution. It incorrectly required `snapshotObservation.state=fresh`; the
+`scope=local` HTTP route directly builds its local snapshot and does not attach
+that shared-snapshot-owner field. The focused fixture had fabricated a shape
+the live route cannot produce.
+
 The amended embedded formation harness consumes existing readiness-owner
-output from the seed's fresh local admin control snapshot before it submits
-application DDL. It requires a current satisfied priority-placement
-observation and every expected node to report `controlPlaneWritable`,
+output from the seed's directly built local admin control snapshot before it
+submits application DDL. It requires an available, satisfied priority-placement
+observation whose `capturedAt` equals the enclosing snapshot's `capturedAt`,
+which establishes that the placement observation belongs to the same local
+build. Every expected node must report `controlPlaneWritable`,
 `metadataPublicationHealthy`, `provisioningEligible`, and the capacity-derived
 `placementEligible`. Every snapshot request is aborted at the remaining
 formation budget.

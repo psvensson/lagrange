@@ -86,9 +86,7 @@ const ADMIN_CONTROL_SNAPSHOT = Object.freeze({
   CURRENT_PRIORITY_PLACEMENT: 'currentPriorityPlacementObservation',
   READINESS_BY_NODE_ID: 'readinessByNodeId',
   DIMENSIONS: 'dimensions',
-  SNAPSHOT_OBSERVATION: 'snapshotObservation',
   STATE: 'state',
-  FRESH: 'fresh',
   AVAILABLE: 'available',
   CONTROL_PLANE_WRITABLE: 'controlPlaneWritable',
   METADATA_PUBLICATION_HEALTHY: 'metadataPublicationHealthy',
@@ -338,12 +336,7 @@ async function pollUntil(t, budgetMs, read, satisfied, describe) {
  * @return {boolean} whether application DDL formation preconditions hold
  */
 function isCurrentFormationSnapshot(snapshot, placement) {
-  const observation = snapshot?.[
-    ADMIN_CONTROL_SNAPSHOT.SNAPSHOT_OBSERVATION
-  ];
-  return observation?.[ADMIN_CONTROL_SNAPSHOT.STATE] ===
-      ADMIN_CONTROL_SNAPSHOT.FRESH &&
-    placement?.[ADMIN_CONTROL_SNAPSHOT.STATE] ===
+  return placement?.[ADMIN_CONTROL_SNAPSHOT.STATE] ===
       ADMIN_CONTROL_SNAPSHOT.AVAILABLE &&
     placement?.[ADMIN_CONTROL_SNAPSHOT.CAPTURED_AT] ===
       snapshot?.[ADMIN_CONTROL_SNAPSHOT.CAPTURED_AT] &&

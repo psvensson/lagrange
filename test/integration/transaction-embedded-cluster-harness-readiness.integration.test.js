@@ -20,12 +20,10 @@ function readiness({writable = true, publicationHealthy = true,
   };
 }
 
-function snapshot({placementSatisfied = true, snapshotState = 'fresh',
-  placementCapturedAt = 1234,
+function snapshot({placementSatisfied = true, placementCapturedAt = 1234,
   seed = readiness(), joiner = readiness()} = {}) {
   return {
     capturedAt: 1234,
-    snapshotObservation: {state: snapshotState},
     controlPlaneDiagnostics: {
       currentPriorityPlacementObservation: {
         capturedAt: placementCapturedAt,
@@ -48,12 +46,6 @@ test('embedded formation consumes authoritative preconditions before DDL',
         EXPECTED_NODE_IDS),
       false,
       'active-node visibility alone is not application-write readiness',
-    );
-    t.equal(
-      areApplicationWriteFormationPreconditionsSatisfied(
-        snapshot({snapshotState: 'stale_but_usable'}), EXPECTED_NODE_IDS),
-      false,
-      'a stale control snapshot cannot release the formation precondition',
     );
     t.equal(
       areApplicationWriteFormationPreconditionsSatisfied(
