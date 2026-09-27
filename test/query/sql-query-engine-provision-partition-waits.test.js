@@ -59,6 +59,8 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
   const executionOwnerTurnPolicies = [];
   let ownershipChecks = 0;
   const mutationWorkClasses = [];
+  const compositeObservationsByNodeId = new Map();
+  const compositeProbeMoves = [];
   const nodes = [
     {node_id: localNodeId, status: 'active'},
     {node_id: 'node-b', status: 'active'},
@@ -127,7 +129,27 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
   };
 
   const rebalanceCoordinator = {
+    async checkProvisioningAdmission(move) {
+      compositeProbeMoves.push(move);
+      const operationCreationAdmission = Object.freeze({
+        allowed: true,
+        contractState: OWNER_CONTRACT_STATE.READY,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
+        operationIntentId: move.operationIntentId,
+      });
+      compositeObservationsByNodeId.set(move.nodeId, operationCreationAdmission);
+      return {
+        allowed: true,
+        decisionType: 'admitted',
+        operationCreationAdmission,
+      };
+    },
     async createOperation(move) {
+      t.equal(
+        move.operationCreationAdmission,
+        compositeObservationsByNodeId.get(move.nodeId),
+        'SQL consumes the coordinator composite observation for the first insert',
+      );
       createdMoves.push(move);
       createdTargetNodeIds.push(move.nodeId);
       mutationWorkClasses.push(move.controlPlaneMutationWorkClass);
@@ -178,6 +200,13 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
     createdTargetNodeIds,
     ['node-a', 'node-b', 'node-c'],
     'provisioning should target local node first, then active peers',
+  );
+  t.equal(compositeProbeMoves.length, 3,
+    'waitForProvisionTargetNodeIds probes every target through the coordinator owner');
+  t.same(
+    compositeProbeMoves.map((move) => move.operationIntentId),
+    createdMoves.map((move) => move.operationIntentId),
+    'the diagnostic wait and first insert share deterministic operation identity',
   );
   t.equal(ownershipChecks, 3,
     'parent ownership is revalidated before each child side effect');

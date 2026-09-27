@@ -1,5 +1,16 @@
 #!/usr/bin/env node
 
+/**
+ * Proof harness for the account-summary service, not application code.
+ *
+ * The harness owns everything a reproducible example needs around the service:
+ * compile the authored file, boot a disposable node, create and split data,
+ * install the derived Artifact/Bindings, invoke both HTTP and CALL BINDING,
+ * exercise refusal and idempotent replay, then assert the evidence.
+ *
+ * If you are learning the programming model, read lagrange.service.js first.
+ */
+
 import assert from 'node:assert/strict';
 import {mkdtemp, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';

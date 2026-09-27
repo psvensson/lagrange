@@ -182,7 +182,7 @@
     {
       "id": "postgres-compatibility",
       "area": "PostgreSQL compatibility",
-      "summary": "Password authentication and TLS are implemed, but SCRAM and arbitrary PostgreSQL or ORM compatibility are not claimed."
+      "summary": "Password authentication and TLS are implemented, but SCRAM and arbitrary PostgreSQL or ORM compatibility are not claimed."
     },
     {
       "id": "node-transport-security",

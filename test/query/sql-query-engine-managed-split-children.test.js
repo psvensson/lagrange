@@ -417,6 +417,11 @@ test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
       reasonCodes: ['control_plane_write_unhealthy'],
     }],
   };
+  const admittedOperationCreationObservation = Object.freeze({
+    allowed: true,
+    contractState: 'ready',
+    nextAction: 'proceed',
+  });
   const rebalanceCoordinator = {
     async checkProvisioningAdmission(move) {
       checkedTargetNodeIds.push(move.nodeId);
@@ -429,10 +434,10 @@ test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
     async createOperation(move) {
       createdTargetMoves.push({
         nodeId: move.nodeId,
-        skipProvisioningAdmissionRecheck:
-          move.skipProvisioningAdmissionRecheck === true,
+        operationCreationAdmission:
+          move.operationCreationAdmission || null,
       });
-      if (move.skipProvisioningAdmissionRecheck !== true) {
+      if (!move.operationCreationAdmission) {
         const error = new Error(`Provisioning admission denied on ${move.nodeId}`);
         error.admissionResult = deniedAdmissionResult;
         throw error;
@@ -476,6 +481,10 @@ test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
     admissionConvergence: {
       candidateTargetNodeIds: [localNodeId, 'node-b', 'node-c'],
       admittedTargetNodeIds: [localNodeId],
+      admittedTargetPlans: [{
+        targetNodeId: localNodeId,
+        operationCreationAdmission: admittedOperationCreationObservation,
+      }],
       rejectedTargetNodePlans: [
         {
           targetNodeId: 'node-b',
@@ -503,7 +512,7 @@ test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
     createdTargetMoves,
     [{
       nodeId: localNodeId,
-      skipProvisioningAdmissionRecheck: true,
+      operationCreationAdmission: admittedOperationCreationObservation,
     }],
     'bootstrap creation should reuse the admitted precheck target instead of re-admitting it',
   );

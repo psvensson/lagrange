@@ -1,0 +1,38 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "application-write-formation-authority",
+  "status": "fail",
+  "generatedAt": "2026-09-27T00:00:00.000Z",
+  "receipts": [
+    {
+      "id": "stable-ready-first-write-admitted",
+      "passed": false,
+      "command": "not yet established",
+      "detail": "F1 is the sealed red property: formation readiness currently does not prove that the first application mutation is admissible under the same authoritative state."
+    },
+    {
+      "id": "pending-operation-prevents-false-readiness",
+      "passed": false,
+      "command": "not yet established",
+      "detail": "F2 has no direct owner-level witness yet."
+    },
+    {
+      "id": "post-ready-transition-safe",
+      "passed": false,
+      "command": "not yet established",
+      "detail": "F3 has no direct owner-level witness yet."
+    },
+    {
+      "id": "stale-generation-cannot-win",
+      "passed": false,
+      "command": "not yet established",
+      "detail": "F4 has no direct owner-level witness yet."
+    },
+    {
+      "id": "transaction-active-end-to-end-confirmation",
+      "passed": false,
+      "command": "not yet established",
+      "detail": "T-A remains an end-to-end reproducer, not the primary property proof."
+    }
+  ]
+}

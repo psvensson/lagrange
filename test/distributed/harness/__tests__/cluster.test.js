@@ -12,7 +12,6 @@ import assert from 'node:assert';
 import fc from 'fast-check';
 import {distributeNodes} from '../cluster.js';
 
-
 /**
  * Feature: distributed-testing-framework
  * Property 5: Multi-Host Container Distribution

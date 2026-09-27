@@ -296,6 +296,21 @@ test(
 test('RebalanceCoordinator facade delegates provisioning policy methods',
   async (t) => {
     const {coordinator, calls} = createFacadeCoordinator();
+    coordinator.captureOperationCreationPlanningIdentity = () =>
+      Object.freeze({
+        globalPlanningGeneration: 1,
+        nodePlanningGeneration: 1,
+        saturated: false,
+      });
+    coordinator.observeReplicaOperationMutationRoute = () => ({allowed: true});
+    coordinator.assertLocalControlPlaneMutationReady = () => {};
+    coordinator.resolveProvisioningLedgerInterlockDeferral = async () => null;
+    coordinator.ensureNoConflictingInFlightReplaceForRemove = async () => {};
+    coordinator.ensurePriorityControlPlaneRemoveLaneAvailable = async () => {};
+    coordinator.ensurePrioritySurplusRemovePlacementFenceAllowed = async () => {};
+    coordinator.ensureEntityAddLikeCreateLaneAvailable = async () => {};
+    coordinator.ensureCriticalPartitionCreateLaneAvailable = async () => {};
+    coordinator.ensureCreateTopologyGuardAllowed = async () => {};
 
     const normalizedWorkClass =
       coordinator.normalizeControlPlaneMutationWorkClass({type: 'ADD'});
@@ -340,7 +355,7 @@ test('RebalanceCoordinator facade delegates provisioning policy methods',
 
     t.same(calls.policy.map(([name]) => name), [
       'normalizeControlPlaneMutationWorkClass',
-      'checkProvisioningAdmission',
+      'ensureProvisioningAdmissionAllowed',
       'ensureProvisioningAdmissionAllowed',
       'evaluateProvisioningAdmission',
       'estimateProvisioningAdmissionBytes',

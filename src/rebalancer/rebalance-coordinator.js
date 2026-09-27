@@ -6,6 +6,8 @@ import {applyRebalanceCoordinatorReplicaIdentityMethods} from './rebalance-coord
 import {applyRebalanceCoordinatorOperationIntentMethods} from './rebalance-coordinator-operation-intent-methods.js';
 import {applyRebalanceCoordinatorOwnerDelegationMethods} from './rebalance-coordinator-owner-delegation-methods.js';
 import {applyRebalanceCoordinatorOperationCreationMethods} from './rebalance-coordinator-operation-creation.js';
+import {applyRebalanceCoordinatorOperationCreationAdmissionMethods} from './rebalance-coordinator-operation-creation-admission.js';
+import {applyRebalanceCoordinatorOperationCreationSupportMethods} from './rebalance-coordinator-operation-creation-support.js';
 import {applyRebalanceCoordinatorEntitySizeMethods} from './rebalance-coordinator-entity-size-methods.js';
 import {applyRebalanceCoordinatorOperationPersistenceCollisionMethods} from './rebalance-coordinator-operation-persistence-collision.js';
 import {applyRebalanceCoordinatorPriorityBudgetAdmissionMethods} from './rebalance-coordinator-priority-budget-admission.js';
@@ -256,6 +258,8 @@ applyRebalanceCoordinatorTopologyGuardMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorReplicaIdentityMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorOperationIntentMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorOwnerDelegationMethods(RebalanceCoordinator);
+applyRebalanceCoordinatorOperationCreationAdmissionMethods(RebalanceCoordinator);
+applyRebalanceCoordinatorOperationCreationSupportMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorOperationCreationMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorEntitySizeMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorOperationPersistenceCollisionMethods(

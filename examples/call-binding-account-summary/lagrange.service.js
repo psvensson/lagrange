@@ -1,26 +1,18 @@
 /**
- * The code-first account-summary service: ONE file authored purely with
- * the guest-safe authoring library (src/authoring/*), from which the
- * compiler derives everything the platform needs.
+ * Developer-authored source for the public composed-service example.
  *
- * The developer declares data, not deployment wiring: one distributed
- * operation and two HTTP routes. There is NO Binding-name literal
- * anywhere here - the durable `<service>--call--<kebab(op id)>` and
- * `<service>--request--<kebab(handler id)>` names are the compiler's to
- * mint from these explicit object keys (the generated entry mirrors the
- * exact same derivation, and the deployment records own the authoritative
- * copy). The hand-authored deployment builder this file replaced is gone.
+ * Read this file as one request split into three execution locations:
+ *   1. `handleAccountSummary` receives the HTTP request.
+ *   2. `summarizeRun` executes beside each selected partition's leader.
+ *   3. `summarizeReduce` combines only the emitted partial values.
  *
- *   - `summarizeAccountActivity` runs per data partition against the
- *     declared statement, keeps only the requested account's rows, and
- *     emits numeric partials; `reduce` folds every shard's partials into
- *     the final JSON summary. Only numbers leave a node - never rows.
- *   - `accountSummary` (POST /accounts/summary) invokes that operation by
- *     descriptor through the authorized call bridge and owns the endpoint's
- *     HTTP mapping - success and each typed call-failure code alike.
- *   - `accountHealth` (GET /accounts/health) is a second route served by
- *     the SAME component via method+path dispatch; it declares no calls,
- *     so the compiler emits no outbound-call policy for it.
+ * The compiler derives package IDs, Binding names, manifests, and outbound-call
+ * policy from this declaration. None of that deployment wiring belongs in the
+ * service source.
+ *
+ * Important: the SQL selector is fixed at deployment. `accountId` is an
+ * operation argument used inside `summarizeRun`; it does not rewrite the SQL
+ * statement or narrow partition planning by itself.
  */
 import {defineService} from '../../src/authoring/define-service.js';
 import {distributed} from '../../src/authoring/distributed-operation.js';
@@ -53,11 +45,12 @@ const PARTIAL_METRIC = Object.freeze({
 });
 const PARTIAL_KEY_SEPARATOR = ':';
 
-// Partition-local work: keep only the requested account's rows and emit a
-// few numeric partials keyed by a shard-unique suffix. Partition ranges
-// make row ids shard-disjoint, so the lowest matching id is a valid
-// shard-unique group-key suffix (the reduce gate refuses overlapping group
-// keys across shards). The rows themselves never leave the node.
+// `rows` is already a bounded batch read from this partition host. Filter the
+// request-specific account here, before any result crosses the network.
+//
+// Partial keys must be disjoint across shards. Partition ranges make row IDs
+// disjoint, so the lowest matching ID is a convenient shard-specific suffix.
+// The rows themselves never leave this node.
 function summarizeRun(rows, {accountId}, {emit}) {
   let matched = 0;
   let totalCents = 0;
@@ -84,13 +77,14 @@ function summarizeRun(rows, {accountId}, {emit}) {
     );
     emit(`${PARTIAL_METRIC.FLAGGED}${PARTIAL_KEY_SEPARATOR}${shardKey}`, flagged);
   }
-  // Per-shard bookkeeping; it is not coordinated.
+  // The return value is local bookkeeping only. Coordinated output is exactly
+  // what was sent through emit().
   return {matched, scanned: rows.length};
 }
 
-// Reduction over every shard's partials. Keys arrive exactly as emitted -
-// `<metric>:<shardKey>` - so the distinct shard suffixes count the
-// contributing shards.
+// The reducer never sees source rows. It receives the complete validated set
+// of emitted numeric pairs after every expected shard has succeeded.
+// `<metric>:<shardKey>` also lets the example count contributing shards.
 function summarizeReduce(partials, {accountId}) {
   let transactions = 0;
   let totalCents = 0;
@@ -117,19 +111,19 @@ function summarizeReduce(partials, {accountId}) {
   };
 }
 
-// The single distributed operation, referenced by descriptor identity -
-// never by a Binding-name string - from both `operations` and the
-// handler's `calls` allowlist.
+// The literal SELECT is part of the deployed operation contract. Per-request
+// arguments vary the partition function, not this selector. Descriptor identity
+// lets the compiler derive the call Binding and the handler's allowlist.
 const summarizeAccountActivity = distributed({
   reduce: summarizeReduce,
   run: summarizeRun,
   statement: sql`SELECT id, account_id, amount_cents, flagged FROM account_activity`,
 });
 
-// The composed HTTP endpoint. `call(descriptor, args)` reaches the deployed
-// call Binding through the authorized bridge; the optional demo affordance
-// `body.target` lets the runner ask for an UNDECLARED target so the host's
-// durable outbound-call policy (not this code) proves the fail-closed 403.
+// The handler looks like ordinary application code: parse request data, invoke
+// a declared operation, then map typed failures to HTTP. `body.target` exists
+// only so the proof harness can attempt an undeclared call and show that the
+// host policy rejects it before dispatch.
 function handleAccountSummary(request, {call, json}) {
   const accountId = request.body?.accountId ?? null;
   const target = typeof request.body?.target === 'string' ?
@@ -155,6 +149,8 @@ function handleAccountHealth(_request, {json}) {
   return json(HEALTH_BODY);
 }
 
+// Object keys are durable source identities. The compiler uses them to derive
+// request/call Bindings and least-authority outbound-call policy.
 export default defineService({
   handlers: {
     accountHealth: http.get('/accounts/health', {

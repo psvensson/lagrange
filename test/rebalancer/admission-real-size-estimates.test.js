@@ -374,6 +374,20 @@ test('checkProvisioningAdmission probe sizes on the real size_bytes',
   async (t) => {
     initializeConfig();
     const {coordinator, estimateCalls} = createCoordinatorWithRealSize();
+    coordinator.captureOperationCreationPlanningIdentity = () =>
+      Object.freeze({
+        globalPlanningGeneration: 1,
+        nodePlanningGeneration: 1,
+        saturated: false,
+      });
+    coordinator.observeReplicaOperationMutationRoute = () => ({allowed: true});
+    coordinator.assertLocalControlPlaneMutationReady = () => {};
+    coordinator.ensureNoConflictingInFlightReplaceForRemove = async () => {};
+    coordinator.ensurePriorityControlPlaneRemoveLaneAvailable = async () => {};
+    coordinator.ensurePrioritySurplusRemovePlacementFenceAllowed = async () => {};
+    coordinator.ensureEntityAddLikeCreateLaneAvailable = async () => {};
+    coordinator.ensureCriticalPartitionCreateLaneAvailable = async () => {};
+    coordinator.ensureCreateTopologyGuardAllowed = async () => {};
 
     const probe = await coordinator.checkProvisioningAdmission({
       type: OperationType.ADD,

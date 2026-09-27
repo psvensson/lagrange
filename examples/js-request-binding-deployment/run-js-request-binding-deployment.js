@@ -1,5 +1,16 @@
 #!/usr/bin/env node
 
+/**
+ * Proof harness for service.js.
+ *
+ * It turns the small JavaScript workload into a component, creates the ledger,
+ * installs the service, waits for a ready Cell, sends the two stateful requests,
+ * and finally proves that undeclared slot access is denied without mutation.
+ *
+ * The deployment ceremony here is test setup; service.js is the author-facing
+ * code this example is meant to make easy to understand.
+ */
+
 import assert from 'node:assert/strict';
 import {mkdtemp, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';

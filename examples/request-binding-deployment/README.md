@@ -20,6 +20,29 @@ One command builds the committed [`component.wat`](component.wat) source into
 a real component, boots a disposable local node, runs the deployment SQL,
 sends authenticated HTTP requests, and shuts everything down.
 
+### How to read `component.wat`
+
+The WAT looks low-level, but it has only four conceptual parts:
+
+1. declare the host capabilities the component may import (`read`, `write`,
+   `capability`);
+2. lower those typed component functions into imports the core WASM module can
+   call;
+3. run a tiny core module that either touches declared slot `0` or deliberately
+   probes undeclared slot `1`; and
+4. lift the core `run` function back into the typed component export Lagrange
+   invokes.
+
+The slot numbers are capability handles. They are not schema ordinals or
+physical table identifiers. Deployment policy maps slot `0` to
+`global.request_binding_audit`; slot `1` is intentionally absent.
+
+Read [`component.wat`](component.wat) for the actual workload and
+[`run-request-binding-deployment.js`](run-request-binding-deployment.js) for
+the proof harness. The runner is longer because it builds the component,
+installs it, starts the node, sends requests, and checks that denial leaves
+the table unchanged.
+
 ## WebAssembly terms used here
 
 If WASM is new to you, three terms are enough for this example:

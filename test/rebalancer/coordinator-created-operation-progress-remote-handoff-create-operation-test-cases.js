@@ -30,6 +30,17 @@ import {
   REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS,
 } from './coordinator-created-operation-progress-remote-handoff-fixture-builders.js';
 
+function createAllowAllStorageAdmissionService() {
+  return {
+    async checkAdd() {
+      return {allowed: true, decisionType: 'admitted'};
+    },
+    async checkReplace() {
+      return {allowed: true, decisionType: 'admitted'};
+    },
+  };
+}
+
 export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
   test,
 }) {
@@ -150,6 +161,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           return 1024;
         },
       },
+      storageAdmissionService: createAllowAllStorageAdmissionService(),
       messageRouter: {
         async deliver(target, payload) {
           deliveries.push({target, payload});
@@ -183,7 +195,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         entityId: 'sql_write_operations-p1',
         nodeId: 'node-target',
         replicaId: 'sql_write_operations-p1-r1',
-        skipProvisioningAdmissionRecheck: true,
       });
 
       await new Promise((resolve) => {
@@ -295,6 +306,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           return 1024;
         },
       },
+      storageAdmissionService: createAllowAllStorageAdmissionService(),
       messageRouter: {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
@@ -480,6 +492,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           return 1024;
         },
       },
+      storageAdmissionService: createAllowAllStorageAdmissionService(),
       messageRouter: {
         async deliver(target, payload) {
           deliveries.push({target, payload});
@@ -506,7 +519,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         entityId: 'control_plane_publications-p1',
         nodeId: 'node-target',
         replicaId: 'control_plane_publications-p1-r1',
-        skipProvisioningAdmissionRecheck: true,
       });
 
       await new Promise((resolve) => {
@@ -665,6 +677,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           return 1024;
         },
       },
+      storageAdmissionService: createAllowAllStorageAdmissionService(),
       messageRouter: {
         async deliver(target, payload) {
           deliveries.push({target, payload});
@@ -691,7 +704,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         entityId: 'control_plane_publications-p1',
         nodeId: 'node-target',
         replicaId: 'control_plane_publications-p1-r1',
-        skipProvisioningAdmissionRecheck: true,
       });
 
       await new Promise((resolve) => {

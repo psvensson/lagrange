@@ -8,6 +8,27 @@ own README with step-by-step commands, a plain-language introduction to
 the problem it addresses, and references for every concept beyond basic
 programming.
 
+## How to read these examples
+
+Most directories contain two very different kinds of code:
+
+- **Authored workload** - the small service, component, callback, or application
+  a developer would actually own.
+- **Runner / proof harness** - the larger program that boots disposable nodes,
+  creates schema, installs artifacts, injects failures, and asserts the result.
+
+Read the authored workload first. The runner is deliberately explicit because
+it proves that the example used the real runtime path; its size is not the size
+of the application-facing API. Each README calls out which file is the workload
+and which files exist only to make the proof reproducible.
+
+When evaluating an example, keep four questions separate:
+
+1. What code did the application author write?
+2. Where does that code execute, and where does durable state live?
+3. What crosses the network or coordination boundary?
+4. What does the example prove, and what does it intentionally not prove?
+
 ## The Problem Lagrange Works On
 
 Most applications keep code and data in different places. The application tier
