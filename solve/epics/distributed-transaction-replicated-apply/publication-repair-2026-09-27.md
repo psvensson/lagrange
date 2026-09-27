@@ -320,6 +320,26 @@ files passed 2/2 files and 41 assertions. The quest remains
 `SEALED / PUBLICATION_BLOCKED` until a new exact committed head passes the
 normal publisher and its remote SHA is independently read back.
 
+## Final repaired-head change-cone preflight
+
+Exact head `4c5f1c31f431222cf53246207209001af873bbea` ran its ordinary
+178-file change cone on lenovo-laptop with `jobs=4`, under the normal lab
+machine lock and thermal gate. The first batch started at CPU 46 C and the
+second at CPU 62 C; NVMe temperature was unmeasurable on that host. All
+178 files passed on their first attempt with no retry, for 4401 assertions
+total.
+
+The repaired DT6 witnesses both passed: the proof-channel wake file ran
+12 assertions in 16438 ms, and the progress-proof file ran 29 assertions in
+3243 ms. The copied placement stream is
+`test-output/placement/4c5f1c31f431-mujtk69n-3045507-lenovo-laptop.log`,
+with an empty adjacent `.err`; the copied consolidated results are
+`test-output/reports/test-results-lenovo-laptop.ndjson`. A post-run fleet
+readback reported lenovo-laptop ready with its machine lock free. This focused
+preflight is green, but the quest remains `SEALED / PUBLICATION_BLOCKED` until
+the normal publisher succeeds and the remote branch SHA is independently read
+back.
+
 ## Design verdict remains sealed
 
 The liveness wording is corrected for future work: there is no configured
