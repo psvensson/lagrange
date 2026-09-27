@@ -138,3 +138,29 @@ test('bootstrap reads require semantic delivery even when the router ACKs ' +
     'ACK plus no-handler is unreadable and retains the retry contract',
   );
 });
+
+test('bootstrap reads reject ACKs carrying contradictory transport failure',
+  async () => {
+    for (const conflict of [
+      {deferRetry: true, retryAfterMs: 25},
+      {errorCode: 'ROUTER_CONNECTION_CLOSED'},
+      {deliveryState: 'failed'},
+    ]) {
+      const owner = {
+        nodeId: 'bootstrap-reader-node',
+        systemTableCache: {get: () => null},
+        messageRouter: {deliver: async () => ({
+          acknowledged: true,
+          status: 'completed',
+          membership: committedStamp(),
+          ...conflict,
+        })},
+      };
+      await assert.rejects(
+        readCommittedMembershipStamp(owner, 'adversarial-bootstrap-p1'),
+        (error) => error?.code ===
+          COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE,
+        'contradictory ACK never exposes the application membership',
+      );
+    }
+  });

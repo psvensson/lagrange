@@ -35,8 +35,8 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-09-25: tightened 1436 -> 1435 per checker hint (quest
 // replace-source-removal-owner: the independent lease-verdict evidence consumes
 // another previously unimported export).
-// 2026-09-27: tightened 1435 -> 1434 per checker hint after the distributed
-// membership decoder made its previously unimported canonicalizer live.
+// 2026-09-27: tightened 1435 -> 1434 per checker hint after the REPLACE
+// witness made the shared transport-delivery deferral classifier live.
 const BASELINE_UNUSED_EXPORT_COUNT = 1434;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;

@@ -55,6 +55,23 @@ function owner(answer) {
   };
 }
 
+function membership(overrides = {}) {
+  return {
+    state: PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT,
+    replicaId: 'replace-witness-boundary-r2',
+    partitionId: 'replace-witness-boundary-p1',
+    leaderReplicaId: 'replace-witness-boundary-r2',
+    voterReplicaIds: ['replace-witness-boundary-r2'],
+    votersOutgoingReplicaIds: [],
+    appliedIndex: 7,
+    commitIndex: 7,
+    term: 2,
+    gateOpen: true,
+    transferWindowMaxMs: 300,
+    ...overrides,
+  };
+}
+
 test('ACK-before-handler-lookup remains a named deferred delivery with its ' +
   'retry contract', async () => {
   const answer = {
@@ -81,19 +98,7 @@ test('ACK-before-handler-lookup remains a named deferred delivery with its ' +
 
 test('malformed completed membership answers fail closed across numeric and ' +
   'object-shape classes', async () => {
-  const base = {
-    state: PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT,
-    replicaId: 'replace-witness-boundary-r2',
-    partitionId: 'replace-witness-boundary-p1',
-    leaderReplicaId: 'replace-witness-boundary-r2',
-    voterReplicaIds: ['replace-witness-boundary-r2'],
-    votersOutgoingReplicaIds: [],
-    appliedIndex: 7,
-    commitIndex: 7,
-    term: 2,
-    gateOpen: true,
-    transferWindowMaxMs: 300,
-  };
+  const base = membership();
   const cases = [
     {...base, term: 'Infinity', appliedIndex: 'Infinity',
       commitIndex: 'Infinity'},
@@ -108,6 +113,46 @@ test('malformed completed membership answers fail closed across numeric and ' +
       acknowledged: true,
       status: ReplicaOperationResponseStatus.COMPLETED,
       membership: malformed,
+    });
+    const decision = await decideReplaceCompletion(target, operation());
+    assert.notEqual(decision.verdict, 'source_retired');
+    assert.equal(decision.observation.state,
+      PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE);
+  }
+});
+
+test('valid-shaped membership is bound to the addressed replica and operation ' +
+  'partition', async () => {
+  const cases = [
+    membership({replicaId: 'other-partition-r9'}),
+    membership({partitionId: 'other-partition-p9'}),
+  ];
+  for (const mismatched of cases) {
+    const target = owner({
+      acknowledged: true,
+      status: ReplicaOperationResponseStatus.COMPLETED,
+      membership: mismatched,
+    });
+    const decision = await decideReplaceCompletion(target, operation());
+    assert.notEqual(decision.verdict, 'source_retired');
+    assert.equal(decision.observation.state,
+      PARTITION_REPLICA_MEMBERSHIP_STATE.UNAVAILABLE);
+  }
+});
+
+test('ACK cannot expose an application-looking witness across contradictory ' +
+  'transport metadata', async () => {
+  const cases = [
+    {deferRetry: true, retryAfterMs: 25},
+    {errorCode: 'ROUTER_CONNECTION_CLOSED'},
+    {deliveryState: 'failed'},
+  ];
+  for (const conflict of cases) {
+    const target = owner({
+      acknowledged: true,
+      status: ReplicaOperationResponseStatus.COMPLETED,
+      membership: membership(),
+      ...conflict,
     });
     const decision = await decideReplaceCompletion(target, operation());
     assert.notEqual(decision.verdict, 'source_retired');

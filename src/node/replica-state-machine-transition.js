@@ -40,6 +40,25 @@ const CLEARS_CANONICAL_PARTITION_LEADER_STATES = new Set([
 const RETAINS_CANONICAL_PARTITION_LEADER_SERVICE_STATES = new Set([
   ReplicaState.ACTIVE,
 ]);
+const DURABLE_APPLY_REQUIRED_STATES = new Set([
+  ReplicaState.REMOVING,
+]);
+const DURABLE_TRANSITION_DEFERRED_CODE =
+  'REPLICA_STATE_TRANSITION_DURABILITY_DEFERRED';
+
+function durableTransitionNotAppliedError(replicaId, newState, result) {
+  const effect = classifyControlPlaneMutationResult(result);
+  const error = new Error(
+    `Replica state transition was not durably applied for ${replicaId}: ` +
+    newState,
+  );
+  error.code = DURABLE_TRANSITION_DEFERRED_CODE;
+  error.errorCode = DURABLE_TRANSITION_DEFERRED_CODE;
+  error.deferRetry = effect.retryable === true || result?.deferRetry === true;
+  error.retryAfterMs = Number.isFinite(result?.retryAfterMs) ?
+    result.retryAfterMs : null;
+  return error;
+}
 
 /**
  * Apply one replica-state transition with optional validation and persistence.
@@ -184,9 +203,15 @@ function applyTransition(stateMachine, replicaId, newState, context = {}, option
 
   return persistencePromise.then((result) => {
     clearInFlight();
+    const durableApplyConfirmed = result === true ||
+      didDurableServiceRowWriteApply(result);
+    if (DURABLE_APPLY_REQUIRED_STATES.has(newState) &&
+        !durableApplyConfirmed) {
+      throw durableTransitionNotAppliedError(replicaId, newState, result);
+    }
     commitTransition();
     stateMachine._armTimeoutClock(replicaId);
-    return result;
+    return durableApplyConfirmed;
   }, (error) => {
     clearInFlight();
     throw error;
@@ -332,7 +357,9 @@ async function updateReplicaStateInCdc(
       // Durable write committed — remote existence confirmed (CL-016).
       stateMachine.clearServiceRowLocalOnly(serviceId);
     }
-    await stateMachine._clearCanonicalPartitionLeaderIfNeeded(replicaState);
+    if (durableApplyConfirmed) {
+      await stateMachine._clearCanonicalPartitionLeaderIfNeeded(replicaState);
+    }
 
     stateMachine.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSISTED, {
       replicaId: replicaState.replicaId,
@@ -340,7 +367,7 @@ async function updateReplicaStateInCdc(
       nodeId: stateMachine.nodeId,
     });
 
-    return durableApplyConfirmed;
+    return mutationResult;
   } catch (error) {
     stateMachine.logger.error(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSIST_FAILED, {
       replicaId: replicaState.replicaId,

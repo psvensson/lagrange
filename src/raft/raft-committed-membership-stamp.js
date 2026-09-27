@@ -436,7 +436,7 @@ function isOptionalObservationReplicaId(value) {
   return value === null || isNonemptyReplicaIdentity(value);
 }
 
-function canonicalReplaceMembershipObservation(value) {
+function canonicalReplaceMembershipObservation(value, expected = {}) {
   if (!isExactRecord(value, MEMBERSHIP_OBSERVATION_FIELDS)) {
     return null;
   }
@@ -450,6 +450,10 @@ function canonicalReplaceMembershipObservation(value) {
       value, MEMBERSHIP_OBSERVATION_FIELD.OUTGOING_REPLICA_IDS).value,
     isOptionalObservationReplicaId);
   if (!hasValidObservationScalars(observation) ||
+      !isNonemptyReplicaIdentity(expected.replicaId) ||
+      !isNonemptyReplicaIdentity(expected.partitionId) ||
+      observation.replicaId !== expected.replicaId ||
+      observation.partitionId !== expected.partitionId ||
       !hasValidObservationPeerSets(incoming, outgoing) ||
       !hasValidTransferWindow(observation.transferWindowMaxMs)) {
     return null;

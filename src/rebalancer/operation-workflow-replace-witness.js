@@ -106,6 +106,11 @@ function replaceWitnessDestination(owner, operation, member) {
   return {replicaIds, readReplicaId, targetNodeId, handlerType};
 }
 
+function replaceWitnessReadReplicaId(owner, operation, member) {
+  return member?.replicaId || replaceReplicaIdsOf(owner, operation)
+    .targetReplicaId;
+}
+
 function classifyReplaceWitnessResponse(response) {
   if (isDeliveredTransportDeliveryOutcome(response) &&
       response.noHandler !== true) {
@@ -190,6 +195,7 @@ async function deliverToReplaceWitness(owner, operation, messageType,
  *   it - leaderReplicaId, term, transferWindowMaxMs).
  */
 async function readReplaceWitnessMembership(owner, operation, member = null) {
+  const readReplicaId = replaceWitnessReadReplicaId(owner, operation, member);
   const delivery = await deliverToReplaceWitness(
     owner, operation, ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP,
     member);
@@ -199,7 +205,10 @@ async function readReplaceWitnessMembership(owner, operation, member = null) {
       !membership) {
     return unavailableWitness(reason || response?.status || null, delivery);
   }
-  const canonical = canonicalReplaceMembershipObservation(membership);
+  const canonical = canonicalReplaceMembershipObservation(membership, {
+    replicaId: readReplicaId,
+    partitionId: operation?.partitionId,
+  });
   return canonical || unavailableWitness(
     COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE, delivery);
 }

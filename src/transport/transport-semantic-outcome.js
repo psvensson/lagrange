@@ -69,6 +69,40 @@ function normalizeTransportErrorCode(value) {
     null;
 }
 
+function isTransportDeliveryErrorCode(errorCode) {
+  return errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE ||
+    errorCode === ROUTER_MESSAGE_TIMEOUT_ERROR_CODE ||
+    errorCode === ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE;
+}
+
+function classifyTransportDeliveryState(options) {
+  const deferred =
+    options.deferRetry === true ||
+    options.errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE ||
+    options.errorCode === ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE ||
+    options.retryAfterMs !== null ||
+    options.claimedDeliveryState ===
+      TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED;
+  const hasConflict =
+    options.noHandler ||
+    isTransportDeliveryErrorCode(options.errorCode) ||
+    (
+      options.claimedDeliveryState !== null &&
+      options.claimedDeliveryState !==
+        TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED
+    );
+  const delivered = options.acknowledged && !deferred && !hasConflict;
+  return {
+    delivered,
+    deferred,
+    deliveryState: delivered ?
+      TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED :
+      deferred ?
+        TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED :
+        TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED,
+  };
+}
+
 function resolveTransportSemanticReasonCode(errorCode, deferred) {
   if (errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE) {
     return TRANSPORT_SEMANTIC_OUTCOME_REASON_CODE.CONNECTION_CLOSED;
@@ -157,22 +191,16 @@ function buildTransportDeliveryOutcome(options = {}) {
   );
   const noHandler = options.noHandler === true;
   const acknowledged = options.acknowledged === true;
-  const deferred =
-    acknowledged !== true &&
-    (
-      options.deferRetry === true ||
-      errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE ||
-      errorCode === ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE ||
-      retryAfterMs !== null
-    );
-  const deliveryState =
-    acknowledged === true ?
-      TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED :
-      (
-        deferred ?
-          TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED :
-          TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED
-      );
+  const claimedDeliveryState = normalizeOptionalString(options.deliveryState);
+  const {delivered, deferred, deliveryState} =
+    classifyTransportDeliveryState({
+      acknowledged,
+      claimedDeliveryState,
+      deferRetry: options.deferRetry,
+      errorCode,
+      noHandler,
+      retryAfterMs,
+    });
 
   return Object.freeze({
     ...options,
@@ -186,7 +214,7 @@ function buildTransportDeliveryOutcome(options = {}) {
       errorCode,
       deferred,
       noHandler,
-      acknowledged,
+      delivered,
     ),
   });
 }

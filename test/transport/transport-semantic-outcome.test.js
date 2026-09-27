@@ -48,6 +48,36 @@ test('transport delivery outcome grammar classifies deferred and failed deliveri
     );
   });
 
+test('transport delivery outcome fails closed when ACK contradicts delivery metadata',
+  async (t) => {
+    const cases = [
+      {
+        label: 'explicit deferral',
+        value: {acknowledged: true, deferRetry: true, retryAfterMs: 25},
+        expectedState: TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED,
+      },
+      {
+        label: 'connection failure',
+        value: {
+          acknowledged: true,
+          errorCode: 'ROUTER_CONNECTION_CLOSED',
+        },
+        expectedState: TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED,
+      },
+      {
+        label: 'explicit failed delivery state',
+        value: {acknowledged: true, deliveryState: 'failed'},
+        expectedState: TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED,
+      },
+    ];
+
+    for (const {label, value, expectedState} of cases) {
+      const outcome = classifyTransportDeliveryOutcome(value);
+      t.equal(outcome.deliveryState, expectedState,
+        `${label}: ACK cannot erase contradictory transport state`);
+    }
+  });
+
 test('message router normalizes local delivery results onto the shared delivery grammar',
   async (t) => {
     const router = new MessageRouter({nodeId: 'transport-delivery-test'});

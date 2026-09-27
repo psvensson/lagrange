@@ -110,3 +110,45 @@ test('FAILED enters the same durable REMOVING protocol as every removal',
       'FAILED has no direct durable-cleanup bypass');
     t.equal(stateMachine.getState(replicaId)?.state, ReplicaState.REMOVING);
   });
+
+test('FAILED stays authoritative when its REMOVING write did not durably apply',
+  async (t) => {
+    initializeTestEnvironment();
+    let writes = 0;
+    const stateMachine = new ReplicaStateMachine({
+      nodeId: 'test-node',
+      systemTableCache: {get: () => ({status: ReplicaState.FAILED})},
+      controlPlaneSystemTableGateway: {
+        submitMutation: async () => {
+          writes += 1;
+          return {
+            success: true,
+            outcome: 'observed_state_changed',
+            partitionResult: {affectedRows: 0},
+          };
+        },
+      },
+    });
+    const replicaId = 'replica_operations-p1-r6';
+    stateMachine._applyTransition(replicaId, ReplicaState.PENDING, {
+      partitionId: 'replica_operations-p1',
+    }, {persist: false});
+    stateMachine._applyTransition(replicaId, ReplicaState.FAILED, {
+      partitionId: 'replica_operations-p1',
+    }, {persist: false});
+
+    let refusal = null;
+    try {
+      await stateMachine.transition(replicaId, ReplicaState.REMOVING, {
+        partitionId: 'replica_operations-p1',
+        reason: 'durable-remove-intent',
+      });
+    } catch (error) {
+      refusal = error;
+    }
+    t.equal(refusal?.deferRetry, true,
+      'a retryable non-apply remains a retryable persistence failure');
+    t.equal(writes, 1, 'one durable attempt was made');
+    t.equal(stateMachine.getState(replicaId)?.state, ReplicaState.FAILED,
+      'the non-applied write cannot manufacture local removal authority');
+  });
