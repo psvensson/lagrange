@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   areApplicationWriteFormationPreconditionsSatisfied,
+  buildApplicationWriteFormationObservation,
   readLocalControlSnapshot,
   runApplicationWriteProbe,
 } from './helpers/embedded-cluster-harness.js';
@@ -78,6 +79,25 @@ test('embedded formation consumes authoritative preconditions before DDL',
     );
     t.end();
   });
+
+test('embedded formation failure retains a compact owner observation', (t) => {
+  t.same(
+    buildApplicationWriteFormationObservation(snapshot({
+      eligibleNodeIds: [NODE_ID.SEED],
+    }), EXPECTED_NODE_IDS),
+    {
+      snapshotCapturedAt: 1234,
+      placementCapturedAt: 1234,
+      placementState: 'available',
+      placementSatisfied: true,
+      placementEligibleNodeIds: [NODE_ID.SEED],
+      expectedNodeIds: EXPECTED_NODE_IDS,
+      preconditionsSatisfied: false,
+    },
+    'timeout evidence names every input to the formation predicate',
+  );
+  t.end();
+});
 
 test('embedded formation submits its authorized DDL witness once', async (t) => {
   let createAttempts = 0;

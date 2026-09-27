@@ -370,6 +370,42 @@ function areApplicationWriteFormationPreconditionsSatisfied(
   return isCurrentFormationSnapshot(snapshot, placement, expectedNodeIds);
 }
 
+function formationObservationValue(value) {
+  return value === undefined ? null : value;
+}
+
+function formationObservationArray(value) {
+  return Array.isArray(value) ? [...value] : null;
+}
+
+function buildApplicationWriteFormationObservation(snapshot, expectedNodeIds) {
+  const placement = snapshot?.[
+    ADMIN_CONTROL_SNAPSHOT.CONTROL_PLANE_DIAGNOSTICS
+  ]?.[ADMIN_CONTROL_SNAPSHOT.CURRENT_PRIORITY_PLACEMENT];
+  const eligibleNodeIds = placement?.[
+    ADMIN_CONTROL_SNAPSHOT.ELIGIBLE_NODE_IDS
+  ];
+  return {
+    snapshotCapturedAt: formationObservationValue(
+      snapshot?.[ADMIN_CONTROL_SNAPSHOT.CAPTURED_AT],
+    ),
+    placementCapturedAt: formationObservationValue(
+      placement?.[ADMIN_CONTROL_SNAPSHOT.CAPTURED_AT],
+    ),
+    placementState: formationObservationValue(
+      placement?.[ADMIN_CONTROL_SNAPSHOT.STATE],
+    ),
+    placementSatisfied: formationObservationValue(placement?.satisfied),
+    placementEligibleNodeIds: formationObservationArray(eligibleNodeIds),
+    expectedNodeIds: formationObservationArray(expectedNodeIds),
+    preconditionsSatisfied:
+      areApplicationWriteFormationPreconditionsSatisfied(
+        snapshot,
+        expectedNodeIds,
+      ),
+  };
+}
+
 async function readLocalControlSnapshot(
   t,
   node,
@@ -612,10 +648,11 @@ function createEmbeddedCluster(t, options = {}) {
   async function waitForApplicationWritePreconditions(budgetMs) {
     const expectedNodeIds = nodes.map((node) => node.nodeId);
     return withLogDigest(pollUntil(t, budgetMs,
-      (observationBudgetMs) => readLocalControlSnapshot(
-        t, nodes[0], observationBudgetMs),
-      (snapshot) => areApplicationWriteFormationPreconditionsSatisfied(
-        snapshot, expectedNodeIds),
+      async (observationBudgetMs) => buildApplicationWriteFormationObservation(
+        await readLocalControlSnapshot(t, nodes[0], observationBudgetMs),
+        expectedNodeIds,
+      ),
+      (observation) => observation.preconditionsSatisfied === true,
       `application-write formation preconditions for ${expectedNodeIds.length} nodes`));
   }
 
@@ -724,6 +761,7 @@ export {
   describeExposedError,
   exposedProperty,
   areApplicationWriteFormationPreconditionsSatisfied,
+  buildApplicationWriteFormationObservation,
   readLocalControlSnapshot,
   runApplicationWriteProbe,
   serveStatement,

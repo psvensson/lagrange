@@ -114,6 +114,31 @@ mismatched cohort remains closed. The one-shot CREATE still owns refreshed
 operation-specific provisioning and capacity admission, so this harness gate
 does not authorize DDL or hide a legitimate denial.
 
+## Exact-cohort preflight
+
+The next verifier-approved checkpoint,
+`8c2b64ede899c13bc05dfda9967a4f2fe6b2c61f`, again selected the same seven
+exclusive files at one job. tv-dator accepted that exact head, acquired its
+normal machine lock, and passed the thermal gate. The first file,
+`transaction-active-owns-connection.integration.test.js`, again timed out in
+`formCluster` before its transaction property began.
+
+The bounded TAP failure preserved the full top-level membership and priority
+summary but elided the decisive `currentPriorityPlacementObservation` fields.
+It therefore proves that the exact-cohort precondition stayed false, but not
+which input was false. The remaining six files were cancelled through the
+controller. A subsequent normal fleet probe reported tv-dator ready with its
+machine lock free. The preserved artifacts are
+`test-output/placement/8c2b64ede899-mujnjytq-2727270-tv-dator.log` and
+`test-output/placement/8c2b64ede899-mujnjytq-2727270-tv-dator.err`.
+
+The next diagnostic checkpoint changes neither the predicate nor its budgets.
+Each poll retains a compact real observation containing the enclosing and
+placement capture times, placement state and satisfaction, placement eligible
+node ids, the expected cohort, and the predicate result. A further lab run can
+therefore classify the exact failed field without serializing the entire
+control snapshot into the timeout line.
+
 ## Design verdict remains sealed
 
 The liveness wording is corrected for future work: there is no configured
