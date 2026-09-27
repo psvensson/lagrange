@@ -79,6 +79,16 @@ const EMBEDDED_CLUSTER_VALUE = Object.freeze({
   LOG_SUFFIX: '.log',
 });
 
+const ADMIN_CONTROL_SNAPSHOT = Object.freeze({
+  PATH: '/api/admin/control-snapshot?scope=local',
+  CONTROL_PLANE_DIAGNOSTICS: 'controlPlaneDiagnostics',
+  CURRENT_PRIORITY_PLACEMENT: 'currentPriorityPlacementObservation',
+  READINESS_BY_NODE_ID: 'readinessByNodeId',
+  DIMENSIONS: 'dimensions',
+  CONTROL_PLANE_WRITABLE: 'controlPlaneWritable',
+  METADATA_PUBLICATION_HEALTHY: 'metadataPublicationHealthy',
+});
+
 const CLUSTER_SQL = Object.freeze({
   NODES: 'SELECT node_id, status FROM nodes',
   WRITE_PROBE_TABLE:
@@ -277,6 +287,21 @@ async function labelled(label, observation) {
   }
 }
 
+/**
+ * Submit the formation write witness exactly once after the readiness owners
+ * authorize it. Retrying CREATE TABLE would submit a fresh operation for the
+ * same deterministic schema intent after a terminal rejection and obscure
+ * the first failure rather than establish readiness.
+ *
+ * @param {Function} queryRows - application query executor
+ * @return {Promise<void>}
+ */
+async function runApplicationWriteProbe(queryRows) {
+  await labelled('create', queryRows(CLUSTER_SQL.WRITE_PROBE_TABLE));
+  await labelled('insert', queryRows(CLUSTER_SQL.WRITE_PROBE_INSERT,
+    [randomUUID(), Date.now()]));
+}
+
 async function pollUntil(t, budgetMs, read, satisfied, describe) {
   const deadline = Date.now() + scaleByMachineFactor(budgetMs);
   let last;
@@ -292,6 +317,56 @@ async function pollUntil(t, budgetMs, read, satisfied, describe) {
   }
   throw new Error(`${describe} not reached within ${budgetMs} ms ` +
     `(x factor); last observation: ${JSON.stringify(last)}`);
+}
+
+/**
+ * Consume the control-snapshot owners' answer instead of attempting schema
+ * DDL as a readiness probe. A schema operation submitted before priority
+ * placement and mutation readiness converge can become durably terminal; a
+ * later retry of the same deterministic schema intent cannot repair that.
+ *
+ * @param {Object} snapshot - local admin control snapshot
+ * @param {string[]} expectedNodeIds - nodes owned by this formation
+ * @return {boolean} whether application DDL may be attempted
+ */
+function isApplicationWriteReadinessSatisfied(snapshot, expectedNodeIds) {
+  const diagnostics = snapshot?.[
+    ADMIN_CONTROL_SNAPSHOT.CONTROL_PLANE_DIAGNOSTICS
+  ];
+  const placement = diagnostics?.[
+    ADMIN_CONTROL_SNAPSHOT.CURRENT_PRIORITY_PLACEMENT
+  ];
+  const readinessByNodeId = diagnostics?.[
+    ADMIN_CONTROL_SNAPSHOT.READINESS_BY_NODE_ID
+  ];
+  if (placement?.satisfied !== true) {
+    return false;
+  }
+  if (!Array.isArray(expectedNodeIds) || expectedNodeIds.length === 0) {
+    return false;
+  }
+  if (!readinessByNodeId || typeof readinessByNodeId !== 'object') return false;
+  return expectedNodeIds.every((nodeId) => {
+    const dimensions = readinessByNodeId[nodeId]?.[
+      ADMIN_CONTROL_SNAPSHOT.DIMENSIONS
+    ];
+    return dimensions?.[
+      ADMIN_CONTROL_SNAPSHOT.CONTROL_PLANE_WRITABLE
+    ] === true && dimensions?.[
+      ADMIN_CONTROL_SNAPSHOT.METADATA_PUBLICATION_HEALTHY
+    ] === true;
+  });
+}
+
+async function readLocalControlSnapshot(node) {
+  const response = await fetch(
+    `http://${EMBEDDED_CLUSTER_VALUE.LOOPBACK_HOST}:${node.adminPort}` +
+      ADMIN_CONTROL_SNAPSHOT.PATH,
+  );
+  if (!response.ok) {
+    throw new Error(`control snapshot request failed with HTTP ${response.status}`);
+  }
+  return response.json();
 }
 
 function parseLogLine(line) {
@@ -493,23 +568,23 @@ function createEmbeddedCluster(t, options = {}) {
       `${expectedCount} active nodes`));
   }
 
-  // A formed cluster (every node `active`) is not yet a cluster that serves
-  // application DDL and writes: the harness waits for one application-level
-  // CREATE TABLE IF NOT EXISTS + INSERT to be served through the public
-  // session on the seed, and reports how long that took.
-  async function waitForApplicationWrites(
-    budgetMs = EMBEDDED_CLUSTER_BUDGET_MS.APPLICATION_WRITES,
-  ) {
+  // Once the canonical readiness owners authorize application mutations,
+  // submit one application-level CREATE TABLE IF NOT EXISTS + INSERT through
+  // the public session on the seed. A rejection is terminal evidence: do not
+  // retry the same deterministic schema intent under a new operation id.
+  async function waitForApplicationWrites() {
     const startedAt = Date.now();
-    let attempts = 0;
-    await withLogDigest(pollUntil(t, budgetMs, async () => {
-      attempts++;
-      await labelled('create', seedQueryRows(CLUSTER_SQL.WRITE_PROBE_TABLE));
-      await labelled('insert', seedQueryRows(CLUSTER_SQL.WRITE_PROBE_INSERT,
-        [randomUUID(), Date.now()]));
-      return true;
-    }, (served) => served === true, 'application DDL and writes served'));
-    return {attempts, elapsedMs: Date.now() - startedAt};
+    await withLogDigest(runApplicationWriteProbe(seedQueryRows));
+    return {attempts: 1, elapsedMs: Date.now() - startedAt};
+  }
+
+  async function waitForApplicationWriteReadiness(budgetMs) {
+    const expectedNodeIds = nodes.map((node) => node.nodeId);
+    return withLogDigest(pollUntil(t, budgetMs,
+      () => readLocalControlSnapshot(nodes[0]),
+      (snapshot) => isApplicationWriteReadinessSatisfied(
+        snapshot, expectedNodeIds),
+      `authoritative application-write readiness for ${expectedNodeIds.length} nodes`));
   }
 
   // Form a cluster of `size` processes (seed + joiners, each waited to
@@ -533,9 +608,14 @@ function createEmbeddedCluster(t, options = {}) {
         `${budgetMs} ms (x factor): ${error.message}\nnode logs:\n${logDigest()}`);
     }
     const activeMs = Date.now() - startedAt;
-    const writes = await waitForApplicationWrites(remaining());
+    const readinessStartedAt = Date.now();
+    await waitForApplicationWriteReadiness(remaining());
+    const applicationWriteReadinessAfterActiveMs =
+      Date.now() - readinessStartedAt;
+    const writes = await waitForApplicationWrites();
     return {
       activeMs,
+      applicationWriteReadinessAfterActiveMs,
       nodeStartMs: nodes.map((node) => node.startMs),
       writesServedAfterActiveMs: writes.elapsedMs,
       writeAttempts: writes.attempts,
@@ -611,5 +691,7 @@ export {
   decodeExposure,
   describeExposedError,
   exposedProperty,
+  isApplicationWriteReadinessSatisfied,
+  runApplicationWriteProbe,
   serveStatement,
 };

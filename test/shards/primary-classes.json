@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 1909,
-    "integration": 78,
+    "integration": 79,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2176,
-  "digest": "fnv1a32-cf0de886",
+  "censusSize": 2177,
+  "digest": "fnv1a32-2b25171d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -996,6 +996,7 @@
     "test/integration/three-node-seed-rebalance.integration.test.js": "integration",
     "test/integration/transaction-active-owns-connection.integration.test.js": "integration",
     "test/integration/transaction-concurrent-read-outage.integration.test.js": "integration",
+    "test/integration/transaction-embedded-cluster-harness-readiness.integration.test.js": "integration",
     "test/integration/transaction-replicated-apply-settling.integration.test.js": "integration",
     "test/integration/user-table-local-cdc-readiness.integration.test.js": "integration",
     "test/integration/user-table-metadata-fanout.integration.test.js": "convergence-probe",

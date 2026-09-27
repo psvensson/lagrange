@@ -21,14 +21,14 @@
     "storage-partition": 151,
     "storage-raft": 102,
     "test-infrastructure": 136,
-    "transactions": 18,
+    "transactions": 19,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2176,
-  "digest": "fnv1a32-155be4a0",
+  "censusSize": 2177,
+  "digest": "fnv1a32-281521e8",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-034d409d",
+  "observationDigest": "fnv1a32-3e0f37ee",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1015,6 +1015,7 @@
     "test/integration/three-node-seed-rebalance.integration.test.js": "placement-rebalance",
     "test/integration/transaction-active-owns-connection.integration.test.js": "transactions",
     "test/integration/transaction-concurrent-read-outage.integration.test.js": "transactions",
+    "test/integration/transaction-embedded-cluster-harness-readiness.integration.test.js": "transactions",
     "test/integration/transaction-replicated-apply-settling.integration.test.js": "transactions",
     "test/integration/user-table-local-cdc-readiness.integration.test.js": "cdc-metadata",
     "test/integration/user-table-metadata-fanout.integration.test.js": "cdc-metadata",
@@ -6070,6 +6071,11 @@
       ]
     },
     "test/integration/transaction-concurrent-read-outage.integration.test.js": {
+      "files": [
+        "test/integration/helpers/embedded-node-worker.js"
+      ]
+    },
+    "test/integration/transaction-embedded-cluster-harness-readiness.integration.test.js": {
       "files": [
         "test/integration/helpers/embedded-node-worker.js"
       ]
