@@ -247,6 +247,33 @@ submit INSERT exactly once. The completed exact-cohort
 no retry, new sleep, larger budget, production change, or weaker transaction
 assertion is introduced.
 
+## Final corrected-branch preflight
+
+After independent verification, exact head
+`a486f6803d84fd3424a3b3d87950b95d94dfb106` ran the same seven-file exclusive
+cone on tv-dator with `jobs=1`. The normal machine lock and thermal gate passed
+at CPU 64 C and NVMe 44 C. All seven files passed on their first attempt with
+no retries, for 130 assertions total:
+
+| file | assertions | duration |
+| --- | ---: | ---: |
+| `transaction-active-owns-connection.integration.test.js` | 33 | 176980 ms |
+| `transaction-concurrent-read-outage.integration.test.js` | 5 | 81511 ms |
+| `transaction-embedded-cluster-harness-readiness.integration.test.js` | 35 | 482 ms |
+| `transaction-replicated-apply-settling.integration.test.js` | 12 | 137187 ms |
+| `exact-election-evidence-same-turn-model-contract.test.js` | 16 | 3135 ms |
+| `local-leader-row-visibility-model-contract.test.js` | 26 | 3255 ms |
+| `lagrange-server-npm-package.integration.test.js` | 3 | 21836 ms |
+
+The copied placement artifacts are
+`test-output/placement/a486f6803d84-mujqi96h-2870136-tv-dator.log`, its empty
+adjacent `.err`, and its adjacent `.sh`. The consolidated results are in
+`test-output/reports/test-results-tv-dator.ndjson`. A post-run fleet readback
+reported tv-dator ready with its machine lock free. This closes the focused
+preflight requirement, but the quest remains `SEALED / PUBLICATION_BLOCKED`
+until the normal publisher succeeds and the remote branch SHA is independently
+read back.
+
 ## Design verdict remains sealed
 
 The liveness wording is corrected for future work: there is no configured
