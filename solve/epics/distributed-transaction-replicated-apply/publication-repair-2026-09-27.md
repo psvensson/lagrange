@@ -63,15 +63,13 @@ execution. It incorrectly required `snapshotObservation.state=fresh`; the
 that shared-snapshot-owner field. The focused fixture had fabricated a shape
 the live route cannot produce.
 
-The amended embedded formation harness consumes existing readiness-owner
-output from the seed's directly built local admin control snapshot before it
-submits application DDL. It requires an available, satisfied priority-placement
-observation whose `capturedAt` equals the enclosing snapshot's `capturedAt`,
-which establishes that the placement observation belongs to the same local
-build. Every expected node must report `controlPlaneWritable`,
-`metadataPublicationHealthy`, `provisioningEligible`, and the capacity-derived
-`placementEligible`. Every snapshot request is aborted at the remaining
-formation budget.
+The amended embedded formation harness consumes the current priority-placement
+owner output from the seed's directly built local admin control snapshot before
+it submits application DDL. It requires an available, satisfied observation
+whose `capturedAt` equals the enclosing snapshot's `capturedAt`, which
+establishes that the placement observation belongs to the same local build,
+and whose `eligibleNodeIds` set exactly equals the expected harness cohort.
+Every snapshot request is aborted at the remaining formation budget.
 
 These are formation preconditions, not CREATE authorization. The one-shot
 CREATE remains the operation-specific authoritative decision because its
@@ -85,6 +83,36 @@ directly with the node-log digest. It is not converted into another readiness
 poll, retried under a new operation id, or hidden by a longer timeout. A
 focused regression proves that a rejected CREATE has one attempt and cannot
 fall through to INSERT. The transaction/outage assertions are unchanged.
+
+## First corrected-branch lab preflight
+
+An independent verifier approved `788fca7cbc2a568257530b828889367a9e27b0fc`
+for a changed-profile preflight. The normal selector produced one exclusive,
+single-job lane containing both the outage witness and the new focused
+regression. The controller placed that exact SHA on tv-dator after its normal
+lock and thermal checks.
+
+The first selected integration file stopped in `formCluster`, before its tested
+transaction property, because the four per-peer readiness dimensions did not
+all become true before the formation deadline. The final control snapshot had
+an available, satisfied, same-build priority-placement observation for the
+full expected cohort, while the embedded per-peer evidence still contained
+seed-projected `planning_snapshot_refresh_pending` states. Those projections
+are not the canonical formation-completion event.
+
+The remaining preflight was cancelled through the controller rather than
+spending six more formation deadlines. The controller exited 130, the copied
+placement log ends `Terminated`, and a subsequent normal lab fleet probe
+reported tv-dator ready with its machine lock free. The preserved placement
+log is
+`test-output/placement/788fca7cbc2a-mujmpyka-2712098-tv-dator.log`.
+
+The follow-up correction therefore removes the stale per-peer readiness
+predicates and requires the canonical current priority-placement owner to show
+the exact expected eligible cohort. A reduced, expanded, or same-size
+mismatched cohort remains closed. The one-shot CREATE still owns refreshed
+operation-specific provisioning and capacity admission, so this harness gate
+does not authorize DDL or hide a legitimate denial.
 
 ## Design verdict remains sealed
 

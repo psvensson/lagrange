@@ -84,14 +84,9 @@ const ADMIN_CONTROL_SNAPSHOT = Object.freeze({
   CAPTURED_AT: 'capturedAt',
   CONTROL_PLANE_DIAGNOSTICS: 'controlPlaneDiagnostics',
   CURRENT_PRIORITY_PLACEMENT: 'currentPriorityPlacementObservation',
-  READINESS_BY_NODE_ID: 'readinessByNodeId',
-  DIMENSIONS: 'dimensions',
+  ELIGIBLE_NODE_IDS: 'eligibleNodeIds',
   STATE: 'state',
   AVAILABLE: 'available',
-  CONTROL_PLANE_WRITABLE: 'controlPlaneWritable',
-  METADATA_PUBLICATION_HEALTHY: 'metadataPublicationHealthy',
-  PLACEMENT_ELIGIBLE: 'placementEligible',
-  PROVISIONING_ELIGIBLE: 'provisioningEligible',
 });
 
 const CLUSTER_SQL = Object.freeze({
@@ -325,9 +320,9 @@ async function pollUntil(t, budgetMs, read, satisfied, describe) {
 }
 
 /**
- * Consume the control-snapshot owners' formation preconditions before the
- * one-shot schema operation asks its operation-specific admission owner. The
- * dimensions below are intentionally not called CREATE authorization:
+ * Consume the priority-placement owner's completed formation event before the
+ * one-shot schema operation asks its operation-specific admission owner. This
+ * cohort observation is intentionally not called CREATE authorization:
  * provisioning still owns its estimated-byte capacity decision and a denial
  * from that owner is surfaced without retry.
  *
@@ -335,25 +330,30 @@ async function pollUntil(t, budgetMs, read, satisfied, describe) {
  * @param {string[]} expectedNodeIds - nodes owned by this formation
  * @return {boolean} whether application DDL formation preconditions hold
  */
-function isCurrentFormationSnapshot(snapshot, placement) {
+function hasExactFormationCohort(placement, expectedNodeIds) {
+  const eligibleNodeIds = placement?.[
+    ADMIN_CONTROL_SNAPSHOT.ELIGIBLE_NODE_IDS
+  ];
+  if (
+    !Array.isArray(eligibleNodeIds) ||
+    !Array.isArray(expectedNodeIds) ||
+    expectedNodeIds.length === 0
+  ) {
+    return false;
+  }
+  const eligibleNodeIdSet = new Set(eligibleNodeIds);
+  const expectedNodeIdSet = new Set(expectedNodeIds);
+  return eligibleNodeIdSet.size === expectedNodeIdSet.size &&
+    [...expectedNodeIdSet].every((nodeId) => eligibleNodeIdSet.has(nodeId));
+}
+
+function isCurrentFormationSnapshot(snapshot, placement, expectedNodeIds) {
   return placement?.[ADMIN_CONTROL_SNAPSHOT.STATE] ===
       ADMIN_CONTROL_SNAPSHOT.AVAILABLE &&
     placement?.[ADMIN_CONTROL_SNAPSHOT.CAPTURED_AT] ===
       snapshot?.[ADMIN_CONTROL_SNAPSHOT.CAPTURED_AT] &&
-    placement?.satisfied === true;
-}
-
-function nodeMeetsApplicationWriteFormationPreconditions(readiness) {
-  const dimensions = readiness?.[ADMIN_CONTROL_SNAPSHOT.DIMENSIONS];
-  return dimensions?.[
-    ADMIN_CONTROL_SNAPSHOT.CONTROL_PLANE_WRITABLE
-  ] === true && dimensions?.[
-    ADMIN_CONTROL_SNAPSHOT.METADATA_PUBLICATION_HEALTHY
-  ] === true && dimensions?.[
-    ADMIN_CONTROL_SNAPSHOT.PROVISIONING_ELIGIBLE
-  ] === true && dimensions?.[
-    ADMIN_CONTROL_SNAPSHOT.PLACEMENT_ELIGIBLE
-  ] === true;
+    placement?.satisfied === true &&
+    hasExactFormationCohort(placement, expectedNodeIds);
 }
 
 function areApplicationWriteFormationPreconditionsSatisfied(
@@ -366,20 +366,7 @@ function areApplicationWriteFormationPreconditionsSatisfied(
   const placement = diagnostics?.[
     ADMIN_CONTROL_SNAPSHOT.CURRENT_PRIORITY_PLACEMENT
   ];
-  const readinessByNodeId = diagnostics?.[
-    ADMIN_CONTROL_SNAPSHOT.READINESS_BY_NODE_ID
-  ];
-  if (!isCurrentFormationSnapshot(snapshot, placement)) {
-    return false;
-  }
-  if (!Array.isArray(expectedNodeIds) || expectedNodeIds.length === 0) {
-    return false;
-  }
-  if (!readinessByNodeId || typeof readinessByNodeId !== 'object') return false;
-  return expectedNodeIds.every((nodeId) =>
-    nodeMeetsApplicationWriteFormationPreconditions(
-      readinessByNodeId[nodeId],
-    ));
+  return isCurrentFormationSnapshot(snapshot, placement, expectedNodeIds);
 }
 
 async function readLocalControlSnapshot(

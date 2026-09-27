@@ -8,31 +8,20 @@ import {
 const NODE_ID = Object.freeze({SEED: 'seed-node', JOINER: 'joiner-node'});
 const EXPECTED_NODE_IDS = Object.freeze([NODE_ID.SEED, NODE_ID.JOINER]);
 
-function readiness({writable = true, publicationHealthy = true,
-  provisioningEligible = true, placementEligible = true} = {}) {
-  return {
-    dimensions: {
-      controlPlaneWritable: writable,
-      metadataPublicationHealthy: publicationHealthy,
-      placementEligible,
-      provisioningEligible,
-    },
-  };
-}
-
 function snapshot({placementSatisfied = true, placementCapturedAt = 1234,
-  seed = readiness(), joiner = readiness()} = {}) {
+  eligibleNodeIds = EXPECTED_NODE_IDS} = {}) {
   return {
     capturedAt: 1234,
     controlPlaneDiagnostics: {
       currentPriorityPlacementObservation: {
         capturedAt: placementCapturedAt,
+        eligibleNodeIds,
         satisfied: placementSatisfied,
         state: 'available',
       },
       readinessByNodeId: {
-        [NODE_ID.SEED]: seed,
-        [NODE_ID.JOINER]: joiner,
+        [NODE_ID.SEED]: {dimensions: {controlPlaneWritable: false}},
+        [NODE_ID.JOINER]: {dimensions: {provisioningEligible: false}},
       },
     },
   };
@@ -61,37 +50,31 @@ test('embedded formation consumes authoritative preconditions before DDL',
     );
     t.equal(
       areApplicationWriteFormationPreconditionsSatisfied(snapshot({
-        joiner: readiness({publicationHealthy: false}),
+        eligibleNodeIds: [NODE_ID.SEED],
       }), EXPECTED_NODE_IDS),
       false,
-      'every expected node must report healthy metadata publication',
+      'a reduced eligible cohort cannot establish formation',
     );
     t.equal(
       areApplicationWriteFormationPreconditionsSatisfied(snapshot({
-        seed: readiness({writable: false}),
+        eligibleNodeIds: [NODE_ID.SEED, 'other-node'],
       }), EXPECTED_NODE_IDS),
       false,
-      'every expected node must report its control plane writable',
+      'a same-size mismatched eligible cohort cannot establish formation',
     );
     t.equal(
       areApplicationWriteFormationPreconditionsSatisfied(snapshot({
-        seed: readiness({provisioningEligible: false}),
+        eligibleNodeIds: [...EXPECTED_NODE_IDS, 'other-node'],
       }), EXPECTED_NODE_IDS),
       false,
-      'every expected node must be provisioning eligible',
-    );
-    t.equal(
-      areApplicationWriteFormationPreconditionsSatisfied(snapshot({
-        joiner: readiness({placementEligible: false}),
-      }), EXPECTED_NODE_IDS),
-      false,
-      'capacity-derived placement eligibility is a formation precondition',
+      'an expanded eligible cohort cannot establish this formation',
     );
     t.equal(
       areApplicationWriteFormationPreconditionsSatisfied(
         snapshot(), EXPECTED_NODE_IDS),
       true,
-      'the readiness and placement owners establish formation preconditions',
+      'same-build satisfied placement for the exact cohort establishes ' +
+        'formation despite stale per-peer readiness projections',
     );
     t.end();
   });
