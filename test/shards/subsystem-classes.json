@@ -28,7 +28,7 @@
   "censusSize": 2178,
   "digest": "fnv1a32-c1a8fb1a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6fb925c1",
+  "observationDigest": "fnv1a32-02927a28",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2609,6 +2609,7 @@
         "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/control-plane/timeout-budget.js",
         "src/diagnostics/formation-turn-attribution.js"
       ]
     },
@@ -3128,6 +3129,7 @@
         "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/control-plane/timeout-budget.js",
         "src/diagnostics/formation-turn-attribution.js"
       ]
     },
@@ -3349,6 +3351,7 @@
         "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/control-plane/timeout-budget.js",
         "src/diagnostics/formation-turn-attribution.js",
         "test/simulation/formation-sim-infrastructure-composition.js"
       ]
@@ -5912,6 +5915,7 @@
         "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/control-plane/timeout-budget.js",
         "src/diagnostics/formation-turn-attribution.js"
       ]
     },
@@ -5923,6 +5927,7 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/control-plane/replica-dispatch-service.js",
+        "src/control-plane/timeout-budget.js",
         "src/diagnostics/formation-turn-attribution.js"
       ]
     },
@@ -7378,6 +7383,7 @@
         "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/control-plane/timeout-budget.js",
         "src/diagnostics/formation-turn-attribution.js"
       ]
     },
@@ -9947,6 +9953,7 @@
         "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/control-plane/timeout-budget.js",
         "src/diagnostics/formation-turn-attribution.js",
         "src/rebalancer/priority-publication-safety-rows.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
@@ -10024,6 +10031,7 @@
         "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/control-plane/timeout-budget.js",
         "src/diagnostics/formation-turn-attribution.js",
         "test/simulation/calibration/formation-seed-2026-09-13.json",
         "test/simulation/calibration/formation-seed-2026-09-17.json",

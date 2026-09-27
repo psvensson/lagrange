@@ -276,11 +276,14 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
 
       const livePlacement = await readAtSettledPlacement(owners, {
         publishedNodeIds: [seedNodeId, 'short-lease-node'],
-        eligibleNodeId: seedNodeId,
+        eligibleNodeIds: [seedNodeId, 'short-lease-node'],
         readers: [rebalancer],
       }, () => rebalancer.getAvailableNodes().map((node) => node.node_id));
       t.equal(livePlacement.settled, true,
         'the publication owner publishes the live member before expiry');
+      t.same([...livePlacement.value].sort(),
+        [seedNodeId, 'short-lease-node'].sort(),
+        'the synchronized enforcement publication offers both live members');
 
       await owners.cdcIntegrationService.updateSystemTableRow(
         SYSTEM_TABLE_NAME.NODES,

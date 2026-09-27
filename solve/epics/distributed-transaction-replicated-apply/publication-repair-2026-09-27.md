@@ -378,15 +378,22 @@ The repair keeps those semantic properties and changes only the test/harness
 owner boundary. The waiter subscribes to the readiness planning owner before
 its first read, reads the latest membership through the publication owner's
 authoritative surface, drives the readers' canonical readiness dimensions,
-then re-reads the publication identity and synchronous readiness in the same
-turn as placement consumption. A terminal owner refusal returns its status and
-reason without opening placement. A publication immediately preceding
-registration is found by the initial authoritative recheck rather than a
-timeout. Deterministic helper proofs cover weaker readiness staying closed,
-canonical publication release, that pre-registration event, terminal failure,
-and exactly-once setup/membership mutation. The lease fixture now also proves
-the exact post-expiry available set remains `[seedNodeId]`; concurrent
-rebalancer success assertions remain unchanged.
+then re-reads the publication identity. That normalized authoritative identity
+must equal every reader's synchronous `getLatestPublishedMembershipRow()`
+identity, the cache-backed enforcement surface consumed by
+`getPublishedActiveNodeIdSet()` and `getAvailableNodes()`, before synchronous
+readiness and placement are consumed in the same turn. Readiness-planning and
+`control_plane_publications` cache changes are wake hints; the existing scaled
+`TEST_TIMEOUT` remains the absolute bound and produces a typed publication-wait
+outcome. A terminal owner refusal, including one reached after the wait begins,
+returns its status and reason without opening placement. A publication
+immediately preceding registration is found by the initial authoritative
+recheck rather than a timeout. Deterministic helper proofs cover weaker
+readiness and stale enforcement staying closed, canonical synchronized
+release, that pre-registration event, initial and transitioning terminal
+failure, bounded cleanup, and exactly-once setup/membership mutation. The lease
+fixture proves the exact live available set and the exact post-expiry set
+`[seedNodeId]`; concurrent rebalancer success assertions remain unchanged.
 
 The first implementation commit `3e7cb624efea970f0849b2711acefc6568c5a749`
 passed the single integration file on tv-dator (112 assertions in 145604 ms,
@@ -394,13 +401,23 @@ CPU 57 C and NVMe 46 C), but independent verification rejected its raw-row
 selection and weakened lease assertion. That run is retained as superseded
 diagnostic evidence in
 `test-output/placement/3e7cb624efea-mujwu2uk-3114796-tv-dator.log`; it is not
-the corrected-head proof. There is no production source change, sleep, timeout
-increase, mutation retry, resource workaround, or weaker rebalance-success
-assertion. On the corrected worktree, the deterministic owner-wait tests passed
-21 assertions in 903 ms and the membership integration passed 112 assertions
-in 135626 ms. Focused ESLint plus strict scoped cyclomatic and cognitive
-complexity were green. No full corpus or publisher was run. The sealed STOP
-checkpoint
+the corrected-head proof.
+
+The second implementation commit
+`896f07b8199f7fd1e69a1101e70b108393635abc` passed the integration file on
+tv-dator (112 assertions in 134453 ms, CPU 62 C and NVMe 46 C), but independent
+verification rejected it because the waiter did not bind the authoritative row
+to the cache-backed publication each rebalancer actually enforces, and its
+event loop had no restored focused timeout. Its retained stream
+`test-output/placement/896f07b8199f-mujxpayw-3128138-tv-dator.log` is therefore
+superseded pre-correction evidence, not approval of the final waiter.
+
+There is no production source change, sleep, timeout increase, mutation retry,
+resource workaround, or weaker rebalance-success assertion. On the final
+correction worktree, the deterministic owner-wait tests passed 41 assertions in
+2936 ms and the membership integration passed 113 assertions in 137052 ms.
+Focused ESLint plus strict scoped cyclomatic and cognitive complexity were
+green. No final-head lab corpus or publisher was run. The sealed STOP checkpoint
 `292b7204334cf47617e675dd9b12bc708b682886` remains unchanged, and the quest
 remains `SEALED / PUBLICATION_BLOCKED` until a normal publisher succeeds and
 the remote branch SHA is independently read back.

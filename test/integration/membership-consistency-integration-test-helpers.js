@@ -8,6 +8,12 @@ import {TablePolicyService} from '../../src/policy/table-policy-service.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {StorageAdmissionService} from '../../src/rebalancer/storage-admission-service.js';
 import {StorageCapacityAccountingService} from '../../src/rebalancer/storage-capacity-accounting-service.js';
+import {
+  subscribeToSystemTableCacheChanges,
+  waitForStartupConvergence,
+} from '../../src/bootstrap/shared/startup-convergence-gate.js';
+import {TIMEOUT_BUDGET_CLASSIFICATION} from
+  '../../src/control-plane/timeout-budget.js';
 import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 import {createSqlEngineSeam} from '../distributed/harness/sql-engine-seam.js';
 import {NODE_STATUS} from '../../src/node/node-constants.js';
@@ -535,6 +541,15 @@ function publicationPlacementIdentity(publication) {
   ]);
 }
 
+function readEnforcementMembershipPublication(reader) {
+  if (typeof reader?.getLatestPublishedMembershipRow !== 'function') {
+    return null;
+  }
+  return resolveLatestPublicationRow({
+    latestPublicationRow: reader.getLatestPublishedMembershipRow(),
+  });
+}
+
 async function readAuthoritativeMembershipPublication(publicationService) {
   const publication = await publicationService.getLatestClusterPublication({
     readSource: MEMBERSHIP_PUBLICATION_READ_SOURCE.AUTHORITATIVE_PREFERRED,
@@ -555,27 +570,30 @@ function terminalPublicationOutcome(publicationService, publication) {
   } : null;
 }
 
-function subscribeToReadinessOwner(readinessService, nodeId) {
-  let generation = 0;
-  let release = null;
-  const unsubscribe = readinessService.subscribeReadinessPlanningSnapshots(
-    (event) => {
-      if (event?.ownerKey !== nodeId) return;
-      generation += 1;
-      release?.();
-      release = null;
-    },
+function placementEligibleNodeIds(settledPoint) {
+  return normalizedNodeIds(
+    Array.isArray(settledPoint.eligibleNodeIds) ?
+      settledPoint.eligibleNodeIds :
+      [settledPoint.eligibleNodeId],
   );
-  return {
-    generation: () => generation,
-    next(observedGeneration) {
-      if (generation !== observedGeneration) return Promise.resolve();
-      return new Promise((resolve) => {
-        release = resolve;
-      });
-    },
-    unsubscribe,
-  };
+}
+
+function subscribeToReadinessOwner(readinessService, nodeIds, notify) {
+  const eligibleNodeIds = new Set(nodeIds);
+  return readinessService.subscribeReadinessPlanningSnapshots((event) => {
+    if (eligibleNodeIds.has(event?.ownerKey)) notify(event);
+  });
+}
+
+function publicationCacheSubscriptions(owners, readers) {
+  const caches = new Set([
+    owners.cache,
+    ...readers.map((reader) => reader?.systemTableCache),
+  ].filter(Boolean));
+  return [...caches].map((cache) => (notify) =>
+    subscribeToSystemTableCacheChanges(cache, notify, {
+      tableNames: [TABLES.CONTROL_PLANE_PUBLICATIONS],
+    }));
 }
 
 async function tryOwnerFacingPlacement(owners, settledPoint, read) {
@@ -592,10 +610,10 @@ async function tryOwnerFacingPlacement(owners, settledPoint, read) {
 
   const dimensions = [...new Set(settledPoint.readers.map((reader) =>
     reader.resolveNodeReadinessDecisionDimension()))];
-  await Promise.all(dimensions.map((decisionDimension) =>
-    readinessService.getNodeReadiness(settledPoint.eligibleNodeId, {
-      decisionDimension,
-    })));
+  const eligibleNodeIds = placementEligibleNodeIds(settledPoint);
+  await Promise.all(eligibleNodeIds.flatMap((nodeId) =>
+    dimensions.map((decisionDimension) =>
+      readinessService.getNodeReadiness(nodeId, {decisionDimension}))));
 
   const secondPublication = await readAuthoritativeMembershipPublication(
     publicationService,
@@ -605,16 +623,19 @@ async function tryOwnerFacingPlacement(owners, settledPoint, read) {
     secondPublication,
   );
   if (secondTerminal) return secondTerminal;
+  const publicationIdentity = publicationPlacementIdentity(secondPublication);
+  const enforcementPublications = settledPoint.readers.map(
+    readEnforcementMembershipPublication,
+  );
   if (
     publicationPlacementIdentity(firstPublication) !==
-      publicationPlacementIdentity(secondPublication) ||
+      publicationIdentity ||
     !publicationMatchesPlacement(secondPublication, settledPoint) ||
+    enforcementPublications.some((publication) =>
+      publicationPlacementIdentity(publication) !== publicationIdentity) ||
     !settledPoint.readers.every((reader) =>
-      isEligibleForReader(
-        readinessService,
-        reader,
-        settledPoint.eligibleNodeId,
-      ))
+      eligibleNodeIds.every((nodeId) =>
+        isEligibleForReader(readinessService, reader, nodeId)))
   ) {
     return {settled: false, terminal: false, value: null};
   }
@@ -626,8 +647,10 @@ async function tryOwnerFacingPlacement(owners, settledPoint, read) {
  * precedes the first authoritative publication read, so an event before waiter
  * registration is covered by the immediate recheck. A weaker readiness result
  * cannot release the waiter. The publication owner is then read authoritatively
- * again and its identity plus every reader's synchronous readiness verdict are
- * checked in the same turn as `read`.
+ * again and its identity must equal every reader's canonical cache-backed
+ * publication identity; those identities plus every synchronous readiness
+ * verdict are checked in the same turn as `read`. The existing scaled test
+ * timeout bounds the event-driven wait.
  * @param {object} owners - seedOwners(bootstrapService).
  * @param {object} settledPoint - publication and readiness preconditions.
  * @param {Function} read - The synchronous read.
@@ -635,20 +658,30 @@ async function tryOwnerFacingPlacement(owners, settledPoint, read) {
  */
 async function readAtSettledPlacement(owners, settledPoint, read) {
   const readinessService = owners.controlPlaneReadinessService;
-  const wake = subscribeToReadinessOwner(
-    readinessService,
-    settledPoint.eligibleNodeId,
-  );
-  try {
-    while (true) {
-      const observedGeneration = wake.generation();
+  const subscriptions = [
+    (notify) => subscribeToReadinessOwner(
+      readinessService,
+      placementEligibleNodeIds(settledPoint),
+      notify,
+    ),
+    ...publicationCacheSubscriptions(owners, settledPoint.readers),
+  ];
+  return waitForStartupConvergence({
+    operationName: 'membership_consistency_settled_placement',
+    timeoutClassification:
+      TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
+    timeoutMessage:
+      `membership placement did not converge within ${TEST_TIMEOUTS.TEST_TIMEOUT}ms`,
+    timeoutMs: TEST_TIMEOUTS.TEST_TIMEOUT,
+    subscriptions,
+    evaluate: async () => {
       const outcome = await tryOwnerFacingPlacement(owners, settledPoint, read);
-      if (outcome.settled || outcome.terminal) return outcome;
-      await wake.next(observedGeneration);
-    }
-  } finally {
-    wake.unsubscribe();
-  }
+      return {
+        ...outcome,
+        ready: outcome.settled || outcome.terminal,
+      };
+    },
+  });
 }
 
 /**
