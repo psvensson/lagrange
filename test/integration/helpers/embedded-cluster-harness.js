@@ -83,10 +83,13 @@ const ADMIN_CONTROL_SNAPSHOT = Object.freeze({
   PATH: '/api/admin/control-snapshot?scope=local',
   CAPTURED_AT: 'capturedAt',
   CONTROL_PLANE_DIAGNOSTICS: 'controlPlaneDiagnostics',
-  CURRENT_PRIORITY_PLACEMENT: 'currentPriorityPlacementObservation',
-  ELIGIBLE_NODE_IDS: 'eligibleNodeIds',
+  PUBLICATION_ACTIVE_GATE_HANDOFF: 'publicationActiveGateHandoff',
+  EXPECTED_NODE_IDS: 'expectedNodeIds',
   STATE: 'state',
-  AVAILABLE: 'available',
+  COMPLETE: 'complete',
+  RUNTIME_PROMOTION_ALLOWED: 'runtimePromotionAllowed',
+  NEXT_ACTION: 'nextAction',
+  ADMIT_ACTIVE_GATE: 'admit_active_gate',
 });
 
 const CLUSTER_SQL = Object.freeze({
@@ -288,11 +291,11 @@ async function labelled(label, observation) {
 }
 
 /**
- * Submit the formation write witness exactly once after priority placement
- * establishes the preconditions for an attempt. CREATE remains the mutation
- * and admission authority. Retrying CREATE TABLE would submit a fresh
- * operation for the same deterministic schema intent after a terminal
- * rejection and obscure the first failure rather than establish readiness.
+ * Submit the formation write witness exactly once after the publication owner
+ * hands the exact cohort to the active-gate owner. CREATE remains the mutation
+ * and admission authority. Retrying CREATE TABLE would submit a fresh operation
+ * for the same deterministic schema intent after a terminal rejection and
+ * obscure the first failure rather than establish readiness.
  *
  * @param {Function} queryRows - application query executor
  * @return {Promise<void>}
@@ -321,40 +324,43 @@ async function pollUntil(t, budgetMs, read, satisfied, describe) {
 }
 
 /**
- * Consume the priority-placement owner's completed formation event before the
+ * Consume the publication owner's completed active-gate handoff before the
  * one-shot schema operation asks its operation-specific admission owner. This
  * cohort observation is intentionally not called CREATE authorization:
  * provisioning still owns its estimated-byte capacity decision and a denial
- * from that owner is surfaced without retry.
+ * from that owner is surfaced without retry. The handoff is attached directly
+ * by the same local control-snapshot build whose capturedAt is retained in the
+ * timeout observation below.
  *
  * @param {Object} snapshot - local admin control snapshot
  * @param {string[]} expectedNodeIds - nodes owned by this formation
  * @return {boolean} whether application DDL formation preconditions hold
  */
-function hasExactFormationCohort(placement, expectedNodeIds) {
-  const eligibleNodeIds = placement?.[
-    ADMIN_CONTROL_SNAPSHOT.ELIGIBLE_NODE_IDS
+function hasExactFormationCohort(handoff, expectedNodeIds) {
+  const handoffExpectedNodeIds = handoff?.[
+    ADMIN_CONTROL_SNAPSHOT.EXPECTED_NODE_IDS
   ];
   if (
-    !Array.isArray(eligibleNodeIds) ||
+    !Array.isArray(handoffExpectedNodeIds) ||
     !Array.isArray(expectedNodeIds) ||
     expectedNodeIds.length === 0
   ) {
     return false;
   }
-  const eligibleNodeIdSet = new Set(eligibleNodeIds);
+  const handoffExpectedNodeIdSet = new Set(handoffExpectedNodeIds);
   const expectedNodeIdSet = new Set(expectedNodeIds);
-  return eligibleNodeIdSet.size === expectedNodeIdSet.size &&
-    [...expectedNodeIdSet].every((nodeId) => eligibleNodeIdSet.has(nodeId));
+  return handoffExpectedNodeIdSet.size === expectedNodeIdSet.size &&
+    [...expectedNodeIdSet].every((nodeId) =>
+      handoffExpectedNodeIdSet.has(nodeId));
 }
 
-function isCurrentFormationSnapshot(snapshot, placement, expectedNodeIds) {
-  return placement?.[ADMIN_CONTROL_SNAPSHOT.STATE] ===
-      ADMIN_CONTROL_SNAPSHOT.AVAILABLE &&
-    placement?.[ADMIN_CONTROL_SNAPSHOT.CAPTURED_AT] ===
-      snapshot?.[ADMIN_CONTROL_SNAPSHOT.CAPTURED_AT] &&
-    placement?.satisfied === true &&
-    hasExactFormationCohort(placement, expectedNodeIds);
+function isCompletedFormationHandoff(handoff, expectedNodeIds) {
+  return handoff?.[ADMIN_CONTROL_SNAPSHOT.STATE] ===
+      ADMIN_CONTROL_SNAPSHOT.COMPLETE &&
+    handoff?.[ADMIN_CONTROL_SNAPSHOT.RUNTIME_PROMOTION_ALLOWED] === true &&
+    handoff?.[ADMIN_CONTROL_SNAPSHOT.NEXT_ACTION] ===
+      ADMIN_CONTROL_SNAPSHOT.ADMIT_ACTIVE_GATE &&
+    hasExactFormationCohort(handoff, expectedNodeIds);
 }
 
 function areApplicationWriteFormationPreconditionsSatisfied(
@@ -364,10 +370,10 @@ function areApplicationWriteFormationPreconditionsSatisfied(
   const diagnostics = snapshot?.[
     ADMIN_CONTROL_SNAPSHOT.CONTROL_PLANE_DIAGNOSTICS
   ];
-  const placement = diagnostics?.[
-    ADMIN_CONTROL_SNAPSHOT.CURRENT_PRIORITY_PLACEMENT
+  const handoff = diagnostics?.[
+    ADMIN_CONTROL_SNAPSHOT.PUBLICATION_ACTIVE_GATE_HANDOFF
   ];
-  return isCurrentFormationSnapshot(snapshot, placement, expectedNodeIds);
+  return isCompletedFormationHandoff(handoff, expectedNodeIds);
 }
 
 function formationObservationValue(value) {
@@ -379,24 +385,26 @@ function formationObservationArray(value) {
 }
 
 function buildApplicationWriteFormationObservation(snapshot, expectedNodeIds) {
-  const placement = snapshot?.[
+  const handoff = snapshot?.[
     ADMIN_CONTROL_SNAPSHOT.CONTROL_PLANE_DIAGNOSTICS
-  ]?.[ADMIN_CONTROL_SNAPSHOT.CURRENT_PRIORITY_PLACEMENT];
-  const eligibleNodeIds = placement?.[
-    ADMIN_CONTROL_SNAPSHOT.ELIGIBLE_NODE_IDS
+  ]?.[ADMIN_CONTROL_SNAPSHOT.PUBLICATION_ACTIVE_GATE_HANDOFF];
+  const handoffExpectedNodeIds = handoff?.[
+    ADMIN_CONTROL_SNAPSHOT.EXPECTED_NODE_IDS
   ];
   return {
     snapshotCapturedAt: formationObservationValue(
       snapshot?.[ADMIN_CONTROL_SNAPSHOT.CAPTURED_AT],
     ),
-    placementCapturedAt: formationObservationValue(
-      placement?.[ADMIN_CONTROL_SNAPSHOT.CAPTURED_AT],
+    handoffState: formationObservationValue(
+      handoff?.[ADMIN_CONTROL_SNAPSHOT.STATE],
     ),
-    placementState: formationObservationValue(
-      placement?.[ADMIN_CONTROL_SNAPSHOT.STATE],
+    handoffRuntimePromotionAllowed: formationObservationValue(
+      handoff?.[ADMIN_CONTROL_SNAPSHOT.RUNTIME_PROMOTION_ALLOWED],
     ),
-    placementSatisfied: formationObservationValue(placement?.satisfied),
-    placementEligibleNodeIds: formationObservationArray(eligibleNodeIds),
+    handoffNextAction: formationObservationValue(
+      handoff?.[ADMIN_CONTROL_SNAPSHOT.NEXT_ACTION],
+    ),
+    handoffExpectedNodeIds: formationObservationArray(handoffExpectedNodeIds),
     expectedNodeIds: formationObservationArray(expectedNodeIds),
     preconditionsSatisfied:
       areApplicationWriteFormationPreconditionsSatisfied(
@@ -634,11 +642,11 @@ function createEmbeddedCluster(t, options = {}) {
       `${expectedCount} active nodes`));
   }
 
-  // Once current priority placement establishes the preconditions for an
-  // application-write attempt, submit one CREATE TABLE IF NOT EXISTS + INSERT
-  // through the public session on the seed. CREATE remains the mutation and
-  // admission authority. A rejection is terminal evidence: do not retry the
-  // same deterministic schema intent under a new operation id.
+  // Once the publication owner hands the exact cohort to the active-gate owner,
+  // submit one CREATE TABLE IF NOT EXISTS + INSERT through the public session
+  // on the seed. CREATE remains the mutation and admission authority. A
+  // rejection is terminal evidence: do not retry the same deterministic schema
+  // intent under a new operation id.
   async function waitForApplicationWrites() {
     const startedAt = Date.now();
     await withLogDigest(runApplicationWriteProbe(seedQueryRows));

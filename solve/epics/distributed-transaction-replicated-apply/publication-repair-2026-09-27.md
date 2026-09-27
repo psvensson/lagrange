@@ -139,6 +139,44 @@ node ids, the expected cohort, and the predicate result. A further lab run can
 therefore classify the exact failed field without serializing the entire
 control snapshot into the timeout line.
 
+## Priority-placement diagnostic and owner correction
+
+The diagnostic checkpoint `88457ed1038f6ca13336304b55840866ca875fd9`
+selected the same seven exclusive files on tv-dator with the normal machine
+lock, thermal gate and `jobs=1`. The first file again stopped in `formCluster`
+before its transaction property. Its compact final observation established
+that the enclosing and placement captures were identical, the placement was
+available, and its eligible-node set exactly matched the three-node harness
+cohort. The only false predicate input was `placementSatisfied=false`.
+
+The node-log digest contained five `control_plane_replicas_not_spread`
+observations and repeated seed reservation collisions. Those signals explain
+why the topology-quiescence summary could remain unsatisfied; they do not make
+that summary the mutation-admission authority. The remaining six files were
+cancelled through the lab controller after this classification. The controller
+released tv-dator's machine lock, and the preserved artifacts are
+`test-output/placement/88457ed1038f-mujnwb6s-2734803-tv-dator.log` and
+`test-output/placement/88457ed1038f-mujnwb6s-2734803-tv-dator.err`.
+
+The owner trace showed that `currentPriorityPlacementObservation.satisfied`
+is a conjunction of replica-spread and leader-coverage diagnostics. It is a
+topology-quiescence observation, not the formation event that authorizes an
+application-mutation attempt. The local control-snapshot builder directly
+attaches the existing `publicationActiveGateHandoff`, the canonical handoff
+from the topology-publication owner to the active-gate owner. In the preceding
+raw lab evidence that handoff was complete for the exact expected cohort,
+allowed runtime promotion, and named `admit_active_gate` as its next action
+while the priority-placement summary remained blocked.
+
+The formation precondition now consumes that direct handoff: state `complete`,
+`runtimePromotionAllowed=true`, next action `admit_active_gate`, and an
+`expectedNodeIds` set exactly equal to the harness cohort. The enclosing local
+snapshot's `capturedAt` remains in compact timeout evidence; the handoff is
+attached by that same local snapshot build rather than carrying a fabricated
+independent capture time. CREATE and INSERT remain one-shot. CREATE still owns
+the refreshed operation-specific provisioning and capacity decision, and a
+denial is surfaced directly without a retry, sleep, or extended timeout.
+
 ## Design verdict remains sealed
 
 The liveness wording is corrected for future work: there is no configured

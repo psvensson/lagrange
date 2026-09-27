@@ -9,15 +9,22 @@ import {
 const NODE_ID = Object.freeze({SEED: 'seed-node', JOINER: 'joiner-node'});
 const EXPECTED_NODE_IDS = Object.freeze([NODE_ID.SEED, NODE_ID.JOINER]);
 
-function snapshot({placementSatisfied = true, placementCapturedAt = 1234,
-  eligibleNodeIds = EXPECTED_NODE_IDS} = {}) {
+function snapshot({handoffState = 'complete', runtimePromotionAllowed = true,
+  nextAction = 'admit_active_gate',
+  handoffExpectedNodeIds = EXPECTED_NODE_IDS} = {}) {
   return {
     capturedAt: 1234,
     controlPlaneDiagnostics: {
+      publicationActiveGateHandoff: {
+        expectedNodeIds: handoffExpectedNodeIds,
+        nextAction,
+        runtimePromotionAllowed,
+        state: handoffState,
+      },
       currentPriorityPlacementObservation: {
-        capturedAt: placementCapturedAt,
-        eligibleNodeIds,
-        satisfied: placementSatisfied,
+        capturedAt: 1233,
+        eligibleNodeIds: [NODE_ID.SEED],
+        satisfied: false,
         state: 'available',
       },
       readinessByNodeId: {
@@ -39,43 +46,49 @@ test('embedded formation consumes authoritative preconditions before DDL',
     );
     t.equal(
       areApplicationWriteFormationPreconditionsSatisfied(
-        snapshot({placementCapturedAt: 1233}), EXPECTED_NODE_IDS),
+        snapshot({handoffState: 'pending'}), EXPECTED_NODE_IDS),
       false,
-      'priority placement must belong to the same snapshot capture',
+      'an incomplete publication handoff keeps the formation attempt closed',
     );
     t.equal(
       areApplicationWriteFormationPreconditionsSatisfied(
-        snapshot({placementSatisfied: false}), EXPECTED_NODE_IDS),
+        snapshot({runtimePromotionAllowed: false}), EXPECTED_NODE_IDS),
       false,
-      'unsatisfied canonical priority placement keeps DDL closed',
+      'a handoff without runtime promotion permission keeps formation closed',
+    );
+    t.equal(
+      areApplicationWriteFormationPreconditionsSatisfied(
+        snapshot({nextAction: 'observe_owner_handoff'}), EXPECTED_NODE_IDS),
+      false,
+      'a handoff not yet admitting the active gate keeps formation closed',
     );
     t.equal(
       areApplicationWriteFormationPreconditionsSatisfied(snapshot({
-        eligibleNodeIds: [NODE_ID.SEED],
+        handoffExpectedNodeIds: [NODE_ID.SEED],
       }), EXPECTED_NODE_IDS),
       false,
-      'a reduced eligible cohort cannot establish formation',
+      'a reduced handoff cohort cannot establish formation',
     );
     t.equal(
       areApplicationWriteFormationPreconditionsSatisfied(snapshot({
-        eligibleNodeIds: [NODE_ID.SEED, 'other-node'],
+        handoffExpectedNodeIds: [NODE_ID.SEED, 'other-node'],
       }), EXPECTED_NODE_IDS),
       false,
-      'a same-size mismatched eligible cohort cannot establish formation',
+      'a same-size mismatched handoff cohort cannot establish formation',
     );
     t.equal(
       areApplicationWriteFormationPreconditionsSatisfied(snapshot({
-        eligibleNodeIds: [...EXPECTED_NODE_IDS, 'other-node'],
+        handoffExpectedNodeIds: [...EXPECTED_NODE_IDS, 'other-node'],
       }), EXPECTED_NODE_IDS),
       false,
-      'an expanded eligible cohort cannot establish this formation',
+      'an expanded handoff cohort cannot establish this formation',
     );
     t.equal(
       areApplicationWriteFormationPreconditionsSatisfied(
         snapshot(), EXPECTED_NODE_IDS),
       true,
-      'same-build satisfied placement for the exact cohort establishes ' +
-        'formation despite stale per-peer readiness projections',
+      'the completed exact-cohort handoff establishes formation despite ' +
+        'stale placement and per-peer readiness projections',
     );
     t.end();
   });
@@ -83,14 +96,14 @@ test('embedded formation consumes authoritative preconditions before DDL',
 test('embedded formation failure retains a compact owner observation', (t) => {
   t.same(
     buildApplicationWriteFormationObservation(snapshot({
-      eligibleNodeIds: [NODE_ID.SEED],
+      handoffExpectedNodeIds: [NODE_ID.SEED],
     }), EXPECTED_NODE_IDS),
     {
       snapshotCapturedAt: 1234,
-      placementCapturedAt: 1234,
-      placementState: 'available',
-      placementSatisfied: true,
-      placementEligibleNodeIds: [NODE_ID.SEED],
+      handoffState: 'complete',
+      handoffRuntimePromotionAllowed: true,
+      handoffNextAction: 'admit_active_gate',
+      handoffExpectedNodeIds: [NODE_ID.SEED],
       expectedNodeIds: EXPECTED_NODE_IDS,
       preconditionsSatisfied: false,
     },
@@ -99,7 +112,7 @@ test('embedded formation failure retains a compact owner observation', (t) => {
   t.end();
 });
 
-test('embedded formation submits its authorized DDL witness once', async (t) => {
+test('embedded formation submits its DDL witness once', async (t) => {
   let createAttempts = 0;
   let insertAttempts = 0;
   await t.rejects(runApplicationWriteProbe(async (sql) => {
