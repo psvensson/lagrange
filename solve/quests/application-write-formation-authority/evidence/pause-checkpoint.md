@@ -12,8 +12,10 @@ formation/lifecycle owners are changing.
   `ae3e6d887b5ed4bf80bdc75131ee6ba889201d36`.
 - Evidence state immediately before this checkpoint:
   `7fec3934958c36ea02b5a54310e09eb2d879e78d`.
-- The production tree has not changed after `ae3e6d887`; later commits contain
-  Quest evidence only.
+- No runtime or admission behavior has changed after `ae3e6d887`. Later WIP
+  commits contain Quest evidence, a test-fixture deduplication required by the
+  normal publication ratchet, and de-exports of three unused internal symbols
+  required by the same gate.
 - The transaction STOP checkpoints remain untouched:
   `292b7204334cf47617e675dd9b12bc708b682886` and
   `f673538bbeaa30738d688fb226dbcd90f94014d9`.

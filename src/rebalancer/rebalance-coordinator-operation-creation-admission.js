@@ -463,7 +463,5 @@ function applyRebalanceCoordinatorOperationCreationAdmissionMethods(target) {
 }
 
 export {
-  OPERATION_CREATION_ADMISSION_ERROR_CODE,
-  OPERATION_CREATION_ADMISSION_REASON,
   applyRebalanceCoordinatorOperationCreationAdmissionMethods,
 };

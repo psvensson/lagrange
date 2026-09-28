@@ -26,5 +26,4 @@ function buildSchemaProvisioningChildIntent(jobId, targetNodeId) {
 
 export {
   buildSchemaProvisioningChildIntent,
-  buildSchemaProvisioningChildIntentId,
 };
