@@ -124,7 +124,7 @@ Managed WASM execution: **${displayCapability(portability.runtimes.wasm_componen
 Lagrange exposes one service API across execution providers. Provider choice may
 change packaging, isolation, and the final runtime adapter; it must not create a
 second Artifact / Binding / Cell model or change handler, distributed-call,
-`run`, `emit`, reduction, routing, budget, retry, or invocation-identity
+\`run\`, \`emit\`, reduction, routing, budget, retry, or invocation-identity
 semantics.
 
 Binding source kinds are publicly invocable: ${renderList(capabilities.deployment.publicInvocation)}; accepted
