@@ -1,3 +1,4 @@
+/* global module */
 'use strict';
 
 module.exports.run = async function run(ctx, _batch) {
