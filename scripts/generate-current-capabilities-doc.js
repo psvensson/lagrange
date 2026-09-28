@@ -23,9 +23,6 @@ const DISPLAY_LABEL = Object.freeze({
     'Descriptor and in-memory lifecycle scaffold only',
   finite_numbers: 'Finite numbers',
   genuine_wasi_component_cell: 'Genuine WASI component Cell',
-  internal_supported: 'Internal supported path',
-  javascript_envelope_rehearsal: 'Legacy JavaScript-envelope rehearsal',
-  kernel_internal: 'Kernel-internal only',
   literal_single_table_select_fixed_at_deployment:
     'Literal single-table SELECT fixed at deployment',
   plain_websocket_trusted_network_only:
@@ -40,7 +37,7 @@ const DISPLAY_LABEL = Object.freeze({
   must_be_disjoint_across_shards: 'Must be disjoint across shards',
   single_node_two_partition_functional_proof:
     'Single-node, two-partition functional proof',
-  internal_native_js_service_path: 'Internal native_js service path',
+  internal_service_path: 'Internal measurement path',
   five_node_certification_window: 'Five-node certification window',
   not_available: 'Not available',
   unsupported: 'Unsupported',
@@ -66,10 +63,10 @@ function renderList(values) {
 
 function renderCurrentCapabilitiesDocument(capabilities, portability) {
   const runtimeRows = Object.entries(portability.runtimes)
+    .filter(([runtime]) => runtime !== 'native_js')
     .map(([runtime, contract]) =>
       `| \`${runtime}\` | ${displayCapability(contract.externalInstall)} | ` +
-      `${displayCapability(contract.managedExecution)} | ` +
-      `${displayCapability(contract.callbackInvocation)} |`)
+      `${displayCapability(contract.managedExecution)} |`)
     .join('\n');
 
   const lifecycleRows = capabilities.deployment.lifecycleSql
@@ -123,15 +120,19 @@ ${capabilities.productBoundary.dataLocalRequirement}
 The deployment model is [Artifact / Binding / Cell](vocabulary.md#service-deployment-hierarchy).
 Recommended authoring: **${displayCapability(capabilities.deployment.recommendedAuthoring)}**.
 Managed WASM execution: **${displayCapability(portability.runtimes.wasm_component.managedExecution)}**.
-The legacy callback representation in the table below is a JavaScript envelope,
-not a WebAssembly binary or component. It is a separate internal path, not the
-component produced by the public service build.
+
+Lagrange exposes one service API across execution providers. Provider choice may
+change packaging, isolation, and the final runtime adapter; it must not create a
+second Artifact / Binding / Cell model or change handler, distributed-call,
+`run`, `emit`, reduction, routing, budget, retry, or invocation-identity
+semantics.
 
 Binding source kinds are publicly invocable: ${renderList(capabilities.deployment.publicInvocation)}; accepted
 ${renderList(capabilities.deployment.acceptedButNotPubliclyInvocable)} kinds
 may be declared but have no public invocation adapter.
-Managed OCI activation remains unsupported.
-OCI callback invocation remains unsupported.
+Managed OCI activation remains unsupported. When OCI execution is implemented,
+it must project the same service API rather than introduce a provider-specific
+programming model.
 
 | Call property | Current state |
 | --- | --- |
@@ -153,12 +154,12 @@ Supported lifecycle SQL:
 
 ${lifecycleRows}
 
-| Runtime | External installation | Managed execution | Callback path |
-| --- | --- | --- | --- |
+| Execution provider | External installation | Managed execution |
+| --- | --- | --- |
 ${runtimeRows}
 
-The callback column is a legacy/internal execution axis, not an alternative
-public service model. Managed OCI activation remains unsupported.
+WASM is the current supported execution provider. OCI remains a future provider;
+its packaging and isolation differ, but its application semantics do not.
 
 ## Embedded application sessions
 
