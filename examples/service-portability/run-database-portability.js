@@ -25,7 +25,7 @@ import {promisify} from 'node:util';
 
 import Database from 'better-sqlite3';
 
-import {RUNTIME_KIND} from '../../src/constants/runtime.js';
+import {SQL_ENGINE_RUNTIME_KIND} from '../../src/constants/runtime.js';
 import {
   META_SERVICE_ID,
   META_SERVICE_RUNTIME_REF,
@@ -187,7 +187,7 @@ function createSqlRequestExecutor(database, observedRequests) {
 function createLagrangeDefinition() {
   return {
     serviceId: META_SERVICE_ID.POSTGRES_WIRE,
-    runtimeKind: RUNTIME_KIND.NATIVE_JS,
+    runtimeKind: SQL_ENGINE_RUNTIME_KIND,
     runtimeRef: META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
     runtimeConfig: JSON.stringify({
       host: LAGRANGE_RUNTIME.HOST,
