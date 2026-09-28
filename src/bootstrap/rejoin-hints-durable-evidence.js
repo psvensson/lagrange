@@ -10,6 +10,7 @@ import {extractPeerAddresses, normalizeAddress} from
 const PARTITIONS_DIRNAME = 'partitions';
 const SQLITE_DB_SUFFIX = '.db';
 const NODES_PARTITION_PREFIX = `${TABLES.NODES}-p`;
+const SERVICES_PARTITION_PREFIX = `${TABLES.SERVICES}-p`;
 const SQLITE_TABLE_TYPE = 'table';
 const EMPTY_STRING = '';
 const UTF8_ENCODING = 'utf8';
@@ -19,6 +20,7 @@ const SQL_TABLE_EXISTS =
 const SQL_SELECT_NODES =
   `SELECT ${COLUMN.NODE_ID} AS node_id, ` +
   `${COLUMN.NODE_ADDRESS} AS node_address FROM ${TABLES.NODES}`;
+const SQL_SELECT_SERVICES = `SELECT * FROM ${TABLES.SERVICES}`;
 
 /**
  * Read the rejoin hints file as a typed outcome. A hints file that exists
@@ -157,6 +159,171 @@ async function listNodesReplicaDbPathsOutcome(dataDir) {
   return {state, dbPaths: paths};
 }
 
+async function inspectServicesReplicaDirectory(partitionsDir, entry) {
+  if (entry?.isDirectory?.() !== true) return {skipped: true};
+  let replicaEntries;
+  try {
+    replicaEntries = await readdir(
+      join(partitionsDir, entry.name),
+      {withFileTypes: true},
+    );
+  } catch (_error) {
+    return {unreadable: true};
+  }
+  const names = new Set(replicaEntries
+    .filter((replicaEntry) => replicaEntry?.isFile?.() === true)
+    .map((replicaEntry) => replicaEntry.name));
+  if (!String(entry.name || EMPTY_STRING)
+    .startsWith(SERVICES_PARTITION_PREFIX)) {
+    return {unownedArtifacts: [...names].some((name) =>
+      /\.db(?:-(?:wal|shm|journal))?$/u.test(name))};
+  }
+  const dbPaths = [];
+  let sidecarOnly = false;
+  for (const name of names) {
+    if (name.endsWith(SQLITE_DB_SUFFIX)) {
+      dbPaths.push(join(partitionsDir, entry.name, name));
+    } else {
+      const dbName = name.replace(/-(wal|shm|journal)$/u, EMPTY_STRING);
+      if (dbName !== name && dbName.endsWith(SQLITE_DB_SUFFIX) &&
+          !names.has(dbName)) sidecarOnly = true;
+    }
+  }
+  return {dbPaths, sidecarOnly};
+}
+
+function servicesReplicaArtifactsOutcome(state, dbPaths = [],
+  sidecarOnly = false, unownedArtifacts = false) {
+  return {state, dbPaths, sidecarOnly, unownedArtifacts};
+}
+
+async function listServicesReplicaArtifactsOutcome(dataDir) {
+  const normalizedDataDir = normalizeAddress(dataDir);
+  const partitionsDir = normalizedDataDir ?
+    join(normalizedDataDir, PARTITIONS_DIRNAME) : null;
+  const partitionsRead = partitionsDir ?
+    await readPartitionsDirectoryEntries(partitionsDir) :
+    {entries: [], state: DURABLE_EVIDENCE_STATE.MISSING};
+  if (partitionsRead.state !== DURABLE_EVIDENCE_STATE.READABLE) {
+    return servicesReplicaArtifactsOutcome(partitionsRead.state);
+  }
+  const dbPaths = [];
+  let sidecarOnly = false;
+  let unownedArtifacts = false;
+  for (const entry of partitionsRead.entries) {
+    const inspected = await inspectServicesReplicaDirectory(
+      partitionsDir,
+      entry,
+    );
+    if (inspected.unreadable) {
+      return servicesReplicaArtifactsOutcome(
+        DURABLE_EVIDENCE_STATE.UNREADABLE,
+      );
+    }
+    dbPaths.push(...(inspected.dbPaths || []));
+    sidecarOnly = sidecarOnly || inspected.sidecarOnly === true;
+    unownedArtifacts = unownedArtifacts ||
+      inspected.unownedArtifacts === true;
+  }
+  return servicesReplicaArtifactsOutcome(
+    dbPaths.length === 0 && !sidecarOnly && !unownedArtifacts ?
+      DURABLE_EVIDENCE_STATE.MISSING : DURABLE_EVIDENCE_STATE.READABLE,
+    dbPaths,
+    sidecarOnly,
+    unownedArtifacts,
+  );
+}
+
+function readServicesRowsFromReplicaDbOutcome(dbPath) {
+  let database = null;
+  try {
+    database = new Database(dbPath, {readonly: true, fileMustExist: true});
+    const tableExists = database
+      .prepare(SQL_TABLE_EXISTS)
+      .get(SQLITE_TABLE_TYPE, TABLES.SERVICES);
+    return {
+      state: DURABLE_EVIDENCE_STATE.READABLE,
+      rows: tableExists ? database.prepare(SQL_SELECT_SERVICES).all() : [],
+    };
+  } catch (_error) {
+    return {state: DURABLE_EVIDENCE_STATE.UNREADABLE, rows: []};
+  } finally {
+    database?.close();
+  }
+}
+
+const CANONICAL_SERVICE_IDENTITY_FIELDS = Object.freeze([
+  'service_id',
+  'service_type',
+  'node_id',
+  'partition_id',
+  'group_id',
+  'status',
+  'cleanup_token',
+  'state_entered_at',
+  'updated_at',
+]);
+
+function canonicalServiceIdentity(row) {
+  return JSON.stringify(CANONICAL_SERVICE_IDENTITY_FIELDS.map(
+    (field) => row?.[field] ?? null,
+  ));
+}
+
+function servicesIdentitySnapshot(state, rows, conflicting, empty) {
+  return {state, rows, conflicting, empty};
+}
+
+async function readDurableServicesIdentitySnapshot(dataDir) {
+  const artifacts = await listServicesReplicaArtifactsOutcome(dataDir);
+  if (artifacts.state !== DURABLE_EVIDENCE_STATE.READABLE) {
+    return servicesIdentitySnapshot(
+      artifacts.state,
+      [],
+      false,
+      artifacts.state === DURABLE_EVIDENCE_STATE.MISSING,
+    );
+  }
+  if (artifacts.sidecarOnly) {
+    return servicesIdentitySnapshot(
+      DURABLE_EVIDENCE_STATE.UNREADABLE,
+      [],
+      false,
+      false,
+    );
+  }
+  const rowsByServiceId = new Map();
+  let conflicting = false;
+  for (const dbPath of artifacts.dbPaths) {
+    const read = readServicesRowsFromReplicaDbOutcome(dbPath);
+    if (read.state !== DURABLE_EVIDENCE_STATE.READABLE) {
+      return servicesIdentitySnapshot(
+        DURABLE_EVIDENCE_STATE.UNREADABLE,
+        [],
+        false,
+        false,
+      );
+    }
+    for (const row of read.rows) {
+      const serviceId = normalizeAddress(row?.service_id);
+      if (!serviceId) {
+        conflicting = true;
+        continue;
+      }
+      const existing = rowsByServiceId.get(serviceId);
+      if (existing && canonicalServiceIdentity(existing) !==
+          canonicalServiceIdentity(row)) conflicting = true;
+      if (!existing) rowsByServiceId.set(serviceId, row);
+    }
+  }
+  return servicesIdentitySnapshot(
+    DURABLE_EVIDENCE_STATE.READABLE,
+    Array.from(rowsByServiceId.values()),
+    conflicting,
+    rowsByServiceId.size === 0 && artifacts.unownedArtifacts !== true,
+  );
+}
+
 /**
  * Read the nodes-table rows from one replica DB as a typed outcome. A
  * discovered DB file that cannot be opened or queried is UNREADABLE
@@ -286,6 +453,7 @@ async function readDurableNodesTableSnapshot(options = {}) {
 
 export {
   readDurableNodesTableSnapshot,
+  readDurableServicesIdentitySnapshot,
   readRejoinHints,
   readRejoinHintsOutcome,
 };

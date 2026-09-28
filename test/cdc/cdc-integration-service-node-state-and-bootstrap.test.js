@@ -1111,10 +1111,10 @@ async (t) => {
     },
   );
   await service.upsertSystemTableRow(
-    SYSTEM_TABLE_NAME.SERVICES,
+    SYSTEM_TABLE_NAME.NODES,
     {
-      service_id: 'service-routing-key-2',
-      address: 'node1/service/routing-key-2',
+      node_id: 'node-routing-key-2',
+      address: 'node1',
     },
     {
       recoveryCandidateSelectionKey:

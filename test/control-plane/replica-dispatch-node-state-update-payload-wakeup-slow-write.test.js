@@ -8,6 +8,7 @@ import {
   initEnv,
 } from './replica-dispatch-node-state-update-test-support.js';
 import {
+  CONTROL_PLANE_MESSAGE_COMPLETION_FIELD,
   CONTROL_PLANE_MESSAGE_COMPLETION_CONTRACT,
   CONTROL_PLANE_MESSAGE_COMPLETION_KIND,
   ControlPlaneField,
@@ -25,9 +26,6 @@ import {
 } from '../../src/control-plane/replica-dispatch-service-constants.js';
 import {
 } from '../../src/control-plane/control-plane-workload-profile.js';
-import {
-  MESSAGE_GROUP_CDC_INGRESS_ACTION,
-} from '../../src/message-group/message-group-forwarding-owner.js';
 import {
 } from '../../src/rebalancer/replica-operation-repository.js';
 import {
@@ -410,8 +408,9 @@ test('ReplicaDispatchService ignores stale CONNECTED regression after READY',
       },
     });
 
-    await service.handleNodeStateUpdate({
+    await service.publishNodeLifecycleMessage({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: 'node-4',
       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8084',
       [ControlPlaneField.STATE]: STATE.CONNECTED,
@@ -464,8 +463,9 @@ test('ReplicaDispatchService rebases lagged READY heartbeats to a full owner lea
       },
     });
 
-    await service.handleNodeStateUpdate({
+    await service.publishNodeLifecycleMessage({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: 'node-4b',
       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8084',
       [ControlPlaneField.STATE]: STATE.READY,
@@ -484,7 +484,8 @@ test('ReplicaDispatchService rebases lagged READY heartbeats to a full owner lea
     );
     t.equal(
       updates[0]?.row?.ready_lease_expires_at,
-      updates[0]?.row?.last_heartbeat + service.readyLeaseMs,
+      updates[0]?.row?.last_heartbeat +
+        service.nodeLifecyclePublication.leaseAuthority.readyLeaseMs,
       'canonical write owner grants the full lease after delivery latency',
     );
 
@@ -500,7 +501,6 @@ test('ReplicaDispatchService isolates slow NODE_STATE_UPDATE writes by node lane
     let fastObservedSlowInFlight = false;
     const writes = [];
     const service = createService({
-      nodeStateUpdateQueueShardCount: 2,
       cdcIntegrationService: {},
       cacheNodes: [
         {
@@ -555,6 +555,7 @@ test('ReplicaDispatchService isolates slow NODE_STATE_UPDATE writes by node lane
       messageId: 'slow-msg',
       payload: {
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+        [ControlPlaneField.BOOT_INCARNATION]: 1,
         [ControlPlaneField.NODE_ID]: 'node-slow',
         [ControlPlaneField.NODE_ADDRESS]: 'localhost:8091',
         [ControlPlaneField.STATE]: STATE.READY,
@@ -565,6 +566,7 @@ test('ReplicaDispatchService isolates slow NODE_STATE_UPDATE writes by node lane
       messageId: 'fast-msg',
       payload: {
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+        [ControlPlaneField.BOOT_INCARNATION]: 1,
         [ControlPlaneField.NODE_ID]: 'node-fast',
         [ControlPlaneField.NODE_ADDRESS]: 'localhost:8092',
         [ControlPlaneField.STATE]: STATE.READY,
@@ -636,6 +638,7 @@ test('ReplicaDispatchService acknowledges READY only after its owner write commi
       messageId: 'msg-1',
       payload: {
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+        [ControlPlaneField.BOOT_INCARNATION]: 1,
         [ControlPlaneField.NODE_ID]: 'node-5',
         [ControlPlaneField.NODE_ADDRESS]: 'localhost:8085',
         [ControlPlaneField.STATE]: STATE.READY,
@@ -667,14 +670,28 @@ test('ReplicaDispatchService acknowledges READY only after its owner write commi
       ['msg-1'],
       'READY is acknowledged only after the owner write commits',
     );
-    t.same(
+    t.match(
       completedPublication,
       {
         completionKind:
           CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
         completionCompleted: true,
+        [CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW]: {
+          node_id: 'node-5',
+          status: SERVICE_STATUS.ACTIVE,
+          connection_state: STATE.READY,
+          last_heartbeat: Number,
+        },
+        [CONTROL_PLANE_MESSAGE_COMPLETION_FIELD
+          .AUTHORITATIVE_OBSERVED_AT_MS]: Number,
       },
-      'the receiver returns the declared durable-publication boundary',
+      'the receiver returns the exact durable-publication owner row',
+    );
+    t.ok(
+      completedPublication[
+        CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW
+      ].last_heartbeat >= now,
+      'the owner receipt retains its rebased authoritative heartbeat',
     );
     service.stop();
   });
@@ -708,35 +725,34 @@ test('ReplicaDispatchService refuses READY acknowledgement when its owner write 
       getMetadataIngressReadiness: () => ({ready: true}),
     };
 
-    await t.rejects(
-      service.handleMessageReceived(mgService, {
-        messageId: 'ready-failure-msg',
-        payload: {
-          [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-          [ControlPlaneField.NODE_ID]: 'node-ready-failure',
-          [ControlPlaneField.NODE_ADDRESS]: 'localhost:8087',
-          [ControlPlaneField.STATE]: STATE.READY,
-          [ControlPlaneField.HEARTBEAT_AT]: Date.now(),
-        },
-      }),
-      /injected authoritative READY write failure/,
-      'the transport path observes the owner failure',
-    );
+    const completion = await service.handleMessageReceived(mgService, {
+      messageId: 'ready-failure-msg',
+      payload: {
+        [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+        [ControlPlaneField.BOOT_INCARNATION]: 1,
+        [ControlPlaneField.NODE_ID]: 'node-ready-failure',
+        [ControlPlaneField.NODE_ADDRESS]: 'localhost:8087',
+        [ControlPlaneField.STATE]: STATE.READY,
+        [ControlPlaneField.HEARTBEAT_AT]: Date.now(),
+      },
+    });
+    t.match(completion, {
+      completionCompleted: false,
+      deferRetry: true,
+      publicationOutcome: 'not_applied_source_unchanged',
+    }, 'an unknown write outcome is resolved by readback into a typed ' +
+      'deferred completion when the destination did not apply');
     t.same(
       acknowledgements,
       [],
       'failed authoritative READY publication is never acknowledged',
     );
-    t.equal(
-      service.nodeStateUpdateDeferredRetries.size,
-      0,
-      'the transport caller owns retry instead of creating a hidden success',
-    );
     service.stop();
   });
 
-test('ReplicaDispatchService acknowledges maintenance only after bypassing a ' +
-  'steady-heartbeat deferred slot into the critical owner queue', async (t) => {
+test('ReplicaDispatchService keeps no deferred slot: a pressured steady ' +
+  'publication stays unacknowledged and the next delivery publishes directly',
+async (t) => {
   initEnv();
 
   const now = Date.now();
@@ -777,9 +793,15 @@ test('ReplicaDispatchService acknowledges maintenance only after bypassing a ' +
       },
     },
   });
-
+  const mgService = {
+    acknowledgeMessage: async (messageId) => {
+      acknowledgements.push(messageId);
+    },
+    isLeaderReplica: () => true,
+  };
   const steadyPayload = {
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-maintenance-ingress',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8086',
     [ControlPlaneField.STATE]: STATE.READY,
@@ -787,25 +809,15 @@ test('ReplicaDispatchService acknowledges maintenance only after bypassing a ' +
     [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
       CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY,
     [ControlPlaneField.HEARTBEAT_AT]: now,
-    [ControlPlaneField.READY_LEASE_EXPIRES_AT]: now + 5000,
   };
-  await service.reconcileNodeStateUpdate('node-maintenance-ingress', {
+  const steadyCompletion = await service.handleMessageReceived(mgService, {
+    messageId: 'steady-msg',
     payload: steadyPayload,
   });
-  t.equal(
-    service.nodeStateUpdateDeferredRetries.size,
-    1,
-    'steady publication pressure should establish the pre-existing deferred owner slot',
-  );
+  t.match(steadyCompletion, {completionCompleted: false, deferRetry: true},
+    'pressure on the steady publication is a typed deferred completion');
 
   acceptMaintenance = true;
-  const mgService = {
-    acknowledgeMessage: async (messageId) => {
-      acknowledgements.push(messageId);
-    },
-    isLeaderReplica: () => true,
-    getMetadataIngressReadiness: () => ({ready: true}),
-  };
   const maintenanceCompletion = service.handleMessageReceived(mgService, {
     messageId: 'maintenance-msg',
     payload: {
@@ -813,35 +825,22 @@ test('ReplicaDispatchService acknowledges maintenance only after bypassing a ' +
       [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
         CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
       [ControlPlaneField.HEARTBEAT_AT]: now + 10000,
-      [ControlPlaneField.READY_LEASE_EXPIRES_AT]: now + 25000,
     },
   });
-
   for (let attempt = 0; attempt < 20 && writes.length < 2; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
-  t.equal(
-    writes.length,
-    2,
-    'maintenance ingress should re-enter the production write owner immediately',
-  );
-  t.same(
-    acknowledgements,
-    [],
-    'critical maintenance is not acknowledged before its owner write commits',
-  );
-  t.equal(
-    service.nodeStateUpdateDeferredRetries.size,
-    0,
-    'non-deferrable maintenance ingress should cancel the older deferred slot',
-  );
+  t.equal(writes.length, 2,
+    'the next delivery reaches the lifecycle owner write immediately');
+  t.same(acknowledgements, [],
+    'neither the deferred nor the in-flight publication is acknowledged');
   t.match(
     writes[1]?.options,
     {
       deliveryPriority: 'critical',
       workClass: 'critical',
     },
-    'the ingress-to-write handoff should retain the critical non-deferred profile',
+    'maintenance publication keeps the critical non-deferred profile',
   );
 
   resolveMaintenanceWrite?.();
@@ -849,189 +848,90 @@ test('ReplicaDispatchService acknowledges maintenance only after bypassing a ' +
   t.same(
     acknowledgements,
     ['maintenance-msg'],
-    'transport acknowledges maintenance after the owner write commits',
+    'transport acknowledges only after the owner write commits',
   );
   service.stop();
 });
 
-test('ReplicaDispatchService forwards NODE_STATE_UPDATE when local ingress is not metadata-ready',
-  async (t) => {
-    initEnv();
+test('ReplicaDispatchService publishes READY with the message group leaderless: ' +
+  'the receiving replica reaches the NODES gateway itself and never forwards',
+async (t) => {
+  initEnv();
 
-    const acknowledgements = [];
-    const forwarded = [];
-    const service = createService({
-      cdcIntegrationService: {},
-      cacheNode: {
-        node_id: 'node-6',
-        node_address: 'localhost:8086',
-        status: SERVICE_STATUS.ACTIVE,
-        connection_state: STATE.CONNECTED,
-        capabilities: '[]',
-        created_at: Date.now() - 10000,
+  const acknowledgements = [];
+  const writes = [];
+  const service = createService({
+    cdcIntegrationService: {},
+    cacheNode: {
+      node_id: 'node-6',
+      node_address: 'localhost:8086',
+      status: 'joining',
+      connection_state: STATE.CONNECTED,
+      capabilities: '[]',
+      created_at: Date.now() - 10000,
+    },
+    controlPlaneSystemTableGateway: {
+      updateSystemTableRow: async (tableName, whereClause, row) => {
+        writes.push({tableName, whereClause, row});
+        return {success: true, partitionResult: {affectedRows: 1}};
       },
-      controlPlaneSystemTableGateway: {
-        updateSystemTableRow: async () => {
-          throw new Error('should not write locally when ingress is not ready');
-        },
-      },
-    });
-    const mgService = {
-      acknowledgeMessage: async (messageId) => {
-        acknowledgements.push(messageId);
-      },
-      isLeaderReplica: () => false,
-      getMetadataIngressReadiness: () => ({
-        ready: false,
-        reason: 'leader routing not established',
-        retryAfterMs: 250,
-      }),
-      getLeaderId: () => {
-        throw new Error('should not use raw leader-id forwarding');
-      },
-      buildPeerAddress: () => {
-        throw new Error('should not build raw leader address for metadata ingress');
-      },
-      sendMessage: async () => {
-        throw new Error('should not send metadata ingress via raw leader path');
-      },
-      forwardMetadataIngressPayloadToLeader: async (payload, options) => {
-        forwarded.push({payload, options});
-      },
-    };
+    },
+  });
+  const leaderlessMessageGroup = {
+    acknowledgeMessage: async (messageId) => {
+      acknowledgements.push(messageId);
+    },
+    isLeaderReplica: () => false,
+    getLeaderId: () => null,
+    getMetadataIngressReadiness: () => ({
+      ready: false,
+      reason: 'leader routing not established',
+      retryAfterMs: 250,
+    }),
+    resolveMetadataIngressForwardSelection: async () => {
+      throw new Error('READY must not consult message-group forwarding');
+    },
+    forwardMetadataIngressPayloadToLeader: async () => {
+      throw new Error('READY must not be forwarded to a message-group leader');
+    },
+    buildPeerAddress: () => {
+      throw new Error('READY must not address a message-group leader');
+    },
+    sendMessage: async () => {
+      throw new Error('READY must not ride a message-group hop');
+    },
+  };
 
-    const now = Date.now();
-    await service.handleMessageReceived(mgService, {
-      messageId: 'msg-forward',
+  const now = Date.now();
+  const completion = await service.handleMessageReceived(
+    leaderlessMessageGroup,
+    {
+      messageId: 'msg-leaderless-ready',
       payload: {
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+        [ControlPlaneField.BOOT_INCARNATION]: 1,
         [ControlPlaneField.NODE_ID]: 'node-6',
         [ControlPlaneField.NODE_ADDRESS]: 'localhost:8086',
         [ControlPlaneField.STATE]: STATE.READY,
         [ControlPlaneField.HEARTBEAT_AT]: now,
       },
-    });
+    },
+  );
 
-    t.same(
-      acknowledgements,
-      ['msg-forward'],
-      'forwarded node-state message should still be acknowledged once forwarded',
-    );
-    t.same(
-      forwarded,
-      [{
-        payload: {
-          [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-          [ControlPlaneField.NODE_ID]: 'node-6',
-          [ControlPlaneField.NODE_ADDRESS]: 'localhost:8086',
-          [ControlPlaneField.STATE]: STATE.READY,
-          [ControlPlaneField.HEARTBEAT_AT]: now,
-        },
-        options: {
-          requiredTables: ['nodes'],
-          forwardedByNodeId: 'node-1',
-        },
-      }],
-      'node-state updates should forward through canonical metadata ingress ' +
-        'routing instead of writing locally',
-    );
+  t.equal(writes.length, 1,
+    'the lifecycle owner writes the NODES row through the gateway');
+  t.match(writes[0], {
+    tableName: 'nodes',
+    whereClause: {node_id: 'node-6', boot_incarnation: 1, status: 'joining'},
+    row: {status: SERVICE_STATUS.ACTIVE, connection_state: STATE.READY},
+  }, 'the READY CAS is fenced by the observed registration identity');
+  t.match(completion, {
+    completionKind:
+      CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
+    completionCompleted: true,
+  }, 'the leaderless replica returns the durable publication completion');
+  t.same(acknowledgements, ['msg-leaderless-ready'],
+    'the durable publication is acknowledged');
 
-    service.stop();
-  });
-
-test(
-  'ReplicaDispatchService forwards NODE_STATE_UPDATE when canonical metadata ' +
-  'ingress selection resolves to forward',
-  async (t) => {
-    initEnv();
-
-    const acknowledgements = [];
-    const forwarded = [];
-    let localWriteAttempted = false;
-    const service = createService({
-      cdcIntegrationService: {},
-      cacheNode: {
-        node_id: 'node-7',
-        node_address: 'localhost:8087',
-        status: SERVICE_STATUS.ACTIVE,
-        connection_state: STATE.CONNECTED,
-        capabilities: '[]',
-        created_at: Date.now() - 10000,
-      },
-      controlPlaneSystemTableGateway: {
-        updateSystemTableRow: async () => {
-          localWriteAttempted = true;
-          throw new Error('should not write locally when canonical ingress action is forward');
-        },
-      },
-    });
-    const mgService = {
-      acknowledgeMessage: async (messageId) => {
-        acknowledgements.push(messageId);
-      },
-      isLeaderReplica: () => false,
-      getMetadataIngressReadiness: () => ({
-        ready: true,
-      }),
-      resolveMetadataIngressForwardSelection: async () => ({
-        action: MESSAGE_GROUP_CDC_INGRESS_ACTION.FORWARD,
-        ready: true,
-        reason: 'forward_through_canonical_metadata_ingress',
-      }),
-      getLeaderId: () => {
-        throw new Error('dispatch should use canonical metadata ingress selection');
-      },
-      buildPeerAddress: () => {
-        throw new Error('dispatch should not use raw leader addressing');
-      },
-      sendMessage: async () => {
-        throw new Error('dispatch should not use raw leader message send');
-      },
-      forwardMetadataIngressPayloadToLeader: async (payload, options) => {
-        forwarded.push({payload, options});
-      },
-    };
-
-    const now = Date.now();
-    await service.handleMessageReceived(mgService, {
-      messageId: 'msg-forward-selection',
-      payload: {
-        [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-        [ControlPlaneField.NODE_ID]: 'node-7',
-        [ControlPlaneField.NODE_ADDRESS]: 'localhost:8087',
-        [ControlPlaneField.STATE]: STATE.READY,
-        [ControlPlaneField.HEARTBEAT_AT]: now,
-      },
-    });
-
-    t.equal(
-      localWriteAttempted,
-      false,
-      'canonical forward selection should bypass the local write lane',
-    );
-    t.same(
-      acknowledgements,
-      ['msg-forward-selection'],
-      'forwarded node-state message should still be acknowledged once forwarded',
-    );
-    t.same(
-      forwarded,
-      [{
-        payload: {
-          [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-          [ControlPlaneField.NODE_ID]: 'node-7',
-          [ControlPlaneField.NODE_ADDRESS]: 'localhost:8087',
-          [ControlPlaneField.STATE]: STATE.READY,
-          [ControlPlaneField.HEARTBEAT_AT]: now,
-        },
-        options: {
-          requiredTables: ['nodes'],
-          forwardedByNodeId: 'node-1',
-        },
-      }],
-      'node-state updates should forward through the canonical metadata ingress selection when the owner says forward',
-    );
-
-    service.stop();
-  },
-);
+  service.stop();
+});

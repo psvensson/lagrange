@@ -36,8 +36,13 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
       // replica-removal cleanup must not orphan DB/WAL files indefinitely,
       // so every startup reconciles the partitions directory against
       // authoritative rows via the idempotent reconcile cleanup path.
+      this.removedReplicaCleanupAdmissionBarrier =
+        this.captureRemovedReplicaCleanupStartupAuthorities();
       this.removedReplicaCleanupDebtSweepTask =
-        this.sweepRemovedReplicaCleanupDebt().catch((error) => {
+        this.removedReplicaCleanupAdmissionBarrier.then(
+          (startupAuthorities) =>
+            this.sweepRemovedReplicaCleanupDebt(startupAuthorities),
+        ).catch((error) => {
           this.logger.warn(
             REPLICA_HANDLER_LOG_MSG.REMOVED_CLEANUP_SWEEP_FAILED,
             {nodeId: this.nodeId, error: error.message},
@@ -50,6 +55,7 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
      * @return {Promise<Object>} Response.
      */
     async handleMessage(envelope) {
+      await this.awaitRemovedReplicaCleanupAdmissionBarrier();
       const {payload, correlationId} = envelope;
       const type = payload?.[ReplicaOperationField.TYPE];
       this.logger.debug(REPLICA_HANDLER_LOG_MSG.MESSAGE_RECEIVED, {

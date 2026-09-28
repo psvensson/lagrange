@@ -10,6 +10,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
     PRESSURE_WORK_CLASS,
     PARTITION_METADATA_MISSING_PREFIX,
     PartitionServiceRowOwner,
+    ReplicaCleanupTombstoneOwner,
     REPLICA_HANDLER_ERROR_MSG,
     REPLICA_HANDLER_LITERAL,
     REPLICA_HANDLER_LOG_MSG,
@@ -485,6 +486,15 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         systemTableWriter: this.getControlPlaneSystemTableGateway(),
       });
       return this.partitionServiceRowOwner;
+    }
+    getReplicaCleanupTombstoneOwner() {
+      if (this.replicaCleanupTombstoneOwner) {
+        return this.replicaCleanupTombstoneOwner;
+      }
+      this.replicaCleanupTombstoneOwner = new ReplicaCleanupTombstoneOwner({
+        gateway: this.getControlPlaneSystemTableGateway(),
+      });
+      return this.replicaCleanupTombstoneOwner;
     }
     /**
      * @return {Object|null}

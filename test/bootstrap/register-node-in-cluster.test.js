@@ -47,6 +47,7 @@ test('registerNodeInCluster() - should create the canonical nodes row and upsert
       nodeId: 'test-node-123',
       nodeAddress: 'ws://localhost:9000',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
     });
 
     // Set the mock CDC service
@@ -121,6 +122,7 @@ test('registerNodeInCluster() - should canonicalize raw node address to websocke
     nodeId: 'test-node-canonical-endpoint',
     nodeAddress: 'joiner-host:8080',
     seedNodeAddress: 'ws://seed:8000',
+    bootIncarnation: 1,
   });
   service.cdcIntegrationService = mockCDCService;
   service.sendControlPlaneNodeStateUpdate = async () => {
@@ -155,6 +157,7 @@ test('registerNodeInCluster() - should publish explicit advertised websocket end
     nodeAddress: 'joiner-host:8080',
     advertisedNodeWsAddress: 'ws://172.20.0.42:8082',
     seedNodeAddress: 'ws://seed:8000',
+    bootIncarnation: 1,
   });
   service.cdcIntegrationService = mockCDCService;
   service.sendControlPlaneNodeStateUpdate = async () => {
@@ -187,6 +190,7 @@ test('registerNodeInCluster() - should throw error if query fails', async (t) =>
     nodeId: 'test-node-456',
     nodeAddress: 'ws://localhost:9001',
     seedNodeAddress: 'ws://seed:8000',
+    bootIncarnation: 1,
   });
 
   // Set the mock CDC service
@@ -213,6 +217,7 @@ test('registerNodeInCluster() - should throw error if CDC service not available'
     nodeId: 'test-node-789',
     nodeAddress: 'ws://localhost:9002',
     seedNodeAddress: 'ws://seed:8000',
+    bootIncarnation: 1,
   });
 
   // Don't set CDC service (it's null)
@@ -241,6 +246,7 @@ test('registerNodeInCluster() - should skip cache waits before CDC subscriptions
       nodeId: 'test-node-join-cache-wait',
       nodeAddress: 'ws://localhost:9003',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
       wsPort: 9003,
     });
     service.cdcIntegrationService = mockCDCService;
@@ -300,6 +306,7 @@ test('registerNodeInCluster() - should skip cache waits even after CDC subscript
       nodeId: 'test-node-join-cache-wait-active',
       nodeAddress: 'ws://localhost:9004',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
       wsPort: 9004,
     });
     service.cdcIntegrationService = mockCDCService;
@@ -353,6 +360,7 @@ test('registerNodeInCluster() - should use join phase SQL fallback when CDC muta
       nodeId: 'test-node-join-sql-fallback',
       nodeAddress: 'ws://localhost:9014',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
       wsPort: 9014,
     });
     service.cdcIntegrationService = {};
@@ -411,6 +419,7 @@ test('registerNodeInCluster() - should use the registration owner path for nodes
       nodeId: 'test-node-owner-path',
       nodeAddress: 'ws://localhost:9010',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
     });
 
     service.cdcIntegrationService = {
@@ -458,6 +467,7 @@ test('registerNodeInCluster() - should retry transient participant failures duri
       nodeId: 'test-node-admission-retry',
       nodeAddress: 'ws://localhost:9012',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
     });
     service.config.joinAdmissionWriteRetryTimeoutMs = 1000;
     service.sleep = async () => {};
@@ -522,6 +532,7 @@ test('registerNodeInCluster() - should retry admission at phase scope when the f
       nodeId: 'test-node-phase-admission-retry',
       nodeAddress: 'ws://localhost:9013',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
     });
 
     let nowMs = 0;
@@ -590,6 +601,7 @@ test('registerNodeInCluster() - should fail narrowly on seed participant failure
       nodeId: 'test-node-seed-restart-failure',
       nodeAddress: 'ws://localhost:9011',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
     });
     service.config.joinAdmissionWriteRetryTimeoutMs = 0;
 
@@ -659,6 +671,7 @@ test('registerNodeInCluster() - should reuse canonical membership during durable
     t.after(() => NodeService.resetInstance());
 
     const upsertCalls = [];
+    const incarnationAdvances = [];
     const nodeId = 'test-node-durable-rejoin';
     const nodeAddress = 'joiner-host:8080';
     const cache = new SystemTableCache();
@@ -692,6 +705,7 @@ test('registerNodeInCluster() - should reuse canonical membership during durable
       nodeId,
       nodeAddress,
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
       wsPort: 8082,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       clusterIncarnationFence: TEST_CLUSTER_INCARNATION_FENCE_ALLOWED,
@@ -744,6 +758,10 @@ test('registerNodeInCluster() - should reuse canonical membership during durable
         upsertCalls.push({tableName, rowData});
         return {success: true};
       },
+      updateSystemTableRow: async (tableName, whereClause, rowData) => {
+        incarnationAdvances.push({tableName, whereClause, rowData});
+        return {success: true, partitionResult: {affectedRows: 1}};
+      },
     };
     service.sendControlPlaneNodeStateUpdate = async () => {
       throw new Error('legacy node-state owner path should not be used');
@@ -753,21 +771,30 @@ test('registerNodeInCluster() - should reuse canonical membership during durable
 
     t.equal(
       upsertCalls.length,
+      0,
+      'durable rejoin never upserts over the canonical nodes row',
+    );
+    t.equal(
+      incarnationAdvances.length,
       1,
-      'durable rejoin should refresh the canonical nodes row so peers learn the node is connected but not yet ready',
+      'durable rejoin refreshes the canonical nodes row with one ' +
+        'incarnation-advance CAS so peers learn it is connected but not ready',
     );
-    t.equal(
-      upsertCalls[0]?.tableName,
-      TABLES.NODES,
-      'durable rejoin should only refresh the canonical nodes row when endpoint metadata is already reusable',
+    t.same(
+      incarnationAdvances[0]?.whereClause,
+      {node_id: nodeId, boot_incarnation: null},
+      'the refresh is fenced by the observed (older) boot incarnation',
     );
-    t.equal(
-      upsertCalls[0]?.rowData?.connection_state,
-      STATE.CONNECTED,
-      'durable rejoin refresh should preserve CONNECTED admission state',
+    t.match(
+      incarnationAdvances[0]?.rowData,
+      {
+        connection_state: STATE.CONNECTED,
+        boot_incarnation: 1,
+      },
+      'the refresh stamps this boot incarnation and CONNECTED admission state',
     );
     t.notOk(
-      Number.isFinite(upsertCalls[0]?.rowData?.ready_lease_expires_at),
+      Number.isFinite(incarnationAdvances[0]?.rowData?.ready_lease_expires_at),
       'durable rejoin refresh should explicitly clear the ready lease until READY signaling completes',
     );
     t.equal(
@@ -836,6 +863,7 @@ test('registerNodeInCluster() - should not treat cache-only durable rejoin metad
       nodeId,
       nodeAddress,
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
       wsPort: 8082,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
     });
@@ -904,6 +932,7 @@ test('registerNodeInCluster() - should fall back to fresh admission writes when 
       nodeId,
       nodeAddress: 'new-host:8080',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
       wsPort: 8082,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
     });

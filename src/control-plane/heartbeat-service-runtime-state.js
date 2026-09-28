@@ -12,7 +12,6 @@ const HEARTBEAT_SERVICE_LITERAL = Object.freeze({
   REPORTER_DURABLE_VISIBILITY_REQUIRED:
     'Authoritative node heartbeat visibility was not confirmed',
   NODE_ROW_MISSING_FROM_CACHE: 'node_row_missing_from_cache',
-  NODE_SHUTDOWN_REPORTER_UNVERIFIED: 'node_shutdown_reporter_unverified',
   NODE_ROW_MISSING_FROM_STORAGE: 'node_row_missing_from_storage',
   NODE_SHUTDOWN_CDC_UPDATE: 'node_shutdown_cdc_update',
   ATTEMPT_TIMEOUT: 'attempt_timeout',
@@ -24,6 +23,8 @@ const HEARTBEAT_SERVICE_LITERAL = Object.freeze({
   CDC_UPDATE: 'cdc_update',
   HEARTBEATSERVICE_REQUIRES_CONTROLPLANESYSTEMTABLEGATEWAY:
     'HeartbeatService requires controlPlaneSystemTableGateway',
+  NODE_LIFECYCLE_PUBLICATION_REQUIRED:
+    'HeartbeatService requires the node lifecycle publication owner',
   BACKGROUND: 'background',
   COALESCED_MIN_INTERVAL: 'coalesced_min_interval',
   UTILIZATION_CHANGED: 'utilization_changed',
@@ -52,6 +53,7 @@ const HEARTBEAT_REPORTER_VISIBILITY_DECISION = Object.freeze({
 const HEARTBEAT_PUBLICATION_PATH = Object.freeze({
   NODE_STATE_REPORTER: 'node_state_reporter',
   NODE_STATE_REPORTER_UNVERIFIED: 'node_state_reporter_unverified',
+  NODE_LIFECYCLE_PUBLICATION: 'node_lifecycle_publication',
 });
 const HEARTBEAT_FAILURE_STAGE = Object.freeze({REPORTER_VISIBILITY: 'reporter_visibility'});
 const HEARTBEAT_FAILURE_REASON = Object.freeze({

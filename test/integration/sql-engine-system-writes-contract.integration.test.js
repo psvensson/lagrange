@@ -7,7 +7,6 @@
 
 import {test} from 'node:test';
 
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {registerSqlEngineSystemTableContract} from '../query/sql-engine-system-table-contract-cases.js';
@@ -16,6 +15,7 @@ import {
   cleanupTestEnvironment,
   getUniquePort,
   gracefulShutdown,
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
 } from './helpers/cluster-test-helpers.js';
 
@@ -26,7 +26,7 @@ registerSqlEngineSystemTableContract(test, {
   async open() {
     initializeTestEnvironment({nodeId: SEED_NODE_ID});
     const wsPort = getUniquePort();
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: SEED_NODE_ID,
       nodeAddress: `ws://localhost:${wsPort}`,
       wsPort,

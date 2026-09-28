@@ -232,3 +232,68 @@ test(
     );
   },
 );
+
+test(
+  'CreateMessageGroupPhase attaches the completion owner before publishing ' +
+  'a newly routable replica',
+  async (t) => {
+    const replicaId = 'mg-attach-r1';
+    const messageGroupServices = new Map();
+    const joinReplicas = [];
+    const attachmentObservations = [];
+    const messageRouter = {
+      deliver: async () => ({acknowledged: true}),
+      initialize() {},
+      off() {},
+      on() {},
+      once() {},
+      register() {},
+      removeListener() {},
+      setServiceNodeResolver() {},
+      unregister() {},
+    };
+    const phase = new CreateMessageGroupPhase({
+      nodeId: 'join-node-attach',
+      delegates: {
+        attachMessageGroupService: (service) => {
+          attachmentObservations.push({
+            alreadyRoutable: messageGroupServices.has(replicaId),
+            service,
+          });
+        },
+        getBootstrapReadinessState: () => null,
+        getLogger: () => silentLogger,
+        getMessageGroupServices: () => messageGroupServices,
+        getMessageRouter: () => messageRouter,
+        getSleep: () => async () => {},
+        pushJoinMessageGroupReplica: (service) => {
+          joinReplicas.push(service);
+        },
+      },
+    });
+
+    await phase.createJoinMessageGroupReplica({
+      replicaOptions: {
+        createDelayMs: 0,
+        deferElection: true,
+        groupId: 'mg-attach',
+        peerAddresses: [],
+        publishLeaderNodeMetadata: false,
+        publishRoleMetadata: false,
+        replicaId,
+        replicaIds: [replicaId],
+      },
+    });
+    t.teardown(async () => {
+      await joinReplicas[0]?.shutdown();
+    });
+
+    t.equal(attachmentObservations.length, 1,
+      'the shared dispatch completion owner is attached exactly once');
+    t.equal(attachmentObservations[0].alreadyRoutable, false,
+      'no transport can route to the replica before completion is observable');
+    t.equal(messageGroupServices.get(replicaId),
+      attachmentObservations[0].service,
+      'the attached runtime is the exact runtime later published for routing');
+  },
+);

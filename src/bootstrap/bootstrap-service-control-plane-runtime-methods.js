@@ -23,6 +23,7 @@ import {
 } from './shared/message-group-service-handler-setup.js';
 import {
   COLUMN,
+  NODE_STATE,
   NUM,
   SERVICE_STATUS,
   STATE,
@@ -311,10 +312,11 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
           [COLUMN.DISK_USAGE_PERCENT]:
             Number.isFinite(stats?.diskUsagePercent) ?
               stats.diskUsagePercent : 0,
-          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.STATUS]: NODE_STATE.JOINING,
           [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
           [COLUMN.CAPABILITIES]: JSON.stringify([]),
           [COLUMN.LAST_HEARTBEAT]: now,
+          [COLUMN.BOOT_INCARNATION]: this.bootIncarnation,
           [COLUMN.CREATED_AT]: now,
         };
 

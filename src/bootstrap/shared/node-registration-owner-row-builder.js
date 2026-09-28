@@ -6,12 +6,19 @@ import {
   STATE,
 } from '../../constants/index.js';
 
+const BOOT_INCARNATION_REQUIRED =
+  'Node registration requires a positive boot incarnation';
+
 function buildNodeRegistrationRow({
   nodeId,
   nodeAddress,
   nodeCapabilities,
+  bootIncarnation,
   now,
 }) {
+  if (!Number.isSafeInteger(bootIncarnation) || bootIncarnation <= 0) {
+    throw new Error(BOOT_INCARNATION_REQUIRED);
+  }
   const cpus = os.cpus();
   const totalMemoryBytes = os.totalmem();
   const totalMemoryMb = Math.floor(
@@ -31,6 +38,7 @@ function buildNodeRegistrationRow({
     [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
     [COLUMN.CAPABILITIES]: JSON.stringify(nodeCapabilities || []),
     [COLUMN.LAST_HEARTBEAT]: now,
+    [COLUMN.BOOT_INCARNATION]: bootIncarnation,
     [COLUMN.CREATED_AT]: now,
   };
 }

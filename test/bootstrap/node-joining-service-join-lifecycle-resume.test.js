@@ -60,7 +60,6 @@ const REPORTER_FORWARD_NODE_ID = 'joiner-reporter-publication-mode';
 const REPORTER_FORWARD_NODE_ADDRESS = 'ws://localhost:19103';
 const REPORTER_FORWARD_SEED_ADDRESS = 'http://localhost:8080';
 const REPORTER_FORWARD_HEARTBEAT_AT = 4242;
-const REPORTER_FORWARD_READY_LEASE_AT = 8484;
 const REPORTER_FORWARD_TARGET_ADDRESS = 'seed-node-1/message-group/mg-1-r3';
 const LATE_PHASE_RESUME_NODE_ID = 'joining-node-late-phase-resume-1';
 const LATE_PHASE_RESUME_NODE_ADDRESS = 'ws://localhost:9199';
@@ -424,11 +423,11 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
         state: STATE.READY,
         capabilities: ['partition_replica'],
         heartbeatAt: REPORTER_FORWARD_HEARTBEAT_AT,
-        readyLeaseExpiresAt: REPORTER_FORWARD_READY_LEASE_AT,
-        nodeRow: {
+        heartbeatOnly: true,
+        telemetry: {
           [COLUMN.NODE_ID]: REPORTER_FORWARD_NODE_ID,
         },
-        nodeStatePublicationMode:
+        publicationMode:
           CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
       });
 
@@ -436,11 +435,12 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
         state: STATE.READY,
         capabilities: ['partition_replica'],
         heartbeatAt: REPORTER_FORWARD_HEARTBEAT_AT,
-        readyLeaseExpiresAt: REPORTER_FORWARD_READY_LEASE_AT,
         heartbeatOnly: true,
         nodeStatePublicationMode:
           CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
       }, 'steady-state reporter should preserve the canonical publication mode');
+      t.notOk('readyLeaseExpiresAt' in capturedUpdateOptions,
+        'the routed request never carries a sender-minted READY lease');
       t.same(
         capturedUpdateOptions?.nodeRow,
         {
