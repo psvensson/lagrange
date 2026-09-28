@@ -322,7 +322,7 @@ npm test
 \`\`\`sh
 lagrange service generate .
 lagrange service build .
-lagrange service deploy . --layout .lagrange/oci --idempotency-key <key>
+lagrange service deploy . --idempotency-key <key>
 \`\`\`
 
 \`generate\` compiles \`lagrange.service.js\` into the generated component
