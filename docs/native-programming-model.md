@@ -1,8 +1,14 @@
 # The Lagrange Programming Model
 
 A Lagrange service is one source-level unit containing HTTP handlers,
-distributed operations, and reducers. The compiler turns that source into a
-WASM component plus the immutable deployment records the runtime needs.
+distributed operations, and reducers. The compiler turns that source into an
+executable plus the immutable deployment records the runtime needs.
+
+The authoring API is provider-neutral. WASM is the supported execution provider
+today; planned OCI execution uses the same handlers, distributed-operation
+descriptors, Bindings, `call()`, routing, budgets, retries, and result
+semantics. Runtime selection changes packaging and isolation, not the service
+programming model.
 
 > Colocated in source. Distributed in execution.
 
@@ -23,7 +29,7 @@ account-summary/
   test/handler.test.js      host-side tests; no WASM required
   authoring/                guest-safe descriptor helpers
   runtime-types.d.ts        generated editor types
-  .lagrange/                generated entry, records, component, OCI layout
+  .lagrange/                generated entry, records, executable, install artifact
 ```
 
 The four source helpers are:
@@ -221,7 +227,7 @@ Run:
 ```bash
 lagrange service generate .
 lagrange service build .
-lagrange service deploy . --layout .lagrange/oci --idempotency-key <key>
+lagrange service deploy . --idempotency-key <key>
 ```
 
 `generate` normalizes the source and produces:
@@ -234,11 +240,11 @@ lagrange service deploy . --layout .lagrange/oci --idempotency-key <key>
 - a deterministic deployment plan; and
 - editor typings.
 
-`build` componentizes the generated entry and creates the local OCI layout used
-as installation input. OCI is packaging here, not managed container execution.
-`deploy` replays the generated records through the existing authenticated
-lifecycle SQL owners. The deployed code runs as a WASI component, not a Node.js
-process; only the supplied host interfaces are available.
+`build` creates the executable and immutable installation artifact.
+`deploy` resolves that artifact from the generated manifest and replays the
+generated records through the existing authenticated lifecycle SQL owners.
+With the current provider, deployed code runs as a WASI component; only the
+supplied host interfaces are available.
 
 Artifact, Binding, and Cell remain useful runtime terms:
 
