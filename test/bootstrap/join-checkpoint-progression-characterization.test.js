@@ -187,16 +187,21 @@ function stubJoinServiceForCheckpointTests(service) {
 // Uses buildJoinCheckpointSteps via the join() method owner path
 // ---------------------------------------------------------------------------
 
+// The joiner under test; production startup mints its boot incarnation.
+function createCheckpointJoinService() {
+  return new NodeJoiningService({
+    bootIncarnation: 1,
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    seedNodeAddress: TEST_SEED_ADDRESS,
+  });
+}
+
 test('Join checkpoint progression - steps execute in canonical order',
   async (t) => {
     initializeTestEnvironment();
 
-    const service = new NodeJoiningService({
-      bootIncarnation: 1,
-      nodeId: TEST_NODE_ID,
-      nodeAddress: TEST_NODE_ADDRESS,
-      seedNodeAddress: TEST_SEED_ADDRESS,
-    });
+    const service = createCheckpointJoinService();
 
     const tracking = stubJoinServiceForCheckpointTests(service);
 
@@ -232,12 +237,7 @@ test('Join checkpoint progression - session advances through all checkpoints',
     const store = new JoinSessionStore({now: () => Date.now()});
     const coordinator = new JoinCoordinator({joinSessionStore: store});
 
-    const service = new NodeJoiningService({
-      bootIncarnation: 1,
-      nodeId: TEST_NODE_ID,
-      nodeAddress: TEST_NODE_ADDRESS,
-      seedNodeAddress: TEST_SEED_ADDRESS,
-    });
+    const service = createCheckpointJoinService();
     service.joinCoordinator = coordinator;
     service.joinSessionStore = store;
 
@@ -271,12 +271,7 @@ test('Join checkpoint progression - resume skips completed checkpoints',
     const store = new JoinSessionStore({now: () => Date.now()});
     const coordinator = new JoinCoordinator({joinSessionStore: store});
 
-    const service = new NodeJoiningService({
-      bootIncarnation: 1,
-      nodeId: TEST_NODE_ID,
-      nodeAddress: TEST_NODE_ADDRESS,
-      seedNodeAddress: TEST_SEED_ADDRESS,
-    });
+    const service = createCheckpointJoinService();
     service.joinCoordinator = coordinator;
     service.joinSessionStore = store;
 
@@ -408,12 +403,7 @@ test('Join checkpoint progression - SEED_CONTACTED step runs plan phase 0',
   async (t) => {
     initializeTestEnvironment();
 
-    const service = new NodeJoiningService({
-      bootIncarnation: 1,
-      nodeId: TEST_NODE_ID,
-      nodeAddress: TEST_NODE_ADDRESS,
-      seedNodeAddress: TEST_SEED_ADDRESS,
-    });
+    const service = createCheckpointJoinService();
 
     const tracking = stubJoinServiceForCheckpointTests(service);
 
@@ -446,12 +436,7 @@ test('Join checkpoint progression - MEMBERSHIP_WRITTEN step runs plan phase 4',
   async (t) => {
     initializeTestEnvironment();
 
-    const service = new NodeJoiningService({
-      bootIncarnation: 1,
-      nodeId: TEST_NODE_ID,
-      nodeAddress: TEST_NODE_ADDRESS,
-      seedNodeAddress: TEST_SEED_ADDRESS,
-    });
+    const service = createCheckpointJoinService();
 
     const tracking = stubJoinServiceForCheckpointTests(service);
 
@@ -500,12 +485,7 @@ test('Join checkpoint progression - checkpoint names match ' +
 async (t) => {
   initializeTestEnvironment();
 
-  const service = new NodeJoiningService({
-    bootIncarnation: 1,
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    seedNodeAddress: TEST_SEED_ADDRESS,
-  });
+  const service = createCheckpointJoinService();
 
   stubJoinServiceForCheckpointTests(service);
 
@@ -566,12 +546,7 @@ test('Join checkpoint progression - FINALIZED shouldRerun detects ' +
 async (t) => {
   initializeTestEnvironment();
 
-  const service = new NodeJoiningService({
-    bootIncarnation: 1,
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    seedNodeAddress: TEST_SEED_ADDRESS,
-  });
+  const service = createCheckpointJoinService();
 
   stubJoinServiceForCheckpointTests(service);
 
@@ -634,12 +609,7 @@ test('Join checkpoint progression - checkpoint steps should reference ' +
 async (t) => {
   initializeTestEnvironment();
 
-  const service = new NodeJoiningService({
-    bootIncarnation: 1,
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    seedNodeAddress: TEST_SEED_ADDRESS,
-  });
+  const service = createCheckpointJoinService();
 
   stubJoinServiceForCheckpointTests(service);
 
@@ -690,12 +660,7 @@ test('Join checkpoint progression - SEED_CONTACTED step should reference ' +
 async (t) => {
   initializeTestEnvironment();
 
-  const service = new NodeJoiningService({
-    bootIncarnation: 1,
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    seedNodeAddress: TEST_SEED_ADDRESS,
-  });
+  const service = createCheckpointJoinService();
 
   stubJoinServiceForCheckpointTests(service);
 
@@ -737,12 +702,7 @@ test('Join checkpoint progression - INFRASTRUCTURE_READY step should ' +
 async (t) => {
   initializeTestEnvironment();
 
-  const service = new NodeJoiningService({
-    bootIncarnation: 1,
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    seedNodeAddress: TEST_SEED_ADDRESS,
-  });
+  const service = createCheckpointJoinService();
 
   stubJoinServiceForCheckpointTests(service);
 
@@ -785,12 +745,7 @@ test('Join checkpoint progression - MEMBERSHIP_WRITTEN step should ' +
 async (t) => {
   initializeTestEnvironment();
 
-  const service = new NodeJoiningService({
-    bootIncarnation: 1,
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    seedNodeAddress: TEST_SEED_ADDRESS,
-  });
+  const service = createCheckpointJoinService();
 
   stubJoinServiceForCheckpointTests(service);
 
@@ -832,12 +787,7 @@ test('Join checkpoint progression - READY_LEASE_ASSIGNED step should ' +
 async (t) => {
   initializeTestEnvironment();
 
-  const service = new NodeJoiningService({
-    bootIncarnation: 1,
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    seedNodeAddress: TEST_SEED_ADDRESS,
-  });
+  const service = createCheckpointJoinService();
 
   stubJoinServiceForCheckpointTests(service);
 

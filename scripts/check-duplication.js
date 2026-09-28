@@ -163,9 +163,11 @@ const RATCHET_TARGETS = [
     // lifecycle witness shared its authoritative-read fixture, then 29940 ->
     // 29935 after the final seed-admission fixtures removed their overlap.
     // 2026-09-28: tightened 779/29888 -> 775/29717 after the lifecycle
-    // closure fixtures converged on the shared durable/projection owner.
-    baselineCloneGroupCount: 775,
-    baselineDuplicatedLineCount: 29717,
+    // closure fixtures converged on the shared durable/projection owner,
+    // then 775/29717 -> 773/29693 after the joiner fixtures shared one
+    // boot-incarnation factory per file.
+    baselineCloneGroupCount: 773,
+    baselineDuplicatedLineCount: 29693,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

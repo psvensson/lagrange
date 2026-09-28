@@ -67,6 +67,27 @@ let nodeIdCounter = 0x900000000000;
  * @param {Object} seedApi - The BootstrapAPI instance
  * @returns {Function} Async function that performs HTTP POST requests
  */
+// One in-process joiner against the seed's WebSocket port; production
+// startup mints the boot incarnation.
+function createWsJoiningService({nodeId, wsPort, seedWsPort, httpPost}) {
+  return new NodeJoiningService({
+    bootIncarnation: 1,
+    nodeId,
+    nodeAddress: `ws://localhost:${wsPort}`,
+    seedNodeAddress: 'http://localhost:0',
+    seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+    wsPort,
+    config: {
+      httpTimeoutMs: 5000,
+      leadershipWaitTimeoutMs: 10000,
+      leadershipWaitInitialDelayMs: 10,
+      leadershipWaitMaxDelayMs: 100,
+      replicaStaggerDelayMs: 20,
+    },
+    httpPost,
+  });
+}
+
 function createInProcHttpPost(seedApi) {
   return async (url, body) => {
     const {pathname} = new URL(url);
@@ -264,20 +285,10 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       const joiningNodeId = generateUniqueNodeId(nodeIdCounter++);
       const joiningWsPort = getUniquePort();
 
-      joiningService = new NodeJoiningService({
-        bootIncarnation: 1,
+      joiningService = createWsJoiningService({
         nodeId: joiningNodeId,
-        nodeAddress: `ws://localhost:${joiningWsPort}`,
-        seedNodeAddress: 'http://localhost:0',
-        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
         wsPort: joiningWsPort,
-        config: {
-          httpTimeoutMs: 5000,
-          leadershipWaitTimeoutMs: 10000,
-          leadershipWaitInitialDelayMs: 10,
-          leadershipWaitMaxDelayMs: 100,
-          replicaStaggerDelayMs: 20,
-        },
+        seedWsPort,
         httpPost,
       });
 
@@ -532,20 +543,10 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       const joiningNodeId = generateUniqueNodeId(nodeIdCounter++);
       const joiningWsPort = getUniquePort();
 
-      joiningService = new NodeJoiningService({
-        bootIncarnation: 1,
+      joiningService = createWsJoiningService({
         nodeId: joiningNodeId,
-        nodeAddress: `ws://localhost:${joiningWsPort}`,
-        seedNodeAddress: 'http://localhost:0',
-        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
         wsPort: joiningWsPort,
-        config: {
-          httpTimeoutMs: 5000,
-          leadershipWaitTimeoutMs: 10000,
-          leadershipWaitInitialDelayMs: 10,
-          leadershipWaitMaxDelayMs: 100,
-          replicaStaggerDelayMs: 20,
-        },
+        seedWsPort,
         httpPost,
       });
 
@@ -697,20 +698,10 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       const joiningNodeId2 = generateUniqueNodeId(nodeIdCounter++);
       const joiningWsPort2 = getUniquePort();
 
-      joiningService2 = new NodeJoiningService({
-        bootIncarnation: 1,
+      joiningService2 = createWsJoiningService({
         nodeId: joiningNodeId2,
-        nodeAddress: `ws://localhost:${joiningWsPort2}`,
-        seedNodeAddress: 'http://localhost:0',
-        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
         wsPort: joiningWsPort2,
-        config: {
-          httpTimeoutMs: 5000,
-          leadershipWaitTimeoutMs: 10000,
-          leadershipWaitInitialDelayMs: 10,
-          leadershipWaitMaxDelayMs: 100,
-          replicaStaggerDelayMs: 20,
-        },
+        seedWsPort,
         httpPost,
       });
 
@@ -723,20 +714,10 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       const joiningNodeId3 = generateUniqueNodeId(nodeIdCounter++);
       const joiningWsPort3 = getUniquePort();
 
-      joiningService3 = new NodeJoiningService({
-        bootIncarnation: 1,
+      joiningService3 = createWsJoiningService({
         nodeId: joiningNodeId3,
-        nodeAddress: `ws://localhost:${joiningWsPort3}`,
-        seedNodeAddress: 'http://localhost:0',
-        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
         wsPort: joiningWsPort3,
-        config: {
-          httpTimeoutMs: 5000,
-          leadershipWaitTimeoutMs: 10000,
-          leadershipWaitInitialDelayMs: 10,
-          leadershipWaitMaxDelayMs: 100,
-          replicaStaggerDelayMs: 20,
-        },
+        seedWsPort,
         httpPost,
       });
 
