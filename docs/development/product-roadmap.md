@@ -266,7 +266,7 @@ loss, and demonstrate the same execution contract from a second language/runtime
 |------|--------|-------|
 | Unified service lifecycle | ✅ | `ServiceLifecycleManager` + `ServiceReconciler` + `ServiceDispatcher` |
 | Built-in runtime services | ✅ | `sys-postgres-wire`, `sys-admin-meta`, `sys-wasm-meta` |
-| `native_js` runtime | ✅ | Active runtime for first-party system services |
+| the kernel-internal runtime runtime | ✅ | Active runtime for first-party system services |
 | `wasm_component` runtime | ✅ | Available runtime for replicated services |
 | Service manifest schema definition | 🔲 | Identity, runtime, capabilities, compatibility |
 | Manifest validation rules | 🔲 | Required fields, version format, capability recognition, dependency validation |
