@@ -50,6 +50,8 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
     const operationRows = new Map();
     const deferredTimers = [];
     const deliveries = [];
+    const storageAdmissionService =
+      createAllowAllStorageAdmissionService();
 
     const authoritativeRead = async (tableName, sql, params = []) => {
       if (tableName === 'replica_operations' &&
@@ -161,7 +163,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           return 1024;
         },
       },
-      storageAdmissionService: createAllowAllStorageAdmissionService(),
+      storageAdmissionService,
       messageRouter: {
         async deliver(target, payload) {
           deliveries.push({target, payload});
