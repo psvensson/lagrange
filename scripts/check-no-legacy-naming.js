@@ -122,10 +122,11 @@ function main() {
     );
     for (const line of violations) console.error(`  ${line}`);
   }
+  const violationCount =
+    violations.length + serviceSurfaceViolations.length;
   console.error(
-    `\n${violations.length} disallowed reference(s). ` +
-    'If a reference is a genuine historical record, place it under a ' +
-    'whitelisted path in scripts/check-no-legacy-naming.js.',
+    `\n${violationCount} disallowed reference(s). ` +
+    'Historical solver records may retain old terms; public service surfaces may not.',
   );
   process.exit(1);
 }
