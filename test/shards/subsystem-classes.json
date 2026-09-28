@@ -22,11 +22,11 @@
     "storage-raft": 102,
     "test-infrastructure": 136,
     "transactions": 15,
-    "transport-messaging": 90,
+    "transport-messaging": 91,
     "wasm-toolchain": 57
   },
-  "censusSize": 2172,
-  "digest": "fnv1a32-77f90537",
+  "censusSize": 2173,
+  "digest": "fnv1a32-bd6f8464",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-31298d2c",
   "classes": {
@@ -1037,6 +1037,7 @@
     "test/message-group/message-group-failover-cdc-continuity.test.js": "transport-messaging",
     "test/message-group/message-group-rebalancer-leadership-readiness-hysteresis.test.js": "transport-messaging",
     "test/message-group/message-group-replica-distribution.property.test.js": "transport-messaging",
+    "test/message-group/message-group-service-forwarded-application-ingress.test.js": "transport-messaging",
     "test/message-group/message-group-service-leader-cdc.test.js": "transport-messaging",
     "test/message-group/message-group-service-lifecycle-and-ledger.test.js": "transport-messaging",
     "test/message-group/message-group-service-raft-replication-and-cdc.test.js": "transport-messaging",

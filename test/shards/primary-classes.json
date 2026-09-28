@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1908,
+    "unit": 1909,
     "integration": 75,
     "bootstrap": 182,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2172,
-  "digest": "fnv1a32-692a2597",
+  "censusSize": 2173,
+  "digest": "fnv1a32-91d3cd58",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1018,6 +1018,7 @@
     "test/message-group/message-group-failover-cdc-continuity.test.js": "unit",
     "test/message-group/message-group-rebalancer-leadership-readiness-hysteresis.test.js": "unit",
     "test/message-group/message-group-replica-distribution.property.test.js": "unit",
+    "test/message-group/message-group-service-forwarded-application-ingress.test.js": "unit",
     "test/message-group/message-group-service-leader-cdc.test.js": "unit",
     "test/message-group/message-group-service-lifecycle-and-ledger.test.js": "unit",
     "test/message-group/message-group-service-raft-replication-and-cdc.test.js": "unit",

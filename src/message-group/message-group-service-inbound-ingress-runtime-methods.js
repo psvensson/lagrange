@@ -10,6 +10,44 @@ const MESSAGE_GROUP_SERVICE_INBOUND_INGRESS_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
 };
 
+// The application envelope `attemptDirectDelivery` hands the transport. A
+// node transport (MessageRouter) wraps every delivery once more in its own
+// routing envelope, so a sendMessage delivery arrives here as that routing
+// envelope's payload while a raw router delivery arrives unwrapped.
+const MESSAGE_GROUP_APPLICATION_ENVELOPE_FIELDS = Object.freeze([
+  'messageId',
+  'payload',
+  'sourceGroup',
+  'sourceReplica',
+]);
+
+function isMessageGroupApplicationEnvelope(candidate) {
+  if (!candidate || typeof candidate !== 'object' ||
+      Array.isArray(candidate)) {
+    return false;
+  }
+  const fields = MESSAGE_GROUP_APPLICATION_ENVELOPE_FIELDS;
+  return Object.keys(candidate).length === fields.length &&
+    fields.every((field) => Object.hasOwn(candidate, field)) &&
+    typeof candidate.messageId === 'string' &&
+    candidate.messageId.length > 0 &&
+    typeof candidate.sourceGroup === 'string' &&
+    typeof candidate.sourceReplica === 'string';
+}
+
+/**
+ * One application ingress shape: a message-group envelope carried inside a
+ * transport envelope is handed on as itself (exactly one level); anything
+ * else is already the application message.
+ * @param {Object} message
+ * @return {Object}
+ */
+function resolveApplicationIngressMessage(message) {
+  return isMessageGroupApplicationEnvelope(message?.payload) ?
+    message.payload :
+    message;
+}
+
 async function completeApplicationMessage(
   service,
   applicationEvent,
@@ -191,7 +229,9 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
       }
       // Handle application messages (non-Raft)
       // Requirements: 2.3, 5.3
-      return this.handleApplicationMessage(message);
+      return this.handleApplicationMessage(
+        resolveApplicationIngressMessage(message),
+      );
     }
     /**
      * Handle application messages (non-Raft messages).

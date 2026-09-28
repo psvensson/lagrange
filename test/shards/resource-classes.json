@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2155,
+    "ordinary": 2156,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2172,
-  "digest": "fnv1a32-1b6d1f5f",
+  "censusSize": 2173,
+  "digest": "fnv1a32-926d99fa",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1017,6 +1017,7 @@
     "test/message-group/message-group-failover-cdc-continuity.test.js": "ordinary",
     "test/message-group/message-group-rebalancer-leadership-readiness-hysteresis.test.js": "ordinary",
     "test/message-group/message-group-replica-distribution.property.test.js": "ordinary",
+    "test/message-group/message-group-service-forwarded-application-ingress.test.js": "ordinary",
     "test/message-group/message-group-service-leader-cdc.test.js": "ordinary",
     "test/message-group/message-group-service-lifecycle-and-ledger.test.js": "ordinary",
     "test/message-group/message-group-service-raft-replication-and-cdc.test.js": "ordinary",
