@@ -85,22 +85,21 @@ descriptors, not durable Binding-name strings.
 lagrange service build .
 ```
 
-Build componentizes the generated entry into `.lagrange/component.wasm` and
-creates a local OCI layout as immutable installation input. OCI is the artifact
-transport here; the running service is a WASI component Cell, not a managed
-container.
+Build turns the generated entry into the executable and immutable installation
+artifact. The current WASM provider produces `.lagrange/component.wasm` and
+uses OCI image-layout formatting internally for artifact transport; that
+packaging detail is not a second service runtime.
 
 ## Deploy
 
 ```bash
-lagrange service deploy . \
-  --layout .lagrange/oci \
-  --idempotency-key <unique-key>
+lagrange service deploy . --idempotency-key <unique-key>
 ```
 
-Deploy sends the generated records through authenticated PostgreSQL-wire
-lifecycle SQL. The cluster stores verified component bytes in replicated
-artifact tables before a Cell depends on them.
+Deploy resolves the immutable artifact produced by `build` from the generated
+manifest, then sends the generated records through authenticated
+PostgreSQL-wire lifecycle SQL. The cluster stores verified component bytes in
+replicated artifact tables before a Cell depends on them.
 
 The lower-level sequence is:
 
