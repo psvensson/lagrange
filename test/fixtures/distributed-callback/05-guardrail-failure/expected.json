@@ -1,0 +1,8 @@
+{
+  "shape": "array",
+  "minRows": 1,
+  "firstRow": {
+    "ok": true,
+    "errorIncludes": "unbounded"
+  }
+}
