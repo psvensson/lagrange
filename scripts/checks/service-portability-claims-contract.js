@@ -3,13 +3,18 @@ import path from 'node:path';
 
 const CAPABILITY_PATH = 'docs/service-portability-capabilities.json';
 
-const PUBLIC_DOCUMENT_PATHS = Object.freeze([
+const PUBLIC_SURFACE_ROOTS = Object.freeze([
   'README.md',
-  'examples/README.md',
-  'docs/current-capabilities-and-limitations.md',
-  'docs/service-deployment-guide.md',
-  'docs/native-programming-model.md',
+  'docs',
+  'architecture',
+  'examples',
 ]);
+const PUBLIC_TEXT_EXTENSIONS = Object.freeze(new Set([
+  '.js',
+  '.json',
+  '.md',
+  '.mjs',
+]));
 const CANONICAL_HUMAN_DOCUMENT_PATH =
   'docs/current-capabilities-and-limitations.md';
 
@@ -120,11 +125,7 @@ function validateCapabilities(capabilities, problems) {
 }
 
 function validatePublicDocuments(documents, problems) {
-  for (const documentPath of PUBLIC_DOCUMENT_PATHS) {
-    const content = documents[documentPath];
-    addProblem(problems, typeof content === 'string',
-      `missing public claims document: ${documentPath}`);
-    if (typeof content !== 'string') continue;
+  for (const [documentPath, content] of Object.entries(documents)) {
     for (const pattern of FORBIDDEN_PUBLIC_CLAIMS) {
       addProblem(problems, !pattern.test(content),
         `${documentPath} contains forbidden capability claim ${pattern}`);
@@ -162,10 +163,31 @@ function readText(root, relativePath) {
   return fs.readFileSync(path.join(root, relativePath), TEXT_ENCODING_UTF8);
 }
 
+function collectPublicTextFiles(root) {
+  const files = [];
+  const visit = (relativePath) => {
+    const absolutePath = path.join(root, relativePath);
+    const stat = fs.statSync(absolutePath);
+    if (stat.isDirectory()) {
+      for (const entry of fs.readdirSync(absolutePath)) {
+        visit(path.join(relativePath, entry));
+      }
+      return;
+    }
+    if (relativePath === 'README.md' ||
+        PUBLIC_TEXT_EXTENSIONS.has(path.extname(relativePath))) {
+      files.push(relativePath);
+    }
+  };
+  for (const relativePath of PUBLIC_SURFACE_ROOTS) visit(relativePath);
+  return files.sort();
+}
+
 function loadServicePortabilityClaimsContract(root = process.cwd()) {
+  const publicPaths = collectPublicTextFiles(root);
   return {
     capabilities: readJson(root, CAPABILITY_PATH),
-    documents: Object.fromEntries(PUBLIC_DOCUMENT_PATHS.map((relativePath) => [
+    documents: Object.fromEntries(publicPaths.map((relativePath) => [
       relativePath,
       readText(root, relativePath),
     ])),
