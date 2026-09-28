@@ -40,11 +40,11 @@ import {NODE_STATUS} from '../../src/node/node-constants.js';
 import {STATE, TABLES} from '../../src/constants/index.js';
 import {NODE_LIVENESS_SEMANTIC_THRESHOLD_DEFAULT} from
   '../../src/control-plane/node-liveness-semantic-projection.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
   getUniquePort,
   cleanupTestEnvironment,
+  createVirginSeedBootstrapService,
   initializeTestEnvironment as initTestEnv,
   TEST_CONFIG,
 } from './helpers/cluster-test-helpers.js';
@@ -143,7 +143,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedWsPort = getUniquePort();
     const followerNodeId = 'follower-node';
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -226,7 +226,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440003';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -327,7 +327,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440004';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -487,7 +487,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedWsPort = getUniquePort();
     const nodeId = 'expiring-node';
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -555,7 +555,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440007';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -848,7 +848,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440010';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -958,7 +958,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440011';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -1143,7 +1143,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440013';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -1273,7 +1273,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440015';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

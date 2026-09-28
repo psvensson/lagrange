@@ -433,7 +433,7 @@ class NodeRegistrationOwnerPublicationMethods {
     return runRetryableControlPlaneWrite(
       () => controlPlaneSystemTableGateway.submitMutation(
         {
-          operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+          operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
           tableName: TABLES.SERVICES,
           row: rowData,
         },

@@ -97,7 +97,7 @@ test('production lifecycle handoff does not await a blocked CREATED write ' +
   const releaseCreatedWrite = createDeferred();
   const calls = [];
   const servicesOwner = {
-    async updateService(serviceId, data) {
+    async updateService(serviceId, _expectedIdentity, data) {
       calls.push({kind: 'update', serviceId, data});
       if (data.status === RUNTIME_REPLICA_STATUS.CREATED) {
         createdWriteStarted.resolve();
@@ -116,8 +116,8 @@ test('production lifecycle handoff does not await a blocked CREATED write ' +
       calls.push({kind: 'insert', row});
       return {success: true};
     },
-    async removeService(serviceId) {
-      calls.push({kind: 'delete', serviceId});
+    async removeService(serviceId, expectedIdentity) {
+      calls.push({kind: 'delete', serviceId, expectedIdentity});
       return {success: true};
     },
   };
@@ -245,7 +245,7 @@ test('a newer permanent failure supersedes an older retryable transition',
     const owner = new RuntimeReplicaStateProjectionOwner({
       hostNodeId: HOST_NODE_ID,
       servicesOwner: {
-        async updateService(_serviceId, data) {
+        async updateService(_serviceId, _expectedIdentity, data) {
           statuses.push(data.status);
           if (data.status === RUNTIME_REPLICA_STATUS.CREATED) {
             createdWriteStarted.resolve();
@@ -311,7 +311,7 @@ test('STOPPED queued behind an in-flight ACTIVE write deletes last and cannot ' 
   const releaseActiveWrite = createDeferred();
   const calls = [];
   const servicesOwner = {
-    async updateService(serviceId, data) {
+    async updateService(serviceId, _expectedIdentity, data) {
       calls.push({kind: 'update', serviceId, data});
       if (data.status === RUNTIME_REPLICA_STATUS.ACTIVE) {
         activeWriteStarted.resolve();
@@ -326,8 +326,8 @@ test('STOPPED queued behind an in-flight ACTIVE write deletes last and cannot ' 
       calls.push({kind: 'insert', row});
       return {success: true};
     },
-    async removeService(serviceId) {
-      calls.push({kind: 'delete', serviceId});
+    async removeService(serviceId, expectedIdentity) {
+      calls.push({kind: 'delete', serviceId, expectedIdentity});
       return {success: true};
     },
   };

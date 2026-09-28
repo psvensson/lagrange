@@ -33,16 +33,19 @@ class ServicesOwner extends SystemMetadataOwnerBase {
     return this.insertRow(row, options);
   }
 
-  async upsertService(row, options = {}) {
-    return this.upsertRow(row, options);
+  async updateService(serviceId, expectedIdentity, data, options = {}) {
+    return this.updateWhere(
+      {service_id: serviceId, ...expectedIdentity},
+      data,
+      options,
+    );
   }
 
-  async updateService(serviceId, data, options = {}) {
-    return this.updateByPrimaryKey(serviceId, data, options);
-  }
-
-  async removeService(serviceId, options = {}) {
-    return this.deleteByPrimaryKey(serviceId, options);
+  async removeService(serviceId, expectedIdentity, options = {}) {
+    return this.deleteWhere(
+      {service_id: serviceId, ...expectedIdentity},
+      options,
+    );
   }
 }
 

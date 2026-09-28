@@ -5,6 +5,10 @@ import {
 } from '../../src/control-plane/heartbeat-service.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  FIXTURE_BOOT_INCARNATION,
+  createNodeLifecyclePublicationFixture,
+} from '../test-helpers/node-lifecycle-publication-fixture.js';
 
 const HEARTBEAT_REPORTER_PUBLICATION_PATH = Object.freeze({
   NODE_STATE_REPORTER: 'node_state_reporter',
@@ -65,8 +69,19 @@ function createHeartbeatService(options = {}) {
       messageRouter: options.messageRouter || null,
     });
   return new RawHeartbeatService({
+    bootIncarnation: FIXTURE_BOOT_INCARNATION,
     ...options,
     controlPlaneSystemTableGateway,
+    nodeLifecyclePublication:
+      options.nodeLifecyclePublication ||
+      createNodeLifecyclePublicationFixture({
+        controlPlaneSystemTableGateway,
+        systemTableCache: options.systemTableCache,
+        authoritativeNodeRow: options.authoritativeNodeRow,
+        nodeId: options.nodeId,
+        bootIncarnation: options.bootIncarnation,
+        now: options.now,
+      }),
   });
 }
 

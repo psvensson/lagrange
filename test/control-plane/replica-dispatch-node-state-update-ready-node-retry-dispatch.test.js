@@ -269,8 +269,9 @@ test('ReplicaDispatchService demotes non-ready node-state churn to the ' +
     },
   });
 
-  await service.handleNodeStateUpdate({
+  await service.publishNodeLifecycleMessage({
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-connected',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8082',
     [ControlPlaneField.STATE]: STATE.CONNECTED,
@@ -352,8 +353,9 @@ test('ReplicaDispatchService fails loudly when NODE_STATE_UPDATE targets a missi
     });
 
     await t.rejects(
-      service.handleNodeStateUpdate({
+      service.publishNodeLifecycleMessage({
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+        [ControlPlaneField.BOOT_INCARNATION]: 1,
         [ControlPlaneField.NODE_ID]: 'node-3',
         [ControlPlaneField.NODE_ADDRESS]: 'localhost:8083',
         [ControlPlaneField.STATE]: STATE.READY,
@@ -363,14 +365,15 @@ test('ReplicaDispatchService fails loudly when NODE_STATE_UPDATE targets a missi
       /node row .*missing/i,
       'NODE_STATE_UPDATE should not recreate missing authoritative rows',
     );
-    t.equal(updates.length, 1, 'attempts the canonical update path once');
+    t.equal(updates.length, 0,
+      'authoritative absence refuses before any mutation attempt');
     t.equal(upserts.length, 0, 'dispatch updates should not fall back to upsert');
 
     service.stop();
   });
 
-test('ReplicaDispatchService defers missing-row NODE_STATE_UPDATE misses for ' +
-  'previously known nodes while authoritative recovery is unavailable', async (t) => {
+test('ReplicaDispatchService answers AUTHORITY_UNAVAILABLE as a typed ' +
+  'deferred completion while authoritative recovery is unavailable', async (t) => {
   initEnv();
 
   const now = Date.now();
@@ -426,52 +429,29 @@ test('ReplicaDispatchService defers missing-row NODE_STATE_UPDATE misses for ' +
     clearTimeoutFn() {},
   });
 
-  service.nodeStateUpdateQueue = {
-    enqueue(nodeId, reason, context) {
-      enqueues.push({nodeId, reason, context});
-      return true;
-    },
-    shutdown() {},
-  };
-  service.nodeStateUpdateQueues = [service.nodeStateUpdateQueue];
-
   const payload = {
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-recovery',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8084',
     [ControlPlaneField.STATE]: STATE.READY,
     [ControlPlaneField.HEARTBEAT_AT]: now,
   };
 
-  await service.reconcileNodeStateUpdate('node-recovery', {payload});
+  const completion = await service.publishNodeLifecycleMessage(payload);
 
+  t.match(completion, {
+    completionCompleted: false,
+    deferRetry: true,
+    publicationOutcome: 'authority_unavailable',
+    retryAfterMs: Number,
+  }, 'an unavailable authoritative read is a typed deferred completion');
   t.equal(
     scheduled.length,
-    1,
-    'recovery miss should arm one deferred retry timer',
+    0,
+    'the receiver arms no in-process retry; the sender tick owns the retry',
   );
-  t.equal(
-    scheduled[0].delayMs,
-    service.nodeStateUpdateRetryAfterMs,
-    'recovery miss should use the node-state retry budget',
-  );
-  t.equal(
-    service.nodeStateUpdateDeferredRetries.size,
-    1,
-    'recovery miss should retain one deferred retry slot',
-  );
-
-  scheduled[0].callback();
-
-  t.same(
-    enqueues,
-    [{
-      nodeId: 'node-recovery',
-      reason: RECONCILE_REASON.NODE_STATE_UPDATE_MESSAGE,
-      context: {payload},
-    }],
-    'deferred recovery miss should re-enter the canonical node-state queue',
-  );
+  t.same(enqueues, [], 'no hidden node-state queue exists');
 
   service.stop();
 });

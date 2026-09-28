@@ -3,7 +3,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {BOOTSTRAP_API_HANDOFF_STATUS} from '../../src/bootstrap/bootstrap-api-constants.js';
 import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
@@ -18,6 +17,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {NodeStatus} from '../../src/rebalancer/unified-rebalancer.js';
 import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   getUniquePort,
@@ -76,7 +76,7 @@ async function createSeedFixture() {
   if (typeof readinessState.setMaxListeners === 'function') {
     readinessState.setMaxListeners(0);
   }
-  const bootstrapService = new BootstrapService({
+  const bootstrapService = await createVirginSeedBootstrapService({
     nodeId: seedNodeId,
     nodeAddress: `ws://localhost:${seedWsPort}`,
     wsPort: seedWsPort,

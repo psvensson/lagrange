@@ -1043,6 +1043,7 @@ test('PartitionService - handleTransportMessage handles application messages', a
       type: 'FORWARD_WRITE',
       operation: {
         type: 'INSERT',
+        timestamp: partition.hlcClock.now().toString(),
         tableName: 'app_msg_test',
         data: {id: 'item-1', value: 42},
         sql: 'INSERT INTO app_msg_test (id, value) VALUES (?, ?)',
@@ -1055,6 +1056,8 @@ test('PartitionService - handleTransportMessage handles application messages', a
 
   t.equal(result.success, true, 'FORWARD_WRITE should succeed');
   t.equal(result.changes, 1, 'One row should be inserted');
+  t.type(result.originHlc, 'string',
+    'FORWARD_WRITE should preserve the exact committed CDC version');
 
   // Verify data was inserted
   const queryResult = await partition.executeQuery(

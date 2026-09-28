@@ -271,6 +271,24 @@ class CDCIntegrationServiceAuthoritativeReadDelegates {
   }
 
   /**
+   * Gateway-shaped alias for delegates that must remain behind the CDC read
+   * owner instead of invoking its authoritative read implementation directly.
+   * @param {string} tableName
+   * @param {string} sql
+   * @param {Array<*>} params
+   * @param {Object} [options]
+   * @return {Promise<Object>}
+   */
+  async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
+    return this.executeAuthoritativeSystemTableRead(
+      tableName,
+      sql,
+      params,
+      options,
+    );
+  }
+
+  /**
    * Execute the recovery read over the owner-partition RPC lane instead of
    * the generic SQL query engine route.
    * @param {string} tableName

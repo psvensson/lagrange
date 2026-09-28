@@ -20,6 +20,10 @@
 import {assembleHeartbeatService} from '../../control-plane/heartbeat-service.js';
 import {join} from 'node:path';
 import {LeaseService} from '../../control-plane/lease-service.js';
+import {NodeLifecyclePublication} from
+  '../../control-plane/node-lifecycle-publication.js';
+import {NodeReadyLeaseAuthority} from
+  '../../control-plane/node-ready-lease-authority.js';
 import {EndpointService} from '../../control-plane/endpoint-service.js';
 import {
   registerControlPlaneSystemTableGateway,
@@ -485,6 +489,14 @@ class ControlPlaneSetup {
       });
     }
 
+    // One durable node lifecycle owner per node: Heartbeat (local ingress)
+    // and ReplicaDispatch (routed NODE_STATE_UPDATE ingress) both call it.
+    const readyLeaseAuthority = NodeReadyLeaseAuthority.fromConfiguration();
+    const nodeLifecyclePublication = new NodeLifecyclePublication({
+      gateway: controlPlaneSystemTableGateway,
+      leaseAuthority: readyLeaseAuthority,
+    });
+
     // Create decomposed control plane services
     const heartbeatService = assembleHeartbeatService({
       nodeId,
@@ -495,6 +507,7 @@ class ControlPlaneSetup {
       systemTableCache,
       controlPlaneSystemTableGateway,
       controlPlaneReadinessService,
+      nodeLifecyclePublication,
       verifyReporterVisibilityOnSuccess: true,
       membershipPublicationService: membershipPublicationService || null,
       isNodeLifecycleReady: () => {
@@ -513,6 +526,7 @@ class ControlPlaneSetup {
       sqlQueryEngine: controlPlaneRuntimeBundle.sqlQueryEngine,
       messageRouter,
       controlPlaneSystemTableGateway,
+      readyLeaseAuthority,
     });
     leaseService.initialize();
 
@@ -537,6 +551,7 @@ class ControlPlaneSetup {
       nodesOwner: systemMetadataOwners.nodesOwner,
       servicesOwner: systemMetadataOwners.servicesOwner,
       replicaOperationsOwner: systemMetadataOwners.replicaOperationsOwner,
+      nodeLifecyclePublication,
     });
     dispatchService.initialize();
 

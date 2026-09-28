@@ -273,7 +273,7 @@ class SeedCleanupHandler {
       await d.clearRuntimeServiceHandler();
       d.stopAndClearControlPlaneServices();
       await d.clearRpcClient();
-      d.clearReplicaStateMachine();
+      await d.clearReplicaStateMachine();
       d.clearEpochManager();
       await d.clearReplicaHandler();
       d.clearTablePolicyService();
@@ -562,7 +562,7 @@ class SeedCleanupHandler {
     await LatencyTopologySetup.stop(d.getLatencyTopology());
     d.setLatencyTopology(null);
     await this.shutdownSharedRuntimeDependencies(d);
-    d.clearReplicaStateMachine();
+    await d.clearReplicaStateMachine();
     this.disableSystemTableWriter(d);
     d.clearEpochManager();
     await d.clearReplicaHandler();

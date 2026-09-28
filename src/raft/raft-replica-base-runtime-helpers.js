@@ -1,6 +1,10 @@
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {STRING, TABLES} from '../constants/index.js';
+import {
+  STRING,
+  TABLES,
+  isPartitionCleanupServiceRow,
+} from '../constants/index.js';
 import {ensureLiferaftProviderForRuntime} from './raft-provider-control.js';
 import {
   deliverRaftPacketWithBackpressureMute,
@@ -58,7 +62,7 @@ function buildPeerAddressForReplica(replica, peerId) {
 
   if (replica.systemTableCache) {
     const service = replica.systemTableCache.get(TABLES.SERVICES, peerId);
-    if (service && service.node_id) {
+    if (service && !isPartitionCleanupServiceRow(service) && service.node_id) {
       const address = replica.addressManager.format(
         service.node_id,
         replica.entityType,

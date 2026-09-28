@@ -36,6 +36,8 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {installMinimumSeedBootstrapLifecycleFixture} from
+  '../integration/helpers/cluster-test-helpers.js';
 
 // -- Suite-local fixture constants --
 
@@ -151,11 +153,13 @@ test('Bootstrap executePhase updates lifecycle sub-phases during phase execution
   async (t) => {
     initializeTestEnvironment();
 
-    const bootstrap = new BootstrapService({
-      nodeId: TEST_NODE_ID,
-      nodeAddress: TEST_NODE_ADDRESS,
-      wsPort: TEST_WS_PORT,
-    });
+    const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
+      new BootstrapService({
+        nodeId: TEST_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        wsPort: TEST_WS_PORT,
+      }),
+    );
 
     bootstrap.seedPhaseOwners = {
       infrastructure: async () => {},
@@ -219,11 +223,13 @@ test('Bootstrap terminal sub-phase CACHE_HYDRATION auto-advances to CONNECTING',
   async (t) => {
     initializeTestEnvironment();
 
-    const bootstrap = new BootstrapService({
-      nodeId: TEST_NODE_ID,
-      nodeAddress: TEST_NODE_ADDRESS,
-      wsPort: TEST_WS_PORT,
-    });
+    const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
+      new BootstrapService({
+        nodeId: TEST_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        wsPort: TEST_WS_PORT,
+      }),
+    );
 
     bootstrap.seedPhaseOwners = {
       infrastructure: async () => {},
