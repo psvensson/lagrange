@@ -124,7 +124,7 @@ To prevent overlap and contradictory runtime behavior:
    owner key and drains items through a single reconcile callback. Periodic
    polling loops remain as recovery-only paths.
 9. **SQL Scaling:** SQL service Cells use the shared service lifecycle
-   (`service_profile = 'sql_engine'`, active `runtime_kind = native_js`
+   (`service_profile = 'sql_engine'`, active `runtime_kind = kernel-internal provider`
    via `SQL_ENGINE_RUNTIME_KIND`). No parallel SQL-specific scaling framework.
 10. **WASM Entity Management:** External module/service administration flows
    through the default replicated meta service (`sys-wasm-meta`). Other APIs
