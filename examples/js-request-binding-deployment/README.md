@@ -77,10 +77,8 @@ flowchart LR
   classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
 ```
 
-Unlike the older JavaScript-envelope callback rehearsal in
-[`distributed-sql`](../distributed-sql/README.md), the artifact deployed here
-is a real WebAssembly component: the node executes it exactly as it executes
-the WAT-built component in
+The artifact deployed here is a real WebAssembly component: the node executes
+it exactly as it executes the WAT-built component in
 [`request-binding-deployment`](../request-binding-deployment/README.md).
 
 [`service.js`](service.js) imports the host interface directly:
