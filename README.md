@@ -65,8 +65,14 @@ See [partitioning](architecture/process-partitioning.md) and
 
 ## What runs where
 
-A Lagrange service is compiled to a **WASM component**: portable executable
-code with explicit interfaces for what it provides and may call.
+A Lagrange service is currently compiled to a **WASM component**: portable
+executable code with explicit interfaces for what it provides and may call.
+
+WASM is the supported execution provider today, not a separate application
+API. Planned OCI execution must preserve the same service model - handlers,
+distributed operations, calls, routing, budgets, retries, and reduction - while
+changing only provider concerns such as packaging, isolation, and the final
+runtime adapter.
 
 In source, an endpoint and its data-heavy operation can live together.
 This abbreviated example declares the operation and calls it from a handler:
