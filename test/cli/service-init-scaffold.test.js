@@ -43,7 +43,6 @@ const PROJECT_FILE_MODE = 0o644;
 const RESTRICTIVE_UMASK = 0o077;
 const SERVICE_OWNER_IMPORTS = Object.freeze({
   'src/cli/service-command-router.js': [
-    './service-project-scaffold.js',
     './service-wasm-scaffold.js',
   ],
   'src/cli/service-project-scaffold.js': [
@@ -109,11 +108,17 @@ async function runServiceEntrypoint(args) {
   return runEntrypoint(ENTRYPOINT, {args, timeoutMs: 15000});
 }
 
-// This suite guards the OCI-container scaffold; since init's default is
-// now the WASM-first project, every OCI assertion drives the legacy path
-// explicitly through --oci.
+// This suite guards the retained low-level OCI-container scaffold directly.
+// It is intentionally no longer reachable through the public service-init CLI.
 async function initializeProject(target) {
-  return runServiceEntrypoint(['service', 'init', target, '--oci']);
+  try {
+    createServiceProject(target);
+    return {exitCode: 0, stderr: ''};
+  } catch (error) {
+    const exitCode =
+      error?.code === SERVICE_PROJECT_SCAFFOLD_ERROR_CODE.INVALID_NAME ? 2 : 1;
+    return {exitCode, stderr: `${error?.code}: ${error?.message}`};
+  }
 }
 
 function runServiceRouter(args) {
@@ -275,7 +280,8 @@ test('service router rejects ambiguous commands and invalid project names', asyn
     {args: ['service', 'init', projectPath(root), 'extra'], error: /unknown_option/},
     {args: ['service', 'unknown'], error: /unknown_command/},
     {args: ['service', 'init', '--output'], error: /unknown_option/},
-    {args: ['service', 'init', path.join(root, 'Bad_Name'), '--oci'], error: /invalid_name/},
+    {args: ['service', 'init', path.join(root, 'Bad_Name')], error: /invalid_name/},
+    {args: ['service', 'init', projectPath(root), '--oci'], error: /usage/},
   ];
 
   const results = cases.map((attack) => runServiceRouter(attack.args.slice(1)));
