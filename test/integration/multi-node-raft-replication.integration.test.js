@@ -16,7 +16,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -27,6 +26,7 @@ import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {TERMINAL_STATUSES} from '../../src/rebalancer/replica-status.js';
 import {URL} from 'url';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   TEST_CONFIG,
@@ -178,7 +178,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       originalWarn.apply(console, args);
     };
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -464,7 +464,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
       child: () => capturingLogger,
     };
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -642,7 +642,7 @@ test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
     const seedNodeId = generateUniqueNodeId(nodeIdCounter++);
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

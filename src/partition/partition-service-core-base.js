@@ -15,6 +15,7 @@ import {
 } from './partition-service-constants.js';
 import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
+import {isLivePartitionServiceRow} from '../constants/service.js';
 const {
   AddressManager,
   CDCEventBuffer,
@@ -40,7 +41,6 @@ const {
   PendingRequestTracker,
   ProposalQueue,
   RaftRole,
-  SERVICE_TYPE,
   SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
   TABLES,
   TIMEOUT_BUDGET_DEFAULT,
@@ -810,7 +810,7 @@ class PartitionServiceCoreBase extends EventEmitter {
       return null;
     }
     const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
-    if (!service || !service.node_id) {
+    if (!isLivePartitionServiceRow(service) || !service.node_id) {
       return null;
     }
     const address = AddressManager.getInstance().format(
@@ -845,7 +845,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     }
     if (
       record.partition_id !== this.partitionId ||
-      record.service_type !== SERVICE_TYPE.PARTITION
+      !isLivePartitionServiceRow(record)
     ) {
       return;
     }

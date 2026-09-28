@@ -13,10 +13,8 @@ import {
   HEARTBEAT_STATE,
 } from './heartbeat-service-constants.js';
 import {
-  normalizeHeartbeatPublicationDiagnostics,
   recordHeartbeatPublicationAttempt,
   recordHeartbeatPublicationSuccess,
-  recordHeartbeatPublicationTarget,
 } from './heartbeat-service-write-coalescing.js';
 import {HEARTBEAT_SERVICE_LITERAL, ONE, ZERO} from './heartbeat-service-runtime-state.js';
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
@@ -438,80 +436,12 @@ class HeartbeatServiceLifecycleMethods {
       last_heartbeat: now,
       ready_lease_expires_at: null,
     };
-    const shutdownNodeRow = {...existing, node_id: this.nodeId, ...shutdownRow};
     const queryTimeoutMs = this.resolveHeartbeatWriteQueryTimeoutMs();
-    const reporterTimeoutMs = this.resolveNodeStateReporterTimeoutMs(queryTimeoutMs);
     recordHeartbeatPublicationAttempt({
       diagnostics: this.heartbeatPublicationDiagnostics,
       heartbeatConsecutiveFailures: this.heartbeatConsecutiveFailures,
       startedAtMs: now,
     });
-    if (typeof this.nodeStateReporter === 'function') {
-      try {
-        const reporterResult = await this.callNodeStateReporterWithTimeout(
-          {
-            nodeId: this.nodeId,
-            nodeAddress: shutdownRow.node_address,
-            state: shutdownRow.connection_state,
-            capabilities: shutdownRow.capabilities,
-            heartbeatAt: now,
-            readyLeaseExpiresAt: null,
-            nodeRow: shutdownNodeRow,
-          },
-          reporterTimeoutMs,
-        );
-        const reporterDiagnostics = normalizeHeartbeatPublicationDiagnostics(
-          reporterResult,
-          'node_shutdown_reporter',
-        );
-        const reporterVisible = await this.verifyReporterHeartbeatVisibility(now, {
-          expectedStatus: SERVICE_STATUS.STOPPED,
-          expectedConnectionState: STATE.DISCONNECTED,
-          expectedReadyLeaseCleared: true,
-        });
-        if (!reporterVisible) {
-          recordHeartbeatPublicationSuccess({
-            diagnostics: {
-              ...reporterDiagnostics,
-              publicationPath: HEARTBEAT_SERVICE_LITERAL.NODE_SHUTDOWN_REPORTER_UNVERIFIED,
-            },
-            heartbeatConsecutiveFailures: this.heartbeatConsecutiveFailures,
-            heartbeatPublicationDiagnostics: this.heartbeatPublicationDiagnostics,
-            now,
-            serviceLiteral: HEARTBEAT_SERVICE_LITERAL,
-          });
-          this.logger.info(HEARTBEAT_LOG_MSG.SHUTDOWN_STATUS_PUBLISHED, {
-            nodeId: this.nodeId,
-            publicationPath: HEARTBEAT_SERVICE_LITERAL.NODE_SHUTDOWN_REPORTER_UNVERIFIED,
-          });
-          return true;
-        }
-        recordHeartbeatPublicationSuccess({
-          diagnostics: reporterDiagnostics,
-          heartbeatConsecutiveFailures: this.heartbeatConsecutiveFailures,
-          heartbeatPublicationDiagnostics: this.heartbeatPublicationDiagnostics,
-          now,
-          serviceLiteral: HEARTBEAT_SERVICE_LITERAL,
-        });
-        this.logger.info(HEARTBEAT_LOG_MSG.SHUTDOWN_STATUS_PUBLISHED, {
-          nodeId: this.nodeId,
-          publicationPath: reporterDiagnostics.publicationPath,
-        });
-        return true;
-      } catch (error) {
-        const reporterDiagnostics = normalizeHeartbeatPublicationDiagnostics(
-          error?.publicationDiagnostics || error,
-          'node_shutdown_reporter',
-        );
-        recordHeartbeatPublicationTarget({
-          diagnostics: reporterDiagnostics,
-          heartbeatPublicationDiagnostics: this.heartbeatPublicationDiagnostics,
-          serviceLiteral: HEARTBEAT_SERVICE_LITERAL,
-        });
-        error.publicationDiagnostics = reporterDiagnostics;
-        throw error;
-      }
-    }
     const updateResult = await this.getControlPlaneSystemTableGateway().updateSystemTableRow(
       SYSTEM_TABLE_NAME.NODES,
       {node_id: this.nodeId},

@@ -27,6 +27,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {REPLICA_HANDLER_LOG_MSG} from
   '../../src/node/replica-handler-constants.js';
 import {
@@ -34,6 +35,11 @@ import {
   ReplicaOperationMessageType,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {
+  createLifecycleServiceRow,
+  createLifecycleStateStore,
+  createPartitionRow,
+} from '../test-helpers/lifecycle-state-store.js';
 
 const LIFECYCLE_TABLE = '_raft_rs_replica_lifecycle';
 const SERVICES = 'services';
@@ -79,18 +85,50 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
   cache, rowOf}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(),
     'replica-removal-exit-'));
-  const states = new Map([[replicaId, ReplicaStatus.ACTIVE]]);
   const outcomes = [];
-  const replicaStateMachine = {
-    getState: (id) => states.get(id) ?? null,
-    registerReplicaSnapshot: (id, snapshot) => states.set(id, snapshot.state),
-    transition(id, status) {
-      states.set(id, status);
-      cache.upsert(SERVICES, rowOf(status));
-      return true;
-    },
-    completeDurableRemoval: (id) => states.set(id, ReplicaStatus.REMOVED),
+  const initialRow = createLifecycleServiceRow({
+    replicaId,
+    partitionId,
+    nodeId,
+    status: ReplicaStatus.ACTIVE,
+    createdAt: 1,
+    stateEnteredAt: 1,
+    ...rowOf(ReplicaStatus.ACTIVE),
+  });
+  const lifecycleStore = createLifecycleStateStore({
+    services: [initialRow],
+    partitions: [createPartitionRow({
+      partitionId,
+      leaderNodeId: null,
+    })],
+  });
+  const submitMutation = lifecycleStore.gateway.submitMutation.bind(
+    lifecycleStore.gateway,
+  );
+  lifecycleStore.gateway.submitMutation = async (...args) => {
+    const result = await submitMutation(...args);
+    const durableRow = lifecycleStore.durable.services.get(replicaId) || null;
+    if (durableRow) cache.upsert(SERVICES, durableRow);
+    else cache.delete(SERVICES, replicaId);
+    return result;
   };
+  const replicaStateMachine = new ReplicaStateMachine({
+    nodeId,
+    systemTableCache: lifecycleStore.cache,
+    controlPlaneSystemTableGateway: lifecycleStore.gateway,
+  });
+  replicaStateMachine.registerReplicaSnapshot(replicaId, {
+    partitionId,
+    nodeId,
+    state: ReplicaStatus.ACTIVE,
+    serviceId: replicaId,
+    serviceType: initialRow.service_type,
+    serviceAddress: initialRow.address,
+    durableVersionColumn: 'state_entered_at',
+    durableVersion: initialRow.state_entered_at,
+    durableUpdatedAt: initialRow.updated_at,
+    durableCreatedAt: initialRow.created_at,
+  });
   const service = new EventEmitter();
   Object.assign(service, {
     partitionId,
@@ -110,6 +148,7 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     dataDir,
     systemTableCache: cache,
     cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: lifecycleStore.gateway,
     createPartitionService: () => {
       throw new Error('this world creates no partition service');
     },
@@ -129,11 +168,6 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
       return logger.info(message, fields);
     },
   });
-  handler.partitionServiceRowOwner = {
-    removeReplica: async ({replicaId: removed}) => {
-      cache.delete(SERVICES, removed);
-    },
-  };
   handler.localServices.set(replicaId, service);
   handler.localReplicas.set(replicaId, {replicaId, partitionId,
     status: ReplicaStatus.ACTIVE, service});

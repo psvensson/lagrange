@@ -27,6 +27,10 @@ import {
 } from '../../src/bootstrap/seed-startup-session-store.js';
 import {ControlPlaneSetup} from
   '../../src/bootstrap/shared/control-plane-setup.js';
+import {
+  createVirginSeedBootstrapService,
+  EMPTY_REPLICA_STATE_MACHINE_HANDLE,
+} from '../integration/helpers/cluster-test-helpers.js';
 
 const ports = createPortAllocator(import.meta.url);
 const BOOTSTRAP_SEQUENCE_TEST_TIMEOUT_MS = 90000;
@@ -96,6 +100,10 @@ function getRandomPort() {
 function disablePostPartitionBootstrapWork(bootstrap) {
   bootstrap.seedRegistrationPhase.phaseRegistration = NOOP_ASYNC;
   bootstrap.seedCacheHydrationPhase.phaseCacheHydration = NOOP_ASYNC;
+  bootstrap.initializeReplicaStateMachine = () => {
+    bootstrap.replicaStateMachine = EMPTY_REPLICA_STATE_MACHINE_HANDLE;
+    return bootstrap.replicaStateMachine;
+  };
   bootstrap.initializeReplicaHandler = NOOP_SYNC;
   bootstrap.initializeMessageGroupServiceHandler = () => {
     bootstrap.messageGroupServiceHandler = EMPTY_SERVICE_HANDLE;
@@ -192,6 +200,7 @@ test('BootstrapService - seed checkpoint snapshot resolves explicit readiness st
     bootstrap.messageGroupServices = new Map([['mg-1', {}]]);
     bootstrap.partitionServices = new Map([['services-p1', {}]]);
     bootstrap.cdcIntegrationService = {};
+    bootstrap.replicaStateMachine = EMPTY_REPLICA_STATE_MACHINE_HANDLE;
     bootstrap.systemTableCache = createLocalServiceEndpointCache(
       bootstrap.nodeId,
     );
@@ -421,6 +430,10 @@ test('BootstrapService - activates message-group rows after seed registration',
       async () => {
         order.push('cache-hydration');
       };
+    bootstrap.initializeReplicaStateMachine = () => {
+      bootstrap.replicaStateMachine = EMPTY_REPLICA_STATE_MACHINE_HANDLE;
+      return bootstrap.replicaStateMachine;
+    };
     bootstrap.initializeReplicaHandler = () => {
       order.push('replica-handler');
     };
@@ -597,7 +610,7 @@ test('Bootstrap sequence - services created after self-connection', async (t) =>
   const wsPort = getRandomPort();
   const nodeId = `test-node-${Date.now()}`;
 
-  const bootstrap = new BootstrapService({
+  const bootstrap = await createVirginSeedBootstrapService({
     nodeId,
     nodeAddress: `ws://localhost:${wsPort}`,
     wsPort,

@@ -13,15 +13,9 @@ import {
 import {
   ControlPlaneField,
   ControlPlaneMessageType,
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
-import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
-import {
-  NODE_STATE_UPDATE_RETRY_CLASS,
-  NODE_STATE_UPDATE_RETRY_POLICY,
-} from '../../src/control-plane/replica-dispatch-service-constants.js';
 import {
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
@@ -90,8 +84,8 @@ test('ReplicaDispatchService ignores non-owner replica_operations cache rows',
     service.stop();
   });
 
-test('ReplicaDispatchService bootstraps missing node rows from NODE_STATE_UPDATE ' +
-  'payloads when startup registration visibility lags',
+test('ReplicaDispatchService refuses missing registered node identity despite ' +
+  'a complete NODE_STATE_UPDATE payload',
 async (t) => {
   initEnv();
 
@@ -118,8 +112,9 @@ async (t) => {
     },
   });
 
-  await service.handleNodeStateUpdate({
+  const error = await t.rejects(service.publishNodeLifecycleMessage({
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-joiner',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8099',
     [ControlPlaneField.STATE]: STATE.CONNECTED,
@@ -139,24 +134,19 @@ async (t) => {
       [COLUMN.STORAGE_BUDGET_SOURCE]: 'backfill',
       [COLUMN.STORAGE_BUDGET_UPDATED_AT]: now - 500,
     },
-  });
-  t.equal(updates.length, 1, 'attempts the canonical update path once');
-  t.equal(
-    upserts.length,
-    1,
-    'dispatch should bootstrap a missing node row from the node-state payload',
-  );
-  t.equal(
-    upserts[0].row[COLUMN.STORAGE_BUDGET_BYTES],
-    107374182400,
-    'bootstrap upsert should preserve startup-owned storage budget fields',
-  );
+  }));
+  t.equal(error?.code, 'NODE_ROW_MISSING',
+    'registration absence remains the creation owner concern');
+  t.equal(updates.length, 0,
+    'publication does not mutate before authoritative registration exists');
+  t.equal(upserts.length, 0,
+    'payload contents cannot recreate canonical node identity');
 
   service.stop();
 });
 
-test('ReplicaDispatchService bootstraps missing node rows from heartbeat-only ' +
-  'NODE_STATE_UPDATE payloads with background write options',
+test('ReplicaDispatchService refuses missing registered identity for ' +
+  'heartbeat-only NODE_STATE_UPDATE payloads',
 async (t) => {
   initEnv();
 
@@ -183,8 +173,9 @@ async (t) => {
     },
   });
 
-  await service.handleNodeStateUpdate({
+  const error = await t.rejects(service.publishNodeLifecycleMessage({
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-joiner-heartbeat-only',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8100',
     [ControlPlaneField.STATE]: STATE.CONNECTED,
@@ -205,34 +196,14 @@ async (t) => {
       [COLUMN.STORAGE_BUDGET_SOURCE]: 'backfill',
       [COLUMN.STORAGE_BUDGET_UPDATED_AT]: now - 500,
     },
-  });
+  }));
 
-  t.equal(updates.length, 1, 'attempts the canonical update path once');
-  t.equal(
-    upserts.length,
-    1,
-    'dispatch should bootstrap a missing row even for heartbeat-only updates',
-  );
-  t.equal(
-    upserts[0].options?.deliveryPriority,
-    'background',
-    'heartbeat-only bootstrap should use background write delivery',
-  );
-  t.equal(
-    upserts[0].options?.workClass,
-    'background',
-    'heartbeat-only bootstrap should use background work class',
-  );
-  t.equal(
-    upserts[0].row[COLUMN.CPU_CORES],
-    undefined,
-    'heartbeat-only bootstrap should not persist resource participation fields',
-  );
-  t.equal(
-    upserts[0].row[COLUMN.STORAGE_BUDGET_BYTES],
-    undefined,
-    'heartbeat-only bootstrap should not persist storage budget fields',
-  );
+  t.equal(error?.code, 'NODE_ROW_MISSING',
+    'heartbeat recovery cannot become a registration creator');
+  t.equal(updates.length, 0,
+    'heartbeat publication does not mutate an absent identity');
+  t.equal(upserts.length, 0,
+    'heartbeat-only publication never invents canonical identity');
 
   service.stop();
 });
@@ -295,8 +266,9 @@ test('ReplicaDispatchService NODE_STATE_UPDATE uses injected control-plane ' +
     },
   });
 
-  await service.handleNodeStateUpdate({
+  await service.publishNodeLifecycleMessage({
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-gateway',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8090',
     [ControlPlaneField.STATE]: STATE.READY,
@@ -315,363 +287,6 @@ test('ReplicaDispatchService NODE_STATE_UPDATE uses injected control-plane ' +
     'dispatch gateway writes should target the nodes table',
   );
 
-  service.stop();
-});
-
-test('ReplicaDispatchService defers transient NODE_STATE_UPDATE failures and ' +
-  're-enqueues only the latest payload', async (t) => {
-  initEnv();
-
-  const scheduled = [];
-  const enqueues = [];
-  const now = Date.now();
-  const cacheNode = {
-    node_id: 'node-deferred',
-    node_address: 'localhost:8091',
-    cpu_cores: 8,
-    memory_mb: 16384,
-    disk_gb: 500,
-    status: SERVICE_STATUS.ACTIVE,
-    connection_state: STATE.CONNECTED,
-    capabilities: READY_NODE_CAPABILITIES_JSON,
-    last_heartbeat: now - 1000,
-    ready_lease_expires_at: null,
-    created_at: now - 10000,
-  };
-  const transientError = new Error('Connection to node seed closed');
-  transientError.retryAfterMs = 123;
-
-  const service = createService({
-    cacheNode,
-    cdcIntegrationService: {
-      updateSystemTableRow: async () => ({success: true}),
-      upsertSystemTableRow: async () => ({success: true}),
-      isTransientCdcError(message) {
-        return message.includes('Connection to node');
-      },
-    },
-    controlPlaneSystemTableGateway: {
-      async updateSystemTableRow() {
-        throw transientError;
-      },
-    },
-    setTimeoutFn(callback, delayMs) {
-      const handle = {callback, delayMs};
-      scheduled.push(handle);
-      return handle;
-    },
-    clearTimeoutFn() {},
-  });
-
-  const originalQueue = service.nodeStateUpdateQueue;
-  service.nodeStateUpdateQueue = {
-    enqueue(nodeId, reason, context) {
-      enqueues.push({nodeId, reason, context});
-      return true;
-    },
-    shutdown() {},
-  };
-  service.nodeStateUpdateQueues = [service.nodeStateUpdateQueue];
-
-  const initialPayload = {
-    [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-    [ControlPlaneField.NODE_ID]: 'node-deferred',
-    [ControlPlaneField.NODE_ADDRESS]: 'localhost:8091',
-    [ControlPlaneField.STATE]: STATE.READY,
-    [ControlPlaneField.HEARTBEAT_AT]: now,
-  };
-  const newerPayload = {
-    ...initialPayload,
-    [ControlPlaneField.HEARTBEAT_AT]: now + 5000,
-    [ControlPlaneField.READY_LEASE_EXPIRES_AT]: now + 65000,
-  };
-
-  await service.reconcileNodeStateUpdate('node-deferred', {
-    payload: initialPayload,
-  });
-
-  t.equal(
-    scheduled.length,
-    1,
-    'transient failure should arm one deferred retry timer',
-  );
-  t.equal(
-    scheduled[0].delayMs,
-    123,
-    'deferred retry should honor retryAfterMs',
-  );
-  t.equal(
-    service.nodeStateUpdateDeferredRetries.size,
-    1,
-    'deferred retry slot should be retained until replay',
-  );
-
-  const enqueueResult = service.enqueueNodeStateUpdate(newerPayload);
-  t.equal(
-    enqueueResult,
-    false,
-    'new payload should merge into the deferred retry slot instead of queueing immediately',
-  );
-  t.equal(
-    enqueues.length,
-    0,
-    'deferred retry slot should suppress immediate queue traffic',
-  );
-
-  scheduled[0].callback();
-
-  t.equal(enqueues.length, 1, 'timer should re-enqueue one retry');
-  t.same(
-    enqueues[0],
-    {
-      nodeId: 'node-deferred',
-      reason: RECONCILE_REASON.NODE_STATE_UPDATE_MESSAGE,
-      context: {payload: newerPayload},
-    },
-    'deferred retry should publish the newest merged payload only once',
-  );
-  t.equal(
-    service.nodeStateUpdateDeferredRetries.size,
-    0,
-    'deferred retry slot should clear after re-enqueue',
-  );
-
-  service.nodeStateUpdateQueue = originalQueue;
-  service.stop();
-});
-
-test('ReplicaDispatchService defers steady-heartbeat participant-failure ' +
-  'NODE_STATE_UPDATE errors via shared control-plane classification',
-async (t) => {
-  initEnv();
-
-  const scheduled = [];
-  const now = Date.now();
-  const cacheNode = {
-    node_id: 'node-participant-failure',
-    node_address: 'localhost:8091',
-    cpu_cores: 8,
-    memory_mb: 16384,
-    disk_gb: 500,
-    status: SERVICE_STATUS.ACTIVE,
-    connection_state: STATE.CONNECTED,
-    capabilities: READY_NODE_CAPABILITIES_JSON,
-    last_heartbeat: now - 1000,
-    ready_lease_expires_at: null,
-    created_at: now - 10000,
-  };
-  const retryableError =
-    new Error('Distributed operation failed due to participant failures');
-  retryableError.code = 'DISTRIBUTED_PARTICIPANT_FAILURE';
-
-  const service = createService({
-    cacheNode,
-    cdcIntegrationService: {
-      updateSystemTableRow: async () => ({success: true}),
-      upsertSystemTableRow: async () => ({success: true}),
-      isTransientCdcError() {
-        return false;
-      },
-    },
-    controlPlaneSystemTableGateway: {
-      async updateSystemTableRow() {
-        throw retryableError;
-      },
-    },
-    setTimeoutFn(callback, delayMs) {
-      const handle = {callback, delayMs};
-      scheduled.push(handle);
-      return handle;
-    },
-    clearTimeoutFn() {},
-  });
-
-  await service.reconcileNodeStateUpdate('node-participant-failure', {
-    payload: {
-      [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-      [ControlPlaneField.NODE_ID]: 'node-participant-failure',
-      [ControlPlaneField.NODE_ADDRESS]: 'localhost:8091',
-      [ControlPlaneField.STATE]: STATE.READY,
-      [ControlPlaneField.HEARTBEAT_ONLY]: true,
-      [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
-        CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY,
-      [ControlPlaneField.HEARTBEAT_AT]: now,
-    },
-  });
-
-  t.equal(
-    scheduled.length,
-    1,
-    'retryable participant failure should arm one deferred retry timer',
-  );
-  t.equal(
-    scheduled[0].delayMs,
-    service.nodeStateUpdateRetryAfterMs *
-      NODE_STATE_UPDATE_RETRY_POLICY.PUBLICATION_PRESSURE_MIN_DELAY_MULTIPLIER,
-    'retryable participant failure should use the bounded publication-pressure delay floor',
-  );
-  t.equal(
-    service.nodeStateUpdateDeferredRetries.size,
-    1,
-    'retryable participant failure should keep the latest payload queued for replay',
-  );
-  t.same(
-    service.nodeStateUpdateRetryStateByNodeId.get(
-      'node-participant-failure',
-    ),
-    {
-      retryClass: NODE_STATE_UPDATE_RETRY_CLASS.PUBLICATION_PRESSURE,
-      failureCount: 1,
-      retryAfterMs:
-        service.nodeStateUpdateRetryAfterMs *
-        NODE_STATE_UPDATE_RETRY_POLICY.PUBLICATION_PRESSURE_MIN_DELAY_MULTIPLIER,
-      errorMessage:
-        'Distributed operation failed due to participant failures',
-    },
-    'participant-failure retries should record one canonical publication-pressure retry state',
-  );
-
-  service.stop();
-});
-
-test('ReplicaDispatchService backs off repeated steady-heartbeat participant-failure ' +
-  'NODE_STATE_UPDATE retries and keeps one deferred owner slot per node',
-async (t) => {
-  initEnv();
-
-  const scheduled = [];
-  const enqueues = [];
-  const now = Date.now();
-  const cacheNode = {
-    node_id: 'node-participant-backoff',
-    node_address: 'localhost:8091',
-    cpu_cores: 8,
-    memory_mb: 16384,
-    disk_gb: 500,
-    status: SERVICE_STATUS.ACTIVE,
-    connection_state: STATE.CONNECTED,
-    capabilities: READY_NODE_CAPABILITIES_JSON,
-    last_heartbeat: now - 1000,
-    ready_lease_expires_at: null,
-    created_at: now - 10000,
-  };
-  const retryableError =
-    new Error('Distributed operation failed due to participant failures');
-  retryableError.code = 'DISTRIBUTED_PARTICIPANT_FAILURE';
-
-  const service = createService({
-    cacheNode,
-    cdcIntegrationService: {
-      updateSystemTableRow: async () => ({success: true}),
-      upsertSystemTableRow: async () => ({success: true}),
-      isTransientCdcError() {
-        return false;
-      },
-    },
-    controlPlaneSystemTableGateway: {
-      async updateSystemTableRow() {
-        throw retryableError;
-      },
-    },
-    setTimeoutFn(callback, delayMs) {
-      const handle = {callback, delayMs};
-      scheduled.push(handle);
-      return handle;
-    },
-    clearTimeoutFn() {},
-  });
-
-  const originalQueue = service.nodeStateUpdateQueue;
-  service.nodeStateUpdateQueue = {
-    enqueue(nodeId, reason, context) {
-      enqueues.push({nodeId, reason, context});
-      return true;
-    },
-    shutdown() {},
-  };
-  service.nodeStateUpdateQueues = [service.nodeStateUpdateQueue];
-
-  const initialPayload = {
-    [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-    [ControlPlaneField.NODE_ID]: 'node-participant-backoff',
-    [ControlPlaneField.NODE_ADDRESS]: 'localhost:8091',
-    [ControlPlaneField.STATE]: STATE.READY,
-    [ControlPlaneField.HEARTBEAT_ONLY]: true,
-    [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
-      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY,
-    [ControlPlaneField.HEARTBEAT_AT]: now,
-  };
-  const newerPayload = {
-    ...initialPayload,
-    [ControlPlaneField.HEARTBEAT_AT]: now + 5000,
-    [ControlPlaneField.READY_LEASE_EXPIRES_AT]: now + 65000,
-  };
-
-  await service.reconcileNodeStateUpdate('node-participant-backoff', {
-    payload: initialPayload,
-  });
-
-  const firstDelayMs =
-    service.nodeStateUpdateRetryAfterMs *
-    NODE_STATE_UPDATE_RETRY_POLICY.PUBLICATION_PRESSURE_MIN_DELAY_MULTIPLIER;
-  t.equal(
-    scheduled[0].delayMs,
-    firstDelayMs,
-    'first participant-failure retry should use the publication-pressure floor',
-  );
-
-  scheduled[0].callback();
-  t.equal(
-    enqueues.length,
-    1,
-    'first deferred retry should re-enter the owner queue once',
-  );
-
-  await service.reconcileNodeStateUpdate(
-    'node-participant-backoff',
-    enqueues[0].context,
-  );
-
-  t.equal(
-    scheduled[1].delayMs,
-    firstDelayMs * NODE_STATE_UPDATE_RETRY_POLICY.BACKOFF_MULTIPLIER,
-    'second participant-failure retry should back off through the same owner state',
-  );
-  t.same(
-    service.nodeStateUpdateRetryStateByNodeId.get(
-      'node-participant-backoff',
-    ),
-    {
-      retryClass: NODE_STATE_UPDATE_RETRY_CLASS.PUBLICATION_PRESSURE,
-      failureCount: 2,
-      retryAfterMs:
-        firstDelayMs *
-        NODE_STATE_UPDATE_RETRY_POLICY.BACKOFF_MULTIPLIER,
-      errorMessage:
-        'Distributed operation failed due to participant failures',
-    },
-    'retry state should preserve failure streak across replay attempts',
-  );
-
-  const enqueueResult = service.enqueueNodeStateUpdate(newerPayload);
-  t.equal(
-    enqueueResult,
-    false,
-    'newer payload should merge into the existing deferred owner slot during backoff',
-  );
-
-  scheduled[1].callback();
-  t.same(
-    enqueues[1],
-    {
-      nodeId: 'node-participant-backoff',
-      reason: RECONCILE_REASON.NODE_STATE_UPDATE_MESSAGE,
-      context: {payload: newerPayload},
-    },
-    'deferred replay should publish the newest payload after backoff merging',
-  );
-
-  service.nodeStateUpdateQueue = originalQueue;
   service.stop();
 });
 

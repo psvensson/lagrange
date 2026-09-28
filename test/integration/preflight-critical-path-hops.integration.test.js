@@ -16,9 +16,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {v4 as uuidv4} from 'uuid';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
-import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -44,8 +42,9 @@ import {
   cleanupTestEnvironment,
   createInProcHttpPost,
   getUniquePort,
-  gracefulJoiningShutdown,
   gracefulShutdown,
+  createJoiningNodeFixtureOwner,
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   stopAllRebalancers,
   TEST_CONFIG,
@@ -176,7 +175,7 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
   const seedWsPort = getUniquePort();
   const joiningWsPorts = joiningNodeIds.map(() => getUniquePort());
 
-  const bootstrapService = new BootstrapService({
+  const bootstrapService = await createVirginSeedBootstrapService({
     nodeId: seedNodeId,
     nodeAddress: `ws://localhost:${seedWsPort}`,
     wsPort: seedWsPort,
@@ -190,6 +189,7 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
   let seedApi = null;
   let seedQueryEngine = null;
   const joiningServices = [];
+  const joiningNodeFixtures = createJoiningNodeFixtureOwner();
   const joinResults = [];
   let adminApi = null;
 
@@ -224,7 +224,7 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
     for (let index = 0; index < joiningNodeIds.length; index += 1) {
       const joiningNodeId = joiningNodeIds[index];
       const joiningWsPort = joiningWsPorts[index];
-      const joiningService = new NodeJoiningService({
+      const joiningService = joiningNodeFixtures.create({
         nodeId: joiningNodeId,
         nodeAddress: `ws://localhost:${joiningWsPort}`,
         seedNodeAddress: 'http://localhost:0',
@@ -237,7 +237,12 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
         httpPost,
       });
       joiningServices.push(joiningService);
+    }
+    joiningNodeFixtures.assertDistinctNodePaths();
 
+    for (let index = 0; index < joiningServices.length; index += 1) {
+      const joiningNodeId = joiningNodeIds[index];
+      const joiningService = joiningServices[index];
       const joinResult = await joiningService.join();
       joinResults.push(joinResult);
       t.equal(
@@ -506,9 +511,7 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
     for (const joiningService of joiningServices) {
       stopAllRebalancers(joiningService?.partitionServices);
     }
-    for (let index = joiningServices.length - 1; index >= 0; index -= 1) {
-      await gracefulJoiningShutdown(joiningServices[index]);
-    }
+    await joiningNodeFixtures.shutdownAll();
     await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
     await cleanupTestEnvironment();
   }

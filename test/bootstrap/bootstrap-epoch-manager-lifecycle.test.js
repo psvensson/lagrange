@@ -3,11 +3,12 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
+import {createVirginSeedBootstrapService} from
+  '../integration/helpers/cluster-test-helpers.js';
 
 const ports = createPortAllocator(import.meta.url);
 
@@ -37,7 +38,7 @@ test(
 
     const wsPort = ports.getPort();
     const nodeId = `test-node-${Date.now()}`;
-    const bootstrap = new BootstrapService({
+    const bootstrap = await createVirginSeedBootstrapService({
       nodeId,
       nodeAddress: `ws://localhost:${wsPort}`,
       wsPort,

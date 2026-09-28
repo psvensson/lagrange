@@ -5,7 +5,6 @@ import {
   buildReplicaOperationVisibilityLagError,
   buildRetryableSkippedDispatchError,
   hasAuthoritativeReplicaOperationRowChanged,
-  resolveNodeStateUpdateBudgetFields,
   shouldRetrySkippedDispatchResult,
 } from './replica-dispatch-service-dispatch-error-helpers.js';
 import {
@@ -31,10 +30,6 @@ const {
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
 class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
-  resolveNodeStateUpdateBudgetFields(nodeRow) {
-    return resolveNodeStateUpdateBudgetFields(nodeRow);
-  }
-
   /**
    * Resolve the canonical system-table gateway for dispatch writes.
    * @return {ControlPlaneSystemTableGateway}

@@ -804,10 +804,13 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE keeps local ' +
     ],
     'ready heartbeat routing should keep the local ingress fallback when recovery-eligible routing remains open',
   );
-  t.same(
-    routingDecisionDimensions,
-    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE],
-    'node-state update routing should consult the recovery-eligible routing dimension',
+  t.ok(
+    routingDecisionDimensions.length > 0 &&
+      routingDecisionDimensions.every((dimension) =>
+        dimension ===
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      ),
+    'node-state update routing and retry re-resolution should use only the recovery-eligible routing dimension',
   );
 });
 
@@ -993,6 +996,48 @@ test('NodeJoiningService - retries NODE_STATE_UPDATE on stale control-plane targ
       service.controlPlaneTargetAddress,
       'seed-node-1/message-group/mg-1-r3',
       'should retain the successful control-plane target after retry',
+    );
+  });
+
+test('NodeJoiningService - re-resolves ingress after the only target moves',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-moving-owner',
+      nodeAddress: 'ws://localhost:90951',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+    const staleTarget = 'seed-node-1/message-group/mg-1-r2';
+    const currentTarget = 'seed-node-2/message-group/mg-1-r1';
+    let staleInvalidated = false;
+    const deliveries = [];
+    service.controlPlaneKernelIngress = {
+      resolveNodeStateUpdateTargetCandidates() {
+        return staleInvalidated ? [currentTarget] : [staleTarget];
+      },
+      invalidateTarget(targetAddress) {
+        if (targetAddress === staleTarget) staleInvalidated = true;
+      },
+      noteSuccessfulTarget() {},
+    };
+    service.messageRouter = {
+      async deliver(targetAddress) {
+        deliveries.push(targetAddress);
+        return targetAddress === staleTarget ? {
+          acknowledged: false,
+          noHandler: true,
+          error: `No handler registered for address ${staleTarget}`,
+        } : {acknowledged: true};
+      },
+    };
+
+    await service.sendControlPlaneNodeStateUpdate({state: STATE.READY});
+
+    t.same(
+      deliveries,
+      [staleTarget, currentTarget],
+      'retry resolves the current authority instead of replaying a stale address',
     );
   });
 
