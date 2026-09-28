@@ -1,7 +1,10 @@
 import {
   buildControlPlaneMutationOwnerOutcomeEnvelope,
 } from '../../src/control-plane/control-plane-system-table-gateway-shared.js';
-import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_GATEWAY_ERROR_CODE,
+} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {
   registerControlPlaneSystemTableGatewayReadCoalescingTests,
@@ -304,61 +307,64 @@ export function registerControlPlaneSystemTableGatewayTailTests({
     );
   });
 
-  test('ControlPlaneSystemTableGateway submitMutation falls back to SQL during ' +
-    'bootstrap-scoped skip-cache-wait writes when CDC mutation helpers are unavailable',
+  test('ControlPlaneSystemTableGateway forbids SERVICES UPSERT before the ' +
+    'CDC-unavailable SQL fallback can replace lifecycle authority',
   async (t) => {
     const sqlCalls = [];
+    const durableRow = {
+      service_id: 'svc-1',
+      service_type: 'partition_cleanup',
+      node_id: 'node-a',
+      partition_id: 'p1',
+      status: 'cleanup_owned',
+      cleanup_token: 'cleanup-token-newer',
+      state_entered_at: 900,
+      updated_at: 900,
+    };
+    const before = structuredClone(durableRow);
     const gateway = new ControlPlaneSystemTableGateway({
       nodeId: 'node-gateway',
       sqlQueryEngine: {
         async executeQuery(sql, params, options) {
           sqlCalls.push({sql, params, options});
+          Object.assign(durableRow, {status: 'replaced'});
           return {success: true, affectedRows: 1};
         },
       },
     });
 
-    const result = await gateway.submitMutation({
+    const forbiddenMutation = {
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
       tableName: TABLES.SERVICES,
       row: {
         service_id: 'svc-1',
-        service_type: 'message_group',
+        service_type: 'partition',
         node_id: 'node-a',
-        status: 'stopped',
+        partition_id: 'p1',
+        status: 'active',
+        state_entered_at: 100,
+        updated_at: 100,
         [GATEWAY_ASSIGNMENT_ID_FIELD]: 'assignment-1',
       },
-    }, {
-      skipCacheWait: true,
-      phaseScope: CONTROL_PLANE_PHASE_SCOPE.BOOTSTRAP,
-      workClass: PRESSURE_WORK_CLASS.CRITICAL,
-      deliveryPriority: 'critical',
-    });
-
-    t.equal(result.success, true, 'bootstrap fallback mutation should succeed');
-    t.equal(result.outcome, CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
-      'fallback mutation should still normalize as an applied write');
-    t.equal(sqlCalls.length, 1, 'fallback should route through SQL once');
-    t.match(
-      sqlCalls[0].sql,
-      /^INSERT OR REPLACE INTO services \(/,
-      'fallback should emit an upsert statement for the system table',
+    };
+    await t.rejects(
+      gateway.submitMutation(forbiddenMutation, {
+        skipCacheWait: true,
+        phaseScope: CONTROL_PLANE_PHASE_SCOPE.BOOTSTRAP,
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+        deliveryPriority: 'critical',
+      }),
+      {code: CONTROL_PLANE_GATEWAY_ERROR_CODE.SERVICES_UPSERT_FORBIDDEN},
+      'shared mutation ingress should forbid SERVICES UPSERT before routing',
     );
-    t.notMatch(
-      sqlCalls[0].sql,
-      new RegExp(GATEWAY_ASSIGNMENT_ID_FIELD),
-      'fallback should omit metadata fields outside the services schema',
+    t.throws(
+      () => gateway.buildSqlMutationPlan(forbiddenMutation),
+      {code: CONTROL_PLANE_GATEWAY_ERROR_CODE.SERVICES_UPSERT_FORBIDDEN},
+      'the SQL-plan boundary should independently refuse INSERT OR REPLACE',
     );
-    t.same(
-      sqlCalls[0].params,
-      ['svc-1', 'message_group', 'node-a', 'stopped'],
-      'fallback should preserve row values in statement order',
-    );
-    t.equal(
-      sqlCalls[0].options.routingReadinessDimension,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      'fallback should keep control-plane recovery routing semantics',
-    );
+    t.equal(sqlCalls.length, 0, 'forbidden UPSERT must execute no SQL');
+    t.same(durableRow, before,
+      'cleanup token and durable generation must remain byte-for-byte intact');
   });
 
   test('ControlPlaneSystemTableGateway submitMutation fences the SQL fallback ' +

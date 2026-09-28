@@ -13,7 +13,6 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {v4 as uuidv4, validate as uuidValidate} from 'uuid';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
@@ -27,6 +26,15 @@ import {ServiceThreadManager} from '../../src/threading/service-thread-manager.j
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 import {URL} from 'url';
+import Database from 'better-sqlite3';
+import {existsSync, mkdirSync, mkdtempSync, rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join, resolve} from 'node:path';
+import {
+  createJoiningNodeFixtureOwner,
+  createVirginSeedBootstrapService,
+} from
+  '../integration/helpers/cluster-test-helpers.js';
 
 const ports = createPortAllocator(import.meta.url);
 function getUniquePort() {
@@ -150,7 +158,7 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
       const seedNodeId = uuidv4();
       const seedWsPort = getUniquePort();
 
-      bootstrapService = new BootstrapService({
+      bootstrapService = await createVirginSeedBootstrapService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         wsPort: seedWsPort,
@@ -225,7 +233,7 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
       const seedNodeId = uuidv4();
       const seedWsPort = getUniquePort();
 
-      bootstrapService = new BootstrapService({
+      bootstrapService = await createVirginSeedBootstrapService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         wsPort: seedWsPort,
@@ -311,7 +319,7 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
       const seedNodeId = uuidv4();
       const seedWsPort = getUniquePort();
 
-      bootstrapService = new BootstrapService({
+      bootstrapService = await createVirginSeedBootstrapService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         wsPort: seedWsPort,
@@ -362,3 +370,115 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
     }
   });
 });
+
+test('virgin seed fixture binds startup admission and storage to one unique ' +
+  'owned directory', async (t) => {
+  initializeTestEnvironment();
+  const [first, second] = await Promise.all([
+    createVirginSeedBootstrapService({nodeId: 'virgin-seed-a'}),
+    createVirginSeedBootstrapService({nodeId: 'virgin-seed-b'}),
+  ]);
+  const firstDir = first.dataDirectoryManager.getDataDir();
+  const secondDir = second.dataDirectoryManager.getDataDir();
+  t.not(firstDir, secondDir,
+    'concurrent virgin seeds never share implicit physical storage');
+  t.equal(resolve(firstDir), resolve(first.dataDirectoryManager.getDataDir()),
+    'startup admission and storage manager use the same canonical path');
+  t.equal(resolve(secondDir), resolve(second.dataDirectoryManager.getDataDir()),
+    'each concurrent fixture retains its own canonical path');
+  t.ok(existsSync(firstDir) && existsSync(secondDir),
+    'both owned directories exist before shutdown');
+  await Promise.all([first.shutdown(), second.shutdown()]);
+  t.notOk(existsSync(firstDir), 'first owned directory is removed on shutdown');
+  t.notOk(existsSync(secondDir), 'second owned directory is removed on shutdown');
+  await cleanupTestEnvironment();
+});
+
+test('joining-node fixture owns unique stable paths across retries',
+  async (t) => {
+    initializeTestEnvironment();
+    const owner = createJoiningNodeFixtureOwner();
+    const explicitDir = mkdtempSync(join(tmpdir(), 'lagrange-join-explicit-'));
+    const common = {
+      nodeAddress: 'ws://localhost:9191',
+      seedNodeAddress: 'ws://seed:8000',
+    };
+    const firstAttempt = owner.create({...common, nodeId: 'join-a'});
+    const retryAttempt = owner.create({...common, nodeId: 'join-a'});
+    const secondNode = owner.create({...common, nodeId: 'join-b'});
+    const explicitNode = owner.create({
+      ...common,
+      nodeId: 'join-explicit',
+      bootIncarnation: 7,
+      dataDir: explicitDir,
+    });
+    const firstDir = resolve(firstAttempt.dataDir);
+
+    t.equal(resolve(retryAttempt.dataDir), firstDir,
+      'a retry for one logical node reuses its exact storage identity');
+    t.not(resolve(secondNode.dataDir), firstDir,
+      'different logical nodes receive distinct canonical paths');
+    t.equal(resolve(explicitNode.dataDir), resolve(explicitDir),
+      'an explicit dataDir remains authoritative');
+    t.equal(firstAttempt.bootIncarnation, 1,
+      'a virgin logical node receives canonical initial boot identity');
+    t.equal(retryAttempt.bootIncarnation, firstAttempt.bootIncarnation,
+      'a same-process retry reuses its exact boot identity');
+    t.equal(explicitNode.bootIncarnation, 7,
+      'an explicit boot identity remains authoritative');
+    t.equal(owner.assertDistinctNodePaths(), true,
+      'the fixture proves path uniqueness before join begins');
+    t.ok(existsSync(firstDir), 'the owned retry directory exists before shutdown');
+
+    await owner.shutdownAttempt(firstAttempt);
+    t.ok(existsSync(firstDir),
+      'ending one attempt does not destroy storage needed by its retry');
+    await owner.shutdownAll();
+    t.notOk(existsSync(firstDir),
+      'final owner shutdown removes implicitly owned storage');
+    t.ok(existsSync(explicitDir),
+      'final owner shutdown does not remove caller-owned explicit storage');
+    rmSync(explicitDir, {recursive: true, force: true});
+    await cleanupTestEnvironment();
+  });
+
+test('virgin seed fixture refuses mismatched and non-virgin physical storage',
+  async (t) => {
+    initializeTestEnvironment();
+    const explicitDir = mkdtempSync(join(tmpdir(), 'lagrange-seed-explicit-'));
+    const differentDir = mkdtempSync(join(tmpdir(), 'lagrange-seed-other-'));
+    const manager = {
+      isInitialized: () => true,
+      getDataDir: () => explicitDir,
+    };
+    await t.rejects(
+      createVirginSeedBootstrapService({
+        nodeId: 'mismatched-seed',
+        dataDir: differentDir,
+        dataDirectoryManager: manager,
+      }),
+      /dataDir must match/u,
+      'one bootstrap cannot admit one path and open storage on another',
+    );
+
+    const servicesDir = join(explicitDir, 'partitions', 'services-p1');
+    mkdirSync(servicesDir, {recursive: true});
+    const database = new Database(join(servicesDir, 'services-p1-r1.db'));
+    database.exec(
+      'CREATE TABLE services (service_id TEXT PRIMARY KEY, status TEXT); ' +
+      'INSERT INTO services VALUES (\'existing-service\', \'active\')',
+    );
+    database.close();
+    await t.rejects(
+      createVirginSeedBootstrapService({
+        nodeId: 'non-virgin-seed',
+        dataDir: explicitDir,
+        dataDirectoryManager: manager,
+      }),
+      /durable SERVICES identity/u,
+      'durable identity prevents a non-virgin directory from seed admission',
+    );
+    rmSync(explicitDir, {recursive: true, force: true});
+    rmSync(differentDir, {recursive: true, force: true});
+    await cleanupTestEnvironment();
+  });

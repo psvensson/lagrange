@@ -297,7 +297,7 @@ test('System metadata owners route typed read and mutation methods through the g
         readMethod: 'getService',
         listMethod: 'listServices',
         insertMethod: 'insertService',
-        upsertMethod: 'upsertService',
+        upsertMethod: null,
         updateMethod: 'updateService',
         deleteMethod: 'removeService',
         row: {service_id: 'svc-1'},
@@ -373,9 +373,16 @@ test('System metadata owners route typed read and mutation methods through the g
       await owner[ownerSpec.readMethod](ownerSpec.key);
       await owner[ownerSpec.listMethod]();
       await owner[ownerSpec.insertMethod](ownerSpec.row);
-      await owner[ownerSpec.upsertMethod](ownerSpec.row);
+      if (ownerSpec.upsertMethod) {
+        await owner[ownerSpec.upsertMethod](ownerSpec.row);
+      } else {
+        t.equal(typeof owner.upsertService, 'undefined',
+          'SERVICES authority is INSERT-only and exposes no generic upsert');
+      }
       await owner[ownerSpec.updateMethod](ownerSpec.key, {status: 'active'});
       await owner[ownerSpec.deleteMethod](ownerSpec.key);
+
+      const mutationOffset = ownerSpec.upsertMethod ? 0 : -1;
 
       t.equal(
         gatewayCalls[0].method,
@@ -398,17 +405,19 @@ test('System metadata owners route typed read and mutation methods through the g
         `${ownerSpec.insertMethod} should route through gateway inserts`,
       );
       t.equal(
-        gatewayCalls[3].method,
-        'upsertSystemTableRow',
-        `${ownerSpec.upsertMethod} should route through gateway upserts`,
+        ownerSpec.upsertMethod ? gatewayCalls[3].method : 'insert-only',
+        ownerSpec.upsertMethod ? 'upsertSystemTableRow' : 'insert-only',
+        ownerSpec.upsertMethod ?
+          `${ownerSpec.upsertMethod} should route through gateway upserts` :
+          'SERVICES must not route any generic upsert',
       );
       t.equal(
-        gatewayCalls[4].method,
+        gatewayCalls[4 + mutationOffset].method,
         'updateSystemTableRow',
         `${ownerSpec.updateMethod} should route through gateway updates`,
       );
       t.equal(
-        gatewayCalls[5].method,
+        gatewayCalls[5 + mutationOffset].method,
         'deleteSystemTableRow',
         `${ownerSpec.deleteMethod} should route through gateway deletes`,
       );

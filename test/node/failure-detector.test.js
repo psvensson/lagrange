@@ -19,6 +19,8 @@ import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createCanonicalLifecycleServiceRow} from
+  '../test-helpers/lifecycle-state-store.js';
 
 const TEST_EVENT_NODE_FAILURE = 'event:nodeFailure';
 const TEST_EVENT_NODE_RECOVERY = 'event:nodeRecovery';
@@ -58,7 +60,15 @@ function createMockCDCService() {
     },
     async updateSystemTableRow(tableName, whereClause, data) {
       operations.push({type: 'update', tableName, whereClause, data});
-      return {success: true, operation: 'UPDATE', tableName, whereClause, data};
+      return {
+        success: true,
+        outcome: 'applied',
+        partitionResult: {affectedRows: 1},
+        operation: 'UPDATE',
+        tableName,
+        whereClause,
+        data,
+      };
     },
     async deleteSystemTableRow(tableName, whereClause) {
       operations.push({type: 'delete', tableName, whereClause});
@@ -136,7 +146,12 @@ function createRepairIntentRecorder(sequence = []) {
 function createMockSqlEngine(data = {}) {
   const cache = {
     nodes: data.nodes || [],
-    services: data.services || [],
+    services: (data.services || []).map((service, index) =>
+      createCanonicalLifecycleServiceRow({
+        state_entered_at: index + 1,
+        updated_at: index + 1,
+        ...service,
+      }, index)),
   };
 
   return {
@@ -152,6 +167,13 @@ function createMockSqlEngine(data = {}) {
         );
         return {rows: filtered, success: true};
       }
+      if (sql.includes('FROM services') &&
+          sql.includes('WHERE service_id = ?')) {
+        const row = cache.services.find(
+          (service) => service.service_id === params[0],
+        );
+        return {rows: row ? [row] : [], success: true};
+      }
       return {rows: [], success: true};
     },
     // Allow tests to update cache
@@ -159,7 +181,11 @@ function createMockSqlEngine(data = {}) {
       cache.nodes = nodes;
     },
     setServices(services) {
-      cache.services = services;
+      cache.services = services.map((service, index) => ({
+        state_entered_at: index + 1,
+        updated_at: index + 1,
+        ...service,
+      }));
     },
   };
 }
