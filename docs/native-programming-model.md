@@ -6,6 +6,29 @@ WASM component plus the immutable deployment records the runtime needs.
 
 > Colocated in source. Distributed in execution.
 
+## One service API
+
+Lagrange has one service programming model. WASM is the supported execution
+provider today; planned OCI execution is a provider underneath the same model,
+not a second application API.
+
+Provider choice may change packaging, isolation, and the final runtime adapter.
+It must not change Artifact / Binding / Cell semantics, handlers, distributed
+operations, `call()`, partition-local `run()`, `emit()`, reduction, routing,
+budgets, retry classification, or invocation identity. Language SDKs may be
+idiomatic, but they project this same contract.
+
+The normal developer workflow is therefore provider-neutral:
+
+```bash
+lagrange service generate .
+lagrange service build .
+lagrange service deploy . --idempotency-key <key>
+```
+
+Build owns provider-specific packaging. Deploy discovers the built artifact
+from the project; developers do not pass internal artifact-layout paths.
+
 ## Recommended source model
 
 A scaffolded project starts with:
@@ -23,7 +46,7 @@ account-summary/
   test/handler.test.js      host-side tests; no WASM required
   authoring/                guest-safe descriptor helpers
   runtime-types.d.ts        generated editor types
-  .lagrange/                generated entry, records, component, OCI layout
+  .lagrange/                generated build and deployment files
 ```
 
 The four source helpers are:
