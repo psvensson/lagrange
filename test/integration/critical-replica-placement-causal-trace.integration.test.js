@@ -23,7 +23,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
@@ -54,6 +53,7 @@ import {
   getUniquePort,
   gracefulJoiningShutdown,
   gracefulShutdown,
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   stopAllRebalancers,
   waitFor,
@@ -275,13 +275,27 @@ async function runActiveProbeIfNeeded(options) {
     };
     return;
   }
-  const probeResult =
-    await productionRebalancer.rebalance('s6a_causal_trace_probe');
-  artifact.activeProbe = {
-    ran: true,
-    success: probeResult?.success === true,
-    moves: (probeResult?.moves || []).map(summarizeProbeMove),
-  };
+  try {
+    const probeResult =
+      await productionRebalancer.rebalance('s6a_causal_trace_probe');
+    artifact.activeProbe = {
+      ran: true,
+      success: probeResult?.success === true,
+      moves: (probeResult?.moves || []).map(summarizeProbeMove),
+    };
+  } catch (error) {
+    // This is a diagnostic probe against a live production rebalancer. Its
+    // refusal/failure is itself the admission-boundary evidence the trace is
+    // collecting; it must not abort the stage classifier before the evidence
+    // packet names that owner and predicate.
+    artifact.activeProbe = {
+      ran: true,
+      success: false,
+      moves: [],
+      error: error?.message || String(error),
+      code: error?.code || null,
+    };
+  }
 }
 
 test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
@@ -292,7 +306,7 @@ test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
     const seedWsPort = getUniquePort();
     const node2WsPort = getUniquePort();
     const node3WsPort = getUniquePort();
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: SEED_NODE_ID,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

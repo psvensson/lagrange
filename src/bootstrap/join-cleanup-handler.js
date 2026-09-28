@@ -622,7 +622,7 @@ class JoinCleanupHandler {
       this.delegates.setReplicaHandler(null);
     }
 
-    this.clearReplicaStateMachine();
+    await this.clearReplicaStateMachine();
     // Stop all runtime drivers (request/call cell workers) before the
     // service maps come down: the per-replica REMOVE_REPLICA stop path
     // never runs at whole-node teardown, so without this sweep the
@@ -679,13 +679,13 @@ class JoinCleanupHandler {
     this.delegates.setRebalanceCoordinator(null);
   }
 
-  clearReplicaStateMachine() {
+  async clearReplicaStateMachine() {
     const replicaStateMachine = this.delegates.getReplicaStateMachine();
     if (!replicaStateMachine) {
       return;
     }
     replicaStateMachine.stopTimeoutChecker();
-    replicaStateMachine.clear();
+    await replicaStateMachine.clear();
     this.delegates.setReplicaStateMachine(null);
   }
 

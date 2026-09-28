@@ -94,6 +94,7 @@ async function activateMessageGroupServiceRows(options = {}) {
     typeof options.resolveExtraFields === 'function' ?
       options.resolveExtraFields :
       () => null;
+  const activationEntries = [];
   let activatedCount = 0;
 
   for (const [replicaId, service] of messageGroupServices.entries()) {
@@ -111,7 +112,10 @@ async function activateMessageGroupServiceRows(options = {}) {
         ),
       );
     }
+    activationEntries.push({groupId, replicaId, service});
+  }
 
+  for (const {groupId, replicaId, service} of activationEntries) {
     try {
       const activationContext = {
         groupId,
@@ -119,6 +123,8 @@ async function activateMessageGroupServiceRows(options = {}) {
         nodeId: options.nodeId,
         service,
         extraFields: resolveExtraFields(replicaId, service),
+        registrationEvidence:
+          options.registrationEvidenceByReplicaId?.get?.(replicaId),
       };
       if (activateReplica) {
         await activateReplica(activationContext);

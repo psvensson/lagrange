@@ -11,6 +11,10 @@ import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
   '../partition/partition-service-constants.js';
 import {COMMITTED_MEMBERSHIP_REFUSAL} from
   '../raft/raft-committed-membership-constants.js';
+import {assertDurableRejoinStorageAdmission} from
+  './durable-rejoin-storage-admission.js';
+import {nodeStateUpdateOptionsFromLifecycleRequest} from
+  '../control-plane/node-lifecycle-publication-wire.js';
 
 // A durable-rejoin replica that holds no durable record is refused at its
 // consensus port (owner decision O4): it is not restored, not activated and
@@ -18,7 +22,6 @@ import {COMMITTED_MEMBERSHIP_REFUSAL} from
 // target. Every other restore failure still aborts the rejoin.
 const DURABLE_REJOIN_RECORD_MISSING_MSG =
   'Durable rejoin replica refused: no durable consensus record (O4)';
-
 function isDurableRecordMissingRefusal(error) {
   return error?.code ===
       PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED &&
@@ -42,9 +45,7 @@ const {
   PartitionService,
   PgWireStartupSafetyGate,
   ReplicaHandlerSetup,
-  ReplicaStatus,
   RuntimeServiceHandlerSetup,
-  SERVICE_TYPE,
   SQLQueryEngine,
   STARTUP_JOIN_MODE,
   STRING,
@@ -53,7 +54,6 @@ const {
   assertCritical,
   buildDurableRejoinPartitionRestorePlans,
   buildPartitionCdcPropagationSubscriber,
-  formatReplicatedServiceAddress,
   shouldAttachPartitionCdcPropagation,
   wireMigrationWorkflowOwners,
 } = NODE_JOINING_SERVICE_SHARED;
@@ -230,6 +230,9 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    * @private
    */
   async createJoinLocalPartitionService(options) {
+    await assertDurableRejoinStorageAdmission(
+      this.replicaStateMachine, options,
+    );
     const cdcIntegrationService = this.createCdcIntegrationService();
     const systemTableCache = NodeService.getInstance().getSystemTableCache();
     if (!this.tablePolicyService) {
@@ -361,27 +364,8 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     this.replicaHandler.setLocalReplica?.(replicaId, {
       replicaId,
       partitionId,
-      status: ReplicaStatus.ACTIVE,
       service: partition,
     });
-    this.replicaHandler.replicaStateMachine?.registerReplicaSnapshot?.(
-      replicaId,
-      {
-        partitionId,
-        nodeId: this.nodeId,
-        state: ReplicaStatus.ACTIVE,
-        serviceId: replicaId,
-        serviceType: SERVICE_TYPE.PARTITION,
-        serviceAddress:
-          typeof partition?.getUnifiedAddress === 'function' ?
-            partition.getUnifiedAddress() :
-            formatReplicatedServiceAddress(
-              SERVICE_TYPE.PARTITION,
-              this.nodeId,
-              replicaId,
-            ),
-      },
-    );
   }
   /**
    * Initialize the control plane service for ordered registration and dispatch.
@@ -467,19 +451,12 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     if (
       typeof this.heartbeatService?.setNodeStateReporter === 'function'
     ) {
-      this.heartbeatService.setNodeStateReporter(async (payload = {}) => {
-        return this.sendControlPlaneNodeStateUpdate({
-          state: payload.state,
-          capabilities: payload.capabilities,
-          heartbeatAt: payload.heartbeatAt,
-          readyLeaseExpiresAt: payload.readyLeaseExpiresAt,
-          heartbeatOnly: true,
-          nodeRow: payload.nodeRow,
-          nodeStatePublicationMode: payload.nodeStatePublicationMode,
-          requireDurableCompletion:
-            payload.requireDurableCompletion === true,
-        });
-      });
+      // Routed transport for the node lifecycle request: the receiving
+      // message-group replica publishes it through the same lifecycle owner.
+      this.heartbeatService.setNodeStateReporter(async (request = {}) =>
+        this.sendControlPlaneNodeStateUpdate(
+          nodeStateUpdateOptionsFromLifecycleRequest(request),
+        ));
     }
     this.leaseService = controlPlane.leaseService;
     this.endpointService = controlPlane.endpointService;

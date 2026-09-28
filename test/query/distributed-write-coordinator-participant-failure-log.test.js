@@ -120,9 +120,13 @@ async (t) => {
     participantNodeId: FAILING_NODE_ID,
     participantAddress: FAILING_ADDRESS,
     errorCode: FAILING_ERROR_CODE,
+    failureCode: null,
+    committed: false,
+    outcome: null,
+    disposition: null,
     error: FAILING_ERROR,
     failedTable: FAILED_TABLE,
-  }], 'the line names each failed participant with its error code');
+  }], 'the line preserves each failed participant disposition');
   t.same(
     result.participantFailures.map((entry) => entry.partitionId),
     [FAILING_PARTITION_ID],
