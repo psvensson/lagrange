@@ -89,6 +89,7 @@ function buildPhaseExecutionDelegates(service) {
     getTransport: () => self.transport,
     getMessageGroupServices: () => self.messageGroupServices,
     getPartitionServices: () => self.partitionServices,
+    getReplicaStateMachine: () => self.replicaStateMachine,
     getMessageGroupReplicas: () => self.messageGroupReplicas,
     getPartitionReplicas: () => self.partitionReplicas,
 
@@ -131,6 +132,8 @@ function buildPhaseExecutionDelegates(service) {
       null,
     getBootstrapReadinessState: () =>
       self.bootstrapReadinessState,
+    getStartupServicesAdmission: () =>
+      self.startupServicesAdmission,
     getPartitionReplicaProgressReporter: () =>
       self.partitionReplicaProgressReporter,
     getInitialMessageGroupId: () =>
@@ -205,6 +208,10 @@ function buildPhaseExecutionDelegates(service) {
     },
     pushMessageGroupReplica: (v) => {
       self.messageGroupReplicas.push(v);
+    },
+    attachMessageGroupService: (service) => {
+      self.dispatchService?.attachMessageGroupService(service);
+      self.leaseService?.messageGroupServices?.add(service);
     },
     filterMessageGroupReplicas: (exclude) => {
       self.messageGroupReplicas =
@@ -471,10 +478,10 @@ function buildCleanupDelegates(service) {
         self.runtimeServiceHandler = null;
       }
     },
-    clearReplicaStateMachine: () => {
+    clearReplicaStateMachine: async () => {
       if (self.replicaStateMachine) {
         self.replicaStateMachine.stopTimeoutChecker();
-        self.replicaStateMachine.clear();
+        await self.replicaStateMachine.clear();
         self.replicaStateMachine = null;
       }
     },

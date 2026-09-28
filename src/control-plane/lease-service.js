@@ -16,6 +16,7 @@ import {
 import {emitInvariant} from '../invariants/invariant-emitter.js';
 import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
 import {assertCritical} from '../utils/assert.js';
+import {NodeReadyLeaseAuthority} from './node-ready-lease-authority.js';
 import {
   createControlPlaneRuntimeBundle,
 } from './control-plane-runtime-bundle.js';
@@ -170,9 +171,10 @@ class LeaseService extends EventEmitter {
       (handle) => this.timeSource.clearInterval(handle);
 
     const config = ConfigurationManager.getInstance();
-    this.readyLeaseMs =
-      config.get(LEASE_CONFIG_KEY.READY_LEASE_MS) ||
-      LEASE_DEFAULT.READY_LEASE_MS;
+    // Lease expiry is judged by the same authority that grants the lease.
+    this.readyLeaseAuthority =
+      options.readyLeaseAuthority ||
+      NodeReadyLeaseAuthority.fromConfiguration();
     this.sweepIntervalMs =
       config.get(LEASE_CONFIG_KEY.SWEEP_INTERVAL_MS) ||
       LEASE_DEFAULT.SWEEP_INTERVAL_MS;
@@ -285,8 +287,7 @@ class LeaseService extends EventEmitter {
     const nodes = result.rows || [];
 
     const expired = nodes.filter((node) => {
-      const leaseExpiry = Number(node.ready_lease_expires_at);
-      return Number.isFinite(leaseExpiry) && leaseExpiry <= now;
+      return this.readyLeaseAuthority.isExpired(node, now);
     });
 
     const expiredIds = [];
@@ -478,9 +479,7 @@ class LeaseService extends EventEmitter {
   async reapStrandedJoiningRows(nodes, now) {
     const stranded = nodes.filter((node) => {
       if (node.status !== LEASE_REAPER.STRANDED_STATUS) return false;
-      const leaseExpiry = Number(node.ready_lease_expires_at);
-      const leaseLive = Number.isFinite(leaseExpiry) && leaseExpiry > now;
-      return !leaseLive;
+      return !this.readyLeaseAuthority.holdsLiveLease(node, now);
     });
 
     const reapedIds = [];

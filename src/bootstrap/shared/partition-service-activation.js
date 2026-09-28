@@ -7,6 +7,8 @@ import {
 import {
   ENTITY_TYPE,
 } from '../../constants/index.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from
+  '../../control-plane/control-plane-readiness-constants.js';
 
 
 const PARTITION_SERVICE_ACTIVATION_ERROR = Object.freeze({
@@ -22,6 +24,172 @@ const PARTITION_SERVICE_ACTIVATION_ERROR = Object.freeze({
     'Partition service activation requires replica handler ' +
     `registration for ${replicaId}`,
 });
+const PARTITION_ACTIVE_ADMISSION_LOG_MSG =
+  'Exact ACTIVE admission downstream evidence discriminator';
+
+function partitionQueryExecutor(service) {
+  return service?.sqlQueryEngine?.queryExecutor ||
+    service?.cdcIntegrationService?.sqlQueryEngine?.queryExecutor ||
+    null;
+}
+
+function valueOrNull(value) {
+  return value ?? null;
+}
+
+function currentPartitionRuntimeRole(service) {
+  if (typeof service?.getRole === 'function') {
+    return service.getRole();
+  }
+  return valueOrNull(service?.role);
+}
+
+function capturePartitionRuntimeEvidence(service) {
+  return Object.freeze({
+    runtimeIsLeader: service?.isLeader === true,
+    runtimeRole: currentPartitionRuntimeRole(service),
+    pendingRole: valueOrNull(service?.pendingRoleUpdate),
+    persistedRole: valueOrNull(service?.persistedRole),
+    pendingLeaderNodeId: valueOrNull(service?.pendingLeaderNodeUpdate),
+    persistedLeaderNodeId: valueOrNull(service?.persistedLeaderNodeId),
+  });
+}
+
+function capturePartitionRoutingEvidence(queryExecutor, partitionId) {
+  if (typeof queryExecutor?.getPartitionRoutingSnapshot !== 'function') {
+    return null;
+  }
+  return queryExecutor.getPartitionRoutingSnapshot(
+    partitionId,
+    CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+  );
+}
+
+function hasReadinessDenial(routingSnapshot) {
+  return routingSnapshot?.canonicalLeaderNodeId !== null &&
+    routingSnapshot?.canonicalLeaderNodeId !== undefined &&
+    Object.keys(routingSnapshot?.deniedByNodeId || {}).length > 0;
+}
+
+function observePartitionRoutingEvidence(queryExecutor, partitionId) {
+  try {
+    return Object.freeze({
+      error: null,
+      snapshot: capturePartitionRoutingEvidence(queryExecutor, partitionId),
+    });
+  } catch (error) {
+    return Object.freeze({error, snapshot: null});
+  }
+}
+
+function reassertMissingPartitionLeaderEvidence(
+  service,
+  routingSnapshot,
+  runtime,
+) {
+  const canonicalLeaderMissing = routingSnapshot !== null &&
+    (routingSnapshot.canonicalLeaderNodeId === null ||
+      routingSnapshot.canonicalLeaderNodeId === undefined);
+  if (!canonicalLeaderMissing || !runtime.runtimeIsLeader) {
+    return Object.freeze({leader: false, role: false});
+  }
+  return Object.freeze({
+    leader: service?.reassertDurableLeaderNodeId?.() === true,
+    role: service?.reassertDurableRaftRole?.() === true,
+  });
+}
+
+async function refreshDeniedPartitionReadiness(
+  queryExecutor,
+  routingSnapshot,
+) {
+  if (!hasReadinessDenial(routingSnapshot) ||
+      typeof queryExecutor?.maybeAwaitDeniedPartitionRoutingRepair !==
+        'function') {
+    return Object.freeze({attempted: false, error: null});
+  }
+  try {
+    await queryExecutor.maybeAwaitDeniedPartitionRoutingRepair(
+      routingSnapshot,
+      {
+        allowReadinessAuthoritativeRefresh: true,
+        routingReadinessDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      },
+    );
+    return Object.freeze({attempted: true, error: null});
+  } catch (error) {
+    // Exact ACTIVE remains authoritative. The readiness owner retains its own
+    // repair debt, and a later level-trigger retries this observation.
+    return Object.freeze({attempted: true, error});
+  }
+}
+
+function buildActiveAdmissionDiagnostic(options) {
+  const {
+    partitionId,
+    replicaId,
+    routingObservation,
+    runtime,
+    reassertion,
+    readinessRefresh,
+  } = options;
+  const routingSnapshot = routingObservation.snapshot;
+  const diagnostic = Object.freeze({
+    partitionId,
+    replicaId,
+    canonicalLeaderNodeId:
+      valueOrNull(routingSnapshot?.canonicalLeaderNodeId),
+    canonicalLeaderRoutingGapState:
+      valueOrNull(routingSnapshot?.canonicalLeaderRoutingGapState),
+    deniedByNodeId: routingSnapshot?.deniedByNodeId || {},
+    activeAddressedServiceCount:
+      valueOrNull(routingSnapshot?.activeAddressedServiceCount),
+    routableServiceCount:
+      valueOrNull(routingSnapshot?.routableServiceCount),
+    ...runtime,
+    roleReasserted: reassertion.role,
+    leaderReasserted: reassertion.leader,
+    readinessRefreshAttempted: readinessRefresh.attempted,
+    routingObservationError:
+      routingObservation.error?.message || null,
+    readinessRefreshError: readinessRefresh.error?.message || null,
+  });
+  return diagnostic;
+}
+
+async function settlePartitionServiceActiveAdmission(options = {}) {
+  const {partitionId, replicaId, service} = options;
+  const queryExecutor = partitionQueryExecutor(service);
+  const routingObservation = observePartitionRoutingEvidence(
+    queryExecutor,
+    partitionId,
+  );
+  const runtime = capturePartitionRuntimeEvidence(service);
+  const reassertion = reassertMissingPartitionLeaderEvidence(
+    service,
+    routingObservation.snapshot,
+    runtime,
+  );
+  const readinessRefresh = await refreshDeniedPartitionReadiness(
+    queryExecutor,
+    routingObservation.snapshot,
+  );
+  const diagnostic = buildActiveAdmissionDiagnostic({
+    partitionId,
+    replicaId,
+    routingObservation,
+    runtime,
+    reassertion,
+    readinessRefresh,
+  });
+  service?.logger?.debug?.(
+    PARTITION_ACTIVE_ADMISSION_LOG_MSG,
+    diagnostic,
+  );
+  return diagnostic;
+}
+
 function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {
   if (service &&
       typeof service.getUnifiedAddress === 'function') {
@@ -72,12 +240,18 @@ async function activatePartitionServiceRows(options = {}) {
   const partitionServices = options.partitionServices instanceof Map ?
     options.partitionServices :
     new Map();
+  const partitionRegistrationEvidenceByReplicaId =
+    options.partitionRegistrationEvidenceByReplicaId instanceof Map ?
+      options.partitionRegistrationEvidenceByReplicaId :
+      null;
   const owner = new PartitionServiceRowOwner({
     systemTableWriter: options.systemTableWriter,
+    replicaStateMachine: options.replicaStateMachine,
     now: typeof options.now === 'function' ?
       options.now :
       () => Date.now(),
   });
+  const activationEntries = [];
   let activatedCount = 0;
 
   for (const [replicaId, service] of partitionServices.entries()) {
@@ -103,18 +277,38 @@ async function activatePartitionServiceRows(options = {}) {
         ),
       );
     }
+    activationEntries.push({
+      partitionId,
+      replicaId,
+      registrationEvidence:
+        partitionRegistrationEvidenceByReplicaId?.get(replicaId),
+      service,
+    });
+  }
 
+  for (const entry of activationEntries) {
+    const {
+      partitionId,
+      replicaId,
+      registrationEvidence,
+      service,
+    } = entry;
     try {
       await owner.activateReplica({
         partitionId,
         replicaId,
         nodeId: options.nodeId,
         service,
+        registrationEvidence,
+      });
+      await settlePartitionServiceActiveAdmission({
+        partitionId,
+        replicaId,
+        service,
       });
       activatedCount += 1;
     } catch (error) {
-      if (options.deferTransientFailures === true &&
-          isTransientActivationError(error)) {
+      if (isTransientActivationError(error)) {
         if (typeof options.onDeferredActivation === 'function') {
           await Promise.resolve(options.onDeferredActivation({
             partitionId,
@@ -123,7 +317,6 @@ async function activatePartitionServiceRows(options = {}) {
             error,
           }));
         }
-        continue;
       }
       throw error;
     }
@@ -135,4 +328,5 @@ async function activatePartitionServiceRows(options = {}) {
 export {
   activatePartitionServiceRows,
   PARTITION_SERVICE_ACTIVATION_ERROR,
+  settlePartitionServiceActiveAdmission,
 };

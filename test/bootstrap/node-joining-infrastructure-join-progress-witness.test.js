@@ -41,6 +41,7 @@ test('NodeJoiningService projects the ordered ready-signal gate witness',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'restart-progress-witness',
       nodeAddress: 'ws://localhost:19090',
       seedNodeAddress: 'http://localhost:18080',
@@ -99,6 +100,7 @@ test('join checkpoint steps publish their live checkpoint targets',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'restart-checkpoint-witness',
       nodeAddress: 'ws://localhost:19092',
       seedNodeAddress: 'http://localhost:18082',
@@ -204,6 +206,7 @@ test('join progress rejects unsafe attempts and poisoned intrinsics', (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'restart-hostile-attempt-witness',
     nodeAddress: 'ws://localhost:19093',
     seedNodeAddress: 'http://localhost:18083',
@@ -259,6 +262,7 @@ test('join failure codes require own data properties', (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'restart-hostile-failure-witness',
     nodeAddress: 'ws://localhost:19094',
     seedNodeAddress: 'http://localhost:18084',
@@ -291,6 +295,7 @@ test('NodeJoiningService retains the current ready-signal retry failure',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'restart-progress-retry',
       nodeAddress: 'ws://localhost:19091',
       seedNodeAddress: 'http://localhost:18081',

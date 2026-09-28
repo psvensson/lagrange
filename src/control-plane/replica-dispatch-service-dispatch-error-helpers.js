@@ -1,7 +1,6 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 
 const {
-  COLUMN,
   OPERATION_WORKFLOW_OWNER_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   getControlPlaneErrorMessage,
@@ -12,41 +11,6 @@ const RETRYABLE_DISPATCH_SKIPPED_REASONS = Object.freeze(
     OPERATION_WORKFLOW_OWNER_REASON.SHUTDOWN_IN_PROGRESS,
   ]),
 );
-
-function resolveNodeStateUpdateBudgetFields(nodeRow) {
-  if (!nodeRow || typeof nodeRow !== 'object') {
-    return {};
-  }
-
-  const budgetFields = {};
-  const storageBudgetBytes = Number(nodeRow?.[COLUMN.STORAGE_BUDGET_BYTES]);
-  if (Number.isFinite(storageBudgetBytes) && storageBudgetBytes > 0) {
-    budgetFields[COLUMN.STORAGE_BUDGET_BYTES] =
-      Math.floor(storageBudgetBytes);
-  }
-
-  const storageBudgetSource = nodeRow?.[COLUMN.STORAGE_BUDGET_SOURCE];
-  if (
-    typeof storageBudgetSource === 'string' &&
-    storageBudgetSource.length > 0
-  ) {
-    budgetFields[COLUMN.STORAGE_BUDGET_SOURCE] = storageBudgetSource;
-  }
-
-  const storageBudgetUpdatedAt = Number(
-    nodeRow?.[COLUMN.STORAGE_BUDGET_UPDATED_AT],
-  );
-  if (
-    Number.isFinite(storageBudgetUpdatedAt) &&
-    storageBudgetUpdatedAt > 0
-  ) {
-    budgetFields[COLUMN.STORAGE_BUDGET_UPDATED_AT] = Math.floor(
-      storageBudgetUpdatedAt,
-    );
-  }
-
-  return budgetFields;
-}
 
 function shouldRetrySkippedDispatchResult(dispatchResult) {
   return (
@@ -170,6 +134,5 @@ export {
   buildReplicaOperationVisibilityLagError,
   buildRetryableSkippedDispatchError,
   hasAuthoritativeReplicaOperationRowChanged,
-  resolveNodeStateUpdateBudgetFields,
   shouldRetrySkippedDispatchResult,
 };

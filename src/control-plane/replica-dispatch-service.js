@@ -77,16 +77,11 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
     this.priorityDispatchInFlight.clear();
     this.directDispatchWakeupsInFlight.clear();
     this.retryInFlightNodes.clear();
-    this.nodeStateUpdateWatermarks.clear();
-    this.nodeBootIncarnationWatermarks.clear();
     this.nodeReadyRetryWatermarks.clear();
     this.readinessPlanningSnapshotTokenByOwnerKey.clear();
     this.readinessPlanningSnapshotPendingTokenByOwnerKey.clear();
     for (const operationId of this.operationDispatchDeferredRetries.keys()) {
       this.clearDeferredOperationDispatchRetry(operationId);
-    }
-    for (const nodeId of this.nodeStateUpdateDeferredRetries.keys()) {
-      this.clearDeferredNodeStateUpdateRetry(nodeId);
     }
     for (
       const deferredAckRetry of
@@ -97,9 +92,6 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
       }
     }
     this.membershipPublicationAckDeferredRetries.clear();
-    this.nodeStateUpdateRetryStateByNodeId.clear();
-    this.nodeStateUpdateQueueAssignments.clear();
-    this.nextNodeStateUpdateQueueIndex = 0;
 
     if (Array.isArray(this.operationDispatchQueues) &&
         this.operationDispatchQueues.length > 0) {
@@ -108,9 +100,6 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
       }
     } else {
       this.operationDispatchQueue.shutdown();
-    }
-    for (const nodeStateUpdateQueue of this.nodeStateUpdateQueues) {
-      nodeStateUpdateQueue.shutdown();
     }
     this.nodeReadyRetryQueue.shutdown();
     this.membershipPublicationAdvanceQueue.shutdown();

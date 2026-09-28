@@ -1,3 +1,5 @@
+import {SYSTEM_TABLE_NAME} from
+  '../../bootstrap/system-table-schemas-constants.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane-runtime-bundle.js';
 import {createSystemMetadataOwners} from './create-system-metadata-owners.js';
@@ -136,6 +138,24 @@ class MembershipPublicationRuntimeOwner {
     return this.nodesOwner.upsertNode(
       row,
       this.buildJoinMutationOptions(options),
+    );
+  }
+
+  /**
+   * The registration verb's boot-incarnation transition: one CAS on the
+   * observed node identity and boot incarnation. No retry options are
+   * attached; an unobserved advance is classified by the caller's readback.
+   * @param {Object} whereClause - {node_id, boot_incarnation} observed.
+   * @param {Object} row - Row stamped with this boot's incarnation.
+   * @param {Object} [options] - Join-time write options.
+   * @return {Promise<Object>} Gateway mutation result.
+   */
+  async advanceJoinNodeBootIncarnation(whereClause, row, options = {}) {
+    return this.getControlPlaneSystemTableGateway().updateSystemTableRow(
+      SYSTEM_TABLE_NAME.NODES,
+      whereClause,
+      row,
+      options,
     );
   }
 

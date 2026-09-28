@@ -25,6 +25,8 @@ import {ConfigurationManager} from
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {DataDirectoryManager} from
   '../../src/storage/data-directory-manager.js';
+import {acquireDataDirectoryProcessOwner} from
+  '../../src/storage/data-directory-process-owner.js';
 import {
   claimProcessRuntime,
   resetProcessRuntimeClaimForTests,
@@ -344,6 +346,9 @@ test('real dry-run startup awaits CLI configuration overrides', async (t) => {
     t.equal(runtime.dryRun, true);
     t.equal(ConfigurationManager.getInstance().get('storage.dataDir'),
       selectedDataDir);
+    const postDryRunOwner = acquireDataDirectoryProcessOwner(selectedDataDir);
+    postDryRunOwner.release();
+    t.pass('dry-run releases data-directory ownership before returning');
   } finally {
     await rm(root, {force: true, recursive: true});
     resetProcessRuntimeClaimForTests();

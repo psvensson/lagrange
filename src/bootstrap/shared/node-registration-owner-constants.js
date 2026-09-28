@@ -11,7 +11,6 @@ import {META_SERVICE_ID} from '../../constants/wasm-meta.js';
 const LOCAL_STR_RNTKK = 'Registering node in cluster';
 const LOCAL_STR_1PE7K = 'Node registered in cluster';
 const LOCAL_STR_VWYJO = 'Failed to register node in cluster';
-const LOCAL_STR_1YR7Z = 'Failed to refresh durable rejoin membership: ';
 const LOCAL_STR_1S6CG = 'node_state_reporter';
 const LOCAL_STR_V0KZD = 'retryable join admission write failure';
 const LOCAL_STR_UPSERT = 'UPSERT';
@@ -41,7 +40,6 @@ const JOIN_ADMISSION_PUBLICATION = Object.freeze({
     'built-in meta service endpoint publication',
   NODE_ENDPOINT: 'node websocket endpoint publication',
   NODE_MEMBERSHIP: 'node membership publication',
-  NODE_MEMBERSHIP_REFRESH: 'durable rejoin membership refresh',
 });
 const NODE_REGISTRATION_ERROR = Object.freeze({
   JOIN_ADMISSION_GATEWAY_REQUIRED:
@@ -79,7 +77,6 @@ export {
   JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS,
   LOCAL_STR_1PE7K,
   LOCAL_STR_1S6CG,
-  LOCAL_STR_1YR7Z,
   LOCAL_STR_RNTKK,
   LOCAL_STR_UPSERT,
   LOCAL_STR_V0KZD,

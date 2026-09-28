@@ -27,6 +27,10 @@ import {
 } from '../../src/bootstrap/seed-startup-session-store.js';
 import {ControlPlaneSetup} from
   '../../src/bootstrap/shared/control-plane-setup.js';
+import {
+  createVirginSeedBootstrapService,
+  EMPTY_REPLICA_STATE_MACHINE_HANDLE,
+} from '../integration/helpers/cluster-test-helpers.js';
 
 const ports = createPortAllocator(import.meta.url);
 const BOOTSTRAP_SEQUENCE_TEST_TIMEOUT_MS = 90000;
@@ -96,6 +100,10 @@ function getRandomPort() {
 function disablePostPartitionBootstrapWork(bootstrap) {
   bootstrap.seedRegistrationPhase.phaseRegistration = NOOP_ASYNC;
   bootstrap.seedCacheHydrationPhase.phaseCacheHydration = NOOP_ASYNC;
+  bootstrap.initializeReplicaStateMachine = () => {
+    bootstrap.replicaStateMachine = EMPTY_REPLICA_STATE_MACHINE_HANDLE;
+    return bootstrap.replicaStateMachine;
+  };
   bootstrap.initializeReplicaHandler = NOOP_SYNC;
   bootstrap.initializeMessageGroupServiceHandler = () => {
     bootstrap.messageGroupServiceHandler = EMPTY_SERVICE_HANDLE;
@@ -157,6 +165,7 @@ test('BootstrapService retains lifecycle catalog owners for SQL handoff',
 
     try {
       const bootstrap = new BootstrapService({
+        bootIncarnation: 1,
         nodeAddress: 'ws://seed.test:19001',
         nodeId: 'seed-lifecycle-owner-retention',
       });
@@ -180,6 +189,7 @@ test('BootstrapService - seed checkpoint snapshot resolves explicit readiness st
     initializeTestEnvironment();
 
     const bootstrap = new BootstrapService({
+      bootIncarnation: 1,
       nodeId: 'seed-checkpoint-snapshot-node',
       nodeAddress: 'ws://localhost:12003',
       wsPort: 12003,
@@ -192,6 +202,7 @@ test('BootstrapService - seed checkpoint snapshot resolves explicit readiness st
     bootstrap.messageGroupServices = new Map([['mg-1', {}]]);
     bootstrap.partitionServices = new Map([['services-p1', {}]]);
     bootstrap.cdcIntegrationService = {};
+    bootstrap.replicaStateMachine = EMPTY_REPLICA_STATE_MACHINE_HANDLE;
     bootstrap.systemTableCache = createLocalServiceEndpointCache(
       bootstrap.nodeId,
     );
@@ -225,6 +236,7 @@ test('BootstrapService - seed checkpoint rerun guards consume the checkpoint sna
     initializeTestEnvironment();
 
     const bootstrap = new BootstrapService({
+      bootIncarnation: 1,
       nodeId: 'seed-checkpoint-rerun-node',
       nodeAddress: 'ws://localhost:12004',
       wsPort: 12004,
@@ -324,6 +336,7 @@ test('Bootstrap sequence - server starts before services', async (t) => {
   const nodeId = `test-node-${Date.now()}`;
 
   const bootstrap = new BootstrapService({
+    bootIncarnation: 1,
     nodeId,
     nodeAddress: `ws://localhost:${wsPort}`,
     wsPort,
@@ -377,6 +390,7 @@ test('BootstrapService - executePhase routes work through class A scheduler', as
   };
 
   const bootstrap = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: 'bootstrap-scheduler-node',
     nodeAddress: 'ws://localhost:12000',
     wsPort: 12000,
@@ -396,6 +410,7 @@ test('BootstrapService - activates message-group rows after seed registration',
 
     const order = [];
     const bootstrap = new BootstrapService({
+      bootIncarnation: 1,
       nodeId: 'bootstrap-activate-node',
       nodeAddress: 'ws://localhost:12001',
       wsPort: 12001,
@@ -421,6 +436,10 @@ test('BootstrapService - activates message-group rows after seed registration',
       async () => {
         order.push('cache-hydration');
       };
+    bootstrap.initializeReplicaStateMachine = () => {
+      bootstrap.replicaStateMachine = EMPTY_REPLICA_STATE_MACHINE_HANDLE;
+      return bootstrap.replicaStateMachine;
+    };
     bootstrap.initializeReplicaHandler = () => {
       order.push('replica-handler');
     };
@@ -486,6 +505,7 @@ test('BootstrapService - notifies local admin runtime before seed self-publicati
 
     const order = [];
     const bootstrap = new BootstrapService({
+      bootIncarnation: 1,
       nodeId: 'bootstrap-local-admin-node',
       nodeAddress: 'ws://localhost:12002',
       wsPort: 12002,
@@ -557,6 +577,7 @@ test('Bootstrap sequence - self-connection established before services', async (
   const nodeId = `test-node-${Date.now()}`;
 
   const bootstrap = new BootstrapService({
+    bootIncarnation: 1,
     nodeId,
     nodeAddress: `ws://localhost:${wsPort}`,
     wsPort,
@@ -597,7 +618,7 @@ test('Bootstrap sequence - services created after self-connection', async (t) =>
   const wsPort = getRandomPort();
   const nodeId = `test-node-${Date.now()}`;
 
-  const bootstrap = new BootstrapService({
+  const bootstrap = await createVirginSeedBootstrapService({
     nodeId,
     nodeAddress: `ws://localhost:${wsPort}`,
     wsPort,
@@ -632,6 +653,7 @@ test('Bootstrap sequence - without wsPort fails (no server)', async (t) => {
   const nodeId = `test-node-${Date.now()}`;
 
   const bootstrap = new BootstrapService({
+    bootIncarnation: 1,
     nodeId,
     nodeAddress: 'ws://localhost:8080',
     // No wsPort - server won't start, leadership can't be established
@@ -662,6 +684,7 @@ test('Bootstrap sequence - partition leadership wait fails when no leaders', asy
   initializeTestEnvironment();
 
   const bootstrap = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: 'test-node',
     config: {
       leadershipWaitTimeoutMs: 5,
@@ -701,6 +724,7 @@ test('Bootstrap sequence - partition leadership wait honors configured timeout b
   initializeTestEnvironment();
 
   const bootstrap = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: 'test-node',
     config: {
       leadershipWaitTimeoutMs: 20,
@@ -737,6 +761,7 @@ test('Bootstrap sequence - partition leadership wait allows priority control-pla
   initializeTestEnvironment();
 
   const bootstrap = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: 'test-node',
     readinessState: {
       evaluate() {
@@ -777,6 +802,7 @@ test('Bootstrap sequence - partition leadership wait allows init-phase priority 
   initializeTestEnvironment();
 
   const bootstrap = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: 'test-node',
     readinessState: {
       evaluate() {
@@ -822,6 +848,7 @@ test('Bootstrap sequence - partition leadership wait allows direct bootstrap pri
   initializeTestEnvironment();
 
   const bootstrap = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: 'test-node',
     readinessState: {
       evaluate() {
@@ -864,6 +891,7 @@ test('Bootstrap sequence - partition leadership wait memoizes satisfied bootstra
 
   let allowBootstrapBypass = true;
   const bootstrap = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: 'test-node',
     readinessState: {
       evaluate() {
@@ -916,6 +944,7 @@ test('Bootstrap sequence - partition leadership wait allows canonical remote lea
   initializeTestEnvironment();
 
   const bootstrap = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: 'test-node',
     config: {
       leadershipWaitTimeoutMs: 5,

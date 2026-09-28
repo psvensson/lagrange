@@ -98,8 +98,9 @@ test(HEARTBEAT_READY_CAPABILITY_TEST_NAME, async (t) => {
   });
 
   try {
-    await service.handleNodeStateUpdate({
+    await service.publishNodeLifecycleMessage({
       type: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: HEARTBEAT_READY_CAPABILITY_NODE_ID,
       [ControlPlaneField.NODE_ADDRESS]: HEARTBEAT_READY_CAPABILITY_NODE_ADDRESS,
       [ControlPlaneField.STATE]: STATE.READY,
