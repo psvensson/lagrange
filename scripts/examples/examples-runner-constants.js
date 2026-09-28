@@ -1,5 +1,5 @@
 /**
- * Shared constants for distributed SQL examples runner modules.
+ * Shared constants for the internal distributed-callback fixture runner.
  */
 
 import {LISTENER_PORT_DEFAULT} from
@@ -7,7 +7,7 @@ import {LISTENER_PORT_DEFAULT} from
 
 const DEFAULT_TARGET = 'ws://127.0.0.1:' +
   `${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET}/api/admin/stream`;
-const DEFAULT_EXAMPLES_DIR = 'examples/distributed-sql';
+const DEFAULT_EXAMPLES_DIR = 'test/fixtures/distributed-callback';
 const DEFAULT_OUTPUT_DIR = 'test-output/examples';
 const DEFAULT_TIMEOUT_MS = 30000;
 const CODE_TABLE_VERSION = 1;
