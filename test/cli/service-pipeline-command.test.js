@@ -316,21 +316,21 @@ async () => withProject(async (project) => {
 }));
 
 test('deploy requires build output and never asks for an artifact path',
-async () => withProject(async (project) => {
-  assert.equal(await runServicePipelineCommand(
-    ['generate', project], recordingDependencies().dependencies),
-  SUCCESS_EXIT_CODE);
+  async () => withProject(async (project) => {
+    assert.equal(await runServicePipelineCommand(
+      ['generate', project], recordingDependencies().dependencies),
+    SUCCESS_EXIT_CODE);
 
-  const {calls, dependencies, output, errors} = recordingDependencies();
-  const exit = await runServicePipelineCommand(
-    ['deploy', project, '--idempotency-key', 'deploy-before-build'],
-    dependencies);
+    const {calls, dependencies, output, errors} = recordingDependencies();
+    const exit = await runServicePipelineCommand(
+      ['deploy', project, '--idempotency-key', 'deploy-before-build'],
+      dependencies);
 
-  assert.equal(exit, FAILURE_EXIT_CODE);
-  assert.equal(output.length, 0);
-  assert.deepEqual(calls, []);
-  assert.match(errors.at(-1), /built service artifact/iu);
-}));
+    assert.equal(exit, FAILURE_EXIT_CODE);
+    assert.equal(output.length, 0);
+    assert.deepEqual(calls, []);
+    assert.match(errors.at(-1), /built service artifact/iu);
+  }));
 
 test('deploy fails closed when the lifecycle grammar rejects and emits ' +
   'no success output',
