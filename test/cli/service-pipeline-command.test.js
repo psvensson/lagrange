@@ -243,8 +243,7 @@ async () => withProject(async (project) => {
 
   const {calls, dependencies, output, errors} = recordingDependencies();
   const exit = await runServicePipelineCommand(
-    ['deploy', project, '--layout', '/tmp/fake-layout',
-      '--idempotency-key', 'deploy-test-1'],
+    ['deploy', project, '--idempotency-key', 'deploy-test-1'],
     dependencies);
   assert.equal(exit, SUCCESS_EXIT_CODE, errors.join('\n'));
 
@@ -265,7 +264,8 @@ async () => withProject(async (project) => {
   const install = calls[0].payload;
   assert.equal(install.manifest.name, 'account-summary');
   assert.deepEqual(install.artifact_source, {
-    kind: 'local_oci_layout', location: '/tmp/fake-layout',
+    kind: 'local_oci_layout',
+    location: path.join(project, '.lagrange', '0'.repeat(64)),
   });
   assert.equal(install.idempotency_key, 'deploy-test-1');
 
@@ -314,8 +314,7 @@ async () => withProject(async (project) => {
   const output = [];
   const errors = [];
   const exit = await runServicePipelineCommand(
-    ['deploy', project, '--layout', '/tmp/fake-layout',
-      '--idempotency-key', 'deploy-test-2'],
+    ['deploy', project, '--idempotency-key', 'deploy-test-2'],
     {
       createSqlClient: () => ({
         async execute(statement) {
@@ -357,7 +356,6 @@ async () => {
     ['build'],
     ['deploy', 'project'],
     ['deploy', 'project', '--layout', '/tmp/x'],
-    ['deploy', 'project', '--idempotency-key', 'k'],
     ['deploy', 'project', '--layout', '/tmp/x', '--idempotency-key', '  '],
     ['deploy', 'project', '--layout', '/tmp/x', '--idempotency-key', 'k',
       '--unknown'],
