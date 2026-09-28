@@ -11,7 +11,7 @@
  * loadable component. The public init command exposes this one code-first
  * authoring model; provider-specific scaffolds are not CLI alternatives.
  */
-import {mkdir, mkdtemp, readFile, readdir, rm} from 'node:fs/promises';
+import {mkdtemp, readFile, readdir, rm} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
