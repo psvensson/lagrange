@@ -38,6 +38,8 @@ import {
   ControlPlaneReadinessService,
 } from '../../control-plane/control-plane-readiness-service.js';
 import {
+  ControlPlaneField,
+  ControlPlaneMessageType,
   DEFAULT_NODE_CAPABILITIES,
 } from '../../control-plane/control-plane-constants.js';
 import {
@@ -539,6 +541,24 @@ class ControlPlaneSetup {
       replicaOperationsOwner: systemMetadataOwners.replicaOperationsOwner,
     });
     dispatchService.initialize();
+    heartbeatService.setNodeStatePublisher(async (payload = {}) => {
+      const message = {
+        [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+        [ControlPlaneField.NODE_ID]: nodeId,
+        [ControlPlaneField.NODE_ADDRESS]: nodeAddress,
+        [ControlPlaneField.STATE]: payload.state,
+        [ControlPlaneField.CAPABILITIES]: payload.capabilities,
+        [ControlPlaneField.HEARTBEAT_AT]: payload.heartbeatAt,
+        [ControlPlaneField.READY_LEASE_EXPIRES_AT]:
+          payload.readyLeaseExpiresAt,
+        [ControlPlaneField.HEARTBEAT_ONLY]: payload.heartbeatOnly === true,
+        [ControlPlaneField.BOOT_INCARNATION]: bootIncarnation,
+        [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
+          payload.nodeStatePublicationMode,
+        [ControlPlaneField.NODE_ROW]: payload.nodeRow,
+      };
+      return dispatchService.publishNodeStateUpdateAndWait(message);
+    });
 
     // Attach message group services if provided
     if (messageGroupServices && messageGroupServices.size > NUMERIC_ZERO) {

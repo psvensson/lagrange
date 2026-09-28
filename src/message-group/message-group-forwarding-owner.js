@@ -46,6 +46,23 @@ import {
   resolveCDCForwardDeliveryProfile,
 } from './message-group-forwarding-owner-constants.js';
 
+function normalizeRequiredCompletionKind(value) {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function deliveryHasRequiredCompletion(deliveryResult, completionKind) {
+  if (completionKind === null) return true;
+  return deliveryResult?.completionKind === completionKind &&
+    deliveryResult?.completionCompleted === true;
+}
+
+function readForwardedByNodeIds(payload) {
+  const forwardedBy = payload?.[ControlPlaneField.FORWARDED_BY];
+  return Array.isArray(forwardedBy) ?
+    forwardedBy :
+    forwardedBy ? [forwardedBy] : [];
+}
+
 class MessageGroupForwardingOwner {
   constructor(options = {}) {
     this.service = options.service;
@@ -537,11 +554,7 @@ class MessageGroupForwardingOwner {
       options.forwardedByNodeId.length > 0 ?
         options.forwardedByNodeId :
         service.nodeId;
-    const forwardedBy = Array.isArray(payload?.[ControlPlaneField.FORWARDED_BY]) ?
-      payload[ControlPlaneField.FORWARDED_BY] :
-      payload?.[ControlPlaneField.FORWARDED_BY] ?
-        [payload[ControlPlaneField.FORWARDED_BY]] :
-        [];
+    const forwardedBy = readForwardedByNodeIds(payload);
     if (forwardedBy.includes(forwardedByNodeId)) {
       return;
     }
@@ -553,6 +566,9 @@ class MessageGroupForwardingOwner {
         forwardedByNodeId,
       ],
     };
+    const requiredCompletionKind = normalizeRequiredCompletionKind(
+      options.requiredCompletionKind,
+    );
 
     let lastError = null;
     for (const target of targets) {
@@ -568,8 +584,20 @@ class MessageGroupForwardingOwner {
         continue;
       }
       try {
-        await service.sendMessage(targetAddress, forwardedPayload);
-        return;
+        const deliveryResult = await service.sendMessage(
+          targetAddress,
+          forwardedPayload,
+        );
+        if (deliveryHasRequiredCompletion(
+          deliveryResult,
+          requiredCompletionKind,
+        )) {
+          return deliveryResult;
+        }
+        lastError = this.buildDeferredCdcForwardError(
+          MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_DELIVERY_REJECTED,
+          strictForwardRetryAfterMs,
+        );
       } catch (error) {
         lastError = error;
       }

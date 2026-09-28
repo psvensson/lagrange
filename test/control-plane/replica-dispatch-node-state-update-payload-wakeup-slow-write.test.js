@@ -8,6 +8,7 @@ import {
   initEnv,
 } from './replica-dispatch-node-state-update-test-support.js';
 import {
+  CONTROL_PLANE_MESSAGE_COMPLETION_FIELD,
   CONTROL_PLANE_MESSAGE_COMPLETION_CONTRACT,
   CONTROL_PLANE_MESSAGE_COMPLETION_KIND,
   ControlPlaneField,
@@ -412,6 +413,7 @@ test('ReplicaDispatchService ignores stale CONNECTED regression after READY',
 
     await service.handleNodeStateUpdate({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: 'node-4',
       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8084',
       [ControlPlaneField.STATE]: STATE.CONNECTED,
@@ -466,6 +468,7 @@ test('ReplicaDispatchService rebases lagged READY heartbeats to a full owner lea
 
     await service.handleNodeStateUpdate({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: 'node-4b',
       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8084',
       [ControlPlaneField.STATE]: STATE.READY,
@@ -555,6 +558,7 @@ test('ReplicaDispatchService isolates slow NODE_STATE_UPDATE writes by node lane
       messageId: 'slow-msg',
       payload: {
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
         [ControlPlaneField.NODE_ID]: 'node-slow',
         [ControlPlaneField.NODE_ADDRESS]: 'localhost:8091',
         [ControlPlaneField.STATE]: STATE.READY,
@@ -565,6 +569,7 @@ test('ReplicaDispatchService isolates slow NODE_STATE_UPDATE writes by node lane
       messageId: 'fast-msg',
       payload: {
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
         [ControlPlaneField.NODE_ID]: 'node-fast',
         [ControlPlaneField.NODE_ADDRESS]: 'localhost:8092',
         [ControlPlaneField.STATE]: STATE.READY,
@@ -636,6 +641,7 @@ test('ReplicaDispatchService acknowledges READY only after its owner write commi
       messageId: 'msg-1',
       payload: {
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
         [ControlPlaneField.NODE_ID]: 'node-5',
         [ControlPlaneField.NODE_ADDRESS]: 'localhost:8085',
         [ControlPlaneField.STATE]: STATE.READY,
@@ -667,14 +673,28 @@ test('ReplicaDispatchService acknowledges READY only after its owner write commi
       ['msg-1'],
       'READY is acknowledged only after the owner write commits',
     );
-    t.same(
+    t.match(
       completedPublication,
       {
         completionKind:
           CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
         completionCompleted: true,
+        [CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW]: {
+          node_id: 'node-5',
+          status: SERVICE_STATUS.ACTIVE,
+          connection_state: STATE.READY,
+          last_heartbeat: Number,
+        },
+        [CONTROL_PLANE_MESSAGE_COMPLETION_FIELD
+          .AUTHORITATIVE_OBSERVED_AT_MS]: Number,
       },
-      'the receiver returns the declared durable-publication boundary',
+      'the receiver returns the exact durable-publication owner row',
+    );
+    t.ok(
+      completedPublication[
+        CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW
+      ].last_heartbeat >= now,
+      'the owner receipt retains its rebased authoritative heartbeat',
     );
     service.stop();
   });
@@ -713,14 +733,16 @@ test('ReplicaDispatchService refuses READY acknowledgement when its owner write 
         messageId: 'ready-failure-msg',
         payload: {
           [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
           [ControlPlaneField.NODE_ID]: 'node-ready-failure',
           [ControlPlaneField.NODE_ADDRESS]: 'localhost:8087',
           [ControlPlaneField.STATE]: STATE.READY,
           [ControlPlaneField.HEARTBEAT_AT]: Date.now(),
         },
       }),
-      /injected authoritative READY write failure/,
-      'the transport path observes the owner failure',
+      /NODE_STATE_UPDATE_DESTINATION_NOT_OBSERVED/,
+      'an unknown write outcome is observed and remains retryable when the ' +
+        'destination did not apply',
     );
     t.same(
       acknowledgements,
@@ -780,6 +802,7 @@ test('ReplicaDispatchService acknowledges maintenance only after bypassing a ' +
 
   const steadyPayload = {
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-maintenance-ingress',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8086',
     [ControlPlaneField.STATE]: STATE.READY,
@@ -897,6 +920,11 @@ test('ReplicaDispatchService forwards NODE_STATE_UPDATE when local ingress is no
       },
       forwardMetadataIngressPayloadToLeader: async (payload, options) => {
         forwarded.push({payload, options});
+        return {
+          completionKind:
+            CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
+          completionCompleted: true,
+        };
       },
     };
 
@@ -905,6 +933,7 @@ test('ReplicaDispatchService forwards NODE_STATE_UPDATE when local ingress is no
       messageId: 'msg-forward',
       payload: {
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
         [ControlPlaneField.NODE_ID]: 'node-6',
         [ControlPlaneField.NODE_ADDRESS]: 'localhost:8086',
         [ControlPlaneField.STATE]: STATE.READY,
@@ -922,6 +951,7 @@ test('ReplicaDispatchService forwards NODE_STATE_UPDATE when local ingress is no
       [{
         payload: {
           [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
           [ControlPlaneField.NODE_ID]: 'node-6',
           [ControlPlaneField.NODE_ADDRESS]: 'localhost:8086',
           [ControlPlaneField.STATE]: STATE.READY,
@@ -930,6 +960,8 @@ test('ReplicaDispatchService forwards NODE_STATE_UPDATE when local ingress is no
         options: {
           requiredTables: ['nodes'],
           forwardedByNodeId: 'node-1',
+          requiredCompletionKind:
+            CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
         },
       }],
       'node-state updates should forward through canonical metadata ingress ' +
@@ -989,6 +1021,11 @@ test(
       },
       forwardMetadataIngressPayloadToLeader: async (payload, options) => {
         forwarded.push({payload, options});
+        return {
+          completionKind:
+            CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
+          completionCompleted: true,
+        };
       },
     };
 
@@ -997,6 +1034,7 @@ test(
       messageId: 'msg-forward-selection',
       payload: {
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
         [ControlPlaneField.NODE_ID]: 'node-7',
         [ControlPlaneField.NODE_ADDRESS]: 'localhost:8087',
         [ControlPlaneField.STATE]: STATE.READY,
@@ -1019,6 +1057,7 @@ test(
       [{
         payload: {
           [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
           [ControlPlaneField.NODE_ID]: 'node-7',
           [ControlPlaneField.NODE_ADDRESS]: 'localhost:8087',
           [ControlPlaneField.STATE]: STATE.READY,
@@ -1027,6 +1066,8 @@ test(
         options: {
           requiredTables: ['nodes'],
           forwardedByNodeId: 'node-1',
+          requiredCompletionKind:
+            CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
         },
       }],
       'node-state updates should forward through the canonical metadata ingress selection when the owner says forward',

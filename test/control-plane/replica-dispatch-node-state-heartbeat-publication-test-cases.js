@@ -46,7 +46,7 @@ export function registerReplicaDispatchNodeStateHeartbeatPublicationTests({
   createService,
   initEnv,
 }) {
-  test('ReplicaDispatchService revives stale stopped rows on READY ' +
+  test('ReplicaDispatchService refuses stale stopped rows on READY ' +
     'heartbeat-only node-state updates',
   async (t) => {
     initEnv();
@@ -102,8 +102,9 @@ export function registerReplicaDispatchNodeStateHeartbeatPublicationTests({
       },
     });
 
-    await service.handleNodeStateUpdate({
+    const error = await t.rejects(service.handleNodeStateUpdate({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: HEARTBEAT_STATUS_REVIVAL_NODE_ID,
       [ControlPlaneField.NODE_ADDRESS]: HEARTBEAT_STATUS_REVIVAL_NODE_ADDRESS,
       [ControlPlaneField.STATE]: STATE.READY,
@@ -111,34 +112,16 @@ export function registerReplicaDispatchNodeStateHeartbeatPublicationTests({
       [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
         CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
       [ControlPlaneField.HEARTBEAT_AT]: now,
-    });
+    }));
 
-    t.equal(updates.length, 1, 'persists one heartbeat-only node-state update');
-    t.equal(
-      updates[0].row.status,
-      SERVICE_STATUS.ACTIVE,
-      'READY heartbeat-only recovery should revive a stale stopped node row',
-    );
-    t.equal(
-      updates[0].row.connection_state,
-      STATE.READY,
-      'revival update should preserve the READY connection state',
-    );
-    t.equal(
-      reconcileCalls.length,
-      1,
-      'revived READY visibility should re-enter membership publication',
-    );
-    t.equal(
-      reconcileCalls[0]?.context?.nodeRow?.status,
-      SERVICE_STATUS.ACTIVE,
-      'publication repair should receive the revived active row shape',
-    );
-    t.same(
-      acknowledgementCalls,
-      [HEARTBEAT_STATUS_REVIVAL_NODE_ID],
-      'revived rows missing from publication should still probe the ACK owner',
-    );
+    t.equal(error?.code, 'NODE_STATE_UPDATE_SOURCE_CHANGED',
+      'STOPPED is not a valid source for the registration activation owner');
+    t.equal(updates.length, 0,
+      'heartbeat recovery cannot overwrite terminal lifecycle state');
+    t.equal(reconcileCalls.length, 0,
+      'a refused lifecycle mutation cannot publish membership');
+    t.equal(acknowledgementCalls.length, 0,
+      'a refused lifecycle mutation cannot acknowledge publication');
 
     service.stop();
   });
@@ -200,6 +183,7 @@ export function registerReplicaDispatchNodeStateHeartbeatPublicationTests({
 
     await service.handleNodeStateUpdate({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: HEARTBEAT_PUBLICATION_GAP_NODE_ID,
       [ControlPlaneField.NODE_ADDRESS]: HEARTBEAT_PUBLICATION_GAP_NODE_ADDRESS,
       [ControlPlaneField.STATE]: STATE.READY,

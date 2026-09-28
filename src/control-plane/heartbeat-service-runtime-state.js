@@ -24,6 +24,8 @@ const HEARTBEAT_SERVICE_LITERAL = Object.freeze({
   CDC_UPDATE: 'cdc_update',
   HEARTBEATSERVICE_REQUIRES_CONTROLPLANESYSTEMTABLEGATEWAY:
     'HeartbeatService requires controlPlaneSystemTableGateway',
+  NODE_STATE_PUBLICATION_OWNER_REQUIRED:
+    'HeartbeatService requires the canonical node-state publication owner',
   BACKGROUND: 'background',
   COALESCED_MIN_INTERVAL: 'coalesced_min_interval',
   UTILIZATION_CHANGED: 'utilization_changed',

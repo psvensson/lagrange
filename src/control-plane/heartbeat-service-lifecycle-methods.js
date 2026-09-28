@@ -169,10 +169,11 @@ class HeartbeatServiceLifecycleMethods {
    * @param {number} timeoutMs
    * @return {Promise<Object>}
    * @private
-   */ async callNodeStateReporterWithTimeout(payload, timeoutMs) {
+  */ async callNodeStateReporterWithTimeout(payload, timeoutMs) {
+    const nodeStatePublisher = this.getNodeStatePublicationAdapter();
     const boundedTimeoutMs = Number(timeoutMs);
     if (!Number.isFinite(boundedTimeoutMs) || boundedTimeoutMs <= ZERO) {
-      return this.nodeStateReporter(payload);
+      return nodeStatePublisher(payload);
     }
     let timeoutHandle = null;
     let settled = false;
@@ -200,7 +201,7 @@ class HeartbeatServiceLifecycleMethods {
         timeoutHandle.unref();
       }
       Promise.resolve()
-        .then(() => this.nodeStateReporter(payload))
+        .then(() => nodeStatePublisher(payload))
         .then((result) => {
           finalize(resolve, result);
         })
@@ -214,6 +215,28 @@ class HeartbeatServiceLifecycleMethods {
    * @param {Function|null} reporter - Async reporter callback.
    */ setNodeStateReporter(reporter) {
     this.nodeStateReporter = typeof reporter === 'function' ? reporter : null;
+  }
+  /**
+   * Install the local ingress adapter for the canonical node-state publisher.
+   * Routed and local ingress both converge on ReplicaDispatchService.
+   * @param {Function|null} publisher
+   */ setNodeStatePublisher(publisher) {
+    this.nodeStatePublisher = typeof publisher === 'function' ? publisher : null;
+  }
+  /**
+   * Resolve an ingress adapter without granting this observer durable write
+   * authority.
+   * @return {Function}
+   */ getNodeStatePublicationAdapter() {
+    const publisher = typeof this.nodeStateReporter === 'function' ?
+      this.nodeStateReporter :
+      this.nodeStatePublisher;
+    if (typeof publisher !== 'function') {
+      throw new Error(
+        HEARTBEAT_SERVICE_LITERAL.NODE_STATE_PUBLICATION_OWNER_REQUIRED,
+      );
+    }
+    return publisher;
   }
   /**
    * Enable or disable reporter success visibility verification.

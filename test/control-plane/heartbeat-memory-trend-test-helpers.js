@@ -5,6 +5,8 @@ import {
 } from '../../src/control-plane/heartbeat-service.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
+import {createNodeStatePublicationOwnerFixture} from
+  '../test-helpers/node-state-publication-owner-fixture.js';
 
 const HEARTBEAT_REPORTER_PUBLICATION_PATH = Object.freeze({
   NODE_STATE_REPORTER: 'node_state_reporter',
@@ -67,6 +69,13 @@ function createHeartbeatService(options = {}) {
   return new RawHeartbeatService({
     ...options,
     controlPlaneSystemTableGateway,
+    nodeStatePublisher:
+      options.nodeStatePublisher ||
+      createNodeStatePublicationOwnerFixture({
+        controlPlaneSystemTableGateway,
+        nodeId: options.nodeId,
+        bootIncarnation: options.bootIncarnation,
+      }),
   });
 }
 

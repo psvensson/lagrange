@@ -27,6 +27,7 @@ const TEST_NODE_ID = 'test-node-registration-owner';
 const TEST_NODE_ADDRESS = 'joiner-host:8080';
 const TEST_WS_PORT = 8082;
 const TEST_NOW_MS = 1_710_000_000_000;
+const TEST_BOOT_INCARNATION = 7;
 const TEST_LOGGER = {
   info: () => {},
   warn: () => {},
@@ -119,6 +120,7 @@ function createDelegates() {
       resolveBudgetRow: (nodeRow) => buildBudgetResolution(nodeRow),
     }),
     getNodeCapabilities: () => TEST_NODE_CAPABILITIES,
+    getBootIncarnation: () => TEST_BOOT_INCARNATION,
   };
 }
 
@@ -205,6 +207,11 @@ test(
       nodeCalls[0].row[COLUMN.STATUS],
       NODE_STATE.JOINING,
       'join admission stays non-active until the ready-lease heartbeat',
+    );
+    t.equal(
+      nodeCalls[0].row[COLUMN.BOOT_INCARNATION],
+      TEST_BOOT_INCARNATION,
+      'join acquisition durably binds the boot incarnation',
     );
     const joinMutationOptions = publicationCalls.map((call) => call.options);
     t.ok(

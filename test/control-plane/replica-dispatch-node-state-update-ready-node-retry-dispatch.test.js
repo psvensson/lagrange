@@ -271,6 +271,7 @@ test('ReplicaDispatchService demotes non-ready node-state churn to the ' +
 
   await service.handleNodeStateUpdate({
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-connected',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8082',
     [ControlPlaneField.STATE]: STATE.CONNECTED,
@@ -354,6 +355,7 @@ test('ReplicaDispatchService fails loudly when NODE_STATE_UPDATE targets a missi
     await t.rejects(
       service.handleNodeStateUpdate({
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
         [ControlPlaneField.NODE_ID]: 'node-3',
         [ControlPlaneField.NODE_ADDRESS]: 'localhost:8083',
         [ControlPlaneField.STATE]: STATE.READY,
@@ -363,7 +365,8 @@ test('ReplicaDispatchService fails loudly when NODE_STATE_UPDATE targets a missi
       /node row .*missing/i,
       'NODE_STATE_UPDATE should not recreate missing authoritative rows',
     );
-    t.equal(updates.length, 1, 'attempts the canonical update path once');
+    t.equal(updates.length, 0,
+      'authoritative absence refuses before any mutation attempt');
     t.equal(upserts.length, 0, 'dispatch updates should not fall back to upsert');
 
     service.stop();
@@ -437,6 +440,7 @@ test('ReplicaDispatchService defers missing-row NODE_STATE_UPDATE misses for ' +
 
   const payload = {
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-recovery',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8084',
     [ControlPlaneField.STATE]: STATE.READY,

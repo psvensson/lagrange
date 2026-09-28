@@ -24,36 +24,15 @@ import {
 } from '../../src/node/replica-lifecycle-manager.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createLifecycleCdcService} from
+  '../test-helpers/lifecycle-state-store.js';
 
 /**
  * Create a mock CDC integration service.
  * @return {Object} Mock CDC service.
  */
 function createMockCDCService() {
-  const operations = [];
-
-  return {
-    operations,
-    async insertSystemTableRow(tableName, data) {
-      operations.push({type: 'insert', tableName, data, timestamp: Date.now()});
-      return {success: true};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      operations.push({type: 'update', tableName, whereClause, data, timestamp: Date.now()});
-      return {success: true};
-    },
-    async deleteSystemTableRow(tableName, whereClause) {
-      operations.push({type: 'delete', tableName, whereClause, timestamp: Date.now()});
-      return {success: true};
-    },
-    async upsertSystemTableRow(tableName, data) {
-      operations.push({type: 'upsert', tableName, data, timestamp: Date.now()});
-      return {success: true};
-    },
-    reset() {
-      operations.length = 0;
-    },
-  };
+  return createLifecycleCdcService();
 }
 
 /**

@@ -75,6 +75,7 @@ test('ReplicaDispatchService updates existing node rows for NODE_STATE_UPDATE',
 
     await service.handleNodeStateUpdate({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: 'node-2',
       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8082',
       [ControlPlaneField.STATE]: STATE.READY,
@@ -87,8 +88,15 @@ test('ReplicaDispatchService updates existing node rows for NODE_STATE_UPDATE',
     t.equal(updates[0].tableName, 'nodes', 'writes to nodes table');
     t.same(
       updates[0].whereClause,
-      {node_id: 'node-2'},
-      'targets the node row by node_id',
+      {
+        node_id: 'node-2',
+        boot_incarnation: 1,
+        status: SERVICE_STATUS.ACTIVE,
+        connection_state: STATE.CONNECTED,
+        last_heartbeat: cacheNode.last_heartbeat,
+        created_at: cacheNode.created_at,
+      },
+      'targets the exact registered node generation and observed source',
     );
     t.equal(
       updates[0].options?.skipCacheWait,
@@ -199,6 +207,7 @@ test('ReplicaDispatchService routes READY heartbeat-only node-state updates to t
 
   await service.handleNodeStateUpdate({
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-heartbeat-only-ready',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8096',
     [ControlPlaneField.STATE]: STATE.READY,
@@ -320,6 +329,7 @@ async (t) => {
     service.reconcileNodeStateUpdate('node-heartbeat-recovery', {
       payload: {
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
         [ControlPlaneField.NODE_ID]: 'node-heartbeat-recovery',
         [ControlPlaneField.NODE_ADDRESS]: 'localhost:8097',
         [ControlPlaneField.STATE]: STATE.READY,
@@ -403,6 +413,7 @@ test('ReplicaDispatchService surfaces heartbeat-maintenance ' +
     service.reconcileNodeStateUpdate('node-heartbeat-maintenance', {
       payload: {
         [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
         [ControlPlaneField.NODE_ID]: 'node-heartbeat-maintenance',
         [ControlPlaneField.NODE_ADDRESS]: 'localhost:80971',
         [ControlPlaneField.STATE]: STATE.READY,
@@ -445,7 +456,7 @@ test('ReplicaDispatchService surfaces heartbeat-maintenance ' +
   service.stop();
 });
 
-test('ReplicaDispatchService promotes READY node-state updates from stopped rows',
+test('ReplicaDispatchService refuses READY node-state updates from stopped rows',
   async (t) => {
     initEnv();
 
@@ -481,25 +492,19 @@ test('ReplicaDispatchService promotes READY node-state updates from stopped rows
       },
     });
 
-    await service.handleNodeStateUpdate({
+    const error = await t.rejects(service.handleNodeStateUpdate({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: 'node-restart-ready',
       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8092',
       [ControlPlaneField.STATE]: STATE.READY,
       [ControlPlaneField.HEARTBEAT_AT]: now,
-    });
+    }));
 
-    t.equal(updates.length, 1, 'persists one nodes row update');
-    t.equal(
-      updates[0].row.status,
-      SERVICE_STATUS.ACTIVE,
-      'READY node-state updates should restore stopped rows to active',
-    );
-    t.equal(
-      updates[0].row.connection_state,
-      STATE.READY,
-      'READY node-state updates should publish ready connectivity',
-    );
+    t.equal(error?.code, 'NODE_STATE_UPDATE_SOURCE_CHANGED',
+      'STOPPED rows require their lifecycle owner, not READY publication');
+    t.equal(updates.length, 0,
+      'READY evidence cannot overwrite terminal lifecycle state');
 
     service.stop();
   });
@@ -574,6 +579,7 @@ test('ReplicaDispatchService keeps READY node-state publication on the ' +
   await service.reconcileNodeStateUpdate('node-pressure-ready', {
     payload: {
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: 'node-pressure-ready',
       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8085',
       [ControlPlaneField.STATE]: STATE.READY,

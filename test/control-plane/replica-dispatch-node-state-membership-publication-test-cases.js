@@ -407,6 +407,7 @@ export function registerReplicaDispatchNodeStateReadyMembershipPublicationTests(
 
     await service.handleNodeStateUpdate({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: 'node-publication-ack',
       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8087',
       [ControlPlaneField.STATE]: STATE.READY,
@@ -475,6 +476,7 @@ export function registerReplicaDispatchNodeStateReadyMembershipPublicationTests(
 
     await service.handleNodeStateUpdate({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: 'node-publication-refresh-ack',
       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8088',
       [ControlPlaneField.STATE]: STATE.READY,
@@ -557,6 +559,7 @@ export function registerReplicaDispatchNodeStateReadyMembershipPublicationTests(
 
     await service.handleNodeStateUpdate({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: nodeId,
       [ControlPlaneField.NODE_ADDRESS]: nodeAddress,
       [ControlPlaneField.STATE]: STATE.READY,

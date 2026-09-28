@@ -788,8 +788,8 @@ test('HeartbeatService recovers from a hung heartbeat attempt after timeout',
         'heartbeat loop should not overlap before the attempt timeout fires',
       );
 
-      t.equal(timeoutHandles.length, 1,
-        'heartbeat attempt should arm a timeout watchdog');
+      t.equal(timeoutHandles.length, 2,
+        'heartbeat attempt and canonical publication ingress are both bounded');
       timeoutHandles[0].callback();
 
       t.equal(

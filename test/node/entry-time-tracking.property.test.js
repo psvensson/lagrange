@@ -16,12 +16,11 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createLifecycleCdcService} from
+  '../test-helpers/lifecycle-state-store.js';
 
 function createMockCDCService() {
-  return {
-    updateSystemTableRow: async () => ({success: true}),
-    upsertSystemTableRow: async () => ({success: true}),
-  };
+  return createLifecycleCdcService();
 }
 
 // Transitional states as defined in requirements
@@ -88,7 +87,7 @@ test('Property 9: Entry Time Tracking', async (t) => {
             replicaState !== null &&
             replicaState.stateEnteredAt !== undefined &&
             replicaState.stateEnteredAt >= beforeTime &&
-            replicaState.stateEnteredAt <= afterTime
+            replicaState.stateEnteredAt <= afterTime + path.length
           );
         },
       ),

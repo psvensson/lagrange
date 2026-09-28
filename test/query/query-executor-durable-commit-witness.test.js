@@ -15,6 +15,7 @@ const DURABLE_COMMIT_WITNESS = Object.freeze({
   operationId: 'write-operation-1',
   idempotencyKey: 'write-operation-1',
 });
+const ORIGIN_HLC = '1785630280000:1:node-2';
 
 test('default partition delivery preserves the durable commit witness',
   async (t) => {
@@ -70,4 +71,29 @@ test('INSERT rendering returns the durable commit witness to the coordinator',
     t.same(result.durableCommitWitness, DURABLE_COMMIT_WITNESS);
     t.equal(result.acceptingNodeId, 'node-2');
     t.equal(result.acknowledgedAtMs, 1785630280000);
+  });
+
+test('distributed mutation preserves a shared committed origin HLC',
+  async (t) => {
+    const executor = new QueryExecutor({
+      systemCache: createMockSystemCache(['widgets-p1']),
+      messageRouter: {},
+    });
+    executor.executeOnPartitions = async () => [{
+      success: true,
+      rows: [],
+      changes: 1,
+      originHlc: ORIGIN_HLC,
+    }];
+    const ast = new SQLParser(
+      'UPDATE widgets SET name = \'updated\' WHERE id = \'widget-1\'',
+    ).parse();
+
+    const result = await executor.executeUpdate(ast, ['widgets-p1']);
+
+    t.equal(
+      result.originHlc,
+      ORIGIN_HLC,
+      'the mutation completion owner receives the committed CDC version',
+    );
   });

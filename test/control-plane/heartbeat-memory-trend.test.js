@@ -294,11 +294,11 @@ test('HeartbeatService skips cache wait for heartbeat writes and fails on missin
       now: () => now,
     });
 
-    await t.rejects(
-      service.sendHeartbeat(null, null),
-      /node row .*missing/i,
-      'steady-state heartbeat should fail instead of recreating missing rows',
-    );
+      await t.rejects(
+        service.sendHeartbeat(null, null),
+        /NODE_ROW_MISSING/,
+        'steady-state heartbeat should fail instead of recreating missing rows',
+      );
     t.equal(updates.length, 1, 'issues one heartbeat update');
     t.equal(
       updates[0].options?.skipCacheWait,

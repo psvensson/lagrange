@@ -502,7 +502,14 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     // Terminal refusal: a stale-incarnation writer can never become fresh by
     // retrying, so the reconcile callback must rethrow instead of parking the
     // payload on the deferred-retry loop forever.
-    if (error.code === STALE_NODE_INCARNATION_CODE) {
+    if (
+      error.code === STALE_NODE_INCARNATION_CODE ||
+      error.code ===
+        REPLICA_DISPATCH_SERVICE_LITERAL.NODE_STATE_UPDATE_SOURCE_CHANGED ||
+      error.code ===
+        REPLICA_DISPATCH_SERVICE_LITERAL.NODE_STATE_UPDATE_INCARNATION_REQUIRED ||
+      error.code === REPLICA_DISPATCH_SERVICE_LITERAL.NODE_ROW_MISSING
+    ) {
       return false;
     }
     const nextState = payload?.[ControlPlaneField.STATE];
@@ -523,9 +530,6 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
       return false;
     }
     if (error?.deferRetry === true) {
-      return true;
-    }
-    if (error?.code === REPLICA_DISPATCH_SERVICE_LITERAL.NODE_ROW_MISSING) {
       return true;
     }
     if (Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0) {

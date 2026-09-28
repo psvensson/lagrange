@@ -17,7 +17,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -27,6 +26,7 @@ import {
   TEST_STABILIZATION_MS,
 } from '../../src/test-helpers/test-timeout-constants.js';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   getUniquePort,
@@ -207,7 +207,7 @@ async function bootstrapSeedNodeWithRetry(seedNodeId, maxAttempts = 3) {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const seedWsPort = getUniquePort();
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

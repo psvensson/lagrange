@@ -13,6 +13,7 @@ import {
 const {
   CONTROL_PLANE_CONFIG_KEY,
   CONTROL_PLANE_EVENT,
+  CONTROL_PLANE_MESSAGE_COMPLETION_FIELD,
   ConfigurationManager,
   ControlPlaneMessageType,
   ControlPlaneReadinessService,
@@ -507,7 +508,16 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
     }
 
     const completionKind = getControlPlaneMessageCompletionKind(payload.type);
-    const completion = () => ({completionKind, completionCompleted: true});
+    const completion = (authoritativeRow = null) => ({
+      completionKind,
+      completionCompleted: true,
+      ...(authoritativeRow ? {
+        [CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW]:
+          authoritativeRow,
+        [CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_OBSERVED_AT_MS]:
+          Date.now(),
+      } : {}),
+    });
 
     const requiredTables =
       this.resolveControlPlaneMessageRequiredTables(payload);
@@ -523,26 +533,32 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       if (
         ingressDecision.action !== MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL
       ) {
-        await this.forwardToLeader(mgService, payload, {
-          requiredTables,
-          ingressDecision,
-        });
+        const forwardedCompletion = await this.forwardToLeader(
+          mgService,
+          payload,
+          {
+            requiredTables,
+            ingressDecision,
+            requiredCompletionKind: completionKind,
+          },
+        );
         if (
           messageId &&
           typeof mgService.acknowledgeMessage === 'function'
         ) {
           await mgService.acknowledgeMessage(messageId);
         }
-        return completion();
+        return forwardedCompletion;
       }
-      await this.enqueueNodeStateUpdateAndWait(payload);
+      const publicationCompletion =
+        await this.publishNodeStateUpdateAndWait(payload);
       if (
         messageId &&
         typeof mgService.acknowledgeMessage === 'function'
       ) {
         await mgService.acknowledgeMessage(messageId);
       }
-      return completion();
+      return publicationCompletion;
     }
 
     if (!mgService.isLeaderReplica()) {

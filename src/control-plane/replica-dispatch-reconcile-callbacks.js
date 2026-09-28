@@ -378,9 +378,13 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
       return;
     }
     try {
-      await this.handleNodeStateUpdate(payload);
+      const authoritativeRow = await this.handleNodeStateUpdate(payload, {
+        requireDurableCompletion:
+          context?.requireDurableCompletion === true,
+      });
       this.clearDeferredNodeStateUpdateRetry(nodeId);
       this.clearNodeStateUpdateRetryState(nodeId);
+      return authoritativeRow;
     } catch (error) {
       if (context?.requireDurableCompletion === true) {
         throw error;

@@ -3,17 +3,18 @@ import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared
 const {
   COLUMN,
   CONTROL_PLANE_ALLOWED_STATES,
+  CONTROL_PLANE_MESSAGE_COMPLETION_FIELD,
   ControlPlaneField,
   DISPATCH_LOG_MSG,
-  DISPATCH_READINESS_ERROR_REASON,
+  NODE_STATE,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   SERVICE_STATUS,
-  STALE_NODE_INCARNATION_CODE,
   STATE,
   STRING,
   SYSTEM_TABLE_NAME,
   buildStaleNodeIncarnationError,
+  getControlPlaneMessageCompletionKind,
   getNodeHeartbeatWatermark,
   isRetryableControlPlaneError,
   normalizeKnownNodeBootIncarnation,
@@ -30,9 +31,9 @@ const objectFreeze = Object.freeze;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
 const stringConstructor = String;
-const stringPrototypeTrim = Function.call.bind(String.prototype.trim);
 
 const OWN_DATA_VALUE_FIELD = 'value';
+const NO_NODE_STATE_UPDATE_COMPLETION_ROW = Object.freeze({});
 
 function readOwnData(source, field) {
   if (!source || typeof source !== 'object') return undefined;
@@ -81,6 +82,85 @@ function retainNodeBootIncarnationWatermark(watermarks, nodeId, fence) {
       mathMax(fence.payloadBootIncarnation, fence.knownBootIncarnation),
     );
   }
+}
+
+function buildNodeStateUpdateCompletionRow(expectedRow, updateResult) {
+  const originHlc = updateResult?.partitionResult?.originHlc;
+  if (typeof originHlc !== 'string' || originHlc.length === 0) {
+    return NO_NODE_STATE_UPDATE_COMPLETION_ROW;
+  }
+  return {
+    ...expectedRow,
+    [COLUMN.UPDATED_AT_HLC]: originHlc,
+  };
+}
+
+function nodeStateUpdateCompletionRowMatches(nodeId, row, expectedRow) {
+  return row?.[COLUMN.NODE_ID] === nodeId &&
+    row?.[COLUMN.STATUS] === expectedRow?.[COLUMN.STATUS] &&
+    row?.[COLUMN.CONNECTION_STATE] ===
+      expectedRow?.[COLUMN.CONNECTION_STATE] &&
+    Number(row?.[COLUMN.LAST_HEARTBEAT]) >=
+      Number(expectedRow?.[COLUMN.LAST_HEARTBEAT]);
+}
+
+function buildNodeStateUpdateWhereClause(existing, payloadBootIncarnation) {
+  return {
+    [COLUMN.NODE_ID]: existing[COLUMN.NODE_ID],
+    [COLUMN.BOOT_INCARNATION]: payloadBootIncarnation,
+    [COLUMN.STATUS]: existing[COLUMN.STATUS],
+    [COLUMN.CONNECTION_STATE]: existing[COLUMN.CONNECTION_STATE],
+    [COLUMN.LAST_HEARTBEAT]: existing[COLUMN.LAST_HEARTBEAT],
+    [COLUMN.CREATED_AT]: existing[COLUMN.CREATED_AT],
+  };
+}
+
+function nodeStateDestinationMatches(row, expectedRow, payloadBootIncarnation) {
+  return row?.[COLUMN.NODE_ID] === expectedRow?.[COLUMN.NODE_ID] &&
+    normalizeKnownNodeBootIncarnation(row?.[COLUMN.BOOT_INCARNATION]) ===
+      payloadBootIncarnation &&
+    row?.[COLUMN.STATUS] === expectedRow?.[COLUMN.STATUS] &&
+    row?.[COLUMN.CONNECTION_STATE] ===
+      expectedRow?.[COLUMN.CONNECTION_STATE] &&
+    Number(row?.[COLUMN.LAST_HEARTBEAT]) >=
+      Number(expectedRow?.[COLUMN.LAST_HEARTBEAT]);
+}
+
+function nodeStateRegistrationAlreadyActivated(
+  row,
+  source,
+  payloadBootIncarnation,
+) {
+  return source?.[COLUMN.STATUS] === NODE_STATE.JOINING &&
+    normalizeKnownNodeBootIncarnation(
+      row?.[COLUMN.BOOT_INCARNATION],
+    ) === payloadBootIncarnation &&
+    row?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
+    row?.[COLUMN.CONNECTION_STATE] === STATE.READY;
+}
+
+function nodeStateSourceLifecycleMatches(observed, source) {
+  return observed?.[COLUMN.NODE_ID] === source?.[COLUMN.NODE_ID] &&
+    observed?.[COLUMN.BOOT_INCARNATION] ===
+      source?.[COLUMN.BOOT_INCARNATION] &&
+    observed?.[COLUMN.STATUS] === source?.[COLUMN.STATUS] &&
+    observed?.[COLUMN.CONNECTION_STATE] ===
+      source?.[COLUMN.CONNECTION_STATE] &&
+    observed?.[COLUMN.CREATED_AT] === source?.[COLUMN.CREATED_AT];
+}
+
+function buildNodeStatePublicationError(code, options = {}) {
+  const error = new Error(code);
+  error.code = code;
+  error.nodeId = options.nodeId || null;
+  error.receivedIncarnation = options.receivedIncarnation || null;
+  error.knownIncarnation = options.knownIncarnation || null;
+  if (options.deferRetry === true) {
+    error.deferRetry = true;
+    error.retryAfterMs = options.retryAfterMs;
+  }
+  if (options.cause) error.cause = options.cause;
+  return error;
 }
 
 const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
@@ -159,7 +239,19 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
     return this.enqueueNodeStateUpdate(payload, {awaitCompletion: true});
   },
 
-  async handleNodeStateUpdate(payload) {
+  async publishNodeStateUpdateAndWait(payload) {
+    const authoritativeRow = await this.enqueueNodeStateUpdateAndWait(payload);
+    return {
+      completionKind: getControlPlaneMessageCompletionKind(payload?.type),
+      completionCompleted: true,
+      [CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW]:
+        authoritativeRow,
+      [CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_OBSERVED_AT_MS]:
+        Date.now(),
+    };
+  },
+
+  async handleNodeStateUpdate(payload, options = {}) {
     const nodeId = payload[ControlPlaneField.NODE_ID];
     const state = payload[ControlPlaneField.STATE];
     const payloadNodeRow = payload[ControlPlaneField.NODE_ROW];
@@ -177,7 +269,16 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
       return;
     }
 
-    const existing = await this.getNodeRow(nodeId);
+    const existing = await this.readAuthoritativeNodeStateSource(nodeId);
+    const payloadBootIncarnation = normalizeKnownNodeBootIncarnation(
+      readOwnData(payload, ControlPlaneField.BOOT_INCARNATION),
+    );
+    if (payloadBootIncarnation === 0) {
+      throw buildNodeStatePublicationError(
+        REPLICA_DISPATCH_SERVICE_LITERAL.NODE_STATE_UPDATE_INCARNATION_REQUIRED,
+        {nodeId},
+      );
+    }
     const incarnationFence = resolveNodeBootIncarnationFence(
       nodeId,
       payload,
@@ -204,6 +305,17 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
       numberIsFinite(existingReadyLeaseExpiresAt) &&
       existingReadyLeaseExpiresAt > now;
     const nextState = promotedToReadyFromConnected ? STATE.READY : state;
+    const existingStatus = existing?.[COLUMN.STATUS];
+    if (
+      nextState === STATE.READY &&
+      existingStatus !== NODE_STATE.JOINING &&
+      existingStatus !== SERVICE_STATUS.ACTIVE
+    ) {
+      throw buildNodeStatePublicationError(
+        REPLICA_DISPATCH_SERVICE_LITERAL.NODE_STATE_UPDATE_SOURCE_CHANGED,
+        {nodeId},
+      );
+    }
     // The canonical write owner grants the lease. Forwarding latency must not
     // consume a sender-stamped lease before the nodes row becomes durable.
     const readyLeaseExpiresAt =
@@ -273,7 +385,7 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
         nodeId,
         reason: REPLICA_DISPATCH_SERVICE_LITERAL.STALE_AGAINST_EXISTING_ROW,
       });
-      return;
+      return existing;
     }
     const baseRow = this.buildNodeStateUpdateRow({
       nodeId,
@@ -288,34 +400,62 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
       incarnationFence,
     });
 
-    const updateResult =
-      await this.getControlPlaneSystemTableGateway().updateSystemTableRow(
-        SYSTEM_TABLE_NAME.NODES,
-        {[COLUMN.NODE_ID]: nodeId},
-        baseRow,
-        this.buildNodeStateUpdateWriteOptions(
-          nodeId,
-          nextState,
-          isHeartbeatOnly,
-          payload,
-        ),
-      );
+    const expectedRow = {
+      ...existing,
+      [COLUMN.NODE_ID]: nodeId,
+      ...baseRow,
+    };
+    const whereClause = buildNodeStateUpdateWhereClause(
+      existing,
+      payloadBootIncarnation,
+    );
+    let updateResult = null;
+    let writeError = null;
+    try {
+      updateResult =
+        await this.getControlPlaneSystemTableGateway().updateSystemTableRow(
+          SYSTEM_TABLE_NAME.NODES,
+          whereClause,
+          baseRow,
+          this.buildNodeStateUpdateWriteOptions(
+            nodeId,
+            nextState,
+            isHeartbeatOnly,
+            payload,
+          ),
+        );
+      if (updateResult?.success === false) {
+        writeError = buildNodeStatePublicationError(
+          updateResult.error ||
+            REPLICA_DISPATCH_SERVICE_LITERAL
+              .NODE_STATE_UPDATE_DESTINATION_NOT_OBSERVED,
+          {nodeId},
+        );
+      }
+    } catch (error) {
+      writeError = error;
+    }
+
     const updateAffectedRows = Number(
       updateResult?.partitionResult?.affectedRows,
     );
-    if (updateAffectedRows === 0) {
-      const bootstrapped = await this.tryBootstrapMissingNodeStateUpdateRow(
-        nodeId,
-        nextState,
-        baseRow,
-        existing,
-        isHeartbeatOnly,
-        payload,
+    const mustObserveDestination = writeError !== null ||
+      updateAffectedRows === 0 ||
+      (
+        options.requireDurableCompletion === true &&
+        typeof updateResult?.partitionResult?.originHlc !== 'string'
       );
-      if (!bootstrapped) {
-        throw await this.resolveMissingNodeRowUpdateError(nodeId, existing);
-      }
-    }
+
+    const publicationNodeRow = await this.resolveNodeStatePublicationRow({
+      mustObserveDestination,
+      requireDurableCompletion: options.requireDurableCompletion === true,
+      nodeId,
+      payloadBootIncarnation,
+      expectedRow,
+      sourceRow: existing,
+      writeError,
+      updateResult,
+    });
 
     retainNodeBootIncarnationWatermark(
       this.nodeBootIncarnationWatermarks,
@@ -324,11 +464,6 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
     );
 
     if (nextState === STATE.READY && !isHeartbeatOnly) {
-      const publicationNodeRow = {
-        ...existing,
-        [COLUMN.NODE_ID]: nodeId,
-        ...baseRow,
-      };
       const publicationAdvancement =
         typeof this.resolveReadyNodePublicationAdvancement ===
           'function' ?
@@ -359,18 +494,140 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
         },
       );
       await this.acknowledgeMembershipPublicationForNode(nodeId);
-      return;
+      return publicationNodeRow;
     }
 
     if (nextState === STATE.READY && isHeartbeatOnly) {
-      await this.maybeAdvanceReadyNodeMembershipPublication(nodeId, {
-        ...existing,
-        [COLUMN.NODE_ID]: nodeId,
-        ...baseRow,
-      });
+      await this.maybeAdvanceReadyNodeMembershipPublication(
+        nodeId,
+        publicationNodeRow,
+      );
     }
 
     this.clearNodeReadyRetryWatermark(nodeId);
+    return publicationNodeRow;
+  },
+
+  async resolveNodeStatePublicationRow(options = {}) {
+    if (options.mustObserveDestination) {
+      return this.observeNodeStateMutationOutcome({
+        nodeId: options.nodeId,
+        payloadBootIncarnation: options.payloadBootIncarnation,
+        expectedRow: options.expectedRow,
+        sourceRow: options.sourceRow,
+        writeError: options.writeError,
+      });
+    }
+    if (options.requireDurableCompletion) {
+      return this.resolveNodeStateUpdateCompletionRow(
+        options.nodeId,
+        options.expectedRow,
+        options.updateResult,
+      );
+    }
+    return options.expectedRow;
+  },
+
+  async readAuthoritativeNodeStateSource(nodeId) {
+    const observation = await this.getAuthoritativeNodeRow(nodeId);
+    if (observation?.success !== true) {
+      throw buildNodeStatePublicationError(
+        observation?.error ||
+          REPLICA_DISPATCH_SERVICE_LITERAL
+            .NODE_STATE_UPDATE_DESTINATION_NOT_OBSERVED,
+        {
+          nodeId,
+          deferRetry: true,
+          retryAfterMs:
+            observation?.retryAfterMs || this.nodeStateUpdateRetryAfterMs,
+        },
+      );
+    }
+    if (!observation.row?.[COLUMN.NODE_ID]) {
+      throw this.buildMissingNodeRowError(nodeId);
+    }
+    return observation.row;
+  },
+
+  async observeNodeStateMutationOutcome(options = {}) {
+    const {
+      nodeId,
+      payloadBootIncarnation,
+      expectedRow,
+      sourceRow,
+      writeError,
+    } = options;
+    const observed = await this.readAuthoritativeNodeStateSource(nodeId);
+    const knownBootIncarnation = normalizeKnownNodeBootIncarnation(
+      observed?.[COLUMN.BOOT_INCARNATION],
+    );
+    if (knownBootIncarnation > payloadBootIncarnation) {
+      throw buildStaleNodeIncarnationError({
+        nodeId,
+        receivedIncarnation: payloadBootIncarnation,
+        knownIncarnation: knownBootIncarnation,
+      });
+    }
+    if (knownBootIncarnation !== payloadBootIncarnation) {
+      throw buildNodeStatePublicationError(
+        REPLICA_DISPATCH_SERVICE_LITERAL.NODE_STATE_UPDATE_SOURCE_CHANGED,
+        {
+          nodeId,
+          receivedIncarnation: payloadBootIncarnation,
+          knownIncarnation: knownBootIncarnation,
+          cause: writeError,
+        },
+      );
+    }
+    if (
+      nodeStateDestinationMatches(
+        observed,
+        expectedRow,
+        payloadBootIncarnation,
+      ) ||
+      nodeStateRegistrationAlreadyActivated(
+        observed,
+        sourceRow,
+        payloadBootIncarnation,
+      )
+    ) {
+      return observed;
+    }
+    if (nodeStateSourceLifecycleMatches(observed, sourceRow)) {
+      if (isRetryableControlPlaneError(writeError)) {
+        throw writeError;
+      }
+      throw buildNodeStatePublicationError(
+        REPLICA_DISPATCH_SERVICE_LITERAL
+          .NODE_STATE_UPDATE_DESTINATION_NOT_OBSERVED,
+        {
+          nodeId,
+          deferRetry: true,
+          retryAfterMs: this.nodeStateUpdateRetryAfterMs,
+          cause: writeError,
+        },
+      );
+    }
+    throw buildNodeStatePublicationError(
+      REPLICA_DISPATCH_SERVICE_LITERAL.NODE_STATE_UPDATE_SOURCE_CHANGED,
+      {nodeId, cause: writeError},
+    );
+  },
+
+  resolveNodeStateUpdateCompletionRow(nodeId, expectedRow, updateResult) {
+    const row = buildNodeStateUpdateCompletionRow(expectedRow, updateResult);
+    if (nodeStateUpdateCompletionRowMatches(nodeId, row, expectedRow)) {
+      return row;
+    }
+    const error = new Error(
+      REPLICA_DISPATCH_SERVICE_LITERAL
+        .NODE_STATE_UPDATE_DESTINATION_NOT_OBSERVED,
+    );
+    error.code = REPLICA_DISPATCH_SERVICE_LITERAL
+      .NODE_STATE_UPDATE_DESTINATION_NOT_OBSERVED;
+    error.deferRetry = true;
+    error.retryAfterMs = this.nodeStateUpdateRetryAfterMs;
+    throw error;
   },
 
   buildNodeStateUpdateRow(options) {
@@ -504,99 +761,6 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = objectFreeze({
         options.existing[COLUMN.STATUS].toLowerCase() :
         options.existing?.[COLUMN.STATUS];
     return existingStatus !== SERVICE_STATUS.ACTIVE;
-  },
-
-  async tryBootstrapMissingNodeStateUpdateRow(
-    nodeId,
-    nextState,
-    baseRow,
-    existing,
-    isHeartbeatOnly,
-    payload = null,
-  ) {
-    if (!baseRow || typeof baseRow !== 'object') {
-      return false;
-    }
-    if (existing?.[COLUMN.NODE_ID]) {
-      return false;
-    }
-    if (nextState !== STATE.CONNECTED && nextState !== STATE.READY) {
-      return false;
-    }
-    // Incarnation fence on the missing-row path: the durable row (and its
-    // boot_incarnation column) is not visible here, so the fence resolves
-    // against the retained per-node high-water map alone (existingRow null).
-    const incarnationFence = resolveNodeBootIncarnationFence(
-      nodeId,
-      payload,
-      this.nodeBootIncarnationWatermarks,
-      null,
-    );
-    const nodeAddress = stringPrototypeTrim(stringConstructor(
-      baseRow?.[COLUMN.NODE_ADDRESS] || '',
-    ));
-    if (nodeAddress.length === 0 || nodeAddress === STRING.UNKNOWN) {
-      return false;
-    }
-
-    const gateway = this.getControlPlaneSystemTableGateway();
-    if (typeof gateway.upsertSystemTableRow !== 'function') {
-      return false;
-    }
-
-    try {
-      const upsertResult = await gateway.upsertSystemTableRow(
-        SYSTEM_TABLE_NAME.NODES,
-        baseRow,
-        this.buildNodeStateUpdateWriteOptions(
-          nodeId,
-          nextState,
-          isHeartbeatOnly,
-          payload,
-        ),
-      );
-      if (upsertResult?.success === false) {
-        const upsertError = new Error(
-          'Failed to bootstrap missing node row from NODE_STATE_UPDATE: ' +
-            stringConstructor(
-              upsertResult.error || DISPATCH_READINESS_ERROR_REASON.UNKNOWN,
-            ),
-        );
-        upsertError.code =
-          upsertResult.error ||
-          REPLICA_DISPATCH_SERVICE_LITERAL.NODE_STATE_UPDATE_BOOTSTRAP_UPSERT_FAILED;
-        if (upsertResult.deferRetry === true) {
-          upsertError.deferRetry = true;
-          upsertError.retryAfterMs = numberIsFinite(upsertResult.retryAfterMs) ?
-            upsertResult.retryAfterMs :
-            this.nodeStateUpdateRetryAfterMs;
-        }
-        throw upsertError;
-      }
-      this.logger.info(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_BOOTSTRAP_UPSERTED, {
-        nodeId,
-        state: nextState,
-      });
-      retainNodeBootIncarnationWatermark(
-        this.nodeBootIncarnationWatermarks,
-        nodeId,
-        incarnationFence,
-      );
-      return true;
-    } catch (error) {
-      if (error?.code === STALE_NODE_INCARNATION_CODE) {
-        // Terminal refusal: a stale-incarnation writer can never become
-        // fresh by retrying, so it must never gain deferred-retry marking.
-        throw error;
-      }
-      if (error?.deferRetry === true || isRetryableControlPlaneError(error)) {
-        error.deferRetry = true;
-        error.retryAfterMs = numberIsFinite(error?.retryAfterMs) ?
-          error.retryAfterMs :
-          this.nodeStateUpdateRetryAfterMs;
-      }
-      throw error;
-    }
   },
 });
 

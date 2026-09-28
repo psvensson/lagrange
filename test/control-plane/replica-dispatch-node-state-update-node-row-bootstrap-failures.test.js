@@ -90,8 +90,8 @@ test('ReplicaDispatchService ignores non-owner replica_operations cache rows',
     service.stop();
   });
 
-test('ReplicaDispatchService bootstraps missing node rows from NODE_STATE_UPDATE ' +
-  'payloads when startup registration visibility lags',
+test('ReplicaDispatchService refuses missing registered node identity despite ' +
+  'a complete NODE_STATE_UPDATE payload',
 async (t) => {
   initEnv();
 
@@ -118,8 +118,9 @@ async (t) => {
     },
   });
 
-  await service.handleNodeStateUpdate({
+  const error = await t.rejects(service.handleNodeStateUpdate({
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-joiner',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8099',
     [ControlPlaneField.STATE]: STATE.CONNECTED,
@@ -139,24 +140,19 @@ async (t) => {
       [COLUMN.STORAGE_BUDGET_SOURCE]: 'backfill',
       [COLUMN.STORAGE_BUDGET_UPDATED_AT]: now - 500,
     },
-  });
-  t.equal(updates.length, 1, 'attempts the canonical update path once');
-  t.equal(
-    upserts.length,
-    1,
-    'dispatch should bootstrap a missing node row from the node-state payload',
-  );
-  t.equal(
-    upserts[0].row[COLUMN.STORAGE_BUDGET_BYTES],
-    107374182400,
-    'bootstrap upsert should preserve startup-owned storage budget fields',
-  );
+  }));
+  t.equal(error?.code, 'NODE_ROW_MISSING',
+    'registration absence remains the creation owner concern');
+  t.equal(updates.length, 0,
+    'publication does not mutate before authoritative registration exists');
+  t.equal(upserts.length, 0,
+    'payload contents cannot recreate canonical node identity');
 
   service.stop();
 });
 
-test('ReplicaDispatchService bootstraps missing node rows from heartbeat-only ' +
-  'NODE_STATE_UPDATE payloads with background write options',
+test('ReplicaDispatchService refuses missing registered identity for ' +
+  'heartbeat-only NODE_STATE_UPDATE payloads',
 async (t) => {
   initEnv();
 
@@ -183,8 +179,9 @@ async (t) => {
     },
   });
 
-  await service.handleNodeStateUpdate({
+  const error = await t.rejects(service.handleNodeStateUpdate({
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-joiner-heartbeat-only',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8100',
     [ControlPlaneField.STATE]: STATE.CONNECTED,
@@ -205,34 +202,14 @@ async (t) => {
       [COLUMN.STORAGE_BUDGET_SOURCE]: 'backfill',
       [COLUMN.STORAGE_BUDGET_UPDATED_AT]: now - 500,
     },
-  });
+  }));
 
-  t.equal(updates.length, 1, 'attempts the canonical update path once');
-  t.equal(
-    upserts.length,
-    1,
-    'dispatch should bootstrap a missing row even for heartbeat-only updates',
-  );
-  t.equal(
-    upserts[0].options?.deliveryPriority,
-    'background',
-    'heartbeat-only bootstrap should use background write delivery',
-  );
-  t.equal(
-    upserts[0].options?.workClass,
-    'background',
-    'heartbeat-only bootstrap should use background work class',
-  );
-  t.equal(
-    upserts[0].row[COLUMN.CPU_CORES],
-    undefined,
-    'heartbeat-only bootstrap should not persist resource participation fields',
-  );
-  t.equal(
-    upserts[0].row[COLUMN.STORAGE_BUDGET_BYTES],
-    undefined,
-    'heartbeat-only bootstrap should not persist storage budget fields',
-  );
+  t.equal(error?.code, 'NODE_ROW_MISSING',
+    'heartbeat recovery cannot become a registration creator');
+  t.equal(updates.length, 0,
+    'heartbeat publication does not mutate an absent identity');
+  t.equal(upserts.length, 0,
+    'heartbeat-only publication never invents canonical identity');
 
   service.stop();
 });
@@ -297,6 +274,7 @@ test('ReplicaDispatchService NODE_STATE_UPDATE uses injected control-plane ' +
 
   await service.handleNodeStateUpdate({
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-gateway',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8090',
     [ControlPlaneField.STATE]: STATE.READY,
@@ -375,6 +353,7 @@ test('ReplicaDispatchService defers transient NODE_STATE_UPDATE failures and ' +
 
   const initialPayload = {
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-deferred',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8091',
     [ControlPlaneField.STATE]: STATE.READY,
@@ -489,6 +468,7 @@ async (t) => {
   await service.reconcileNodeStateUpdate('node-participant-failure', {
     payload: {
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: 'node-participant-failure',
       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8091',
       [ControlPlaneField.STATE]: STATE.READY,
@@ -593,6 +573,7 @@ async (t) => {
 
   const initialPayload = {
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-participant-backoff',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8091',
     [ControlPlaneField.STATE]: STATE.READY,

@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 261,
+    "bootstrap-membership": 265,
     "cdc-metadata": 59,
     "cli-tooling": 96,
     "control-plane": 197,
@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
-    "storage-partition": 155,
+    "storage-partition": 156,
     "storage-raft": 134,
     "test-infrastructure": 136,
     "transactions": 15,
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2240,
-  "digest": "fnv1a32-a1d78a0c",
+  "censusSize": 2245,
+  "digest": "fnv1a32-3ac0bbc1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a7f966df",
+  "observationDigest": "fnv1a32-8dd95aac",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -247,6 +247,7 @@
     "test/bootstrap/register-node-in-cluster.test.js": "bootstrap-membership",
     "test/bootstrap/rejoin-hints.test.js": "bootstrap-membership",
     "test/bootstrap/replica-evidence-conflict.test.js": "bootstrap-membership",
+    "test/bootstrap/replica-runtime-attachment-authority.test.js": "bootstrap-membership",
     "test/bootstrap/replication-target-authority.test.js": "bootstrap-membership",
     "test/bootstrap/required-dependency-validation.property.test.js": "bootstrap-membership",
     "test/bootstrap/restart-cdc-recovery-diagnostics.test.js": "bootstrap-membership",
@@ -1111,6 +1112,7 @@
     "test/node/replica-handler-replacement-election-already-leader.test.js": "bootstrap-membership",
     "test/node/replica-handler-replica-membership.test.js": "bootstrap-membership",
     "test/node/replica-handler.test.js": "bootstrap-membership",
+    "test/node/replica-lifecycle-durable-generation.test.js": "bootstrap-membership",
     "test/node/replica-lifecycle-manager.test.js": "bootstrap-membership",
     "test/node/replica-lifecycle-message-delivery.property.test.js": "bootstrap-membership",
     "test/node/replica-local-only-row-convergence.test.js": "bootstrap-membership",
@@ -1121,6 +1123,8 @@
     "test/node/replica-removal-graceful-shutdown.property.test.js": "bootstrap-membership",
     "test/node/replica-removal-leader-source.test.js": "bootstrap-membership",
     "test/node/replica-state-delegation.test.js": "bootstrap-membership",
+    "test/node/replica-state-machine-authoritative-transition.test.js": "bootstrap-membership",
+    "test/node/replica-state-machine-registered-activation.test.js": "bootstrap-membership",
     "test/node/replica-state-machine-transitions.property.test.js": "bootstrap-membership",
     "test/node/replica-state-machine.test.js": "bootstrap-membership",
     "test/node/replica-status-state-machine.property.test.js": "bootstrap-membership",
@@ -1194,6 +1198,7 @@
     "test/partition/partition-retiring-row-peer-retirement.test.js": "storage-partition",
     "test/partition/partition-runtime-reconstruction-leadership.test.js": "storage-partition",
     "test/partition/partition-service-cdc-log-suppression.test.js": "storage-partition",
+    "test/partition/partition-service-cleanup-token-schema.test.js": "storage-partition",
     "test/partition/partition-service-hlc-monotonicity.test.js": "storage-partition",
     "test/partition/partition-service-learner-promotion-wake.test.js": "storage-partition",
     "test/partition/partition-service-learner-promotion.test.js": "storage-partition",
@@ -2524,6 +2529,12 @@
         "src/cdc/cdc-pipeline-readiness-gate.js"
       ]
     },
+    "test/bootstrap/bootstrap-epoch-manager-lifecycle.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "test/integration/helpers/cluster-test-helpers.js"
+      ]
+    },
     "test/bootstrap/bootstrap-request-admission-precheck.test.js": {
       "files": [
         "src/bootstrap/bootstrap-api-constants.js",
@@ -2546,6 +2557,7 @@
     },
     "test/bootstrap/bootstrap-sequence.test.js": {
       "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/bootstrap/shared/control-plane-setup.js"
       ]
     },
@@ -2554,6 +2566,11 @@
         "src/bootstrap/owners/bootstrap-topology-snapshot-owner.js",
         "src/constants/index.js",
         "src/query/canonical-leader-routing.js"
+      ]
+    },
+    "test/bootstrap/bootstrap-websocket-server-reentry.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
     "test/bootstrap/call-cell-invocation-setup.test.js": {
@@ -2570,6 +2587,12 @@
         "src/bootstrap/pipeline/startup-pipeline-runner.js"
       ]
     },
+    "test/bootstrap/cold-node-authority-reacquisition-pressure.test.js": {
+      "files": [
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
     "test/bootstrap/critical-placement-trace-classifier.test.js": {
       "files": [
         "src/bootstrap/critical-placement-convergence.js",
@@ -2577,6 +2600,11 @@
         "src/node/replica-lifecycle-manager.js",
         "src/partition/partition-service-learner-promotion-methods.js",
         "src/rebalancer/operation-workflow-dispatch-response-reconcile.js"
+      ]
+    },
+    "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
     "test/bootstrap/join-checkpoint-progression-characterization.test.js": {
@@ -2588,6 +2616,23 @@
     "test/bootstrap/join-formation-discovery-window-budget.test.js": {
       "files": [
         "test/integration/three-node-seed-rebalance.integration.test.js"
+      ]
+    },
+    "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "test/integration/helpers/cluster-test-helpers.js"
+      ]
+    },
+    "test/bootstrap/join-retry-patience-selectable.test.js": {
+      "files": [
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/bootstrap/lifecycle-message-delegation.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/bootstrap/lifecycle-unification.test.js": {
@@ -2612,6 +2657,12 @@
         "test/bootstrap/lifecycle-unification.test.js"
       ]
     },
+    "test/bootstrap/node-bootstrap-consistency.property.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "test/integration/helpers/cluster-test-helpers.js"
+      ]
+    },
     "test/bootstrap/node-incarnation.test.js": {
       "files": [
         "src/control-plane/control-plane-constants.js"
@@ -2627,14 +2678,72 @@
     "test/bootstrap/node-joining-infrastructure-join-progress-witness.test.js": {
       "files": [
         "src/bootstrap/owners/bootstrap-readiness-owner.js",
-        "src/bootstrap/rejoin-hints-constants.js"
+        "src/bootstrap/rejoin-hints-constants.js",
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/bootstrap/node-joining-service-bootstrap-resume-budget.test.js": {
+      "files": [
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/bootstrap/node-joining-service-canonical-readiness.test.js": {
+      "files": [
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/bootstrap/node-joining-service-final-sql-runtime-handoff.test.js": {
+      "files": [
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/bootstrap/node-joining-service-join-lifecycle-resume.test.js": {
+      "files": [
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/bootstrap/node-joining-service-lifecycle-owner-handoff.test.js": {
       "files": [
         "src/bootstrap/node-joining-service.js",
         "src/entrypoint-runtime-join-startup-policy.js",
-        "src/lagrange-runtime-startup.js"
+        "src/lagrange-runtime-startup.js",
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/bootstrap/node-joining-service-mesh-reconciliation.test.js": {
+      "files": [
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/bootstrap/node-joining-service-message-group-activation.test.js": {
+      "files": [
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/bootstrap/node-joining-service-node-state-update-ingress.test.js": {
+      "files": [
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/bootstrap/node-joining-service-register-service-retries.test.js": {
+      "files": [
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/bootstrap/node-joining-service.test.js": {
+      "files": [
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/bootstrap/node-registration-owner.test.js": {
@@ -2655,7 +2764,9 @@
     },
     "test/bootstrap/phase-event-ordering-characterization.test.js": {
       "files": [
-        "src/bootstrap/pipeline/join-startup-plan.js"
+        "src/bootstrap/pipeline/join-startup-plan.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "test/integration/helpers/cluster-test-helpers.js"
       ]
     },
     "test/bootstrap/production-scheduling-defaults.test.js": {
@@ -2673,6 +2784,7 @@
     "test/bootstrap/readiness-handoff-liveness-witness.test.js": {
       "files": [
         "src/bootstrap/phases/seed-cache-hydration-phase.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
@@ -2685,6 +2797,14 @@
       "files": [
         "src/bootstrap/rejoin-hints-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js"
+      ]
+    },
+    "test/bootstrap/replica-runtime-attachment-authority.test.js": {
+      "files": [
+        "src/bootstrap/node-joining-service.js",
+        "src/node/replica-state-machine.js",
+        "test/bootstrap/node-joining-service-test-support.js",
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/bootstrap/replication-target-authority.test.js": {
@@ -2898,6 +3018,11 @@
     "test/cdc/cdc-terminal-gate-inflight.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/cdc/current-epoch-propagation.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
     "test/cli/core/base-view-model.test.js": {
@@ -3217,6 +3342,7 @@
     },
     "test/control-plane/core-system-logic-runtime-witness.test.js": {
       "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
@@ -3504,6 +3630,7 @@
     },
     "test/control-plane/priority-recovery-decision-provenance.test.js": {
       "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
@@ -5904,7 +6031,8 @@
         "src/entrypoint-runtime-shutdown-lifecycle.js",
         "src/entrypoint-startup-acquisition-ledger.js",
         "src/query/application-database.js",
-        "src/storage/data-directory-manager.js"
+        "src/storage/data-directory-manager.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/entrypoint/embedded-lagrange-input.test.js": {
@@ -6015,6 +6143,16 @@
         "LAGRANGE_PROOF_NODE_HOST"
       ]
     },
+    "test/integration/ack-delivery.integration.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/integration/admin-cdc-propagation.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
     "test/integration/artifact-payload-durability.integration.test.js": {
       "files": [
         "src/control-plane/owners/index.js",
@@ -6048,15 +6186,22 @@
         "src/control-plane/control-plane-system-table-gateway.js"
       ]
     },
+    "test/integration/cdc-propagation.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
     "test/integration/concurrent-move-replica-assignment.integration.test.js": {
       "files": [
         "src/bootstrap/bootstrap-api-constants.js",
         "src/bootstrap/bootstrap-constants.js",
-        "src/bootstrap/phases/contact-seed-failure-signals.js"
+        "src/bootstrap/phases/contact-seed-failure-signals.js",
+        "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
     "test/integration/control-plane-rebalance.integration.test.js": {
       "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/rebalancer/replica-operation-constants.js"
       ],
       "env": [
@@ -6067,14 +6212,26 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js"
+      ]
+    },
+    "test/integration/create-table-partition-provisioning.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
+    "test/integration/critical-partition-learner-safety.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
     "test/integration/critical-replica-placement-causal-trace.integration.test.js": {
       "files": [
         "src/bootstrap/critical-placement-convergence.js",
         "src/bootstrap/replication-target-authority.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/node/replica-lifecycle-manager.js",
         "src/partition/partition-service-learner-promotion-methods.js",
         "src/rebalancer/operation-workflow-dispatch-response-reconcile.js"
@@ -6084,7 +6241,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/replica-operation-constants.js",
-        "test/node/replica-handler-bootstrap-stamps.js"
+        "test/node/replica-handler-bootstrap-stamps.js",
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/integration/cross-worker-cdc.integration.test.js": {
@@ -6109,13 +6267,18 @@
       ]
     },
     "test/integration/debug-join-flow.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ],
       "env": [
         "TAP"
       ]
     },
     "test/integration/failure-scenarios.integration.test.js": {
       "files": [
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "test/test-helpers/lifecycle-state-store.js"
       ],
       "env": [
         "TAP"
@@ -6139,6 +6302,11 @@
       ],
       "directories": [
         "wit"
+      ]
+    },
+    "test/integration/insert-or-ignore-raft-replay.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
     "test/integration/lagrange-server-npm-package.integration.test.js": {
@@ -6170,6 +6338,9 @@
       ]
     },
     "test/integration/leader-metadata-validation.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ],
       "env": [
         "TAP"
       ]
@@ -6181,8 +6352,15 @@
         "test/distributed/config/local.json"
       ]
     },
+    "test/integration/managed-split-admission-reliability.integration.test.js": {
+      "files": [
+        "src/bootstrap/phases/seed-partitions-phase.js",
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
     "test/integration/membership-consistency.integration.test.js": {
       "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
@@ -6193,10 +6371,16 @@
         "src/diagnostics/formation-turn-attribution.js"
       ]
     },
+    "test/integration/message-group-multi-join-formation.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
     "test/integration/message-group-service-handler-services-row.integration.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
-        "src/node/message-group-service-handler.js"
+        "src/node/message-group-service-handler.js",
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js": {
@@ -6257,9 +6441,20 @@
         "src/runtime/wasm-component-driver.js"
       ]
     },
+    "test/integration/move-replica-handoff.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
     "test/integration/multi-node-cluster.integration.test.js": {
       "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js"
+      ]
+    },
+    "test/integration/multi-node-raft-replication.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
     "test/integration/multi-worker-raft.integration.test.js": {
@@ -6267,8 +6462,19 @@
         "src/worker/replica-worker.js"
       ]
     },
+    "test/integration/node-join-convergence-slo.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
+    "test/integration/node-join-replica-activation.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
     "test/integration/node-joining-rebalance.integration.test.js": {
       "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/replica-dispatch-service.js"
       ]
@@ -6288,20 +6494,44 @@
       ]
     },
     "test/integration/preflight-critical-path-hops.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ],
       "env": [
         "LAGRANGE_TEST_MACHINE_FACTOR"
       ]
     },
     "test/integration/raft-leader-election.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ],
       "env": [
         "LAGRANGE_TEST_MACHINE_FACTOR"
       ]
     },
     "test/integration/replica-handler-metadata-propagation.integration.test.js": {
       "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/replica-operation-constants.js",
-        "test/node/replica-handler-bootstrap-stamps.js"
+        "test/node/replica-handler-bootstrap-stamps.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
+    "test/integration/seed-node-bootstrap.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "test/integration/helpers/cluster-test-helpers.js"
+      ]
+    },
+    "test/integration/seed-owner-read-diagnosis.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": {
@@ -6310,9 +6540,20 @@
         "src/sea-entry.js"
       ]
     },
+    "test/integration/services-p1-self-referential-write.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
     "test/integration/single-node-default-replica-count-writes.integration.test.js": {
       "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
         "test/integration/helpers/seed-query-surface.js"
+      ]
+    },
+    "test/integration/sql-engine-system-writes-contract.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
     "test/integration/strict-benchmark-local-readiness.integration.test.js": {
@@ -6341,8 +6582,19 @@
     },
     "test/integration/three-node-partition-rebalance.integration.test.js": {
       "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
         "src/rebalancer/unified-rebalancer.js"
+      ]
+    },
+    "test/integration/three-node-seed-rebalance.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
+    "test/integration/user-table-metadata-fanout.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
     "test/integration/versioned-cdc-readiness-convergence.integration.test.js": {
@@ -6353,11 +6605,25 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js"
       ]
     },
+    "test/integration/websocket-create-replica-ack.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/node/replica-handler-bootstrap-stamps.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
     "test/live-query/live-query-startup-wiring.test.js": {
       "files": [
         "src/entrypoint-runtime-admin-composition.js",
         "src/lagrange-runtime-startup.js",
         "src/live-query/live-query-startup-wiring.js"
+      ]
+    },
+    "test/message-group/message-group-service-row-owner.test.js": {
+      "files": [
+        "src/message-group/message-group-service-row-owner.js",
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/message-group/metadata-cache-removal.test.js": {
@@ -6369,6 +6635,21 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/node/runtime-service-call-cell-handler.js"
+      ]
+    },
+    "test/node/concurrent-operation-limits.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/node/entry-time-tracking.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/node/event-emission-completeness.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/node/failure-detection-delegation.property.test.js": {
@@ -6387,7 +6668,8 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/config/configuration-manager.js",
-        "test/node/failure-detector-test-helpers.js"
+        "test/node/failure-detector-test-helpers.js",
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/node/failure-detector-recovery.property.test.js": {
@@ -6395,6 +6677,16 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/config/configuration-manager.js",
         "test/node/failure-detector-test-helpers.js"
+      ]
+    },
+    "test/node/failure-detector.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/node/idempotent-operations.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/node/message-group-service-handler.test.js": {
@@ -6405,11 +6697,37 @@
         "NODE_ENV"
       ]
     },
+    "test/node/metrics-accuracy.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/node/node-recovery-orphan-cleanup.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/node/registered-partition-removal.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/node/replica-creation-idempotency.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
     "test/node/replica-handler-cache-state.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/replica-operation-constants.js",
-        "test/node/replica-handler-bootstrap-stamps.js"
+        "test/node/replica-handler-bootstrap-stamps.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/node/replica-handler-idempotency.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/node/replica-handler-leadership-transfer.test.js": {
@@ -6461,6 +6779,30 @@
         "test/node/replica-handler-bootstrap-stamps.js"
       ]
     },
+    "test/node/replica-lifecycle-durable-generation.test.js": {
+      "files": [
+        "src/bootstrap/phases/seed-partitions-phase.js",
+        "src/bootstrap/rejoin-hints-durable-evidence.js",
+        "src/cdc/cdc-integration-service-mutations.js",
+        "src/entrypoint-startup-acquisition-ledger.js",
+        "src/lagrange-runtime-startup.js",
+        "src/node/replica-handler-runtime-methods.js",
+        "src/node/replica-lifecycle-manager.js",
+        "src/node/replica-lifecycle-recovery.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/storage/data-directory-process-owner.js"
+      ]
+    },
+    "test/node/replica-lifecycle-manager.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/node/replica-lifecycle-message-delivery.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
     "test/node/replica-removal-consensus-exit.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -6495,6 +6837,11 @@
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
+    "test/node/replica-removal-graceful-shutdown.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
     "test/node/replica-removal-leader-source.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -6509,6 +6856,14 @@
         "src/rebalancer/executor-outcome-constants.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/node/replica-state-machine-registered-activation.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/node/replica-state-machine-registered-activation.js",
+        "src/node/replica-state-machine.js",
+        "src/partition/partition-service-row-owner.js"
       ]
     },
     "test/node/replica-state-machine.test.js": {
@@ -6528,6 +6883,21 @@
       ],
       "env": [
         "NODE_ENV"
+      ]
+    },
+    "test/node/single-cdc-write-path.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/node/state-count-accuracy.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/node/state-persistence-cdc.property.test.js": {
+      "files": [
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/packaging/sea-bundle-smoke.test.js": {
@@ -6676,6 +7046,12 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
         "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/partition/partition-service-cleanup-token-schema.test.js": {
+      "files": [
+        "src/bootstrap/system-table-core-schema-definitions.js",
+        "src/partition/partition-service-schema-migration-base.js"
       ]
     },
     "test/partition/partition-service-hlc-monotonicity.test.js": {
@@ -7705,6 +8081,7 @@
     },
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": {
       "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/config/configuration-manager.js",
         "src/partition/partition-raft-storage.js",
         "src/partition/partition-service-constants.js",
@@ -7909,7 +8286,8 @@
     },
     "test/rebalancer/cleanup-moves-failed-replicas.property.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/rebalancer/cluster-readiness-signal.property.test.js": {
@@ -8015,7 +8393,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-operation-constants.js",
-        "test/rebalancer/committed-membership-fixture.js"
+        "test/rebalancer/committed-membership-fixture.js",
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/rebalancer/failed-authoritative-read-admission-verdict.test.js": {
@@ -8673,6 +9052,7 @@
     },
     "test/rebalancer/rolling-restart-rebalancer-handoff-witness.test.js": {
       "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
@@ -11289,6 +11669,7 @@
     },
     "test/simulation/formation-sim-attribution-isolation.test.js": {
       "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",
@@ -11366,6 +11747,7 @@
     },
     "test/simulation/formation-sim-runner.test.js": {
       "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/active-node-publication-snapshots.js",
         "src/control-plane/control-plane-gateway-registry.js",
         "src/control-plane/control-plane-publications-leadership.js",

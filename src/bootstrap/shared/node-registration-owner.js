@@ -211,6 +211,7 @@ class NodeRegistrationOwner {
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
       nodeCapabilities: this.delegates.getNodeCapabilities?.() || [],
+      bootIncarnation: this.delegates.getBootIncarnation?.() || 0,
       now,
     });
   }

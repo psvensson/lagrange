@@ -722,11 +722,11 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
           DISPATCH_ERROR_MSG.METADATA_FORWARD_PATH_UNAVAILABLE,
         );
       }
-      await mgService.forwardMetadataIngressPayloadToLeader(payload, {
+      return mgService.forwardMetadataIngressPayloadToLeader(payload, {
         requiredTables,
         forwardedByNodeId: this.nodeId,
+        requiredCompletionKind: options.requiredCompletionKind,
       });
-      return;
     }
 
     const leaderId = mgService.getLeaderId();
@@ -756,7 +756,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       [ControlPlaneField.FORWARDED_BY]: [...forwardedBy, this.nodeId],
     };
 
-    await mgService.sendMessage(leaderAddress, forwardedPayload);
+    return mgService.sendMessage(leaderAddress, forwardedPayload);
   }
 
   /**

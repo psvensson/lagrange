@@ -51,10 +51,9 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
+import {createLifecycleCdcService, createLifecycleServiceRow} from
+  '../test-helpers/lifecycle-state-store.js';
 import {URL} from 'url';
-
-const JOIN_ACTIVATION_CONTROL_PLANE_UPSERT_OPTION =
-  'preferControlPlaneUpsert';
 
 test('NodeJoiningService - blocking authoritative backfill uses critical delivery priority',
   async (t) => {
@@ -378,7 +377,19 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
           nodeAddress: 'ws://localhost:9191',
           seedNodeAddress: 'ws://seed:8000',
         });
-        const activated = [];
+        const writer = createLifecycleCdcService({services: [
+          createLifecycleServiceRow({
+            serviceId: 'mg-cache-r1',
+            replicaId: 'mg-cache-r1',
+            replicaIdentity: 'mg-cache-r1',
+            serviceType: SERVICE_TYPE.MESSAGE_GROUP,
+            groupId: 'mg-cache',
+            nodeId: 'join-activation-node',
+            status: SERVICE_STATUS.STOPPED,
+            createdAt: 100,
+            updatedAt: 101,
+          }),
+        ]});
 
         service.messageGroupServiceHandler = {};
         service.messageRouter = {
@@ -388,29 +399,26 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
           groupId: 'mg-cache',
           unifiedAddress: 'join-activation-node/message-group/mg-cache-r1',
         });
-        service.registerMessageGroupService = async (
-          groupId,
-          replicaId,
-          replicaService,
-          options,
-        ) => {
-          activated.push({groupId, replicaId, replicaService, options});
-        };
+        service.createCdcIntegrationService = () => writer;
+        service.createMessageGroupPhase.registrationEvidenceByReplicaId.set(
+          'mg-cache-r1',
+          writer.store.durableRow(TABLES.SERVICES, 'mg-cache-r1'),
+        );
+        writer.store.setAuthoritativeReadAvailable(false);
 
         const activatedCount =
         await service.activateMessageGroupServiceRows();
 
         t.equal(activatedCount, 1,
           'activation should proceed once local service_endpoints rows are visible in cache');
-        t.equal(activated.length, 1,
-          'activation should register the visible replica');
-        t.same(
-          activated[0]?.options,
-          {
-            status: SERVICE_STATUS.ACTIVE,
-            [JOIN_ACTIVATION_CONTROL_PLANE_UPSERT_OPTION]: true,
-          },
-          'activation should mark the replica service row active through the join-time control-plane upsert lane');
+        t.same(writer.calls.map((call) => call.type), ['update'],
+          'activation should transition the staged row without registration');
+        t.equal(
+          writer.store.durableRow(TABLES.SERVICES, 'mg-cache-r1')?.status,
+          SERVICE_STATUS.ACTIVE,
+          'activation should mark the exact durable replica row active');
+        t.equal(writer.store.authoritativeReads.length, 0,
+          'successful exact CAS needs no availability-dependent reread');
       } finally {
         NodeService.getInstance = originalGetNodeService;
       }

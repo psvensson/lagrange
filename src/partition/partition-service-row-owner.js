@@ -7,23 +7,43 @@ import {
   isCriticalLeaderPublication,
 } from './partition-leader-publication-criticality.js';
 import {
+  COLUMN,
   ENTITY_TYPE,
   SERVICE_STATUS,
   SERVICE_TYPE,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
+import {classifyControlPlaneMutationResult} from
+  '../control-plane/control-plane-mutation-outcome-classifier.js';
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
+  readAuthoritativeControlPlaneRows,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {isCleanupTombstoneRow} from
+  '../node/replica-cleanup-tombstone-owner.js';
+import {mintPartitionServiceCreatedAt} from
+  './partition-service-incarnation.js';
 
 
 const PARTITION_SERVICE_ROW_OWNER_ERROR = Object.freeze({
   PARTITION_ID_REQUIRED: 'PartitionServiceRowOwner requires partitionId',
   NODE_ID_REQUIRED: 'PartitionServiceRowOwner requires nodeId',
   REPLICA_ID_REQUIRED: 'PartitionServiceRowOwner requires replicaId',
-  UPSERT_REQUIRED:
-    'PartitionServiceRowOwner requires upsertSystemTableRow for registration',
-  DELETE_REQUIRED:
-    'PartitionServiceRowOwner requires deleteSystemTableRow for removal',
+  INSERT_REQUIRED:
+    'PartitionServiceRowOwner requires insertSystemTableRow for registration',
+  UPDATE_REQUIRED:
+    'PartitionServiceRowOwner requires updateSystemTableRow for updates',
+  LIFECYCLE_OWNER_REQUIRED:
+    'PartitionServiceRowOwner requires ReplicaStateMachine for activation',
+  CLEANUP_IN_PROGRESS: 'CLEANUP_IN_PROGRESS',
+  CREATE_OWNER_DEFERRED: 'CREATE_OWNER_DEFERRED',
+  IDENTITY_CONFLICT: 'REPLICA_IDENTITY_CONFLICT',
 });
+const SERVICES_ROW_POINT_READ_SQL =
+  'SELECT * FROM services WHERE service_id = ?';
+const CRITICAL_WORK_CLASS = 'critical';
 const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   allowCoalescing: true,
   deliveryPriority: 'background',
@@ -38,6 +58,18 @@ const CRITICAL_SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   skipCacheWait: true,
   workClass: 'critical',
 });
+const partitionRegistrationEvidence = new WeakSet();
+
+function sealPartitionRegistrationEvidence(row) {
+  const evidence = Object.freeze({...row});
+  partitionRegistrationEvidence.add(evidence);
+  return evidence;
+}
+
+function isPartitionRegistrationEvidence(value) {
+  return value !== null && typeof value === 'object' &&
+    partitionRegistrationEvidence.has(value);
+}
 
 function assertRequiredString(value, errorMessage) {
   if (typeof value !== 'string' || value.length === 0) {
@@ -60,9 +92,80 @@ function resolvePartitionRaftRole(service) {
   return normalizePublishedRaftRole(service?.role);
 }
 
+function partitionCreateOwnershipError(code, replicaId, cause = null) {
+  const error = new Error(`Partition replica creation ${code}: ${replicaId}`);
+  error.code = code;
+  error.errorCode = code;
+  error.deferRetry = code !==
+    PARTITION_SERVICE_ROW_OWNER_ERROR.IDENTITY_CONFLICT;
+  if (cause) error.cause = cause;
+  return error;
+}
+
+async function observePartitionRegistration(systemTableWriter, replicaId) {
+  try {
+    const observation = await readAuthoritativeControlPlaneRows(
+      systemTableWriter,
+      SYSTEM_TABLE_NAME.SERVICES,
+      SERVICES_ROW_POINT_READ_SQL,
+      [replicaId],
+      {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+        deliveryPriority: CRITICAL_WORK_CLASS,
+        workClass: CRITICAL_WORK_CLASS,
+      },
+    );
+    return observation?.success === true && observation.rows?.length === 1 ?
+      observation.rows[0] : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function rowsMatchPartitionRegistration(observed, expected) {
+  const fields = [
+    COLUMN.SERVICE_ID,
+    COLUMN.SERVICE_TYPE,
+    COLUMN.PARTITION_ID,
+    COLUMN.NODE_ID,
+    COLUMN.REPLICA_ID,
+    COLUMN.ADDRESS,
+    COLUMN.STATUS,
+  ];
+  return Number.isSafeInteger(observed?.[COLUMN.CREATED_AT]) &&
+    fields.every((field) => observed?.[field] === expected[field]);
+}
+
+async function resolvePartitionRegistration(systemTableWriter, row,
+  insertError) {
+  const observed = await observePartitionRegistration(
+    systemTableWriter,
+    row.service_id,
+  );
+  if (isCleanupTombstoneRow(observed)) {
+    throw partitionCreateOwnershipError(
+      PARTITION_SERVICE_ROW_OWNER_ERROR.CLEANUP_IN_PROGRESS,
+      row.service_id,
+      insertError,
+    );
+  }
+  if (rowsMatchPartitionRegistration(observed, row)) {
+    return sealPartitionRegistrationEvidence(observed);
+  }
+  throw partitionCreateOwnershipError(
+    observed ? PARTITION_SERVICE_ROW_OWNER_ERROR.IDENTITY_CONFLICT :
+      PARTITION_SERVICE_ROW_OWNER_ERROR.CREATE_OWNER_DEFERRED,
+    row.service_id,
+    insertError,
+  );
+}
+
 class PartitionServiceRowOwner {
   constructor(options = {}) {
     this.systemTableWriter = options.systemTableWriter || null;
+    this.replicaStateMachine = options.replicaStateMachine || null;
     this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
@@ -98,6 +201,7 @@ class PartitionServiceRowOwner {
       replicaId,
     );
 
+    const createdAt = mintPartitionServiceCreatedAt(timestamp);
     return {
       service_id: replicaId,
       service_type: SERVICE_TYPE.PARTITION,
@@ -108,8 +212,8 @@ class PartitionServiceRowOwner {
       raft_role: resolvePartitionRaftRole(service),
       status,
       address,
-      created_at: timestamp,
-      updated_at: timestamp,
+      created_at: createdAt,
+      updated_at: createdAt,
       ...(extraFields || {}),
     };
   }
@@ -171,26 +275,44 @@ class PartitionServiceRowOwner {
   async registerReplica(options = {}) {
     if (
       !this.systemTableWriter ||
-      typeof this.systemTableWriter.upsertSystemTableRow !== 'function'
+      typeof this.systemTableWriter.insertSystemTableRow !== 'function'
     ) {
       throw new Error(
-        PARTITION_SERVICE_ROW_OWNER_ERROR.UPSERT_REQUIRED,
+        PARTITION_SERVICE_ROW_OWNER_ERROR.INSERT_REQUIRED,
       );
     }
 
-    const row = PartitionServiceRowOwner.buildServiceRow({
+    const row = Object.freeze(PartitionServiceRowOwner.buildServiceRow({
       ...options,
       timestamp: options.timestamp ?? this.now(),
-    });
+    }));
 
-    await this.systemTableWriter.upsertSystemTableRow(
-      SYSTEM_TABLE_NAME.SERVICES,
-      row,
-      this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
-    );
+    let insertResult;
+    let insertError = null;
+    try {
+      insertResult = await this.systemTableWriter.insertSystemTableRow(
+        SYSTEM_TABLE_NAME.SERVICES,
+        row,
+        {
+          ...this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
+          allowCoalescing: false,
+          coalescingKey: `services:${row.service_id}:create:${row.updated_at}`,
+        },
+      );
+    } catch (error) {
+      insertError = error;
+    }
+    if (!classifyControlPlaneMutationResult(insertResult).applied) {
+      return resolvePartitionRegistration(
+        this.systemTableWriter,
+        row,
+        insertError,
+      );
+    }
+    const registrationEvidence = sealPartitionRegistrationEvidence(row);
     await this.publishCanonicalLeaderNodeId(row);
 
-    return row;
+    return registrationEvidence;
   }
 
   async activateReplica(options = {}) {
@@ -203,91 +325,43 @@ class PartitionServiceRowOwner {
   async updateReplicaStatus(options = {}) {
     if (
       !this.systemTableWriter ||
-      typeof this.systemTableWriter.upsertSystemTableRow !== 'function'
+      typeof this.systemTableWriter.updateSystemTableRow !== 'function'
     ) {
       throw new Error(
-        PARTITION_SERVICE_ROW_OWNER_ERROR.UPSERT_REQUIRED,
+        PARTITION_SERVICE_ROW_OWNER_ERROR.UPDATE_REQUIRED,
       );
     }
 
-    const row = PartitionServiceRowOwner.buildServiceRow({
-      ...options,
+    if (!this.replicaStateMachine ||
+        typeof this.replicaStateMachine.activateRegisteredReplica !==
+          'function') {
+      throw new Error(
+        PARTITION_SERVICE_ROW_OWNER_ERROR.LIFECYCLE_OWNER_REQUIRED,
+      );
+    }
+    if (options.status !== SERVICE_STATUS.ACTIVE) {
+      throw new Error(
+        PARTITION_SERVICE_ROW_OWNER_ERROR.LIFECYCLE_OWNER_REQUIRED,
+      );
+    }
+    const row = await this.replicaStateMachine.activateRegisteredReplica({
+      partitionId: options.partitionId,
+      replicaId: options.replicaId,
+      nodeId: options.nodeId,
+      systemTableWriter: this.systemTableWriter,
       timestamp: options.timestamp ?? this.now(),
+      registrationEvidence: options.registrationEvidence,
+      writeOptions: this.buildDeferredUpdateOptions(
+        options.replicaId,
+        options.partitionId,
+      ),
     });
-    if (typeof this.systemTableWriter.updateSystemTableRow !== 'function') {
-      await this.systemTableWriter.upsertSystemTableRow(
-        SYSTEM_TABLE_NAME.SERVICES,
-        row,
-        this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
-      );
-      return row;
-    }
-
-    const {
-      created_at: _createdAt,
-      ...updates
-    } = row;
-    const updateResult = await this.systemTableWriter.updateSystemTableRow(
-      SYSTEM_TABLE_NAME.SERVICES,
-      {
-        service_id: row.service_id,
-        service_type: row.service_type,
-      },
-      updates,
-      this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
-    );
-    // Absence-proven heal: the registration write of this row is a one-shot
-    // direct write outside raft; when it misses a replica db, every later
-    // UPDATE zero-row no-ops with no CDC and the cached row never leaves
-    // stopped, wedging serve-eligibility permanently (round-11). A zero
-    // affected-row count on a primary-key-pinned WHERE proves durable
-    // absence, and the full canonical row is already in hand — re-issue the
-    // registration upsert. An unwitnessed count keeps the update-only
-    // contract (absence must be proven, not assumed).
-    if (updateResult?.partitionResult?.affectedRows === 0) {
-      await this.systemTableWriter.upsertSystemTableRow(
-        SYSTEM_TABLE_NAME.SERVICES,
-        row,
-        this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
-      );
-    }
     await this.publishCanonicalLeaderNodeId(row);
     return row;
   }
-
-  async removeReplica(options = {}) {
-    if (
-      !this.systemTableWriter ||
-      typeof this.systemTableWriter.deleteSystemTableRow !== 'function'
-    ) {
-      throw new Error(
-        PARTITION_SERVICE_ROW_OWNER_ERROR.DELETE_REQUIRED,
-      );
-    }
-
-    const {partitionId, replicaId, nodeId} = options;
-    assertRequiredString(
-      replicaId,
-      PARTITION_SERVICE_ROW_OWNER_ERROR.REPLICA_ID_REQUIRED,
-    );
-
-    const whereClause = {
-      service_id: replicaId,
-      service_type: SERVICE_TYPE.PARTITION,
-    };
-    if (typeof partitionId === 'string' && partitionId.length > 0) {
-      whereClause.partition_id = partitionId;
-    }
-    if (typeof nodeId === 'string' && nodeId.length > 0) {
-      whereClause.node_id = nodeId;
-    }
-
-    await this.systemTableWriter.deleteSystemTableRow(
-      SYSTEM_TABLE_NAME.SERVICES,
-      whereClause,
-      this.buildDeferredUpdateOptions(replicaId, partitionId || null),
-    );
-  }
 }
 
-export {PartitionServiceRowOwner};
+export {
+  PartitionServiceRowOwner,
+  isPartitionRegistrationEvidence,
+};

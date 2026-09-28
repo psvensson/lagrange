@@ -11,7 +11,6 @@
  * Requirements: 1.1, 1.2, 1.3, 1.4
  */
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -19,6 +18,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SERVICE_STATUS, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   gracefulJoiningShutdown,
@@ -103,7 +103,7 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
     const joiningNodeId = '550e8400-e29b-41d4-a716-446655440092';
     const joiningWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -212,7 +212,7 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
       const joiningNodeId = '550e8400-e29b-41d4-a716-446655440100';
       const joiningWsPort = getUniquePort();
 
-      const bootstrapService = new BootstrapService({
+      const bootstrapService = await createVirginSeedBootstrapService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         wsPort: seedWsPort,
@@ -343,7 +343,7 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
     const joiningNodeId = '550e8400-e29b-41d4-a716-446655440094';
     const joiningWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -440,7 +440,7 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
     const joiningNodeId = '550e8400-e29b-41d4-a716-446655440096';
     const joiningWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -547,7 +547,7 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
     const joiningNodeId = '550e8400-e29b-41d4-a716-446655440098';
     const joiningWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

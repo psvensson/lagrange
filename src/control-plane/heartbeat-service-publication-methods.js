@@ -11,7 +11,6 @@ import {
 } from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
-  CONTROL_PLANE_MESSAGE_COMPLETION_KIND,
   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
   getControlPlaneNodeStatePublicationProfile,
   isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
@@ -281,8 +280,8 @@ class HeartbeatServicePublicationMethods {
         Math.floor(queryTimeoutMs) :
         this.resolveHeartbeatWriteQueryTimeoutMs();
     const reporterTimeoutMs = this.resolveNodeStateReporterTimeoutMs(heartbeatWriteQueryTimeoutMs);
-    if (typeof this.nodeStateReporter === 'function') {
-      try {
+    this.getNodeStatePublicationAdapter();
+    try {
         const reporterResult = await this.callNodeStateReporterWithTimeout(
           {
             nodeId: this.nodeId,
@@ -304,19 +303,12 @@ class HeartbeatServicePublicationMethods {
           HEARTBEAT_PUBLICATION_PATH.NODE_STATE_REPORTER,
         );
         if (options.requireDurableVisibility === true) {
-          const durableCompletion =
-            reporterResult?.completionKind ===
-              CONTROL_PLANE_MESSAGE_COMPLETION_KIND
-                .DURABLE_STATE_PUBLICATION &&
-            reporterResult?.completionCompleted === true;
-          if (!durableCompletion) {
-            const visibilityError = new Error(
-              HEARTBEAT_SERVICE_LITERAL.REPORTER_DURABLE_VISIBILITY_REQUIRED,
-            );
-            visibilityError.deferRetry = true;
-            visibilityError.publicationDiagnostics = reporterDiagnostics;
-            throw visibilityError;
-          }
+          this.assertReporterDurableHeartbeatCompletion(
+            reporterResult,
+            now,
+            updateRow,
+            reporterDiagnostics,
+          );
           this.lastReporterVisibilityVerifiedAt = this.now();
           this.lastReporterVisibilityTargetAddress =
             reporterDiagnostics.targetAddress || null;
@@ -366,39 +358,20 @@ class HeartbeatServicePublicationMethods {
           return;
         }
         return;
-      } catch (error) {
-        const reporterDiagnostics = normalizeHeartbeatPublicationDiagnostics(
-          error?.publicationDiagnostics || error,
-          HEARTBEAT_PUBLICATION_PATH.NODE_STATE_REPORTER,
-        );
-        recordHeartbeatPublicationTarget({
-          diagnostics: reporterDiagnostics,
-          heartbeatPublicationDiagnostics: this.heartbeatPublicationDiagnostics,
-          serviceLiteral: HEARTBEAT_SERVICE_LITERAL,
-        });
-        this.nodeHeartbeatReporterVisibilityState = HEARTBEAT_REPORTER_VISIBILITY_STATE.UNVERIFIED;
-        error.publicationDiagnostics = reporterDiagnostics;
-        throw error;
-      }
+    } catch (error) {
+      const reporterDiagnostics = normalizeHeartbeatPublicationDiagnostics(
+        error?.publicationDiagnostics || error,
+        HEARTBEAT_PUBLICATION_PATH.NODE_STATE_REPORTER,
+      );
+      recordHeartbeatPublicationTarget({
+        diagnostics: reporterDiagnostics,
+        heartbeatPublicationDiagnostics: this.heartbeatPublicationDiagnostics,
+        serviceLiteral: HEARTBEAT_SERVICE_LITERAL,
+      });
+      this.nodeHeartbeatReporterVisibilityState = HEARTBEAT_REPORTER_VISIBILITY_STATE.UNVERIFIED;
+      error.publicationDiagnostics = reporterDiagnostics;
+      throw error;
     }
-    const updateResult = await this.getControlPlaneSystemTableGateway().updateSystemTableRow(
-      SYSTEM_TABLE_NAME.NODES,
-      {node_id: this.nodeId},
-      updateRow,
-      this.buildNodeHeartbeatWriteOptions(heartbeatWriteQueryTimeoutMs, publicationMode),
-    );
-    const affectedRows = Number(updateResult?.partitionResult?.affectedRows);
-    if (affectedRows === 0) {
-      throw this.buildMissingNodeRowError(HEARTBEAT_SERVICE_LITERAL.HEARTBEAT);
-    }
-    recordHeartbeatPublicationSuccess({
-      diagnostics: {publicationPath: HEARTBEAT_SERVICE_LITERAL.CDC_UPDATE},
-      heartbeatConsecutiveFailures: this.heartbeatConsecutiveFailures,
-      heartbeatPublicationDiagnostics: this.heartbeatPublicationDiagnostics,
-      now,
-      serviceLiteral: HEARTBEAT_SERVICE_LITERAL,
-    });
-    this.recordConfirmedNodeHeartbeatWrite(updateRow, now);
   }
   /**
    * Resolve the canonical system-table gateway for heartbeat writes.

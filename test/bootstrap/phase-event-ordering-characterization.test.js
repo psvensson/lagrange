@@ -29,6 +29,8 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {NUM} from '../../src/constants/index.js';
+import {installMinimumSeedBootstrapLifecycleFixture} from
+  '../integration/helpers/cluster-test-helpers.js';
 
 // -- Suite-local fixture constants --
 
@@ -96,11 +98,13 @@ test('Seed bootstrap - emits phase:start and phase:complete in correct order',
   async (t) => {
     initializeTestEnvironment();
 
-    const bootstrap = new BootstrapService({
-      nodeId: TEST_NODE_ID,
-      nodeAddress: TEST_NODE_ADDRESS,
-      wsPort: TEST_WS_PORT,
-    });
+    const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
+      new BootstrapService({
+        nodeId: TEST_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        wsPort: TEST_WS_PORT,
+      }),
+    );
 
     // Stub all phase implementations to no-ops so we test only event ordering
     bootstrap.seedPhaseOwners = {
@@ -164,11 +168,13 @@ test('Seed bootstrap - emits BOOTSTRAP_EVENT.PHASE_START/COMPLETE in correct ord
   async (t) => {
     initializeTestEnvironment();
 
-    const bootstrap = new BootstrapService({
-      nodeId: TEST_NODE_ID,
-      nodeAddress: TEST_NODE_ADDRESS,
-      wsPort: TEST_WS_PORT,
-    });
+    const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
+      new BootstrapService({
+        nodeId: TEST_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        wsPort: TEST_WS_PORT,
+      }),
+    );
 
     bootstrap.seedPhaseOwners = {
       infrastructure: async () => {},
@@ -225,11 +231,13 @@ test('Seed bootstrap - emits BOOTSTRAP_EVENT.PHASE_START/COMPLETE in correct ord
 test('Seed bootstrap - emits COMPLETE event after all phases', async (t) => {
   initializeTestEnvironment();
 
-  const bootstrap = new BootstrapService({
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    wsPort: TEST_WS_PORT,
-  });
+  const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
+    new BootstrapService({
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      wsPort: TEST_WS_PORT,
+    }),
+  );
 
   bootstrap.seedPhaseOwners = {
     infrastructure: async () => {},
@@ -287,11 +295,13 @@ test('Seed bootstrap - phase failure emits phase:failed and phaseFailed events',
   async (t) => {
     initializeTestEnvironment();
 
-    const bootstrap = new BootstrapService({
-      nodeId: TEST_NODE_ID,
-      nodeAddress: TEST_NODE_ADDRESS,
-      wsPort: TEST_WS_PORT,
-    });
+    const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
+      new BootstrapService({
+        nodeId: TEST_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        wsPort: TEST_WS_PORT,
+      }),
+    );
 
     const failureMessage = 'intentional partition phase failure';
     bootstrap.seedPhaseOwners = {
@@ -659,11 +669,13 @@ test('Seed bootstrap - phase event payloads include phase and nodeId',
   async (t) => {
     initializeTestEnvironment();
 
-    const bootstrap = new BootstrapService({
-      nodeId: TEST_NODE_ID,
-      nodeAddress: TEST_NODE_ADDRESS,
-      wsPort: TEST_WS_PORT,
-    });
+    const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
+      new BootstrapService({
+        nodeId: TEST_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        wsPort: TEST_WS_PORT,
+      }),
+    );
 
     bootstrap.seedPhaseOwners = {
       infrastructure: async () => {},
@@ -788,11 +800,13 @@ test('Seed bootstrap - phase events include normalized lifecycle tuple ' +
 async (t) => {
   initializeTestEnvironment();
 
-  const bootstrap = new BootstrapService({
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    wsPort: TEST_WS_PORT,
-  });
+  const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
+    new BootstrapService({
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      wsPort: TEST_WS_PORT,
+    }),
+  );
 
   bootstrap.seedPhaseOwners = {
     infrastructure: async () => {},
@@ -888,11 +902,13 @@ test('Seed bootstrap - phase:failed event includes normalized lifecycle ' +
 async (t) => {
   initializeTestEnvironment();
 
-  const bootstrap = new BootstrapService({
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    wsPort: TEST_WS_PORT,
-  });
+  const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
+    new BootstrapService({
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      wsPort: TEST_WS_PORT,
+    }),
+  );
 
   const failureMessage = 'intentional infra failure for tuple test';
   bootstrap.seedPhaseOwners = {
@@ -1071,11 +1087,13 @@ async (t) => {
   initializeTestEnvironment();
 
   // Collect seed payloads
-  const bootstrap = new BootstrapService({
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    wsPort: TEST_WS_PORT,
-  });
+  const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
+    new BootstrapService({
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      wsPort: TEST_WS_PORT,
+    }),
+  );
 
   bootstrap.seedPhaseOwners = {
     infrastructure: async () => {},

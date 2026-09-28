@@ -16,11 +16,16 @@ import fs from 'fs';
 import path from 'path';
 import {
   ReplicaLifecycleManager,
-  ReplicaStatus,
 } from '../../src/node/replica-lifecycle-manager.js';
+import {ReplicaState} from '../../src/node/replica-state-machine.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  createCanonicalLifecycleServiceRow,
+  createLifecycleCdcService,
+} from
+  '../test-helpers/lifecycle-state-store.js';
 
 const TEST_DATA_DIR = '/tmp/test-lifecycle-recovery';
 
@@ -48,31 +53,8 @@ function cleanupTestDirs() {
  * Create a mock CDC integration service.
  * @return {Object} Mock CDC service.
  */
-function createMockCDCService() {
-  const operations = [];
-
-  return {
-    operations,
-    async insertSystemTableRow(tableName, data) {
-      operations.push({type: 'insert', tableName, data});
-      return {success: true};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      operations.push({type: 'update', tableName, whereClause, data});
-      return {success: true};
-    },
-    async deleteSystemTableRow(tableName, whereClause) {
-      operations.push({type: 'delete', tableName, whereClause});
-      return {success: true};
-    },
-    async upsertSystemTableRow(tableName, data) {
-      operations.push({type: 'upsert', tableName, data});
-      return {success: true};
-    },
-    reset() {
-      operations.length = 0;
-    },
-  };
+function createMockCDCService(services = []) {
+  return createLifecycleCdcService({services});
 }
 
 /**
@@ -103,6 +85,12 @@ function createMockPartitionServiceFactory() {
  * @return {Object} Mock cache.
  */
 function createMockCache(nodeId, services = []) {
+  services.forEach((service, index) => {
+    Object.assign(
+      service,
+      createCanonicalLifecycleServiceRow(service, index),
+    );
+  });
   return {
     filter(tableName, predicate) {
       if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
@@ -147,7 +135,8 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
   });
 
   /**
-   * Property: For any 'starting' replica on recovery, it is marked as 'failed'.
+   * Property: For any canonical CREATING replica on recovery, its exact
+   * durable generation is marked FAILED.
    */
   t.test('starting replicas are marked as failed on recovery', async (t) => {
     await fc.assert(
@@ -156,19 +145,18 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
         fc.uuid(), // partition_id
         async (serviceId, partitionId) => {
           const nodeId = 'test-node';
-          const mockCDC = createMockCDCService();
-
           const services = [
             {
               service_id: serviceId,
               node_id: nodeId,
               service_type: 'partition',
               partition_id: partitionId,
-              status: ReplicaStatus.STARTING,
+              status: ReplicaState.CREATING,
             },
           ];
 
           const mockCache = createMockCache(nodeId, services);
+          const mockCDC = createMockCDCService(services);
           const {factory} = createMockPartitionServiceFactory();
 
           // Create partition directory for cleanup
@@ -190,7 +178,9 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
           const failedUpdates = mockCDC.operations.filter((op) =>
             op.type === 'update' &&
             op.whereClause.service_id === serviceId &&
-            op.data.status === ReplicaStatus.FAILED);
+            op.data.status === ReplicaState.FAILED &&
+            op.whereClause.status === ReplicaState.CREATING &&
+            Number.isFinite(op.whereClause.state_entered_at));
 
           manager.shutdown();
 
@@ -213,19 +203,18 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
         fc.uuid(), // partition_id
         async (serviceId, partitionId) => {
           const nodeId = 'test-node';
-          const mockCDC = createMockCDCService();
-
           const services = [
             {
               service_id: serviceId,
               node_id: nodeId,
               service_type: 'partition',
               partition_id: partitionId,
-              status: ReplicaStatus.SYNCING,
+              status: ReplicaState.SYNCING,
             },
           ];
 
           const mockCache = createMockCache(nodeId, services);
+          const mockCDC = createMockCDCService(services);
           const {factory} = createMockPartitionServiceFactory();
 
           // Create partition directory for cleanup
@@ -247,7 +236,9 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
           const failedUpdates = mockCDC.operations.filter((op) =>
             op.type === 'update' &&
             op.whereClause.service_id === serviceId &&
-            op.data.status === ReplicaStatus.FAILED);
+            op.data.status === ReplicaState.FAILED &&
+            op.whereClause.status === ReplicaState.SYNCING &&
+            Number.isFinite(op.whereClause.state_entered_at));
 
           manager.shutdown();
 
@@ -261,7 +252,9 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
   });
 
   /**
-   * Property: For any 'stopping' replica on recovery, removal is completed.
+   * Property: Recovery never revives the retired delete-row-then-clean-files
+   * contract. A REMOVING generation remains durably owned until the canonical
+   * removal/cleanup owner completes it.
    */
   t.test('stopping replicas are removed on recovery', async (t) => {
     await fc.assert(
@@ -270,19 +263,18 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
         fc.uuid(), // partition_id
         async (serviceId, partitionId) => {
           const nodeId = 'test-node';
-          const mockCDC = createMockCDCService();
-
           const services = [
             {
               service_id: serviceId,
               node_id: nodeId,
               service_type: 'partition',
               partition_id: partitionId,
-              status: ReplicaStatus.STOPPING,
+              status: ReplicaState.REMOVING,
             },
           ];
 
           const mockCache = createMockCache(nodeId, services);
+          const mockCDC = createMockCDCService(services);
           const {factory} = createMockPartitionServiceFactory();
 
           // Create partition directory for cleanup
@@ -300,19 +292,19 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
 
           await manager.handleNodeRecovery();
 
-          // Check that replica was updated to stopped and then deleted
-          const stoppedUpdates = mockCDC.operations.filter((op) =>
-            op.type === 'update' &&
-            op.whereClause.service_id === serviceId &&
-            op.data.status === ReplicaStatus.STOPPED);
-
           const deleteOps = mockCDC.operations.filter((op) =>
             op.type === 'delete' &&
             op.whereClause.service_id === serviceId);
+          const durableRow = mockCDC.store.durableRow(
+            SYSTEM_TABLE_NAME.SERVICES,
+            serviceId,
+          );
 
           manager.shutdown();
 
-          return stoppedUpdates.length === 1 && deleteOps.length === 1;
+          return deleteOps.length === 0 &&
+            durableRow?.status === ReplicaState.REMOVING &&
+            durableRow?.created_at === services[0].created_at;
         },
       ),
       {numRuns: 10},
@@ -332,8 +324,6 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
         fc.integer({min: 1, max: 3}), // stopping count
         async (startingCount, syncingCount, stoppingCount) => {
           const nodeId = 'test-node';
-          const mockCDC = createMockCDCService();
-
           const services = [];
 
           // Add starting replicas
@@ -344,7 +334,7 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
               node_id: nodeId,
               service_type: 'partition',
               partition_id: partitionId,
-              status: ReplicaStatus.STARTING,
+              status: ReplicaState.CREATING,
             });
             ensurePartitionDir(partitionId);
           }
@@ -357,7 +347,7 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
               node_id: nodeId,
               service_type: 'partition',
               partition_id: partitionId,
-              status: ReplicaStatus.SYNCING,
+              status: ReplicaState.SYNCING,
             });
             ensurePartitionDir(partitionId);
           }
@@ -370,12 +360,13 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
               node_id: nodeId,
               service_type: 'partition',
               partition_id: partitionId,
-              status: ReplicaStatus.STOPPING,
+              status: ReplicaState.REMOVING,
             });
             ensurePartitionDir(partitionId);
           }
 
           const mockCache = createMockCache(nodeId, services);
+          const mockCDC = createMockCDCService(services);
           const {factory} = createMockPartitionServiceFactory();
 
           const manager = new ReplicaLifecycleManager({
@@ -392,21 +383,24 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
 
           // Count failed updates for starting/syncing
           const failedUpdates = mockCDC.operations.filter((op) =>
-            op.type === 'update' && op.data.status === ReplicaStatus.FAILED);
-
-          // Count stopped updates for stopping
-          const stoppedUpdates = mockCDC.operations.filter((op) =>
-            op.type === 'update' && op.data.status === ReplicaStatus.STOPPED);
+            op.type === 'update' && op.data.status === ReplicaState.FAILED &&
+            Number.isFinite(op.whereClause.state_entered_at));
 
           // Count deletes for stopping
           const deleteOps = mockCDC.operations.filter((op) =>
             op.type === 'delete');
 
+          const removingRowsRemainOwned = services
+            .filter((service) => service.status === ReplicaState.REMOVING)
+            .every((service) => mockCDC.store.durableRow(
+              SYSTEM_TABLE_NAME.SERVICES,
+              service.service_id,
+            )?.created_at === service.created_at);
+
           manager.shutdown();
 
           return failedUpdates.length === startingCount + syncingCount &&
-            stoppedUpdates.length === stoppingCount &&
-            deleteOps.length === stoppingCount;
+            deleteOps.length === 0 && removingRowsRemainOwned;
         },
       ),
       {numRuns: 10},
@@ -425,19 +419,18 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
         fc.uuid(), // partition_id
         async (serviceId, partitionId) => {
           const nodeId = 'test-node';
-          const mockCDC = createMockCDCService();
-
           const services = [
             {
               service_id: serviceId,
               node_id: nodeId,
               service_type: 'partition',
               partition_id: partitionId,
-              status: ReplicaStatus.ACTIVE,
+              status: ReplicaState.ACTIVE,
             },
           ];
 
           const mockCache = createMockCache(nodeId, services);
+          const mockCDC = createMockCDCService(services);
           const {factory} = createMockPartitionServiceFactory();
 
           const manager = new ReplicaLifecycleManager({
@@ -475,8 +468,6 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
         async (serviceId, partitionId) => {
           const nodeId = 'test-node';
           const otherNodeId = 'other-node';
-          const mockCDC = createMockCDCService();
-
           // Replica on different node in transitional state
           const services = [
             {
@@ -484,11 +475,12 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
               node_id: otherNodeId, // Different node
               service_type: 'partition',
               partition_id: partitionId,
-              status: ReplicaStatus.STARTING,
+              status: ReplicaState.CREATING,
             },
           ];
 
           const mockCache = createMockCache(nodeId, services);
+          const mockCDC = createMockCDCService(services);
           const {factory} = createMockPartitionServiceFactory();
 
           const manager = new ReplicaLifecycleManager({
@@ -524,8 +516,6 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
         fc.integer({min: 0, max: 5}), // orphan count
         async (orphanCount) => {
           const nodeId = 'test-node';
-          const mockCDC = createMockCDCService();
-
           const services = [];
           for (let i = 0; i < orphanCount; i++) {
             const partitionId = `partition-${i}`;
@@ -534,12 +524,13 @@ test('Property 83: Node Recovery Orphan Cleanup', async (t) => {
               node_id: nodeId,
               service_type: 'partition',
               partition_id: partitionId,
-              status: ReplicaStatus.STARTING,
+              status: ReplicaState.CREATING,
             });
             ensurePartitionDir(partitionId);
           }
 
           const mockCache = createMockCache(nodeId, services);
+          const mockCDC = createMockCDCService(services);
           const {factory} = createMockPartitionServiceFactory();
 
           const manager = new ReplicaLifecycleManager({

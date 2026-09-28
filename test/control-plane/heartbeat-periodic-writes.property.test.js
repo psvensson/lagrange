@@ -21,6 +21,8 @@ import {ConfigurationManager} from
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {HEARTBEAT_STATE} from
   '../../src/control-plane/heartbeat-service-constants.js';
+import {createNodeStatePublicationOwnerFixture} from
+  '../test-helpers/node-state-publication-owner-fixture.js';
 
 /**
  * Initialize test singletons.
@@ -91,6 +93,13 @@ function createHeartbeatService(options = {}) {
   return new RawHeartbeatService({
     ...options,
     controlPlaneSystemTableGateway,
+    nodeStatePublisher:
+      options.nodeStatePublisher ||
+      createNodeStatePublicationOwnerFixture({
+        controlPlaneSystemTableGateway,
+        nodeId: options.nodeId,
+        bootIncarnation: options.bootIncarnation,
+      }),
   });
 }
 
