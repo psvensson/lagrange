@@ -317,7 +317,7 @@ This demo proves the data-local execution, bounded-reduction, and placement
 shape, but it is **not yet the public service-authoring path**.
 
 It drives the internal placement substrate directly: the harness writes a
-`service_definitions` row for a kernel-internal `native_js` query-loop module
+`service_definitions` row for a kernel-internal query-loop module
 and pins two replicas so the disjoint-shard arithmetic is reproducible.
 
 That direct write is demo scaffolding against a migration-input table. It is
