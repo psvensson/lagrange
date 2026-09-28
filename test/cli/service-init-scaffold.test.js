@@ -277,7 +277,7 @@ test('service router rejects ambiguous commands and invalid project names', asyn
   const root = makeTempRoot(t);
   const cases = [
     {args: ['service', 'init'], error: /usage/},
-    {args: ['service', 'init', projectPath(root), 'extra'], error: /unknown_option/},
+    {args: ['service', 'init', projectPath(root), 'extra'], error: /usage/},
     {args: ['service', 'unknown'], error: /unknown_command/},
     {args: ['service', 'init', '--output'], error: /unknown_option/},
     {args: ['service', 'init', path.join(root, 'Bad_Name')], error: /invalid_name/},
