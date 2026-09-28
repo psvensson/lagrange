@@ -93,9 +93,7 @@ container.
 ## Deploy
 
 ```bash
-lagrange service deploy . \
-  --layout .lagrange/oci \
-  --idempotency-key <unique-key>
+lagrange service deploy . --idempotency-key <unique-key>
 ```
 
 Deploy sends the generated records through authenticated PostgreSQL-wire
