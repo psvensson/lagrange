@@ -1,3 +1,16 @@
+function normalizeBootstrapMutationEffect(result) {
+  const affectedRows = result?.partitionResult?.affectedRows ??
+    result?.partitionResult?.changes ??
+    result?.affectedRows ??
+    result?.changes;
+  if (!Number.isSafeInteger(affectedRows) || affectedRows < 0) return result;
+  return {
+    ...result,
+    affectedRows,
+    partitionResult: {...result.partitionResult, affectedRows},
+  };
+}
+
 class BootstrapSystemTableWriter {
   constructor(cdcIntegrationService, partitionServices) {
     this.cdcIntegrationService = cdcIntegrationService;
@@ -12,15 +25,32 @@ class BootstrapSystemTableWriter {
     this.cdcIntegrationService.setBootstrapMode(false, null);
   }
 
-  upsertSystemTableRow(tableName, data) {
-    return this.cdcIntegrationService.upsertSystemTableRow(tableName, data);
+  async insertSystemTableRow(tableName, data, options = {}) {
+    const result = await this.cdcIntegrationService.insertSystemTableRow(
+      tableName, data, options,
+    );
+    return normalizeBootstrapMutationEffect(result);
   }
 
-  updateSystemTableRow(tableName, keyData, updateData) {
-    return this.cdcIntegrationService.updateSystemTableRow(
+  upsertSystemTableRow(tableName, data, options = {}) {
+    return this.cdcIntegrationService.upsertSystemTableRow(
+      tableName, data, options,
+    );
+  }
+
+  async updateSystemTableRow(tableName, keyData, updateData, options = {}) {
+    const result = await this.cdcIntegrationService.updateSystemTableRow(
       tableName,
       keyData,
       updateData,
+      options,
+    );
+    return normalizeBootstrapMutationEffect(result);
+  }
+
+  readAuthoritativeRows(tableName, sql, params = [], options = {}) {
+    return this.cdcIntegrationService.readAuthoritativeRows(
+      tableName, sql, params, options,
     );
   }
 }
@@ -36,15 +66,30 @@ class RoutedSqlSystemTableWriter {
 
   disable() {}
 
-  upsertSystemTableRow(tableName, data) {
-    return this.cdcIntegrationService.upsertSystemTableRow(tableName, data);
+  insertSystemTableRow(tableName, data, options = {}) {
+    return this.cdcIntegrationService.insertSystemTableRow(
+      tableName, data, options,
+    );
   }
 
-  updateSystemTableRow(tableName, keyData, updateData) {
+  upsertSystemTableRow(tableName, data, options = {}) {
+    return this.cdcIntegrationService.upsertSystemTableRow(
+      tableName, data, options,
+    );
+  }
+
+  updateSystemTableRow(tableName, keyData, updateData, options = {}) {
     return this.cdcIntegrationService.updateSystemTableRow(
       tableName,
       keyData,
       updateData,
+      options,
+    );
+  }
+
+  readAuthoritativeRows(tableName, sql, params = [], options = {}) {
+    return this.cdcIntegrationService.readAuthoritativeRows(
+      tableName, sql, params, options,
     );
   }
 }

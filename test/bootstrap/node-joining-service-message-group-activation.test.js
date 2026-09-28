@@ -51,10 +51,9 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
+import {createLifecycleCdcService, createLifecycleServiceRow} from
+  '../test-helpers/lifecycle-state-store.js';
 import {URL} from 'url';
-
-const JOIN_ACTIVATION_CONTROL_PLANE_UPSERT_OPTION =
-  'preferControlPlaneUpsert';
 
 test('NodeJoiningService - blocking authoritative backfill uses critical delivery priority',
   async (t) => {
@@ -71,6 +70,7 @@ test('NodeJoiningService - blocking authoritative backfill uses critical deliver
       });
 
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'joining-node-backfill-critical',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -179,6 +179,7 @@ test('NodeJoiningService - pressure-degraded backfill skips replica fanout',
       });
 
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'joining-node-backfill-pressure',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -281,6 +282,8 @@ test('NodeJoiningService - registerNodeInCluster seeds local discovery-critical 
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
         wsPort: 9090,
+        // Registration stamps this boot's incarnation on the nodes row.
+        bootIncarnation: 1,
       });
 
       service.cdcIntegrationService = {
@@ -374,11 +377,24 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
 
       try {
         const service = new NodeJoiningService({
+          bootIncarnation: 1,
           nodeId: 'join-activation-node',
           nodeAddress: 'ws://localhost:9191',
           seedNodeAddress: 'ws://seed:8000',
         });
-        const activated = [];
+        const writer = createLifecycleCdcService({services: [
+          createLifecycleServiceRow({
+            serviceId: 'mg-cache-r1',
+            replicaId: 'mg-cache-r1',
+            replicaIdentity: 'mg-cache-r1',
+            serviceType: SERVICE_TYPE.MESSAGE_GROUP,
+            groupId: 'mg-cache',
+            nodeId: 'join-activation-node',
+            status: SERVICE_STATUS.STOPPED,
+            createdAt: 100,
+            updatedAt: 101,
+          }),
+        ]});
 
         service.messageGroupServiceHandler = {};
         service.messageRouter = {
@@ -388,29 +404,26 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
           groupId: 'mg-cache',
           unifiedAddress: 'join-activation-node/message-group/mg-cache-r1',
         });
-        service.registerMessageGroupService = async (
-          groupId,
-          replicaId,
-          replicaService,
-          options,
-        ) => {
-          activated.push({groupId, replicaId, replicaService, options});
-        };
+        service.createCdcIntegrationService = () => writer;
+        service.createMessageGroupPhase.registrationEvidenceByReplicaId.set(
+          'mg-cache-r1',
+          writer.store.durableRow(TABLES.SERVICES, 'mg-cache-r1'),
+        );
+        writer.store.setAuthoritativeReadAvailable(false);
 
         const activatedCount =
         await service.activateMessageGroupServiceRows();
 
         t.equal(activatedCount, 1,
           'activation should proceed once local service_endpoints rows are visible in cache');
-        t.equal(activated.length, 1,
-          'activation should register the visible replica');
-        t.same(
-          activated[0]?.options,
-          {
-            status: SERVICE_STATUS.ACTIVE,
-            [JOIN_ACTIVATION_CONTROL_PLANE_UPSERT_OPTION]: true,
-          },
-          'activation should mark the replica service row active through the join-time control-plane upsert lane');
+        t.same(writer.calls.map((call) => call.type), ['update'],
+          'activation should transition the staged row without registration');
+        t.equal(
+          writer.store.durableRow(TABLES.SERVICES, 'mg-cache-r1')?.status,
+          SERVICE_STATUS.ACTIVE,
+          'activation should mark the exact durable replica row active');
+        t.equal(writer.store.authoritativeReads.length, 0,
+          'successful exact CAS needs no availability-dependent reread');
       } finally {
         NodeService.getInstance = originalGetNodeService;
       }
@@ -486,6 +499,7 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
     // Create joining service with wsPort for WebSocket server
     // Use short leadership timeout since mock peers can't respond
     service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440011',
       nodeAddress: `ws://localhost:${joiningNodeWsPort}`,
       seedNodeAddress: 'http://localhost:0',
@@ -565,6 +579,7 @@ test('NodeJoiningService - hasOperationalMessageGroup', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -578,6 +593,7 @@ test('NodeJoiningService - cleanup on failure', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:99999', // Invalid port
@@ -632,6 +648,7 @@ test('NodeJoiningService - emits events', async (t) => {
     await seedApi.initialize(0, {listen: false});
 
     service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440012',
       nodeAddress: `ws://localhost:${joiningNodeWsPort}`,
       seedNodeAddress: 'http://localhost:0',
@@ -732,6 +749,7 @@ test('NodeJoiningService - replica factory should preserve join mode from replic
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'test-node-join-factory',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -811,6 +829,7 @@ test('NodeJoiningService - replica factory subscribes exactly the propagated cac
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'test-node-join-cache-sync',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -936,6 +955,7 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'test-node-join-cdc-propagation-fallback',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',

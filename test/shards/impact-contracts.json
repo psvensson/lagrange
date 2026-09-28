@@ -129,6 +129,26 @@
         "test/node/replica-local-only-row-convergence.test.js"
       ]
     },
+    "replica-durable-generation-cleanup": {
+      "description": "Exact durable replica generations, SERVICES-key cleanup ownership, storage deletion, startup admission, and live-row creation form one lifecycle closure contract.",
+      "owners": [
+        "src/node/replica-cleanup-tombstone-owner.js",
+        "src/node/replica-handler-remove-execution-methods.js",
+        "src/node/replica-handler-removed-cleanup-sweep.js",
+        "src/node/replica-handler-create-methods.js",
+        "src/node/replica-state-machine",
+        "src/node/replica-storage-artifacts.js",
+        "src/partition/partition-service-row-owner.js",
+        "src/bootstrap/phases/seed-partitions-phase.js",
+        "src/bootstrap/rejoin-hints-durable-evidence.js",
+        "src/cdc/cdc-integration-service-mutations.js"
+      ],
+      "tests": [
+        "test/node/replica-lifecycle-durable-generation.test.js",
+        "test/node/replica-handler.test.js",
+        "test/partition/partition-service-cleanup-token-schema.test.js"
+      ]
+    },
     "critical-create-admission-topology-ordering": {
       "description": "Critical create admission runs before the downstream topology guard on createOperation.",
       "owners": [
@@ -677,6 +697,37 @@
       "contract": "priority-services-marker-reconcile",
       "witnessTests": [
         "test/node/replica-local-only-row-convergence.test.js"
+      ]
+    },
+    "replica-durable-generation-cleanup": {
+      "description": "Lifecycle CAS, cleanup-key arbitration, physical storage deletion, and every storage-open admission must preserve one exact durable owner for a logical replica identity.",
+      "endpoints": [
+        {
+          "id": "durable-lifecycle-generation",
+          "owners": [
+            "src/node/replica-state-machine",
+            "src/partition/partition-service-row-owner.js"
+          ]
+        },
+        {
+          "id": "cleanup-creation-storage-owner",
+          "owners": [
+            "src/node/replica-cleanup-tombstone-owner.js",
+            "src/node/replica-handler-remove-execution-methods.js",
+            "src/node/replica-handler-removed-cleanup-sweep.js",
+            "src/node/replica-storage-artifacts.js",
+            "src/node/replica-handler-create-methods.js",
+            "src/bootstrap/phases/seed-partitions-phase.js",
+            "src/bootstrap/rejoin-hints-durable-evidence.js",
+            "src/cdc/cdc-integration-service-mutations.js"
+          ]
+        }
+      ],
+      "contract": "replica-durable-generation-cleanup",
+      "witnessTests": [
+        "test/node/replica-lifecycle-durable-generation.test.js",
+        "test/node/replica-handler.test.js",
+        "test/partition/partition-service-cleanup-token-schema.test.js"
       ]
     },
     "critical-create-hold-topology-guard-order": {

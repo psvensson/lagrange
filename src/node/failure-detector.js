@@ -44,6 +44,7 @@ import {
   markFailureDetectorPartitionReplicaAsFailed,
   markFailureDetectorReplicasAsFailed,
 } from './failure-detector-replica-failures.js';
+import {ReplicaStateMachine} from './replica-state-machine.js';
 
 /**
  * FailureDetector monitors node health via heartbeat timeouts.
@@ -113,6 +114,7 @@ class FailureDetector extends EventEmitter {
     this.adaptiveResetTimer = null;
     this.recentFailures = new Map(); // nodeId -> failure timestamps
     this.currentFailureThreshold = this.failureThresholdMs;
+    this.partitionReplicaStateMachinesByNodeId = new Map();
     this.initialized = false;
   }
 
@@ -153,6 +155,7 @@ class FailureDetector extends EventEmitter {
     if (!this.cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
       throw new Error(FAILURE_DETECTOR_ERROR_MSG.MISSING_CDC_SERVICE);
     }
+    this.partitionReplicaStateMachinesByNodeId.clear();
 
     this.initialized = true;
 
@@ -624,6 +627,29 @@ class FailureDetector extends EventEmitter {
   }
 
   /**
+   * Resolve the canonical lifecycle owner for partition rows hosted by one
+   * node. Failure detection supplies intent; this owner performs the fresh
+   * authoritative read, exact-generation transition, and outcome resolution.
+   * @param {string} nodeId Replica-hosting node identity.
+   * @return {ReplicaStateMachine} Canonical partition lifecycle owner.
+   */
+  getPartitionReplicaStateMachine(nodeId) {
+    let stateMachine = this.partitionReplicaStateMachinesByNodeId.get(nodeId);
+    if (!stateMachine) {
+      stateMachine = new ReplicaStateMachine({
+        nodeId,
+        cdcIntegrationService: this.cdcIntegrationService,
+        controlPlaneSystemTableGateway:
+          this.getControlPlaneSystemTableGateway(),
+        systemTableCache: this.systemTableCache,
+        now: this.now,
+      });
+      this.partitionReplicaStateMachinesByNodeId.set(nodeId, stateMachine);
+    }
+    return stateMachine;
+  }
+
+  /**
    * Get message group replicas on a specific node via SQL query engine.
    * @param {string} nodeId - Node ID.
    * @return {Promise<Array<Object>>} Array of replica objects.
@@ -734,6 +760,7 @@ class FailureDetector extends EventEmitter {
   shutdown() {
     this.stop();
     this.recentFailures.clear();
+    this.partitionReplicaStateMachinesByNodeId.clear();
     this.currentFailureThreshold = this.failureThresholdMs;
     this.initialized = false;
 

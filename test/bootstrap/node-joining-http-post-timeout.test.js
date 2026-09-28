@@ -55,6 +55,7 @@ function createStalledBodyPromise(signal) {
 
 function createJoiningService() {
   return new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_NODE_ADDRESS,

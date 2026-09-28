@@ -41,9 +41,10 @@ const REPLICA_STATE_MACHINE_VALID_TRANSITIONS = Object.freeze({
     REPLICA_STATE_MACHINE_STATE.REMOVING,
     REPLICA_STATE_MACHINE_STATE.FAILED,
   ],
+  // Durable REMOVING is the single cleanup authority. Its timeout is an
+  // observable re-drive signal, never authority to abandon removal as FAILED.
   [REPLICA_STATE_MACHINE_STATE.REMOVING]: [
     REPLICA_STATE_MACHINE_STATE.REMOVED,
-    REPLICA_STATE_MACHINE_STATE.FAILED,
   ],
   // FAILED describes why the replica stopped serving; it is not removal
   // intent. Every deletion first publishes the same durable REMOVING row.
@@ -90,6 +91,8 @@ const REPLICA_STATE_MACHINE_EVENT_TYPE = Object.freeze({
 
 const REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE = Object.freeze({
   INVALID_TRANSITION: 'replica_invalid_transition',
+  CANONICAL_LEADER_CLEAR_DEFERRED:
+    'replica_canonical_leader_clear_deferred',
 });
 
 const REPLICA_STATE_MACHINE_REASON = Object.freeze({
@@ -114,6 +117,8 @@ const REPLICA_STATE_MACHINE_LOG_MSG = Object.freeze({
   TIMEOUT_CHECKER_STOPPED: 'Timeout checker stopped',
   LOCAL_ONLY_ROW_CONVERGED:
     'Deferred durable services row converged after control-plane recovery',
+  CANONICAL_LEADER_CLEAR_DEFERRED:
+    'Canonical partition leader clear deferred after replica state persisted',
   OPERATION_TIMEOUT: 'Replica operation timed out',
   RECOVERY_START: 'Handling node recovery in state machine',
   RECOVERY_NO_CACHE: 'No system table cache provided for recovery',

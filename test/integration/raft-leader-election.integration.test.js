@@ -12,8 +12,8 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   TEST_CONFIG,
@@ -80,7 +80,7 @@ test('Raft leader election', {timeout: 120000}, async (t) => {
     const seedNodeId = generateUniqueNodeId(nodeIdCounter++);
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -216,7 +216,7 @@ test('Raft leader election', {timeout: 120000}, async (t) => {
     const seedNodeId = generateUniqueNodeId(nodeIdCounter++);
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -320,7 +320,7 @@ test('Raft leader election', {timeout: 120000}, async (t) => {
     const seedNodeId = generateUniqueNodeId(nodeIdCounter++);
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

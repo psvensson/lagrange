@@ -205,8 +205,13 @@ function armSnapshotOfferRouting(context) {
               systemTableCache,
             }),
           },
-          createPartitionService: (serviceOptions) =>
-            replicaHandler.createPartitionService(serviceOptions),
+          createPartitionService: async (serviceOptions) => {
+            await replicaHandler.requireActiveReplicaStorageAdmission(
+              serviceOptions.replicaId,
+              serviceOptions.partitionId,
+            );
+            return replicaHandler.createPartitionService(serviceOptions);
+          },
           registerReplacementService: (replacement) =>
             replicaHandler.replaceLocalReplicaService(
               service.replicaId, replacement),

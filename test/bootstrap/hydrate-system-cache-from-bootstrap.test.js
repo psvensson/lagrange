@@ -21,6 +21,7 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
     systemTableCache.clear();
 
     const joiningService = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'test-node-1',
       nodeAddress: 'http://localhost:3001',
       seedNodeAddress: 'http://localhost:3000',
@@ -84,6 +85,7 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
     });
 
     const joiningService = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'test-node-2',
       nodeAddress: 'http://localhost:3002',
       seedNodeAddress: 'http://localhost:3000',
@@ -113,6 +115,7 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
     systemTableCache.clear();
 
     const joiningService = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'test-node-3',
       nodeAddress: 'http://localhost:3003',
       seedNodeAddress: 'http://localhost:3000',
@@ -157,6 +160,7 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
     systemTableCache.clear();
 
     const joiningService = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'test-node-4',
       nodeAddress: 'http://localhost:3004',
       seedNodeAddress: 'http://localhost:3000',
@@ -206,6 +210,7 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
       systemTableCache.clear();
 
       const joiningService = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'test-node-epoch',
         nodeAddress: 'http://localhost:3010',
         seedNodeAddress: 'http://localhost:3000',

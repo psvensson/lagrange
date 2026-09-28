@@ -65,6 +65,8 @@ import {
 } from '../node/replica-handler-bootstrap-stamps.js';
 import {withFixtureCommittedMembership} from
   './committed-membership-fixture.js';
+import {createLifecycleCdcServiceForCache} from
+  '../test-helpers/lifecycle-state-store.js';
 import {
   createMockCache,
   createMockCdcService,
@@ -163,20 +165,7 @@ function createCapturingPartitionServiceFactory(captured) {
 function createJoinHandler({cache, captured}) {
   const handler = new ReplicaHandler({
     nodeId: JOIN_NODE_ID,
-    cdcIntegrationService: {
-      async insertSystemTableRow() {
-        return {success: true};
-      },
-      async updateSystemTableRow() {
-        return {success: true};
-      },
-      async upsertSystemTableRow() {
-        return {success: true};
-      },
-      async deleteSystemTableRow() {
-        return {success: true};
-      },
-    },
+    cdcIntegrationService: createLifecycleCdcServiceForCache(cache),
     systemTableCache: cache,
     dataDir: getTempDir(),
     createPartitionService: createCapturingPartitionServiceFactory(captured),

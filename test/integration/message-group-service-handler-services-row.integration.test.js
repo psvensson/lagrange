@@ -10,6 +10,8 @@ import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {createLifecycleCdcServiceForCache} from
+  '../test-helpers/lifecycle-state-store.js';
 
 function flushImmediate() {
   return new Promise((resolve) => setImmediate(resolve));
@@ -43,24 +45,7 @@ function seedReplicaOperation(
 }
 
 function createMockCdc(cache) {
-  return {
-    async upsertSystemTableRow(tableName, data) {
-      cache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      cache.applySystemTableChange(
-        tableName,
-        'UPDATE',
-        {...whereClause, ...data},
-      );
-      return {success: true};
-    },
-    async deleteSystemTableRow(tableName, whereClause) {
-      cache.applySystemTableChange(tableName, 'DELETE', whereClause);
-      return {success: true};
-    },
-  };
+  return createLifecycleCdcServiceForCache(cache);
 }
 
 function createMockExecutorOutcomeEmitter(cache) {

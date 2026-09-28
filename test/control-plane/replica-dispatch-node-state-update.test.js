@@ -12,6 +12,7 @@ import {
 import {
   ControlPlaneField,
   ControlPlaneMessageType,
+  CONTROL_PLANE_MESSAGE_COMPLETION_FIELD,
   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
@@ -73,8 +74,9 @@ test('ReplicaDispatchService updates existing node rows for NODE_STATE_UPDATE',
       },
     });
 
-    await service.handleNodeStateUpdate({
+    await service.publishNodeLifecycleMessage({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: 'node-2',
       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8082',
       [ControlPlaneField.STATE]: STATE.READY,
@@ -87,8 +89,15 @@ test('ReplicaDispatchService updates existing node rows for NODE_STATE_UPDATE',
     t.equal(updates[0].tableName, 'nodes', 'writes to nodes table');
     t.same(
       updates[0].whereClause,
-      {node_id: 'node-2'},
-      'targets the node row by node_id',
+      {
+        node_id: 'node-2',
+        boot_incarnation: 1,
+        status: SERVICE_STATUS.ACTIVE,
+        connection_state: STATE.CONNECTED,
+        last_heartbeat: cacheNode.last_heartbeat,
+        created_at: cacheNode.created_at,
+      },
+      'targets the exact registered node generation and observed source',
     );
     t.equal(
       updates[0].options?.skipCacheWait,
@@ -197,8 +206,9 @@ test('ReplicaDispatchService routes READY heartbeat-only node-state updates to t
     shutdown() {},
   };
 
-  await service.handleNodeStateUpdate({
+  await service.publishNodeLifecycleMessage({
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.BOOT_INCARNATION]: 1,
     [ControlPlaneField.NODE_ID]: 'node-heartbeat-only-ready',
     [ControlPlaneField.NODE_ADDRESS]: 'localhost:8096',
     [ControlPlaneField.STATE]: STATE.READY,
@@ -240,13 +250,18 @@ test('ReplicaDispatchService routes READY heartbeat-only node-state updates to t
   );
   t.equal(
     updates[0].row.status,
-    undefined,
-    'heartbeat-only updates should not persist service status',
+    SERVICE_STATUS.ACTIVE,
+    'the lifecycle owner writes READY only together with status=active',
   );
   t.equal(
     updates[0].row.cpu_cores,
-    undefined,
-    'heartbeat-only updates should not persist resource participation fields',
+    8,
+    'heartbeat-only publications carry the telemetry columns',
+  );
+  t.equal(
+    updates[0].row[COLUMN.STORAGE_BUDGET_BYTES],
+    107374182400,
+    'heartbeat-only publications carry the storage-budget columns',
   );
   t.equal(
     reconcileEnqueues.length,
@@ -316,20 +331,17 @@ async (t) => {
     clearTimeoutFn() {},
   });
 
-  const error = await t.rejects(
-    service.reconcileNodeStateUpdate('node-heartbeat-recovery', {
-      payload: {
-        [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-        [ControlPlaneField.NODE_ID]: 'node-heartbeat-recovery',
-        [ControlPlaneField.NODE_ADDRESS]: 'localhost:8097',
-        [ControlPlaneField.STATE]: STATE.READY,
-        [ControlPlaneField.HEARTBEAT_ONLY]: true,
-        [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
-          CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
-        [ControlPlaneField.HEARTBEAT_AT]: now,
-      },
-    }),
-  );
+  const completion = await service.publishNodeLifecycleMessage({
+    [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.BOOT_INCARNATION]: 1,
+    [ControlPlaneField.NODE_ID]: 'node-heartbeat-recovery',
+    [ControlPlaneField.NODE_ADDRESS]: 'localhost:8097',
+    [ControlPlaneField.STATE]: STATE.READY,
+    [ControlPlaneField.HEARTBEAT_ONLY]: true,
+    [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
+    [ControlPlaneField.HEARTBEAT_AT]: now,
+  });
 
   t.equal(gatewayCalls.length, 1,
     'recovery heartbeat should attempt the canonical update once');
@@ -343,20 +355,15 @@ async (t) => {
     'critical',
     'recovery heartbeat writes must keep the critical work class',
   );
-  t.equal(
-    error?.code,
-    'DISTRIBUTED_PARTICIPANT_FAILURE',
-    'recovery heartbeat failures should surface the canonical pressure error',
-  );
+  t.match(completion, {
+    completionCompleted: false,
+    deferRetry: true,
+    publicationOutcome: 'not_applied_source_unchanged',
+  }, 'pressure on an unchanged source is a typed deferred completion');
   t.equal(
     scheduled.length,
     0,
-    'recovery heartbeat failures should not arm a deferred retry timer',
-  );
-  t.equal(
-    service.nodeStateUpdateDeferredRetries.size,
-    0,
-    'recovery heartbeat failures should not park a deferred retry by node',
+    'recovery heartbeat pressure never arms an in-process retry timer',
   );
 
   service.stop();
@@ -399,53 +406,45 @@ test('ReplicaDispatchService surfaces heartbeat-maintenance ' +
     clearTimeoutFn() {},
   });
 
-  const error = await t.rejects(
-    service.reconcileNodeStateUpdate('node-heartbeat-maintenance', {
-      payload: {
-        [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-        [ControlPlaneField.NODE_ID]: 'node-heartbeat-maintenance',
-        [ControlPlaneField.NODE_ADDRESS]: 'localhost:80971',
-        [ControlPlaneField.STATE]: STATE.READY,
-        [ControlPlaneField.HEARTBEAT_ONLY]: true,
-        [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
-          CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
-        [ControlPlaneField.HEARTBEAT_AT]: now,
-      },
-    }),
-  );
+  const completion = await service.publishNodeLifecycleMessage({
+    [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.BOOT_INCARNATION]: 1,
+    [ControlPlaneField.NODE_ID]: 'node-heartbeat-maintenance',
+    [ControlPlaneField.NODE_ADDRESS]: 'localhost:80971',
+    [ControlPlaneField.STATE]: STATE.READY,
+    [ControlPlaneField.HEARTBEAT_ONLY]: true,
+    [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
+    [ControlPlaneField.HEARTBEAT_AT]: now,
+  });
 
   t.equal(gatewayCalls.length, 1,
     'maintenance heartbeat should attempt the canonical update once');
   t.equal(
     gatewayCalls[0].options?.deliveryPriority,
     'critical',
-    'maintenance heartbeat writes should use critical delivery priority',
+    'maintenance heartbeat writes must keep critical delivery priority',
   );
   t.equal(
     gatewayCalls[0].options?.workClass,
     'critical',
-    'maintenance heartbeat writes should use the critical work class',
+    'maintenance heartbeat writes must keep the critical work class',
   );
-  t.equal(
-    error?.code,
-    'DISTRIBUTED_PARTICIPANT_FAILURE',
-    'maintenance heartbeat failures should surface the canonical pressure error',
-  );
+  t.match(completion, {
+    completionCompleted: false,
+    deferRetry: true,
+    publicationOutcome: 'not_applied_source_unchanged',
+  }, 'pressure on an unchanged source is a typed deferred completion');
   t.equal(
     scheduled.length,
     0,
-    'maintenance heartbeat failures should not arm a deferred retry timer',
-  );
-  t.equal(
-    service.nodeStateUpdateDeferredRetries.size,
-    0,
-    'maintenance heartbeat failures should not park a deferred retry by node',
+    'maintenance heartbeat pressure never arms an in-process retry timer',
   );
 
   service.stop();
 });
 
-test('ReplicaDispatchService promotes READY node-state updates from stopped rows',
+test('ReplicaDispatchService refuses READY node-state updates from stopped rows',
   async (t) => {
     initEnv();
 
@@ -481,25 +480,19 @@ test('ReplicaDispatchService promotes READY node-state updates from stopped rows
       },
     });
 
-    await service.handleNodeStateUpdate({
+    const error = await t.rejects(service.publishNodeLifecycleMessage({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: 'node-restart-ready',
       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8092',
       [ControlPlaneField.STATE]: STATE.READY,
       [ControlPlaneField.HEARTBEAT_AT]: now,
-    });
+    }));
 
-    t.equal(updates.length, 1, 'persists one nodes row update');
-    t.equal(
-      updates[0].row.status,
-      SERVICE_STATUS.ACTIVE,
-      'READY node-state updates should restore stopped rows to active',
-    );
-    t.equal(
-      updates[0].row.connection_state,
-      STATE.READY,
-      'READY node-state updates should publish ready connectivity',
-    );
+    t.equal(error?.code, 'NODE_STATE_UPDATE_SOURCE_CHANGED',
+      'STOPPED rows require their lifecycle owner, not READY publication');
+    t.equal(updates.length, 0,
+      'READY evidence cannot overwrite terminal lifecycle state');
 
     service.stop();
   });
@@ -571,14 +564,13 @@ test('ReplicaDispatchService keeps READY node-state publication on the ' +
     shutdown() {},
   };
 
-  await service.reconcileNodeStateUpdate('node-pressure-ready', {
-    payload: {
-      [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-      [ControlPlaneField.NODE_ID]: 'node-pressure-ready',
-      [ControlPlaneField.NODE_ADDRESS]: 'localhost:8085',
-      [ControlPlaneField.STATE]: STATE.READY,
-      [ControlPlaneField.HEARTBEAT_AT]: now,
-    },
+  const completion = await service.publishNodeLifecycleMessage({
+    [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.BOOT_INCARNATION]: 1,
+    [ControlPlaneField.NODE_ID]: 'node-pressure-ready',
+    [ControlPlaneField.NODE_ADDRESS]: 'localhost:8085',
+    [ControlPlaneField.STATE]: STATE.READY,
+    [ControlPlaneField.HEARTBEAT_AT]: now,
   });
 
   t.equal(gatewayCalls.length, 1,
@@ -593,15 +585,21 @@ test('ReplicaDispatchService keeps READY node-state publication on the ' +
     0,
     'READY publication should not arm a deferred retry timer',
   );
+  t.equal(completion.completionCompleted, true,
+    'READY publication completes with the durable row');
   t.equal(
-    service.nodeStateUpdateDeferredRetries.size,
+    readyRetryEnqueues.length,
     0,
-    'READY publication should not remain parked in the deferred retry map',
+    'the write path never reacts inline to its own publication',
+  );
+  service.handleCacheNodeChange(
+    'nodes',
+    completion[CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW],
   );
   t.equal(
     readyRetryEnqueues.length,
     1,
-    'successful READY publication should re-enter the ready retry owner path',
+    'the NODES cache trigger re-enters the ready retry owner path',
   );
 
   service.nodeReadyRetryQueue = originalNodeReadyRetryQueue;

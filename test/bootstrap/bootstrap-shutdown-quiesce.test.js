@@ -13,6 +13,7 @@ function createSilentLogger() {
 test('BootstrapService cleanup quiesces rebalancers before service shutdown', async (t) => {
   const callOrder = [];
   const service = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: 'test-node',
     nodeAddress: 'localhost:8080',
   });

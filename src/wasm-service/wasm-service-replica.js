@@ -632,7 +632,11 @@ class WasmServiceReplica extends RaftReplicaBase {
     return this.controlPlaneSystemTableGateway.submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
       tableName: TABLES.SERVICES,
-      whereClause: {[COLUMN.SERVICE_ID]: this.replicaId},
+      whereClause: {
+        [COLUMN.SERVICE_ID]: this.replicaId,
+        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
+        [COLUMN.NODE_ID]: this.nodeId,
+      },
       data: {
         [COLUMN.RAFT_ROLE]: role,
         [COLUMN.UPDATED_AT]: updatedAt,
@@ -674,7 +678,11 @@ class WasmServiceReplica extends RaftReplicaBase {
     return this.controlPlaneSystemTableGateway.submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
       tableName: TABLES.SERVICES,
-      whereClause: {[COLUMN.SERVICE_ID]: this.replicaId},
+      whereClause: {
+        [COLUMN.SERVICE_ID]: this.replicaId,
+        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
+        [COLUMN.NODE_ID]: this.nodeId,
+      },
       data: {
         [COLUMN.NODE_ID]: leaderNodeId,
         [COLUMN.RAFT_ROLE]: role,
