@@ -471,9 +471,9 @@ records placement evidence and the service's convergence toward the data it
 accesses.
 
 The demo predates the public call path: its service phase drives the
-internal placement substrate directly through a kernel-internal `native_js`
-module rather than an installed call Binding. It remains the best proof of
-the execution and placement *shape*; the public route to the same shape is
+internal placement substrate directly rather than through an installed call
+Binding. It remains the best proof of the execution and placement *shape*; the
+public route to the same shape is
 the CALL binding shown above. Check the
 [examples index](../../examples/README.md) for the current runnable
 call-path example, and see

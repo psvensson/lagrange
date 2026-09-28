@@ -163,7 +163,7 @@ and control-plane workflows.
 3. Runtime lifecycle operations are owned by
    `Service_Runtime_Lifecycle` with runtime selection through
    `Runtime_Driver_Registry`.
-4. SQL profile services map to `runtime_kind = native_js` through
+4. SQL profile services select the kernel-internal provider through
    `SQL_ENGINE_RUNTIME_KIND`.
 5. Callback invocation is owned by `CallbackExecutionHost`; callback
    runtime selection is through `CallbackRuntimeDriverRegistry` as a
@@ -182,7 +182,6 @@ replicated meta services.
 
 | Runtime Kind | Purpose | Status |
 |-------------|---------|--------|
-| `native_js` | Run existing in-process handlers as replicated service workloads (admin first) | Active |
 | `wasm_component` | Run WASI component workloads with manifest/capability/dependency enforcement | Genuine WASI component execution on the Binding/Cell readiness path (transpile, instantiate, budget and declared-table enforcement); the callback example remains a JavaScript envelope rehearsal, not component execution |
 | `oci_container` | Validate digest-pinned OCI container descriptors | Descriptor and in-memory lifecycle scaffold; no real container activation |
 
@@ -292,7 +291,7 @@ Replicated Meta Service Handler (sys-admin-meta / sys-wasm-meta)
       ▼
 Service_Runtime_Lifecycle
       │
-      ├──► Runtime_Driver_Registry -> {Native_JS_Driver | Wasm_Component_Driver | OCI_Container_Driver}
+      ├──► Runtime_Driver_Registry -> {kernel-internal | Wasm_Component_Driver | OCI_Container_Driver}
       │
       ├──► SQL/CDC mutation path + operation journal updates
       │

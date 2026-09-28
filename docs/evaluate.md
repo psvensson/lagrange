@@ -134,9 +134,9 @@ measurements, and failure drills.
 Lagrange distributed SQL, and shard-local policy with bounded reduction over
 100,000 ratings. It reports correctness, transfer shape, and placement evidence.
 
-The service phase uses the kernel-internal `native_js` substrate rather than the
-current public code-first WASM path. It demonstrates the execution shape, not a
-complete current-product benchmark. It deliberately does not print a speedup
+The service phase uses an internal measurement substrate rather than the
+current public code-first service path. It demonstrates the execution shape,
+not a complete current-product benchmark. It deliberately does not print a speedup
 ratio.
 
 ### Replica rebuild evidence

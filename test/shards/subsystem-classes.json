@@ -28,7 +28,7 @@
   "censusSize": 2157,
   "digest": "fnv1a32-4dcd180e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6a89e74c",
+  "observationDigest": "fnv1a32-7a4c7ade",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8345,9 +8345,14 @@
         "docs/steering/rules.md",
         "docs/steering/workflow-guidelines/solver-quests.md",
         "scripts/check-guideline-literals-baseline.json",
-        "scripts/solve/store.js"
+        "scripts/solve/store.js",
+        "src/cli/service-command-router.js",
+        "src/cli/service-wasm-scaffold.js"
       ],
       "directories": [
+        "architecture",
+        "docs",
+        "examples",
         "scripts/checks",
         "solve/changes",
         "solve/epics",
@@ -9178,20 +9183,12 @@
       "files": [
         "README.md",
         "docs/current-capabilities-and-limitations.md",
+        "docs/native-programming-model.md",
         "docs/service-deployment-guide.md",
         "docs/service-portability-capabilities.json",
         "examples/README.md",
-        "examples/distributed-sql/06-wasm-remote-replica/example.manifest.json",
-        "examples/distributed-sql/06-wasm-remote-replica/expected.json",
-        "examples/distributed-sql/06-wasm-remote-replica/index.js",
-        "examples/distributed-sql/README.md",
-        "src/query/callback/callback-module-artifact.js",
         "src/query/callback/callback-runtime-driver-registry.js",
-        "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
         "src/runtime/oci-container-driver.js"
-      ],
-      "directories": [
-        "examples/distributed-sql/06-wasm-remote-replica"
       ]
     },
     "test/scripts/service-portability-static-gate.test.js": {

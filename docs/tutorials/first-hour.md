@@ -132,15 +132,14 @@ lagrange service build .
 ```
 
 Generation writes the component entry, deployment records, deployment plan, and
-typings under `.lagrange/`. Build produces `.lagrange/component.wasm` and the
-local OCI layout used as installation input.
+typings under `.lagrange/`. Build produces the service artifact used by
+deployment. The packaging details under `.lagrange/` are internal to the
+toolchain and do not need to be passed back to `deploy`.
 
 To deploy to a running cluster:
 
 ```bash
-lagrange service deploy . \
-  --layout .lagrange/oci \
-  --idempotency-key <unique-key>
+lagrange service deploy . --idempotency-key <unique-key>
 ```
 
 Deployment requires the PostgreSQL-wire connection and credential environment

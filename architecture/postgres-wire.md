@@ -207,7 +207,7 @@ execution-mode behavior.
 
 ### SQL Service Profile on Replicated Services
 SQL service instances are modeled as replicated service definitions with
-`service_profile = 'sql_engine'` (active runtime: `native_js` via
+`service_profile = 'sql_engine'` (runtime selected through
 `SQL_ENGINE_RUNTIME_KIND`). They share the same placement, rebalancing,
 failover, endpoint registration, and runtime lifecycle ownership as other
 replicated services. No parallel SQL-specific scaling framework exists.

@@ -8,11 +8,10 @@
  * its lagrange.service.js into the generated entry and the deterministic
  * .lagrange/deployment records through the real normalizer/validators,
  * and `build` componentizes the entry against the real toolchain into a
- * loadable component. `--oci` preserves the legacy OCI-container
- * scaffold byte-for-byte, and `dev-install` is demoted to a low-level
- * compatibility note in help without behavior change.
+ * loadable component. The public init command exposes this one code-first
+ * authoring model; provider-specific scaffolds are not CLI alternatives.
  */
-import {mkdir, mkdtemp, readFile, readdir, rm} from 'node:fs/promises';
+import {mkdtemp, readFile, readdir, rm} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
@@ -22,9 +21,6 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   createWasmServiceProject,
 } from '../../src/cli/service-wasm-scaffold.js';
-import {
-  createServiceProject,
-} from '../../src/cli/service-project-scaffold.js';
 import {
   runServiceCommand,
 } from '../../src/cli/service-command-router.js';
@@ -169,61 +165,31 @@ async (t) => {
     'componentize must produce a non-empty component');
 });
 
-test('--oci preserves the legacy scaffold byte-for-byte and the router ' +
-  'routes the flag', async (t) => {
+test('init exposes one code-first authoring model', async (t) => {
   const root = await makeTempRoot(t);
-  // Both projects use the SAME service name under different roots so the
-  // name embedded in the generated files is identical and the byte
-  // comparison isolates the scaffold path (not the name).
-  const directRoot = path.join(root, 'direct');
-  const flagRoot = path.join(root, 'flag');
-  const wasmRoot = path.join(root, 'wasm');
-  const ociDirect = path.join(directRoot, 'oci-service');
-  const ociFlag = path.join(flagRoot, 'oci-service');
-  const wasmDir = path.join(wasmRoot, 'wasm-service');
+  const serviceDir = path.join(root, 'service');
 
-  // The scaffold is fail-closed on a missing parent (no silent mkdir -p),
-  // so create the intermediate roots first.
-  await mkdir(directRoot);
-  await mkdir(flagRoot);
-  await mkdir(wasmRoot);
+  const created = runInitThroughRouter(['init', serviceDir]);
+  assert.equal(created.exitCode, SUCCESS_EXIT_CODE, created.stderr);
+  assert.match(created.stdout, /Created service project/);
+  assert.ok((await listFiles(serviceDir)).includes('lagrange.service.js'));
 
-  // Direct OCI scaffold output (unchanged owner).
-  createServiceProject(ociDirect);
-
-  // The router's --oci flag must produce the SAME bytes as the direct
-  // legacy scaffold and must NOT create a WASM project.
-  const flagExit = runInitThroughRouter(['init', ociFlag, '--oci']);
-  assert.equal(flagExit.exitCode, SUCCESS_EXIT_CODE, flagExit.stderr);
-  assert.match(flagExit.stdout, /OCI-container service project/);
-
-  const directFiles = await listFiles(ociDirect);
-  const flagFiles = await listFiles(ociFlag);
-  assert.deepEqual(flagFiles, directFiles);
-  for (const relative of directFiles) {
-    const directBytes = await readFile(path.join(ociDirect, relative));
-    const flagBytes = await readFile(path.join(ociFlag, relative));
-    assert.deepEqual(flagBytes, directBytes, `${relative} drifted`);
-  }
-  // The OCI path carries no WASM-first artifacts.
-  assert.ok(!flagFiles.includes('lagrange.service.js'));
-  assert.ok(!flagFiles.some((file) => file.startsWith('authoring/')));
-
-  // The default (no flag) routes to the WASM scaffold.
-  const wasmExit = runInitThroughRouter(['init', wasmDir]);
-  assert.equal(wasmExit.exitCode, SUCCESS_EXIT_CODE, wasmExit.stderr);
-  assert.match(wasmExit.stdout, /WASM service project/);
-  assert.ok((await listFiles(wasmDir)).includes('lagrange.service.js'));
+  const providerSpecific = runInitThroughRouter([
+    'init',
+    path.join(root, 'provider-specific'),
+    '--oci',
+  ]);
+  assert.notEqual(providerSpecific.exitCode, SUCCESS_EXIT_CODE);
+  assert.match(providerSpecific.stderr, /usage|unknown option/iu);
 });
 
-test('help demotes dev-install to a low-level compatibility note and ' +
-  'documents --oci', async () => {
+test('help documents one project-owned service workflow', async () => {
   const help = captureHelp();
-  assert.match(help, /init <directory> \[--oci\]/);
-  assert.match(help, /code-first WASM service project/);
-  assert.match(help, /--oci for the legacy OCI-container/);
-  assert.match(help, /Low-level compatibility:/);
-  assert.match(help, /dev-install.*low-level/s);
+  assert.match(help, /init <directory>/);
+  assert.doesNotMatch(help, /--oci/);
+  assert.match(help, /Create a code-first service project/);
+  assert.match(help, /deploy <project-directory> --idempotency-key <key>/);
+  assert.doesNotMatch(help, /--layout/);
 });
 
 function runInitThroughRouter(args) {

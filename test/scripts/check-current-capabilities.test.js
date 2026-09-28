@@ -52,13 +52,14 @@ test('current capabilities detect a stale generated document', () => {
   }
 });
 
-test('generated public service status separates WASI and callbacks', () => {
+test('generated public service status exposes one runtime-neutral API', () => {
   const document = generate();
   assert.match(
     document, /Managed WASM execution: \*\*Genuine WASI component Cell\*\*/u,
   );
-  assert.doesNotMatch(document, /compiled artifact is not a WebAssembly/iu);
-  assert.match(document, /legacy callback representation/iu);
+  assert.match(document, /one service API across execution providers/iu);
+  assert.match(document, /Execution provider/iu);
+  assert.doesNotMatch(document, /native_js|JavaScript-envelope|legacy callback/iu);
 });
 
 test('managed WASM summary follows the portability status', () => {

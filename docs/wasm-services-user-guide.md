@@ -3,11 +3,12 @@ audience: human
 documentClass: compatibility
 ---
 
-# WASM Services Guide
+# Service Runtime Guide
 
 This former combined guide has been split. A Lagrange service - endpoints,
-partition functions, and reducers authored together and deployed as WASM -
-is documented across the pages below.
+partition functions, and reducers authored together - is documented across
+the pages below. WASM is the current supported execution provider; provider
+choice is not a separate service API.
 
 Choose the document that matches your question:
 
@@ -32,8 +33,8 @@ reducer over the partial results, invoked over authenticated pgwire with
 `CALL BINDING $1` - or from a request handler in the same Artifact through
 the policy-authorized `callBinding` host import.
 
-The legacy `js_wasm_component_v1` callback envelope is JavaScript, not a
-WebAssembly component. The accepted `pushdown`, `change`, `time`, `once`,
-and `boot` Binding source kinds are declared-only today. Managed OCI
-container activation is unsupported; OCI exists as a compatibility
-scaffold, not a peer of the WASM path.
+The accepted `pushdown`, `change`, `time`, `once`, and `boot` Binding
+source kinds are declared-only today. Managed OCI container activation is
+unsupported. The OCI provider is a future execution option for the same
+Artifact / Binding / Cell and service-call semantics, not a second programming
+model.

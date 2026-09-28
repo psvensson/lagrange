@@ -27,6 +27,24 @@ const LEGACY_TOKENS = Object.freeze([
   'DDB_CLI_DEBUG',
 ]);
 
+const RETIRED_SERVICE_SURFACE_TOKENS = Object.freeze([
+  'native_js',
+  'js_wasm_component_v1',
+  'JavaScript-envelope',
+  'legacy JavaScript',
+  'legacy JS',
+  '.lagrange/oci',
+]);
+
+const SERVICE_SURFACE_PREFIXES = Object.freeze([
+  'README.md',
+  'architecture/',
+  'docs/',
+  'examples/',
+  'src/cli/service-command-router.js',
+  'src/cli/service-wasm-scaffold.js',
+]);
+
 // Locations where a legacy token is allowed because the content is an
 // immutable historical record or a parallel working copy.
 // A quest's append-only log is the immutable historical record; the store
@@ -45,12 +63,12 @@ const HISTORICAL_NOTE_PREFIX = 'src/cli/';
 
 const PATTERN = new RegExp(LEGACY_TOKENS.join('|'), 'u');
 
-function trackedHits() {
+function trackedHits(tokens) {
   let out = '';
   try {
     out = execFileSync(
       'git',
-      ['grep', '-nI', '-E', '--', LEGACY_TOKENS.join('|')],
+      ['grep', '-nI', '-E', '--', tokens.join('|')],
       {encoding: 'utf8', maxBuffer: 64 * 1024 * 1024},
     );
   } catch (err) {
@@ -67,7 +85,7 @@ function isAllowed(file) {
 }
 
 function main() {
-  const violations = trackedHits()
+  const violations = trackedHits(LEGACY_TOKENS)
     .filter((line) => PATTERN.test(line))
     .filter((line) => {
       const file = line.slice(0, line.indexOf(':'));
@@ -77,20 +95,40 @@ function main() {
       return !isAllowed(file);
     });
 
-  if (violations.length === 0) {
-    console.log('no-legacy-naming guard: clean (no live `ddb` CLI naming).');
+  const serviceSurfaceViolations = trackedHits(RETIRED_SERVICE_SURFACE_TOKENS)
+    .filter((line) => {
+      const file = line.slice(0, line.indexOf(':'));
+      return SERVICE_SURFACE_PREFIXES.some((prefix) =>
+        file === prefix || file.startsWith(prefix));
+    });
+
+  if (violations.length === 0 && serviceSurfaceViolations.length === 0) {
+    console.log(
+      'no-legacy-naming guard: clean (CLI naming and public service surface).',
+    );
     return;
   }
 
+  if (serviceSurfaceViolations.length > 0) {
+    console.error(
+      'no-legacy-naming guard FAILED: retired service-runtime details are ' +
+      'not allowed in public docs, examples, CLI help, or generated scaffold docs.\n',
+    );
+    for (const line of serviceSurfaceViolations) console.error(`  ${line}`);
+  }
+
+  if (violations.length > 0) {
+    console.error(
+      'no-legacy-naming guard FAILED: the pre-release ddb CLI naming is ' +
+      'retired. Use lagrange-admin / lagrange-cli / LAGRANGE_* instead.\n',
+    );
+    for (const line of violations) console.error(`  ${line}`);
+  }
+  const violationCount =
+    violations.length + serviceSurfaceViolations.length;
   console.error(
-    'no-legacy-naming guard FAILED: the pre-release ddb CLI naming is ' +
-    'retired. Use lagrange-admin / lagrange-cli / LAGRANGE_* instead.\n',
-  );
-  for (const line of violations) console.error(`  ${line}`);
-  console.error(
-    `\n${violations.length} disallowed reference(s). ` +
-    'If a reference is a genuine historical record, place it under a ' +
-    'whitelisted path in scripts/check-no-legacy-naming.js.',
+    `\n${violationCount} disallowed reference(s). ` +
+    'Historical solver records may retain old terms; public service surfaces may not.',
   );
   process.exit(1);
 }

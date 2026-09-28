@@ -35,12 +35,10 @@ const PIPELINE_COMMAND = Object.freeze({
 });
 const PIPELINE_FLAG = Object.freeze({
   IDEMPOTENCY_KEY: '--idempotency-key',
-  LAYOUT: '--layout',
   OPTION_PREFIX: '-',
 });
 const MAXIMUM_IDEMPOTENCY_KEY_LENGTH = 256;
 const PIPELINE_USAGE_MESSAGE = Object.freeze({
-  DEPLOY_LAYOUT_REQUIRED: 'deploy requires --layout <oci-layout-path>',
   DIRECTORY_REQUIRED: 'requires exactly one project directory',
   IDEMPOTENCY_KEY_INVALID:
     '--idempotency-key must contain 1 to 256 characters',
@@ -99,20 +97,13 @@ function parseFlagValue(command, args, flag, startIndex) {
 function parseDeployFlags(command, args, parsed) {
   for (let index = 1; index < args.length; index += 1) {
     const token = args[index];
-    if (token === PIPELINE_FLAG.LAYOUT) {
-      parsed.layoutPath = parseFlagValue(command, args, token, index);
-      index += 1;
-    } else if (token === PIPELINE_FLAG.IDEMPOTENCY_KEY) {
+    if (token === PIPELINE_FLAG.IDEMPOTENCY_KEY) {
       parsed.idempotencyKey = parseFlagValue(command, args, token, index);
       index += 1;
     } else {
       throw new ServicePipelineUsageError(
         `${PIPELINE_USAGE_MESSAGE.UNKNOWN_OPTION}: ${token}`);
     }
-  }
-  if (typeof parsed.layoutPath !== 'string') {
-    throw new ServicePipelineUsageError(
-      PIPELINE_USAGE_MESSAGE.DEPLOY_LAYOUT_REQUIRED);
   }
   if (typeof parsed.idempotencyKey !== 'string' ||
       parsed.idempotencyKey.trim().length === 0 ||
@@ -174,7 +165,6 @@ async function runServicePipelineCommand(argv, dependencyOverrides = {}) {
       await runDeploy({
         createSqlClient: dependencies.createSqlClient,
         idempotencyKey: command.idempotencyKey,
-        layoutPath: command.layoutPath,
         projectDirectory: command.projectDirectory,
         writeOutput: dependencies.writeOutput,
       });

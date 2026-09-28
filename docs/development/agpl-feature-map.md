@@ -416,7 +416,7 @@ service platform around that substrate rather than reopening those owners.
 |------|--------|-------|
 | Unified service lifecycle | ✅ | `ServiceLifecycleManager` + `ServiceReconciler` + `ServiceDispatcher` |
 | Built-in runtime services | ✅ | `sys-postgres-wire`, `sys-admin-meta`, `sys-wasm-meta` run on the service substrate |
-| `native_js` runtime | ✅ | Active runtime for first-party system services |
+| Kernel-internal runtime | ✅ | Active provider for first-party system services |
 | `wasm_component` runtime | ✅ | Available runtime for replicated services |
 | Service manifest schema definition | 🔲 | Identity, runtime, capabilities, compatibility. Architecture: `architecture/lagrange-service-manifest.md` |
 | Manifest validation rules | 🔲 | Required fields, format and capability validation. Architecture: `architecture/lagrange-service-manifest.md` |
@@ -533,7 +533,7 @@ research.
 | Spatial search/index service | 🔲 | Specialized geometry/index semantics rather than a required 0.3 B-tree variant. |
 | Embedding service | 🔲 | |
 
-Note: `native_js` is kernel-internal only. User-installable services
+Note: the kernel-internal provider is not user-installable. User services
 use `wasm_component` or `oci_container`, both packaged as OCI artifacts.
 
 ### 3. External Kernel Platform API
