@@ -1,0 +1,31 @@
+{
+  "schema": "solve-quest/2",
+  "id": "message-group-leader-safe-movement",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Moving a message-group replica can never leave the group permanently leaderless. Four latent mechanisms compose into an unrecoverable leaderless group once a leader replica is relocated (classified 2026-09-28 on the replica-lifecycle-durable-generation candidate, where an activation-CAS regression exposed them; evidence session scratchpad mg-livelock/): (1) MessageGroupAssignment.findMovableReplica (src/bootstrap/message-group-assignment.js:271-276) takes leadership from the copied SERVICES.raft_role, and the role publisher always writes follower over a leader row (message-group-service-leadership-state-runtime-methods.js:99 collapseLeaderToFollower), so the chooser's authority is an advisory copy; (2) MG MOVE_REPLICA source release is a plain localService.shutdown() with no role check or typed leadership handoff (src/bootstrap/owners/move-replica-handoff-owner.js:458-496), unlike the partition REPLACE_SOURCE_LEADER_HANDOFF path; (3) the moved replica keeps its own source address as a voter (bootstrap-join-admission-owner.js:662-665 peerAddresses; reconcileRaftPeersFromCache skips local replicas), a phantom voter that raises the majority beyond reach; (4) a replica joining an existing group denies every vote and suppresses its election timer until its node is READY (message-group-service-inbound-ingress-runtime-methods.js:144-149, node-joining-admission-readiness.js:243), which can deadlock against a leaderless group; per-index election jitter (2500 ms per replica index, replica-election-timeouts.js) makes the most up-to-date survivor the slowest to stand. Repair as one owner class: the chooser reads authoritative Raft leadership; MOVE_REPLICA of the current leader requires a typed leadership handoff before destructive movement; voter sets are built from replica identities so a moved replica cannot retain a phantom voter; JOINING-node voting policy cannot permanently prevent election after legitimate movement.",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/message-group-leader-safe-movement.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-safety-class",
+      "statement": "The four mechanisms are one message-group/Raft safety class and are repaired together at their owners, not as four local patches."
+    },
+    {
+      "id": "raft-owner-authority",
+      "statement": "Leadership and voter membership come from the Raft owner (committed ConfState, live role), never from SERVICES copies."
+    },
+    {
+      "id": "no-timing-levers",
+      "statement": "No timeout, budget, jitter or retry change is the repair; witnesses are deterministic and red-on-revert."
+    },
+    {
+      "id": "lifecycle-candidate-independent",
+      "statement": "Separate from replica-lifecycle-durable-generation, which repairs only its own activation-generation regression and must not depend on this quest."
+    }
+  ]
+}

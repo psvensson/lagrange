@@ -1,0 +1,27 @@
+{
+  "schema": "solve-quest/2",
+  "id": "message-group-forward-completion-propagation",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A forwarded message-group control message reports completion to its original sender only when the leader's completion says so. Found 2026-09-28 while proving c3cfd229f (fixes/mg-forwarded-application-envelope): both forwarders (MessageGroupForwardingOwner.forwardMetadataIngressPayloadToLeader, message-group-forwarding-owner.js:571, and replica-dispatch-readiness-capture.js:759) await sendMessage and ignore the leader's completionKind/completionCompleted, and ReplicaDispatchService.handleMessageReceived then reports completionCompleted:true after any forward, including the forwardedBy loop-guard early return that delivered nothing. One shared place propagates the leader's typed completion; a leader completion of false, a deferred answer, a throw or a loop-guard stop never reaches the sender as completed. Also record the sibling: RPCClient.call rides MessageGroupService.sendMessage and its router handlers (message-group-service-handler.js, replica-handler) read the outer envelope, so its type is always unknown (latent, no src caller).",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/message-group-forward-completion-propagation.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "after-envelope-fix",
+      "statement": "Builds on c3cfd229f (forwarded application messages reach the leader's completion handler); lands after it."
+    },
+    {
+      "id": "one-propagation-owner",
+      "statement": "Completion propagation lives in one place shared by both forwarders; no per-forwarder copies."
+    },
+    {
+      "id": "fail-closed-witness",
+      "statement": "Deterministic red-on-revert witness: leader completion false/deferred/throw and the loop-guard stop each reach the sender as not completed."
+    }
+  ]
+}
