@@ -98,7 +98,7 @@ tap.test('OCI implementation drift requires capability-contract update',
   (t) => {
     const result = evaluateMutation((input) => {
       input.evidence.ociCallback = input.evidence.ociCallback
-        .replace('REGISTRY_OCI_CONTAINER_GATED', 'OCI_READY');
+        .replaceAll('REGISTRY_OCI_CONTAINER_GATED', 'OCI_READY');
     });
     t.equal(result.valid, false);
     t.equal(result.problems.length, 1);
