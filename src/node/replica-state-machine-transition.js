@@ -1,15 +1,43 @@
-import {AddressManager} from '../address/address-manager.js';
 import {
   SERVICE_TYPE,
   TABLES,
 } from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
+  CONTROL_PLANE_MUTATION_OUTCOME,
 } from '../control-plane/control-plane-system-table-gateway.js';
-import {classifyControlPlaneMutationResult} from
-  '../control-plane/control-plane-mutation-outcome-classifier.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
+import {
+  didDurableServiceRowWriteApply,
+  durableTransitionNotAppliedError,
+  reportServiceRowPersisted,
+  reportServiceRowPersistenceError,
+} from './replica-state-machine-durability.js';
+import {
+  buildReplicaLifecycleMutationPredicateFromState,
+  isReplicaLifecycleMutationPredicate,
+  observeAuthoritativeReplicaLifecycle,
+  readAuthoritativeReplicaLifecycle,
+  resolveReplicaCreateGroupId,
+  rowMatchesReplicaLifecycle,
+} from './replica-state-machine-lifecycle-observation.js';
+import {
+  advanceReplicaRevision,
+  captureReplicaAdmission,
+  isCanonicalLeaderClearSettled,
+  isReplicaAdmissionCurrent,
+  runSerializedReplicaMutation,
+} from './replica-state-machine-serialization.js';
+import {clearLeaderOrRecordDebt} from
+  './replica-state-machine-leader-clear.js';
+import {createReplicaRowInCdc} from
+  './replica-state-machine-create-persistence.js';
+import {mintPartitionServiceCreatedAt} from
+  '../partition/partition-service-incarnation.js';
+
+const STATE_ENTERED_AT_COLUMN = 'state_entered_at';
+const OBSERVED_STATE_CHANGED_OUTCOME = 'observed_state_changed';
 import {
   REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE,
   REPLICA_STATE_MACHINE_EVENT,
@@ -32,32 +60,428 @@ const BACKGROUND_PERSISTENCE_STATES = new Set([
   ReplicaState.SYNCING,
   ReplicaState.REMOVING,
 ]);
-const CLEARS_CANONICAL_PARTITION_LEADER_STATES = new Set([
-  ReplicaState.REMOVING,
-  ReplicaState.REMOVED,
-  ReplicaState.FAILED,
-]);
 const RETAINS_CANONICAL_PARTITION_LEADER_SERVICE_STATES = new Set([
   ReplicaState.ACTIVE,
 ]);
-const DURABLE_APPLY_REQUIRED_STATES = new Set([
-  ReplicaState.REMOVING,
-]);
-const DURABLE_TRANSITION_DEFERRED_CODE =
-  'REPLICA_STATE_TRANSITION_DURABILITY_DEFERRED';
 
-function durableTransitionNotAppliedError(replicaId, newState, result) {
-  const effect = classifyControlPlaneMutationResult(result);
-  const error = new Error(
-    `Replica state transition was not durably applied for ${replicaId}: ` +
-    newState,
+async function resolveUncertainLifecycleUpdate(
+  stateMachine,
+  replicaState,
+  previousState,
+  cause,
+) {
+  const serviceId = replicaState.serviceId || replicaState.replicaId;
+  const observation = await observeAuthoritativeReplicaLifecycle(
+    stateMachine,
+    serviceId,
   );
-  error.code = DURABLE_TRANSITION_DEFERRED_CODE;
-  error.errorCode = DURABLE_TRANSITION_DEFERRED_CODE;
-  error.deferRetry = effect.retryable === true || result?.deferRetry === true;
-  error.retryAfterMs = Number.isFinite(result?.retryAfterMs) ?
-    result.retryAfterMs : null;
-  return error;
+  if (observation.available !== true ||
+      !rowMatchesReplicaLifecycle(observation.row, replicaState)) {
+    throw cause;
+  }
+  stateMachine.clearServiceRowLocalOnly?.(serviceId);
+  await clearLeaderOrRecordDebt(stateMachine, replicaState, previousState);
+  reportServiceRowPersisted(stateMachine, replicaState);
+  return {
+    success: true,
+    outcome: CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
+    partitionResult: {affectedRows: 1},
+  };
+}
+
+function refuseTransition(
+  stateMachine,
+  replicaId,
+  currentState,
+  newState,
+  context,
+) {
+  stateMachine.logger.error(REPLICA_STATE_MACHINE_LOG_MSG.INVALID_TRANSITION, {
+    replicaId,
+    currentState,
+    attemptedState: newState,
+    reason: context.reason,
+    nodeId: stateMachine.nodeId,
+  });
+
+  stateMachine.emit(REPLICA_STATE_MACHINE_EVENT.TRANSITION_ERROR, {
+    code: REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE.INVALID_TRANSITION,
+    replicaId,
+    currentState,
+    attemptedState: newState,
+    reason: context.reason,
+    nodeId: stateMachine.nodeId,
+  });
+
+  return false;
+}
+
+function transitionValue(value, existingValue, fallback = null) {
+  return value || existingValue || fallback;
+}
+
+function resolveTransitionTimestamp(stateMachine, existingState, context) {
+  const observedNow = Number.isFinite(context?.timestamp) ?
+    context.timestamp : stateMachine.now();
+  const sourceVersion = Number.isFinite(existingState?.durableVersion) ?
+    existingState.durableVersion : existingState?.stateEnteredAt;
+  return {
+    observedNow,
+    now: Number.isFinite(sourceVersion) ?
+      Math.max(observedNow, sourceVersion + 1) : observedNow,
+  };
+}
+
+function buildTransitionLifecycleIdentity(replicaId, existingState, now) {
+  const createdAt = Number.isFinite(existingState?.createdAt) ?
+    existingState.createdAt :
+    mintPartitionServiceCreatedAt(now);
+  return {
+    replicaIdentity: existingState?.replicaIdentity || replicaId,
+    groupId: existingState?.groupId ?? null,
+    createdAt,
+    lifecycleIdentityAuthoritative:
+      existingState?.lifecycleIdentityAuthoritative === true,
+  };
+}
+
+function buildTransitionState(
+  stateMachine,
+  replicaId,
+  newState,
+  context,
+  existingState,
+) {
+  const {observedNow, now} = resolveTransitionTimestamp(
+    stateMachine,
+    existingState,
+    context,
+  );
+  // The durable timestamp is the lifecycle generation token. Make it
+  // strictly monotonic even when transitions share a millisecond or a
+  // recovered row was stamped by a clock ahead of this process.
+  const previousState = existingState ? existingState.state : null;
+  return {
+    now,
+    previousState,
+    timeInPreviousState: existingState ?
+      Math.max(
+        REPLICA_STATE_MACHINE_NUM.ZERO,
+        observedNow - existingState.stateEnteredAt,
+      ) : REPLICA_STATE_MACHINE_NUM.ZERO,
+    replicaState: {
+      replicaId,
+      partitionId: transitionValue(
+        context.partitionId,
+        existingState?.partitionId,
+      ),
+      nodeId: transitionValue(
+        context.nodeId,
+        existingState?.nodeId,
+        stateMachine.nodeId,
+      ),
+      state: newState,
+      stateEnteredAt: now,
+      timeoutStartedAt: null,
+      previousState,
+      triggerReason: transitionValue(
+        context.reason,
+        null,
+        REPLICA_STATE_MACHINE_REASON.UNKNOWN,
+      ),
+      errorMessage: context.errorMessage || null,
+      metadata: transitionValue(context.metadata, existingState?.metadata, {}),
+      serviceId: transitionValue(context.serviceId, existingState?.serviceId),
+      serviceType: transitionValue(
+        context.serviceType,
+        existingState?.serviceType,
+        SERVICE_TYPE.PARTITION,
+      ),
+      serviceAddress: transitionValue(
+        context.serviceAddress,
+        existingState?.serviceAddress,
+      ),
+      ...buildTransitionLifecycleIdentity(replicaId, existingState, now),
+      durableVersionColumn: STATE_ENTERED_AT_COLUMN,
+      durableVersion: now,
+    },
+  };
+}
+
+function commitTransition(
+  stateMachine,
+  replicaId,
+  newState,
+  context,
+  transitionState,
+) {
+  const {
+    now,
+    previousState,
+    timeInPreviousState,
+    replicaState,
+  } = transitionState;
+  if (previousState !== null) {
+    stateMachine.stateCounts[previousState]--;
+  }
+  stateMachine.stateCounts[newState]++;
+
+  const transitionKey =
+    `${previousState}${REPLICA_STATE_MACHINE_TRANSITION.SEPARATOR}${newState}`;
+  const currentTransitionCount =
+    stateMachine.transitionCounts.get(transitionKey) ||
+    REPLICA_STATE_MACHINE_NUM.ZERO;
+  stateMachine.transitionCounts.set(
+    transitionKey,
+    currentTransitionCount + REPLICA_STATE_MACHINE_NUM.ONE,
+  );
+
+  if (previousState !== null &&
+      timeInPreviousState > REPLICA_STATE_MACHINE_NUM.ZERO) {
+    const currentTimeInState = stateMachine.timeInState.get(previousState) ||
+      REPLICA_STATE_MACHINE_NUM.ZERO;
+    stateMachine.timeInState.set(
+      previousState,
+      currentTimeInState + timeInPreviousState,
+    );
+  }
+
+  if (newState === ReplicaState.FAILED) {
+    stateMachine.failureCount++;
+  }
+
+  stateMachine._updatePeakConcurrentOperations();
+  stateMachine.replicas.set(replicaId, replicaState);
+  advanceReplicaRevision(stateMachine, replicaId);
+
+  stateMachine.logger.info(REPLICA_STATE_MACHINE_LOG_MSG.STATE_TRANSITION, {
+    replicaId,
+    previousState,
+    newState,
+    reason: context.reason,
+    nodeId: stateMachine.nodeId,
+  });
+
+  stateMachine.emit(REPLICA_STATE_MACHINE_EVENT.STATE_TRANSITION, {
+    eventType: REPLICA_STATE_MACHINE_EVENT_TYPE.REPLICA_STATE_TRANSITION,
+    replicaId,
+    partitionId: replicaState.partitionId,
+    nodeId: replicaState.nodeId,
+    previousState,
+    newState,
+    timestamp: now,
+    triggerReason: replicaState.triggerReason,
+    errorMessage: replicaState.errorMessage,
+    timeInPreviousState,
+  });
+}
+
+function completeRemovalInLane(stateMachine, replicaId, context = {}) {
+  const existingState = stateMachine.replicas.get(replicaId) || null;
+  if (existingState?.state !== ReplicaState.REMOVING ||
+      !isCanonicalLeaderClearSettled(stateMachine, replicaId)) {
+    return false;
+  }
+  const transitionState = buildTransitionState(
+    stateMachine,
+    replicaId,
+    ReplicaState.REMOVED,
+    context,
+    existingState,
+  );
+  commitTransition(
+    stateMachine,
+    replicaId,
+    ReplicaState.REMOVED,
+    context,
+    transitionState,
+  );
+  stateMachine._armTimeoutClock(replicaId);
+  return true;
+}
+
+function runTransitionAttempt(
+  stateMachine,
+  replicaId,
+  newState,
+  context,
+  options,
+  admission,
+) {
+  const existingState = stateMachine.replicas.get(replicaId) || null;
+  const currentState = existingState?.state || null;
+  const validate = options.validate !== false;
+  const persist = options.persist !== false;
+
+  // Admission is source-state specific. A queued request must not be
+  // reinterpreted as a different, coincidentally valid edge after an earlier
+  // transition commits (for example, a CREATING -> FAILED observation after
+  // durable REMOVING has won). The monotonic revision also fences ABA changes.
+  if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission) ||
+      currentState === ReplicaState.REMOVING &&
+        newState === ReplicaState.REMOVED &&
+        !isCanonicalLeaderClearSettled(stateMachine, replicaId) ||
+      validate && !stateMachine.isValidTransition(currentState, newState)) {
+    return refuseTransition(
+      stateMachine,
+      replicaId,
+      currentState,
+      newState,
+      context,
+    );
+  }
+
+  const transitionState = buildTransitionState(
+    stateMachine,
+    replicaId,
+    newState,
+    context,
+    existingState,
+  );
+  const commit = () => {
+    commitTransition(
+      stateMachine,
+      replicaId,
+      newState,
+      context,
+      transitionState,
+    );
+    stateMachine._armTimeoutClock(replicaId);
+  };
+
+  if (!persist) {
+    commit();
+    return true;
+  }
+
+  const uncertainRemoval = newState === ReplicaState.REMOVING ?
+    stateMachine.uncertainRemovingIntentByReplicaId.get(replicaId) : null;
+  if (uncertainRemoval) {
+    return resolveUncertainRemovingTransition({
+      stateMachine,
+      replicaId,
+      existingState,
+      admission,
+      uncertainty: uncertainRemoval,
+    }).then((resolved) => resolved === true ? true :
+      resolved === false ? false : persistTransitionAttempt({
+        stateMachine,
+        replicaId,
+        newState,
+        existingState,
+        admission,
+        transitionState,
+        context,
+        commit,
+      }));
+  }
+  return persistTransitionAttempt({
+    stateMachine,
+    replicaId,
+    newState,
+    existingState,
+    admission,
+    transitionState,
+    context,
+    commit,
+  });
+}
+
+async function resolveUncertainRemovingTransition({
+  stateMachine,
+  replicaId,
+  existingState,
+  admission,
+  uncertainty,
+}) {
+  const row = await readAuthoritativeReplicaLifecycle(stateMachine, replicaId);
+  if (rowMatchesReplicaLifecycle(row, uncertainty.transitionState.replicaState)) {
+    if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) {
+      return false;
+    }
+    await clearLeaderOrRecordDebt(
+      stateMachine,
+      uncertainty.transitionState.replicaState,
+      existingState,
+    );
+    if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) {
+      return false;
+    }
+    stateMachine.uncertainRemovingIntentByReplicaId.delete(replicaId);
+    commitTransition(
+      stateMachine,
+      replicaId,
+      ReplicaState.REMOVING,
+      uncertainty.context,
+      uncertainty.transitionState,
+    );
+    stateMachine._armTimeoutClock(replicaId);
+    return true;
+  }
+  if (rowMatchesReplicaLifecycle(row, existingState)) {
+    stateMachine.uncertainRemovingIntentByReplicaId.delete(replicaId);
+    return null;
+  }
+  throw durableTransitionNotAppliedError(
+    replicaId,
+    ReplicaState.REMOVING,
+    {
+      success: true,
+      outcome: OBSERVED_STATE_CHANGED_OUTCOME,
+      deferRetry: true,
+    },
+  );
+}
+
+function persistTransitionAttempt({
+  stateMachine,
+  replicaId,
+  newState,
+  existingState,
+  admission,
+  transitionState,
+  context,
+  commit,
+}) {
+  const persistenceResult = transitionState.previousState === null ?
+    stateMachine._createReplicaRowInCdc(transitionState.replicaState) :
+    stateMachine._updateReplicaStateInCdc(
+      transitionState.replicaState,
+      existingState,
+    );
+  return Promise.resolve(persistenceResult).then((result) => {
+    const durableApplyConfirmed = result === true ||
+      didDurableServiceRowWriteApply(result);
+    if (!durableApplyConfirmed) {
+      throw durableTransitionNotAppliedError(replicaId, newState, result);
+    }
+    if (!isReplicaAdmissionCurrent(stateMachine, replicaId, admission)) {
+      return false;
+    }
+    if (newState === ReplicaState.REMOVING) {
+      stateMachine.uncertainRemovingIntentByReplicaId.delete(replicaId);
+    }
+    if (transitionState.previousState === null) {
+      transitionState.replicaState.lifecycleIdentityAuthoritative = true;
+    }
+    commit();
+    return durableApplyConfirmed;
+  }, (error) => {
+    if (newState === ReplicaState.REMOVING) {
+      // A thrown persistence outcome can mean the durable REMOVING write
+      // applied but its acknowledgement was lost. Fence the old source
+      // revision so no failure or forward transition can reinterpret that
+      // uncertainty; only a fresh idempotent REMOVING redrive may resolve it.
+      stateMachine.uncertainRemovingIntentByReplicaId.set(replicaId, {
+        revision: admission.revision,
+        sourceState: admission.sourceState,
+        context: Object.freeze({reason: context.reason}),
+        transitionState,
+      });
+      advanceReplicaRevision(stateMachine, replicaId);
+    }
+    throw error;
+  });
 }
 
 /**
@@ -70,223 +494,44 @@ function durableTransitionNotAppliedError(replicaId, newState, result) {
  * @return {boolean|Promise<boolean>} True if transition succeeded.
  */
 function applyTransition(stateMachine, replicaId, newState, context = {}, options = {}) {
-  const existingState = stateMachine.replicas.get(replicaId);
-  const currentState = existingState ? existingState.state : null;
+  const admission = captureReplicaAdmission(stateMachine, replicaId);
+  const currentState = admission.sourceState;
   const validate = options.validate !== false;
-  const persist = options.persist !== false;
 
-  if (validate && !stateMachine.isValidTransition(currentState, newState)) {
-    stateMachine.logger.error(REPLICA_STATE_MACHINE_LOG_MSG.INVALID_TRANSITION, {
+  if (stateMachine.uncertainRemovingIntentByReplicaId.has(replicaId) &&
+      newState !== ReplicaState.REMOVING) {
+    return refuseTransition(
+      stateMachine,
       replicaId,
       currentState,
-      attemptedState: newState,
-      reason: context.reason,
-      nodeId: stateMachine.nodeId,
-    });
-
-    stateMachine.emit(REPLICA_STATE_MACHINE_EVENT.TRANSITION_ERROR, {
-      code: REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE.INVALID_TRANSITION,
-      replicaId,
-      currentState,
-      attemptedState: newState,
-      reason: context.reason,
-      nodeId: stateMachine.nodeId,
-    });
-
-    return false;
-  }
-
-  const now = stateMachine.now();
-  const previousState = currentState;
-  const timeInPreviousState = existingState ?
-    now - existingState.stateEnteredAt : REPLICA_STATE_MACHINE_NUM.ZERO;
-  const replicaState = {
-    replicaId,
-    partitionId: context.partitionId || existingState?.partitionId || null,
-    nodeId: context.nodeId || existingState?.nodeId || stateMachine.nodeId,
-    state: newState,
-    stateEnteredAt: now,
-    timeoutStartedAt: null,
-    previousState,
-    triggerReason: context.reason || REPLICA_STATE_MACHINE_REASON.UNKNOWN,
-    errorMessage: context.errorMessage || null,
-    metadata: context.metadata || existingState?.metadata || {},
-    serviceId: context.serviceId || existingState?.serviceId || null,
-    serviceType: context.serviceType || existingState?.serviceType ||
-      SERVICE_TYPE.PARTITION,
-    serviceAddress: context.serviceAddress || existingState?.serviceAddress ||
-      null,
-  };
-  const commitTransition = () => {
-    if (previousState !== null) {
-      stateMachine.stateCounts[previousState]--;
-    }
-    stateMachine.stateCounts[newState]++;
-
-    const transitionKey =
-      `${previousState}${REPLICA_STATE_MACHINE_TRANSITION.SEPARATOR}${newState}`;
-    const currentTransitionCount =
-      stateMachine.transitionCounts.get(transitionKey) ||
-      REPLICA_STATE_MACHINE_NUM.ZERO;
-    stateMachine.transitionCounts.set(
-      transitionKey,
-      currentTransitionCount + REPLICA_STATE_MACHINE_NUM.ONE,
+      newState,
+      context,
     );
-
-    if (previousState !== null &&
-        timeInPreviousState > REPLICA_STATE_MACHINE_NUM.ZERO) {
-      const currentTimeInState = stateMachine.timeInState.get(previousState) ||
-        REPLICA_STATE_MACHINE_NUM.ZERO;
-      stateMachine.timeInState.set(
-        previousState,
-        currentTimeInState + timeInPreviousState,
-      );
-    }
-
-    if (newState === ReplicaState.FAILED) {
-      stateMachine.failureCount++;
-    }
-
-    stateMachine._updatePeakConcurrentOperations();
-    stateMachine.replicas.set(replicaId, replicaState);
-
-    stateMachine.logger.info(REPLICA_STATE_MACHINE_LOG_MSG.STATE_TRANSITION, {
+  }
+  if (validate && !stateMachine.isValidTransition(currentState, newState)) {
+    return refuseTransition(
+      stateMachine,
       replicaId,
-      previousState,
+      currentState,
       newState,
-      reason: context.reason,
-      nodeId: stateMachine.nodeId,
-    });
-
-    stateMachine.emit(REPLICA_STATE_MACHINE_EVENT.STATE_TRANSITION, {
-      eventType: REPLICA_STATE_MACHINE_EVENT_TYPE.REPLICA_STATE_TRANSITION,
-      replicaId,
-      partitionId: replicaState.partitionId,
-      nodeId: replicaState.nodeId,
-      previousState,
-      newState,
-      timestamp: now,
-      triggerReason: replicaState.triggerReason,
-      errorMessage: replicaState.errorMessage,
-      timeInPreviousState,
-    });
-  };
-
-  if (!persist) {
-    commitTransition();
-    stateMachine._armTimeoutClock(replicaId);
-    return true;
+      context,
+    );
   }
 
   // CL-021: serialize this row's durable writes against the local-only
-  // reconcile (replica-state-machine.js _reconcileLocalOnlyServiceRows).
   // Both paths submit full-row writes; unserialized, a reconcile carrying
   // the PRE-transition state could land after this transition's write and
   // regress the durable row. The reconcile skips rows with an in-flight
   // transition persist; transitions chain after an in-flight reconcile.
-  const startPersist = () => previousState === null ?
-    stateMachine._createReplicaRowInCdc(replicaState) :
-    stateMachine._updateReplicaStateInCdc(replicaState, previousState);
-  const inFlightMap = stateMachine.serviceRowPersistInFlightByServiceId;
-  const previousInFlight = inFlightMap?.get(replicaId) || null;
-  // No previous in-flight write: start synchronously (callers and tests
-  // depend on the persist beginning within the current microtask).
-  const persistencePromise = previousInFlight ?
-    previousInFlight.catch(() => null).then(startPersist) :
-    Promise.resolve(startPersist());
-  const clearInFlight = () => {
-    if (inFlightMap?.get(replicaId) === persistencePromise) {
-      inFlightMap.delete(replicaId);
-    }
-  };
-  inFlightMap?.set(replicaId, persistencePromise);
-
-  return persistencePromise.then((result) => {
-    clearInFlight();
-    const durableApplyConfirmed = result === true ||
-      didDurableServiceRowWriteApply(result);
-    if (DURABLE_APPLY_REQUIRED_STATES.has(newState) &&
-        !durableApplyConfirmed) {
-      throw durableTransitionNotAppliedError(replicaId, newState, result);
-    }
-    commitTransition();
-    stateMachine._armTimeoutClock(replicaId);
-    return durableApplyConfirmed;
-  }, (error) => {
-    clearInFlight();
-    throw error;
-  });
-}
-
-// CL-016/CL-021: the local-only marker may clear ONLY on a CONFIRMED
-// durable apply. A returned readiness deferral (success:false — the
-// gateway defers background-workClass writes while the joiner's
-// control-plane readiness converges) or a zero-row UPDATE (finite
-// affectedRows <= 0, outcome observed_state_changed — reported success
-// with no CDC event) proves the durable row still does not exist;
-// clearing on those strands the row forever, because the CL-021
-// reconcile owner only retries rows still carrying the marker (live
-// witness: run public-path-multinode-baseline-20260811T095750Z, 63x
-// 'No row found for CDC update' on the services-p1 leader). Unknown
-// Legacy successful result shapes remain applied; invalid typed shapes fail closed.
-function didDurableServiceRowWriteApply(result) {
-  return classifyControlPlaneMutationResult(result).applied;
-}
-
-/**
- * Create the initial services row for a newly tracked replica.
- * @param {ReplicaStateMachine} stateMachine - Owning state machine instance.
- * @param {Object} replicaState - The replica state to persist.
- * @return {Promise<boolean>} True if persistence succeeded.
- */
-async function createReplicaRowInCdc(stateMachine, replicaState) {
-  try {
-    const serviceId = replicaState.serviceId || replicaState.replicaId;
-    const addressManager = AddressManager.getInstance();
-    const serviceType = replicaState.serviceType || SERVICE_TYPE.PARTITION;
-    const address = replicaState.serviceAddress ||
-      addressManager.format(replicaState.nodeId, serviceType, serviceId);
-    const insertData = stateMachine._buildCreateCdcData(
-      replicaState,
-      serviceId,
-      serviceType,
-      address,
-    );
-    const persistenceOptions = stateMachine._buildCdcPersistenceOptions(
-      replicaState,
-      serviceId,
-    );
-
-    await stateMachine.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
-      tableName: TABLES.SERVICES,
-      row: insertData,
-    }, persistenceOptions);
-    await stateMachine._clearCanonicalPartitionLeaderIfNeeded(replicaState);
-
-    stateMachine.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSISTED, {
-      replicaId: replicaState.replicaId,
-      state: replicaState.state,
-      nodeId: stateMachine.nodeId,
-    });
-
-    return true;
-  } catch (error) {
-    stateMachine.logger.error(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSIST_FAILED, {
-      replicaId: replicaState.replicaId,
-      state: replicaState.state,
-      error: error.message,
-      nodeId: stateMachine.nodeId,
-    });
-
-    stateMachine.emit(REPLICA_STATE_MACHINE_EVENT.PERSISTENCE_ERROR, {
-      replicaId: replicaState.replicaId,
-      state: replicaState.state,
-      error: error.message,
-    });
-
-    throw error;
-  }
+  const runAttempt = () => runTransitionAttempt(
+    stateMachine,
+    replicaId,
+    newState,
+    context,
+    options,
+    admission,
+  );
+  return runSerializedReplicaMutation(stateMachine, replicaId, runAttempt);
 }
 
 /**
@@ -303,131 +548,59 @@ async function updateReplicaStateInCdc(
 ) {
   try {
     const serviceId = replicaState.serviceId || replicaState.replicaId;
-    const serviceType = replicaState.serviceType || SERVICE_TYPE.PARTITION;
-    const addressManager = AddressManager.getInstance();
-    const address = replicaState.serviceAddress ||
-      addressManager.format(replicaState.nodeId, serviceType, serviceId);
     const persistenceOptions = stateMachine._buildCdcPersistenceOptions(
       replicaState,
       serviceId,
     );
-    const hasServiceCacheLookup =
-      typeof stateMachine.systemTableCache?.get === 'function';
-    const cachedService = hasServiceCacheLookup ?
-      stateMachine.systemTableCache.get(TABLES.SERVICES, serviceId) :
-      null;
-    // CL-016: the local cache no longer proxies REMOTE existence — the
-    // priority create fallback seeds a local-only services row while the
-    // durable write is deferred. For such rows an UPDATE could target a
-    // row the distributed table never received; UPSERT is idempotent and
-    // converges either way. The marker clears when a durable write
-    // commits.
-    const remoteExistenceUnconfirmed =
-      typeof stateMachine.isServiceRowLocalOnly === 'function' &&
-      stateMachine.isServiceRowLocalOnly(serviceId);
-    const shouldUpsertMissingServiceRow =
-      (hasServiceCacheLookup && !cachedService) ||
-      remoteExistenceUnconfirmed;
-    const mutation = shouldUpsertMissingServiceRow ?
-      {
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
-        tableName: TABLES.SERVICES,
-        row: stateMachine._buildCreateCdcData(
-          replicaState,
-          serviceId,
-          serviceType,
-          address,
-        ),
-      } :
-      {
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-        tableName: TABLES.SERVICES,
-        whereClause: {service_id: serviceId},
-        data: stateMachine._buildUpdateCdcData(replicaState, previousState),
+    const previousStateValue = typeof previousState === 'object' ?
+      previousState?.state : previousState;
+    const whereClause =
+      buildReplicaLifecycleMutationPredicateFromState(previousState);
+    if (!isReplicaLifecycleMutationPredicate(whereClause)) {
+      return {
+        success: true,
+        outcome: OBSERVED_STATE_CHANGED_OUTCOME,
+        partitionResult: {affectedRows: 0},
       };
+    }
+    const mutation = {
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      tableName: TABLES.SERVICES,
+      whereClause,
+      data: stateMachine._buildUpdateCdcData(
+        replicaState,
+        previousStateValue,
+      ),
+    };
     const mutationResult = await stateMachine
       .getControlPlaneSystemTableGateway()
       .submitMutation(mutation, persistenceOptions);
     const durableApplyConfirmed =
       didDurableServiceRowWriteApply(mutationResult);
-    if (
-      durableApplyConfirmed &&
-      typeof stateMachine.clearServiceRowLocalOnly === 'function'
-    ) {
-      // Durable write committed — remote existence confirmed (CL-016).
-      stateMachine.clearServiceRowLocalOnly(serviceId);
-    }
     if (durableApplyConfirmed) {
-      await stateMachine._clearCanonicalPartitionLeaderIfNeeded(replicaState);
+      stateMachine.clearServiceRowLocalOnly?.(serviceId);
+      await clearLeaderOrRecordDebt(
+        stateMachine,
+        replicaState,
+        previousState,
+      );
     }
 
-    stateMachine.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSISTED, {
-      replicaId: replicaState.replicaId,
-      state: replicaState.state,
-      nodeId: stateMachine.nodeId,
-    });
+    reportServiceRowPersisted(stateMachine, replicaState);
 
     return mutationResult;
   } catch (error) {
-    stateMachine.logger.error(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSIST_FAILED, {
-      replicaId: replicaState.replicaId,
-      state: replicaState.state,
-      error: error.message,
-      nodeId: stateMachine.nodeId,
-    });
-
-    stateMachine.emit(REPLICA_STATE_MACHINE_EVENT.PERSISTENCE_ERROR, {
-      replicaId: replicaState.replicaId,
-      state: replicaState.state,
-      error: error.message,
-    });
-
-    throw error;
+    reportServiceRowPersistenceError(stateMachine, replicaState, error);
+    if (replicaState.state === ReplicaState.REMOVING) {
+      throw error;
+    }
+    return resolveUncertainLifecycleUpdate(
+      stateMachine,
+      replicaState,
+      previousState,
+      error,
+    );
   }
-}
-
-/**
- * Clear a canonical partition leader when the current replica can no longer
- * retain that leadership.
- * @param {ReplicaStateMachine} stateMachine - Owning state machine instance.
- * @param {Object} replicaState - The replica state to inspect.
- * @return {Promise<void>}
- */
-async function clearCanonicalPartitionLeaderIfNeeded(
-  stateMachine,
-  replicaState,
-) {
-  if (!replicaState ||
-      replicaState.serviceType !== SERVICE_TYPE.PARTITION ||
-      !CLEARS_CANONICAL_PARTITION_LEADER_STATES.has(replicaState.state) ||
-      typeof replicaState.partitionId !== 'string' ||
-      replicaState.partitionId.length === 0 ||
-      typeof replicaState.nodeId !== 'string' ||
-      replicaState.nodeId.length === 0) {
-    return;
-  }
-  if (stateMachine.hasOtherActivePartitionReplicaOnLeaderNode(replicaState)) {
-    return;
-  }
-
-  await stateMachine.getControlPlaneSystemTableGateway().submitMutation({
-    operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-    tableName: TABLES.PARTITIONS,
-    whereClause: {
-      partition_id: replicaState.partitionId,
-      leader_node_id: replicaState.nodeId,
-    },
-    data: {
-      leader_node_id: null,
-      updated_at: replicaState.stateEnteredAt,
-    },
-  }, {
-    allowCoalescing: true,
-    coalescingKey: `partitions:leader:${replicaState.partitionId}`,
-    deliveryPriority: LOCAL_STR_CRITICAL,
-    workClass: LOCAL_STR_CRITICAL,
-    skipCacheWait: true,
-  });
 }
 
 /**
@@ -502,12 +675,14 @@ function armTimeoutClock(stateMachine, replicaId) {
  * @return {Object} Partial services-row update payload.
  */
 function buildUpdateCdcData(replicaState, previousState) {
+  const durableUpdatedAt = Number.isFinite(replicaState.durableUpdatedAt) ?
+    replicaState.durableUpdatedAt : replicaState.stateEnteredAt;
   const cdcData = {
     status: replicaState.state,
     state_entered_at: replicaState.stateEnteredAt,
     previous_state: previousState,
     trigger_reason: replicaState.triggerReason,
-    updated_at: replicaState.stateEnteredAt,
+    updated_at: durableUpdatedAt,
   };
 
   if (replicaState.errorMessage) {
@@ -532,6 +707,7 @@ function buildCreateCdcData(
   serviceType,
   address,
 ) {
+  const createdAt = replicaState.createdAt;
   // CL-021: this payload feeds a full-row INSERT OR REPLACE. Columns owned
   // by OTHER writers (raft_role from the partition service's role-mutation
   // helper, group_id from registration) were silently NULLED by every
@@ -551,12 +727,11 @@ function buildCreateCdcData(
   ) {
     preservedColumns.raft_role = cachedRow.raft_role;
   }
-  if (
-    typeof cachedRow?.group_id === 'string' &&
-    cachedRow.group_id.length > 0
-  ) {
-    preservedColumns.group_id = cachedRow.group_id;
-  }
+  const groupId = resolveReplicaCreateGroupId(
+    stateMachine,
+    replicaState,
+    serviceId,
+  );
   return {
     ...preservedColumns,
     ...stateMachine._buildUpdateCdcData(replicaState, null),
@@ -564,9 +739,10 @@ function buildCreateCdcData(
     service_type: serviceType,
     node_id: replicaState.nodeId,
     partition_id: replicaState.partitionId,
-    replica_id: replicaState.replicaId,
+    group_id: groupId,
+    replica_id: replicaState.replicaIdentity,
     address,
-    created_at: replicaState.stateEnteredAt,
+    created_at: createdAt,
   };
 }
 
@@ -610,7 +786,7 @@ export {
   buildCdcPersistenceOptions,
   buildCreateCdcData,
   buildUpdateCdcData,
-  clearCanonicalPartitionLeaderIfNeeded,
+  completeRemovalInLane,
   createReplicaRowInCdc,
   getControlPlaneSystemTableGateway,
   hasOtherActivePartitionReplicaOnLeaderNode,

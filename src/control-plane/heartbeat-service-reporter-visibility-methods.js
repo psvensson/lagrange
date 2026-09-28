@@ -1,10 +1,17 @@
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {COLUMN} from '../constants/index.js';
+import {
+  CDC_OPERATION,
+  COLUMN,
+} from '../constants/index.js';
 import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
 import {buildControlPlaneReadAuthority} from
   './control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   './control-plane-system-table-gateway-constants.js';
+import {
+  CONTROL_PLANE_MESSAGE_COMPLETION_FIELD,
+  CONTROL_PLANE_MESSAGE_COMPLETION_KIND,
+} from './control-plane-constants.js';
 import {
   buildNodeHeartbeatStructuralSignature,
   buildNodeHeartbeatUtilizationSignature,
@@ -23,6 +30,59 @@ import {
   ONE,
   ZERO,
 } from './heartbeat-service-runtime-state.js';
+
+const HEARTBEAT_ROW_ALIAS = Object.freeze({
+  CONNECTION_STATE: 'connection_state',
+  NODE_ID: 'node_id',
+  STATUS: 'status',
+});
+
+function heartbeatRowFieldMatches(nodeRow, column, alias, expected) {
+  return nodeRow?.[column] === expected || nodeRow?.[alias] === expected;
+}
+
+function heartbeatReadyLeaseIsCleared(nodeRow) {
+  const readyLeaseExpiresAt =
+    nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT] ??
+    nodeRow?.ready_lease_expires_at;
+  return readyLeaseExpiresAt === null || readyLeaseExpiresAt === undefined;
+}
+
+function reporterHeartbeatRowMatches(nodeId, nodeRow, expectedHeartbeatAt,
+  options) {
+  if (!heartbeatRowFieldMatches(
+    nodeRow,
+    COLUMN.NODE_ID,
+    HEARTBEAT_ROW_ALIAS.NODE_ID,
+    nodeId,
+  )) return false;
+  const lastHeartbeat = Number(
+    nodeRow?.[COLUMN.LAST_HEARTBEAT] ?? nodeRow?.last_heartbeat,
+  );
+  if (!Number.isFinite(lastHeartbeat) || lastHeartbeat < expectedHeartbeatAt) {
+    return false;
+  }
+  if (typeof options.expectedStatus === 'string' &&
+      !heartbeatRowFieldMatches(
+        nodeRow,
+        COLUMN.STATUS,
+        HEARTBEAT_ROW_ALIAS.STATUS,
+        options.expectedStatus,
+      )) {
+    return false;
+  }
+  if (typeof options.expectedConnectionState === 'string' &&
+      !heartbeatRowFieldMatches(
+        nodeRow,
+        COLUMN.CONNECTION_STATE,
+        HEARTBEAT_ROW_ALIAS.CONNECTION_STATE,
+        options.expectedConnectionState,
+      )) {
+    return false;
+  }
+  return options.expectedReadyLeaseCleared !== true ||
+    heartbeatReadyLeaseIsCleared(nodeRow);
+}
 
 class HeartbeatServiceReporterVisibilityMethods {
   /**
@@ -146,12 +206,13 @@ class HeartbeatServiceReporterVisibilityMethods {
     }
     this.lastReporterVisibilityAttemptAt = nowMs;
     this.lastReporterVisibilityAttemptTargetAddress = normalizedDiagnostics.targetAddress || null;
+    const scheduledReporter = this.nodeStateReporter;
     const verificationToken = {};
     const verificationPromise = new Promise((resolve) => {
       const timeoutHandle = this.setTimeoutFn(async () => {
         try {
           if (
-            typeof this.nodeStateReporter !== 'function' ||
+            this.nodeStateReporter !== scheduledReporter ||
             this.verifyReporterVisibilityOnSuccess !== true
           ) {
             return;
@@ -219,6 +280,73 @@ class HeartbeatServiceReporterVisibilityMethods {
     this.nodeHeartbeatReporterVisibilityState = HEARTBEAT_REPORTER_VISIBILITY_STATE.CONFIRMED;
     this.lastHeartbeatPublicationDecision = null;
   }
+  installAuthoritativeReporterHeartbeatRow(result, nodeRow) {
+    const observedAtMs = Number(
+      result?.observedAtMs,
+    );
+    if (!Number.isFinite(observedAtMs) ||
+        typeof this.cdcIntegrationService?.applyAuthoritativeCacheRepair !==
+          'function') {
+      return false;
+    }
+    return this.cdcIntegrationService.applyAuthoritativeCacheRepair(
+      SYSTEM_TABLE_NAME.NODES,
+      CDC_OPERATION.UPSERT,
+      nodeRow,
+      this.nodeId,
+      {
+        authoritativeObservedAtMs: observedAtMs,
+      },
+    );
+  }
+  verifyReporterHeartbeatCompletion(
+    completion,
+    expectedHeartbeatAt,
+    options = {},
+  ) {
+    const nodeRow = completion?.[
+      CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW
+    ];
+    const observedAtMs = Number(completion?.[
+      CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_OBSERVED_AT_MS
+    ]);
+    if (!Number.isFinite(observedAtMs) ||
+        !reporterHeartbeatRowMatches(
+          this.nodeId,
+          nodeRow,
+          expectedHeartbeatAt,
+          options,
+        )) {
+      return false;
+    }
+    return this.installAuthoritativeReporterHeartbeatRow(
+      {observedAtMs},
+      nodeRow,
+    );
+  }
+  assertReporterDurableHeartbeatCompletion(
+    completion,
+    expectedHeartbeatAt,
+    expectedRow,
+    publicationDiagnostics,
+  ) {
+    const durableCompletion =
+      completion?.completionKind ===
+        CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION &&
+      completion?.completionCompleted === true;
+    const exactProjectionInstalled = durableCompletion &&
+      this.verifyReporterHeartbeatCompletion(completion, expectedHeartbeatAt, {
+        expectedStatus: expectedRow.status,
+        expectedConnectionState: expectedRow.connection_state,
+      });
+    if (exactProjectionInstalled) return;
+    const visibilityError = new Error(
+      HEARTBEAT_SERVICE_LITERAL.REPORTER_DURABLE_VISIBILITY_REQUIRED,
+    );
+    visibilityError.deferRetry = true;
+    visibilityError.publicationDiagnostics = publicationDiagnostics;
+    throw visibilityError;
+  }
   /**
    * Verify that a successful node-state reporter heartbeat became visible in
    * the canonical nodes row before we treat delivery as sufficient.
@@ -228,6 +356,7 @@ class HeartbeatServiceReporterVisibilityMethods {
    * @param {string|null} [options.expectedConnectionState]
    * @param {boolean} [options.expectedReadyLeaseCleared]
    * @param {boolean} [options.requireReadableAuthority]
+   * @param {boolean} [options.installAuthoritativeProjection]
    * @return {Promise<boolean>}
    * @private
    */ async verifyReporterHeartbeatVisibility(expectedHeartbeatAt, options = {}) {
@@ -280,30 +409,15 @@ class HeartbeatServiceReporterVisibilityMethods {
         }) ||
         rows[ZERO] ||
         null;
-      const lastHeartbeat = Number(nodeRow?.[COLUMN.LAST_HEARTBEAT] ?? nodeRow?.last_heartbeat);
-      if (!Number.isFinite(lastHeartbeat) || lastHeartbeat < expectedHeartbeatAt) {
+      if (!reporterHeartbeatRowMatches(
+        this.nodeId,
+        nodeRow,
+        expectedHeartbeatAt,
+        options,
+      )) return false;
+      if (options.installAuthoritativeProjection === true &&
+          !this.installAuthoritativeReporterHeartbeatRow(result, nodeRow)) {
         return false;
-      }
-      if (
-        typeof options.expectedStatus === 'string' &&
-        nodeRow?.[COLUMN.STATUS] !== options.expectedStatus &&
-        nodeRow?.status !== options.expectedStatus
-      ) {
-        return false;
-      }
-      if (
-        typeof options.expectedConnectionState === 'string' &&
-        nodeRow?.[COLUMN.CONNECTION_STATE] !== options.expectedConnectionState &&
-        nodeRow?.connection_state !== options.expectedConnectionState
-      ) {
-        return false;
-      }
-      if (options.expectedReadyLeaseCleared === true) {
-        const readyLeaseExpiresAt =
-          nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT] ?? nodeRow?.ready_lease_expires_at;
-        if (readyLeaseExpiresAt !== null && readyLeaseExpiresAt !== undefined) {
-          return false;
-        }
       }
       return true;
     } catch (_error) {

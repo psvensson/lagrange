@@ -178,6 +178,37 @@ describe('ReplicaHandlerSetup', () => {
       assert.strictEqual(result.replicaHandler.initialized, true);
     });
 
+    it('should reuse the canonical replicaStateMachine supplied by startup',
+      () => {
+        const replicaStateMachine =
+          ReplicaHandlerSetup.createReplicaStateMachine({
+            nodeId: TEST_NODE_ID,
+            cdcIntegrationService: mockCdcIntegrationService,
+            systemTableCache: mockSystemTableCache,
+          });
+        createdStateMachines.push(replicaStateMachine);
+
+        const result = ReplicaHandlerSetup.create({
+          nodeId: TEST_NODE_ID,
+          messageRouter: mockMessageRouter,
+          cdcIntegrationService: mockCdcIntegrationService,
+          systemTableCache: mockSystemTableCache,
+          createPartitionService: mockCreatePartitionService,
+          replicaStateMachine,
+        });
+
+        assert.strictEqual(
+          result.replicaStateMachine,
+          replicaStateMachine,
+          'handler setup must not replace the startup lifecycle owner',
+        );
+        assert.strictEqual(
+          result.replicaHandler.replicaStateMachine,
+          replicaStateMachine,
+          'handler should receive the startup lifecycle owner',
+        );
+      });
+
     it('should accept optional dataDir parameter', () => {
       const result = ReplicaHandlerSetup.create({
         nodeId: TEST_NODE_ID,

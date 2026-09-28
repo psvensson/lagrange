@@ -175,7 +175,7 @@ test('NodeJoiningService disables steady-state control-plane reporter outside du
     t.equal(
       clearedReporter,
       true,
-      'should cut steady-state heartbeats over to direct control-plane writes outside durable rejoin',
+      'should cut steady-state heartbeats over to local canonical ingress outside durable rejoin',
     );
     t.equal(
       heartbeatStarted,

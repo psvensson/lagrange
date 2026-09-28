@@ -9,7 +9,6 @@
 
 import tap, {test} from '../../src/test-helpers/tap.js';
 import {request as httpRequest} from 'node:http';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
@@ -38,6 +37,7 @@ import {
   installTransientSqlReadinessFixture,
   gracefulJoiningShutdown,
   gracefulShutdown,
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
@@ -468,7 +468,7 @@ test('Node join convergence SLO', {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async 
     const seedWsPort = getUniquePort();
     const joiningWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -677,7 +677,7 @@ test('Node join convergence SLO real-network readiness path',
     const seedWsPort = getUniquePort();
     const joiningWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -822,7 +822,7 @@ test('Readiness endpoint remains reachable during background log buffer flush',
 
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440221';
     const seedWsPort = getUniquePort();
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -1002,7 +1002,7 @@ test('Real-listener join retries through transient SQL/metadata blockers under c
 
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440231';
     const seedWsPort = getUniquePort();
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

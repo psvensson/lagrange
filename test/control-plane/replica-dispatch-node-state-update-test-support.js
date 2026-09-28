@@ -12,6 +12,10 @@ import {ReplicaDispatchService} from
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {NodeLifecyclePublication} from
+  '../../src/control-plane/node-lifecycle-publication.js';
+import {NodeReadyLeaseAuthority} from
+  '../../src/control-plane/node-ready-lease-authority.js';
 import {
   NODE_CAPABILITY,
 } from '../../src/constants/index.js';
@@ -22,6 +26,8 @@ export const READY_NODE_CAPABILITIES = Object.freeze([
 ]);
 export const READY_NODE_CAPABILITIES_JSON =
   JSON.stringify(READY_NODE_CAPABILITIES);
+const REGISTERED_NODE_FIXTURE_BOOT_INCARNATION = 1;
+const REGISTERED_NODE_FIXTURE_TIMESTAMP = 1;
 
 export function initEnv() {
   ConfigurationManager.resetInstance();
@@ -34,6 +40,75 @@ export function initEnv() {
   if (!logging.isInitialized()) {
     logging.initialize({level: 'error'});
   }
+}
+
+function createAuthoritativeNodeStateGateway(
+  gateway,
+  initialRows,
+  fixtureOptions = {},
+) {
+  if (!gateway) return null;
+  const durableRows = new Map(initialRows.map((row) => {
+    const registeredRow = {
+      ...row,
+      boot_incarnation:
+        row.boot_incarnation ?? REGISTERED_NODE_FIXTURE_BOOT_INCARNATION,
+      created_at:
+        row.created_at ?? REGISTERED_NODE_FIXTURE_TIMESTAMP,
+      last_heartbeat:
+        row.last_heartbeat ??
+        row.created_at ??
+        REGISTERED_NODE_FIXTURE_TIMESTAMP,
+    };
+    return [row.node_id, structuredClone(registeredRow)];
+  }));
+  return {
+    ...gateway,
+    async readAuthoritativeRows(tableName, sql, params, options) {
+      if (typeof gateway.readAuthoritativeRows === 'function') {
+        return gateway.readAuthoritativeRows(tableName, sql, params, options);
+      }
+      const row = tableName === 'nodes' ?
+        durableRows.get(params?.[0]) || null : null;
+      return {success: true, rows: row ? [structuredClone(row)] : []};
+    },
+    async updateSystemTableRow(tableName, whereClause, data, writeOptions) {
+      if (tableName === 'nodes') {
+        await fixtureOptions.beforeNodeUpdate?.({
+          durableRows,
+          whereClause,
+          data,
+        });
+        const current = durableRows.get(whereClause.node_id) || null;
+        const predicateMatches = current && Object.entries(whereClause)
+          .every(([field, value]) => current[field] === value);
+        if (!predicateMatches) {
+          return {success: true, partitionResult: {affectedRows: 0}};
+        }
+      }
+      const result = await gateway.updateSystemTableRow(
+        tableName,
+        whereClause,
+        data,
+        writeOptions,
+      );
+      if (tableName === 'nodes' && result?.success !== false &&
+          Number(result?.partitionResult?.affectedRows) !== 0) {
+        const nodeId = whereClause.node_id;
+        const durableRow = {
+          ...(durableRows.get(nodeId) || whereClause),
+          ...data,
+        };
+        durableRows.set(nodeId, durableRow);
+        result.partitionResult = {
+          ...result.partitionResult,
+          originHlc:
+            `${Number(data.last_heartbeat) || Date.now()}-0-fixture-owner`,
+        };
+      }
+      return result;
+    },
+  };
 }
 
 export function createService(options = {}) {
@@ -57,7 +132,7 @@ export function createService(options = {}) {
   const cdcIntegrationService = options.cdcIntegrationService;
   const controlPlaneReadinessService =
     options.controlPlaneReadinessService;
-  const controlPlaneSystemTableGateway =
+  const rawControlPlaneSystemTableGateway =
     options.controlPlaneSystemTableGateway ||
     (cdcIntegrationService ? {
       updateSystemTableRow: (...args) =>
@@ -69,6 +144,11 @@ export function createService(options = {}) {
       deleteSystemTableRow: (...args) =>
         cdcIntegrationService.deleteSystemTableRow?.(...args),
     } : null);
+  const controlPlaneSystemTableGateway = createAuthoritativeNodeStateGateway(
+    rawControlPlaneSystemTableGateway,
+    cacheNodes,
+    {beforeNodeUpdate: options.beforeNodeUpdate},
+  );
   const rebalanceCoordinator = options.rebalanceCoordinator || {
     executeOperation: async () => ({success: true}),
   };
@@ -79,9 +159,16 @@ export function createService(options = {}) {
     cdcIntegrationService,
     controlPlaneSystemTableGateway,
     controlPlaneReadinessService,
+    // The receiving replica's node lifecycle owner over the durable fixture.
+    nodeLifecyclePublication: controlPlaneSystemTableGateway ?
+      new NodeLifecyclePublication({
+        gateway: controlPlaneSystemTableGateway,
+        leaseAuthority: NodeReadyLeaseAuthority.fromConfiguration(),
+        now: options.now,
+      }) :
+      null,
     operationDispatchQueueShardCount:
       options.operationDispatchQueueShardCount,
-    nodeStateUpdateQueueShardCount: options.nodeStateUpdateQueueShardCount,
     setTimeoutFn: options.setTimeoutFn,
     clearTimeoutFn: options.clearTimeoutFn,
     nodeStateUpdateRetryAfterMs: options.nodeStateUpdateRetryAfterMs,

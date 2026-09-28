@@ -503,6 +503,10 @@ test(
       'promotion should publish through the services table');
     t.same(updates[0]?.whereClause, {
       service_id: 'replica-3',
+      service_type: SERVICE_TYPE.PARTITION,
+      partition_id: 'stable-join-partition',
+      replica_id: 'replica-3',
+      node_id: 'node-3',
       raft_role: RaftRole.LEARNER,
       updated_at: 1,
     }, 'first promotion write should target the learner row snapshot');
@@ -529,6 +533,10 @@ test(
       'retry should re-attempt follower publication after the guarded miss');
     t.same(updates[1].whereClause, {
       service_id: 'replica-3',
+      service_type: SERVICE_TYPE.PARTITION,
+      partition_id: 'stable-join-partition',
+      replica_id: 'replica-3',
+      node_id: 'node-3',
       raft_role: RaftRole.LEARNER,
       updated_at: 2,
     }, 'retry should refresh the guard from the latest observed learner row');

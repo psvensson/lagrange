@@ -15,7 +15,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -25,6 +24,7 @@ import {
   cleanupTestEnvironment,
   gracefulShutdown,
   getUniquePort,
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
@@ -60,7 +60,7 @@ test('single node with production default replica_count serves user-table writes
     // Deliberately NO partition.defaultReplicaCount override: the schema
     // minimum is 3, so the partitions row targets more replicas than this
     // one-node cluster can place.
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

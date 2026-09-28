@@ -1,3 +1,8 @@
+import {
+  createLifecycleControlPlaneGatewayForCache,
+  createReplicaLifecycleStateMachineFixture,
+} from '../test-helpers/lifecycle-state-store.js';
+
 const TEST_INITIAL_STATUS_RETRY_OPERATION_ID =
   'op-initial-create-status-retry';
 const TEST_INITIAL_STATUS_RETRY_REPLICA_ID =
@@ -23,13 +28,12 @@ export async function registerReplicaHandlerCreateAdmissionTests({
   createSeededCache,
   createMetadataOnlyCache,
   seedReplicaOperation,
-  applyGatewayMutationToCache,
   waitForReplicaEvent,
   getTempDir,
   ReplicaOperationResponseStatus,
 }) {
   t.test(
-    'handleCreateReplica - returns ACK before slow pending status persistence completes',
+    'handleCreateReplica - wins durable admission before ACK or runtime open',
     async (t) => {
       const cache = createSeededCache();
       seedReplicaOperation(cache, 'op-slow-pending');
@@ -53,10 +57,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
             async syncFromLeader() {},
           };
         },
-        replicaStateMachine: {
-          getState() {
-            return null;
-          },
+        replicaStateMachine: createReplicaLifecycleStateMachineFixture({
           async transition(replicaId, newStatus) {
             if (replicaId === 'replica-slow' &&
                 newStatus === ReplicaStatus.PENDING) {
@@ -66,7 +67,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
               });
             }
           },
-        },
+        }),
         dataDir: getTempDir(),
       });
 
@@ -78,27 +79,10 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         replicaId: 'replica-slow',
       });
 
-      const response = await Promise.race([
-        responsePromise,
-        new Promise((_, reject) => {
-          setTimeout(() => {
-            reject(new Error(
-              'CREATE_REPLICA ACK should not wait for pending status persistence',
-            ));
-          }, 25);
-        }),
-      ]);
-
-      t.equal(
-        response.status,
-        ReplicaOperationResponseStatus.INITIATED,
-        'CREATE_REPLICA should ACK immediately even when pending status persistence is slow',
-      );
-      t.equal(
-        handler.getLocalReplica('replica-slow')?.status,
-        ReplicaStatus.PENDING,
-        'local idempotency state should still become pending before ACK',
-      );
+      let responseSettled = false;
+      responsePromise.finally(() => {
+        responseSettled = true;
+      });
       t.same(
         createdReplicaIds,
         [],
@@ -109,20 +93,29 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       t.equal(
         pendingStatusStarted,
         true,
-        'slow pending-status persistence should begin in the detached background task after ACK',
+        'durable insert admission begins before the response settles',
       );
+      t.equal(responseSettled, false,
+        'CREATE_REPLICA does not ACK before durable identity admission');
       t.type(
         releasePendingStatus,
         'function',
-        'background pending-status persistence should expose the test release gate',
+        'pending admission exposes the deterministic release gate',
       );
 
-      releasePendingStatus();
-      await waitForReplicaEvent(
+      const created = waitForReplicaEvent(
         handler,
         'replicaCreated',
         'replicaCreationFailed',
       );
+      releasePendingStatus();
+      const response = await responsePromise;
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.INITIATED,
+        'ACK follows durable ownership admission',
+      );
+      await created;
 
       t.same(
         createdReplicaIds,
@@ -159,10 +152,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
             async syncFromLeader() {},
           };
         },
-        replicaStateMachine: {
-          getState() {
-            return null;
-          },
+        replicaStateMachine: createReplicaLifecycleStateMachineFixture({
           async transition(replicaId, newStatus) {
             transitions.push({replicaId, newStatus});
             if (
@@ -182,7 +172,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
               pendingAttempts += 1;
             }
           },
-        },
+        }),
         dataDir: getTempDir(),
       });
 
@@ -256,31 +246,37 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       const replicaStateMachine = new ReplicaStateMachine({
         nodeId: 'test-node',
         systemTableCache: cache,
-        controlPlaneSystemTableGateway: {
-          async submitMutation(mutation) {
-            if (mutation.tableName === SYSTEM_TABLE_NAME.SERVICES) {
-              serviceMutationOperations.push({
-                operation: mutation.operation,
-                status: mutation.row?.status || mutation.data?.status || null,
-              });
-            }
-            if (
-              mutation.tableName === SYSTEM_TABLE_NAME.SERVICES &&
+        controlPlaneSystemTableGateway:
+          createLifecycleControlPlaneGatewayForCache(cache, {
+            beforeMutation(mutation) {
+              if (mutation.tableName === SYSTEM_TABLE_NAME.SERVICES) {
+                serviceMutationOperations.push({
+                  operation: mutation.operation,
+                  status: mutation.row?.status || mutation.data?.status || null,
+                });
+              }
+              if (
+                mutation.tableName === SYSTEM_TABLE_NAME.SERVICES &&
               mutation.operation === 'update' &&
               mutation.data?.status === ReplicaStatus.CREATING
-            ) {
-              creatingWriteCount += 1;
+              ) {
+                creatingWriteCount += 1;
+              }
+            },
+            afterMutation(mutation) {
+              if (mutation.tableName !== SYSTEM_TABLE_NAME.SERVICES ||
+                  mutation.operation !== 'update' ||
+                  mutation.data?.status !== ReplicaStatus.CREATING) {
+                return;
+              }
               const error = new Error(TEST_INITIAL_STATUS_RETRY_ERROR);
               error.code = TEST_INITIAL_STATUS_RETRY_ERROR_CODE;
               error.errorCode = TEST_INITIAL_STATUS_RETRY_ERROR_CODE;
               error.deferRetry = true;
               error.retryAfterMs = TEST_INITIAL_STATUS_RETRY_AFTER_MS;
               throw error;
-            }
-            applyGatewayMutationToCache(cache, mutation);
-            return {success: true};
-          },
-        },
+            },
+          }),
       });
       let handler = null;
       const createdReplicaIds = [];
@@ -336,8 +332,8 @@ export async function registerReplicaHandlerCreateAdmissionTests({
 
       t.equal(
         creatingWriteCount,
-        0,
-        'priority CREATING status should be local-first, not a startup gate',
+        1,
+        'priority create wins durable identity before local CREATING fallback',
       );
       t.same(
         serviceMutationOperations
@@ -346,10 +342,10 @@ export async function registerReplicaHandlerCreateAdmissionTests({
             mutation.status === ReplicaStatus.ACTIVE,
           ),
         [
-          {operation: 'upsert', status: ReplicaStatus.SYNCING},
+          {operation: 'update', status: ReplicaStatus.SYNCING},
           {operation: 'update', status: ReplicaStatus.ACTIVE},
         ],
-        'post-start lifecycle writes should upsert missing service rows before updating them',
+        'post-start lifecycle writes remain source-generation CAS updates',
       );
       t.same(
         createdReplicaIds,
@@ -523,9 +519,8 @@ export async function registerReplicaHandlerCreateAdmissionTests({
   );
 
   t.test(
-    'CL-016: priority local-commit fallback seeds the LOCAL services row ' +
-      'so voter-ready activation does not require the recovering control ' +
-      'plane',
+    'priority create observes a lost CREATING acknowledgement without ' +
+      'inventing local-only authority',
     async (t) => {
       const cache = createSeededCache({
         tableId: 'replica_operations',
@@ -541,34 +536,33 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       const replicaStateMachine = new ReplicaStateMachine({
         nodeId: 'test-node',
         systemTableCache: cache,
-        controlPlaneSystemTableGateway: {
-          async submitMutation(mutation) {
-            // The CREATING write defers — the recovering control plane is
-            // unavailable at create time (the CL-016 live condition);
-            // later lifecycle writes succeed.
-            const mutationStatus =
+        controlPlaneSystemTableGateway:
+          createLifecycleControlPlaneGatewayForCache(cache, {
+            beforeMutation(mutation) {
+              const mutationStatus =
               mutation.row?.status || mutation.data?.status || null;
-            if (
-              mutation.tableName === SYSTEM_TABLE_NAME.SERVICES &&
-              mutationStatus === ReplicaStatus.CREATING
-            ) {
+              if (mutation.tableName === SYSTEM_TABLE_NAME.SERVICES) {
+                serviceMutations.push({
+                  operation: mutation.operation,
+                  status: mutationStatus,
+                });
+              }
+            },
+            afterMutation(mutation) {
+              const mutationStatus =
+                mutation.row?.status || mutation.data?.status || null;
+              if (mutation.tableName !== SYSTEM_TABLE_NAME.SERVICES ||
+                  mutationStatus !== ReplicaStatus.CREATING) {
+                return;
+              }
               const error = new Error(TEST_INITIAL_STATUS_RETRY_ERROR);
               error.code = TEST_INITIAL_STATUS_RETRY_ERROR_CODE;
               error.errorCode = TEST_INITIAL_STATUS_RETRY_ERROR_CODE;
               error.deferRetry = true;
               error.retryAfterMs = TEST_INITIAL_STATUS_RETRY_AFTER_MS;
               throw error;
-            }
-            if (mutation.tableName === SYSTEM_TABLE_NAME.SERVICES) {
-              serviceMutations.push({
-                operation: mutation.operation,
-                status: mutationStatus,
-              });
-            }
-            applyGatewayMutationToCache(cache, mutation);
-            return {success: true};
-          },
-        },
+            },
+          }),
       });
       let rowAtFactory = null;
       let localOnlyAtFactory = null;
@@ -625,16 +619,17 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       );
       t.equal(
         localOnlyAtFactory,
-        true,
-        'row is marked local-only while the durable write is deferred',
+        false,
+        'exact destination observation resolves the lost acknowledgement ' +
+          'without inventing local-only authority',
       );
       const syncingMutation = serviceMutations.find(
         (mutation) => mutation.status === ReplicaStatus.SYNCING,
       );
       t.equal(
         syncingMutation?.operation,
-        'upsert',
-        'lifecycle write UPSERTs while remote existence is unconfirmed',
+        'update',
+        'lifecycle writes cannot turn cache uncertainty into UPSERT authority',
       );
       t.equal(
         replicaStateMachine.isServiceRowLocalOnly(
@@ -648,4 +643,3 @@ export async function registerReplicaHandlerCreateAdmissionTests({
     },
   );
 }
-

@@ -2,13 +2,14 @@
  * MessageGroupServiceHandler - Handles CREATE_REPLICA and REMOVE_REPLICA
  * operations for message-group entities.
  */
-
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {AddressManager} from '../address/address-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {MessageGroupServiceRowOwner} from
   '../message-group/message-group-service-row-owner.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 import {
   ENTITY_TYPE,
   SERVICE_STATUS,
@@ -20,9 +21,7 @@ import {
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
-import {
-  ReplicaStatus,
-} from '../rebalancer/replica-status.js';
+import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   EXECUTOR_OUTCOME_TYPE,
 } from '../rebalancer/executor-outcome-constants.js';
@@ -73,10 +72,17 @@ class MessageGroupServiceHandler extends EventEmitter {
       options.stopMessageGroupReplica || null;
     this.resolveLocalMessageGroupReplica =
       options.resolveLocalMessageGroupReplica || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway ||
+      createControlPlaneRuntimeBundle({
+        nodeId: this.nodeId,
+        cdcIntegrationService: this.cdcIntegrationService,
+        systemTableCache: this.systemTableCache,
+      }).controlPlaneSystemTableGateway;
     this.messageGroupServiceRowOwner =
       options.messageGroupServiceRowOwner ||
       new MessageGroupServiceRowOwner({
-        systemTableWriter: this.cdcIntegrationService,
+        systemTableWriter: this.controlPlaneSystemTableGateway,
       });
     this.messageRouter = options.messageRouter || null;
     this.rpcClient = null;
@@ -555,21 +561,24 @@ class MessageGroupServiceHandler extends EventEmitter {
     reason,
   }) {
     try {
-      await this.messageGroupServiceRowOwner.updateReplicaStatus({
-        groupId,
-        replicaId,
-        nodeId: this.nodeId,
-        service: this.resolveActiveReplicaService(replicaId),
-        status: SERVICE_STATUS.STOPPED,
-      });
+      const stoppedRow = await this.messageGroupServiceRowOwner
+        .updateReplicaStatus({
+          groupId,
+          replicaId,
+          nodeId: this.nodeId,
+          service: this.resolveActiveReplicaService(replicaId),
+          status: SERVICE_STATUS.STOPPED,
+        });
       await this.stopMessageGroupReplica({
         groupId,
         replicaId,
         reason,
       });
       await this.messageGroupServiceRowOwner.removeReplica({
+        groupId,
         replicaId,
         nodeId: this.nodeId,
+        stoppedRow,
       });
 
       this.localReplicas.set(replicaId, {

@@ -1,9 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   TEST_CONFIG,
@@ -21,7 +21,7 @@ test('CDC debug - single UPDATE propagation timing', {timeout: 30000}, async (t)
   const seedNodeId = 'cdc-debug-000001';
   const seedWsPort = ports.getPort();
 
-  const bootstrapService = new BootstrapService({
+  const bootstrapService = await createVirginSeedBootstrapService({
     nodeId: seedNodeId,
     nodeAddress: `ws://localhost:${seedWsPort}`,
     wsPort: seedWsPort,

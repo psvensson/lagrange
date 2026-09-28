@@ -1,9 +1,40 @@
 const SERVICE_TYPE = Object.freeze({
   PARTITION: 'partition',
+  PARTITION_CLEANUP: 'partition_cleanup',
   MESSAGE_GROUP: 'message_group',
   MESSAGE_GROUP_REPLICA: 'message_group_replica',
   WASM_SERVICE: 'wasm_service',
 });
+
+const SERVICE_IDENTITY_ROW_KIND = Object.freeze({
+  ABSENT: 'absent',
+  CLEANUP_OWNERSHIP: 'cleanup_ownership',
+  LIVE_PARTITION: 'live_partition',
+  OTHER_SERVICE: 'other_service',
+});
+
+function classifyServiceIdentityRow(row) {
+  if (!row || typeof row !== 'object') {
+    return SERVICE_IDENTITY_ROW_KIND.ABSENT;
+  }
+  if (row.service_type === SERVICE_TYPE.PARTITION_CLEANUP) {
+    return SERVICE_IDENTITY_ROW_KIND.CLEANUP_OWNERSHIP;
+  }
+  if (row.service_type === SERVICE_TYPE.PARTITION) {
+    return SERVICE_IDENTITY_ROW_KIND.LIVE_PARTITION;
+  }
+  return SERVICE_IDENTITY_ROW_KIND.OTHER_SERVICE;
+}
+
+function isPartitionCleanupServiceRow(row) {
+  return classifyServiceIdentityRow(row) ===
+    SERVICE_IDENTITY_ROW_KIND.CLEANUP_OWNERSHIP;
+}
+
+function isLivePartitionServiceRow(row) {
+  return classifyServiceIdentityRow(row) ===
+    SERVICE_IDENTITY_ROW_KIND.LIVE_PARTITION;
+}
 
 const SERVICE_PROFILE = Object.freeze({
   DEFAULT: 'default',
@@ -39,6 +70,8 @@ const SERVICE_PARTITION_ACCESS_KIND = Object.freeze({
 
 export {
   SERVICE_TYPE,
+  isLivePartitionServiceRow,
+  isPartitionCleanupServiceRow,
   SERVICE_PROFILE,
   SERVICE_READ_LOCALITY,
   SERVICE_PARTITION_ACCESS_COL,

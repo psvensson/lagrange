@@ -18,14 +18,18 @@ import {LogsTableService} from '../../../src/logging/logs-table-service.js';
 import {NodeService} from '../../../src/node/node-service.js';
 import {AddressManager} from '../../../src/address/address-manager.js';
 import {ServiceThreadManager} from '../../../src/threading/service-thread-manager.js';
+import {BootstrapService} from '../../../src/bootstrap/bootstrap-service.js';
+import {NodeJoiningService} from '../../../src/bootstrap/node-joining-service.js';
+import {readSeedStartupStorageAdmission} from
+  '../../../src/bootstrap/seed-startup-storage-admission.js';
 import {
   clearRegisteredControlPlaneSystemTableGateway,
 } from '../../../src/control-plane/control-plane-gateway-registry.js';
 import {createPortAllocator} from '../../../src/test-helpers/port-allocator.js';
 import {URL} from 'url';
-import {mkdtempSync} from 'fs';
+import {mkdirSync, mkdtempSync, rmSync} from 'fs';
 import {tmpdir} from 'os';
-import {join} from 'path';
+import {join, resolve} from 'path';
 
 /**
  * Per-test-file allocator to avoid cross-file port collisions when tests
@@ -36,6 +40,24 @@ const FILE_SCHEME_PREFIX = 'file://';
 const TEST_FILE_PATTERN = /((?:file:\/\/)?[^\s()]+\.test\.js)/;
 const DEFAULT_TEST_FILE_ID = process.argv[1] || import.meta.url;
 const testFilePortAllocators = new Map();
+
+export const EMPTY_REPLICA_STATE_MACHINE_HANDLE = Object.freeze({
+  stopTimeoutChecker() {},
+  async clear() {},
+});
+
+/**
+ * Install the minimum lifecycle-owner handle required by phase-only seed
+ * fixtures. These fixtures replace the registration phase itself, but the
+ * workflow still enforces that a lifecycle owner exists before crossing the
+ * registration checkpoint.
+ * @param {BootstrapService} bootstrap Phase-only bootstrap fixture.
+ * @return {BootstrapService} The same fixture for fluent setup.
+ */
+export function installMinimumSeedBootstrapLifecycleFixture(bootstrap) {
+  bootstrap.replicaStateMachine = EMPTY_REPLICA_STATE_MACHINE_HANDLE;
+  return bootstrap;
+}
 
 function normalizeTestFileId(candidate) {
   if (typeof candidate !== 'string' || candidate.length === 0) {
@@ -168,6 +190,90 @@ export function initializeTestEnvironment(options = {}) {
   // Initialize logging at error level to reduce noise
   const logging = LoggingService.getInstance();
   logging.initialize({level: 'error'});
+}
+
+function assertMatchingVirginSeedDataDirectories(dataDir, managerDir) {
+  if (typeof dataDir === 'string' && managerDir &&
+      resolve(dataDir) !== resolve(managerDir)) {
+    throw new Error(
+      'Virgin seed fixture dataDir must match its data-directory manager',
+    );
+  }
+}
+
+function resolveVirginSeedDataDirectory(options, suppliedManagerDir) {
+  const suppliedDataDir = typeof options.dataDir === 'string' ?
+    options.dataDir : null;
+  return {
+    dataDir: suppliedDataDir || suppliedManagerDir ||
+      mkdtempSync(join(tmpdir(), 'lagrange-virgin-seed-')),
+    ownsDataDir: suppliedDataDir === null && suppliedManagerDir === null,
+  };
+}
+
+function createVirginSeedDataDirectoryManager(suppliedManager, dataDir) {
+  return suppliedManager || {
+    isInitialized: () => true,
+    getDataDir: () => dataDir,
+    getPartitionsDir: () => join(dataDir, 'partitions'),
+    ensurePartitionDirExists(partitionId) {
+      mkdirSync(join(dataDir, 'partitions', partitionId), {recursive: true});
+    },
+    getPartitionDbPath(partitionId, replicaId) {
+      return join(dataDir, 'partitions', partitionId, `${replicaId}.db`);
+    },
+  };
+}
+
+function bindOwnedVirginSeedDataDirectoryCleanup(bootstrap, dataDir) {
+  const shutdown = bootstrap.shutdown.bind(bootstrap);
+  bootstrap.shutdown = async (...args) => {
+    try {
+      return await shutdown(...args);
+    } finally {
+      rmSync(dataDir, {recursive: true, force: true});
+    }
+  };
+}
+
+/**
+ * Construct a seed bootstrap fixture only after the production durable
+ * SERVICES-identity reader positively proves a virgin data directory.
+ * Direct BootstrapService construction deliberately remains fail closed.
+ * @param {Object} options BootstrapService options.
+ * @return {Promise<BootstrapService>} Admitted bootstrap fixture.
+ */
+export async function createVirginSeedBootstrapService(options = {}) {
+  const suppliedManager = options.dataDirectoryManager;
+  const suppliedManagerDir = suppliedManager?.isInitialized?.() === true ?
+    suppliedManager.getDataDir() : null;
+  assertMatchingVirginSeedDataDirectories(options.dataDir, suppliedManagerDir);
+  const {dataDir, ownsDataDir} = resolveVirginSeedDataDirectory(
+    options,
+    suppliedManagerDir,
+  );
+  const manager = createVirginSeedDataDirectoryManager(
+    suppliedManager,
+    dataDir,
+  );
+  const startupServicesAdmission = await readSeedStartupStorageAdmission(
+    dataDir,
+    (acquisition) => acquisition,
+  );
+  if (startupServicesAdmission.empty !== true) {
+    throw new Error('Virgin seed fixture found durable SERVICES identity');
+  }
+  const bootstrap = new BootstrapService({
+    ...options,
+    bootIncarnation: options.bootIncarnation ?? 1,
+    dataDir,
+    dataDirectoryManager: manager,
+    startupServicesAdmission,
+  });
+  if (ownsDataDir) {
+    bindOwnedVirginSeedDataDirectoryCleanup(bootstrap, dataDir);
+  }
+  return bootstrap;
 }
 
 /**
@@ -569,6 +675,82 @@ export async function gracefulJoiningShutdown(joiningService) {
       // Best-effort cleanup only.
     }
   }
+}
+
+/**
+ * Own the physical storage identity of in-process joining-node fixtures.
+ * A logical node keeps one canonical directory across retry attempts; a
+ * distinct logical node cannot accidentally share it.
+ * @return {Object} Joining-node fixture owner.
+ */
+export function createJoiningNodeFixtureOwner() {
+  const directoryByNode = new Map();
+  const nodeByDirectory = new Map();
+  const ownedDirectories = new Set();
+  const services = new Set();
+
+  function resolveNodeDirectory(nodeId, explicitDataDir) {
+    if (typeof nodeId !== 'string' || nodeId.length === 0) {
+      throw new Error('Joining-node fixture requires nodeId');
+    }
+    const existing = directoryByNode.get(nodeId);
+    const explicit = typeof explicitDataDir === 'string' &&
+      explicitDataDir.length > 0 ? resolve(explicitDataDir) : null;
+    if (existing) {
+      if (explicit && explicit !== existing) {
+        throw new Error('Joining-node retry must reuse its canonical dataDir');
+      }
+      return existing;
+    }
+    const dataDir = explicit || resolve(mkdtempSync(
+      join(tmpdir(), 'lagrange-joining-node-'),
+    ));
+    const incumbentNodeId = nodeByDirectory.get(dataDir);
+    if (incumbentNodeId && incumbentNodeId !== nodeId) {
+      throw new Error('Distinct joining nodes cannot share a physical dataDir');
+    }
+    directoryByNode.set(nodeId, dataDir);
+    nodeByDirectory.set(dataDir, nodeId);
+    if (!explicit) ownedDirectories.add(dataDir);
+    return dataDir;
+  }
+
+  return {
+    create(options = {}) {
+      const dataDir = resolveNodeDirectory(options.nodeId, options.dataDir);
+      const service = new NodeJoiningService({
+        ...options,
+        bootIncarnation: options.bootIncarnation ?? 1,
+        dataDir,
+      });
+      services.add(service);
+      return service;
+    },
+    getDataDir(nodeId) {
+      return directoryByNode.get(nodeId) || null;
+    },
+    assertDistinctNodePaths() {
+      if (new Set(directoryByNode.values()).size !== directoryByNode.size) {
+        throw new Error('Joining-node fixture paths are not unique');
+      }
+      return true;
+    },
+    async shutdownAttempt(service) {
+      if (!services.has(service)) return;
+      services.delete(service);
+      await gracefulJoiningShutdown(service);
+    },
+    async shutdownAll() {
+      for (const service of [...services].reverse()) {
+        await gracefulJoiningShutdown(service);
+      }
+      services.clear();
+      for (const dataDir of ownedDirectories) {
+        rmSync(dataDir, {recursive: true, force: true});
+      }
+      ownedDirectories.clear();
+    },
+  };
 }
 
 /**
