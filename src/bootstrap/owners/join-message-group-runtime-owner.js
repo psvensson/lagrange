@@ -164,6 +164,17 @@ class JoinMessageGroupRuntimeOwner {
       raftTerm: messageGroup.raft?.term,
     });
 
+    // MOVE_REPLICA uses the assignment-token handoff owner to transfer the
+    // canonical identity before activation. This is registration, not the
+    // activation write: activation later performs an exact STOPPED -> ACTIVE
+    // CAS using the row returned by this handoff.
+    await this.delegates.registerMessageGroupService(
+      groupId,
+      replicaId,
+      messageGroup,
+      {status: SERVICE_STATUS.STOPPED},
+    );
+
     logger.info(JOINING_LOG_MSG.JOINED_EXISTING_GROUP, {
       nodeId: this.nodeId,
       groupId,

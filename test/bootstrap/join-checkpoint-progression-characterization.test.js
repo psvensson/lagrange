@@ -192,6 +192,7 @@ test('Join checkpoint progression - steps execute in canonical order',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       seedNodeAddress: TEST_SEED_ADDRESS,
@@ -232,6 +233,7 @@ test('Join checkpoint progression - session advances through all checkpoints',
     const coordinator = new JoinCoordinator({joinSessionStore: store});
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       seedNodeAddress: TEST_SEED_ADDRESS,
@@ -270,6 +272,7 @@ test('Join checkpoint progression - resume skips completed checkpoints',
     const coordinator = new JoinCoordinator({joinSessionStore: store});
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       seedNodeAddress: TEST_SEED_ADDRESS,
@@ -406,6 +409,7 @@ test('Join checkpoint progression - SEED_CONTACTED step runs plan phase 0',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       seedNodeAddress: TEST_SEED_ADDRESS,
@@ -443,6 +447,7 @@ test('Join checkpoint progression - MEMBERSHIP_WRITTEN step runs plan phase 4',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       seedNodeAddress: TEST_SEED_ADDRESS,
@@ -496,6 +501,7 @@ async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
@@ -561,6 +567,7 @@ async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
@@ -628,6 +635,7 @@ async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
@@ -683,6 +691,7 @@ async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
@@ -729,6 +738,7 @@ async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
@@ -776,6 +786,7 @@ async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
@@ -822,6 +833,7 @@ async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,

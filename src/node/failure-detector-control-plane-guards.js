@@ -1,4 +1,21 @@
 
+const REPLICA_IDENTITY_FIELDS = Object.freeze([
+  'service_type',
+  'partition_id',
+  'group_id',
+  'replica_id',
+  'node_id',
+  'status',
+]);
+
+function copyObservedStringFields(target, source, fields) {
+  for (const field of fields) {
+    if (typeof source?.[field] === 'string' && source[field].length > 0) {
+      target[field] = source[field];
+    }
+  }
+}
+
 function buildObservedNodeWhereClause(node) {
   const whereClause = {
     node_id: node.node_id,
@@ -22,18 +39,7 @@ function buildObservedReplicaWhereClause(replica) {
   const whereClause = {
     service_id: replica.service_id,
   };
-  if (
-    typeof replica?.node_id === 'string' &&
-    replica.node_id.length > 0
-  ) {
-    whereClause.node_id = replica.node_id;
-  }
-  if (
-    typeof replica?.status === 'string' &&
-    replica.status.length > 0
-  ) {
-    whereClause.status = replica.status;
-  }
+  copyObservedStringFields(whereClause, replica, REPLICA_IDENTITY_FIELDS);
   if (Number.isFinite(replica?.updated_at)) {
     whereClause.updated_at = replica.updated_at;
   }

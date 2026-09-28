@@ -137,6 +137,7 @@ function createPartitionServiceTable(service) {
     `${quoteSqliteIdentifier(service.tableName)} (${columns})`;
   service.db.exec(sql);
   ensureNodesTableColumns(service);
+  service.ensureServicesTableColumns();
   service.ensureTablesTableColumns();
   service.ensureMessageGroupsTableColumns();
   service.ensurePartitionsTableColumns();

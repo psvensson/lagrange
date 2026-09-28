@@ -68,7 +68,12 @@ const TARGET_THRESHOLD = 12;
 // readAllNodeServiceRows drops below the threshold).
 // 2026-09-26 (integration 2): the two merged at the lower (1805), then
 // tightened to 1804 on the checker's hint.
-const BASELINE_COUNT = 1804;
+// 2026-09-28: tightened 1804 -> 1797 on the checker's hint (node lifecycle
+// owner: the dispatch node-state queue, deferred retry and in-write
+// follow-up branches deleted).
+// 2026-09-29: tightened 1797 -> 1796 on the checker's hint (census walker
+// split into named node predicates).
+const BASELINE_COUNT = 1796;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

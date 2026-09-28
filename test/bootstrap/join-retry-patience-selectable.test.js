@@ -34,6 +34,7 @@ function createLeaderMetadataIncompleteError() {
 
 function createService(attemptBudgetMode) {
   return new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: `joining-node-${attemptBudgetMode}`,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,

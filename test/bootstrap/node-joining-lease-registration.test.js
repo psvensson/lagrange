@@ -86,6 +86,7 @@ test('registerNodeInCluster defers ready_lease_expires_at until ready signaling'
       nodeId: 'joining-test-node',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
+      bootIncarnation: 9,
     });
 
     service.cdcIntegrationService = mockCdcIntegrationService;
@@ -107,5 +108,10 @@ test('registerNodeInCluster defers ready_lease_expires_at until ready signaling'
       nodeUpsert.rowData.ready_lease_expires_at,
       undefined,
       'join registration should not carry a ready lease before the ready checkpoint',
+    );
+    t.equal(
+      nodeUpsert.rowData.boot_incarnation,
+      9,
+      'join registration binds the canonical boot identity before READY',
     );
   });

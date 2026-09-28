@@ -38,6 +38,9 @@ Phase 2: Message Groups
 └── Elections deferred until Phase 3 complete
 
 Phase 3: Partitions
+├── Prove storage admission before every partition open
+│   ├── a truly virgin data directory may found the initial generation
+│   └── persisted/reseed opens require an exact live durable services row
 ├── Create partition services for all system tables
 ├── Each partition is a 3-replica Raft group
 ├── Start elections for message groups and partitions
@@ -74,6 +77,22 @@ Phase 5: Cache Hydration
 7. Storage Budget -> Resolve and persist node storage budget via NodeStorageBudgetService
 8. Ready -> Node is ready to serve queries
 ```
+
+Before request admission, startup takes one owner-required snapshot of local
+`partition_cleanup` markers. The admission barrier waits for that snapshot, not
+for the full orphan sweep. Only exact tokens present in the frozen snapshot may
+resume cleanup; disk-discovered candidates use INSERT-only acquisition on the
+same `services.service_id` key used by live creation. This preserves asynchronous
+startup cleanup without allowing a later sweeper to borrow another owner's
+token.
+
+Startup enforces one live OS process per canonical data directory. Immediately
+after directory initialization and before provenance, rejoin, or replica work,
+the process holds an exclusive transaction in the directory-local ownership
+database. A second process fails closed with `DATA_DIRECTORY_ALREADY_OWNED`;
+startup failure, abort, dry-run completion, normal shutdown, and process death
+release the kernel-backed lock. Durable key arbitration separately handles
+independent cluster owners racing the same logical identity.
 
 Step 4 consumes the canonical control-plane readiness and publication
 projection. A reconciled node is not treated as published until the durable row

@@ -522,6 +522,7 @@ test(
       DURABLE_PEER_B,
     ]);
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
       seedNodeAddress: seedContactUrls[0],

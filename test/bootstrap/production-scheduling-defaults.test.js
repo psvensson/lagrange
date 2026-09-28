@@ -202,6 +202,7 @@ const settle = (delayMs) =>
  */
 function productionBootstrapService() {
   return new BootstrapService({
+    bootIncarnation: 1,
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT,
     nodeService: new NodeService(),
   });
@@ -215,6 +216,7 @@ function productionBootstrapService() {
  */
 function suppliedClockBootstrapService(clock) {
   return new BootstrapService({
+    bootIncarnation: 1,
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT,
     nodeService: new NodeService({timeSource: clock}),
   });

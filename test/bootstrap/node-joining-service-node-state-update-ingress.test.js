@@ -63,6 +63,7 @@ test('NodeJoiningService - retry diagnostics include attempt, elapsed, code, and
     const debugEvents = [];
     let attempts = 0;
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440103',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -125,6 +126,7 @@ test('NodeJoiningService - resolves control plane target from kernel bootstrap i
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-1',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -165,6 +167,7 @@ test('NodeJoiningService - uses kernel bootstrap ingress when no local target ex
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-2',
       nodeAddress: 'ws://localhost:9091',
       seedNodeAddress: 'http://localhost:8080',
@@ -198,6 +201,7 @@ test('NodeJoiningService - does not self-target move-replica heartbeats ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-3',
     nodeAddress: 'ws://localhost:9092',
     seedNodeAddress: 'http://localhost:8080',
@@ -256,6 +260,7 @@ test('NodeJoiningService - accepts canonical message-group leader metadata witho
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-canonical-mg-leader',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -298,6 +303,7 @@ test('NodeJoiningService - falls back to leader-role witness when message-group 
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-leader-role-fallback',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -337,6 +343,7 @@ test('NodeJoiningService - prefers local kernel ingress for NODE_STATE_UPDATE',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-local',
       nodeAddress: 'ws://localhost:9093',
       seedNodeAddress: 'http://localhost:8080',
@@ -414,6 +421,7 @@ test('NodeJoiningService - resolves ordered control-plane target candidates ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-candidates',
     nodeAddress: 'ws://localhost:9094',
     seedNodeAddress: 'http://localhost:8080',
@@ -467,6 +475,7 @@ test('NodeJoiningService - NODE_STATE_UPDATE prefers local non-leader ingress ' 
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-local-follower',
     nodeAddress: 'ws://localhost:90941',
     seedNodeAddress: 'http://localhost:8080',
@@ -523,6 +532,7 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE prefers remote ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-ready-heartbeat',
     nodeAddress: 'ws://localhost:909411',
     seedNodeAddress: 'http://localhost:8080',
@@ -576,6 +586,7 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE falls back to ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-ready-heartbeat-optimistic-remote',
     nodeAddress: 'ws://localhost:909412',
     seedNodeAddress: 'http://localhost:8080',
@@ -631,6 +642,7 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE falls back to ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-ready-heartbeat-local-fallback',
     nodeAddress: 'ws://localhost:909412',
     seedNodeAddress: 'http://localhost:8080',
@@ -697,6 +709,7 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE keeps local ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-ready-heartbeat-recovery-fallback',
     nodeAddress: 'ws://localhost:909413',
     seedNodeAddress: 'http://localhost:8080',
@@ -804,10 +817,13 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE keeps local ' +
     ],
     'ready heartbeat routing should keep the local ingress fallback when recovery-eligible routing remains open',
   );
-  t.same(
-    routingDecisionDimensions,
-    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE],
-    'node-state update routing should consult the recovery-eligible routing dimension',
+  t.ok(
+    routingDecisionDimensions.length > 0 &&
+      routingDecisionDimensions.every((dimension) =>
+        dimension ===
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      ),
+    'node-state update routing and retry re-resolution should use only the recovery-eligible routing dimension',
   );
 });
 
@@ -817,6 +833,7 @@ test('NodeJoiningService - query transport selection uses initialized local ' +
   t.plan(3);
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-query-transport-relay',
     nodeAddress: 'ws://localhost:90942',
     seedNodeAddress: 'http://localhost:8080',
@@ -860,6 +877,7 @@ test('NodeJoiningService - connect websocket phase wires the dedicated query ' +
   t.plan(3);
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-query-transport-phase-wiring',
     nodeAddress: 'ws://localhost:90943',
     seedNodeAddress: 'http://localhost:8080',
@@ -902,6 +920,7 @@ test('NodeJoiningService - excludes disconnected control-plane ingress candidate
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-reconnectable-target',
       nodeAddress: 'ws://localhost:90945',
       seedNodeAddress: 'http://localhost:8080',
@@ -950,6 +969,7 @@ test('NodeJoiningService - retries NODE_STATE_UPDATE on stale control-plane targ
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-retry',
       nodeAddress: 'ws://localhost:9095',
       seedNodeAddress: 'http://localhost:8080',
@@ -996,11 +1016,55 @@ test('NodeJoiningService - retries NODE_STATE_UPDATE on stale control-plane targ
     );
   });
 
+test('NodeJoiningService - re-resolves ingress after the only target moves',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      bootIncarnation: 1,
+      nodeId: 'joining-node-moving-owner',
+      nodeAddress: 'ws://localhost:90951',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+    const staleTarget = 'seed-node-1/message-group/mg-1-r2';
+    const currentTarget = 'seed-node-2/message-group/mg-1-r1';
+    let staleInvalidated = false;
+    const deliveries = [];
+    service.controlPlaneKernelIngress = {
+      resolveNodeStateUpdateTargetCandidates() {
+        return staleInvalidated ? [currentTarget] : [staleTarget];
+      },
+      invalidateTarget(targetAddress) {
+        if (targetAddress === staleTarget) staleInvalidated = true;
+      },
+      noteSuccessfulTarget() {},
+    };
+    service.messageRouter = {
+      async deliver(targetAddress) {
+        deliveries.push(targetAddress);
+        return targetAddress === staleTarget ? {
+          acknowledged: false,
+          noHandler: true,
+          error: `No handler registered for address ${staleTarget}`,
+        } : {acknowledged: true};
+      },
+    };
+
+    await service.sendControlPlaneNodeStateUpdate({state: STATE.READY});
+
+    t.same(
+      deliveries,
+      [staleTarget, currentTarget],
+      'retry resolves the current authority instead of replaying a stale address',
+    );
+  });
+
 test('NodeJoiningService - reuses confirmed control-plane ingress after stale-target retry',
   async (t) => {
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-confirmed-ingress',
       nodeAddress: 'ws://localhost:90955',
       seedNodeAddress: 'http://localhost:8080',
@@ -1067,6 +1131,7 @@ test('NodeJoiningService - retries CONNECTED NODE_STATE_UPDATE once on the same 
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-same-target-retry',
       nodeAddress: 'ws://localhost:909551',
       seedNodeAddress: 'http://localhost:8080',
@@ -1124,6 +1189,7 @@ test('NodeJoiningService - retries heartbeat-recovery NODE_STATE_UPDATE on alter
 
     let nowMs = 1000;
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-heartbeat-recovery',
       nodeAddress: 'ws://localhost:909552',
       seedNodeAddress: 'http://localhost:8080',
@@ -1220,6 +1286,7 @@ test('NodeJoiningService - retries heartbeat-recovery NODE_STATE_UPDATE on stale
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-heartbeat-no-handler-retry',
       nodeAddress: 'ws://localhost:909553',
       seedNodeAddress: 'http://localhost:8080',
