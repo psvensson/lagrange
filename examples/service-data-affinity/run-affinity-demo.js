@@ -21,13 +21,13 @@
  *      confidence-adjusted top-10 reference result.
  *   3. A REAL runtime service is started on the internal placement
  *      substrate: the harness writes a service_definitions row directly
- *      (runtime_kind native_js, runtime_ref sql-query-loop-runtime)
+ *      (the SQL engine runtime kind and sql-query-loop-runtime)
  *      with read_locality='any' (routing choice, not an affinity switch).
  *      This direct write is demo scaffolding against a migration-input
  *      table, not the user deployment surface; user deployment is
  *      declared through Bindings (architecture/minimal-deployment-
  *      surface.md), where replica capacity is system-policy output. A
- *      native_js query-loop module has no component export, so it is
+ *      kernel-internal query-loop module has no component export, so it is
  *      not expressible as a Binding; the demo pins its replica shape
  *      only to make the shard/merge arithmetic reproducible.
  *      Stable leased slot 1 reduces
@@ -57,6 +57,7 @@ import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
+import {SQL_ENGINE_RUNTIME_KIND} from '../../src/constants/runtime.js';
 import {
   createRatingsTableWithRetry,
   loadRatingsIntoLagrange,
@@ -535,7 +536,7 @@ async function deployQueryLoopService() {
     sqlQuote('sql-query-loop'), sqlQuote('strong'), sqlQuote('strong'),
     sqlQuote('any'), String(SERVICE_REPLICA_COUNT),
     sqlQuote('websocket'), sqlQuote('{}'),
-    '500', sqlQuote('native_js'), sqlQuote('sql-query-loop-runtime'),
+    '500', sqlQuote(SQL_ENGINE_RUNTIME_KIND), sqlQuote('sql-query-loop-runtime'),
     sqlQuote(runtimeConfig), sqlQuote('active'), String(now), String(now),
   ];
   await queryRows(
