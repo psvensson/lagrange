@@ -149,7 +149,7 @@ Key ownership rules:
 - `CallbackExecutionHost` is the single callback invocation surface; no
   parallel callback executor path exists
 - `CallbackRuntimeDriverRegistry` maps `runtime_kind` to callback drivers
-  (`native_js`, `wasm_component`, gated `oci_container`)
+  (the kernel-internal provider, `wasm_component`, gated `oci_container`)
 - Callback contexts expose the same bounded primitives and nested-call
   guardrails as stage runtime contexts
 - Budget enforcement, cancellation propagation, lineage dedupe, and telemetry
@@ -162,7 +162,7 @@ Callback runtime selection reuses the unified runtime ownership model defined
 in this document:
 
 - `CallbackRuntimeDriverRegistry` uses the same `RUNTIME_KIND` enum
-  (`native_js`, `wasm_component`, `oci_container`) as `Runtime_Driver_Registry`
+  (the kernel-internal provider, `wasm_component`, `oci_container`) as `Runtime_Driver_Registry`
 - `CALLBACK_RUNTIME_KIND` is an alias for `RUNTIME_KIND` (same object reference)
 - No parallel lifecycle owner exists for callback execution —
   `CallbackExecutionHost` has only `execute()`, not prepare/start/stop/health
