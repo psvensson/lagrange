@@ -186,10 +186,10 @@ test('init exposes one code-first authoring model', async (t) => {
 test('help documents one project-owned service workflow', async () => {
   const help = captureHelp();
   assert.match(help, /init <directory>/);
-  assert.notMatch(help, /--oci/);
+  assert.doesNotMatch(help, /--oci/);
   assert.match(help, /Create a code-first service project/);
   assert.match(help, /deploy <project-directory> --idempotency-key <key>/);
-  assert.notMatch(help, /--layout/);
+  assert.doesNotMatch(help, /--layout/);
 });
 
 function runInitThroughRouter(args) {
