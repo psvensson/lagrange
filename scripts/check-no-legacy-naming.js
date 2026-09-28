@@ -31,6 +31,8 @@ const RETIRED_SERVICE_SURFACE_TOKENS = Object.freeze([
   'native_js',
   'js_wasm_component_v1',
   'JavaScript-envelope',
+  'legacy JavaScript',
+  'legacy JS',
   '.lagrange/oci',
 ]);
 
