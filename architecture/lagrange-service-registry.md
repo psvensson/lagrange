@@ -113,7 +113,7 @@ At present:
 
 - `wasm_component` supports external installation and genuine WASI Cell
   execution;
-- `native_js` is kernel-internal; and
+- the kernel-internal provider is kernel-internal; and
 - `oci_container` supports descriptor validation and an in-memory lifecycle
   scaffold, but not real container activation.
 

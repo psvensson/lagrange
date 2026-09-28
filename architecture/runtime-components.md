@@ -252,7 +252,7 @@ No other source file may call `applySystemTableChange` directly.
 - Single owner for runtime `prepare/start/stop/health` orchestration
 - Coordinates endpoint intent registration through one write path
 - Coordinates operation lifecycle transitions through SQL/CDC-owned records
-- Shared owner across `native_js`, `wasm_component`, and `oci_container`
+- Shared owner across the kernel-internal provider, `wasm_component`, and `oci_container`
 - Injects service-scoped query executors into replica contexts during `start()`
   so service Cells can query tables through the standard SQL execution path.
   The query executor factory is owned by `SQLQueryEngine` and wired via
@@ -332,7 +332,7 @@ No other source file may call `applySystemTableChange` directly.
   ingress (`META_SERVICE_ID.POSTGRES_WIRE = 'sys-postgres-wire'`)
 - Provisioned during seed bootstrap alongside `sys-admin-meta` and
   `sys-wasm-meta` via `MetaServiceFactory`
-- `service_type = runtime_service`, `runtime_kind = native_js`,
+- `service_type = runtime_service`, `runtime_kind = kernel-internal provider`,
   `runtime_ref = postgres-wire-runtime`
   (`META_SERVICE_RUNTIME_REF.POSTGRES_WIRE`)
 - Cluster-global `replica_count` semantics: the rebalancer treats

@@ -229,7 +229,7 @@ The current repository contains:
 - multi-node integration tests for host-local row reads and bounded shard
   dispatch; and
 - a multi-process MovieLens comparison whose service phase uses an internal
-  `native_js` query-loop runtime.
+  the kernel-internal runtime query-loop runtime.
 
 It does not yet contain a multi-node, public code-first WASM benchmark
 compared against a controlled conventional deployment. Treat performance

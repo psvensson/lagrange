@@ -68,6 +68,13 @@ See [partitioning](architecture/process-partitioning.md) and
 A Lagrange service is compiled to a **WASM component**: portable executable
 code with explicit interfaces for what it provides and may call.
 
+The **service API is runtime-neutral**. Handlers, distributed operations,
+Bindings, `call()`, routing, budgets, retries, and result semantics belong to
+Lagrange rather than to a particular execution provider. WASM is the supported
+provider today. Planned managed OCI execution uses the same service API and
+Artifact / Binding / Cell model; it changes packaging and isolation, not the
+programming model.
+
 In source, an endpoint and its data-heavy operation can live together.
 This abbreviated example declares the operation and calls it from a handler:
 

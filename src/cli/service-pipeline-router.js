@@ -40,7 +40,6 @@ const PIPELINE_FLAG = Object.freeze({
 });
 const MAXIMUM_IDEMPOTENCY_KEY_LENGTH = 256;
 const PIPELINE_USAGE_MESSAGE = Object.freeze({
-  DEPLOY_LAYOUT_REQUIRED: 'deploy requires --layout <oci-layout-path>',
   DIRECTORY_REQUIRED: 'requires exactly one project directory',
   IDEMPOTENCY_KEY_INVALID:
     '--idempotency-key must contain 1 to 256 characters',
@@ -109,10 +108,6 @@ function parseDeployFlags(command, args, parsed) {
       throw new ServicePipelineUsageError(
         `${PIPELINE_USAGE_MESSAGE.UNKNOWN_OPTION}: ${token}`);
     }
-  }
-  if (typeof parsed.layoutPath !== 'string') {
-    throw new ServicePipelineUsageError(
-      PIPELINE_USAGE_MESSAGE.DEPLOY_LAYOUT_REQUIRED);
   }
   if (typeof parsed.idempotencyKey !== 'string' ||
       parsed.idempotencyKey.trim().length === 0 ||

@@ -23,9 +23,6 @@ const DISPLAY_LABEL = Object.freeze({
     'Descriptor and in-memory lifecycle scaffold only',
   finite_numbers: 'Finite numbers',
   genuine_wasi_component_cell: 'Genuine WASI component Cell',
-  internal_supported: 'Internal supported path',
-  javascript_envelope_rehearsal: 'Legacy JavaScript-envelope rehearsal',
-  kernel_internal: 'Kernel-internal only',
   literal_single_table_select_fixed_at_deployment:
     'Literal single-table SELECT fixed at deployment',
   plain_websocket_trusted_network_only:
@@ -40,7 +37,7 @@ const DISPLAY_LABEL = Object.freeze({
   must_be_disjoint_across_shards: 'Must be disjoint across shards',
   single_node_two_partition_functional_proof:
     'Single-node, two-partition functional proof',
-  internal_native_js_service_path: 'Internal native_js service path',
+  internal_service_path: 'Internal service-path comparison',
   five_node_certification_window: 'Five-node certification window',
   not_available: 'Not available',
   unsupported: 'Unsupported',
@@ -68,8 +65,7 @@ function renderCurrentCapabilitiesDocument(capabilities, portability) {
   const runtimeRows = Object.entries(portability.runtimes)
     .map(([runtime, contract]) =>
       `| \`${runtime}\` | ${displayCapability(contract.externalInstall)} | ` +
-      `${displayCapability(contract.managedExecution)} | ` +
-      `${displayCapability(contract.callbackInvocation)} |`)
+      `${displayCapability(contract.managedExecution)} |`)
     .join('\n');
 
   const lifecycleRows = capabilities.deployment.lifecycleSql
@@ -123,15 +119,17 @@ ${capabilities.productBoundary.dataLocalRequirement}
 The deployment model is [Artifact / Binding / Cell](vocabulary.md#service-deployment-hierarchy).
 Recommended authoring: **${displayCapability(capabilities.deployment.recommendedAuthoring)}**.
 Managed WASM execution: **${displayCapability(portability.runtimes.wasm_component.managedExecution)}**.
-The legacy callback representation in the table below is a JavaScript envelope,
-not a WebAssembly binary or component. It is a separate internal path, not the
-component produced by the public service build.
+
+**One service API:** handlers, distributed operations, Bindings, `call()`,
+routing, budgets, retries, and result semantics are provider-neutral. Runtime
+choice changes execution packaging and isolation, not the service programming
+model. WASM is the supported provider today; managed OCI execution is not yet
+supported.
 
 Binding source kinds are publicly invocable: ${renderList(capabilities.deployment.publicInvocation)}; accepted
 ${renderList(capabilities.deployment.acceptedButNotPubliclyInvocable)} kinds
 may be declared but have no public invocation adapter.
 Managed OCI activation remains unsupported.
-OCI callback invocation remains unsupported.
 
 | Call property | Current state |
 | --- | --- |
@@ -153,12 +151,13 @@ Supported lifecycle SQL:
 
 ${lifecycleRows}
 
-| Runtime | External installation | Managed execution | Callback path |
-| --- | --- | --- | --- |
+| Runtime provider | External installation | Managed execution |
+| --- | --- | --- |
 ${runtimeRows}
 
-The callback column is a legacy/internal execution axis, not an alternative
-public service model. Managed OCI activation remains unsupported.
+Managed OCI activation remains unsupported. Both providers use the same service
+API contract; provider-specific adapters may not redefine routing, retry,
+Binding, or distributed-call semantics.
 
 ## Embedded application sessions
 

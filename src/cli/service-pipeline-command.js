@@ -70,6 +70,7 @@ const ACCESS_POLICY_FILE = 'access-policy.json';
 const DEPLOYMENT_SUBDIRECTORY = 'deployment';
 const JSON_INDENT = 2;
 const TEXT_ENCODING = 'utf8';
+const SHA256_PREFIX = 'sha256:';
 
 // The grammar statements deploy replays; the payloads are the generated
 // records themselves (with the real package id substituted), so the SQL
@@ -95,9 +96,6 @@ const SQL_PARAMETER_SUFFIX = ' $';
 const SERVICE_PIPELINE_MESSAGE = Object.freeze({
   COMPONENTIZE_FAILED:
     'componentize failed (run `lagrange service generate` first): ',
-  DEPLOY_LAYOUT_REQUIRED:
-    'deploy requires the build layout path (run `lagrange service ' +
-    'build` and pass --layout <path>)',
   IDEMPOTENCY_KEY_REQUIRED: '--idempotency-key is required',
   NO_PACKAGE_ID: 'INSTALL SERVICE returned no package_id row',
 });
@@ -312,6 +310,22 @@ async function executeDeployStatement(execute, statement, payload, stage) {
   }
 }
 
+function builtArtifactPath(projectDirectory, manifest) {
+  const digest = manifest?.artifact?.digest;
+  if (typeof digest !== 'string' || !digest.startsWith(SHA256_PREFIX) ||
+      digest.length === SHA256_PREFIX.length) {
+    throw pipelineFailure(
+      SERVICE_PIPELINE_STAGE.DEPLOY,
+      'generated manifest is missing a built artifact digest',
+    );
+  }
+  return path.join(
+    projectDirectory,
+    LAGRANGE_DIRECTORY,
+    digest.slice(SHA256_PREFIX.length),
+  );
+}
+
 async function runDeploy({
   createSqlClient,
   idempotencyKey,
@@ -331,12 +345,9 @@ async function runDeploy({
     deploymentFile(projectDirectory, BINDINGS_FILE), stage);
   const accessPolicies = await readJsonFile(
     deploymentFile(projectDirectory, ACCESS_POLICY_FILE), stage);
-  if (typeof layoutPath !== 'string' || layoutPath.length === 0) {
-    throw pipelineFailure(
-      stage,
-      SERVICE_PIPELINE_MESSAGE.DEPLOY_LAYOUT_REQUIRED,
-    );
-  }
+  const artifactPath =
+    typeof layoutPath === 'string' && layoutPath.length > 0 ?
+      layoutPath : builtArtifactPath(projectDirectory, manifest);
   const sqlClient = createSqlClient();
   const execute = (statement, parameters) =>
     sqlClient.execute(statement, parameters);
@@ -345,7 +356,7 @@ async function runDeploy({
     execute, DEPLOY_SQL.INSTALL, {
       artifact_source: {
         kind: LOCAL_OCI_ARTIFACT_SOURCE_KIND,
-        location: layoutPath,
+        location: artifactPath,
       },
       config: {},
       idempotency_key: idempotencyKey,
