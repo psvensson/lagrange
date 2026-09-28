@@ -20,6 +20,26 @@ formation/lifecycle owners are changing.
   `292b7204334cf47617e675dd9b12bc708b682886` and
   `f673538bbeaa30738d688fb226dbcd90f94014d9`.
 
+## WIP publication status
+
+The normal WIP remote ref is still absent. Three ordinary, non-bypassed
+publication attempts have retained their classification:
+
+1. The first exposed one test-fixture duplication line and led to the
+   behavior-preserving fixture-local binding recorded above.
+2. The second exposed three unused exports and led to their de-export without
+   runtime behavior change.
+3. The third cleared corpus, dependency, unused-export, and file-size gates,
+   then the full static audit failed on cognitive complexity: this WIP head is
+   `162/160`, while exact integration base `75147d7439de82d72de857aadd48c6b0eccf3059`
+   is independently red at `161/160`.
+
+The direct owner work adds one of those violations in the repository mutation
+gateway; removing it would not make a new remote ref publishable while the
+base remains red. Both the inherited ratchet defect and the eventual local
+refactor are recorded for the responsible owner. This paused quest will not
+absorb either merely to make WIP publication green.
+
 ## Direct owner proof
 
 Command:
