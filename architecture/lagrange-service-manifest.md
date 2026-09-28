@@ -23,7 +23,7 @@ The artifact has `type: "oci"`, a non-empty `ref`, a lowercase pinned
 | `wasm_component` | `application/wasm` |
 | `oci_container` | `application/vnd.oci.image.manifest.v1+json` |
 
-`native_js` is kernel-internal and is rejected at external manifest ingress.
+the kernel-internal provider is kernel-internal and is rejected at external manifest ingress.
 Runtime kind and media type must match.
 
 Each export has exactly `name` and `interface`. Export names are unique and use
