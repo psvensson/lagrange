@@ -410,3 +410,6 @@ Lead decisions recorded: keep dormant entries as named debt; null lease reads as
   (ordering-safe per R7 census, but non-exact) and the identity-helper fallback for transports without unregisterExact.
 - Recovery bundle: round8/round8.bundle (+RESTORE.md, SHA256SUMS) at 0a95cb4ec, kept OUT of Git (untracked, sent to the owner as files); disaster recovery only.
 - Tests: 34 files touching RSM / replica-handler-setup / MG create lifecycle 1166/1166; boundary tests 116/116.
+- formation-sim-charged-seed-host.test.js: NOT CONCLUSIVE in the cloud — killed at the 1200 s timeout with no summary
+  (at base 6831054b1 it also ran past 900 s). Move to the lab (tv-dator / lenovo-laptop), exact SHA, no timeout expansion.
+  RSM unit tests (test/node/replica-state-machine*.test.js) 155/155.
