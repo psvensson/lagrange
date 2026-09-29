@@ -43,6 +43,7 @@ const createMinimalHydratedCache = () => ({
 
 test('BootstrapService.verifyCacheHydration fails hard on missing required tables', async (t) => {
   const service = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
   });
@@ -59,6 +60,7 @@ test('BootstrapService.verifyCacheHydration fails hard on missing required table
 test('BootstrapService.phaseCacheHydration blocks mode swap when strict hydration fails',
   async (t) => {
     const service = new BootstrapService({
+      bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       config: {

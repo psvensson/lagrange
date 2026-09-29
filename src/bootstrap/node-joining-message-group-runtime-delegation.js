@@ -9,7 +9,6 @@ const {
   NodeService,
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
-  SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
   UNIFIED_SERVICE_TYPE,
@@ -19,10 +18,6 @@ const {
   formatReplicatedServiceAddress,
   getControlPlaneMessageRequiredTables,
 } = NODE_JOINING_SERVICE_SHARED;
-
-const JOIN_MESSAGE_GROUP_SERVICE_REGISTRATION_OPTION = Object.freeze({
-  PREFER_CONTROL_PLANE_UPSERT: 'preferControlPlaneUpsert',
-});
 
 class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescriptorCoordination {
   async createJoinPartitionReplica(context) {
@@ -308,13 +303,9 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
   async activateMessageGroupServiceRows() {
     return activateMessageGroupServiceRows({
       nodeId: this.nodeId,
-      activateReplica: async ({groupId, replicaId, service}) => {
-        await this.registerMessageGroupService(groupId, replicaId, service, {
-          status: SERVICE_STATUS.ACTIVE,
-          [JOIN_MESSAGE_GROUP_SERVICE_REGISTRATION_OPTION
-            .PREFER_CONTROL_PLANE_UPSERT]: true,
-        });
-      },
+      systemTableWriter: this.createCdcIntegrationService(),
+      registrationEvidenceByReplicaId:
+        this.createMessageGroupPhase.registrationEvidenceByReplicaId,
       messageRouter: this.messageRouter,
       deferTransientFailures: true,
       onDeferredActivation: ({groupId, replicaId, error}) => {
@@ -349,8 +340,8 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     return activatePartitionServiceRows({
       nodeId: this.nodeId,
       systemTableWriter: this.createCdcIntegrationService(),
+      replicaStateMachine: this.replicaStateMachine,
       messageRouter: this.messageRouter,
-      deferTransientFailures: true,
       onDeferredActivation: ({partitionId, replicaId, error}) => {
         this.logger.warn(
           NODE_JOINING_SERVICE_LITERAL.DEFERRING_JOIN_PARTITION_SERVICE_ROW_ACTIVATION,

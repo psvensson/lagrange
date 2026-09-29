@@ -151,13 +151,18 @@ function initializeEnvironment() {
  * A SQL engine over the real SQLite replica_operations partition so the
  * repository's INSERT encodes SQL NULL and its SELECT rehydrates a real
  * NULL, not a JavaScript stand-in. Reads against other system tables
- * (services, nodes) answer empty, as the in-memory harness engine does.
+ * (services, nodes) answer empty, as the in-memory harness engine does;
+ * writes to them are acknowledged as applied.
  */
 function createSqliteQueryEngine(db) {
   return {
     async executeQuery(sql, params = []) {
       if (!sql.includes(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS)) {
-        return {success: true, rows: [], changes: 0};
+        // Other tables are not modelled: reads answer empty, and a write
+        // (e.g. the storage-reservation INSERT OR IGNORE) is acknowledged as
+        // applied rather than reported as a zero-row conflict.
+        const isWrite = /^\s*(INSERT|UPDATE|DELETE)\b/iu.test(sql);
+        return {success: true, rows: [], changes: isWrite ? 1 : 0};
       }
       const statement = db.prepare(sql);
       if (statement.reader) {

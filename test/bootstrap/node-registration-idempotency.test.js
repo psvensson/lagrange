@@ -40,6 +40,8 @@ function createWiredService({
     nodeId,
     nodeAddress,
     seedNodeAddress: 'ws://seed:8000',
+    // Registration stamps this boot's incarnation on the nodes row.
+    bootIncarnation: 1,
   });
   service.cdcIntegrationService = mockCDCService;
   service.sendControlPlaneNodeStateUpdate = async () => {

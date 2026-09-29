@@ -11,12 +11,9 @@ import {
 } from '../diagnostics/formation-owner-attribution.js';
 
 const {
-  CONTROL_PLANE_CONFIG_KEY,
   CONTROL_PLANE_EVENT,
-  ConfigurationManager,
   ControlPlaneMessageType,
   ControlPlaneReadinessService,
-  DEFAULT_READY_LEASE_MS,
   DISPATCH_DEFAULT,
   DISPATCH_ERROR_MSG,
   DISPATCH_LOG_MSG,
@@ -25,8 +22,6 @@ const {
   DISPATCH_SUBSYSTEM,
   EventEmitter,
   LoggingService,
-  MESSAGE_GROUP_CDC_INGRESS_ACTION,
-  NUM,
   OwnerKeyReconcileQueue,
   REBALANCE_COORDINATOR_EVENT,
   RECONCILE_REASON,
@@ -35,7 +30,6 @@ const {
   WORKFLOW_STEP,
   assertCritical,
   createControlPlaneRuntimeBundle,
-  getControlPlaneMessageRequiredTables,
   getControlPlaneMessageCompletionKind,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
@@ -119,22 +113,13 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
     this.dispatchInFlight = new Set();
     this.priorityDispatchInFlight = new Set();
     this.retryInFlightNodes = new Set();
-    this.nodeStateUpdateWatermarks = new Map();
-    // Retained per-node high-water boot incarnation: lets the missing-row
-    // upsert path fence a stale-incarnation writer even when the durable row
-    // (and its boot_incarnation column) is not yet visible to this receiver.
-    this.nodeBootIncarnationWatermarks = new Map();
     this.nodeReadyRetryWatermarks = new Map();
     this.readinessPlanningSnapshotTokenByOwnerKey = new Map();
     this.readinessPlanningSnapshotPendingTokenByOwnerKey = new Map();
     this.dispatchFailureSignaturesByOperationId = new Map();
     this.operationDispatchDeferredRetries = new Map();
     this.directDispatchWakeupsInFlight = new Map();
-    this.nodeStateUpdateDeferredRetries = new Map();
     this.membershipPublicationAckDeferredRetries = new Map();
-    this.nodeStateUpdateRetryStateByNodeId = new Map();
-    this.nodeStateUpdateQueueAssignments = new Map();
-    this.nextNodeStateUpdateQueueIndex = 0;
     this.cacheChangeListener = null;
     this.readinessPlanningSnapshotUnsubscribe = null;
     this.coordinatorOperationCreatedListener = null;
@@ -147,14 +132,9 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       typeof options.clearTimeoutFn === 'function' ?
         options.clearTimeoutFn :
         clearTimeout;
-    const config = ConfigurationManager.getInstance();
-    this.readyLeaseMs =
-      config.get(CONTROL_PLANE_CONFIG_KEY.READY_LEASE_MS) ||
-      DEFAULT_READY_LEASE_MS;
-    this.nodeStateUpdateQueryTimeoutMs = Math.max(
-      1,
-      Math.floor(this.readyLeaseMs / NUM.THREE),
-    );
+    // The one durable node lifecycle owner; NODE_STATE_UPDATE messages are an
+    // ingress adapter into it (never a second publisher).
+    this.nodeLifecyclePublication = options.nodeLifecyclePublication || null;
     this.nodeStateUpdateRetryAfterMs =
       this.normalizeNodeStateUpdateRetryAfterMs(
         options.nodeStateUpdateRetryAfterMs,
@@ -197,24 +177,6 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       },
     );
     this.operationDispatchQueue = this.buildOperationDispatchQueueFacade();
-
-    this.nodeStateUpdateQueueShardCount =
-      this.normalizeNodeStateUpdateQueueShardCount(
-        options.nodeStateUpdateQueueShardCount,
-      );
-    this.nodeStateUpdateQueues = Array.from(
-      {length: this.nodeStateUpdateQueueShardCount},
-      (_unused, shardIndex) => {
-        return new OwnerKeyReconcileQueue({
-          name: this.buildNodeStateUpdateQueueName(shardIndex),
-          reconcileFn: (ownerKey, _reasons, context) =>
-            runRebalancerActivity(() =>
-              this.reconcileNodeStateUpdate(ownerKey, context)),
-        });
-      },
-    );
-    // Keep the first shard exposed for compatibility with existing diagnostics.
-    this.nodeStateUpdateQueue = this.nodeStateUpdateQueues[0];
 
     this.nodeReadyRetryQueue = new OwnerKeyReconcileQueue({
       name: DISPATCH_QUEUE_NAME.NODE_READY,
@@ -509,40 +471,22 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
     const completionKind = getControlPlaneMessageCompletionKind(payload.type);
     const completion = () => ({completionKind, completionCompleted: true});
 
-    const requiredTables =
-      this.resolveControlPlaneMessageRequiredTables(payload);
-
-    // NODE_STATE_UPDATE is idempotent, but it still produces shared metadata
-    // writes. Only process it locally when this replica is already ready to
-    // carry that write set through the canonical metadata ingress path.
+    // NODE_STATE_UPDATE is an ingress adapter: this replica publishes the
+    // node lifecycle through the durable NODES boundary itself, so READY
+    // never waits for a healthy message-group leader.
     if (payload.type === ControlPlaneMessageType.NODE_STATE_UPDATE) {
-      const ingressDecision = await this.resolveMessageGroupIngressDecision(
-        mgService,
-        requiredTables,
-      );
+      const publicationCompletion =
+        await this.publishNodeLifecycleMessage(payload);
+      // Only a durable completion is acknowledged; a deferred publication
+      // stays re-deliverable.
       if (
-        ingressDecision.action !== MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL
-      ) {
-        await this.forwardToLeader(mgService, payload, {
-          requiredTables,
-          ingressDecision,
-        });
-        if (
-          messageId &&
-          typeof mgService.acknowledgeMessage === 'function'
-        ) {
-          await mgService.acknowledgeMessage(messageId);
-        }
-        return completion();
-      }
-      await this.enqueueNodeStateUpdateAndWait(payload);
-      if (
+        publicationCompletion.completionCompleted === true &&
         messageId &&
         typeof mgService.acknowledgeMessage === 'function'
       ) {
         await mgService.acknowledgeMessage(messageId);
       }
-      return completion();
+      return publicationCompletion;
     }
 
     if (!mgService.isLeaderReplica()) {
@@ -560,11 +504,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
     return completion();
   }
 
-  resolveControlPlaneMessageRequiredTables(payload) {
-    return getControlPlaneMessageRequiredTables(payload?.type);
-  }
-
-  resolveMessageGroupIngressReadiness(mgService, requiredTables = []) {
+  resolveMessageGroupIngressReadiness(mgService) {
     if (
       !mgService ||
       typeof mgService.getMetadataIngressReadiness !== 'function'
@@ -575,102 +515,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
           REPLICA_DISPATCH_SERVICE_LITERAL.MESSAGE_DASH_GROUP_INGRESS_READINESS_UNAVAILABLE,
       };
     }
-    return mgService.getMetadataIngressReadiness({requiredTables});
-  }
-
-  buildMessageGroupIngressDecision(action, readiness = {}, extra = {}) {
-    return Object.freeze({
-      action,
-      ready: readiness?.ready === true,
-      reason:
-        typeof readiness?.reason === 'string' &&
-        readiness.reason.length > 0 ?
-          readiness.reason :
-          null,
-      retryAfterMs:
-        Number.isFinite(readiness?.retryAfterMs) &&
-        readiness.retryAfterMs > 0 ?
-          Math.floor(readiness.retryAfterMs) :
-          null,
-      ...extra,
-    });
-  }
-
-  resolveMessageGroupIngressFallbackDecision(mgService, requiredTables = []) {
-    const readiness = this.resolveMessageGroupIngressReadiness(
-      mgService,
-      requiredTables,
-    );
-    if (readiness.ready === true) {
-      return this.buildMessageGroupIngressDecision(
-        MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL,
-        readiness,
-      );
-    }
-    if (
-      typeof mgService?.forwardMetadataIngressPayloadToLeader ===
-      'function'
-    ) {
-      return this.buildMessageGroupIngressDecision(
-        MESSAGE_GROUP_CDC_INGRESS_ACTION.FORWARD,
-        readiness,
-      );
-    }
-    return this.buildMessageGroupIngressDecision(
-      MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER,
-      readiness,
-    );
-  }
-
-  async resolveMessageGroupIngressDecision(mgService, requiredTables = []) {
-    if (!mgService || typeof mgService !== 'object') {
-      return this.buildMessageGroupIngressDecision(
-        MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER,
-        {
-          ready: false,
-          reason:
-            REPLICA_DISPATCH_SERVICE_LITERAL.MESSAGE_DASH_GROUP_INGRESS_READINESS_UNAVAILABLE,
-        },
-      );
-    }
-    if (
-      typeof mgService.resolveMetadataIngressForwardSelection !==
-      'function'
-    ) {
-      return this.resolveMessageGroupIngressFallbackDecision(
-        mgService,
-        requiredTables,
-      );
-    }
-    const selection = await mgService.resolveMetadataIngressForwardSelection({
-      requiredTables,
-    });
-    const selectionAction =
-      selection?.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL ||
-      selection?.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.FORWARD ||
-      selection?.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER ?
-        selection.action :
-        MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER;
-    const retryAfterMs =
-      Number.isFinite(selection?.retryAfterMs) &&
-      selection.retryAfterMs > 0 ?
-        selection.retryAfterMs :
-        Number.isFinite(selection?.strictForwardRetryAfterMs) &&
-            selection.strictForwardRetryAfterMs > 0 ?
-          selection.strictForwardRetryAfterMs :
-          null;
-    return this.buildMessageGroupIngressDecision(
-      selectionAction,
-      {
-        ready: selection?.ready === true,
-        reason:
-          typeof selection?.reason === 'string' ?
-            selection.reason :
-            REPLICA_DISPATCH_SERVICE_LITERAL.MESSAGE_DASH_GROUP_INGRESS_SELECTION_UNAVAILABLE,
-        retryAfterMs,
-      },
-      {selection},
-    );
+    return mgService.getMetadataIngressReadiness({requiredTables: []});
   }
 
   /**

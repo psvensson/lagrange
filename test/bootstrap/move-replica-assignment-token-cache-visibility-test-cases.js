@@ -36,6 +36,45 @@ const EXPIRED_TARGET_PROGRESS_SECOND_NODE_ADDRESS =
   'ws://localhost:9136';
 const EXPLICITLY_CLEARED_READY_LEASE_EXPIRES_AT = null;
 
+test('register-service surfaces authoritative SERVICES read deferral as 503 ' +
+  'without consuming the MOVE_REPLICA reservation or writing a service row',
+async (t) => {
+  const fixture = await bootstrapMoveReplicaAssignment(t, {
+    joiningNodeId: '550e8400-e29b-41d4-a716-446655440399',
+    assignmentLeaseMs: 60_000,
+  });
+  const {api, assignment, joiningNodeId, rows} = fixture;
+  const servicesBefore = rows.services.map((row) => ({...row}));
+  const reservationStatusBefore =
+    api.moveReplicaAssignmentReservations.get(assignment.assignmentId)?.status;
+  const gateway = api.getControlPlaneSystemTableGateway();
+  gateway.readAuthoritativeRows = async () => ({
+    success: false,
+    error: 'authoritative SERVICES owner unavailable',
+  });
+
+  const response = await api.getFastify().inject({
+    method: 'POST',
+    url: '/register-service',
+    payload: buildRegisterPayload(joiningNodeId, assignment, {
+      assignment_id: assignment.assignmentId,
+    }),
+  });
+  const body = response.json();
+  t.equal(response.statusCode, 503,
+    'authoritative read unavailability is a retryable service outcome');
+  t.equal(body.code, 'SERVICE_OWNER_READ_DEFERRED',
+    'the response retains the stable owner-read code');
+  t.type(body.retryAfterMs, 'number', 'the retry hint is explicit');
+  t.same(rows.services, servicesBefore,
+    'no SERVICES mutation occurs after an unavailable owner read');
+  t.equal(
+    api.moveReplicaAssignmentReservations.get(assignment.assignmentId)?.status,
+    reservationStatusBefore,
+    'the MOVE_REPLICA reservation remains open for retry',
+  );
+});
+
 test('BootstrapAPI register-service emits retryable cache visibility timeout response',
   async (t) => {
     initializeTestEnvironment();
@@ -74,7 +113,9 @@ test('BootstrapAPI register-service emits retryable cache visibility timeout res
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache,
       messageGroupServices: new Map(),
-      cdcIntegrationService: createCdcIntegrationServiceFixture(rows),
+      cdcIntegrationService: createCdcIntegrationServiceFixture(rows, {
+        persistMutations: false,
+      }),
     });
     await api.initialize(0, {listen: false});
     api.setSqlQueryEngine({
@@ -193,7 +234,12 @@ test('BootstrapAPI register-service remains retryable when storage is visible bu
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache,
       messageGroupServices: new Map(),
-      cdcIntegrationService: createCdcIntegrationServiceFixture(rows),
+      cdcIntegrationService: createCdcIntegrationServiceFixture(rows, {
+        executeAuthoritativeSystemTableRead: async () => {
+          storageVisibilityLookups += 1;
+          return {success: true, rows: [expectedServiceRow]};
+        },
+      }),
     });
     await api.initialize(0, {listen: false});
     const assignmentId = configureSyntheticMoveReplicaRegisterServiceHandoff(
@@ -314,6 +360,10 @@ test('BootstrapAPI register-service repairs cache-visible hole from authoritativ
     let repairAttempts = 0;
     const cdcIntegrationService = createCdcIntegrationServiceFixture(rows, {
       persistMutations: false,
+      executeAuthoritativeSystemTableRead: async () => {
+        storageVisibilityLookups += 1;
+        return {success: true, rows: [expectedServiceRow]};
+      },
       async repairCacheVisibilityHole(tableName, key, expectPresent, expectedFields) {
         repairAttempts += 1;
         t.equal(tableName, 'services', 'repair should target the services table');
@@ -968,8 +1018,8 @@ test('BootstrapAPI register-service timeout diagnostics include mismatch fields'
   const responseBody = response.json();
   t.equal(
     responseBody.details?.lastVisibilityCheck?.reason,
-    BOOTSTRAP_API_CACHE_VISIBILITY.REASON_FIELD_MISMATCH,
-    'timeout diagnostics should classify stale row mismatch',
+    BOOTSTRAP_API_CACHE_VISIBILITY.REASON_STORAGE_ROW_VISIBLE_CACHE_STALE,
+    'timeout diagnostics should distinguish durable visibility from the stale cache mismatch',
   );
   t.ok(
     responseBody.details?.lastVisibilityCheck?.mismatchFields.includes('node_id'),

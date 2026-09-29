@@ -431,65 +431,61 @@ test('HeartbeatService allows initial node heartbeat write during quiet mode',
     }
   });
 
-test('HeartbeatService promotes stopped rows back to active for direct node writes',
-  async (t) => {
-    initEnv();
+test('HeartbeatService never revives a STOPPED row: the lifecycle owner ' +
+  'refuses READY from a terminal source without writing',
+async (t) => {
+  initEnv();
 
-    const nodeUpdates = [];
-    const existingNodeRow = {
-      node_id: 'node-direct-restart',
-      node_address: '10.0.0.92:8080',
-      cpu_cores: 4,
-      memory_mb: 256,
-      disk_gb: 64,
-      cpu_usage_percent: 10,
-      memory_usage_percent: 20,
-      disk_usage_percent: 30,
-      status: SERVICE_STATUS.STOPPED,
-      connection_state: STATE.DISCONNECTED,
-      capabilities: '["partition_replica"]',
-      last_heartbeat: 111,
-      ready_lease_expires_at: null,
-      created_at: 100,
-    };
-    const service = new HeartbeatService({
-      nodeId: 'node-direct-restart',
-      nodeAddress: '10.0.0.92:8080',
-      cdcIntegrationService: {
-        updateSystemTableRow: async (_tableName, _whereClause, updateRow) => {
-          nodeUpdates.push(updateRow);
-          return {success: true};
-        },
-        upsertSystemTableRow: async () => ({success: true}),
+  const nodeUpdates = [];
+  const existingNodeRow = {
+    node_id: 'node-direct-restart',
+    node_address: '10.0.0.92:8080',
+    cpu_cores: 4,
+    memory_mb: 256,
+    disk_gb: 64,
+    cpu_usage_percent: 10,
+    memory_usage_percent: 20,
+    disk_usage_percent: 30,
+    status: SERVICE_STATUS.STOPPED,
+    connection_state: STATE.DISCONNECTED,
+    capabilities: '["partition_replica"]',
+    last_heartbeat: 111,
+    ready_lease_expires_at: null,
+    created_at: 100,
+  };
+  const service = new HeartbeatService({
+    nodeId: 'node-direct-restart',
+    nodeAddress: '10.0.0.92:8080',
+    cdcIntegrationService: {
+      updateSystemTableRow: async (_tableName, _whereClause, updateRow) => {
+        nodeUpdates.push(updateRow);
+        return {success: true};
       },
-      systemTableCache: {
-        get: (_tableName, key) =>
-          key === 'node-direct-restart' ? existingNodeRow : null,
-      },
-      nodeMetadataMinUpdateIntervalMs: 0,
-      nodeMetadataMaxStalenessMs: 5000,
-    });
-
-    try {
-      await service.sendHeartbeat(null, ['partition_replica']);
-
-      t.equal(nodeUpdates.length, 1, 'should persist one heartbeat update');
-      t.equal(
-        nodeUpdates[0].status,
-        SERVICE_STATUS.ACTIVE,
-        'direct heartbeat writes should promote a restarted node back to active',
-      );
-      t.equal(
-        nodeUpdates[0].connection_state,
-        STATE.READY,
-        'direct heartbeat writes should publish ready connectivity',
-      );
-    } finally {
-      service.stop();
-      ConfigurationManager.resetInstance();
-      LoggingService.resetInstance();
-    }
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    systemTableCache: {
+      get: (_tableName, key) =>
+        key === 'node-direct-restart' ? existingNodeRow : null,
+    },
+    nodeMetadataMinUpdateIntervalMs: 0,
+    nodeMetadataMaxStalenessMs: 5000,
   });
+
+  try {
+    await t.rejects(
+      service.sendHeartbeat(null, ['partition_replica']),
+      {code: 'refused_source_changed'},
+      'READY is published only from a JOINING or ACTIVE source row',
+    );
+    t.equal(nodeUpdates.length, 0,
+      'a terminal STOPPED row is re-admitted by registration, never by a ' +
+          'heartbeat write');
+  } finally {
+    service.stop();
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  }
+});
 
 test('HeartbeatService allows quiet-mode safety bypass for staleness guard and records reason',
   async (t) => {
@@ -799,6 +795,7 @@ test('HeartbeatService recovers from a hung heartbeat attempt after timeout',
       );
 
       await intervalHandles[0].callback();
+      await new Promise((resolve) => setTimeout(resolve, 0));
       t.equal(
         writes.length,
         2,
@@ -817,203 +814,64 @@ test('HeartbeatService recovers from a hung heartbeat attempt after timeout',
     }
   });
 
-test('HeartbeatService reportNodeShutdown publishes stopped state through node-state reporter',
-  async (t) => {
-    initEnv();
-
-    const publications = [];
-    const existingNodeRow = {
-      node_id: 'node-shutdown-reporter',
-      node_address: '10.0.0.21:8080',
-      cpu_cores: 4,
-      memory_mb: 256,
-      disk_gb: 64,
-      cpu_usage_percent: 10,
-      memory_usage_percent: 20,
-      disk_usage_percent: 30,
-      status: SERVICE_STATUS.ACTIVE,
-      connection_state: STATE.READY,
-      capabilities: '["partition_replica"]',
-      last_heartbeat: 111,
-      ready_lease_expires_at: 222,
-      created_at: 100,
-    };
-    const service = new HeartbeatService({
-      nodeId: 'node-shutdown-reporter',
-      nodeAddress: '10.0.0.21:8080',
-      cdcIntegrationService: {
-        updateSystemTableRow: async () => {
-          t.fail('shutdown publication should not fall back to CDC');
-        },
-        upsertSystemTableRow: async () => {
-          t.fail('shutdown publication should not upsert rows');
-        },
-      },
-      systemTableCache: {
-        get: (_tableName, key) =>
-          key === 'node-shutdown-reporter' ? existingNodeRow : null,
-      },
-      nodeStateReporter: async (payload) => {
-        publications.push(payload);
-        return {
-          publicationPath: 'node_shutdown_reporter',
-          targetAddress: 'seed-node/message-group/mg-1-r1',
-        };
-      },
-      now: () => 12345,
-    });
-
-    const published = await service.reportNodeShutdown();
-
-    t.equal(published, true, 'shutdown publication should report success');
-    t.equal(publications.length, 1, 'should publish one shutdown update');
-    t.equal(publications[0].state, STATE.DISCONNECTED,
-      'should publish a disconnected shutdown state');
-    t.equal(publications[0].readyLeaseExpiresAt, null,
-      'should clear the ready lease on shutdown publication');
-    t.equal(publications[0].nodeRow.status, SERVICE_STATUS.STOPPED,
-      'should mark the node row stopped during shutdown');
-    t.equal(publications[0].nodeRow.connection_state, STATE.DISCONNECTED,
-      'should mark the node row disconnected during shutdown');
-    t.equal(publications[0].nodeRow.ready_lease_expires_at, null,
-      'should persist a null ready lease in the shutdown row');
-
-    ConfigurationManager.resetInstance();
-    LoggingService.resetInstance();
-  });
-
-test('HeartbeatService reportNodeShutdown fails when reporter publication fails',
-  async (t) => {
-    initEnv();
-
-    const updates = [];
-    const service = new HeartbeatService({
-      nodeId: 'node-shutdown-cdc',
-      nodeAddress: '10.0.0.22:8080',
-      cdcIntegrationService: {
-        updateSystemTableRow: async (tableName, whereClause, updateRow, options) => {
-          updates.push({tableName, whereClause, updateRow, options});
-          return {
-            success: true,
-            partitionResult: {affectedRows: 1},
-          };
-        },
-        upsertSystemTableRow: async () => {
-          t.fail('shutdown publication should not create missing rows');
-        },
-      },
-      systemTableCache: {
-        get: (_tableName, key) => {
-          if (key !== 'node-shutdown-cdc') {
-            return null;
-          }
-          return {
-            node_id: 'node-shutdown-cdc',
-            node_address: '10.0.0.22:8080',
-            cpu_cores: 8,
-            memory_mb: 512,
-            disk_gb: 128,
-            status: SERVICE_STATUS.ACTIVE,
-            connection_state: STATE.READY,
-            capabilities: '["partition_replica"]',
-            last_heartbeat: 500,
-            ready_lease_expires_at: 600,
-          };
-        },
-      },
-      nodeStateReporter: async () => {
-        throw new Error('reporter unavailable');
-      },
-      now: () => 22334,
-    });
-
-    await t.rejects(
-      service.reportNodeShutdown(),
-      /reporter unavailable/,
-      'shutdown publication should stay on the reporter path when configured',
-    );
-    t.equal(updates.length, 0, 'shutdown publication should not fall back to CDC');
-
-    ConfigurationManager.resetInstance();
-    LoggingService.resetInstance();
-  });
-
-test('HeartbeatService reportNodeShutdown keeps the reporter path when shutdown ' +
-  'visibility remains unverified',
+test('HeartbeatService reportNodeShutdown writes the terminal row through its ' +
+  'own owner even when the routed lifecycle reporter is installed',
 async (t) => {
   initEnv();
 
   const updates = [];
-  let authoritativeReads = 0;
+  const reporterCalls = [];
   const service = new HeartbeatService({
-    nodeId: 'node-shutdown-visibility-gap',
-    nodeAddress: '10.0.0.24:8080',
+    nodeId: 'node-shutdown-reporter',
+    nodeAddress: '10.0.0.21:8080',
     cdcIntegrationService: {
-      updateSystemTableRow: async (tableName, whereClause, updateRow, options) => {
-        updates.push({tableName, whereClause, updateRow, options});
+      updateSystemTableRow: async (tableName, whereClause, updateRow) => {
+        updates.push({tableName, whereClause, updateRow});
         return {
           success: true,
           partitionResult: {affectedRows: 1},
         };
       },
       upsertSystemTableRow: async () => {
-        t.fail('shutdown publication should not create missing rows');
-      },
-      executeAuthoritativeSystemTableRead: async () => {
-        authoritativeReads += 1;
-        return {
-          success: true,
-          rows: [{
-            node_id: 'node-shutdown-visibility-gap',
-            status: SERVICE_STATUS.ACTIVE,
-            connection_state: STATE.READY,
-            last_heartbeat: 777,
-            ready_lease_expires_at: 888,
-          }],
-        };
+        t.fail('shutdown publication should not upsert rows');
       },
     },
     systemTableCache: {
-      get: (_tableName, key) => {
-        if (key !== 'node-shutdown-visibility-gap') {
-          return null;
-        }
-        return {
-          node_id: 'node-shutdown-visibility-gap',
-          node_address: '10.0.0.24:8080',
-          cpu_cores: 8,
-          memory_mb: 512,
-          disk_gb: 128,
-          status: SERVICE_STATUS.ACTIVE,
-          connection_state: STATE.READY,
-          capabilities: '["partition_replica"]',
-          last_heartbeat: 500,
-          ready_lease_expires_at: 600,
-        };
-      },
+      get: (_tableName, key) => key === 'node-shutdown-reporter' ? {
+        node_id: 'node-shutdown-reporter',
+        node_address: '10.0.0.21:8080',
+        cpu_cores: 4,
+        status: SERVICE_STATUS.ACTIVE,
+        connection_state: STATE.READY,
+        capabilities: '["partition_replica"]',
+        last_heartbeat: 111,
+        ready_lease_expires_at: 222,
+        created_at: 100,
+      } : null,
     },
-    nodeStateReporter: async () => {
-      return {
-        publicationPath: 'node_shutdown_reporter',
-        targetAddress: 'seed-node/message-group/mg-1-r1',
-      };
+    // The routed reporter carries only CONNECTED/READY lifecycle requests.
+    nodeStateReporter: async (payload) => {
+      reporterCalls.push(payload);
+      return {};
     },
-    now: () => 22335,
+    now: () => 12345,
   });
 
   const published = await service.reportNodeShutdown();
 
-  t.equal(published, true,
-    'shutdown publication should still succeed when the reporter path is unverified');
-  t.equal(authoritativeReads, 1,
-    'shutdown publication should verify canonical visibility after reporter success');
-  t.equal(updates.length, 0,
-    'shutdown publication should not repair the authoritative nodes row via CDC fallback');
-  t.equal(
-    service.getHeartbeatPublicationDiagnostics().publicationPath,
-    'node_shutdown_reporter_unverified',
-    'shutdown visibility gap should remain on the reporter publication path',
-  );
+  t.equal(published, true, 'shutdown publication should report success');
+  t.equal(reporterCalls.length, 0,
+    'the terminal shutdown row never rides the lifecycle reporter');
+  t.equal(updates.length, 1, 'should write one shutdown update');
+  t.same(updates[0].whereClause, {node_id: 'node-shutdown-reporter',
+    boot_incarnation: service.bootIncarnation},
+  'the final mutation carries the exact boot incarnation');
+  t.match(updates[0].updateRow, {
+    status: SERVICE_STATUS.STOPPED,
+    connection_state: STATE.DISCONNECTED,
+    ready_lease_expires_at: null,
+    last_heartbeat: 12345,
+  }, 'the shutdown row is stopped, disconnected, and clears the lease');
 
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();

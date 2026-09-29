@@ -130,6 +130,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
         wsPortArb,
         async (nodeId, wsPort) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             wsPort,
             config: {
@@ -185,6 +186,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
         async (nodeId) => {
           // Create bootstrap with very short timeout to force failure
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             // No wsPort - will fail during leadership wait
             config: {
@@ -237,6 +239,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             config: {
               replicaStaggerDelayMs: 0,
@@ -277,6 +280,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             config: {
               replicaStaggerDelayMs: 0,
@@ -317,6 +321,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             config: {
               replicaStaggerDelayMs: 0,
@@ -357,6 +362,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             config: {
               replicaStaggerDelayMs: 0,
@@ -400,6 +406,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
         wsPortArb,
         async (nodeId, wsPort) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             wsPort,
             config: {
@@ -447,6 +454,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
         wsPortArb,
         async (nodeId, wsPort) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             wsPort,
             config: {
@@ -493,6 +501,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             config: {
               replicaStaggerDelayMs: 0,
@@ -538,6 +547,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             config: {
               replicaStaggerDelayMs: 0,
@@ -593,6 +603,7 @@ test('Property 7: Return Value Completeness (join)', {timeout: 120000}, async (t
         async (nodeId) => {
           // Create joining service without seed node address to force failure
           const joiningService = new NodeJoiningService({
+            bootIncarnation: 1,
             nodeId,
             nodeAddress: 'localhost:9999',
             seedNodeAddress: null, // Will cause failure
@@ -655,6 +666,7 @@ test('Property 7: Return Value Completeness (join)', {timeout: 120000}, async (t
         nodeIdArb,
         async (nodeId) => {
           const joiningService = new NodeJoiningService({
+            bootIncarnation: 1,
             nodeId,
             nodeAddress: 'localhost:9999',
             seedNodeAddress: null,
@@ -705,6 +717,7 @@ test('Property 7: Return Value Completeness (join)', {timeout: 120000}, async (t
         nodeIdArb,
         async (nodeId) => {
           const joiningService = new NodeJoiningService({
+            bootIncarnation: 1,
             nodeId,
             nodeAddress: 'localhost:9999',
             seedNodeAddress: null,
@@ -755,6 +768,7 @@ test('Property 7: Return Value Completeness (join)', {timeout: 120000}, async (t
         nodeIdArb,
         async (nodeId) => {
           const joiningService = new NodeJoiningService({
+            bootIncarnation: 1,
             nodeId,
             nodeAddress: 'localhost:9999',
             seedNodeAddress: null,
@@ -805,6 +819,7 @@ test('Property 7: Return Value Completeness (join)', {timeout: 120000}, async (t
         nodeIdArb,
         async (nodeId) => {
           const joiningService = new NodeJoiningService({
+            bootIncarnation: 1,
             nodeId,
             nodeAddress: 'localhost:9999',
             seedNodeAddress: null,
@@ -860,6 +875,7 @@ test('Property 7: Return Value Completeness (join)', {timeout: 120000}, async (t
         nodeIdArb,
         async (nodeId) => {
           const joiningService = new NodeJoiningService({
+            bootIncarnation: 1,
             nodeId,
             nodeAddress: 'localhost:9999',
             seedNodeAddress: null,
@@ -942,6 +958,7 @@ test('Property 7: Return Value Completeness (join)', {timeout: 120000}, async (t
         wsPortArb,
         async (nodeId, wsPort) => {
           const joiningService = new NodeJoiningService({
+            bootIncarnation: 1,
             nodeId,
             nodeAddress: `localhost:${wsPort}`,
             seedNodeAddress: 'http://localhost:3000',
@@ -1027,6 +1044,7 @@ test('Property 7: Return Value Completeness (join)', {timeout: 120000}, async (t
         wsPortArb,
         async (nodeId, wsPort) => {
           const joiningService = new NodeJoiningService({
+            bootIncarnation: 1,
             nodeId,
             nodeAddress: `localhost:${wsPort}`,
             seedNodeAddress: 'http://localhost:3000',
@@ -1105,6 +1123,7 @@ test('Property 7: Return Value Completeness (join)', {timeout: 120000}, async (t
         wsPortArb,
         async (nodeId, wsPort) => {
           const joiningService = new NodeJoiningService({
+            bootIncarnation: 1,
             nodeId,
             nodeAddress: `localhost:${wsPort}`,
             seedNodeAddress: 'http://localhost:3000',
@@ -1183,6 +1202,7 @@ test('Property 7: Return Value Completeness (join)', {timeout: 120000}, async (t
         wsPortArb,
         async (nodeId, wsPort) => {
           const joiningService = new NodeJoiningService({
+            bootIncarnation: 1,
             nodeId,
             nodeAddress: `localhost:${wsPort}`,
             seedNodeAddress: 'http://localhost:3000',

@@ -116,6 +116,11 @@ const bootstrapApiRegistrationMethods = {
       [COLUMN.STATUS]: serviceData[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: serviceData[COLUMN.ADDRESS] || null,
       [COLUMN.CREATED_AT]: serviceData[COLUMN.CREATED_AT] || Date.now(),
+      // The registrant's canonical lifecycle generation travels with the
+      // row so its activation evidence stays fenced by it.
+      ...(Number.isFinite(serviceData[COLUMN.STATE_ENTERED_AT]) ? {
+        [COLUMN.STATE_ENTERED_AT]: serviceData[COLUMN.STATE_ENTERED_AT],
+      } : {}),
       [COLUMN.UPDATED_AT]: serviceData[COLUMN.UPDATED_AT] || Date.now(),
     };
   },

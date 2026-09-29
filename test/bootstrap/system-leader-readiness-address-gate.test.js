@@ -125,6 +125,7 @@ const createSeedBootstrapCache = ({
 
 test('BootstrapService readiness waiter blocks when required system-table leader addresses are missing', async (t) => {
   const bootstrapService = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     config: TEST_CONFIG,
@@ -157,6 +158,7 @@ test('BootstrapService readiness waiter blocks when required system-table leader
 
 test('BootstrapService readiness waiter accepts local seed leaders before service addresses publish', async (t) => {
   const bootstrapService = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     config: TEST_CONFIG,
@@ -230,6 +232,7 @@ test('BootstrapService readiness waiter accepts local seed leaders before servic
 
 test('BootstrapService readiness waiter ignores missing message-group leaders before activation', async (t) => {
   const bootstrapService = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     config: TEST_CONFIG,
@@ -246,6 +249,7 @@ test('BootstrapService readiness waiter ignores missing message-group leaders be
 
 test('BootstrapService readiness waiter accepts role-based local seed leaders', async (t) => {
   const bootstrapService = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     config: TEST_CONFIG,
@@ -316,6 +320,7 @@ test('NodeJoiningService join waiter allows missing leader_node_id metadata', as
   };
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: 'http://localhost:8080',
@@ -375,6 +380,7 @@ test('NodeJoiningService join waiter ignores missing message-group leader rows',
   };
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: 'http://localhost:8080',

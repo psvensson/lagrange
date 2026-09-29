@@ -93,6 +93,7 @@ class SeedRegistrationPhase {
    */
   constructor(options = {}) {
     this.delegates = options.delegates || {};
+    this.messageGroupRegistrationEvidenceByReplicaId = new Map();
     this.runtimeOwner = new SeedRegistrationRuntimeOwner({
       delegates: this.delegates,
     });
@@ -199,6 +200,7 @@ class SeedRegistrationPhase {
         systemTableWriter,
         now: () => now,
       });
+    const partitionRegistrationEvidenceByReplicaId = new Map();
 
     // Register message group replicas
     for (const [replicaId, service] of
@@ -222,14 +224,19 @@ class SeedRegistrationPhase {
         });
 
       try {
-        await messageGroupServiceRowOwner.registerReplica({
-          groupId: INITIAL_MESSAGE_GROUP_ID,
+        const registrationEvidence =
+          await messageGroupServiceRowOwner.registerReplica({
+            groupId: INITIAL_MESSAGE_GROUP_ID,
+            replicaId,
+            nodeId,
+            service,
+            timestamp: now,
+            status: SERVICE_STATUS.STOPPED,
+          });
+        this.messageGroupRegistrationEvidenceByReplicaId.set(
           replicaId,
-          nodeId,
-          service,
-          timestamp: now,
-          status: SERVICE_STATUS.STOPPED,
-        });
+          registrationEvidence,
+        );
       } catch (error) {
         logger.error(
           BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_SERVICE_REGISTER_FAILED,
@@ -243,14 +250,19 @@ class SeedRegistrationPhase {
     for (const [replicaId, service] of
       d.getPartitionServices()) {
       try {
-        await partitionServiceRowOwner.registerReplica({
-          partitionId: service.partitionId,
+        const registrationEvidence =
+          await partitionServiceRowOwner.registerReplica({
+            partitionId: service.partitionId,
+            replicaId,
+            nodeId,
+            service,
+            timestamp: now,
+            status: SERVICE_STATUS.STOPPED,
+          });
+        partitionRegistrationEvidenceByReplicaId.set(
           replicaId,
-          nodeId,
-          service,
-          timestamp: now,
-          status: SERVICE_STATUS.STOPPED,
-        });
+          registrationEvidence,
+        );
       } catch (error) {
         logger.error(
           BOOTSTRAP_LOG_MSG.PARTITION_SERVICE_REGISTER_FAILED,
@@ -263,10 +275,10 @@ class SeedRegistrationPhase {
     await activatePartitionServiceRows({
       nodeId,
       systemTableWriter,
+      replicaStateMachine: d.getReplicaStateMachine(),
       messageRouter: typeof d.getMessageRouter === LOCAL_STR_FUNCTION ?
         d.getMessageRouter() :
         null,
-      deferTransientFailures: true,
       onDeferredActivation: ({partitionId, replicaId, error}) => {
         logger.warn(
           LOCAL_STR_DEFERRING_SEED_PARTITION_SERVICE_ROW_ACT,
@@ -279,6 +291,7 @@ class SeedRegistrationPhase {
         );
       },
       partitionServices: d.getPartitionServices(),
+      partitionRegistrationEvidenceByReplicaId,
       now: () => now,
     });
 

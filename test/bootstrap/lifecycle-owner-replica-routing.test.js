@@ -20,6 +20,7 @@ const silentLogger = {
 
 test('BootstrapService routes replica lifecycle through unified adapters', async (t) => {
   const service = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: 'seed-node-1',
     nodeAddress: 'ws://localhost:8080',
   });
@@ -70,6 +71,7 @@ test('BootstrapService routes replica lifecycle through unified adapters', async
 
 test('NodeJoiningService routes replica lifecycle through unified adapters', async (t) => {
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-1',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',

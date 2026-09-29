@@ -18,6 +18,7 @@ import {
   STALE_NODE_INCARNATION_CODE,
 } from '../../src/control-plane/control-plane-error-classification.js';
 import {
+  CONTROL_PLANE_MESSAGE_COMPLETION_FIELD,
   ControlPlaneField,
   ControlPlaneMessageType,
 } from '../../src/control-plane/control-plane-constants.js';
@@ -28,6 +29,24 @@ import {
 } from '../../src/constants/index.js';
 
 const TEST_NODE_ID = 'node-2';
+
+function buildRegisteredNodeRow(options = {}) {
+  const now = options.now || 1000;
+  return {
+    node_id: options.nodeId || TEST_NODE_ID,
+    node_address: options.nodeAddress || 'localhost:8082',
+    cpu_cores: 8,
+    memory_mb: 16384,
+    disk_gb: 500,
+    status: options.status || 'joining',
+    connection_state: options.connectionState || STATE.CONNECTED,
+    capabilities: '[]',
+    last_heartbeat: options.lastHeartbeat || now,
+    boot_incarnation: options.bootIncarnation || 1,
+    ready_lease_expires_at: options.readyLeaseExpiresAt ?? null,
+    created_at: options.createdAt || now - 100,
+  };
+}
 
 function buildPayload(options = {}) {
   return {
@@ -93,7 +112,7 @@ test('a stale-incarnation NODE_STATE_UPDATE is refused terminally and the ' +
 
   const stalePayload = buildPayload({bootIncarnation: 3});
   const staleError = await t.rejects(
-    service.handleNodeStateUpdate(stalePayload),
+    service.publishNodeLifecycleMessage(stalePayload),
   );
   t.equal(
     staleError?.code,
@@ -125,30 +144,27 @@ test('a stale-incarnation NODE_STATE_UPDATE is refused terminally and the ' +
   );
   t.equal(gateway.upserts.length, 0, 'no upsert happens for a stale writer');
 
-  // A fresh-incarnation writer against the same stored row is accepted and
-  // lifts the retained high-water.
+  // A writer cannot mint a newer incarnation through publication. The
+  // registration owner must first acquire the canonical row for that boot.
   const freshPayload = buildPayload({bootIncarnation: 6});
-  await service.handleNodeStateUpdate(freshPayload);
+  const freshError = await t.rejects(
+    service.publishNodeLifecycleMessage(freshPayload),
+  );
   t.equal(
     gateway.updates.length,
-    1,
-    'a fresher incarnation is accepted',
+    0,
+    'a publisher cannot replace the registered incarnation',
   );
   t.equal(
-    service.nodeBootIncarnationWatermarks.get(TEST_NODE_ID),
-    6,
-    'the accepted update retains the freshest incarnation',
-  );
-  t.equal(
-    gateway.updates[0].row.boot_incarnation,
-    6,
-    'the canonical full-row writer durably projects the accepted incarnation',
+    freshError?.code,
+    'NODE_STATE_UPDATE_SOURCE_CHANGED',
+    'a newer but unregistered writer is a terminal source change',
   );
 
   service.stop();
 });
 
-test('an UNKNOWN incarnation on either side never fences (compat policy)',
+test('unbranded activation evidence fails closed without mutating NODES',
   async (t) => {
     initEnv();
 
@@ -170,160 +186,110 @@ test('an UNKNOWN incarnation on either side never fences (compat policy)',
       cdcIntegrationService: gateway.cdcIntegrationService,
     });
 
-    // Pre-incarnation writer (no field) against a known stored incarnation.
-    service.nodeBootIncarnationWatermarks.set(TEST_NODE_ID, 9);
-    await service.handleNodeStateUpdate(buildPayload({}));
+    const error = await t.rejects(
+      service.publishNodeLifecycleMessage(buildPayload({})),
+    );
+    t.equal(
+      error?.code,
+      'NODE_STATE_UPDATE_INCARNATION_REQUIRED',
+      'absent incarnation evidence is refused',
+    );
     t.equal(
       gateway.updates.length,
-      1,
-      'an absent payload incarnation is UNKNOWN and never fences',
-    );
-    t.equal(
-      gateway.updates[0].row.boot_incarnation,
-      9,
-      'an UNKNOWN writer preserves the receiver high-water instead of ' +
-        'downgrading durable identity',
-    );
-
-    // Known writer against an UNKNOWN stored incarnation.
-    service.nodeBootIncarnationWatermarks.clear();
-    await service.handleNodeStateUpdate(buildPayload({bootIncarnation: 2}));
-    t.equal(
-      gateway.updates.length,
-      2,
-      'an unknown receiver-side incarnation (0) never fences',
-    );
-    t.equal(gateway.updates[1].row.boot_incarnation, 2);
-
-    const heartbeatOnlyPayload = buildPayload({bootIncarnation: 3});
-    heartbeatOnlyPayload[ControlPlaneField.HEARTBEAT_ONLY] = true;
-    await service.handleNodeStateUpdate(heartbeatOnlyPayload);
-    t.equal(
-      gateway.updates[2].row.boot_incarnation,
-      3,
-      'heartbeat-only publication projects the accepted incarnation too',
+      0,
+      'unbranded evidence performs no durable mutation',
     );
 
     service.stop();
   });
 
-test('a stale-incarnation writer on the missing-row upsert path is refused ' +
-  'terminally even though the row is absent', async (t) => {
-  initEnv();
-
-  const gateway = createRecordingGateway({updateAffectedRows: 0});
-  const service = createService({
-    cdcIntegrationService: gateway.cdcIntegrationService,
-  });
-
-  const stalePayload = buildPayload({
-    nodeId: 'node-joiner',
-    nodeAddress: 'localhost:8099',
-    state: STATE.CONNECTED,
-    bootIncarnation: 2,
-    nodeRow: {
-      [COLUMN.CPU_CORES]: 4,
-      [COLUMN.MEMORY_MB]: 8192,
-      [COLUMN.DISK_GB]: 250,
-    },
-  });
-
-  // The retained high-water (not the absent durable row) is what fences the
-  // missing-row path.
-  service.nodeBootIncarnationWatermarks.set('node-joiner', 4);
-
-  const missingRowError = await t.rejects(
-    service.handleNodeStateUpdate(stalePayload),
-  );
-  t.equal(
-    missingRowError?.code,
-    STALE_NODE_INCARNATION_CODE,
-    'the missing-row path refuses with STALE_NODE_INCARNATION — a ' +
-      'stale-incarnation writer must not resurrect itself through an upsert',
-  );
-  t.equal(
-    missingRowError?.knownIncarnation,
-    4,
-    'fenced against the retained high-water incarnation',
-  );
-
-  t.equal(
-    gateway.upserts.length,
-    0,
-    'the stale writer never reaches the missing-row upsert',
-  );
-
-  // A fresh-incarnation writer on the same path upserts and lifts the
-  // retained high-water.
-  await service.handleNodeStateUpdate(buildPayload({
-    nodeId: 'node-joiner',
-    nodeAddress: 'localhost:8099',
-    state: STATE.CONNECTED,
-    bootIncarnation: 5,
-    nodeRow: {
-      [COLUMN.CPU_CORES]: 4,
-      [COLUMN.MEMORY_MB]: 8192,
-      [COLUMN.DISK_GB]: 250,
-    },
-  }));
-  t.equal(
-    gateway.upserts.length,
-    1,
-    'a fresh incarnation upserts the missing row',
-  );
-  t.equal(
-    service.nodeBootIncarnationWatermarks.get('node-joiner'),
-    5,
-    'the accepted upsert retains the freshest incarnation',
-  );
-  t.equal(
-    gateway.upserts[0].row.boot_incarnation,
-    5,
-    'the missing-row path persists the same fenced incarnation it accepted',
-  );
-
-  service.stop();
-});
-
-test('a STALE_NODE_INCARNATION error is never deferred (terminal refusal)',
+test('node-state publication never creates an absent registration row',
   async (t) => {
     initEnv();
 
+    const gateway = createRecordingGateway({updateAffectedRows: 0});
     const service = createService({
-      cdcIntegrationService: {
-        updateSystemTableRow: async () => ({
-          success: true,
-          partitionResult: {affectedRows: 1},
-        }),
-        upsertSystemTableRow: async () => ({success: true}),
+      cdcIntegrationService: gateway.cdcIntegrationService,
+    });
+
+    const stalePayload = buildPayload({
+      nodeId: 'node-joiner',
+      nodeAddress: 'localhost:8099',
+      state: STATE.CONNECTED,
+      bootIncarnation: 2,
+      nodeRow: {
+        [COLUMN.CPU_CORES]: 4,
+        [COLUMN.MEMORY_MB]: 8192,
+        [COLUMN.DISK_GB]: 250,
       },
     });
 
-    const staleError = new Error('stale incarnation');
-    staleError.code = STALE_NODE_INCARNATION_CODE;
+    const missingRowError = await t.rejects(
+      service.publishNodeLifecycleMessage(stalePayload),
+    );
     t.equal(
-      service.shouldDeferNodeStateUpdateRetry(
-        staleError,
-        buildPayload({bootIncarnation: 1}),
-      ),
-      false,
-      'shouldDeferNodeStateUpdateRetry returns false so the publisher-side ' +
-        'retry loop rethrows instead of retrying a zombie writer forever',
+      missingRowError?.code,
+      'NODE_ROW_MISSING',
+      'absence remains the registration owner\'s concern',
     );
 
-    const retryableError = new Error('Message timeout');
     t.equal(
-      service.shouldDeferNodeStateUpdateRetry(
-        retryableError,
-        buildPayload({bootIncarnation: 1}),
-      ),
-      true,
-      'ordinary transient failures still defer (the terminal carve-out is ' +
-        'narrow)',
+      gateway.upserts.length,
+      0,
+      'the stale writer never reaches the missing-row upsert',
+    );
+
+    const freshMissingError = await t.rejects(
+      service.publishNodeLifecycleMessage(buildPayload({
+        nodeId: 'node-joiner',
+        nodeAddress: 'localhost:8099',
+        state: STATE.CONNECTED,
+        bootIncarnation: 5,
+        nodeRow: {
+          [COLUMN.CPU_CORES]: 4,
+          [COLUMN.MEMORY_MB]: 8192,
+          [COLUMN.DISK_GB]: 250,
+        },
+      })),
+    );
+    t.equal(
+      freshMissingError?.code,
+      'NODE_ROW_MISSING',
+      'even fresh evidence cannot create the row',
+    );
+    t.equal(
+      gateway.upserts.length,
+      0,
+      'no compatibility UPSERT remains',
     );
 
     service.stop();
   });
+
+test('a STALE_NODE_INCARNATION refusal is terminal, never a deferred ' +
+  'completion', async (t) => {
+  initEnv();
+
+  const gateway = createRecordingGateway();
+  const service = createService({
+    cacheNode: buildRegisteredNodeRow({
+      status: SERVICE_STATUS.ACTIVE,
+      bootIncarnation: 5,
+    }),
+    cdcIntegrationService: gateway.cdcIntegrationService,
+  });
+
+  const staleError = await t.rejects(
+    service.publishNodeLifecycleMessage(buildPayload({bootIncarnation: 1})),
+  );
+  t.equal(staleError?.code, STALE_NODE_INCARNATION_CODE,
+    'a zombie writer is refused with the typed terminal error');
+  t.notOk(staleError?.deferRetry,
+    'the refusal never asks the sender to retry a zombie writer');
+  t.equal(gateway.updates.length, 0, 'no write for a stale writer');
+
+  service.stop();
+});
 
 test('durable incarnation projection is stable under post-import mutable ' +
   'intrinsic replacement', (t) => {
@@ -344,26 +310,25 @@ test('durable incarnation projection is stable under post-import mutable ' +
     Number.isFinite = () => false;
     // eslint-disable-next-line no-extend-native -- adversarial fixture
     String.prototype.trim = () => '';
-    row = service.buildNodeStateUpdateRow({
-      existing: null,
-      nodeRow: {
-        [COLUMN.NODE_ID]: TEST_NODE_ID,
-        [COLUMN.NODE_ADDRESS]: 'localhost:8082',
-        [COLUMN.CPU_CORES]: 8,
-        [COLUMN.MEMORY_MB]: 16384,
-        [COLUMN.DISK_GB]: 500,
+    row = service.nodeLifecyclePublication.buildUpdateRow(
+      {
+        nodeId: TEST_NODE_ID,
+        nodeAddress: 'localhost:8082',
+        capabilities: ['partition_replica'],
+        telemetry: {
+          [COLUMN.CPU_CORES]: 8,
+          [COLUMN.MEMORY_MB]: 16384,
+          [COLUMN.DISK_GB]: 500,
+        },
       },
-      nextState: STATE.CONNECTED,
-      heartbeatAt: 10_000,
-      readyLeaseExpiresAt: null,
-      payloadNodeAddress: 'localhost:8082',
-      payload: buildPayload({bootIncarnation: 7}),
-      isHeartbeatOnly: false,
-      incarnationFence: {
-        payloadBootIncarnation: 7,
-        knownBootIncarnation: 5,
+      buildRegisteredNodeRow({bootIncarnation: 7}),
+      {
+        nextState: STATE.CONNECTED,
+        heartbeatAt: 10_000,
+        readyLeaseExpiresAt: null,
+        bootIncarnation: 7,
       },
-    });
+    );
   } finally {
     Array.isArray = originals.arrayIsArray;
     Math.max = originals.mathMax;
@@ -373,6 +338,7 @@ test('durable incarnation projection is stable under post-import mutable ' +
   }
   t.equal(row.boot_incarnation, 7);
   t.equal(row.capabilities, '["partition_replica"]');
+  t.equal(row.cpu_cores, 8, 'telemetry projection ignores replaced intrinsics');
   service.stop();
   t.end();
 });
@@ -398,7 +364,6 @@ test('durable incarnation ingress rejects inherited, accessor, and coercive ' +
     cacheNode,
     cdcIntegrationService: gateway.cdcIntegrationService,
   });
-  service.nodeBootIncarnationWatermarks.set(TEST_NODE_ID, 9);
   const inheritedPayload = buildPayload({});
   const accessorPayload = buildPayload({});
   const objectPayload = buildPayload({bootIncarnation: {}});
@@ -422,6 +387,7 @@ test('durable incarnation ingress rejects inherited, accessor, and coercive ' +
     valueOf: Object.getOwnPropertyDescriptor(Object.prototype, 'valueOf'),
     toString: Object.getOwnPropertyDescriptor(Object.prototype, 'toString'),
   };
+  const errors = [];
   try {
     // eslint-disable-next-line no-extend-native -- adversarial fixture
     Object.defineProperty(
@@ -441,9 +407,9 @@ test('durable incarnation ingress rejects inherited, accessor, and coercive ' +
       value: () => '7',
       writable: true,
     });
-    await service.handleNodeStateUpdate(inheritedPayload);
-    await service.handleNodeStateUpdate(accessorPayload);
-    await service.handleNodeStateUpdate(objectPayload);
+    for (const payload of [inheritedPayload, accessorPayload, objectPayload]) {
+      errors.push(await t.rejects(service.publishNodeLifecycleMessage(payload)));
+    }
   } finally {
     if (originals.bootIncarnation) {
       // eslint-disable-next-line no-extend-native -- adversarial fixture
@@ -461,11 +427,202 @@ test('durable incarnation ingress rejects inherited, accessor, and coercive ' +
     Object.defineProperty(Object.prototype, 'toString', originals.toString);
   }
   t.equal(getterCalls, 0, 'durable identity ingress never invokes accessors');
-  t.equal(gateway.updates.length, 3);
-  for (let index = 0; index < gateway.updates.length; index += 1) {
-    t.equal(gateway.updates[index].row.boot_incarnation, 9,
-      'malformed identity preserves the known durable fence without minting');
-  }
+  t.equal(
+    errors.every((error) => {
+      return error?.code === 'NODE_STATE_UPDATE_INCARNATION_REQUIRED';
+    }),
+    true,
+    'every inherited, accessor, or coercive identity fails closed',
+  );
+  t.equal(gateway.updates.length, 0,
+    'malformed identity never reaches the durable writer');
   service.stop();
   t.end();
 });
+
+test('R4 final CAS fences delayed G1 after registration replaces it with G2',
+  async (t) => {
+    initEnv();
+    const gateway = createRecordingGateway();
+    const g1 = buildRegisteredNodeRow({bootIncarnation: 1});
+    const g2 = buildRegisteredNodeRow({
+      bootIncarnation: 2,
+      nodeAddress: 'localhost:8182',
+      createdAt: 2000,
+      lastHeartbeat: 2100,
+    });
+    const service = createService({
+      cacheNode: g1,
+      cdcIntegrationService: gateway.cdcIntegrationService,
+      beforeNodeUpdate: ({durableRows}) => {
+        durableRows.set(TEST_NODE_ID, structuredClone(g2));
+      },
+    });
+
+    const error = await t.rejects(service.publishNodeLifecycleMessage(
+      buildPayload({bootIncarnation: 1, heartbeatAt: 3000}),
+    ));
+    t.equal(error?.code, STALE_NODE_INCARNATION_CODE,
+      'the zero-row readback classifies the superseded writer as stale');
+    t.equal(gateway.updates.length, 0,
+      'the full predicate prevents the stale durable mutation');
+    service.stop();
+  });
+
+test('READY publication uses the complete observed registration predicate',
+  async (t) => {
+    initEnv();
+    const gateway = createRecordingGateway();
+    const source = buildRegisteredNodeRow({bootIncarnation: 8});
+    const service = createService({
+      cacheNode: source,
+      cdcIntegrationService: gateway.cdcIntegrationService,
+    });
+
+    await service.publishNodeLifecycleMessage(
+      buildPayload({bootIncarnation: 8, heartbeatAt: 3000}),
+    );
+    t.same(gateway.updates[0].whereClause, {
+      node_id: TEST_NODE_ID,
+      boot_incarnation: 8,
+      status: 'joining',
+      connection_state: STATE.CONNECTED,
+      last_heartbeat: source.last_heartbeat,
+      created_at: source.created_at,
+    }, 'the gateway is only a persistence adapter for the exact source CAS');
+    service.stop();
+  });
+
+test('R5 final CAS refuses a same-incarnation source regression', async (t) => {
+  initEnv();
+  const gateway = createRecordingGateway();
+  const source = buildRegisteredNodeRow({bootIncarnation: 3});
+  const service = createService({
+    cacheNode: source,
+    cdcIntegrationService: gateway.cdcIntegrationService,
+    beforeNodeUpdate: ({durableRows}) => {
+      durableRows.set(TEST_NODE_ID, {
+        ...source,
+        status: 'stopped',
+        connection_state: 'disconnected',
+        last_heartbeat: 2500,
+      });
+    },
+  });
+
+  const error = await t.rejects(service.publishNodeLifecycleMessage(
+    buildPayload({bootIncarnation: 3, heartbeatAt: 3000}),
+  ));
+  t.equal(error?.code, 'NODE_STATE_UPDATE_SOURCE_CHANGED',
+    'a prerequisite/source regression is terminal');
+  t.equal(gateway.updates.length, 0,
+    'the regressed source is never overwritten');
+  service.stop();
+});
+
+test('a same-incarnation JOINING heartbeat advance remains a compatible ' +
+  'level-triggered source', async (t) => {
+  initEnv();
+  const gateway = createRecordingGateway();
+  const source = buildRegisteredNodeRow({
+    bootIncarnation: 9,
+    lastHeartbeat: 1000,
+  });
+  let advanceSourceHeartbeat = true;
+  const service = createService({
+    cacheNode: source,
+    cdcIntegrationService: gateway.cdcIntegrationService,
+    beforeNodeUpdate: ({durableRows}) => {
+      if (!advanceSourceHeartbeat) return;
+      advanceSourceHeartbeat = false;
+      durableRows.set(TEST_NODE_ID, {
+        ...source,
+        last_heartbeat: 1500,
+      });
+    },
+  });
+  const payload = buildPayload({
+    bootIncarnation: 9,
+    heartbeatAt: 3000,
+  });
+
+  const first = await service.publishNodeLifecycleMessage(payload);
+  t.match(first, {
+    completionCompleted: false,
+    deferRetry: true,
+    publicationOutcome: 'not_applied_source_unchanged',
+  }, 'a JOINING liveness advance requests re-drive instead of terminalizing');
+  const result = await service.publishNodeLifecycleMessage(payload);
+  t.match(result[CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW], {
+    node_id: TEST_NODE_ID,
+    boot_incarnation: 9,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+  }, 'the re-drive observes the new heartbeat fence and reaches READY');
+  t.equal(gateway.updates.length, 1,
+    'only the re-drive that owns the refreshed source predicate mutates');
+  service.stop();
+});
+
+test('lost acknowledgement observes the exact destination and duplicate ' +
+  'evidence remains idempotent', async (t) => {
+  initEnv();
+  const gateway = createRecordingGateway();
+  const source = buildRegisteredNodeRow({bootIncarnation: 4});
+  let loseFirstOutcome = true;
+  const service = createService({
+    cacheNode: source,
+    cdcIntegrationService: gateway.cdcIntegrationService,
+    beforeNodeUpdate: ({durableRows, data}) => {
+      if (!loseFirstOutcome) return;
+      loseFirstOutcome = false;
+      durableRows.set(TEST_NODE_ID, {...source, ...data});
+      throw new Error('lost acknowledgement');
+    },
+  });
+  const payload = buildPayload({
+    bootIncarnation: 4,
+    heartbeatAt: Number.MAX_SAFE_INTEGER - 1000,
+  });
+
+  const first = await service.publishNodeLifecycleMessage(payload);
+  const second = await service.publishNodeLifecycleMessage(payload);
+  t.equal(first.publicationOutcome, 'resolved_by_readback',
+    'a lost acknowledgement is classified by authoritative readback');
+  t.equal(second.publicationOutcome, 'already_current',
+    'duplicate evidence against the durable destination writes nothing');
+  t.match(first[CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW], {
+    node_id: TEST_NODE_ID,
+    boot_incarnation: 4,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+  }, 'lost outcome is resolved only by exact authoritative destination');
+  const authoritativeRowField =
+    CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW;
+  t.same(second[authoritativeRowField], first[authoritativeRowField],
+    'duplicate valid evidence is idempotent');
+  t.equal(gateway.updates.length, 0,
+    'the observed destination prevents a replay write storm');
+  service.stop();
+});
+
+test('correct incarnation for the wrong node identity cannot mutate a row',
+  async (t) => {
+    initEnv();
+    const gateway = createRecordingGateway();
+    const service = createService({
+      cacheNode: buildRegisteredNodeRow({bootIncarnation: 5}),
+      cdcIntegrationService: gateway.cdcIntegrationService,
+    });
+    const error = await t.rejects(service.publishNodeLifecycleMessage(
+      buildPayload({
+        nodeId: 'node-other',
+        bootIncarnation: 5,
+        heartbeatAt: 3000,
+      }),
+    ));
+    t.equal(error?.code, 'NODE_ROW_MISSING',
+      'identity mismatch is delegated back to registration, not inferred');
+    t.equal(gateway.updates.length, 0, 'no other node row is touched');
+    service.stop();
+  });

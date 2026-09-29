@@ -1,3 +1,4 @@
+import {COLUMN} from '../constants/index.js';
 import {
   getRecordHlc,
   getRecordTimestamp,
@@ -7,10 +8,23 @@ const TOMBSTONE_TTL_MS = 30000;
 const TOMBSTONE_MAX_PER_TABLE = 1024;
 
 function versionStampsOf(source) {
+  const createdAt = Number(source?.[COLUMN.CREATED_AT]);
   return {
     hlc: getRecordHlc(source),
     updatedAt: getRecordTimestamp(source),
+    createdAt: Number.isFinite(createdAt) && createdAt > 0 ? createdAt : null,
   };
+}
+
+// Without an HLC pair, a write of the deleted incarnation (same creation
+// identity) that is not strictly newer than the deleted row is a replay of
+// the removed row, never a recreation.
+function writeReplaysDeletedIncarnation(incoming, tombstone) {
+  return Number.isFinite(tombstone.createdAt) &&
+    incoming.createdAt === tombstone.createdAt &&
+    Number.isFinite(incoming.updatedAt) &&
+    Number.isFinite(tombstone.updatedAt) &&
+    incoming.updatedAt <= tombstone.updatedAt;
 }
 
 function effectiveTimestampOf(stamps) {
@@ -79,6 +93,9 @@ function writeSupersedesTombstone(data, tombstone) {
   }
   if (incoming.hlc && tombstone.hlc) {
     return incoming.hlc.compare(tombstone.hlc) > 0;
+  }
+  if (writeReplaysDeletedIncarnation(incoming, tombstone)) {
+    return false;
   }
   if (
     Number.isFinite(incoming.updatedAt) &&
@@ -195,6 +212,7 @@ class SystemTableCacheTombstoneStore {
     tombstoneTable.set(key, {
       hlc: incoming.hlc,
       updatedAt: incoming.updatedAt,
+      createdAt: incoming.createdAt,
       deletedAtMs: this.timeSource.now(),
       authoritativeAbsence,
       authoritativeObservedAtMs,

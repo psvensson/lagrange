@@ -59,6 +59,9 @@ function createBootstrapServiceRuntimeMethods() {
         messageGroupServiceHandler: this.messageGroupServiceHandler,
         endpointsPublished: this.hasPublishedLocalServiceEndpoints(),
         messageGroupServices: this.messageGroupServices,
+        registrationEvidenceByReplicaId:
+          this.seedRegistrationPhase
+            ?.messageGroupRegistrationEvidenceByReplicaId,
         onDeferredActivation: ({groupId, replicaId, error}) => {
           this.logger.warn(
             BOOTSTRAP_RUNTIME_LOG_MSG

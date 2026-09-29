@@ -133,6 +133,7 @@ function resolvePartitionExecutionBuilders({
         rows: response.rows || [],
         changes: response.changes,
         durableCommitWitness: response.durableCommitWitness,
+        originHlc: response.originHlc,
         acceptingNodeId: response.acceptingNodeId,
         acknowledgedAtMs: response.acknowledgedAtMs,
         readAuthorityWitness: response.readAuthorityWitness,
