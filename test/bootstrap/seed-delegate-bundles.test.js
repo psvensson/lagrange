@@ -40,6 +40,7 @@ function initializeTestEnvironment() {
 
 function createService() {
   return new BootstrapService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     wsPort: TEST_WS_PORT,

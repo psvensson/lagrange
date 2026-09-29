@@ -4,12 +4,12 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {EPOCH_CONFIG_KEY} from '../../src/cdc/cdc-integration-service.js';
 import {
   cleanupTestEnvironment,
+  createVirginSeedBootstrapService,
   getUniquePort,
   initializeTestEnvironment,
   TEST_CONFIG,
@@ -65,7 +65,7 @@ test('Current epoch durability and propagation integration', {timeout: 120000}, 
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440101';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -102,7 +102,7 @@ test('Current epoch durability and propagation integration', {timeout: 120000}, 
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440102';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

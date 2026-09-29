@@ -379,11 +379,14 @@ test('BootstrapAPI - bootstrap control-plane mutations use runtime-owner CDC whe
 
     const result = await api.executeBootstrapControlPlaneMutation({
       operation: 'upsert',
-      tableName: TABLES.SERVICES,
+      tableName: TABLES.CONFIG,
       row: {
-        service_id: 'svc-runtime-owner',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        node_id: 'seed-node-1',
+        config_key: 'test.runtime-owner-routing',
+        config_value: 'enabled',
+        value_type: 'string',
+        requires_restart: 0,
+        default_value: 'disabled',
+        created_at: 1234,
       },
     });
 
@@ -396,11 +399,14 @@ test('BootstrapAPI - bootstrap control-plane mutations use runtime-owner CDC whe
     },
     'runtime-owner CDC should satisfy bootstrap mutation ingress');
     t.same(capturedRow, {
-      tableName: TABLES.SERVICES,
+      tableName: TABLES.CONFIG,
       row: {
-        service_id: 'svc-runtime-owner',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        node_id: 'seed-node-1',
+        config_key: 'test.runtime-owner-routing',
+        config_value: 'enabled',
+        value_type: 'string',
+        requires_restart: 0,
+        default_value: 'disabled',
+        created_at: 1234,
       },
     }, 'default gateway should route mutations through runtime-owner CDC');
   });
@@ -522,6 +528,9 @@ test('BootstrapAPI - register-service returns retryable 503 when the control-pla
       systemTableCache: createEmptySystemTableCache(),
       sqlQueryEngine: {executeQuery: async () => ({success: true})},
       controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows() {
+          return {success: true, rows: []};
+        },
         async submitMutation() {
           return {
             success: false,
@@ -744,6 +753,9 @@ test('BootstrapAPI - register-service retries deferred services publication befo
       systemTableCache: createEmptySystemTableCache(),
       sqlQueryEngine: {executeQuery: async () => ({success: true})},
       controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows() {
+          return {success: true, rows: []};
+        },
         async submitMutation() {
           mutationAttempts += 1;
           if (mutationAttempts === 1) {
@@ -916,7 +928,7 @@ async (t) => {
     'bootstrap register-service should route through the SQL fallback once');
   t.match(
     sqlCalls[0].sql,
-    /^INSERT OR REPLACE INTO services \(/,
+    /^INSERT INTO services \(/,
     'register-service should persist through the canonical services table',
   );
   t.notMatch(
@@ -961,6 +973,9 @@ async (t) => {
       },
     },
     controlPlaneSystemTableGateway: {
+      async readAuthoritativeRows() {
+        return {success: true, rows: []};
+      },
       async submitMutation(mutation) {
         submittedMutations.push(mutation);
         return {success: true, affectedRows: 1};
@@ -1009,7 +1024,15 @@ test('BootstrapAPI - register-service acknowledges plain self-hosted registratio
       systemTableCache: createEmptySystemTableCache(),
       sqlQueryEngine: {
         async executeQuery() {
+          return {success: true, rows: [], affectedRows: 1};
+        },
+      },
+      controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows() {
           return {success: true, rows: []};
+        },
+        async submitMutation() {
+          return {success: true, affectedRows: 1};
         },
       },
       cdcIntegrationService: null,

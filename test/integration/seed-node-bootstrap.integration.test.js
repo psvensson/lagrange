@@ -5,7 +5,9 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import {NodeService} from '../../src/node/node-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -23,6 +25,10 @@ import {
   TABLES,
   UNIFIED_SERVICE_TYPE,
 } from '../../src/constants/index.js';
+import {createVirginSeedBootstrapService} from
+  './helpers/cluster-test-helpers.js';
+
+let testDataDir = null;
 
 /**
  * Initialize test environment with fast Raft elections.
@@ -35,6 +41,7 @@ function initializeTestEnvironment() {
   ServiceThreadManager.resetInstance();
 
   const config = ConfigurationManager.getInstance();
+  testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seed-bootstrap-'));
   config.initialize({
     node: {id: 'test-seed-node'},
     logging: {level: 'error'},
@@ -44,6 +51,7 @@ function initializeTestEnvironment() {
       electionTimeoutMaxMs: 200,
       heartbeatIntervalMs: 50,
     },
+    storage: {dataDir: testDataDir},
   });
 
   const logging = LoggingService.getInstance();
@@ -65,6 +73,10 @@ async function cleanupTestEnvironment() {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   AddressManager.resetInstance();
+  if (testDataDir) {
+    fs.rmSync(testDataDir, {recursive: true, force: true});
+    testDataDir = null;
+  }
 }
 
 const TEST_TIMEOUT_MS = 120000;
@@ -82,7 +94,7 @@ test('Seed node bootstrap integration', {timeout: TEST_TIMEOUT_MS}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440001';
     const seedWsPort = 18080;
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -230,7 +242,7 @@ test('Seed node bootstrap integration', {timeout: TEST_TIMEOUT_MS}, async (t) =>
       const expectedPartitionCreates = Object.values(INITIAL_REPLICA_IDS)
         .reduce((sum, replicaIds) => sum + replicaIds.length, 0);
 
-      const bootstrapService = new BootstrapService({
+      const bootstrapService = await createVirginSeedBootstrapService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         wsPort: seedWsPort,
@@ -310,7 +322,7 @@ test('Seed node bootstrap integration', {timeout: TEST_TIMEOUT_MS}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440002';
     const seedWsPort = 18081;
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -364,7 +376,7 @@ test('Seed node bootstrap integration', {timeout: TEST_TIMEOUT_MS}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440003';
     const seedWsPort = 18082;
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -421,7 +433,7 @@ test('Seed node bootstrap integration', {timeout: TEST_TIMEOUT_MS}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440004';
     const seedWsPort = 18083;
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -463,7 +475,7 @@ test('Seed node bootstrap integration', {timeout: TEST_TIMEOUT_MS}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440005';
     const seedWsPort = 18084;
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

@@ -10,6 +10,8 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {insertViaUpsert} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -37,6 +39,9 @@ test('registerNodeInCluster defers ready_lease_expires_at until ready signaling'
 
     const mockCdcIntegrationService = {
       sqlQueryEngine: {},
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async (tableName, rowData, options) => {
         upserts.push({tableName, rowData, options});
         return {success: true};
@@ -86,6 +91,7 @@ test('registerNodeInCluster defers ready_lease_expires_at until ready signaling'
       nodeId: 'joining-test-node',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
+      bootIncarnation: 9,
     });
 
     service.cdcIntegrationService = mockCdcIntegrationService;
@@ -107,5 +113,10 @@ test('registerNodeInCluster defers ready_lease_expires_at until ready signaling'
       nodeUpsert.rowData.ready_lease_expires_at,
       undefined,
       'join registration should not carry a ready lease before the ready checkpoint',
+    );
+    t.equal(
+      nodeUpsert.rowData.boot_incarnation,
+      9,
+      'join registration binds the canonical boot identity before READY',
     );
   });

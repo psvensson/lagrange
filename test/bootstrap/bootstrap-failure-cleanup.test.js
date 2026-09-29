@@ -21,6 +21,7 @@ import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';
  */
 function createTestBootstrapService(overrides = {}) {
   const service = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: 'test-seed-node',
     nodeAddress: 'http://localhost:3000',
     wsPort: null,

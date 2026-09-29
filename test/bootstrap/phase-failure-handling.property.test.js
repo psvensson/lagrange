@@ -82,6 +82,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             // No wsPort - will fail during leadership wait
             config: {
@@ -132,6 +133,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             config: {
               replicaStaggerDelayMs: 0,
@@ -181,6 +183,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             config: {
               replicaStaggerDelayMs: 0,
@@ -227,6 +230,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             config: {
               replicaStaggerDelayMs: 0,
@@ -278,6 +282,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             config: {
               replicaStaggerDelayMs: 0,
@@ -329,6 +334,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             config: {
               replicaStaggerDelayMs: 0,
@@ -386,6 +392,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             config: {
               replicaStaggerDelayMs: 0,
@@ -437,6 +444,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             config: {
               replicaStaggerDelayMs: 0,
@@ -483,6 +491,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
         nodeIdArb,
         async (nodeId) => {
           const bootstrap = new BootstrapService({
+            bootIncarnation: 1,
             nodeId,
             config: {
               replicaStaggerDelayMs: 0,

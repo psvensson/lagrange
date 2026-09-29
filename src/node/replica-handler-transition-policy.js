@@ -46,32 +46,6 @@ const SYSTEM_TABLE_HYDRATION_SQL = Object.freeze({
     `SELECT * FROM ${SYSTEM_TABLE_NAME.SERVICES} ` +
     'WHERE partition_id = ? AND service_type = ?',
 });
-function resolveSnapshotStateForTransition(
-  existingStatus,
-  localStatus,
-  targetStatus,
-) {
-  if (existingStatus) {
-    return existingStatus;
-  }
-  if (localStatus && localStatus !== targetStatus) {
-    return localStatus;
-  }
-  switch (targetStatus) {
-  case ReplicaStatus.CREATING:
-    return ReplicaStatus.PENDING;
-  case ReplicaStatus.SYNCING:
-    return ReplicaStatus.CREATING;
-  case ReplicaStatus.ACTIVE:
-    return ReplicaStatus.SYNCING;
-  case ReplicaStatus.REMOVING:
-    return ReplicaStatus.ACTIVE;
-  case ReplicaStatus.REMOVED:
-    return ReplicaStatus.REMOVING;
-  default:
-    return localStatus || ReplicaStatus.ACTIVE;
-  }
-}
 function hasExplicitReadyLeaseMetadata(nodeRow) {
   return Boolean(
     nodeRow &&
@@ -140,6 +114,5 @@ export {
   hasExplicitReadyLeaseMetadata,
   isReplicaJoinNodeViable,
   partitionMetadataMissingError,
-  resolveSnapshotStateForTransition,
   tableMetadataMissingError,
 };

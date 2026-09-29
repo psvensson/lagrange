@@ -5,18 +5,29 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {FIXTURE_ENDPOINT_INCARNATION} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
+
+// A registered, ready NODES row at the fixture incarnation.
+const readyNodeRow = (nodeId) => ({node_id: nodeId,
+  boot_incarnation: FIXTURE_ENDPOINT_INCARNATION, status: 'active',
+  connection_state: 'ready', ready_lease_expires_at: 2000});
+
+// Intentional I9 contract correction (owner decision F-FX-4, 2026-09-29):
+// the base expectation retained node-2 on endpoint evidence while its NODES
+// row was missing. Endpoint validity requires the endpoint's incarnation to
+// match the current authoritative NODES incarnation; with no NODES row there
+// is none, so the endpoint is not current evidence.
+const MISSING_NODES_ROW_TITLE = 'active-node projection does not retain a ' +
+  'node whose NODES row is missing: without the authoritative NODES ' +
+  'incarnation its endpoint is not current evidence (I9)';
 
 export function registerActiveNodeProjectionLaggingEvidenceTests() {
-  test('active-node projection can retain a readiness-healthy node when the node row is missing but active service evidence remains',
+  test(MISSING_NODES_ROW_TITLE,
     async (t) => {
       const activeNodeIds = resolveCanonicalActiveNodeIds({
         nodeRows: [
-          {
-            node_id: 'node-1',
-            status: 'active',
-            connection_state: 'ready',
-            ready_lease_expires_at: 2000,
-          },
+          readyNodeRow('node-1'),
         ],
         serviceRows: [
           {
@@ -34,6 +45,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
         ],
         nodeEndpointRows: [
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: 'node-1-ws',
             node_id: 'node-1',
             transport_type: 'ws',
@@ -41,6 +53,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
             address: 'ws://node-1:8082',
           },
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: 'node-2-ws',
             node_id: 'node-2',
             transport_type: 'ws',
@@ -65,34 +78,24 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
         nowMs: 1000,
       });
 
+      // Endpoint evidence is current only against the node's NODES
+      // incarnation (endpoint incarnation authority, invariant I9). While
+      // node-2's NODES row lags, its endpoint cannot be judged current (it
+      // could belong to a previous boot), so it is not retained on that
+      // evidence; it projects again as soon as its NODES row arrives.
       t.same(
         activeNodeIds,
-        ['node-1', 'node-2'],
-        'healthy nodes with active service and endpoint evidence should remain visible even if the node row lags the cache',
+        ['node-1'],
+        'endpoint evidence of a node whose NODES row lags is not current evidence',
       );
     });
   test('active-node projection keeps readiness-healthy node rows when service evidence is present but node_endpoints lags',
     async (t) => {
       const activeNodeIds = resolveCanonicalActiveNodeIds({
         nodeRows: [
-          {
-            node_id: 'node-1',
-            status: 'active',
-            connection_state: 'ready',
-            ready_lease_expires_at: 2000,
-          },
-          {
-            node_id: 'node-2',
-            status: 'active',
-            connection_state: 'ready',
-            ready_lease_expires_at: 2000,
-          },
-          {
-            node_id: 'node-3',
-            status: 'active',
-            connection_state: 'ready',
-            ready_lease_expires_at: 2000,
-          },
+          readyNodeRow('node-1'),
+          readyNodeRow('node-2'),
+          readyNodeRow('node-3'),
         ],
         serviceRows: [
           {
@@ -112,6 +115,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
         ],
         nodeEndpointRows: [
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: 'node-1-ws',
             node_id: 'node-1',
             transport_type: 'ws',
@@ -154,6 +158,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
         nodeRows: [
           {
             node_id: 'node-1',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 2000,
@@ -161,6 +166,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
           },
           {
             node_id: 'node-2',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             status: 'stopped',
             connection_state: 'ready',
             ready_lease_expires_at: 950,
@@ -185,6 +191,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
         ],
         nodeEndpointRows: [
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: 'node-1-ws',
             node_id: 'node-1',
             transport_type: 'ws',
@@ -192,6 +199,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
             address: 'ws://node-1:8082',
           },
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: 'node-2-ws',
             node_id: 'node-2',
             transport_type: 'ws',
@@ -214,6 +222,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
         nodeRows: [
           {
             node_id: 'node-1',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 71000,
@@ -221,6 +230,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
           },
           {
             node_id: 'node-2',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             status: 'stopped',
             connection_state: 'ready',
             ready_lease_expires_at: 1000,
@@ -245,6 +255,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
         ],
         nodeEndpointRows: [
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: 'node-1-ws',
             node_id: 'node-1',
             transport_type: 'ws',
@@ -252,6 +263,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
             address: 'ws://node-1:8082',
           },
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: 'node-2-ws',
             node_id: 'node-2',
             transport_type: 'ws',
@@ -274,6 +286,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
         nodeRows: [
           {
             node_id: 'node-1',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             status: 'active',
             connection_state: 'ready',
             ready_lease_expires_at: 71000,
@@ -281,6 +294,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
           },
           {
             node_id: 'node-2',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             status: 'stopped',
             connection_state: 'ready',
             ready_lease_expires_at: 1000,
@@ -305,6 +319,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
         ],
         nodeEndpointRows: [
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: 'node-1-ws',
             node_id: 'node-1',
             transport_type: 'ws',
@@ -312,6 +327,7 @@ export function registerActiveNodeProjectionLaggingEvidenceTests() {
             address: 'ws://node-1:8082',
           },
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: 'node-2-ws',
             node_id: 'node-2',
             transport_type: 'ws',

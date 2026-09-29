@@ -17,9 +17,6 @@ import {
 import {
   createControlPlaneRuntimeBundle,
 } from '../../src/control-plane/control-plane-runtime-bundle.js';
-import {
-  PartitionServiceRowOwner,
-} from '../../src/partition/partition-service-row-owner.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   createLocalSystemTablePartitionServices,
@@ -144,12 +141,25 @@ test(
 );
 
 test(
-  'PartitionServiceRowOwner - zero-row removal still repairs stale cache ' +
+  'cleanup-marker release - zero-row removal still repairs stale cache ' +
     'through the gateway and a witnessed leader owner read',
   async (t) => {
     const serviceId = 'services-p1-stale-replica';
     const cache = new SystemTableCache();
     seedStaleServiceCacheRow(cache, serviceId);
+    cache.applySystemTableChange(
+      SYSTEM_TABLE_NAME.SERVICES,
+      CACHE_CDC_OPERATIONS.UPDATE,
+      {
+        service_id: serviceId,
+        service_type: 'partition_cleanup',
+        partition_id: SERVICES_PARTITION_ID,
+        node_id: SOURCE_NODE_ID,
+        status: 'cleanup_owned',
+        cleanup_token: 'cleanup-token',
+        updated_at: 200,
+      },
+    );
     const ownerReads = [];
     const sqlQueryEngine = {
       async executeQuery(sql) {
@@ -200,15 +210,19 @@ test(
       cdcIntegrationService: service,
       systemTableCache: cache,
     }).controlPlaneSystemTableGateway;
-    const owner = new PartitionServiceRowOwner({
-      systemTableWriter: gateway,
-    });
-
-    await owner.removeReplica({
-      partitionId: SERVICES_PARTITION_ID,
-      replicaId: serviceId,
-      nodeId: SOURCE_NODE_ID,
-    });
+    await gateway.deleteSystemTableRow(
+      SYSTEM_TABLE_NAME.SERVICES,
+      {
+        service_id: serviceId,
+        service_type: 'partition_cleanup',
+        partition_id: SERVICES_PARTITION_ID,
+        node_id: SOURCE_NODE_ID,
+        status: 'cleanup_owned',
+        cleanup_token: 'cleanup-token',
+        updated_at: 200,
+      },
+      {allowCoalescing: false, skipCacheWait: true},
+    );
 
     t.equal(ownerReads.length, 1,
       'owner-to-gateway zero-row cleanup should trigger one exact ' +

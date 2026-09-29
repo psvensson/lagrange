@@ -231,6 +231,7 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
     now: () => Date.now(),
   });
   const exhaustedService = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
     seedNodeAddress: SEED_ADDRESS,
@@ -289,6 +290,7 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
   );
 
   const unknownOwnerService = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
     seedNodeAddress: SEED_ADDRESS,
@@ -298,6 +300,7 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
   unknownOwnerService.getLifecycleStateMachine().transition('stopped');
   t.throws(
     () => new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       seedNodeAddress: SEED_ADDRESS,
@@ -315,7 +318,10 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
     storage: durableStorage,
     now: () => Date.now(),
   });
+  // The outer reattempt is a new boot lifecycle: it reserves a strictly
+  // larger incarnation than the exhausted attempt (boot-incarnation-owner).
   const service = new NodeJoiningService({
+    bootIncarnation: 2,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
     seedNodeAddress: SEED_ADDRESS,

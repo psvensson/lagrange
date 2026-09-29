@@ -11,6 +11,10 @@ import {
   TABLES,
   TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
+import {
+  FIXTURE_ENDPOINT_INCARNATION,
+  registeredNodeRow,
+} from '../test-helpers/endpoint-incarnation-fixture.js';
 
 const TEST_NOW_MS = 1234;
 const TEST_JOINING_NODE_ID = 'joining-node';
@@ -41,8 +45,11 @@ function createEndpointEvaluator() {
   });
 }
 
+// The joining node is registered at the incarnation its endpoints carry.
 function createEndpointCache(rows = [], serviceEndpointRows = []) {
   return {
+    get: (tableName, nodeId) =>
+      (tableName === TABLES.NODES ? registeredNodeRow(nodeId) : null),
     getAll(tableName) {
       if (tableName === TABLES.NODE_ENDPOINTS) return rows;
       if (tableName === TABLES.SERVICE_ENDPOINTS) return serviceEndpointRows;
@@ -53,6 +60,7 @@ function createEndpointCache(rows = [], serviceEndpointRows = []) {
 
 function createPostgresWireEndpointRow() {
   return {
+    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
     endpoint_id: `${META_SERVICE_ID.POSTGRES_WIRE}-ep-${TEST_JOINING_NODE_ID}`,
     service_id: META_SERVICE_ID.POSTGRES_WIRE,
     node_id: TEST_JOINING_NODE_ID,
@@ -256,6 +264,7 @@ test('JoinReadinessEvaluator requires local bootstrap transport but not pgwire',
   const evaluator = createEndpointEvaluator();
   const result = evaluator.evaluateCanonicalJoinEndpointVisibility(
     createEndpointCache([{
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       endpoint_id: 'joining-node-ws',
       node_id: TEST_JOINING_NODE_ID,
       transport_type: TRANSPORT_TYPE.WEBSOCKET,

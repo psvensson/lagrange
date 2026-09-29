@@ -29,6 +29,7 @@ import {
 } from '../constants/index.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 import {
+  STALE_NODE_INCARNATION_CODE,
   isRetryableControlPlaneError,
 } from '../control-plane/control-plane-error-classification.js';
 
@@ -85,6 +86,13 @@ const JOIN_CLEANUP_LIFECYCLE_STOP_PATH_BY_STATE = Object.freeze({
 
 function resolveJoinFailureRetryable(error) {
   return error?.retryable === true || isRetryableControlPlaneError(error);
+}
+
+// A newer incarnation superseded this lifecycle's registration: the next
+// lifecycle must reserve above it (boot-incarnation-owner.js).
+function readSupersededBootIncarnation(error) {
+  return error?.code === STALE_NODE_INCARNATION_CODE &&
+    Number.isSafeInteger(error.knownIncarnation) ? error.knownIncarnation : 0;
 }
 
 /**
@@ -150,6 +158,7 @@ class JoinCleanupHandler {
         error: error.message,
         phase: failedPhase,
         retryable: resolveJoinFailureRetryable(error),
+        supersededBootIncarnation: readSupersededBootIncarnation(error),
         retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
           Math.max(0, Math.floor(error.retryAfterMs)) :
           0,
@@ -189,6 +198,7 @@ class JoinCleanupHandler {
       error: error.message,
       phase: failedPhase,
       retryable: resolveJoinFailureRetryable(error),
+      supersededBootIncarnation: readSupersededBootIncarnation(error),
       retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
         Math.max(0, Math.floor(error.retryAfterMs)) :
         0,
@@ -622,7 +632,7 @@ class JoinCleanupHandler {
       this.delegates.setReplicaHandler(null);
     }
 
-    this.clearReplicaStateMachine();
+    await this.clearReplicaStateMachine();
     // Stop all runtime drivers (request/call cell workers) before the
     // service maps come down: the per-replica REMOVE_REPLICA stop path
     // never runs at whole-node teardown, so without this sweep the
@@ -679,13 +689,13 @@ class JoinCleanupHandler {
     this.delegates.setRebalanceCoordinator(null);
   }
 
-  clearReplicaStateMachine() {
+  async clearReplicaStateMachine() {
     const replicaStateMachine = this.delegates.getReplicaStateMachine();
     if (!replicaStateMachine) {
       return;
     }
     replicaStateMachine.stopTimeoutChecker();
-    replicaStateMachine.clear();
+    await replicaStateMachine.clear();
     this.delegates.setReplicaStateMachine(null);
   }
 
