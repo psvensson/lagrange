@@ -1,5 +1,6 @@
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
+  CONTROL_PLANE_GATEWAY_ERROR_CODE,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_SQL_OPERATION,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
@@ -215,6 +216,17 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
     ));
   },
 
+  assertSystemTableMutationAllowed(operation, tableName) {
+    if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
+        operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT) {
+      const error = new Error(GATEWAY_ERROR_MSG.SERVICES_UPSERT_FORBIDDEN);
+      error.code =
+        CONTROL_PLANE_GATEWAY_ERROR_CODE.SERVICES_UPSERT_FORBIDDEN;
+      error.errorCode = error.code;
+      throw error;
+    }
+  },
+
   assertSqlQueryEngine() {
     const sqlQueryEngine = this.resolveSqlQueryEngine();
     if (
@@ -268,6 +280,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
     if (!tableName) {
       throw new Error(GATEWAY_ERROR_MSG.MUTATION_TABLE_REQUIRED);
     }
+    this.assertSystemTableMutationAllowed(operation, tableName);
 
     if (
       operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT ||

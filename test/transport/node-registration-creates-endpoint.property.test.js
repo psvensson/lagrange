@@ -77,6 +77,7 @@ function createWiredService({nodeId, nodeAddress, executedQueries}) {
   const mockCDCService = createMockCDCService(mockQueryEngine);
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId,
     nodeAddress,
     seedNodeAddress: 'ws://seed:8000',
@@ -181,6 +182,7 @@ test('Property 11: Node Registration Creates Endpoint',
                 createMockCDCService(mockQueryEngine);
 
               const service = new NodeJoiningService({
+                bootIncarnation: 1,
                 nodeId,
                 nodeAddress,
                 seedNodeAddress: 'ws://seed:8000',

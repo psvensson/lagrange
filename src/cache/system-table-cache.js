@@ -33,9 +33,11 @@ import {
 } from './system-cache-key-descriptor.js';
 import {
   applyStaleRowBackfill,
+  buildDeletedRowTombstoneSource,
   cloneFieldValue,
   compareSchemaVersions,
   getRecordTimestamp,
+  isDeleteSupersededByExistingRecord,
   isStaleForExistingRecord,
   mergeRecords,
   shouldBackfillMissingField,
@@ -465,7 +467,7 @@ class SystemTableCache {
         });
       } else {
         const existing = table.get(key);
-        if (this.isStaleForExistingRecord(tableName, existing, data)) {
+        if (isDeleteSupersededByExistingRecord(tableName, existing, data)) {
           // The row is causally newer than this DELETE: the delete is superseded,
           // so it must NOT leave a tombstone that would fence the live row.
           this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
@@ -482,7 +484,7 @@ class SystemTableCache {
         this.tombstoneStore.record(
           tableName,
           key,
-          data,
+          buildDeletedRowTombstoneSource(existing, data),
           {
             authoritativeAbsence,
             authoritativeObservedAtMs: options?.authoritativeObservedAtMs,

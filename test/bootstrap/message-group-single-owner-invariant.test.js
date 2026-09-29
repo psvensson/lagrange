@@ -73,6 +73,17 @@ test('BootstrapAPI rejects duplicate active message-group owner registration',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache,
       messageGroupServices: new Map(),
+      controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows(_tableName, _sql, params) {
+          const row = rows.services.find((service) =>
+            service.service_id === params[0],
+          );
+          return {success: true, rows: row ? [{...row}] : []};
+        },
+        async submitMutation() {
+          return {success: true, affectedRows: 1};
+        },
+      },
     });
     await api.initialize(0, {listen: false});
     api.setSqlQueryEngine({

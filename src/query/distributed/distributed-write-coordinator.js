@@ -26,6 +26,19 @@ const UNARY_PLUS = '+';
 const PARTICIPANT_ROLE_PRIMARY = 'primary';
 const PARTICIPANT_ROLE_MIRROR = 'mirror';
 
+function participantFailureDisposition(result = {}) {
+  return {
+    failureCode: typeof result.failureCode === 'string' ?
+      result.failureCode : null,
+    committed: result.committed === true,
+    outcome: typeof result.outcome === 'string' ? result.outcome : null,
+    disposition: typeof result.disposition === 'string' ?
+      result.disposition : null,
+    logIndex: Number.isSafeInteger(result.logIndex) ? result.logIndex : null,
+    entryId: typeof result.entryId === 'string' ? result.entryId : null,
+  };
+}
+
 // One log line per failed fan-out: the operation identity plus the
 // partition/service ids and error codes of every failed participant, so the
 // server log names what the client envelope names.
@@ -41,6 +54,10 @@ function buildParticipantFailureLogContext(plan, participantFailures) {
       participantNodeId: entry.participantNodeId,
       participantAddress: entry.participantAddress,
       errorCode: entry.errorCode,
+      failureCode: entry.failureCode,
+      committed: entry.committed,
+      outcome: entry.outcome,
+      disposition: entry.disposition,
       error: entry.error,
       failedTable: entry.failedTable,
     })),
@@ -234,6 +251,11 @@ class DistributedWriteCoordinator {
         result.attempts : 1;
       return sum + Math.max(attempts - 1, 0);
     }, 0);
+    const originHlc = participantResults[0]?.originHlc;
+    const hasSharedOriginHlc =
+      typeof originHlc === LOCAL_STR_STRING &&
+      originHlc.length > 0 &&
+      participantResults.every((result) => result.originHlc === originHlc);
     for (const result of participantResults) {
       if (!result.success) {
         continue;
@@ -262,6 +284,7 @@ class DistributedWriteCoordinator {
             typeof result.errorCode === 'string' ?
               result.errorCode :
               null,
+        ...participantFailureDisposition(result),
         error:
             result.error ||
             QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
@@ -311,17 +334,7 @@ class DistributedWriteCoordinator {
         failedPartitions: failedParticipants.map(
           (result) => result.partitionId,
         ),
-        partitionErrors: failedParticipants.map((result) => ({
-          partitionId: result.partitionId,
-          error:
-              result.error ||
-              QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-          retryAfterMs:
-              Number.isFinite(result?.retryAfterMs) &&
-              result.retryAfterMs > 0 ?
-                Math.floor(result.retryAfterMs) :
-                null,
-        })),
+        partitionErrors: participantFailures.map((failure) => ({...failure})),
         participantFailures,
         firstFailedParticipant,
         participantResults,
@@ -342,6 +355,7 @@ class DistributedWriteCoordinator {
       partitions: primaryPartitions,
       mirrorPartitions,
       participantResults,
+      ...(hasSharedOriginHlc ? {originHlc} : {}),
       idempotencyKey: plan.idempotencyKey,
       operationId: plan.operationId,
       retryCount,
@@ -402,6 +416,7 @@ class DistributedWriteCoordinator {
             error.errorCode.length > 0 ?
               error.errorCode :
               null),
+        ...participantFailureDisposition(error),
         retryAfterMs:
           Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0 ?
             Math.floor(error.retryAfterMs) :

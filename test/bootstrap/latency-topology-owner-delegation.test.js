@@ -88,6 +88,7 @@ test('NodeJoiningService partition CDC propagation requires topology owner',
   async (t) => {
     setupEnvironment();
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'node-a',
       seedNodeAddress: 'http://seed-node:8080',
     });
@@ -113,6 +114,7 @@ test('NodeJoiningService delegates partition CDC propagation to topology owner',
     setupEnvironment();
     const calls = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'node-a',
       seedNodeAddress: 'http://seed-node:8080',
     });

@@ -62,6 +62,7 @@ test(DURABLE_REJOIN_FINAL_HANDOFF_TEST.name, async (t) => {
 
   const cache = new SystemTableCache();
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: DURABLE_REJOIN_FINAL_HANDOFF_TEST.nodeId,
     nodeAddress: DURABLE_REJOIN_FINAL_HANDOFF_TEST.nodeAddress,
     seedNodeAddress: DURABLE_REJOIN_FINAL_HANDOFF_TEST.seedAddress,

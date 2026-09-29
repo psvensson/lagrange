@@ -18,6 +18,8 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createLifecycleCdcService} from
+  '../test-helpers/lifecycle-state-store.js';
 import {
   buildReplicaStatePropertyContext,
   getExpectedReplicaStateMutationBundleCount,
@@ -39,29 +41,7 @@ const VALID_TRANSITION_SEQUENCES = [
  * @return {Object} Mock service with calls array.
  */
 function createMockCdcService() {
-  const calls = [];
-  return {
-    calls,
-    updateSystemTableRow: async (tableName, whereClause, data) => {
-      calls.push({
-        type: 'update',
-        tableName,
-        whereClause,
-        data,
-        timestamp: Date.now(),
-      });
-      return {success: true};
-    },
-    upsertSystemTableRow: async (tableName, data) => {
-      calls.push({
-        type: 'upsert',
-        tableName,
-        data,
-        timestamp: Date.now(),
-      });
-      return {success: true};
-    },
-  };
+  return createLifecycleCdcService();
 }
 
 test('Property 6: State Persistence via CDC', async (t) => {
@@ -199,16 +179,11 @@ test('Property 6: State Persistence via CDC', async (t) => {
           let cdcCompleted = false;
 
           // Mock CDC integration service with tracking
-          const mockCdc = {
-            updateSystemTableRow: async () => {
+          const mockCdc = createLifecycleCdcService({
+            onMutation: () => {
               cdcCompleted = true;
-              return {success: true};
             },
-            upsertSystemTableRow: async () => {
-              cdcCompleted = true;
-              return {success: true};
-            },
-          };
+          });
 
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',

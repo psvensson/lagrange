@@ -52,6 +52,9 @@ class HeartbeatService extends EventEmitter {
     this.quietMode = options.quietMode || null;
     this.nodeStateReporter =
       typeof options.nodeStateReporter === 'function' ? options.nodeStateReporter : null;
+    // The one durable node lifecycle owner; this service is its local
+    // ingress adapter and never writes lifecycle columns itself.
+    this.nodeLifecyclePublication = options.nodeLifecyclePublication || null;
     this.isNodeLifecycleReady =
       typeof options.isNodeLifecycleReady === 'function' ?
         options.isNodeLifecycleReady :
@@ -216,6 +219,7 @@ function assembleHeartbeatService(options = {}) {
       options.verifyReporterVisibilityOnSuccess !== false,
     membershipPublicationService: options.membershipPublicationService || null,
     isNodeLifecycleReady: options.isNodeLifecycleReady,
+    nodeLifecyclePublication: options.nodeLifecyclePublication,
     now: options.now,
     setIntervalFn: options.setIntervalFn,
     clearIntervalFn: options.clearIntervalFn,

@@ -10,6 +10,7 @@ import {buildControlPlaneReadAuthority} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
+import {isPartitionCleanupServiceRow} from '../constants/service.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
@@ -67,14 +68,9 @@ class SQLQueryEngineRoutingMetadataMethods {
       return false;
     }
 
-    if (typeof this.systemCache.has === LOCAL_STR_FUNCTION) {
-      if (this.systemCache.has(TABLES.SERVICES, replicaId)) {
-        return true;
-      }
-    }
-
     if (typeof this.systemCache.get === LOCAL_STR_FUNCTION) {
-      if (this.systemCache.get(TABLES.SERVICES, replicaId)) {
+      const row = this.systemCache.get(TABLES.SERVICES, replicaId);
+      if (row && !isPartitionCleanupServiceRow(row)) {
         return true;
       }
     }
@@ -82,7 +78,8 @@ class SQLQueryEngineRoutingMetadataMethods {
     if (typeof this.systemCache.filter === LOCAL_STR_FUNCTION) {
       const matches = this.systemCache.filter(
         TABLES.SERVICES,
-        (row) => row.service_id === replicaId || row.replica_id === replicaId,
+        (row) => !isPartitionCleanupServiceRow(row) &&
+          (row.service_id === replicaId || row.replica_id === replicaId),
       );
       if (Array.isArray(matches) && matches.length > 0) {
         return true;

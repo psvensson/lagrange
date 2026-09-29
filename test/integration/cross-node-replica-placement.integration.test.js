@@ -36,6 +36,8 @@ import {
   createMockStoragePressureBehavior,
 } from './rebalancer-integration-doubles.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {createLifecycleCdcServiceForCache} from
+  '../test-helpers/lifecycle-state-store.js';
 
 // Port counter for unique ports per test
 let integrationPortCounter = 25000;
@@ -107,24 +109,7 @@ function createTestSchema(tableName) {
 }
 
 function createMockCDCService(systemTableCache) {
-  return {
-    async insertSystemTableRow(tableName, data) {
-      systemTableCache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      systemTableCache.applySystemTableChange(
-        tableName,
-        'UPDATE',
-        {...whereClause, ...data},
-      );
-      return {success: true};
-    },
-    async upsertSystemTableRow(tableName, data) {
-      systemTableCache.applySystemTableChange(tableName, 'UPSERT', data);
-      return {success: true};
-    },
-  };
+  return createLifecycleCdcServiceForCache(systemTableCache);
 }
 
 function createMockTablePolicyService() {

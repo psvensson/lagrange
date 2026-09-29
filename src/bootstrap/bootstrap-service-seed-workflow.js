@@ -95,7 +95,10 @@ function createBootstrapServiceSeedWorkflowMethods() {
           this.messageGroupServices.size > 0,
         partitionsReady:
           this.partitionServices.size > 0,
-        registrationReady: this.cdcIntegrationService !== null,
+        registrationReady: Boolean(
+          this.cdcIntegrationService !== null &&
+          this.replicaStateMachine,
+        ),
         cacheHydrated:
           systemTableCache !== null && this.systemCacheHydrated === true,
         replicaHandlerReady: Boolean(this.replicaHandler),
@@ -284,6 +287,11 @@ function createBootstrapServiceSeedWorkflowMethods() {
             resolveCheckpointSnapshot(),
           ),
           run: async () => {
+            if (!this.replicaStateMachine) {
+              this.seedRuntimeBridgeOwner
+                .ensureBootstrapCdcIntegrationService();
+              this.initializeReplicaStateMachine();
+            }
             await startupPipelineRunner.run({
               phases: phases.slice(NUM.THREE, NUM.FOUR),
             });
@@ -315,7 +323,9 @@ function createBootstrapServiceSeedWorkflowMethods() {
             });
 
             const replicaHandlerStartMs = Date.now();
-            this.initializeReplicaHandler();
+            if (!this.replicaHandler) {
+              this.initializeReplicaHandler();
+            }
             this.logger.info(POST_PIPELINE_LOG.REPLICA_HANDLER, {
               nodeId: this.nodeId,
               durationMs: Date.now() - replicaHandlerStartMs,

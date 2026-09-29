@@ -242,6 +242,27 @@ test('CDCIntegrationService - transient detection includes leader-transition que
     t.end();
   });
 
+test('CDCIntegrationService - local write routing preserves typed terminal ' +
+  'participant disposition', (t) => {
+  const service = new CDCIntegrationService({nodeId: 'test-node'});
+  const terminalAggregate = {
+    success: false,
+    error: 'Distributed operation failed due to participant failures',
+    participantFailures: [{
+      failureCode: 'SQLITE_CONSTRAINT_PRIMARYKEY',
+      committed: true,
+      outcome: 'statement_failed',
+    }],
+  };
+
+  t.equal(
+    service.isLocalSystemTableWriteRoutedOn(terminalAggregate),
+    false,
+    'a committed deterministic participant failure must not be replayed',
+  );
+  t.end();
+});
+
 // F-ae / F-z census: a partition write its replica did not take because it
 // is recovering consensus, or released with an outcome it cannot know, is
 // retried like a write that found no leader (the texts the write kernel
