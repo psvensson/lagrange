@@ -1,0 +1,26 @@
+diff --git a/test/simulation/formation-sim-production-seed-host.js b/test/simulation/formation-sim-production-seed-host.js
+index 9d18592fe..2df8566d1 100644
+--- a/test/simulation/formation-sim-production-seed-host.js
++++ b/test/simulation/formation-sim-production-seed-host.js
+@@ -15,6 +15,8 @@
+ import {TRANSPORT_EVENT} from '../../src/constants/transport.js';
+ import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
+ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
++import {DURABLE_EVIDENCE_STATE} from
++  '../../src/bootstrap/rejoin-hints-constants.js';
+ import {
+   BOOTSTRAP_PHASE,
+ } from '../../src/bootstrap/bootstrap-constants.js';
+@@ -323,6 +325,12 @@ function createProductionSeedSimHost(environment, options = {}) {
+   const bootstrap = new BootstrapService({
+     nodeId, nodeAddress, wsPort,
+     nodeService: environment.nodeService, routerFactory, randomSource,
++    // The simulated seed is virgin: no data directory, so no durable SERVICES
++    // identity. Production reads this at startup (readSeedStartupStorageAdmission).
++    startupServicesAdmission: Object.freeze({
++      state: DURABLE_EVIDENCE_STATE.MISSING, rows: [], conflicting: false,
++      empty: true,
++    }),
+   });
+   // A seed phase is production's work, and production already owns the
+   // boundary it is entered through: StartupPipelineRunner.run() is where
