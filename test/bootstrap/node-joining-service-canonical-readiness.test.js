@@ -48,6 +48,8 @@ import {
   TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
 import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
+import {FIXTURE_ENDPOINT_INCARNATION} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 
 function attachStartupAuthority(service, canonicalStartupNodeIds) {
@@ -66,6 +68,7 @@ test('NodeJoiningService - canonical readiness accepts local kernel ingress',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-local-ingress',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -113,6 +116,7 @@ test('NodeJoiningService - canonical readiness snapshot tracks active required n
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-required-node-ids',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -124,10 +128,12 @@ test('NodeJoiningService - canonical readiness snapshot tracks active required n
     const cache = new SystemTableCache();
 
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: 'seed-node',
       [COLUMN.STATUS]: 'active',
     });
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: 'joining-node-required-node-ids',
       [COLUMN.STATUS]: 'active',
     });
@@ -152,6 +158,7 @@ test('NodeJoiningService - canonical readiness snapshot does not use partial rea
     const JOINING_NODE_ID = 'joining-node-startup-authority-empty';
     const PARTIAL_READY_NODE_ID = 'seed-node';
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: JOINING_NODE_ID,
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -173,10 +180,12 @@ test('NodeJoiningService - canonical readiness snapshot does not use partial rea
     const cache = new SystemTableCache();
 
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: PARTIAL_READY_NODE_ID,
       [COLUMN.STATUS]: 'active',
     });
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: JOINING_NODE_ID,
       [COLUMN.STATUS]: 'active',
     });
@@ -199,6 +208,7 @@ test('NodeJoiningService - canonical readiness snapshot uses startup authority w
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-topology-meta',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -268,6 +278,7 @@ test('NodeJoiningService - canonical readiness snapshot surfaces behind revision
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-topology-regression',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -325,6 +336,7 @@ test('NodeJoiningService - canonical join timeout preserves topology diagnostics
     let now = 0;
     const errorEvents = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-join-gate-3',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -428,6 +440,7 @@ test('NodeJoiningService - canonical readiness blocked log includes control-plan
     let now = 0;
     const warnEvents = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-join-gate-blocked',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -503,6 +516,7 @@ test('NodeJoiningService - canonical readiness treats self target as unreachable
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-self-transport-gate',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -555,6 +569,7 @@ test('NodeJoiningService - canonical join readiness repairs endpoint visibility'
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-join-gate-repair',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -583,6 +598,7 @@ test('NodeJoiningService - canonical join readiness repairs endpoint visibility'
     service.backfillPropagatedCacheTablesFromAuthoritativeState = async (tableNames) => {
       repairCalls.push(Array.isArray(tableNames) ? [...tableNames] : []);
       cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         [COLUMN.ENDPOINT_ID]: 'ep-joining-node-join-gate-repair-ws',
         [COLUMN.NODE_ID]: 'joining-node-join-gate-repair',
         [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
@@ -592,10 +608,12 @@ test('NodeJoiningService - canonical join readiness repairs endpoint visibility'
     };
 
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: 'seed-node',
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     });
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: 'joining-node-join-gate-repair',
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     });
@@ -626,6 +644,7 @@ test('NodeJoiningService - canonical join readiness snapshot waits for endpoint 
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-endpoint-gate',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -636,10 +655,12 @@ test('NodeJoiningService - canonical join readiness snapshot waits for endpoint 
     service.getBlockingSystemServiceLeaders = (missing) => missing;
 
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: 'seed-node',
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     });
     cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.NODE_ID]: 'joining-node-endpoint-gate',
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     });
@@ -661,6 +682,7 @@ test('NodeJoiningService - canonical join readiness snapshot waits for endpoint 
     // A healthy sys-postgres-wire endpoint is an optional runtime service and
     // never substitutes for the bootstrap transport endpoint.
     cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-joining-node-endpoint-gate',
       [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
       [COLUMN.NODE_ID]: 'joining-node-endpoint-gate',
@@ -681,6 +703,7 @@ test('NodeJoiningService - canonical join readiness snapshot waits for endpoint 
     );
 
     cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       [COLUMN.ENDPOINT_ID]: 'ep-joining-node-endpoint-gate-ws',
       [COLUMN.NODE_ID]: 'joining-node-endpoint-gate',
       [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
@@ -708,6 +731,7 @@ test('NodeJoiningService - authoritative cache backfill closes the CDC blind win
       });
 
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'joining-node-backfill-gate',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -716,14 +740,17 @@ test('NodeJoiningService - authoritative cache backfill closes the CDC blind win
       service.getBlockingSystemServiceLeaders = (missing) => missing;
 
       cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         [COLUMN.NODE_ID]: 'seed-node',
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       });
       cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         [COLUMN.NODE_ID]: 'joining-node-backfill-gate',
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       });
       cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         [COLUMN.ENDPOINT_ID]: 'ep-seed-node-ws',
         [COLUMN.NODE_ID]: 'seed-node',
         [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
@@ -731,6 +758,7 @@ test('NodeJoiningService - authoritative cache backfill closes the CDC blind win
         [COLUMN.UPDATED_AT]: 2,
       });
       cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-seed-node',
         [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
         [COLUMN.NODE_ID]: 'seed-node',
@@ -755,6 +783,7 @@ test('NodeJoiningService - authoritative cache backfill closes the CDC blind win
                 rows: [
                   ...cache.getAll(TABLES.NODE_ENDPOINTS),
                   {
+                    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
                     [COLUMN.ENDPOINT_ID]: 'ep-joining-node-backfill-gate-ws',
                     [COLUMN.NODE_ID]: 'joining-node-backfill-gate',
                     [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
@@ -769,6 +798,7 @@ test('NodeJoiningService - authoritative cache backfill closes the CDC blind win
                 rows: [
                   ...cache.getAll(TABLES.SERVICE_ENDPOINTS),
                   {
+                    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
                     [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-joining-node-backfill-gate',
                     [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
                     [COLUMN.NODE_ID]: 'joining-node-backfill-gate',
@@ -828,6 +858,7 @@ test('NodeJoiningService - authoritative backfill merges divergent replica snaps
       });
 
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'joining-node-replica-merge',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -964,6 +995,7 @@ async (t) => {
     });
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-publication-backfill',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1046,6 +1078,7 @@ test(
       });
 
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'joining-node-bootstrap-snapshot',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -1123,6 +1156,7 @@ test(
       });
 
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'joining-node-snapshot-first',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -1225,6 +1259,7 @@ test('NodeJoiningService - authoritative backfill coalesces concurrent identical
       });
 
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'joining-node-backfill-single-flight',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',

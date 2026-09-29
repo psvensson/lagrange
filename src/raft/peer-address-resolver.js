@@ -5,7 +5,7 @@
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5
  */
 
-import {TABLES} from '../constants/index.js';
+import {TABLES, isPartitionCleanupServiceRow} from '../constants/index.js';
 import {AddressManager} from '../address/address-manager.js';
 import {
   PEER_ADDRESS_RESOLVER_ADDRESS,
@@ -136,7 +136,7 @@ class PeerAddressResolver {
    */
   resolveFromCache(peerId) {
     const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
-    if (service && service.node_id) {
+    if (service && !isPartitionCleanupServiceRow(service) && service.node_id) {
       const address = this.addressManager.format(
         service.node_id,
         this.entityType,

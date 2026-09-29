@@ -11,6 +11,7 @@ import {
   ENTITY_TYPE,
   SERVICE_TYPE,
   TABLES,
+  isPartitionCleanupServiceRow,
 } from '../constants/index.js';
 import {
   MESSAGE_GROUP_SERVICE_LITERAL,
@@ -196,7 +197,7 @@ function assignPeerResolution(serviceClass) {
         return null;
       }
       const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
-      if (!service) {
+      if (!service || isPartitionCleanupServiceRow(service)) {
         return null;
       }
       if (service.address) {

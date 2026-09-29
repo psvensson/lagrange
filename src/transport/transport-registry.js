@@ -9,6 +9,8 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {COLUMN, ENDPOINT_STATUS, TABLES} from '../constants/index.js';
+import {isEndpointCurrentForNode} from
+  '../control-plane/owners/endpoint-incarnation-currentness.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_PROVIDER_NOT_AVAILABLE = 'provider not available';
@@ -193,12 +195,17 @@ class TransportRegistry {
 
     this.logger.debug(REGISTRY_LOG_MSG.GETTING_ENDPOINTS, {nodeId});
 
-    // Query SystemTableCache for endpoints matching this node
+    // Query SystemTableCache for endpoints matching this node. Only an
+    // endpoint of the node's current authoritative incarnation is a routing
+    // target (the endpoint incarnation authority): a stale incarnation's row
+    // may linger for cleanup but is never used as current.
+    const nodeRow = this.systemCacheClient.get(TABLES.NODES, nodeId) || null;
     const endpoints = this.systemCacheClient.filter(
       TABLES.NODE_ENDPOINTS,
       (endpoint) =>
         endpoint[COLUMN.NODE_ID] === nodeId &&
-        endpoint[COLUMN.STATUS] === ENDPOINT_STATUS.ACTIVE,
+        endpoint[COLUMN.STATUS] === ENDPOINT_STATUS.ACTIVE &&
+        isEndpointCurrentForNode(endpoint, nodeRow),
     );
 
     // Sort by priority (lower number = higher preference)

@@ -7,18 +7,27 @@ const LIFECYCLE_STATE = Object.freeze({
   ACTIVE: 'active',
   RETIRED: 'retired',
 });
-const OWNERS = new Map();
+// Durable lifecycle generation is the persistent authority. Runtime-instance
+// identity is the exact process-local projection of that generation: the
+// registry holds one entry per opened runtime (the frozen operation port a
+// replica generation opened), never per logical (group, replica) name.
+// Every operation here is exact-runtime; a missing exact runtime is a
+// terminal stale result for that work item and is never resolved to
+// whichever runtime currently serves the name. No current-runtime
+// observation exists in this registry; one would have to be a separately
+// named, non-destructive read. A reused logical name opens a new
+// runtime and a new entry; work that belongs to the old runtime can reach
+// only the old entry, and removing an entry removes only that runtime's own.
+// Nothing here is durable: the durable lifecycle row recreates the right
+// runtime through the existing recovery owner after a restart.
+const RUNTIME_LIFECYCLE_OWNERS = new WeakMap();
 const LIFECYCLE_ADMIN_OUTCOME = Object.freeze({NOT_MANAGED: 'NOT_MANAGED'});
 const LIFECYCLE_REASON = Object.freeze({
   MISSING: 'lifecycle-record-missing',
   IDENTITY_MISMATCH: 'lifecycle-identity-mismatch',
   RETIRED: 'retired',
-  NO_OWNER: 'no-active-raft-rs-lifecycle-owner',
+  STALE_RUNTIME_GENERATION: 'runtime-generation-not-registered',
 });
-
-function ownerKey(groupId, replicaIdentity) {
-  return `${groupId}\u0000${replicaIdentity}`;
-}
 
 function frozenResult(outcome, reason, detail = null) {
   return Object.freeze({outcome, reason, detail});
@@ -88,7 +97,14 @@ class RaftRsReplicaLifecycleOwner {
           LIFECYCLE_REASON.RETIRED : null;
       }
     }
-    OWNERS.set(ownerKey(groupId, replicaIdentity), this);
+  }
+
+  get groupId() {
+    return this.#groupId;
+  }
+
+  get replicaIdentity() {
+    return this.#replicaIdentity;
   }
 
   get active() {
@@ -146,9 +162,6 @@ class RaftRsReplicaLifecycleOwner {
       RAFT_OPERATION_OUTCOME.CORE_OK, LIFECYCLE_REASON.RETIRED);
   }
 
-  unregister() {
-    OWNERS.delete(ownerKey(this.#groupId, this.#replicaIdentity));
-  }
 
   #release() {
     this.#activeCount -= 1;
@@ -161,12 +174,52 @@ class RaftRsReplicaLifecycleOwner {
   }
 }
 
-async function retireReplicaLifecycle({groupId, replicaIdentity, reason}) {
-  const owner = OWNERS.get(ownerKey(groupId, replicaIdentity));
+/**
+ * Register one opened runtime's lifecycle owner under that exact runtime.
+ * @param {Object} runtime - The operation port the generation opened.
+ * @param {RaftRsReplicaLifecycleOwner} owner
+ */
+function registerRuntimeLifecycle(runtime, owner) {
+  RUNTIME_LIFECYCLE_OWNERS.set(runtime, owner);
+}
+
+/**
+ * Remove exactly this runtime's own entry; a different owner registered for
+ * the same runtime handle is never removed.
+ * @param {Object} runtime
+ * @param {RaftRsReplicaLifecycleOwner} owner
+ */
+function unregisterRuntimeLifecycle(runtime, owner) {
+  if (RUNTIME_LIFECYCLE_OWNERS.get(runtime) === owner) {
+    RUNTIME_LIFECYCLE_OWNERS.delete(runtime);
+  }
+}
+
+/**
+ * Retire exactly the runtime generation the caller owns. A runtime that is
+ * no longer registered (closed, or never opened) is a typed stale result:
+ * the lookup never falls back to whatever runtime now serves the same
+ * logical (group, replica) name.
+ * @param {Object} request
+ * @param {Object} request.runtime - The exact operation port to retire.
+ * @param {string} request.groupId
+ * @param {string} request.replicaIdentity
+ * @param {string} request.reason
+ * @return {Promise<Object>} Frozen outcome.
+ */
+async function retireReplicaLifecycle({runtime, groupId, replicaIdentity,
+  reason}) {
+  const owner = runtime ? RUNTIME_LIFECYCLE_OWNERS.get(runtime) : undefined;
   if (!owner) {
     return frozenResult(
       LIFECYCLE_ADMIN_OUTCOME.NOT_MANAGED,
-      LIFECYCLE_REASON.NO_OWNER,
+      LIFECYCLE_REASON.STALE_RUNTIME_GENERATION,
+    );
+  }
+  if (owner.groupId !== groupId || owner.replicaIdentity !== replicaIdentity) {
+    return frozenResult(
+      RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      LIFECYCLE_REASON.IDENTITY_MISMATCH,
     );
   }
   return owner.retire(reason);
@@ -174,5 +227,7 @@ async function retireReplicaLifecycle({groupId, replicaIdentity, reason}) {
 
 export {
   RaftRsReplicaLifecycleOwner,
+  registerRuntimeLifecycle,
   retireReplicaLifecycle,
+  unregisterRuntimeLifecycle,
 };

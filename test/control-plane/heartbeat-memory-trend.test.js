@@ -22,6 +22,7 @@ import {
   HEARTBEAT_REPORTER_PUBLICATION_PATH,
   HEARTBEAT_REPORTER_VISIBILITY_ROUTING_DIMENSION,
   initEnv,
+  insertViaUpsert,
 } from './heartbeat-memory-trend-test-helpers.js';
 import './heartbeat-owner-completion-test-cases.js';
 
@@ -176,6 +177,9 @@ test('HeartbeatService sendHeartbeat uses injected clock', async (t) => {
         capturedUpdate = updateRow;
         return {success: true};
       },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async () => ({success: true}),
     },
     systemTableCache: createMockCache(),
@@ -207,6 +211,9 @@ test('HeartbeatService sendHeartbeat uses injected control-plane system-table ' 
       updateSystemTableRow: async () => {
         throw new Error('cdcIntegrationService should not handle heartbeat writes');
       },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async () => {
         throw new Error('cdcIntegrationService should not handle heartbeat writes');
       },
@@ -224,6 +231,9 @@ test('HeartbeatService sendHeartbeat uses injected control-plane system-table ' 
           success: true,
           partitionResult: {affectedRows: 1},
         };
+      },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
       },
       async upsertSystemTableRow(tableName, row, options) {
         gatewayCalls.push({
@@ -260,53 +270,69 @@ test('HeartbeatService skips cache wait for heartbeat writes and fails on missin
     initEnv();
 
     const now = 56789;
-    const updates = [];
-    const upserts = [];
-    const service = new HeartbeatService({
-      nodeId: 'node-heartbeat-repair',
-      nodeAddress: '10.0.0.11:8080',
-      cdcIntegrationService: {
-        updateSystemTableRow: async (_table, _whereClause, updateRow, options) => {
-          updates.push({updateRow, options});
-          return {
-            success: true,
-            partitionResult: {affectedRows: 0},
-          };
+    const createService = (updates, upserts, options = {}) =>
+      new HeartbeatService({
+        nodeId: 'node-heartbeat-repair',
+        nodeAddress: '10.0.0.11:8080',
+        cdcIntegrationService: {
+          updateSystemTableRow: async (_table, _whereClause, updateRow, writeOptions) => {
+            updates.push({updateRow, options: writeOptions});
+            return {
+              success: true,
+              partitionResult: {affectedRows: 1},
+            };
+          },
+          insertSystemTableRow(...args) {
+            return insertViaUpsert(this, args);
+          },
+          upsertSystemTableRow: async (tableName, row, writeOptions) => {
+            upserts.push({tableName, row, options: writeOptions});
+            return {success: true};
+          },
         },
-        upsertSystemTableRow: async (tableName, row, options) => {
-          upserts.push({tableName, row, options});
-          return {success: true};
+        systemTableCache: {
+          get: (_tableName, key) => {
+            if (key !== 'node-heartbeat-repair') {
+              return null;
+            }
+            return {
+              node_id: 'node-heartbeat-repair',
+              created_at: 50000,
+              storage_budget_bytes: 1024,
+              storage_budget_source: 'absolute',
+            };
+          },
         },
-      },
-      systemTableCache: {
-        get: (_tableName, key) => {
-          if (key !== 'node-heartbeat-repair') {
-            return null;
-          }
-          return {
-            node_id: 'node-heartbeat-repair',
-            created_at: 50000,
-            storage_budget_bytes: 1024,
-            storage_budget_source: 'absolute',
-          };
-        },
-      },
-      now: () => now,
-    });
+        now: () => now,
+        ...options,
+      });
 
+    const missingUpdates = [];
+    const missingUpserts = [];
+    const missingRowService = createService(missingUpdates, missingUpserts, {
+      authoritativeNodeRow: null,
+    });
     await t.rejects(
-      service.sendHeartbeat(null, null),
-      /node row .*missing/i,
+      missingRowService.sendHeartbeat(null, null),
+      /node row is missing/,
       'steady-state heartbeat should fail instead of recreating missing rows',
     );
+    t.equal(missingUpdates.length, 0,
+      'the lifecycle owner refuses a missing row before any write');
+    t.equal(
+      missingUpserts.filter((entry) => entry.tableName === 'nodes').length,
+      0,
+      'steady-state heartbeat should not upsert nodes',
+    );
+
+    const updates = [];
+    await createService(updates, []).sendHeartbeat(null, null);
     t.equal(updates.length, 1, 'issues one heartbeat update');
     t.equal(
       updates[0].options?.skipCacheWait,
       true,
       'heartbeat update should not block on cache wait',
     );
-    const nodeUpserts = upserts.filter((entry) => entry.tableName === 'nodes');
-    t.equal(nodeUpserts.length, 0, 'steady-state heartbeat should not upsert nodes');
 
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
@@ -351,6 +377,9 @@ test('HeartbeatService throttles endpoint upserts but refreshes after interval',
       updateSystemTableRow: async () => {
         counters.nodeUpdates += 1;
         return {success: true};
+      },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
       },
       upsertSystemTableRow: async () => {
         counters.endpointUpserts += 1;
@@ -415,6 +444,9 @@ test('HeartbeatService coalesces unchanged node heartbeat writes within min inte
           counters.nodeUpdates += 1;
           return {success: true};
         },
+        insertSystemTableRow(...args) {
+          return insertViaUpsert(this, args);
+        },
         upsertSystemTableRow: async () => {
           counters.endpointUpserts += 1;
           return {success: true};
@@ -464,6 +496,9 @@ test('HeartbeatService forces node heartbeat refresh once max staleness elapses'
         updateSystemTableRow: async () => {
           nodeUpdates += 1;
           return {success: true};
+        },
+        insertSystemTableRow(...args) {
+          return insertViaUpsert(this, args);
         },
         upsertSystemTableRow: async () => ({success: true}),
       },
@@ -601,6 +636,9 @@ test('HeartbeatService suppresses bucket-equivalent utilization churn even after
           nodeUpdates += 1;
           return {success: true};
         },
+        insertSystemTableRow(...args) {
+          return insertViaUpsert(this, args);
+        },
         upsertSystemTableRow: async () => ({success: true}),
       },
       systemTableCache: createMockCache(),
@@ -652,6 +690,9 @@ test('HeartbeatService writes immediately when structural metadata changes',
           nodeUpdates += 1;
           return {success: true};
         },
+        insertSystemTableRow(...args) {
+          return insertViaUpsert(this, args);
+        },
         upsertSystemTableRow: async () => ({success: true}),
       },
       systemTableCache: createMockCache(),
@@ -695,6 +736,9 @@ test('HeartbeatService prefers node-state reporter for node heartbeats', async (
         nodeUpdates += 1;
         return {success: true};
       },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async () => {
         endpointUpserts += 1;
         return {success: true};
@@ -737,7 +781,7 @@ test('HeartbeatService prefers node-state reporter for node heartbeats', async (
       'default reporter heartbeat path should not block on visibility checks');
     t.equal(reportedHeartbeat.state, 'ready', 'reported heartbeat should keep READY state');
     t.equal(
-      reportedHeartbeat.nodeRow.cpu_cores,
+      reportedHeartbeat.telemetry.cpu_cores,
       4,
       'reported node row should include current node metadata',
     );
@@ -813,12 +857,12 @@ test('HeartbeatService promotes stopped rows back to active in reporter heartbea
 
       t.ok(reportedHeartbeat, 'reporter should receive heartbeat payload');
       t.equal(
-        reportedHeartbeat.nodeRow.status,
+        reportedHeartbeat.telemetry.status,
         SERVICE_STATUS.ACTIVE,
         'ready heartbeat should promote a restarted node back to active',
       );
       t.equal(
-        reportedHeartbeat.nodeRow.connection_state,
+        reportedHeartbeat.telemetry.connection_state,
         STATE.READY,
         'reported heartbeat should publish ready connectivity',
       );
@@ -842,6 +886,9 @@ test('HeartbeatService surfaces reporter failure when node-state reporter fails'
         updateSystemTableRow: async () => {
           nodeUpdates += 1;
           return {success: true};
+        },
+        insertSystemTableRow(...args) {
+          return insertViaUpsert(this, args);
         },
         upsertSystemTableRow: async () => ({success: true}),
       },
@@ -893,6 +940,9 @@ async (t) => {
       updateSystemTableRow: async () => {
         nodeUpdates += 1;
         return {success: true};
+      },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
       },
       upsertSystemTableRow: async () => ({success: true}),
     },
@@ -950,6 +1000,9 @@ async (t) => {
       updateSystemTableRow: async () => {
         nodeUpdates += 1;
         return {success: true};
+      },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
       },
       upsertSystemTableRow: async () => ({success: true}),
     },
@@ -1009,6 +1062,9 @@ async (t) => {
       updateSystemTableRow: async () => {
         nodeUpdates += 1;
         return {success: true};
+      },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
       },
       upsertSystemTableRow: async () => ({success: true}),
       executeAuthoritativeSystemTableRead: async () => {
@@ -1070,6 +1126,9 @@ test('HeartbeatService surfaces reporter failure without routed SQL fallback',
           nodeWriteOptions.push(options);
           return {success: true};
         },
+        insertSystemTableRow(...args) {
+          return insertViaUpsert(this, args);
+        },
         upsertSystemTableRow: async (_table, _row, options = {}) => {
           endpointWriteOptions.push(options);
           return {success: true};
@@ -1121,6 +1180,9 @@ async (t) => {
       updateSystemTableRow: async () => {
         nodeUpdates += 1;
         return {success: true};
+      },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
       },
       upsertSystemTableRow: async () => ({success: true}),
       executeAuthoritativeSystemTableRead: async () => {
@@ -1215,6 +1277,9 @@ async (t) => {
     nodeAddress: '10.0.0.12:8080',
     cdcIntegrationService: {
       updateSystemTableRow: async () => ({success: true}),
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async () => ({success: true}),
       executeAuthoritativeSystemTableRead: async (
         tableName,
@@ -1299,6 +1364,9 @@ async (t) => {
     nodeAddress: '10.0.0.30:8080',
     cdcIntegrationService: {
       updateSystemTableRow: async () => ({success: true}),
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async () => ({success: true}),
       executeAuthoritativeSystemTableRead: async () => {
         authoritativeReads += 1;

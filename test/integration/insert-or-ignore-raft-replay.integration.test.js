@@ -20,10 +20,10 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   TEST_CONFIG,
@@ -62,7 +62,7 @@ test('INSERT OR IGNORE lost through SQL rebuild', {timeout: 30000}, async (t) =>
       const seedNodeId = generateUniqueNodeId(nodeIdCounter++);
       const seedWsPort = ports.getPort();
 
-      const bootstrapService = new BootstrapService({
+      const bootstrapService = await createVirginSeedBootstrapService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         wsPort: seedWsPort,

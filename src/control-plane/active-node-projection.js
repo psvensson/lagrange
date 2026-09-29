@@ -34,6 +34,8 @@ import {
 import {
   projectNodeLivenessSemantics,
 } from './node-liveness-semantic-projection.js';
+import {selectCurrentEndpointRows} from
+  './owners/endpoint-incarnation-currentness.js';
 
 const LOCAL_STR_PUBLISHED_MEMBERSHIP = 'published_membership';
 const LOCAL_STR_UNPUBLISHED = 'unpublished';
@@ -129,8 +131,10 @@ function hasCanonicalWebSocketEndpoints(nodeEndpointRows = []) {
     .some((row) => isCanonicalWebSocketEndpointRow(row));
 }
 
-function hasCanonicalWebSocketEndpoint(nodeId, nodeEndpointRows = []) {
-  return (Array.isArray(nodeEndpointRows) ? nodeEndpointRows : [])
+// Judged on the current endpoint view only (I9); no NODES source: none.
+function hasCanonicalWebSocketEndpoint(nodeId, nodeEndpointRows = [],
+  nodeRows = null) {
+  return selectCurrentEndpointRows(nodeEndpointRows, nodeRows)
     .some((row) => {
       const normalizedEndpoint = normalizeNodeEndpointRow(row);
       return normalizedEndpoint.nodeId === nodeId &&
@@ -454,6 +458,7 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
         !hasCanonicalWebSocketEndpoint(
           normalizedNode.nodeId,
           nodeEndpointRows,
+          [nodeRow],
         ) &&
         !hasCanonicalActiveService(
           normalizedNode.nodeId,
@@ -596,14 +601,10 @@ function resolveProjectedActiveNodeSelection(options = {}) {
       }
       continue;
     }
-    if (requireWebSocketEndpoint &&
-        !hasCanonicalWebSocketEndpoint(nodeId, options.nodeEndpointRows) &&
-        !runtimeTransportEvidence &&
-        readinessOnlyProjectionEligible !== true) {
-      continue;
-    }
-    if (!hasCanonicalActiveService(nodeId, options.serviceRows) &&
-        !hasCanonicalWebSocketEndpoint(nodeId, options.nodeEndpointRows) &&
+    if ((requireWebSocketEndpoint ||
+        !hasCanonicalActiveService(nodeId, options.serviceRows)) &&
+        !hasCanonicalWebSocketEndpoint(nodeId, options.nodeEndpointRows,
+          nodeRowsById) &&
         !runtimeTransportEvidence &&
         readinessOnlyProjectionEligible !== true) {
       continue;
@@ -787,7 +788,6 @@ export {
   hasCanonicalActiveService,
   hasFreshReadyLeaseOrHeartbeat,
   hasCanonicalWebSocketEndpoint,
-  hasCanonicalWebSocketEndpoints,
   isCanonicalWebSocketEndpointRow,
   isCanonicallyActiveNode,
   resolveLatestPublicationRow,

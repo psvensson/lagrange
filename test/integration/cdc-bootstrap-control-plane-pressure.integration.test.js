@@ -175,9 +175,9 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
             try {
               await messageGroup.proposeCDCCommand({
                 type: 'CDC',
-                tableName: SYSTEM_TABLE_NAME.SERVICES,
+                tableName: SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
                 operation: CDC_OPERATION.UPSERT,
-                data: {service_id: 'svc-pressure-1', status: 'active'},
+                data: {group_id: 'mg-pressure', status: 'active'},
                 timestamp: '123',
                 causeId: 'integration-control-plane-pressure',
               });
@@ -198,11 +198,12 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
 
       const error = await t.rejects(
         cdc.upsertSystemTableRow(
-          SYSTEM_TABLE_NAME.SERVICES,
-          {service_id: 'svc-pressure-1', status: 'active'},
+          SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+          {group_id: 'mg-pressure', status: 'active'},
           {
             skipCacheWait: true,
             causeId: 'integration-control-plane-pressure',
+            workClass: 'background',
           },
         ),
         /Raft CDC replication failed/i,
@@ -238,8 +239,8 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
         CDC_OPERATION.UPSERT,
       );
       t.equal(
-        terminalCdcWarning?.fields?.primaryKey?.service_id,
-        'svc-pressure-1',
+        terminalCdcWarning?.fields?.primaryKey?.group_id,
+        'mg-pressure',
       );
       t.equal(
         terminalCdcWarning?.fields?.writeMode,
@@ -428,7 +429,7 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
 
       const mutationResult = await api.executeBootstrapControlPlaneMutation(
         {
-          operation: 'upsert',
+          operation: 'insert',
           tableName: TABLES.SERVICES,
           row: {
             service_id: 'svc-pressure',

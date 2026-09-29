@@ -1,5 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  CONTROL_PLANE_MESSAGE_COMPLETION_FIELD,
   ControlPlaneField,
   ControlPlaneMessageType,
 } from '../../src/control-plane/control-plane-constants.js';
@@ -367,8 +368,9 @@ export function registerReplicaDispatchNodeStateReadyMembershipPublicationTests(
   createService,
   initEnv,
 }) {
-  test('ReplicaDispatchService acknowledges required membership publication ' +
-    'for READY node-state updates', async (t) => {
+  test('ReplicaDispatchService READY publication makes no inline membership ' +
+    'acknowledgement (the NODES cache/CDC triggers own follow-ups)',
+  async (t) => {
     initEnv();
 
     const now = Date.now();
@@ -405,8 +407,9 @@ export function registerReplicaDispatchNodeStateReadyMembershipPublicationTests(
       },
     });
 
-    await service.handleNodeStateUpdate({
+    await service.publishNodeLifecycleMessage({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: 'node-publication-ack',
       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8087',
       [ControlPlaneField.STATE]: STATE.READY,
@@ -415,94 +418,16 @@ export function registerReplicaDispatchNodeStateReadyMembershipPublicationTests(
 
     t.equal(
       acknowledgements.length,
-      1,
-      'ready node-state updates should delegate cluster publication ' +
-        'acknowledgement to publication service',
-    );
-    t.equal(
-      acknowledgements[0]?.nodeId,
-      'node-publication-ack',
-      'acknowledgement should target the ready node id',
-    );
-    t.equal(
-      typeof acknowledgements[0]?.options,
-      TYPEOF.UNDEFINED,
-      'dispatch should pass only the node id to the publication owner API',
+      0,
+      'the READY write path never acknowledges publication inline',
     );
 
     service.stop();
   });
 
-  test('ReplicaDispatchService delegates stale cache READY acknowledgements to ' +
-    'the publication owner API', async (t) => {
-    initEnv();
-
-    const now = Date.now();
-    const refreshCalls = [];
-    const acknowledgements = [];
-    const cacheNode = {
-      node_id: 'node-publication-refresh-ack',
-      node_address: 'localhost:8088',
-      cpu_cores: 8,
-      memory_mb: 16384,
-      disk_gb: 500,
-      status: SERVICE_STATUS.ACTIVE,
-      connection_state: STATE.CONNECTED,
-      capabilities: '[]',
-      last_heartbeat: now - 1000,
-      ready_lease_expires_at: null,
-      created_at: now - 5000,
-    };
-
-    const service = createService({
-      cacheNode,
-      cdcIntegrationService: {
-        updateSystemTableRow: async () => ({
-          success: true,
-          partitionResult: {affectedRows: 1},
-        }),
-      },
-      controlPlaneReadinessService: {
-        membershipPublicationService: {
-          async acknowledgeMembershipPublicationForNode(nodeId, options) {
-            refreshCalls.push({nodeId, options});
-            acknowledgements.push({nodeId, options});
-            return options?.publicationRow || null;
-          },
-        },
-      },
-    });
-
-    await service.handleNodeStateUpdate({
-      [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-      [ControlPlaneField.NODE_ID]: 'node-publication-refresh-ack',
-      [ControlPlaneField.NODE_ADDRESS]: 'localhost:8088',
-      [ControlPlaneField.STATE]: STATE.READY,
-      [ControlPlaneField.HEARTBEAT_AT]: now,
-    });
-
-    t.equal(
-      acknowledgements.length,
-      1,
-      'publication owner should receive one READY acknowledgement delegation call',
-    );
-    t.equal(
-      acknowledgements[0]?.options,
-      undefined,
-      'dispatch should pass only the node id to the publication owner API',
-    );
-    t.equal(refreshCalls.length, 1, 'dispatch should call the owner API once');
-    t.equal(
-      refreshCalls[0]?.nodeId,
-      'node-publication-refresh-ack',
-      'owner API should be called for the ready node',
-    );
-
-    service.stop();
-  });
-
-  test('ReplicaDispatchService READY node-state updates enqueue cluster ' +
-    'membership reconcile through the publication owner queue', async (t) => {
+  test('ReplicaDispatchService durable READY rows enqueue cluster membership ' +
+    'reconcile through the publication owner queue via the NODES cache trigger',
+  async (t) => {
     initEnv();
 
     const now = Date.now();
@@ -555,13 +480,21 @@ export function registerReplicaDispatchNodeStateReadyMembershipPublicationTests(
       },
     });
 
-    await service.handleNodeStateUpdate({
+    const completion = await service.publishNodeLifecycleMessage({
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.BOOT_INCARNATION]: 1,
       [ControlPlaneField.NODE_ID]: nodeId,
       [ControlPlaneField.NODE_ADDRESS]: nodeAddress,
       [ControlPlaneField.STATE]: STATE.READY,
       [ControlPlaneField.HEARTBEAT_AT]: now,
     });
+    t.equal(reconcileEnqueues.length, 0,
+      'the READY write path never reacts inline to its own publication');
+    service.handleCacheNodeChange(
+      SYSTEM_TABLE_NAME.NODES,
+      completion[CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW],
+    );
+    await flushScheduledMembershipPublicationAdvance();
 
     t.equal(
       reconcileEnqueues.length,

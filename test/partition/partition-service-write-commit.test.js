@@ -136,6 +136,11 @@ test('PartitionService waits for committed-entry callback before acking multi-re
     const result = await writePromise;
     t.equal(result.success, true, 'write should succeed after commit');
     t.ok(Number.isFinite(result.logIndex), 'write result should include log index');
+    t.equal(
+      result.originHlc,
+      proposedEntry.timestamp,
+      'write result should expose the exact committed CDC version',
+    );
     t.same(
       result.durableCommitWitness,
       {

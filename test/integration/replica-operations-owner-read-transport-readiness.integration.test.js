@@ -6,7 +6,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
   CONTROL_PLANE_PARTICIPATION_DECISION,
   CONTROL_PLANE_PARTICIPATION_KIND,
@@ -14,6 +13,7 @@ import {
   CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   getUniquePort,
@@ -59,7 +59,7 @@ test('replica_operations owner-read defers until local query transport is ready'
 
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440271';
     const seedWsPort = getUniquePort();
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

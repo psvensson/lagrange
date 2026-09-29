@@ -121,17 +121,17 @@ async (t) => {
       'pre-activation heartbeat must publish CONNECTED, not READY',
     );
     t.equal(
-      payload.nodeRow.status,
+      payload.telemetry.status,
       NODE_STATE.JOINING,
       'pre-activation heartbeat must preserve status=joining',
     );
-    t.equal(
-      payload.nodeRow.ready_lease_expires_at,
-      TEST_EXISTING_LEASE,
-      'pre-activation heartbeat must not extend the ready lease',
+    t.notOk(
+      'ready_lease_expires_at' in payload.telemetry,
+      'pre-activation heartbeat never computes a ready lease (the ' +
+        'lifecycle owner grants none for CONNECTED)',
     );
     t.equal(
-      payload.nodeRow.last_heartbeat,
+      payload.telemetry.last_heartbeat,
       TEST_NOW,
       'pre-activation heartbeat must still renew liveness',
     );
@@ -161,13 +161,13 @@ async (t) => {
 
     t.equal(payload.state, STATE.READY, 'lifecycle-ready publishes READY');
     t.equal(
-      payload.nodeRow.status,
+      payload.telemetry.status,
       SERVICE_STATUS.ACTIVE,
       'lifecycle-ready promotes status to active',
     );
-    t.ok(
-      payload.nodeRow.ready_lease_expires_at > TEST_NOW,
-      'lifecycle-ready grants the ready lease',
+    t.notOk(
+      'ready_lease_expires_at' in payload.telemetry,
+      'the READY lease is granted by the lifecycle owner, not the heartbeat',
     );
   } finally {
     ConfigurationManager.resetInstance();
@@ -196,13 +196,13 @@ async (t) => {
       'activated heartbeat publishes READY',
     );
     t.equal(
-      payload.nodeRow.status,
+      payload.telemetry.status,
       SERVICE_STATUS.ACTIVE,
       'activated heartbeat publishes status=active',
     );
-    t.ok(
-      payload.nodeRow.ready_lease_expires_at > TEST_NOW,
-      'activated heartbeat grants a fresh ready lease',
+    t.notOk(
+      'ready_lease_expires_at' in payload.telemetry,
+      'the fresh READY lease is granted by the lifecycle owner',
     );
   } finally {
     ConfigurationManager.resetInstance();

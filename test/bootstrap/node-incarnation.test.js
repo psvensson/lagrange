@@ -1,7 +1,7 @@
 /**
- * Boot incarnation mint/persist/propagate (node-incarnation-fencing frontier
- * 1): the rejoin-hints file carries a node-local monotonic boot counter,
- * minted once per boot (previous + 1) and held stable across the 1s
+ * Boot incarnation projection/propagate: the rejoin-hints file projects the
+ * boot incarnation the owner reserved (boot-incarnation-owner.js; its own
+ * tests prove the monotonic reservation), held stable across the 1s
  * persistence cadence, and the publisher stamps it onto every node state
  * update message so receivers can fence stale-incarnation writers.
  */
@@ -13,9 +13,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   buildBootstrapRejoinHintsSnapshot,
   buildRejoinHintsSnapshot,
-  mintBootIncarnation,
-  persistBootstrapRejoinHints,
-  readPersistedBootIncarnation,
+  readRejoinHints,
   RejoinHintsPersistenceService,
 } from '../../src/bootstrap/rejoin-hints.js';
 import {
@@ -98,41 +96,6 @@ test('an absent incarnation leaves the field off (pre-incarnation ' +
   );
 });
 
-test('mintBootIncarnation increments the persisted counter exactly once ' +
-  'per boot', async (t) => {
-  const dataDir = await mkdtemp(join(tmpdir(), 'boot-incarnation-'));
-  try {
-    t.equal(
-      await readPersistedBootIncarnation(dataDir),
-      0,
-      'a fresh data directory starts at incarnation 0',
-    );
-    const first = await mintBootIncarnation(dataDir);
-    t.equal(first, 1, 'the first boot mints incarnation 1');
-    await persistBootstrapRejoinHints({
-      dataDir,
-      nodeId: LOCAL_NODE_ID,
-      nodeAddress: LOCAL_NODE_ADDRESS,
-      nodeRole: 'joiner',
-      peerAddresses: [PEER_NODE_ADDRESS],
-      bootIncarnation: first,
-    });
-    t.equal(
-      await readPersistedBootIncarnation(dataDir),
-      1,
-      'the minted incarnation is persisted with the hints',
-    );
-    const second = await mintBootIncarnation(dataDir);
-    t.equal(
-      second,
-      2,
-      'the next boot mints the next monotonic value',
-    );
-  } finally {
-    await rm(dataDir, {recursive: true, force: true});
-  }
-});
-
 test('the persistence cadence rewrites the hints with the SAME ' +
   'incarnation', async (t) => {
   const dataDir = await mkdtemp(join(tmpdir(), 'boot-incarnation-'));
@@ -150,9 +113,9 @@ test('the persistence cadence rewrites the hints with the SAME ' +
     await service.persistNow();
     await service.persistNow();
     t.equal(
-      await readPersistedBootIncarnation(dataDir),
+      (await readRejoinHints(dataDir))?.bootIncarnation,
       5,
-      'repeated cadence writes never advance the counter',
+      'repeated cadence writes project the same reservation',
     );
     await service.stop();
   } finally {

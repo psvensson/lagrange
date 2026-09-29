@@ -10,6 +10,13 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {FIXTURE_ENDPOINT_INCARNATION} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
+
+// A registered, ready NODES row at the fixture incarnation.
+const readyNodeRow = (nodeId) => ({node_id: nodeId,
+  boot_incarnation: FIXTURE_ENDPOINT_INCARNATION, status: 'active',
+  connection_state: 'ready', ready_lease_expires_at: 2000});
 
 const ACTIVE_NODE_ADMISSION_STATE_BLOCKED = 'blocked';
 const ACTIVE_NODE_ADMISSION_REASON_CLUSTER_INTEGRITY =
@@ -29,24 +36,9 @@ export function registerActiveNodeProjectionMembershipPublicationTests() {
     async (t) => {
       const activeNodeIds = resolveCanonicalActiveNodeIds({
         nodeRows: [
-          {
-            node_id: 'node-1',
-            status: 'active',
-            connection_state: 'ready',
-            ready_lease_expires_at: 2000,
-          },
-          {
-            node_id: 'node-2',
-            status: 'active',
-            connection_state: 'ready',
-            ready_lease_expires_at: 2000,
-          },
-          {
-            node_id: 'node-3',
-            status: 'active',
-            connection_state: 'ready',
-            ready_lease_expires_at: 2000,
-          },
+          readyNodeRow('node-1'),
+          readyNodeRow('node-2'),
+          readyNodeRow('node-3'),
         ],
         serviceRows: [
           {
@@ -70,6 +62,7 @@ export function registerActiveNodeProjectionMembershipPublicationTests() {
         ],
         nodeEndpointRows: [
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: 'node-1-ws',
             node_id: 'node-1',
             transport_type: 'ws',
@@ -77,6 +70,7 @@ export function registerActiveNodeProjectionMembershipPublicationTests() {
             address: 'ws://node-1:8082',
           },
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: 'node-2-ws',
             node_id: 'node-2',
             transport_type: 'ws',
@@ -84,6 +78,7 @@ export function registerActiveNodeProjectionMembershipPublicationTests() {
             address: 'ws://node-2:8082',
           },
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: 'node-3-ws',
             node_id: 'node-3',
             transport_type: 'ws',

@@ -1,7 +1,18 @@
+import {SYSTEM_TABLE_NAME} from
+  '../../bootstrap/system-table-schemas-constants.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane-runtime-bundle.js';
 import {createSystemMetadataOwners} from './create-system-metadata-owners.js';
 import {NodeEndpointsOwner} from './node-endpoints-owner.js';
+import {
+  readAuthoritativeEndpointRow,
+  writeEndpointAtIncarnation,
+} from './endpoint-incarnation-authority.js';
+import {COLUMN, TABLES} from '../../constants/index.js';
+import {
+  readAuthoritativeNodeRow,
+  writeNodeRegistrationAtIncarnation,
+} from './node-registration-incarnation-write.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
@@ -132,25 +143,73 @@ class MembershipPublicationRuntimeOwner {
     return mutationOptions;
   }
 
-  async upsertJoinNode(row, options = {}) {
-    return this.nodesOwner.upsertNode(
+  /**
+   * The joiner's NODES registration at this boot's exact incarnation: birth
+   * or one CAS over an older incarnation, never over a newer one (D-7). One
+   * attempt plus one authoritative reread; no retry loop.
+   * @param {Object} row - NODES row.
+   * @param {number} bootIncarnation - This boot's reserved incarnation.
+   * @param {Object} [options] - Join-time write options.
+   * @return {Promise<Object>} Frozen {outcome, observedRow}.
+   */
+  async registerJoinNodeAtIncarnation(row, bootIncarnation, options = {}) {
+    const gateway = this.getControlPlaneSystemTableGateway();
+    return writeNodeRegistrationAtIncarnation({
       row,
-      this.buildJoinMutationOptions(options),
+      bootIncarnation,
+      observe: () => readAuthoritativeNodeRow(gateway, row[COLUMN.NODE_ID]),
+      insert: (stampedRow) => gateway.insertSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES, stampedRow, options),
+      advance: (whereClause, stampedRow) => gateway.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES, whereClause, stampedRow, options),
+    });
+  }
+
+  /**
+   * The registration verb's boot-incarnation transition: one CAS on the
+   * observed node identity and boot incarnation. No retry options are
+   * attached; an unobserved advance is classified by the caller's readback.
+   * @param {Object} whereClause - {node_id, boot_incarnation} observed.
+   * @param {Object} row - Row stamped with this boot's incarnation.
+   * @param {Object} [options] - Join-time write options.
+   * @return {Promise<Object>} Gateway mutation result.
+   */
+  async advanceJoinNodeBootIncarnation(whereClause, row, options = {}) {
+    return this.getControlPlaneSystemTableGateway().updateSystemTableRow(
+      SYSTEM_TABLE_NAME.NODES,
+      whereClause,
+      row,
+      options,
     );
   }
 
-  async upsertJoinNodeEndpoint(row, options = {}) {
-    return this.nodeEndpointsOwner.upsertEndpoint(
+  /**
+   * The join-time endpoint write at the node's exact boot incarnation (the
+   * endpoint incarnation authority): birth when absent, one CAS on the
+   * observed same-or-older incarnation, never over a newer owner.
+   * @param {string} tableName - node_endpoints or service_endpoints.
+   * @param {Object} row - Endpoint row.
+   * @param {number} bootIncarnation - This boot's incarnation.
+   * @param {Object} [options] - Join-time write options.
+   * @return {Promise<Object>} Frozen endpoint incarnation outcome.
+   */
+  async writeJoinEndpointAtIncarnation(tableName, row, bootIncarnation,
+    options = {}) {
+    const owner = tableName === TABLES.NODE_ENDPOINTS ?
+      this.nodeEndpointsOwner :
+      this.serviceEndpointsOwner;
+    const mutationOptions = this.buildJoinMutationOptions(options);
+    const gateway = this.getControlPlaneSystemTableGateway();
+    return writeEndpointAtIncarnation({
       row,
-      this.buildJoinMutationOptions(options),
-    );
-  }
-
-  async upsertJoinServiceEndpoint(row, options = {}) {
-    return this.serviceEndpointsOwner.upsertEndpoint(
-      row,
-      this.buildJoinMutationOptions(options),
-    );
+      bootIncarnation,
+      observe: () => readAuthoritativeEndpointRow(gateway, tableName,
+        row[COLUMN.ENDPOINT_ID]),
+      insert: (stampedRow) => owner.insertEndpoint(stampedRow,
+        mutationOptions),
+      update: (whereClause, data) => owner.updateWhere(whereClause, data,
+        mutationOptions),
+    });
   }
 
   getControlPlanePublicationsOwner() {

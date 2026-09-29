@@ -12,6 +12,8 @@ import {
   BOOTSTRAP_API_CLUSTER_STATE,
   BOOTSTRAP_API_ERROR,
 } from '../bootstrap-api-constants.js';
+import {readCurrentEndpointRows} from
+  '../../control-plane/owners/endpoint-incarnation-currentness.js';
 
 function canTreatSeedAsBootstrapReady(readiness) {
   return !!readiness &&
@@ -103,7 +105,7 @@ class BootstrapClusterViewOwner {
     const nodeRows = systemTableCache.getAll(TABLES.NODES) || [];
     const serviceRows = systemTableCache.getAll(TABLES.SERVICES) || [];
     const nodeEndpointRows =
-      systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [];
+      readCurrentEndpointRows(systemTableCache, TABLES.NODE_ENDPOINTS);
     const readinessService = this.getControlPlaneReadinessService();
     const candidateNodeIds = new Set();
     addCandidateNodeIds(candidateNodeIds, nodeRows);

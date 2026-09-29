@@ -12,6 +12,10 @@ import {DependencyError} from '../../../src/bootstrap/bootstrap-errors.js';
 import {NodeService} from '../../../src/node/node-service.js';
 import {createPortAllocator} from '../../../src/test-helpers/port-allocator.js';
 import {ConfigurationManager} from '../../../src/config/configuration-manager.js';
+import {
+  FIXTURE_ENDPOINT_INCARNATION,
+  registeredNodeRow,
+} from '../../test-helpers/endpoint-incarnation-fixture.js';
 
 // Bind 127.0.0.1 explicitly: in CI containers 'localhost' can resolve to ::1
 // for the server bind while cross-router dials go to 127.0.0.1, producing
@@ -248,11 +252,13 @@ describe('MessageRouterSetup', () => {
                   transport_type: 'ws',
                   address: 'target-host:8080',
                   priority: 0,
+                  boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
                 };
                 return predicate(row) ? [row] : [];
               },
-              get() {
-                return null;
+              // target-node is registered at its endpoint's incarnation.
+              get(tableName, nodeId) {
+                return tableName === 'nodes' ? registeredNodeRow(nodeId) : null;
               },
             };
           },

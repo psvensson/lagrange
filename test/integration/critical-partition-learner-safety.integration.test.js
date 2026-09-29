@@ -7,7 +7,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -16,6 +15,7 @@ import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-consta
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   createInProcHttpPost,
@@ -146,7 +146,7 @@ test('Critical partition learner safety', {
     const joiningNodeId = '550e8400-e29b-41d4-a716-446655440122';
     const joiningWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -182,6 +182,7 @@ test('Critical partition learner safety', {
       seedApi.setSqlQueryEngine(seedQueryEngine);
 
       joiningService = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: joiningNodeId,
         nodeAddress: `ws://localhost:${joiningWsPort}`,
         seedNodeAddress: 'http://localhost:0',

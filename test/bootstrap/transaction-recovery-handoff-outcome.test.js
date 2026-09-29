@@ -334,6 +334,7 @@ test(
   async (t) => {
     const localRoute = 'ddb-test-reuse-7-1:8080';
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'restarted-seed',
       nodeAddress: localRoute,
       seedNodeAddress: 'http://ddb-test-reuse-7-2:8080',
