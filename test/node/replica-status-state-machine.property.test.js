@@ -12,7 +12,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
-  ReplicaLifecycleManager,
+  ReplicaLifecycleManager as ProductionReplicaLifecycleManager,
   ReplicaStatus,
   VALID_STATUS_TRANSITIONS,
 } from '../../src/node/replica-lifecycle-manager.js';
@@ -74,6 +74,23 @@ function createMockPartitionServiceFactory() {
     async shutdown() {},
     async syncFromLeader() {},
   });
+}
+
+function ReplicaLifecycleManager(options) {
+  const localReplicas = new Map();
+  const replicaHandler = {
+    localReplicas,
+    initialize() {},
+    getLocalReplica(replicaId) {
+      return localReplicas.get(replicaId) || null;
+    },
+    async updateReplicaStatus(replicaId, newStatus) {
+      const replica = localReplicas.get(replicaId);
+      if (replica) localReplicas.set(replicaId, {...replica, status: newStatus});
+    },
+    async shutdown() {},
+  };
+  return new ProductionReplicaLifecycleManager({...options, replicaHandler});
 }
 
 // All possible statuses

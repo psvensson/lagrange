@@ -29,6 +29,8 @@ import {
 import {
   ENDPOINT_SYNC_HEALTH,
 } from '../../src/runtime/endpoint-sync-constants.js';
+import {FIXTURE_ENDPOINT_INCARNATION} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 // Initialize test environment
 export function initializeTestEnvironment() {
@@ -58,13 +60,21 @@ export function createMockCache(
   serviceEndpoints = [],
 ) {
   const now = Date.now();
+  // Registered nodes and the endpoints they publish share the node's boot
+  // incarnation (the endpoint incarnation authority), unless a test says
+  // otherwise.
   const normalizedNodes = nodes.map((node) => ({
     connection_state: Object.hasOwn(node, 'connection_state') ?
       node.connection_state : 'ready',
     ready_lease_expires_at: Object.hasOwn(node, 'ready_lease_expires_at') ?
       node.ready_lease_expires_at : now + 10000,
+    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
     ...node,
   }));
+  nodeEndpoints = nodeEndpoints.map((row) =>
+    ({boot_incarnation: FIXTURE_ENDPOINT_INCARNATION, ...row}));
+  serviceEndpoints = serviceEndpoints.map((row) =>
+    ({boot_incarnation: FIXTURE_ENDPOINT_INCARNATION, ...row}));
   const cache = {
     nodes: new Map(normalizedNodes.map((node) => [node.node_id, node])),
     services: new Map(services.map((s) => [s.service_id, s])),
@@ -132,11 +142,13 @@ export function createMockMessageRouter(
   };
 }
 
+// Endpoints published by a registered node at its boot incarnation.
 export function createNodeEndpoint(nodeId) {
   return {
     node_id: nodeId,
     transport_type: TRANSPORT_TYPE.WEBSOCKET,
     status: ENDPOINT_STATUS.ACTIVE,
+    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
   };
 }
 
@@ -145,6 +157,7 @@ export function createPostgresWireEndpoint(nodeId) {
     node_id: nodeId,
     service_id: META_SERVICE_ID.POSTGRES_WIRE,
     health_status: ENDPOINT_SYNC_HEALTH.HEALTHY,
+    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
   };
 }
 

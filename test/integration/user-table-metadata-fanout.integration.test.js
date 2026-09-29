@@ -6,7 +6,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -15,6 +14,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   createInProcHttpPost,
@@ -120,7 +120,7 @@ test('Later-created user-table metadata fans out to all node-local system caches
     ];
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -167,6 +167,7 @@ test('Later-created user-table metadata fans out to all node-local system caches
       for (const nodeId of joinNodeIds) {
         const joiningWsPort = getUniquePort();
         const joiningService = new NodeJoiningService({
+          bootIncarnation: 1,
           nodeId,
           nodeAddress: `ws://localhost:${joiningWsPort}`,
           seedNodeAddress: 'http://localhost:0',

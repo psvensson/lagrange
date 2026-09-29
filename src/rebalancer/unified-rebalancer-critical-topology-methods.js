@@ -1,5 +1,7 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
+import {selectCurrentEndpointRows} from
+  '../control-plane/owners/endpoint-incarnation-currentness.js';
 
 const {
   COLUMN,
@@ -547,8 +549,11 @@ class UnifiedRebalancerCriticalTopologyMethods {
       });
     }
 
-    const visibleNodeEndpointNodeIds =
-      collectVisibleNodeEndpointNodeIds(nodeEndpointRows);
+    // Only the endpoint authority's current view is visibility evidence: a
+    // stale incarnation's endpoint never satisfies its successor.
+    const visibleNodeEndpointNodeIds = collectVisibleNodeEndpointNodeIds(
+      selectCurrentEndpointRows(nodeEndpointRows,
+        options.nodeRows ?? this.systemTableCache));
     const missingNodeEndpointNodeIds = normalizedRequiredNodeIds.filter(
       (nodeId) => !visibleNodeEndpointNodeIds.has(nodeId),
     );

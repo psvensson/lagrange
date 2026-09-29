@@ -3,9 +3,10 @@
  * **Property 10: Timeout-Triggered Failures**
  * **Validates: Requirements 6.2, 6.3, 6.4, 6.5**
  *
- * *For any* replica that remains in a transitional state longer than the
- * configured timeout for that state, the Replica_State_Machine SHALL
- * automatically transition it to `failed` state with a timeout error message.
+ * *For any* replica that remains in a pre-removal transitional state longer
+ * than its configured timeout, the Replica_State_Machine SHALL transition it
+ * to `failed`. A durable `removing` state retains removal authority and emits
+ * only the timeout diagnostic/re-drive signal.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -21,7 +22,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 function createMockCDCService() {
   return {
     updateSystemTableRow: async () => ({success: true}),
-    upsertSystemTableRow: async () => ({success: true}),
+    insertSystemTableRow: async () => ({success: true}),
   };
 }
 
@@ -31,6 +32,11 @@ const TRANSITIONAL_STATES = [
   ReplicaState.CREATING,
   ReplicaState.SYNCING,
   ReplicaState.REMOVING,
+];
+const FAILURE_TIMEOUT_STATES = [
+  ReplicaState.PENDING,
+  ReplicaState.CREATING,
+  ReplicaState.SYNCING,
 ];
 
 const TEST_TIMEOUT_TRANSITION_REASON = 'test';
@@ -71,13 +77,13 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
   });
 
   /**
-   * Property: For any replica in a transitional state that exceeds the
+   * Property: For any replica before durable removal intent that exceeds the
    * configured timeout, checkTimeoutsNow() should transition it to failed.
    */
   t.test('replicas exceeding timeout transition to failed', async (t) => {
     await fc.assert(
       fc.asyncProperty(
-        fc.constantFrom(...TRANSITIONAL_STATES),
+        fc.constantFrom(...FAILURE_TIMEOUT_STATES),
         fc.uuid(),
         fc.uuid(),
         async (targetState, replicaId, partitionId) => {
@@ -134,7 +140,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
   t.test('timeout error message includes timeout value', async (t) => {
     await fc.assert(
       fc.asyncProperty(
-        fc.constantFrom(...TRANSITIONAL_STATES),
+        fc.constantFrom(...FAILURE_TIMEOUT_STATES),
         fc.uuid(),
         fc.uuid(),
         async (targetState, replicaId, partitionId) => {
@@ -189,7 +195,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
   t.test('timeout reason includes state name', async (t) => {
     await fc.assert(
       fc.asyncProperty(
-        fc.constantFrom(...TRANSITIONAL_STATES),
+        fc.constantFrom(...FAILURE_TIMEOUT_STATES),
         fc.uuid(),
         fc.uuid(),
         async (targetState, replicaId, partitionId) => {

@@ -9,7 +9,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -22,6 +21,7 @@ import {
 import {
   TEST_CONFIG,
   cleanupTestEnvironment,
+  createVirginSeedBootstrapService,
   createInProcHttpPost,
   getUniquePort,
   gracefulJoiningShutdown,
@@ -110,7 +110,7 @@ test('fresh join completes through a non-seed node when the first candidate is d
 
   const seedWsPort = getUniquePort();
   const seedAddress = `ws://localhost:${seedWsPort}`;
-  const bootstrapService = new BootstrapService({
+  const bootstrapService = await createVirginSeedBootstrapService({
     nodeId: SEED_NODE_ID,
     nodeAddress: seedAddress,
     wsPort: seedWsPort,
@@ -151,6 +151,7 @@ test('fresh join completes through a non-seed node when the first candidate is d
     const nodeBWsPort = getUniquePort();
     const nodeBAddress = `ws://localhost:${nodeBWsPort}`;
     const nodeBService = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: NODE_B_ID,
       nodeAddress: nodeBAddress,
       seedNodeAddress: 'http://localhost:0',
@@ -194,6 +195,7 @@ test('fresh join completes through a non-seed node when the first candidate is d
 
     const nodeCWsPort = getUniquePort();
     const nodeCService = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: NODE_C_ID,
       nodeAddress: `ws://localhost:${nodeCWsPort}`,
       seedNodeAddress: UNREACHABLE_ADDRESS,

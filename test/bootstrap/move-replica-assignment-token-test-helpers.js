@@ -242,6 +242,29 @@ function createCdcIntegrationServiceFixture(rows, options = {}) {
   };
 
   return {
+    async executeAuthoritativeSystemTableRead(tableName, sql, params = []) {
+      if (typeof options.executeAuthoritativeSystemTableRead === 'function') {
+        return options.executeAuthoritativeSystemTableRead(
+          tableName,
+          sql,
+          params,
+        );
+      }
+      const sourceRows = options.authoritativeRows?.[tableName] ||
+        findRows(tableName);
+      let selected = sourceRows;
+      if (/service_id\s*=\s*\?/iu.test(sql)) {
+        selected = sourceRows.filter((row) => row.service_id === params[0]);
+      } else if (/service_type\s*=\s*\?/iu.test(sql)) {
+        selected = sourceRows.filter((row) =>
+          row.service_type === params[0] && row.status === params[1] &&
+          row.node_id === params[2]);
+      } else if (/operation_id\s*=\s*\?/iu.test(sql)) {
+        selected = sourceRows.filter((row) => row.operation_id === params[0]);
+      }
+      return {success: true, rows: selected.map((row) => ({...row}))};
+    },
+
     async insertSystemTableRow(tableName, row) {
       if (!persistMutations) {
         return {success: true, affectedRows: 1};

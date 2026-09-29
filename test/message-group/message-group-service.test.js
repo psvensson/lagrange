@@ -33,6 +33,7 @@ import {
   RAFT_EVENT,
 } from '../../src/raft/constants.js';
 import {
+  CONTROL_PLANE_MESSAGE_COMPLETION_KIND,
   ControlPlaneField,
   ControlPlaneMessageType,
 } from '../../src/control-plane/control-plane-constants.js';
@@ -1089,6 +1090,73 @@ test(
         },
       }],
       'metadata ingress forwarding should use the canonical target selection and forwarded-by field',
+    );
+  },
+);
+
+test(
+  'MessageGroupService - metadata ingress forwarding does not accept a ' +
+  'transport acknowledgment as durable application completion',
+  async (t) => {
+    const service = new MessageGroupService({
+      groupId: 'mg-completion',
+      replicaId: 'mg-completion-r2',
+      nodeId: 'node-local',
+      transport: {
+        async deliver() {
+          return {acknowledged: true};
+        },
+        async initialize() {},
+        async shutdown() {},
+        setServiceNodeResolver() {},
+      },
+    });
+    const attempts = [];
+    service.resolveMetadataIngressForwardSelection = async () => ({
+      strictForwarding: true,
+      strictForwardRetryAfterMs: 250,
+      targets: [
+        {address: 'node-a/message-group/mg-completion-r1'},
+        {address: 'node-b/message-group/mg-completion-r3'},
+      ],
+      suppressedCount: 0,
+    });
+    service.sendMessage = async (targetAddress) => {
+      attempts.push(targetAddress);
+      if (attempts.length === 1) {
+        return {
+          acknowledged: true,
+          deliveryState: 'delivered',
+        };
+      }
+      return {
+        acknowledged: true,
+        completionKind:
+          CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
+        completionCompleted: true,
+      };
+    };
+
+    const result = await service.forwardMetadataIngressPayloadToLeader(
+      {
+        [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      },
+      {
+        requiredTables: [TABLES.NODES],
+        forwardedByNodeId: 'node-forwarder',
+        requiredCompletionKind:
+          CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
+      },
+    );
+
+    t.same(attempts, [
+      'node-a/message-group/mg-completion-r1',
+      'node-b/message-group/mg-completion-r3',
+    ], 'a bare transport acknowledgment does not stop owner selection');
+    t.equal(
+      result.completionKind,
+      CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
+      'forwarding returns only the requested semantic completion receipt',
     );
   },
 );

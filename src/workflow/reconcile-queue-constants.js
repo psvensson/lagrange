@@ -18,7 +18,6 @@ const RECONCILE_REASON = Object.freeze({
     'replica_operations_cache_replace_active',
   MESSAGE_DISPATCH_REQUEST: 'message_dispatch_request',
   RETRYABLE_OPERATION_DISPATCH: 'retryable_operation_dispatch',
-  NODE_STATE_UPDATE_MESSAGE: 'node_state_update_message',
 
   // Dispatch: node-ready retry reasons
   NODE_STATE_UPDATE_READY: 'node_state_update_ready',

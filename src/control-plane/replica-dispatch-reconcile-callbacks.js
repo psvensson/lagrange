@@ -10,7 +10,6 @@ import {
 
 const {
   COLUMN,
-  ControlPlaneField,
   DISPATCH_LOG_MSG,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
@@ -362,48 +361,6 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
       },
     );
     return true;
-  },
-
-  /**
-   * Reconcile callback for the node-state update queue.
-   * Applies the latest queued payload for one node.
-   * @param {string} nodeId - The node to reconcile.
-   * @param {Object} [context] - Context from the enqueue call.
-   * @return {Promise<void>}
-   * @private
-   */
-  async reconcileNodeStateUpdate(nodeId, context) {
-    const payload = context?.payload || null;
-    if (!payload || payload[ControlPlaneField.NODE_ID] !== nodeId) {
-      return;
-    }
-    try {
-      await this.handleNodeStateUpdate(payload);
-      this.clearDeferredNodeStateUpdateRetry(nodeId);
-      this.clearNodeStateUpdateRetryState(nodeId);
-    } catch (error) {
-      if (context?.requireDurableCompletion === true) {
-        throw error;
-      }
-      if (!this.shouldDeferNodeStateUpdateRetry(error, payload)) {
-        throw error;
-      }
-      const retryAfterMs = this.deferNodeStateUpdateRetry(
-        nodeId,
-        payload,
-        error,
-      );
-      const retryState = this.nodeStateUpdateRetryStateByNodeId.get(nodeId);
-      this.logger.info(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_DEFERRED, {
-        nodeId,
-        retryAfterMs,
-        retryClass:
-          retryState?.retryClass || REPLICA_DISPATCH_SERVICE_LITERAL.UNKNOWN,
-        failureCount: retryState?.failureCount || 1,
-        error: error.message,
-        errorCode: error?.code || null,
-      });
-    }
   },
 
   /**

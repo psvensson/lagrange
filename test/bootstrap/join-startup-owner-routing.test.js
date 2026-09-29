@@ -30,6 +30,7 @@ test('NodeJoiningService initializeJoiningLifecycleOwners uses ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'join-owner-routing-node',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -54,6 +55,7 @@ test('NodeJoiningService triggerJoinReconciler uses ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'join-owner-routing-node',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -78,6 +80,7 @@ test('NodeJoiningService notifyLocalAdminRuntimeReady uses ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'join-owner-routing-node',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',

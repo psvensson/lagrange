@@ -74,6 +74,7 @@ const PHASE_CLEANUP_INCLUDES = Object.freeze({
  */
 function createTrackedBootstrapService(cleanupContext) {
   const service = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: 'test-seed-node',
     nodeAddress: 'http://localhost:3000',
     wsPort: null,

@@ -32,6 +32,12 @@ export function buildParticipantFailureEntry(result) {
     participantNodeId: normalizeParticipantFailureString(result.participantNodeId),
     participantAddress: normalizeParticipantFailureString(result.participantAddress),
     errorCode: normalizeParticipantFailureString(result.errorCode),
+    failureCode: normalizeParticipantFailureString(result.failureCode),
+    committed: result?.committed === true,
+    outcome: normalizeParticipantFailureString(result.outcome),
+    disposition: normalizeParticipantFailureString(result.disposition),
+    logIndex: Number.isSafeInteger(result?.logIndex) ? result.logIndex : null,
+    entryId: normalizeParticipantFailureString(result.entryId),
     error: result.error || ERRORS.QUERY_FAILED,
     durationMs:
       Number.isFinite(result?.durationMs) ?

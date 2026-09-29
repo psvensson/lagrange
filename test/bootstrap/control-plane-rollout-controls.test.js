@@ -108,6 +108,7 @@ test('BootstrapAPI - enforces lifecycle probe rollout control', async (t) => {
 test('BootstrapService - enforces work class scheduler rollout control', async (t) => {
   t.throws(() => {
     new BootstrapService({
+      bootIncarnation: 1,
       nodeId: 'seed-node-1',
       nodeAddress: 'localhost:8080',
       rolloutControls: {
@@ -123,6 +124,7 @@ test('NodeJoiningService - enforces durable join sessions rollout control', asyn
 
   t.throws(() => {
     new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'join-node-1',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
