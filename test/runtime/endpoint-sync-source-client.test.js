@@ -45,6 +45,19 @@ function resetMock() {
   MockWebSocket.onSend = null;
 }
 
+// The admin stream answers the source's two reads: service endpoints and the
+// NODES incarnations currentness is judged against (endpoint authority).
+function answerSourceRead(socket, payload, endpointRow) {
+  const query = JSON.parse(payload);
+  const rows = /FROM nodes/u.test(query.sql || JSON.stringify(query)) ?
+    [{node_id: endpointRow[EP_COL.NODE_ID], boot_incarnation: 1}] :
+    [{...endpointRow, boot_incarnation: 1}];
+  const frame = createQueryResult(query.queryId, rows);
+  setImmediate(() => {
+    socket.emit('message', Buffer.from(JSON.stringify(frame)));
+  });
+}
+
 function createQueryResult(queryId, rows) {
   return {
     type: ADMIN_MESSAGE_TYPE.QUERY_RESULT,
@@ -84,8 +97,7 @@ describe('endpoint-sync-source-client', () => {
       setImmediate(() => socket.emit('open'));
     };
     MockWebSocket.onSend = (socket, payload) => {
-      const query = JSON.parse(payload);
-      const row = {
+      answerSourceRead(socket, payload, {
         [EP_COL.ENDPOINT_ID]: 'ep-1',
         [EP_COL.SERVICE_ID]: 'sys-postgres-wire',
         [EP_COL.NODE_ID]: 'node-1',
@@ -95,10 +107,6 @@ describe('endpoint-sync-source-client', () => {
         [EP_COL.HEALTH_STATUS]: 'healthy',
         [EP_COL.METADATA]: '{}',
         updated_at: 10,
-      };
-      const frame = createQueryResult(query.queryId, [row]);
-      setImmediate(() => {
-        socket.emit('message', Buffer.from(JSON.stringify(frame)));
       });
     };
 
@@ -132,8 +140,7 @@ describe('endpoint-sync-source-client', () => {
         return;
       }
 
-      const query = JSON.parse(payload);
-      const row = {
+      answerSourceRead(socket, payload, {
         [EP_COL.ENDPOINT_ID]: 'ep-2',
         [EP_COL.SERVICE_ID]: 'sys-postgres-wire',
         [EP_COL.NODE_ID]: 'node-2',
@@ -143,10 +150,6 @@ describe('endpoint-sync-source-client', () => {
         [EP_COL.HEALTH_STATUS]: 'healthy',
         [EP_COL.METADATA]: '{}',
         updated_at: 20,
-      };
-      const frame = createQueryResult(query.queryId, [row]);
-      setImmediate(() => {
-        socket.emit('message', Buffer.from(JSON.stringify(frame)));
       });
     };
 
@@ -164,7 +167,8 @@ describe('endpoint-sync-source-client', () => {
 
     assert.equal(rows.length, 1);
     assert.equal(rows[0].endpointId, 'ep-2');
-    assert.equal(attempt, 2);
+    assert.equal(attempt, 3,
+      'one failed read, then the endpoint and NODES reads of the retry');
   });
 
   it('fetchEndpointRows throws after max retries', async () => {

@@ -86,6 +86,8 @@ class RuntimeServiceHandlerSetup {
    * Create and configure runtime service handler.
    *
    * @param {Object} options
+   * @param {number} [options.bootIncarnation] - This boot's incarnation;
+   *   runtime endpoints are written and removed at exactly it.
    * @param {string} options.nodeId - Node ID (required).
    * @param {Object} options.messageRouter - Message router (required).
    * @param {Object} options.cdcIntegrationService - CDC service (required).
@@ -108,6 +110,7 @@ class RuntimeServiceHandlerSetup {
    */
   static create(options) {
     const {
+      bootIncarnation,
       nodeId,
       messageRouter,
       cdcIntegrationService,
@@ -160,6 +163,7 @@ class RuntimeServiceHandlerSetup {
 
     if (ownsRuntimeEndpointPublication(serviceRuntimeLifecycle)) {
       wireRuntimeEndpointPublication({
+        bootIncarnation,
         nodeId,
         serviceEndpointsOwner: resolveServiceEndpointsOwner(options),
         serviceRuntimeLifecycle,

@@ -407,10 +407,13 @@ function readProjectionSourceRows(sourceRowsByTable, plan) {
       TABLES.NODE_ENDPOINTS,
       plan.rebuildEndpointNodeIds || plan.rebuildServiceFallbackNodeIds,
     ),
+    // The endpoint views are judged against NODES (current incarnation), so
+    // NODES rows are read whenever an endpoint view is rebuilt.
     nodeRows: readProjectionRows(
       sourceRowsByTable,
       TABLES.NODES,
-      plan.rebuildNodeIds,
+      plan.rebuildNodeIds || plan.rebuildEndpointNodeIds ||
+        plan.rebuildServiceFallbackNodeIds,
     ),
     partitionRows: readProjectionRows(
       sourceRowsByTable,
@@ -442,7 +445,8 @@ function resolveProjectedEndpointNodeIds(
 ) {
   return plan.rebuildEndpointNodeIds ? arrayFilter(
     nodeIds,
-    (nodeId) => hasCanonicalWebSocketEndpoint(nodeId, rows.endpointRows),
+    (nodeId) => hasCanonicalWebSocketEndpoint(nodeId, rows.endpointRows,
+      rows.nodeRows),
   ) : previousProjection.endpointNodeIds;
 }
 
@@ -455,7 +459,8 @@ function resolveProjectedServiceFallbackNodeIds(
   return plan.rebuildServiceFallbackNodeIds ? arrayFilter(
     nodeIds,
     (nodeId) =>
-      !hasCanonicalWebSocketEndpoint(nodeId, rows.endpointRows) &&
+      !hasCanonicalWebSocketEndpoint(nodeId, rows.endpointRows,
+        rows.nodeRows) &&
       hasCanonicalActiveService(nodeId, rows.serviceRows),
   ) : previousProjection.serviceFallbackNodeIds;
 }

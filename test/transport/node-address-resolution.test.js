@@ -9,6 +9,10 @@ import {
   resolveAdvertisedWebSocketAddress,
   resolveNodeWebSocketAddress,
 } from '../../src/transport/node-address-resolution.js';
+import {
+  FIXTURE_ENDPOINT_INCARNATION,
+  registeredNodeRow,
+} from '../test-helpers/endpoint-incarnation-fixture.js';
 
 test('resolveAdvertisedWebSocketAddress preserves explicit websocket address',
   async (t) => {
@@ -73,6 +77,8 @@ test(
     const resolvedAddress = resolveNodeWebSocketAddress({
       targetNodeId: 'node-2',
       systemTableCache: {
+        get: (tableName, nodeId) =>
+          (tableName === 'nodes' ? registeredNodeRow(nodeId) : null),
         filter(tableName, predicate) {
           if (tableName !== 'node_endpoints') {
             return [];
@@ -85,6 +91,7 @@ test(
               address: 'ws://node-2.svc.cluster.local:8082',
               priority: 0,
               status: 'active',
+              boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             },
           ].filter(predicate);
         },
@@ -167,6 +174,7 @@ test('resolveNodeWebSocketAddress uses authoritative node_endpoints rows',
       targetNodeId: 'node-2',
       bootstrapResponse: {
         systemTableSnapshots: {
+          nodes: [registeredNodeRow('node-2')],
           node_endpoints: [
             {
               endpoint_id: 'ep-node-2-ws',
@@ -175,6 +183,7 @@ test('resolveNodeWebSocketAddress uses authoritative node_endpoints rows',
               address: 'ws://172.20.0.11:8082',
               priority: 0,
               status: 'active',
+              boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             },
           ],
         },
@@ -228,6 +237,8 @@ test('resolveNodeWebSocketAddress reads canonical websocket metadata from cache'
     const resolvedAddress = resolveNodeWebSocketAddress({
       targetNodeId: 'node-2',
       systemTableCache: {
+        get: (tableName, nodeId) =>
+          (tableName === 'nodes' ? registeredNodeRow(nodeId) : null),
         filter(tableName, predicate) {
           if (tableName !== 'node_endpoints') {
             return [];
@@ -240,6 +251,7 @@ test('resolveNodeWebSocketAddress reads canonical websocket metadata from cache'
               address: 'ws://172.20.0.12:8082',
               priority: 0,
               status: 'active',
+              boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             },
           ].filter(predicate);
         },
@@ -277,6 +289,8 @@ test(
         seedNodeWsAddress: 'ws://172.20.0.5:8082',
       },
       systemTableCache: {
+        get: (tableName, nodeId) =>
+          (tableName === 'nodes' ? registeredNodeRow(nodeId) : null),
         filter(tableName, predicate) {
           if (tableName !== 'node_endpoints') {
             return [];
@@ -289,6 +303,7 @@ test(
               address: 'ws://172.20.0.99:8082',
               priority: 0,
               status: 'active',
+              boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             },
           ].filter(predicate);
         },

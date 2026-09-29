@@ -13,6 +13,12 @@ import {
 
 const LOCAL_STR_FUNCTION = 'function';
 
+function attachMessageGroupServiceBeforePublish(delegates, messageGroup) {
+  if (typeof delegates.attachMessageGroupService === LOCAL_STR_FUNCTION) {
+    delegates.attachMessageGroupService(messageGroup);
+  }
+}
+
 /**
  * Format missing-replica assertion message for join lifecycle.
  * @param {string} replicaId
@@ -103,6 +109,7 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
     }
 
     await messageGroup.initialize();
+    attachMessageGroupServiceBeforePublish(this.delegates, messageGroup);
     messageGroupServices.set(options.replicaId, messageGroup);
     this.delegates.pushJoinMessageGroupReplica(messageGroup);
 

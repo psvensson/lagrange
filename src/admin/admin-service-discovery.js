@@ -17,6 +17,8 @@ import {
   ENDPOINT_SYNC_HEALTH,
 } from '../runtime/endpoint-sync-constants.js';
 import {buildServiceDiscoveryCatalog} from '../runtime/service-discovery-catalog.js';
+import {isEndpointCurrentForNode} from
+  '../control-plane/owners/endpoint-incarnation-currentness.js';
 import {isLoadReadyReplicaRaftRole} from '../node/replica-state-machine-constants.js';
 import {
   DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP,
@@ -471,7 +473,12 @@ class AdminServiceDiscovery extends AdminCacheOwnerState {
     ) {
       throw new Error(ADMIN_ERROR_MESSAGE.SERVICE_DISCOVERY_UNAVAILABLE);
     }
-    const endpointRows = this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS);
+    // Only endpoints of each node's current incarnation are advertised.
+    const nodesById = new Map((this.systemTableCache.getAll(TABLES.NODES) ||
+      []).map((node) => [node?.[COLUMN.NODE_ID], node]));
+    const endpointRows = (this.systemTableCache.getAll(
+      TABLES.SERVICE_ENDPOINTS) || []).filter((row) =>
+      isEndpointCurrentForNode(row, nodesById.get(row?.[COLUMN.NODE_ID])));
     const definitionRows = this.systemTableCache.getAll(
       TABLES.SERVICE_DEFINITIONS,
     );

@@ -36,6 +36,8 @@ import {
   copyStrictOwnDataRecord,
 } from '../utils/strict-own-data.js';
 import {copyMapValuesToArray} from '../utils/map-values-array.js';
+import {endpointIncarnationOf} from
+  './owners/endpoint-incarnation-currentness.js';
 
 const MapConstructor = Map;
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -225,7 +227,12 @@ function canReuseDirectGlobalProjection(
   const sameKeyUpdate = previousRecord && currentRecord &&
     (operation === CDC_OPERATION.UPDATE ||
       operation === CDC_OPERATION.UPSERT);
-  if (sameKeyUpdate && tableName === TABLES.NODES) return true;
+  // Endpoint presence is judged against the node's boot incarnation (I9):
+  // a NODES update that moves it can make an endpoint current or stale.
+  if (sameKeyUpdate && tableName === TABLES.NODES) {
+    return endpointIncarnationOf(previousRecord) ===
+      endpointIncarnationOf(currentRecord);
+  }
   if (sameKeyUpdate && tableName === TABLES.SERVICES && isDeepStrictEqual(
     localSemanticRecord(tableName, previousRecord),
     localSemanticRecord(tableName, currentRecord),

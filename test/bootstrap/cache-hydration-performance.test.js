@@ -229,6 +229,7 @@ test('Cache hydration performance - typical cluster', async (t) => {
 
     // Create joining service
     const joiningService = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId,
       nodeAddress,
       seedNodeAddress: 'http://localhost:8080',
@@ -300,6 +301,7 @@ test('Cache hydration performance - large cluster', async (t) => {
 
     // Create joining service
     const joiningService = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId,
       nodeAddress,
       seedNodeAddress: 'http://localhost:8080',

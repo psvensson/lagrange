@@ -15,6 +15,7 @@ const {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LITERAL,
   PRESSURE_WORK_CLASS,
+  SERVICE_TYPE,
   SYSTEM_TABLE_NAME,
   TABLES,
 } = PARTITION_SERVICE_SHARED;
@@ -198,7 +199,13 @@ function createRoleMutationHelper(owner) {
     ...hostedMutationTimers(owner),
     tableName: SYSTEM_TABLE_NAME.SERVICES,
     buildWhereClause: (_role, context = {}) => {
-      const whereClause = {service_id: owner.replicaId};
+      const whereClause = {
+        service_id: owner.replicaId,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: owner.partitionId,
+        replica_id: owner.replicaId,
+        node_id: owner.nodeId,
+      };
       // The merged cache may carry a newer local voter-ready seed, so prefer
       // the authoritative observation when building the durable CAS guard.
       const guardRow = context.authoritativeRow || context.cachedRow;

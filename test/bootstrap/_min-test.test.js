@@ -16,6 +16,7 @@ test('constructor works', async (t) => {
   NodeService.resetInstance();
 
   const svc = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'x',
     nodeAddress: 'ws://127.0.0.1:19092',
     seedNodeAddress: 'http://127.0.0.1:18081',

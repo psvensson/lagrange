@@ -16,6 +16,7 @@ import {NodeService} from '../../src/node/node-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   initializeTestEnvironment,
+  installNodeJoiningReplicaStateMachine,
 } from './node-joining-service-test-support.js';
 import {
   PARTITION_SERVICE_ACTIVATION_ERROR,
@@ -57,11 +58,17 @@ import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
 import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {
   SERVICE_TYPE,
+  SERVICE_STATUS,
   TABLES,
   CDC_OPERATION,
   ENDPOINT_STATUS,
   TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
+import {insertViaUpsert} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
+import {
+  FIXTURE_ENDPOINT_INCARNATION,
+} from '../test-helpers/endpoint-incarnation-fixture.js';
 
 const DEFAULT_SEED_WS_ADDRESS =
   `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
@@ -81,10 +88,73 @@ const TEST_CONTACT_SEED_ATTEMPT_NOW_MS = 1000;
 const TEST_CONTACT_SEED_HTTP_TIMEOUT_MS = 50;
 const TEST_CONTACT_SEED_RETRY_TIMEOUT_MS = 100;
 
+function createDurableRejoinSystemTableCache() {
+  const schemaDefinition = {
+    tableName: 'nodes',
+    columns: [{name: 'node_id', type: 'TEXT', primaryKey: true}],
+  };
+  const rowsByTable = new Map([
+    [TABLES.TABLES, [{
+      table_id: 'nodes',
+      table_name: 'nodes',
+      schema_definition: JSON.stringify(schemaDefinition),
+    }]],
+    [TABLES.PARTITIONS, [{
+      partition_id: 'nodes-p1',
+      table_id: 'nodes',
+      table_name: 'nodes',
+      partition_key_start: null,
+      partition_key_end: null,
+      leader_node_id: 'durable-join-node',
+    }]],
+    [TABLES.SERVICES, [{
+      service_id: 'nodes-p1-r1',
+      replica_id: 'nodes-p1-r1',
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: 'durable-join-node',
+      partition_id: 'nodes-p1',
+      status: SERVICE_STATUS.ACTIVE,
+      address: 'durable-join-node/partition/nodes-p1-r1',
+      created_at: 100,
+      updated_at: 100,
+    }, {
+      service_id: 'nodes-p1-r2',
+      replica_id: 'nodes-p1-r2',
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: 'peer-node-2',
+      partition_id: 'nodes-p1',
+      status: SERVICE_STATUS.ACTIVE,
+      address: 'peer-node-2/partition/nodes-p1-r2',
+      created_at: 100,
+      updated_at: 100,
+    }, {
+      service_id: 'nodes-p1-r3',
+      replica_id: 'nodes-p1-r3',
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: 'peer-node-3',
+      partition_id: 'nodes-p1',
+      status: SERVICE_STATUS.ACTIVE,
+      address: 'peer-node-3/partition/nodes-p1-r3',
+      created_at: 100,
+      updated_at: 100,
+    }]],
+  ]);
+  return {
+    getAll: (tableName) => rowsByTable.get(tableName) || [],
+    get(tableName, key) {
+      return (rowsByTable.get(tableName) || []).find((row) =>
+        row.partition_id === key || row.table_id === key ||
+          row.service_id === key,
+      ) || null;
+    },
+  };
+}
+
 test('NodeJoiningService - initialization', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -109,6 +179,7 @@ test('NodeJoiningService - websocket phase receives configured retry policy',
     const TEST_LEADERSHIP_WAIT_BACKOFF_MULTIPLIER = 2;
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: TEST_JOINING_NODE_ID,
       nodeAddress: TEST_JOINING_NODE_ADDRESS,
       seedNodeAddress: TEST_SEED_NODE_ADDRESS,
@@ -166,6 +237,7 @@ test('NodeJoiningService - supplements partial cache mesh from bootstrap snapsho
     const TEST_ENDPOINT_PRIORITY = 0;
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: TEST_JOINING_NODE_ID,
       nodeAddress: TEST_JOINING_NODE_ADDRESS,
       seedNodeAddress: TEST_SEED_NODE_ADDRESS,
@@ -189,10 +261,13 @@ test('NodeJoiningService - supplements partial cache mesh from bootstrap snapsho
             node_address: TEST_PEER_NODE_REST_ADDRESS,
             status: TEST_JOINING_STATUS,
             connection_state: TEST_CONNECTING_STATE,
+            // The peer is registered at the incarnation its endpoint carries.
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           },
         ],
         node_endpoints: [
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: TEST_PEER_ENDPOINT_ID,
             node_id: TEST_PEER_NODE_ID,
             transport_type: TRANSPORT_TYPE.WEBSOCKET,
@@ -214,6 +289,7 @@ test('NodeJoiningService - supplements partial cache mesh from bootstrap snapsho
       TABLES.NODES,
       CDC_OPERATION.INSERT,
       {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         node_id: TEST_JOINING_NODE_ID,
         node_address: TEST_JOINING_NODE_ADDRESS,
         status: TEST_ACTIVE_STATUS,
@@ -223,6 +299,7 @@ test('NodeJoiningService - supplements partial cache mesh from bootstrap snapsho
       TABLES.NODES,
       CDC_OPERATION.INSERT,
       {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         node_id: TEST_SEED_NODE_ID,
         node_address: TEST_SEED_NODE_REST_ADDRESS,
         status: TEST_ACTIVE_STATUS,
@@ -352,6 +429,7 @@ test('NodeJoiningService - runtime owner exposes control-plane readiness service
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'test-node-runtime-owner-readiness',
       nodeAddress: 'ws://localhost:9099',
       seedNodeAddress: 'http://localhost:8080',
@@ -408,6 +486,7 @@ test('NodeJoiningService - runtime owner exposes system table cache for bootstra
     NodeService.getInstance().setSystemCacheProxy(runtimeOwnerCache);
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'test-node-runtime-owner-cache',
       nodeAddress: 'ws://localhost:9098',
       seedNodeAddress: 'http://localhost:8080',
@@ -436,6 +515,7 @@ test('NodeJoiningService - initializeJoinInfrastructure opens external transport
 
     const calls = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-open-admission',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -500,6 +580,7 @@ test('NodeJoiningService - ready signal metadata gate uses seed-contact authorit
       timestamp: Date.now(),
     };
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-ready-signal-authority',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -560,6 +641,7 @@ test('NodeJoiningService - runJoinInfrastructurePhases notifies local admin runt
       });
 
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'joining-node-local-admin',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -613,6 +695,7 @@ test('NodeJoiningService - getStatus', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -631,6 +714,7 @@ test('NodeJoiningService - getStatus surfaces promotion and snapshot revision me
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'test-node-status-metadata',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -681,6 +765,7 @@ test('NodeJoiningService - classifies transient control-plane publication failur
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-classifier',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -721,6 +806,7 @@ test('NodeJoiningService - executePhase routes work through class A scheduler', 
   };
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'test-node-scheduler',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -749,6 +835,7 @@ test('NodeJoiningService - initializeMessageGroupServiceHandler uses NodeService
       });
 
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'joining-node-message-group-handler',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -790,6 +877,7 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'durable-join-node',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -806,6 +894,9 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
     service.cdcIntegrationService = {
       updateSystemTableRow: async (_tableName, predicate) => {
         calls.push(`activate:${predicate.service_id}`);
+      },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
       },
       upsertSystemTableRow: async (_tableName, row) => {
         calls.push(`activate:${row.service_id}`);
@@ -827,63 +918,12 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
       }
     };
 
-    const schemaDefinition = {
-      tableName: 'nodes',
-      columns: [{name: 'node_id', type: 'TEXT', primaryKey: true}],
-    };
-    const rowsByTable = new Map([
-      [TABLES.TABLES, [{
-        table_id: 'nodes',
-        table_name: 'nodes',
-        schema_definition: JSON.stringify(schemaDefinition),
-      }]],
-      [TABLES.PARTITIONS, [{
-        partition_id: 'nodes-p1',
-        table_id: 'nodes',
-        table_name: 'nodes',
-        partition_key_start: null,
-        partition_key_end: null,
-        leader_node_id: 'durable-join-node',
-      }]],
-      [TABLES.SERVICES, [{
-        service_id: 'nodes-p1-r1',
-        replica_id: 'nodes-p1-r1',
-        service_type: SERVICE_TYPE.PARTITION,
-        node_id: 'durable-join-node',
-        partition_id: 'nodes-p1',
-        status: 'active',
-        address: 'durable-join-node/partition/nodes-p1-r1',
-      }, {
-        service_id: 'nodes-p1-r2',
-        replica_id: 'nodes-p1-r2',
-        service_type: SERVICE_TYPE.PARTITION,
-        node_id: 'peer-node-2',
-        partition_id: 'nodes-p1',
-        status: 'active',
-        address: 'peer-node-2/partition/nodes-p1-r2',
-      }, {
-        service_id: 'nodes-p1-r3',
-        replica_id: 'nodes-p1-r3',
-        service_type: SERVICE_TYPE.PARTITION,
-        node_id: 'peer-node-3',
-        partition_id: 'nodes-p1',
-        status: 'active',
-        address: 'peer-node-3/partition/nodes-p1-r3',
-      }]],
-    ]);
-    const systemTableCache = {
-      getAll(tableName) {
-        return rowsByTable.get(tableName) || [];
-      },
-      get(tableName, key) {
-        const rows = rowsByTable.get(tableName) || [];
-        return rows.find((row) =>
-          row.partition_id === key ||
-          row.table_id === key ||
-          row.service_id === key,
-        ) || null;
-      },
-    };
+    const systemTableCache = createDurableRejoinSystemTableCache();
+    installNodeJoiningReplicaStateMachine(
+      service,
+      systemTableCache,
+      ({replicaId}) => calls.push(`activate:${replicaId}`),
+    );
 
     const restored =
       await service.restoreDurableRejoinLocalPartitionServices(
@@ -924,11 +964,72 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
     );
   });
 
+test('NodeJoiningService - durable rejoin activation debt blocks elections ' +
+  'and resumes through workflow re-entry', async (t) => {
+  initializeTestEnvironment();
+
+  const service = new NodeJoiningService({
+    bootIncarnation: 1,
+    nodeId: 'durable-join-node',
+    nodeAddress: 'ws://localhost:9090',
+    seedNodeAddress: 'http://localhost:8080',
+    startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    dataDir: '/tmp/durable-join-data',
+  });
+  const calls = [];
+  let activationAttempt = 0;
+  service.initializeJoiningLifecycleOwners = async () => {
+    calls.push('init');
+  };
+  service.triggerJoinReconciler = async () => {
+    calls.push('reconcile');
+    service.partitionServices.set('nodes-p1-r1', {
+      initialized: true,
+      partitionId: 'nodes-p1',
+      startElection() {
+        calls.push('start:nodes-p1-r1');
+      },
+    });
+  };
+  service.activateJoinPartitionServiceRows = async () => {
+    activationAttempt += 1;
+    calls.push(`activate:${activationAttempt}`);
+    if (activationAttempt === 1) {
+      const error = new Error('activation owner deferred');
+      error.code = 'REPLICA_ACTIVATION_DURABILITY_DEFERRED';
+      error.deferRetry = true;
+      throw error;
+    }
+    return 1;
+  };
+
+  const systemTableCache = createDurableRejoinSystemTableCache();
+
+  await t.rejects(
+    service.restoreDurableRejoinLocalPartitionServices(systemTableCache),
+    {code: 'REPLICA_ACTIVATION_DURABILITY_DEFERRED'},
+    'rejoin restore must remain incomplete while activation ownership is deferred',
+  );
+  t.equal(calls.includes('start:nodes-p1-r1'), false,
+    'partition election must not start before durable activation succeeds');
+
+  const restored = await service.restoreDurableRejoinLocalPartitionServices(
+    systemTableCache,
+  );
+
+  t.equal(activationAttempt, 2,
+    'the existing restore workflow should re-enter the same activation debt');
+  t.same(restored.map(({replicaId}) => replicaId), ['nodes-p1-r1']);
+  t.equal(calls.filter((call) => call === 'start:nodes-p1-r1').length, 1,
+    'successful re-entry should start the election exactly once');
+});
+
 test('NodeJoiningService - durable rejoin restore recreates stale local ' +
   'partition runtime before activation', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'durable-join-node',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -945,6 +1046,9 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
   service.cdcIntegrationService = {
     updateSystemTableRow: async (_tableName, predicate) => {
       calls.push(`activate:${predicate.service_id}`);
+    },
+    insertSystemTableRow(...args) {
+      return insertViaUpsert(this, args);
     },
     upsertSystemTableRow: async (_tableName, row) => {
       calls.push(`activate:${row.service_id}`);
@@ -1005,6 +1109,8 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
       partition_id: 'nodes-p1',
       status: 'active',
       address: 'durable-join-node/partition/nodes-p1-r1',
+      created_at: 100,
+      updated_at: 100,
     }, {
       service_id: 'nodes-p1-r2',
       replica_id: 'nodes-p1-r2',
@@ -1013,6 +1119,8 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
       partition_id: 'nodes-p1',
       status: 'active',
       address: 'peer-node-2/partition/nodes-p1-r2',
+      created_at: 100,
+      updated_at: 100,
     }, {
       service_id: 'nodes-p1-r3',
       replica_id: 'nodes-p1-r3',
@@ -1021,6 +1129,8 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
       partition_id: 'nodes-p1',
       status: 'active',
       address: 'peer-node-3/partition/nodes-p1-r3',
+      created_at: 100,
+      updated_at: 100,
     }]],
   ]);
   const systemTableCache = {
@@ -1036,6 +1146,11 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
       ) || null;
     },
   };
+  installNodeJoiningReplicaStateMachine(
+    service,
+    systemTableCache,
+    ({replicaId}) => calls.push(`activate:${replicaId}`),
+  );
 
   let restored = null;
   try {
@@ -1070,6 +1185,7 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'durable-join-node',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -1088,6 +1204,9 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
   service.cdcIntegrationService = {
     updateSystemTableRow: async (_tableName, predicate) => {
       calls.push(`activate:${predicate.service_id}`);
+    },
+    insertSystemTableRow(...args) {
+      return insertViaUpsert(this, args);
     },
     upsertSystemTableRow: async (_tableName, row) => {
       calls.push(`activate:${row.service_id}`);
@@ -1130,6 +1249,8 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
       partition_id: partitionId,
       status: 'active',
       address: 'peer-node-1/partition/sql_transaction_participants-p1-r1',
+      created_at: 100,
+      updated_at: 100,
     },
     {
       service_id: 'sql_transaction_participants-p1-r2',
@@ -1139,6 +1260,8 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
       partition_id: partitionId,
       status: 'active',
       address: 'peer-node-2/partition/sql_transaction_participants-p1-r2',
+      created_at: 100,
+      updated_at: 100,
     },
     {
       service_id: 'sql_transaction_participants-p1-r3',
@@ -1148,6 +1271,8 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
       partition_id: partitionId,
       status: 'active',
       address: 'peer-node-3/partition/sql_transaction_participants-p1-r3',
+      created_at: 100,
+      updated_at: 100,
     },
     {
       service_id: 'sql_transaction_participants-p1-r4',
@@ -1157,6 +1282,8 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
       partition_id: partitionId,
       status: 'active',
       address: 'peer-node-4/partition/sql_transaction_participants-p1-r4',
+      created_at: 100,
+      updated_at: 100,
     },
     {
       service_id: replicaId,
@@ -1166,6 +1293,8 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
       partition_id: partitionId,
       status: 'active',
       address: `durable-join-node/partition/${replicaId}`,
+      created_at: 100,
+      updated_at: 100,
     },
   ];
   const rowsByTable = new Map([
@@ -1198,6 +1327,12 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
       ) || null;
     },
   };
+  installNodeJoiningReplicaStateMachine(
+    service,
+    systemTableCache,
+    ({replicaId: activatedReplicaId}) =>
+      calls.push(`activate:${activatedReplicaId}`),
+  );
 
   const restored = await service.restoreDurableRejoinLocalPartitionServices(
     systemTableCache,
@@ -1227,6 +1362,7 @@ test('NodeJoiningService - durable rejoin restore fails closed until restored pa
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'durable-join-node',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1241,6 +1377,9 @@ test('NodeJoiningService - durable rejoin restore fails closed until restored pa
     };
     service.cdcIntegrationService = {
       updateSystemTableRow: async () => ({success: true}),
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async () => ({success: true}),
     };
     service.initializeJoiningLifecycleOwners = async () => {};
@@ -1311,6 +1450,7 @@ test('NodeJoiningService - durable rejoin restore skips ambiguous over-target ' 
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'durable-join-node',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -1328,6 +1468,9 @@ test('NodeJoiningService - durable rejoin restore skips ambiguous over-target ' 
   service.cdcIntegrationService = {
     updateSystemTableRow: async () => {
       calls.push('activate:update');
+    },
+    insertSystemTableRow(...args) {
+      return insertViaUpsert(this, args);
     },
     upsertSystemTableRow: async () => {
       calls.push('activate:upsert');
@@ -1427,6 +1570,7 @@ test('NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_RE
 
     let attempts = 0;
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440099',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1494,6 +1638,7 @@ test('NodeJoiningService - sends contact-seed attempt deadline to seed',
 
     let capturedBootstrapRequest = null;
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440098',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1532,6 +1677,7 @@ test('NodeJoiningService - retries bootstrap when seed request times out',
 
     let attempts = 0;
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440100',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1571,6 +1717,7 @@ test('NodeJoiningService - retries register-service request after timeout',
     let attempts = 0;
     const retryDelays = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440104',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1615,6 +1762,7 @@ test('NodeJoiningService - retries register-service on cache visibility timeout 
     const retryDelays = [];
     const warnEvents = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440106',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',

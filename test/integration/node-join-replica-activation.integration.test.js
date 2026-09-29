@@ -9,7 +9,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -20,6 +19,7 @@ import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.
 import LifeRaft from '../../src/raft/liferaft.js';
 import {URL} from 'url';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   getUniquePort,
@@ -201,7 +201,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440001';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -278,6 +278,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       const joiningWsPort = getUniquePort();
 
       joiningService = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: joiningNodeId,
         nodeAddress: `ws://localhost:${joiningWsPort}`,
         seedNodeAddress: 'http://localhost:0',
@@ -387,7 +388,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440021';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -427,6 +428,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       const joiningWsPort = getUniquePort();
 
       joiningService = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: joiningNodeId,
         nodeAddress: `ws://localhost:${joiningWsPort}`,
         seedNodeAddress: 'http://localhost:0',
@@ -517,7 +519,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440020';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -634,7 +636,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440013';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -717,7 +719,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440010';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -788,6 +790,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       const joiningWsPort2 = getUniquePort();
 
       joiningService2 = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: joiningNodeId2,
         nodeAddress: `ws://localhost:${joiningWsPort2}`,
         seedNodeAddress: 'http://localhost:0',
@@ -822,6 +825,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       const joiningWsPort3 = getUniquePort();
 
       joiningService3 = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: joiningNodeId3,
         nodeAddress: `ws://localhost:${joiningWsPort3}`,
         seedNodeAddress: 'http://localhost:0',
