@@ -16,7 +16,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {BOOTSTRAP_PIPELINE_ERROR_CODE} from '../../src/bootstrap/bootstrap-constants.js';
@@ -31,6 +30,7 @@ import {
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {URL} from 'url';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   getUniquePort,
@@ -244,7 +244,7 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
       const seedNodeId = '550e8400-e29b-41d4-a716-446655440101';
       const seedWsPort = getUniquePort();
 
-      const bootstrapService = new BootstrapService({
+      const bootstrapService = await createVirginSeedBootstrapService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         wsPort: seedWsPort,
@@ -361,7 +361,7 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
       const seedNodeId = '550e8400-e29b-41d4-a716-446655440103';
       const seedWsPort = getUniquePort();
 
-      const bootstrapService = new BootstrapService({
+      const bootstrapService = await createVirginSeedBootstrapService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         wsPort: seedWsPort,
@@ -473,7 +473,7 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440105';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -610,7 +610,7 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440107';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

@@ -12,6 +12,8 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {COLUMN, ENDPOINT_STATUS, TABLES, TRANSPORT_TYPE} from '../../src/constants/index.js';
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
+import {publishRegisteredEndpoint} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 /**
  * Initialize test environment.
@@ -276,7 +278,7 @@ t.test('TransportRegistry unit tests', async (t) => {
     registry.registerProvider(createMockProvider(TRANSPORT_TYPE.WEBSOCKET));
 
     const endpoint = createEndpoint({nodeId: 'node-1'});
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, endpoint);
+    publishRegisteredEndpoint(cache, endpoint);
 
     const result = registry.selectEndpoint('node-1');
 
@@ -291,7 +293,7 @@ t.test('TransportRegistry unit tests', async (t) => {
     registry.registerProvider(createMockProvider(TRANSPORT_TYPE.WEBSOCKET, false));
 
     const endpoint = createEndpoint({nodeId: 'node-1'});
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, endpoint);
+    publishRegisteredEndpoint(cache, endpoint);
 
     const result = registry.selectEndpoint('node-1');
 
@@ -304,7 +306,7 @@ t.test('TransportRegistry unit tests', async (t) => {
     // No provider registered
 
     const endpoint = createEndpoint({nodeId: 'node-1'});
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, endpoint);
+    publishRegisteredEndpoint(cache, endpoint);
 
     const result = registry.selectEndpoint('node-1');
 
@@ -318,13 +320,13 @@ t.test('TransportRegistry unit tests', async (t) => {
     registry.registerProvider(createMockProvider(TRANSPORT_TYPE.NATS));
 
     // Add endpoints with different priorities
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-high',
       nodeId: 'node-1',
       transportType: TRANSPORT_TYPE.NATS,
       priority: 10,
     }));
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-low',
       nodeId: 'node-1',
       transportType: TRANSPORT_TYPE.WEBSOCKET,
@@ -344,13 +346,13 @@ t.test('TransportRegistry unit tests', async (t) => {
     registry.registerProvider(createMockProvider(TRANSPORT_TYPE.WEBSOCKET, false));
     registry.registerProvider(createMockProvider(TRANSPORT_TYPE.NATS, true));
 
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-ws',
       nodeId: 'node-1',
       transportType: TRANSPORT_TYPE.WEBSOCKET,
       priority: 0,
     }));
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-nats',
       nodeId: 'node-1',
       transportType: TRANSPORT_TYPE.NATS,
@@ -368,13 +370,13 @@ t.test('TransportRegistry unit tests', async (t) => {
     const registry = new TransportRegistry(cache);
     registry.registerProvider(createMockProvider(TRANSPORT_TYPE.WEBSOCKET));
 
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-inactive',
       nodeId: 'node-1',
       status: ENDPOINT_STATUS.INACTIVE,
       priority: 0,
     }));
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-active',
       nodeId: 'node-1',
       status: ENDPOINT_STATUS.ACTIVE,
@@ -411,17 +413,17 @@ t.test('TransportRegistry unit tests', async (t) => {
     const cache = new SystemTableCache();
     const registry = new TransportRegistry(cache);
 
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-3',
       nodeId: 'node-1',
       priority: 30,
     }));
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-1',
       nodeId: 'node-1',
       priority: 10,
     }));
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-2',
       nodeId: 'node-1',
       priority: 20,
@@ -439,11 +441,11 @@ t.test('TransportRegistry unit tests', async (t) => {
     const cache = new SystemTableCache();
     const registry = new TransportRegistry(cache);
 
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-node1',
       nodeId: 'node-1',
     }));
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-node2',
       nodeId: 'node-2',
     }));
@@ -458,12 +460,12 @@ t.test('TransportRegistry unit tests', async (t) => {
     const cache = new SystemTableCache();
     const registry = new TransportRegistry(cache);
 
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-active',
       nodeId: 'node-1',
       status: ENDPOINT_STATUS.ACTIVE,
     }));
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-inactive',
       nodeId: 'node-1',
       status: ENDPOINT_STATUS.INACTIVE,
@@ -485,7 +487,7 @@ t.test('TransportRegistry unit tests', async (t) => {
     t.equal(result, null, 'should return null initially');
 
     // Add endpoint
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-1',
       nodeId: 'node-1',
     }));
@@ -516,8 +518,8 @@ t.test('TransportRegistry unit tests', async (t) => {
     });
     delete endpointNoPriority[COLUMN.PRIORITY];
 
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, endpointNoPriority);
-    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, createEndpoint({
+    publishRegisteredEndpoint(cache, endpointNoPriority);
+    publishRegisteredEndpoint(cache, createEndpoint({
       endpointId: 'ep-with-priority',
       nodeId: 'node-1',
       priority: 5,

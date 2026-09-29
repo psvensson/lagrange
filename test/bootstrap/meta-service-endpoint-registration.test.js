@@ -21,9 +21,17 @@ const NODE_ID = 'node-a';
 const LOGICAL_SERVICE_ID = 'sys-postgres-wire';
 const REPLICA_ID = `${LOGICAL_SERVICE_ID}-r1`;
 
+// The hosting node's boot incarnation, threaded by the runtime setup.
+const RUNTIME_NODE_INCARNATION = 1;
+
 function createRuntimeEndpointFixture() {
   const mutations = [];
   const gateway = {
+    // A runtime endpoint is born by INSERT at the node's incarnation.
+    async insertSystemTableRow(tableName, row) {
+      mutations.push({operation: 'insert', tableName, row});
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
     async upsertSystemTableRow(tableName, row) {
       mutations.push({operation: 'upsert', tableName, row});
       return {success: true};
@@ -54,6 +62,7 @@ function createRuntimeEndpointFixture() {
     systemTableCache: cache,
   });
   wireRuntimeEndpointPublication({
+    bootIncarnation: RUNTIME_NODE_INCARNATION,
     nodeId: NODE_ID,
     serviceEndpointsOwner: owner,
     serviceRuntimeLifecycle: lifecycle,
@@ -234,7 +243,9 @@ describe('meta-service-endpoint-registration', () => {
     );
 
     assert.equal(mutations.length, 1);
-    assert.equal(mutations[0].operation, 'upsert');
+    assert.equal(mutations[0].operation, 'insert',
+      'the runtime endpoint is born at the node incarnation, never upserted');
+    assert.equal(mutations[0].row.boot_incarnation, RUNTIME_NODE_INCARNATION);
     assert.equal(mutations[0].tableName, SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS);
     assert.equal(mutations[0].row.service_id, LOGICAL_SERVICE_ID);
     assert.equal(mutations[0].row.node_id, NODE_ID);
@@ -265,7 +276,8 @@ describe('meta-service-endpoint-registration', () => {
     assert.equal(mutations[1].tableName, SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS);
     assert.deepEqual(mutations[1].where, {
       endpoint_id: `${LOGICAL_SERVICE_ID}-ep-${NODE_ID}`,
-    });
+      boot_incarnation: RUNTIME_NODE_INCARNATION,
+    }, 'removal deletes only this incarnation\'s endpoint');
   });
 
   it('fails closed when runtime replica identity matches no desired service', async () => {

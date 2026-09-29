@@ -137,6 +137,7 @@ const applyCommonStubs = (service, systemTableCache, hydrationResult) => {
 test('phaseCacheHydration succeeds when CDC pipeline is ready',
   async (t) => {
     const service = new BootstrapService({
+      bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       config: {
@@ -168,6 +169,7 @@ test('phaseCacheHydration succeeds when CDC pipeline is ready',
 test('phaseCacheHydration fails on CDC readiness gate timeout',
   async (t) => {
     const service = new BootstrapService({
+      bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       config: {
@@ -213,6 +215,7 @@ test('phaseCacheHydration fails on CDC readiness gate timeout',
 test('phaseCacheHydration timeout error lists unmet conditions',
   async (t) => {
     const service = new BootstrapService({
+      bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       config: {

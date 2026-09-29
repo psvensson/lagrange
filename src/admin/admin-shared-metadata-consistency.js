@@ -1,6 +1,8 @@
 import {
   COLUMN,
 } from '../constants/index.js';
+import {selectCurrentEndpointRows} from
+  '../control-plane/owners/endpoint-incarnation-currentness.js';
 
 const LOCAL_STR_ACTIVE = 'active';
 const LOCAL_STR_PARTITION = 'partition';
@@ -203,7 +205,7 @@ function evaluateSharedMetadataNodeCoverage(options = {}) {
   }
 
   for (const nodeId of collectNodeIds(
-    options.nodeEndpointRows,
+    selectCurrentEndpointRows(options.nodeEndpointRows, options.nodeRows),
     [COLUMN.NODE_ID, LOCAL_STR_NODE_ID, LOCAL_STR_NODEID],
     isActiveEndpointRow,
   )) {

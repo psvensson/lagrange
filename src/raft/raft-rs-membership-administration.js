@@ -13,7 +13,13 @@ function registerPeerIdentityReservationOwner({
 }) {
   const key = keyOf(groupId, localReplicaIdentity);
   RESERVATION_OWNERS.set(key, reserve);
-  return Object.freeze(() => RESERVATION_OWNERS.delete(key));
+  // Remove only this runtime's own entry: a delayed close of an older
+  // runtime must not unregister the runtime that reused the logical name.
+  return Object.freeze(() => {
+    if (RESERVATION_OWNERS.get(key) === reserve) {
+      RESERVATION_OWNERS.delete(key);
+    }
+  });
 }
 
 function reservePeerIdentity({

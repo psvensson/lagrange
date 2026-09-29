@@ -1,5 +1,11 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {buildSystemTableMutationSqlParts} from './cdc-system-table-mutation-sql-helpers.js';
+import {TABLES} from '../constants/index.js';
+import {
+  CONTROL_PLANE_GATEWAY_ERROR_CODE,
+  GATEWAY_ERROR_MSG,
+} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 
 const {
   CDCOperationType,
@@ -157,6 +163,11 @@ export async function deleteSystemTableRow(context, tableName, whereClause, opti
  */
 export async function upsertSystemTableRow(context, tableName, data, options = {}) {
   context.validateTableName(tableName);
+  if (tableName === TABLES.SERVICES) {
+    const error = new Error(GATEWAY_ERROR_MSG.SERVICES_UPSERT_FORBIDDEN);
+    error.code = CONTROL_PLANE_GATEWAY_ERROR_CODE.SERVICES_UPSERT_FORBIDDEN;
+    throw error;
+  }
   context.validateData(data, CDC_OPERATION_LABEL.UPSERT);
   const upsertData = context.prepareInsertData(tableName, data, {
     generatePrimaryKey: false,

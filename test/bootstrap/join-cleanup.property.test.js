@@ -66,6 +66,7 @@ const PHASES_WITH_MG_CLEANUP = FAILURE_PHASES.filter(
  */
 function createTrackedJoiningService(cleanupContext) {
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'test-joining-node',
     nodeAddress: 'http://localhost:4000',
     seedNodeAddress: 'http://localhost:3000',

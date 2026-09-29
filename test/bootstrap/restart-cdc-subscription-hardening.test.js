@@ -117,6 +117,7 @@ function createFailThenSucceedCDC(failCount) {
 function createServiceWithCapturingLogger(overrides = {}) {
   const logs = [];
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,

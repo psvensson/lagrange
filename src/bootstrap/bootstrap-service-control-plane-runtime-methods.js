@@ -9,12 +9,8 @@ import {ControlPlaneSetup} from './shared/control-plane-setup.js';
 import {
   waitForLocalQueryTransportReadiness,
 } from './shared/local-query-transport-readiness.js';
-import {
-  PgWireStartupSafetyGate,
-} from './pgwire-startup-safety-gate.js';
-import {
-  RuntimeServiceHandlerSetup,
-} from './shared/runtime-service-handler-setup.js';
+import {initializeGuardedRuntimeServiceHandler} from
+  './shared/guarded-runtime-service-handler.js';
 import {
   attachRuntimeServiceRebalancerOwner,
 } from './shared/runtime-service-rebalancer-setup.js';
@@ -23,8 +19,8 @@ import {
 } from './shared/message-group-service-handler-setup.js';
 import {
   COLUMN,
+  NODE_STATE,
   NUM,
-  SERVICE_STATUS,
   STATE,
 } from '../constants/index.js';
 
@@ -133,35 +129,7 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
      * @private
      */
     initializeRuntimeServiceHandler() {
-      const systemTableCache = this.getSystemTableCache();
-      const gate = new PgWireStartupSafetyGate({
-        nodeId: this.nodeId,
-        serviceLifecycleManager: this.serviceLifecycleManager,
-        systemTableCache,
-        heartbeatService: this.heartbeatService,
-      });
-
-      const result = gate.guardedSetup(() => {
-        return RuntimeServiceHandlerSetup.create({
-          nodeId: this.nodeId,
-          messageRouter: this.messageRouter,
-          cdcIntegrationService: this.cdcIntegrationService,
-          systemTableCache,
-          serviceLifecycleManager: this.serviceLifecycleManager,
-          serviceRuntimeLifecycle: this.serviceRuntimeLifecycle,
-          serviceEndpointsOwner:
-            this.systemMetadataOwners?.serviceEndpointsOwner,
-          rpcClient: this.rpcClient,
-          executorOutcomeEmitter:
-            this.rebalanceCoordinator?.executorOutcomeEmitter,
-        });
-      });
-
-      if (result) {
-        this.runtimeServiceHandler = result.runtimeServiceHandler;
-      }
-
-      this.attachRuntimeServiceRebalancerOwner();
+      initializeGuardedRuntimeServiceHandler(this, this.getSystemTableCache());
     },
 
     /**
@@ -311,10 +279,11 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
           [COLUMN.DISK_USAGE_PERCENT]:
             Number.isFinite(stats?.diskUsagePercent) ?
               stats.diskUsagePercent : 0,
-          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.STATUS]: NODE_STATE.JOINING,
           [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
           [COLUMN.CAPABILITIES]: JSON.stringify([]),
           [COLUMN.LAST_HEARTBEAT]: now,
+          [COLUMN.BOOT_INCARNATION]: this.bootIncarnation,
           [COLUMN.CREATED_AT]: now,
         };
 

@@ -234,6 +234,7 @@ const SERVICES_SCHEMA = {
     {name: 'previous_state', type: COLUMN_TYPE.TEXT}, // Previous state for debugging
     {name: 'trigger_reason', type: COLUMN_TYPE.TEXT}, // What triggered current state
     {name: 'error_message', type: COLUMN_TYPE.TEXT}, // Error if in failed state
+    {name: 'cleanup_token', type: COLUMN_TYPE.TEXT},
     {name: 'address', type: COLUMN_TYPE.TEXT},
     {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},

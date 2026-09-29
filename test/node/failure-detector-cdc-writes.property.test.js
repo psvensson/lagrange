@@ -27,6 +27,8 @@ import {ConfigurationManager} from
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createMockMutationGateway} from
   './failure-detector-test-helpers.js';
+import {createCanonicalLifecycleServiceRow} from
+  '../test-helpers/lifecycle-state-store.js';
 
 /**
  * The detector's own node ID — always skipped during health checks.
@@ -46,7 +48,11 @@ function createMockCDCService() {
     operations,
     async updateSystemTableRow(tableName, whereClause, data) {
       operations.push({tableName, whereClause, data});
-      return {success: true};
+      return {
+        success: true,
+        outcome: 'applied',
+        partitionResult: {affectedRows: 1},
+      };
     },
   };
 }
@@ -63,7 +69,9 @@ function createMockCDCService() {
  */
 function createMockSqlQueryEngine(data = {}) {
   const nodes = data.nodes || [];
-  const services = data.services || [];
+  const services = (data.services || []).map(
+    (service, index) => createCanonicalLifecycleServiceRow(service, index),
+  );
 
   return {
     async executeQuery(sql, params = []) {
@@ -81,6 +89,13 @@ function createMockSqlQueryEngine(data = {}) {
             s.service_type === serviceType,
         );
         return {rows: filtered, success: true};
+      }
+      if (sql.includes('FROM services') &&
+          sql.includes('WHERE service_id = ?')) {
+        const row = services.find(
+          (service) => service.service_id === params[0],
+        );
+        return {rows: row ? [row] : [], success: true};
       }
       return {rows: [], success: true};
     },
@@ -100,6 +115,8 @@ function buildPartitionReplica(nodeId, index) {
     service_type: SERVICE_TYPE.PARTITION,
     partition_id: `part-${nodeId}-${index}`,
     status: ReplicaStatus.ACTIVE,
+    state_entered_at: index + 1,
+    updated_at: index + 1,
   };
 }
 
@@ -349,13 +366,13 @@ test('Property 7: Failure detector single CDC write per status change',
     );
 
     /**
-     * Property: For any SUSPECTED-to-FAILED transition with
-     * replicas, the total CDC writes equal exactly 1 (node
-     * status) + N (replica statuses), where N is the total
-     * number of partition and message group replicas on the node.
+     * Property: lifecycle writes remain exactly 1 (node status) + N
+     * (replica statuses). Partition FAILED transitions also submit their
+     * separately-owned canonical leader-clear effect; that effect must not be
+     * mistaken for a second replica lifecycle write.
      */
     t.test(
-      'total CDC writes = 1 node + N replicas on failure',
+      'lifecycle writes = 1 node + N replicas on failure',
       async (t) => {
         await fc.assert(
           fc.asyncProperty(
@@ -407,15 +424,23 @@ test('Property 7: Failure detector single CDC write per status change',
                 partitionCount + msgGroupCount;
               const expectedTotal = 1 + totalReplicas;
 
-              return mockCDC.operations.length === expectedTotal;
+              const lifecycleWrites = mockCDC.operations.filter((operation) =>
+                operation.tableName === SYSTEM_TABLE_NAME.NODES ||
+                operation.tableName === SYSTEM_TABLE_NAME.SERVICES);
+              const leaderClearWrites = mockCDC.operations.filter(
+                (operation) =>
+                  operation.tableName === SYSTEM_TABLE_NAME.PARTITIONS,
+              );
+              return lifecycleWrites.length === expectedTotal &&
+                leaderClearWrites.length === partitionCount;
             },
           ),
           {numRuns: 10},
         );
 
         t.pass(
-          'total CDC writes equal 1 node write + N replica ' +
-          'writes on failure',
+          'lifecycle writes remain singular and partition leader-clear ' +
+          'effects remain separately classified',
         );
       },
     );

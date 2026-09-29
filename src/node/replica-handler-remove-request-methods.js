@@ -92,6 +92,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
      * @return {Promise<Object>} Response.
      */
     async handleRemoveReplica(request) {
+      await this.awaitRemovedReplicaCleanupAdmissionBarrier();
       const operationId = request?.[ReplicaOperationField.OPERATION_ID];
       const partitionId = request?.[ReplicaOperationField.PARTITION_ID];
       const replicaId = request?.[ReplicaOperationField.REPLICA_ID];

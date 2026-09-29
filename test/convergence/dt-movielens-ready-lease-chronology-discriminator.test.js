@@ -16,6 +16,10 @@ import {
   ReplicaDispatchService,
 } from '../../src/control-plane/replica-dispatch-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {NodeLifecyclePublication} from
+  '../../src/control-plane/node-lifecycle-publication.js';
+import {NodeReadyLeaseAuthority} from
+  '../../src/control-plane/node-ready-lease-authority.js';
 import {
   CDCEvent,
   CDCHandler,
@@ -26,12 +30,15 @@ import {
 import {
   buildAffinityDemoLiveReport,
 } from '../../examples/service-data-affinity/affinity-demo-live-report.js';
+import {insertViaUpsert} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 const NODE_ID = 'node-chronology';
 const OLD_OWNER_WRITE_AT_MS = 1_000;
 const OLD_CDC_OBSERVED_AT_MS = 1_500;
 const PRODUCER_HEARTBEAT_AT_MS = 3_000;
 const SNAPSHOT_TARGET = 'ws://127.0.0.1:8081/api/admin/stream';
+const BOOT_INCARNATION = 2;
 
 function initializeEnvironment() {
   ConfigurationManager.resetInstance();
@@ -52,6 +59,8 @@ function buildInitialNodeRow() {
     last_heartbeat: OLD_OWNER_WRITE_AT_MS,
     ready_lease_expires_at: 61_000,
     updated_at_hlc: `${OLD_OWNER_WRITE_AT_MS}-0-old-write-owner`,
+    boot_incarnation: BOOT_INCARNATION,
+    created_at: 0,
   };
 }
 
@@ -114,12 +123,16 @@ function buildHeartbeatService(options = {}) {
   return new HeartbeatService({
     nodeId: NODE_ID,
     nodeAddress: '127.0.0.1:8084',
+    bootIncarnation: BOOT_INCARNATION,
     systemTableCache: options.systemTableCache,
     controlPlaneSystemTableGateway: {
       updateSystemTableRow: async () => ({
         success: true,
         partitionResult: {affectedRows: 1},
       }),
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async () => ({
         success: true,
         partitionResult: {affectedRows: 1},
@@ -199,10 +212,17 @@ test('production seams retain owner-write to CDC chronology in MovieLens report'
           partitionResult: {affectedRows: 1},
         };
       },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       async upsertSystemTableRow() {
         return {success: true, partitionResult: {affectedRows: 1}};
       },
+      async readAuthoritativeRows() {
+        return {success: true, rows: [buildInitialNodeRow()]};
+      },
     };
+    const readyLeaseAuthority = NodeReadyLeaseAuthority.fromConfiguration();
     const dispatchService = new ReplicaDispatchService({
       nodeId: 'node-seed',
       messageRouter: {},
@@ -210,6 +230,10 @@ test('production seams retain owner-write to CDC chronology in MovieLens report'
       controlPlaneSystemTableGateway: dispatchGateway,
       systemTableCache: readOnlyCache,
       controlPlaneReadinessService: {},
+      nodeLifecyclePublication: new NodeLifecyclePublication({
+        gateway: dispatchGateway,
+        leaseAuthority: readyLeaseAuthority,
+      }),
       rebalanceCoordinator: {
         executeOperation: async () => ({success: true}),
       },
@@ -221,7 +245,7 @@ test('production seams retain owner-write to CDC chronology in MovieLens report'
       nowMs: PRODUCER_HEARTBEAT_AT_MS,
       nodeStateReporter: async (payload) => {
         producerPayload = payload;
-        await dispatchService.handleNodeStateUpdate(payload);
+        await dispatchService.nodeLifecyclePublication.publish(payload);
         return {
           publicationPath: 'node_state_reporter',
           targetAddress: 'node-seed/message-group/nodes-p1',
@@ -239,13 +263,13 @@ test('production seams retain owner-write to CDC chronology in MovieLens report'
       );
       t.equal(
         pendingCdcRow.ready_lease_expires_at,
-        pendingCdcRow.last_heartbeat + dispatchService.readyLeaseMs,
+        pendingCdcRow.last_heartbeat + readyLeaseAuthority.readyLeaseMs,
         'canonical owner still mints the unchanged full ready lease',
       );
 
       const ownerWriteAtMs = pendingCdcRow.last_heartbeat;
       const cdcObservedAtMs =
-        ownerWriteAtMs + dispatchService.readyLeaseMs + 5_000;
+        ownerWriteAtMs + readyLeaseAuthority.readyLeaseMs + 5_000;
       applyCdcRow(
         cdcHandler,
         pendingCdcRow,
@@ -266,7 +290,7 @@ test('production seams retain owner-write to CDC chronology in MovieLens report'
       t.equal(witness.cdcObservation.observedAtMs, cdcObservedAtMs);
       t.equal(
         witness.cdcObservation.ownerToCdcDelayMs,
-        dispatchService.readyLeaseMs + 5_000,
+        readyLeaseAuthority.readyLeaseMs + 5_000,
         'per-key receipt exposes CDC delay beyond the owner-minted lease',
       );
       t.equal(witness.readyLease.ageMs, 6_000);
