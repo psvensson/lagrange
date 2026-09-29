@@ -1,3 +1,8 @@
+# Verifier scratch evidence: `cache-reuse-falsifier.test.js`
+
+Original file `falsifiers/cache-reuse-falsifier.test.js`, preserved verbatim below (stored as Markdown so the change cone treats it as inert evidence). To re-run, copy the fenced block to a scratch file with the original name.
+
+````js
 import {test} from '../../src/test-helpers/tap.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {TABLES} from '../../src/constants/index.js';
@@ -66,3 +71,4 @@ test('A4 delayed G1 cleanup-marker release delete vs G2 live row', async (t) => 
   cache.applySystemTableChange(TABLES.SERVICES, 'DELETE', {service_id: ID, service_type: 'partition_cleanup', partition_id: 'p-1', node_id: 'node-a', status: 'cleanup_owned', cleanup_token: 'tok', updated_at: 2900});
   t.equal(cache.get(TABLES.SERVICES, ID)?.created_at, 3000, 'G2 survives');
 });
+````

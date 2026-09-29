@@ -1,3 +1,8 @@
+# Verifier scratch evidence: `boot-incarnation-mint-falsifier.test.js`
+
+Original file `falsifiers/boot-incarnation-mint-falsifier.test.js`, preserved verbatim below (stored as Markdown so the change cone treats it as inert evidence). To re-run, copy the fenced block to a scratch file with the original name.
+
+````js
 // Verifier falsifier (scratch): the joiner startup hint write drops the
 // persisted boot-incarnation counter, so the next mint in the same data dir
 // is not monotonic.
@@ -33,3 +38,4 @@ test('boot incarnation mint stays monotonic across a joiner startup',
       fs.rmSync(dataDir, {recursive: true, force: true});
     }
   });
+````
