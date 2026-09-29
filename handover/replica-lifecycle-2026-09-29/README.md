@@ -26,3 +26,10 @@ Round 8 (the above) -> re-freeze from scratch (owner-decisions-2026-09-29e/f.md 
 
 ## Related branches on origin
 fixes/mg-forwarded-application-envelope (c3cfd229f, separate transport fix, not published); records/followups-2026-09-28 (48ff6df78, draft quests message-group-leader-safe-movement, message-group-forward-completion-propagation).
+
+## Note (local resume 2026-09-29): verifier scratch stored as Markdown
+The earlier verifier's executable scratch under `verify/` is now stored as Markdown evidence records with the original source
+verbatim in a fenced block: `falsifiers/{boot-incarnation-mint-falsifier,cache-reuse-falsifier,reservation-current-name}.test.js.md`
+and `r1-addr.mjs.md`. As `.test.js`/`.mjs` (or any non-Markdown file under `handover/`) they entered the change cone with no
+owning subsystem (`SAFE TEST SCOPE UNKNOWN`) and blocked `lab test changed`. The records that cite them by their old names
+refer to these files. To re-run one, copy the fenced block to a scratch file with the original name.
