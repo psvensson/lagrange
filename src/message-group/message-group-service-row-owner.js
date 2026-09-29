@@ -36,6 +36,11 @@ const MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR = Object.freeze({
   IDENTITY_CONFLICT: 'SERVICE_IDENTITY_CONFLICT',
   ACTIVATION_OWNER_DEFERRED: 'ACTIVATION_OWNER_DEFERRED',
   REMOVE_OWNER_DEFERRED: 'REMOVE_OWNER_DEFERRED',
+  HANDLER_NOT_REGISTERED: 'MESSAGE_GROUP_ACTIVATION_HANDLER_NOT_REGISTERED',
+  LIFECYCLE_OWNER_REQUIRED:
+    'MessageGroupServiceRowOwner activation requires the replica lifecycle ' +
+    'owner',
+  LIFECYCLE_OWNER_CLOSED: 'MESSAGE_GROUP_ACTIVATION_LIFECYCLE_OWNER_CLOSED',
 });
 const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   allowCoalescing: true,
@@ -306,9 +311,23 @@ function messageGroupRemovalErrorCode(observation) {
     MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.REMOVE_OWNER_DEFERRED;
 }
 
+// The activation effect boundary (owner decision N2, class repair
+// 2026-09-29g): the exact handler of this replica generation must be
+// registered when the ACTIVE CAS is issued. Checked inside the replica's
+// lifecycle lane with no await before the CAS; handler retirement waits for
+// the open effect section.
+function requireMessageGroupEffectHandler(options) {
+  if (typeof options.isEffectHandlerCurrent !== 'function' ||
+      options.isEffectHandlerCurrent() !== true) {
+    throw messageGroupActivationError(options.replicaId,
+      MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.HANDLER_NOT_REGISTERED);
+  }
+}
+
 class MessageGroupServiceRowOwner {
   constructor(options = {}) {
     this.systemTableWriter = options.systemTableWriter || null;
+    this.replicaStateMachine = options.replicaStateMachine || null;
     this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
@@ -397,14 +416,41 @@ class MessageGroupServiceRowOwner {
     return row;
   }
 
+  // ACTIVE runs through the replica's lifecycle owner, bound to the exact
+  // transport handler (options.isEffectHandlerCurrent).
   async activateReplica(options = {}) {
-    return this.updateReplicaStatus({
-      ...options,
-      status: SERVICE_STATUS.ACTIVE,
+    this.assertUpdateWriter();
+    const lane = this.replicaStateMachine;
+    if (typeof lane?.runHandlerBoundActivation !== 'function') {
+      throw new Error(
+        MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.LIFECYCLE_OWNER_REQUIRED,
+      );
+    }
+    const activation = {...options, status: SERVICE_STATUS.ACTIVE};
+    const row = await lane.runHandlerBoundActivation(options.replicaId, {
+      resolveSource: () => this.resolveStatusSource(activation),
+      requireHandler: () => requireMessageGroupEffectHandler(activation),
+      effect: (source) => source.status === SERVICE_STATUS.ACTIVE ? source :
+        persistMessageGroupActivation(this, source, activation),
     });
+    if (row === false) {
+      throw messageGroupActivationError(options.replicaId,
+        MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.LIFECYCLE_OWNER_CLOSED);
+    }
+    return row;
   }
 
   async updateReplicaStatus(options = {}) {
+    if (options.status === SERVICE_STATUS.ACTIVE) {
+      return this.activateReplica(options);
+    }
+    this.assertUpdateWriter();
+    const source = await this.resolveStatusSource(options);
+    if (source.status === options.status) return source;
+    return persistMessageGroupActivation(this, source, options);
+  }
+
+  assertUpdateWriter() {
     if (
       !this.systemTableWriter ||
       typeof this.systemTableWriter.updateSystemTableRow !== 'function'
@@ -413,7 +459,9 @@ class MessageGroupServiceRowOwner {
         MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.UPDATE_REQUIRED,
       );
     }
+  }
 
+  async resolveStatusSource(options) {
     const identity = MessageGroupServiceRowOwner.buildServiceRow({
       ...options,
       timestamp: options.timestamp ?? this.now(),
@@ -424,13 +472,11 @@ class MessageGroupServiceRowOwner {
         this.systemTableWriter,
         identity.service_id,
       );
-    const source = requireMessageGroupActivationSource(
+    return requireMessageGroupActivationSource(
       initial,
       identity,
       options.status,
     );
-    if (source.status === options.status) return source;
-    return persistMessageGroupActivation(this, source, options);
   }
 
   async removeReplica(options = {}) {
@@ -481,4 +527,7 @@ class MessageGroupServiceRowOwner {
   }
 }
 
-export {MessageGroupServiceRowOwner};
+export {
+  MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR,
+  MessageGroupServiceRowOwner,
+};

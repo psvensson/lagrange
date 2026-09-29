@@ -59,6 +59,7 @@ function createBootstrapServiceRuntimeMethods() {
       return activateMessageGroupServiceRows({
         nodeId: this.nodeId,
         systemTableWriter: this.cdcIntegrationService,
+        replicaStateMachine: this.replicaStateMachine,
         messageRouter: this.messageRouter,
         deferTransientFailures: true,
         messageGroupServiceHandler: this.messageGroupServiceHandler,

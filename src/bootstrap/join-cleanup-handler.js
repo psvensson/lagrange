@@ -23,10 +23,10 @@ import {
   JOINING_LOG_MSG,
 } from './node-joining-constants.js';
 import {
-  ADDRESS,
-  ENTITY_TYPE,
   NUM,
 } from '../constants/index.js';
+import {retireMessageGroupTransportHandlers} from
+  './shared/message-group-transport-handler.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 import {
   STALE_NODE_INCARNATION_CODE,
@@ -516,16 +516,12 @@ class JoinCleanupHandler {
         }
       }
 
-      // Unregister from message router
-      if (messageRouter) {
-        for (const [replicaId] of messageGroupServices) {
-          const address =
-            `${this.nodeId}${ADDRESS.SEPARATOR}` +
-            `${ENTITY_TYPE.MESSAGE_GROUP}` +
-            `${ADDRESS.SEPARATOR}${replicaId}`;
-          messageRouter.unregister(address);
-        }
-      }
+      // Retire each replica's exact handler through its lifecycle owner.
+      await retireMessageGroupTransportHandlers({
+        messageGroupServices,
+        messageRouter,
+        nodeId: this.nodeId,
+      });
 
       logger.info(
         JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_MESSAGE_GROUP_DONE, {

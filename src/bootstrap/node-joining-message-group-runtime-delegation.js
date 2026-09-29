@@ -11,13 +11,11 @@ const {
   NodeService,
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
-  SERVICE_TYPE,
   TABLES,
   UNIFIED_SERVICE_TYPE,
   activateMessageGroupServiceRows,
   activatePartitionServiceRows,
   assertCritical,
-  formatReplicatedServiceAddress,
   getControlPlaneMessageRequiredTables,
 } = NODE_JOINING_SERVICE_SHARED;
 
@@ -105,15 +103,8 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     if (typeof partition.shutdown === 'function') {
       await partition.shutdown();
     }
-    const unifiedAddress =
-      typeof partition.getUnifiedAddress === 'function' ?
-        partition.getUnifiedAddress() :
-        formatReplicatedServiceAddress(
-          SERVICE_TYPE.PARTITION,
-          this.nodeId,
-          options.replicaId,
-        );
-    this.messageRouter?.unregister?.(unifiedAddress);
+    // partition.shutdown() already retired its exact transport handler in the
+    // replica lane; a raw by-address unregister here could remove a successor's.
     this.partitionServices.delete(options.replicaId);
     this.replicaHandler?.localServices?.delete?.(options.replicaId);
     this.replicaHandler?.localReplicas?.delete?.(options.replicaId);
@@ -309,6 +300,7 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     return activateMessageGroupServiceRows({
       nodeId: this.nodeId,
       systemTableWriter: this.createCdcIntegrationService(),
+      replicaStateMachine: this.replicaStateMachine,
       registrationEvidenceByReplicaId:
         this.createMessageGroupPhase.registrationEvidenceByReplicaId,
       messageRouter: this.messageRouter,

@@ -292,22 +292,27 @@ async (t) => {
     }
   };
   walk(join(root, 'src'));
-  // Message-group handler removals are a different owner (message-group
-  // activation), recorded outside this partition N2 boundary.
-  t.same(sites.sort(), [
-    'src/bootstrap/phases/create-message-group-replica-lifecycle.js',
-    'src/bootstrap/phases/seed-message-groups-phase.js',
-    'src/partition/partition-service-lifecycle-methods.js',
-  ]);
+  // Replica transport-handler removal goes through the shared exact-identity
+  // retirement (partition and message-group alike); no by-unifiedAddress
+  // removal remains.
+  t.same(sites.sort(), []);
   const source = readFileSync(join(root,
     'src/partition/partition-service-lifecycle-methods.js'), 'utf8');
   const retirement = source.slice(
     source.indexOf('async function retirePartitionTransportHandler'),
     source.indexOf('function closePartitionPersistenceResources'));
-  t.match(retirement, /lane\.retireReplicaHandler\(service\.replicaId, retire\)/u,
-    'removal runs in the replica lifecycle lane');
-  t.match(retirement, /transport\.unregisterExact\(service\.unifiedAddress,/u,
-    'removal is exact-identity');
+  t.match(retirement, /await retireReplicaTransportHandler\(\{/u,
+    'removal goes through the shared replica handler retirement');
+  t.match(retirement, /handler: service\.transportHandler,/u,
+    'removal is bound to this replica\'s exact handler');
+  t.match(retirement, /lane: service\.resolveHandlerRetirementLane\?\.\(\) \|\|/u,
+    'removal runs against the replica lifecycle owner');
+  const helper = readFileSync(join(root,
+    'src/node/replica-transport-handler-identity.js'), 'utf8');
+  t.match(helper, /lane\.retireReplicaHandler\(replicaId, retire\)/u,
+    'the shared retirement waits on the owner\'s activation effect section');
+  t.match(helper, /transport\.unregisterExact\(address, handler\)/u,
+    'the shared retirement is exact-identity');
   const shutdown = source.slice(source.indexOf('  async shutdown() {'));
   t.ok(shutdown.indexOf('await retirePartitionTransportHandler(this);') <
     shutdown.indexOf('closePartitionPersistenceResources(this);'),

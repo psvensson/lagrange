@@ -1,11 +1,24 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
-import {MessageGroupServiceRowOwner} from
+import {MessageGroupServiceRowOwner as RowOwner} from
   '../../src/message-group/message-group-service-row-owner.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {createLifecycleCdcService, createLifecycleServiceRow} from
   '../test-helpers/lifecycle-state-store.js';
 
 const REPLICA_ID = 'mg-1-r1';
+// Activation runs through the replica lifecycle owner, bound to the exact
+// transport handler; these fixtures model a registered handler.
+class MessageGroupServiceRowOwner extends RowOwner {
+  constructor(options = {}) {
+    super({replicaStateMachine: new ReplicaStateMachine({nodeId: 'node-a',
+      controlPlaneSystemTableGateway: {}}), ...options});
+  }
+  activateReplica(options = {}) {
+    return super.activateReplica({isEffectHandlerCurrent: () => true,
+      ...options});
+  }
+}
 function stoppedRow(overrides = {}) {
   return createLifecycleServiceRow({serviceId: REPLICA_ID,
     replicaId: REPLICA_ID, replicaIdentity: REPLICA_ID,

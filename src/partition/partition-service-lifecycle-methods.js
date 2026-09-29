@@ -3,6 +3,8 @@ import {
   PARTITION_WRITE_RELEASE_CAUSE,
   buildReleasedPendingWriteAnswer,
 } from './partition-write-kernel.js';
+import {retireReplicaTransportHandler} from
+  '../node/replica-transport-handler-identity.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -47,29 +49,16 @@ function clearPartitionLifecycleListeners(service) {
 }
 
 // Retire this replica's exact transport handler through its lifecycle owner
-// (owner decision N2): an activation that confirmed this handler in its lane
-// completes its ACTIVE CAS first; a later one finds it gone. A successor's
-// handler under the same address is never removed.
+// (owner decision N2).
 async function retirePartitionTransportHandler(service) {
-  const transport = service.transport;
-  if (!transport) return;
-  const retire = () => {
-    if (typeof transport.unregisterExact === PARTITION_SERVICE_TYPE.FUNCTION &&
-        service.transportHandler) {
-      transport.unregisterExact(service.unifiedAddress,
-        service.transportHandler);
-    } else {
-      transport.unregister(service.unifiedAddress);
-    }
-  };
-  const lane = service.resolveHandlerRetirementLane?.() ||
-    service.replicaStateMachine;
-  if (typeof lane?.retireReplicaHandler === PARTITION_SERVICE_TYPE.FUNCTION &&
-      service.replicaId) {
-    await lane.retireReplicaHandler(service.replicaId, retire);
-    return;
-  }
-  retire();
+  await retireReplicaTransportHandler({
+    transport: service.transport,
+    address: service.unifiedAddress,
+    handler: service.transportHandler,
+    replicaId: service.replicaId,
+    lane: service.resolveHandlerRetirementLane?.() ||
+      service.replicaStateMachine,
+  });
 }
 
 function closePartitionPersistenceResources(service) {

@@ -1,4 +1,6 @@
 import {AddressManager} from '../../address/address-manager.js';
+import {isExactReplicaHandlerRegistered} from
+  '../../node/replica-transport-handler-identity.js';
 import {PartitionServiceRowOwner} from
   '../../partition/partition-service-row-owner.js';
 import {
@@ -206,17 +208,6 @@ function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {
   );
 }
 
-// The exact handler identity this replica registered (owner decision N2),
-// not mere presence at the address: a successor generation's handler under the
-// same address never satisfies this replica's activation.
-function isExactReplicaHandlerRegistered(messageRouter, address, service) {
-  if (typeof messageRouter.getRegisteredHandler !== 'function') {
-    return messageRouter.isRegistered(address);
-  }
-  return Boolean(service?.transportHandler) &&
-    messageRouter.getRegisteredHandler(address) === service.transportHandler;
-}
-
 function isTransientActivationError(error) {
   return isRetryableControlPlaneError(error);
 }
@@ -236,7 +227,7 @@ async function activatePartitionServiceRows(options = {}) {
         (replicaId, service) => isExactReplicaHandlerRegistered(
           options.messageRouter,
           resolveReplicaUnifiedAddress(options.nodeId, replicaId, service),
-          service,
+          service?.transportHandler,
         ) :
         null;
   if (!isReplicaHandlerRegistered) {

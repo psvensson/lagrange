@@ -1,6 +1,10 @@
 import {assertCritical} from '../../utils/assert.js';
 import {MessageGroupService} from '../../message-group/message-group-service.js';
 import {
+  registerMessageGroupTransportHandler,
+  retireMessageGroupTransportHandler,
+} from '../shared/message-group-transport-handler.js';
+import {
   JOINING_LOG_MSG,
 } from '../node-joining-constants.js';
 import {
@@ -82,8 +86,11 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
       `${ENTITY_TYPE.MESSAGE_GROUP}` +
       `${ADDRESS.SEPARATOR}${options.replicaId}`;
     const logger = this.delegates.getLogger();
-    messageRouter.register(unifiedAddress, (envelope) => {
-      if (options.logEnvelope) {
+    registerMessageGroupTransportHandler(messageGroup, {
+      messageRouter,
+      address: unifiedAddress,
+      resolveLane: () => this.delegates.getReplicaStateMachine?.() || null,
+      onEnvelope: options.logEnvelope ? (envelope) => {
         logger.debug(
           JOINING_LOG_MSG.JOIN_MESSAGE_RECEIVED,
           {
@@ -94,8 +101,7 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
               envelope?.from || envelope?.payload?.address,
           },
         );
-      }
-      return messageGroup.receiveMessage(envelope);
+      } : null,
     });
 
     if (options.logRegistration) {
@@ -196,10 +202,12 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
       `${this.nodeId}${ADDRESS.SEPARATOR}` +
       `${ENTITY_TYPE.MESSAGE_GROUP}` +
       `${ADDRESS.SEPARATOR}${options.replicaId}`;
-    const messageRouter = this.delegates.getMessageRouter();
-    if (messageRouter) {
-      messageRouter.unregister(unifiedAddress);
-    }
+    await retireMessageGroupTransportHandler({
+      messageGroup,
+      messageRouter: this.delegates.getMessageRouter(),
+      address: unifiedAddress,
+      replicaId: options.replicaId,
+    });
 
     messageGroupServices.delete(options.replicaId);
     this.delegates.removeJoinMessageGroupReplica(messageGroup);

@@ -7,6 +7,8 @@
  */
 
 import {LatencyTopologySetup} from '../shared/latency-topology-setup.js';
+import {retireMessageGroupTransportHandlers} from
+  '../shared/message-group-transport-handler.js';
 import {
   BOOTSTRAP_CLEANUP_STEP,
   BOOTSTRAP_EVENT,
@@ -392,17 +394,11 @@ class SeedCleanupHandler {
         }
       }
 
-      const messageRouter = d.getMessageRouter();
-      if (messageRouter) {
-        for (const [replicaId] of
-          d.getMessageGroupServices()) {
-          const address =
-            `${d.getNodeId()}${ADDRESS.SEPARATOR}` +
-            `${ENTITY_TYPE.MESSAGE_GROUP}` +
-            `${ADDRESS.SEPARATOR}${replicaId}`;
-          messageRouter.unregister(address);
-        }
-      }
+      await retireMessageGroupTransportHandlers({
+        messageGroupServices: d.getMessageGroupServices(),
+        messageRouter: d.getMessageRouter(),
+        nodeId: d.getNodeId(),
+      });
       d.getMessageGroupServices().clear();
       d.resetMessageGroupReplicas();
 
@@ -594,16 +590,11 @@ class SeedCleanupHandler {
       successLogMessage: BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANED,
       failureLogMessage: BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANUP_FAILED,
     });
-    if (messageRouter) {
-      for (const [replicaId] of
-        d.getMessageGroupServices()) {
-        const address =
-          `${d.getNodeId()}${ADDRESS.SEPARATOR}` +
-          `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}` +
-          `${replicaId}`;
-        messageRouter.unregister(address);
-      }
-    }
+    await retireMessageGroupTransportHandlers({
+      messageGroupServices: d.getMessageGroupServices(),
+      messageRouter,
+      nodeId: d.getNodeId(),
+    });
     d.getMessageGroupServices().clear();
     d.resetMessageGroupReplicas();
 

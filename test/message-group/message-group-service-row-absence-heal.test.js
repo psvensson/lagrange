@@ -7,12 +7,14 @@ import {
 import {
   runRowAbsenceActivationDeferredScenario,
 } from '../test-helpers/row-absence-heal-scenarios.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 
 const REPLICA_OPTIONS = Object.freeze({
   groupId: 'mg-1',
   replicaId: 'mg-1-r1',
   nodeId: 'node-a',
   service: {isLeaderReplica: () => false},
+  isEffectHandlerCurrent: () => true,
 });
 
 runRowAbsenceActivationDeferredScenario({
@@ -20,6 +22,8 @@ runRowAbsenceActivationDeferredScenario({
   replicaOptions: REPLICA_OPTIONS,
   ownerLabel: 'message-group',
   deferredCode: 'ACTIVATION_OWNER_DEFERRED',
+  ownerOptions: {replicaStateMachine: new ReplicaStateMachine({
+    nodeId: 'node-a', controlPlaneSystemTableGateway: {}})},
   assertRegisteredRow(t, insert, row) {
     t.equal(insert.row.service_id, 'mg-1-r1');
     t.equal(insert.row.service_type, 'message_group');

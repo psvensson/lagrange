@@ -22,7 +22,7 @@ import {
 } from
   './replica-state-machine-lifecycle-observation.js';
 import {
-  beginActivationEffect,
+  runActivationEffectSection,
   runSerializedReplicaMutation,
 } from
   './replica-state-machine-serialization.js';
@@ -278,23 +278,20 @@ function requireEffectHandler(options) {
 
 async function activateRegisteredReplicaInLane(stateMachine, options) {
   const sourceRow = await resolveRegisteredReplicaSourceRow(options);
-  requireEffectHandler(options);
-  // Same synchronous run as the check: retirement cannot interleave before
-  // the ACTIVE CAS settles.
-  const closeEffect = beginActivationEffect(stateMachine, options.replicaId);
-  let activatedRow = sourceRow;
-  try {
-    if (sourceRow.status !== SERVICE_STATUS.ACTIVE) {
-      activatedRow = await persistRegisteredReplicaActivation(
+  // The check and the section opening are one synchronous step: retirement
+  // cannot interleave before the ACTIVE CAS settles.
+  const activatedRow = await runActivationEffectSection(
+    stateMachine,
+    options.replicaId,
+    () => requireEffectHandler(options),
+    () => sourceRow.status === SERVICE_STATUS.ACTIVE ? sourceRow :
+      persistRegisteredReplicaActivation(
         stateMachine,
         options,
         sourceRow,
         durableRowVersion(sourceRow),
-      );
-    }
-  } finally {
-    closeEffect();
-  }
+      ),
+  );
   if (!installAuthoritativeReplicaLifecycleInLane(
     stateMachine,
     options.replicaId,

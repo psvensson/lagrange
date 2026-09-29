@@ -604,6 +604,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       nodeId: this.nodeId,
       delegates: {
         getLogger: () => this.logger,
+        getReplicaStateMachine: () => this.replicaStateMachine,
         getConfig: () => this.config,
         getNow: () => this.now,
         getSleep: () => this.sleep,

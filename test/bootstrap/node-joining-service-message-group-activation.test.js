@@ -21,6 +21,7 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ReplicaHandlerSetup} from '../../src/bootstrap/shared/replica-handler-setup.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {
 } from '../../src/bootstrap/shared/partition-service-activation.js';
 import {
@@ -409,6 +410,8 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
         service.messageRouter = {
           isRegistered: () => true,
         };
+        service.replicaStateMachine = new ReplicaStateMachine({
+          nodeId: 'join-activation-node', controlPlaneSystemTableGateway: {}});
         service.messageGroupServices.set('mg-cache-r1', {
           groupId: 'mg-cache',
           unifiedAddress: 'join-activation-node/message-group/mg-cache-r1',

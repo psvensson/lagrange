@@ -154,6 +154,50 @@ function beginActivationEffect(stateMachine, replicaId) {
 }
 
 /**
+ * Run an activation's final effect behind the exact handler it depends on:
+ * `requireHandler` (throws when the exact handler is not registered) and the
+ * section opening run in one synchronous step, and the section stays open
+ * until `effect` (the ACTIVE CAS and its lost-ack readback) settles.
+ * @param {Object} stateMachine
+ * @param {string} replicaId
+ * @param {Function} requireHandler - Synchronous exact-handler check.
+ * @param {Function} effect - Issues the ACTIVE CAS without a prior await.
+ * @return {Promise<*>} The effect's result.
+ */
+async function runActivationEffectSection(
+  stateMachine,
+  replicaId,
+  requireHandler,
+  effect,
+) {
+  requireHandler();
+  const closeEffect = beginActivationEffect(stateMachine, replicaId);
+  try {
+    return await effect();
+  } finally {
+    closeEffect();
+  }
+}
+
+/**
+ * Run a handler-bound activation in the replica's lifecycle lane: resolve the
+ * durable source, then check the exact handler and run the ACTIVE effect in
+ * the activation effect section.
+ * @param {Object} stateMachine
+ * @param {string} replicaId
+ * @param {Object} activation - {resolveSource, requireHandler, effect}.
+ * @return {*|Promise<*>} The effect's result; false when admission is closed.
+ */
+function runHandlerBoundActivation(stateMachine, replicaId, activation) {
+  return runSerializedReplicaMutation(stateMachine, replicaId, async () => {
+    const source = await activation.resolveSource();
+    return runActivationEffectSection(stateMachine, replicaId,
+      () => activation.requireHandler(source),
+      () => activation.effect(source));
+  });
+}
+
+/**
  * Retire a replica's transport handler against the activation effect
  * boundary: an activation that confirmed the handler completes its ACTIVE
  * CAS first; one that checks later finds the handler gone. The final check
@@ -174,12 +218,13 @@ async function runReplicaHandlerRetirement(stateMachine, replicaId, retire) {
 
 export {
   advanceReplicaRevision,
-  beginActivationEffect,
   captureReplicaAdmission,
   getReplicaRevision,
   isCanonicalLeaderClearSettled,
   isReplicaAdmissionCurrent,
   recordCanonicalLeaderClearSettlement,
+  runActivationEffectSection,
+  runHandlerBoundActivation,
   runReplicaHandlerRetirement,
   runSerializedReplicaMutation,
 };

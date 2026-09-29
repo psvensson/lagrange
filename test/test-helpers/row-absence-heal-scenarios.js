@@ -7,9 +7,10 @@
  */
 import {test} from '../../src/test-helpers/tap.js';
 
-function buildOwner(OwnerClass) {
+function buildOwner(OwnerClass, ownerOptions) {
   const calls = {updates: [], inserts: [], upserts: []};
   const owner = new OwnerClass({
+    ...ownerOptions,
     now: () => 1234,
     systemTableWriter: {
       async updateSystemTableRow(tableName, whereClause, updateData, options) {
@@ -38,10 +39,11 @@ export function runRowAbsenceActivationDeferredScenario({
   ownerLabel,
   deferredCode,
   assertRegisteredRow,
+  ownerOptions = {},
 }) {
   test(`${ownerLabel} activation defers when canonical identity is ` +
       'unobservable and only registration may create it', async (t) => {
-    const {owner, calls} = buildOwner(OwnerClass);
+    const {owner, calls} = buildOwner(OwnerClass, ownerOptions);
     await t.rejects(
       owner.activateReplica(replicaOptions),
       {code: deferredCode, deferRetry: true},

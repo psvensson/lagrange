@@ -79,6 +79,7 @@ import {
   isCanonicalLeaderClearSettled,
   isReplicaAdmissionCurrent,
   recordCanonicalLeaderClearSettlement,
+  runHandlerBoundActivation,
   runReplicaHandlerRetirement,
   runSerializedReplicaMutation,
 } from './replica-state-machine-serialization.js';
@@ -248,6 +249,18 @@ class ReplicaStateMachine extends EventEmitter {
    */
   activateRegisteredReplica(options = {}) {
     return activateRegisteredReplica(this, options);
+  }
+
+  /**
+   * Run an activation bound to the replica's exact transport handler in the
+   * replica's lifecycle lane (owner decision N2): the handler check and the
+   * ACTIVE effect share the activation effect section.
+   * @param {string} replicaId
+   * @param {Object} activation - {resolveSource, requireHandler, effect}.
+   * @return {*|Promise<*>} The effect's result; false when admission closed.
+   */
+  runHandlerBoundActivation(replicaId, activation) {
+    return runHandlerBoundActivation(this, replicaId, activation);
   }
 
   /**

@@ -18,6 +18,7 @@ import {
   initializeTestEnvironment,
 } from './node-joining-service-test-support.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {ControlPlaneSetup} from '../../src/bootstrap/shared/control-plane-setup.js';
 import {
 } from '../../src/bootstrap/shared/partition-service-activation.js';
@@ -155,13 +156,16 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
     service.phaseCreateSelfHostedMessageGroup = async function() {
       const replicaId = 'mg-join-r1';
       const unifiedAddress = `${this.nodeId}/message-group/${replicaId}`;
+      // The replica's exact handler identity (activation checks identity).
+      const transportHandler = async () => ({acknowledged: true});
       this.messageGroupServices.set(replicaId, {
         groupId: 'mg-1',
         unifiedAddress,
+        transportHandler,
         isLeaderReplica: () => true,
         getLeaderId: () => replicaId,
       });
-      this.messageRouter.register(unifiedAddress, async () => ({acknowledged: true}));
+      this.messageRouter.register(unifiedAddress, transportHandler);
     };
 
     // Mock phases that require system tables (not available in this unit test)
@@ -180,7 +184,10 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
       }, TABLES.SERVICE_ENDPOINTS);
     };
     service.initializeReplicaHandler = function() {
-      // Skip replica handler initialization
+      // Skip replica handler initialization; keep the replica lifecycle owner
+      // that message-group activation runs through.
+      this.replicaStateMachine = new ReplicaStateMachine({nodeId: this.nodeId,
+        controlPlaneSystemTableGateway: {}});
     };
     service.createCdcIntegrationService = function() {
       this.cdcIntegrationService = {
