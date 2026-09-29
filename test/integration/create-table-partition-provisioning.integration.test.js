@@ -1,5 +1,4 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -13,6 +12,7 @@ import {
   cleanupTestEnvironment,
   gracefulShutdown,
   getUniquePort,
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
@@ -75,7 +75,7 @@ test('Create table provisions routable partition replica', {timeout: TEST_TIMEOU
     const seedWsPort = getUniquePort();
     const config = ConfigurationManager.getInstance();
     config.setByPath('partition.defaultReplicaCount', 1);
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

@@ -762,6 +762,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         count: result.count,
         partitionId: this.partitionId,
         durableCommitWitness: result.durableCommitWitness,
+        originHlc: result.originHlc,
         acceptingNodeId: result.acceptingNodeId,
         acknowledgedAtMs: result.acknowledgedAtMs,
         readAuthorityWitness,
@@ -987,12 +988,20 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
    * @private
    */
   buildCommittedWriteIdentity(command, index, term) {
+    const originHlc =
+      typeof command?.timestamp === 'string' && command.timestamp.length > 0 ?
+        command.timestamp : null;
     if (command.proposedBy !== this.replicaId) {
-      return {partitionId: this.partitionId, logIndex: index};
+      return {
+        partitionId: this.partitionId,
+        logIndex: index,
+        ...(originHlc ? {originHlc} : {}),
+      };
     }
     return {
       partitionId: this.partitionId,
       logIndex: index,
+      ...(originHlc ? {originHlc} : {}),
       durableCommitWitness: buildDurableCommitWitness({
         partitionId: this.partitionId,
         leaderNodeId: this.nodeId,

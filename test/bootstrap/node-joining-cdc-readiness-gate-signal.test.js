@@ -39,6 +39,7 @@ test('awaitCdcSubscriptionsForReadiness - passes immediately when active',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'test-node-1',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -64,6 +65,7 @@ test('awaitCdcSubscriptionsForReadiness - waits until flag becomes true',
 
     let sleepCallCount = 0;
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'test-node-1',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -113,6 +115,7 @@ test('awaitCdcSubscriptionsForReadiness - proceeds after timeout with warning',
 
     const logMessages = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'test-node-1',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -161,6 +164,7 @@ test('signalReadyForReplicas - calls awaitCdcSubscriptionsForReadiness',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'test-node-1',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',

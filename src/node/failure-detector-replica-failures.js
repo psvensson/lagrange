@@ -44,19 +44,18 @@ async function markFailureDetectorPartitionReplicaAsFailed(
   now,
 ) {
   try {
-    const result = await detector.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-      tableName: SYSTEM_TABLE_NAME.SERVICES,
-      whereClause: buildObservedReplicaWhereClause(replica),
-      data: {
-        status: ReplicaStatus.FAILED,
-        updated_at: now,
-      },
-    }, {
-      workClass: PRESSURE_WORK_CLASS.CRITICAL,
-      deliveryPriority: 'critical',
-    });
-    if (!guardedUpdateApplied(result)) {
+    const stateMachine = detector.getPartitionReplicaStateMachine(nodeId);
+    const applied = await stateMachine
+      .transitionAuthoritativeReplicaGeneration(
+        replica,
+        ReplicaStatus.FAILED,
+        {
+          timestamp: now,
+          reason: FAILURE_REPAIR_INTENT_TRANSITION_TYPE
+            .PARTITION_REPLICA_FAILURE,
+        },
+      );
+    if (applied !== true) {
       detector.logger.debug(
         FAILURE_DETECTOR_LOG_MSG.STALE_PARTITION_REPLICA_FAILURE_UPDATE,
         {

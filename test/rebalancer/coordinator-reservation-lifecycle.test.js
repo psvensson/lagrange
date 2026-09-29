@@ -21,6 +21,8 @@ import {
 } from '../../src/rebalancer/storage-capacity-accounting-service.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
+import {OPERATION_RESERVATION_ATTEMPT_OUTCOME} from
+  '../../src/rebalancer/operation-reservation-attempt-outcome.js';
 import {
   createMockCache,
   createMockCdcService,
@@ -88,10 +90,13 @@ function createTrackingSqlEngine() {
         return {success: true, changes: 1};
       }
 
-      if (sql.includes('INSERT INTO storage_reservations')) {
+      if (sql.includes('INTO storage_reservations')) {
         const [resId, opId, eType, eId, partId, tgtNode,
           estBytes, ampFactor, status, reason,
           created, updated, expires] = params;
+        if (sql.includes('OR IGNORE') && reservations.has(resId)) {
+          return {success: true, changes: 0};
+        }
         reservations.set(resId, {
           reservation_id: resId, operation_id: opId,
           entity_type: eType, entity_id: eId,
@@ -322,6 +327,44 @@ test('createOperation - creates reservation for REPLACE operation',
     t.end();
   });
 
+test('reservation repair arbitrates duplicate identity then verifies exact owner',
+  async (t) => {
+    initializeConfig();
+    const {coordinator, sqlEngine} = createCoordinatorWithStorage();
+    const operation = await coordinator.createOperation({
+      type: OperationType.ADD,
+      partitionId: 'p-idempotent',
+      nodeId: 'target-idempotent',
+      entityType: SERVICE_TYPE.PARTITION,
+      entityId: 'p-idempotent',
+    });
+    const reservationId = `res-${operation.operationId}`;
+    const original = {...sqlEngine.reservations.get(reservationId)};
+
+    const duplicate = await coordinator.ensureReservationForOperation(operation);
+    t.equal(
+      duplicate.outcome,
+      OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE,
+      'zero-row duplicate converges only through exact authoritative ownership',
+    );
+    t.same(
+      sqlEngine.reservations.get(reservationId),
+      original,
+      'duplicate repair does not replace or refresh the existing reservation',
+    );
+
+    sqlEngine.reservations.set(reservationId, {
+      ...original,
+      target_node_id: 'conflicting-target',
+    });
+    const conflict = await coordinator.ensureReservationForOperation(operation);
+    t.equal(
+      conflict.outcome,
+      OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+      'same primary key with different owner identity fails closed',
+    );
+  });
+
 test('createOperation uses isolated SQL sessions for operation and reservation writes',
   async (t) => {
     initializeConfig();
@@ -330,7 +373,7 @@ test('createOperation uses isolated SQL sessions for operation and reservation w
     const sqlEngine = {
       async executeQuery(sql, params, options = {}) {
         if (sql.includes('INSERT INTO replica_operations') ||
-            sql.includes('INSERT INTO storage_reservations')) {
+            sql.includes('INTO storage_reservations')) {
           observedSessions.push(options.sessionId || null);
           if (!options.sessionId || options.sessionId === 'default') {
             return {

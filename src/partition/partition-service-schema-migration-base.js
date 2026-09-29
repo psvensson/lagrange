@@ -11,6 +11,31 @@ const {
 
 class PartitionServiceSchemaMigrationBase extends PartitionServiceRaftInitBase {
   /**
+   * Ensure services includes the durable cleanup ownership token.
+   * @private
+   */
+  ensureServicesTableColumns() {
+    if (this.tableName !== SYSTEM_TABLE_NAME.SERVICES) {
+      return;
+    }
+    const columns = this.db
+      .prepare(`PRAGMA table_info(${this.tableName})`)
+      .all();
+    const hasCleanupToken = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.CLEANUP_TOKEN,
+    );
+    if (!hasCleanupToken) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+          PARTITION_SERVICE_COLUMN_SQL.ADD_CLEANUP_TOKEN,
+      );
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_SERVICES_CLEANUP_TOKEN, {
+        tableName: this.tableName,
+        partitionId: this.partitionId,
+      });
+    }
+  }
+  /**
    * Ensure message_groups table includes leader_node_id column.
    * @private
    */

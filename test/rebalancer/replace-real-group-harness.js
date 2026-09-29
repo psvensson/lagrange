@@ -420,6 +420,9 @@ class RealGroup {
       this.settle(() =>
         this.cluster.node(this.targetReplicaId).readStatus().gateOpen === true,
       ELECTION_ROUNDS);
+      if (!this.settle(() => this.leader() !== null, ELECTION_ROUNDS)) {
+        throw new Error('setup: admitted target did not converge on a leader');
+      }
     }
     return stamp;
   }
@@ -922,6 +925,10 @@ function startCoordinator(world) {
 
 async function createReplace(world) {
   const coordinator = world.coordinator;
+  if (!world.group.settle(() => world.group.leader() !== null,
+    ELECTION_ROUNDS)) {
+    throw new Error('setup: REPLACE admission has no committed leader');
+  }
   const operation = await coordinator.createOperation({
     type: OperationType.REPLACE,
     partitionId: world.partitionId,

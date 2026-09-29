@@ -16,6 +16,9 @@ import {
 import {emitInvariant} from '../invariants/invariant-emitter.js';
 import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
 import {assertCritical} from '../utils/assert.js';
+import {NodeReadyLeaseAuthority} from './node-ready-lease-authority.js';
+import {endpointIncarnationPredicate} from
+  './owners/endpoint-incarnation-authority.js';
 import {
   createControlPlaneRuntimeBundle,
 } from './control-plane-runtime-bundle.js';
@@ -124,6 +127,26 @@ function pruneLeaseSkipObservations(observations, skippedNodeIds) {
   }
 }
 
+/**
+ * The stranded-JOINING reap is authorized by one observed lease state, and
+ * its final mutation carries exactly that state: the node's boot
+ * incarnation, the JOINING source status, and the lease columns every
+ * lifecycle publication rewrites (ready_lease_expires_at and the strictly
+ * advancing last_heartbeat). A renewal between the read and the write makes
+ * the CAS miss, so a live node is never reaped on a stale observation.
+ * @param {Object} node - The authoritative row the sweep read.
+ * @return {Object} Where-clause (null values are IS NULL predicates).
+ */
+function buildStrandedJoiningReapPredicate(node) {
+  return {
+    node_id: node.node_id,
+    status: LEASE_REAPER.STRANDED_STATUS,
+    boot_incarnation: node.boot_incarnation ?? null,
+    ready_lease_expires_at: node.ready_lease_expires_at ?? null,
+    last_heartbeat: node.last_heartbeat ?? null,
+  };
+}
+
 class LeaseService extends EventEmitter {
   /**
    * @param {Object} options - Configuration options.
@@ -170,9 +193,10 @@ class LeaseService extends EventEmitter {
       (handle) => this.timeSource.clearInterval(handle);
 
     const config = ConfigurationManager.getInstance();
-    this.readyLeaseMs =
-      config.get(LEASE_CONFIG_KEY.READY_LEASE_MS) ||
-      LEASE_DEFAULT.READY_LEASE_MS;
+    // Lease expiry is judged by the same authority that grants the lease.
+    this.readyLeaseAuthority =
+      options.readyLeaseAuthority ||
+      NodeReadyLeaseAuthority.fromConfiguration();
     this.sweepIntervalMs =
       config.get(LEASE_CONFIG_KEY.SWEEP_INTERVAL_MS) ||
       LEASE_DEFAULT.SWEEP_INTERVAL_MS;
@@ -285,8 +309,7 @@ class LeaseService extends EventEmitter {
     const nodes = result.rows || [];
 
     const expired = nodes.filter((node) => {
-      const leaseExpiry = Number(node.ready_lease_expires_at);
-      return Number.isFinite(leaseExpiry) && leaseExpiry <= now;
+      return this.readyLeaseAuthority.isExpired(node, now);
     });
 
     const expiredIds = [];
@@ -424,12 +447,13 @@ class LeaseService extends EventEmitter {
    * terminal transition. Endpoint failures are warn-only and never block the
    * membership reap: an orphaned endpoint row is diagnosis noise, a stranded
    * membership row is a correctness hazard.
-   * @param {string} nodeId - Node whose endpoint rows are reaped.
+   * @param {Object} node - The reaped node row (its exact incarnation).
    * @param {number} now - Current timestamp.
    * @return {Promise<void>}
    * @private
    */
-  async reapStaleRowEndpoints(nodeId, now) {
+  async reapStaleRowEndpoints(node, now) {
+    const nodeId = node.node_id;
     const gateway = this.getControlPlaneSystemTableGateway();
     const endpointReaps = [
       {
@@ -443,9 +467,12 @@ class LeaseService extends EventEmitter {
     ];
     for (const reap of endpointReaps) {
       try {
+        // Only the reaped incarnation's endpoints: a replacement boot's
+        // endpoint rows never match (legacy 0 matches only legacy rows).
         await gateway.updateSystemTableRow(
           reap.tableName,
-          {node_id: nodeId},
+          endpointIncarnationPredicate({node_id: nodeId},
+            node.boot_incarnation),
           reap.data,
         );
       } catch (error) {
@@ -478,9 +505,7 @@ class LeaseService extends EventEmitter {
   async reapStrandedJoiningRows(nodes, now) {
     const stranded = nodes.filter((node) => {
       if (node.status !== LEASE_REAPER.STRANDED_STATUS) return false;
-      const leaseExpiry = Number(node.ready_lease_expires_at);
-      const leaseLive = Number.isFinite(leaseExpiry) && leaseExpiry > now;
-      return !leaseLive;
+      return !this.readyLeaseAuthority.holdsLiveLease(node, now);
     });
 
     const reapedIds = [];
@@ -490,12 +515,14 @@ class LeaseService extends EventEmitter {
           {nodeId: node.node_id});
         continue;
       }
+      let result = null;
       try {
-        await this.getControlPlaneSystemTableGateway().updateSystemTableRow(
-          TABLES.NODES,
-          {node_id: node.node_id, status: LEASE_REAPER.STRANDED_STATUS},
-          {status: LEASE_REAPER.TARGET_STATUS, updated_at: now},
-        );
+        result = await this.getControlPlaneSystemTableGateway()
+          .updateSystemTableRow(
+            TABLES.NODES,
+            buildStrandedJoiningReapPredicate(node),
+            {status: LEASE_REAPER.TARGET_STATUS, updated_at: now},
+          );
       } catch (error) {
         this.logger.warn(LEASE_LOG_MSG.REAPER_ROW_STOP_FAILED, {
           nodeId: node.node_id,
@@ -503,7 +530,14 @@ class LeaseService extends EventEmitter {
         });
         continue;
       }
-      await this.reapStaleRowEndpoints(node.node_id, now);
+      if (!(Number(result?.partitionResult?.affectedRows) > 0)) {
+        // A renewal, rejoin or other transition replaced the observation
+        // that authorized this reap: nothing destructive follows.
+        this.logger.info(LEASE_LOG_MSG.REAPER_SKIPPED_OBSERVATION_SUPERSEDED,
+          {nodeId: node.node_id});
+        continue;
+      }
+      await this.reapStaleRowEndpoints(node, now);
       this.logger.warn(LEASE_LOG_MSG.REAPER_ROW_STOPPED,
         {nodeId: node.node_id});
       this.emit(LEASE_EVENT.STALE_ROW_REAPED, {nodeId: node.node_id});

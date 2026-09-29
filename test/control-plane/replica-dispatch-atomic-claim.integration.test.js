@@ -29,6 +29,7 @@ import {
 import {REBALANCE_COORDINATOR_EVENT} from
   '../../src/rebalancer/rebalancer-constants.js';
 import {
+  applyDurableReadyNodeRow,
   claimPendingOperation,
   createCanonicalPartitionOperationRow,
   initializeAtomicClaimTestEnvironment as initEnv,
@@ -835,12 +836,15 @@ test(
       );
 
       routerConnectionState = STATE.CONNECTED;
-      await service.handleNodeStateUpdate({
-        [ControlPlaneField.NODE_ID]: 'node-2',
-        [ControlPlaneField.NODE_ADDRESS]: 'localhost:8082',
-        [ControlPlaneField.STATE]: STATE.READY,
-        [ControlPlaneField.HEARTBEAT_AT]: now + 1000,
-      });
+      systemTableCache.publishChange(
+        SYSTEM_TABLE_NAME.NODES,
+        'UPDATE',
+        applyDurableReadyNodeRow(
+          nodeStore.get('node-2'),
+          now + 1000,
+          now + 31000,
+        ),
+      );
       await new Promise((resolve) => {
         setTimeout(resolve, 0);
       });

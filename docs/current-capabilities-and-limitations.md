@@ -150,6 +150,7 @@ turning evidence into a product claim.
 | Indexes | CREATE INDEX is unsupported and no secondary-index runtime path is active. |
 | Replication | SQLite partition logs use the active snapshot and proof-gated compaction path; in-memory message-group logs still grow without bound and recover by full replay. |
 | Replication | Learner promotion waits for a time threshold and safety arithmetic; it does not compare follower and leader progress. |
+| Storage lifecycle | Replica cleanup and recreation are durably serialized by services.service_id. A directory-local SQLite ownership lock rejects a second live OS process before provenance, rejoin, or replica storage activity. |
 | Service execution | Request and call Bindings are publicly invocable. Change, time, once, boot, and pushdown Bindings may be declared but have no public invocation adapter. |
 | Service execution | A call selects one bounded shard batch; the public path does not stream or page an unbounded partition scan. |
 | Service execution | Coordinated partial values are finite numbers and their keys must be disjoint across shards. |

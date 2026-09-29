@@ -107,6 +107,36 @@ function ensureNodesTableColumns(service) {
   }
 }
 
+// Endpoint rows carry the exact owning node boot incarnation. Existing
+// tables gain the column at 0 (legacy): the endpoint validity rule treats 0
+// as never current, and the owning node's next endpoint publication stamps
+// its real incarnation.
+const LOG_ADDED_ENDPOINT_BOOT_INCARNATION =
+  'Added endpoint boot_incarnation column';
+const ENDPOINT_INCARNATION_TABLES = new Set([
+  SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
+  SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS,
+]);
+
+function ensureEndpointTableColumns(service) {
+  if (!ENDPOINT_INCARNATION_TABLES.has(service.tableName)) {
+    return;
+  }
+  const hasBootIncarnation = service.db
+    .prepare(`PRAGMA table_info(${service.tableName})`)
+    .all()
+    .some((col) => col.name === PARTITION_SERVICE_COLUMN.BOOT_INCARNATION);
+  if (hasBootIncarnation) {
+    return;
+  }
+  service.db.exec(
+    `ALTER TABLE ${service.tableName} ` +
+      PARTITION_SERVICE_COLUMN_SQL.ADD_BOOT_INCARNATION,
+  );
+  service.logger.info(LOG_ADDED_ENDPOINT_BOOT_INCARNATION,
+    {tableName: service.tableName, partitionId: service.partitionId});
+}
+
 /**
  * Create the partition's state table from its schema, apply the system-table
  * column upgrades, and create the schema's indexes (verbatim behavior of the
@@ -137,6 +167,8 @@ function createPartitionServiceTable(service) {
     `${quoteSqliteIdentifier(service.tableName)} (${columns})`;
   service.db.exec(sql);
   ensureNodesTableColumns(service);
+  ensureEndpointTableColumns(service);
+  service.ensureServicesTableColumns();
   service.ensureTablesTableColumns();
   service.ensureMessageGroupsTableColumns();
   service.ensurePartitionsTableColumns();

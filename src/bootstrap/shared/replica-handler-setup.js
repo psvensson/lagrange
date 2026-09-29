@@ -54,6 +54,39 @@ const ERROR_MSG = Object.freeze({
  * and ReplicaStateMachine.
  */
 class ReplicaHandlerSetup {
+  static createReplicaStateMachine(options = {}) {
+    const {nodeId, cdcIntegrationService, systemTableCache} = options;
+    if (!nodeId) {
+      throw new DependencyError(
+        REPLICA_HANDLER_SETUP_NAME,
+        ERROR_MSG.NODE_ID_REQUIRED,
+      );
+    }
+    if (!cdcIntegrationService) {
+      throw new DependencyError(
+        REPLICA_HANDLER_SETUP_NAME,
+        ERROR_MSG.CDC_INTEGRATION_SERVICE_REQUIRED,
+      );
+    }
+    if (!systemTableCache) {
+      throw new DependencyError(
+        REPLICA_HANDLER_SETUP_NAME,
+        ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+      );
+    }
+    const replicaStateMachine = new ReplicaStateMachine({
+      nodeId,
+      cdcIntegrationService,
+      systemTableCache,
+    });
+    replicaStateMachine.startTimeoutChecker();
+    const loggingService = LoggingService.getInstance();
+    const logger = loggingService.isInitialized() ?
+      loggingService.forSubsystem(REPLICA_HANDLER_SETUP_SUBSYSTEM) : console;
+    logger.debug(LOG_MSG.STATE_MACHINE_STARTED, {nodeId});
+    return replicaStateMachine;
+  }
+
   /**
    * Create and configure replica handler and state machine.
    *
@@ -87,6 +120,7 @@ class ReplicaHandlerSetup {
       dataDir,
       rpcClient,
       executorOutcomeEmitter,
+      replicaStateMachine: existingReplicaStateMachine,
     } = options;
 
     // Validate required dependencies
@@ -131,22 +165,12 @@ class ReplicaHandlerSetup {
       hasRpcClient: !!rpcClient,
     });
 
-    // Create ReplicaStateMachine for tracking replica lifecycle states.
-    // systemTableCache wired so lifecycle persistence can consult the local
-    // row view (UPSERT-vs-UPDATE choice, canonical-leader retention check) —
-    // previously absent, which forced worst-case fallbacks (CL-021 review).
-    const replicaStateMachine = new ReplicaStateMachine({
-      nodeId,
-      cdcIntegrationService,
-      systemTableCache,
-    });
-
-    // Start the timeout checker for transitional state monitoring
-    replicaStateMachine.startTimeoutChecker();
-
-    logger.debug(LOG_MSG.STATE_MACHINE_STARTED, {
-      nodeId,
-    });
+    const replicaStateMachine = existingReplicaStateMachine ||
+      ReplicaHandlerSetup.createReplicaStateMachine({
+        nodeId,
+        cdcIntegrationService,
+        systemTableCache,
+      });
 
     // S6 snapshot catch-up wiring: BOTH production factories (bootstrap and
     // join/durable-rejoin) flow through this shared setup, so wrapping HERE

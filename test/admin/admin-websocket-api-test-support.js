@@ -11,6 +11,11 @@ import {getSystemCachePrimaryKeyField} from
   '../../src/cache/system-cache-key-descriptor.js';
 import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
 import {TABLES} from '../../src/constants/index.js';
+import {
+  FIXTURE_ENDPOINT_INCARNATION,
+  registeredNodeRow,
+} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 export const AUTHORITATIVE_REPAIR_TABLES = Object.freeze([
   TABLES.NODES,
@@ -272,6 +277,7 @@ export function createAuthoritativeRepairCache(nodeId = 'test-node') {
   const cache = new SystemTableCache();
 
   cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
     id: nodeId,
     node_id: nodeId,
     address: 'localhost:8080',
@@ -357,7 +363,9 @@ export function createPopulatedCache() {
   const cache = new SystemTableCache();
 
   cache.applySystemTableChange('nodes', 'INSERT', {
+    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
     id: 'node-1',
+    node_id: 'node-1',
     address: 'localhost:8080',
     status: 'active',
   });
@@ -399,6 +407,13 @@ export function createPopulatedCache() {
  * @param {SystemTableCache} cache
  */
 export function seedServiceDiscoveryRows(cache) {
+  // Endpoints are published by registered nodes at their incarnation.
+  for (const nodeId of ['node-1', 'node-2']) {
+    if (!cache.get(TABLES.NODES, nodeId)) {
+      cache.applySystemTableChange(TABLES.NODES, 'INSERT',
+        registeredNodeRow(nodeId));
+    }
+  }
   cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
     service_id: 'sys-postgres-wire',
     service_name: 'sys-postgres-wire',
@@ -407,6 +422,7 @@ export function seedServiceDiscoveryRows(cache) {
   });
 
   cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
     endpoint_id: 'sys-postgres-wire-ep-node-1',
     service_id: 'sys-postgres-wire',
     node_id: 'node-1',
@@ -423,6 +439,7 @@ export function seedServiceDiscoveryRows(cache) {
   });
 
   cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
     endpoint_id: 'sys-postgres-wire-ep-node-2',
     service_id: 'sys-postgres-wire',
     node_id: 'node-2',
@@ -450,7 +467,9 @@ export function seedRoutedTableDiscoveryRows(cache) {
   const updatedAt = Date.now();
 
   cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
     id: 'node-2',
+    node_id: 'node-2',
     address: 'localhost:8081',
     status: 'active',
   });
@@ -463,6 +482,7 @@ export function seedRoutedTableDiscoveryRows(cache) {
   });
 
   cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
     endpoint_id: 'sys-postgres-wire-ep-node-1',
     service_id: 'sys-postgres-wire',
     node_id: 'node-1',
@@ -479,6 +499,7 @@ export function seedRoutedTableDiscoveryRows(cache) {
   });
 
   cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
     endpoint_id: 'sys-postgres-wire-ep-node-2',
     service_id: 'sys-postgres-wire',
     node_id: 'node-2',
@@ -677,6 +698,7 @@ export function seedPartitionScopedDiscoveryRowsWithoutTableRecord(cache, update
   });
 
   cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
     endpoint_id: 'sys-postgres-wire-ep-node-1',
     service_id: 'sys-postgres-wire',
     node_id: 'node-1',
@@ -729,6 +751,7 @@ export function seedPartitionScopedDiscoveryRowsWithoutTableName(cache, updatedA
   });
 
   cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+    boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
     endpoint_id: 'sys-postgres-wire-ep-node-1',
     service_id: 'sys-postgres-wire',
     node_id: 'node-1',

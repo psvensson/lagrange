@@ -16,17 +16,14 @@ const {
   CONTROL_PLANE_READINESS_DIMENSION,
   ControlPlaneField,
   ControlPlaneReadinessService,
-  DISPATCH_ERROR_MSG,
   DISPATCH_QUEUE_NAME,
   DISPATCH_READINESS_MESSAGE,
   DISPATCH_READINESS_REASON,
-  NODE_STATE_UPDATE_RETRY_CLASS,
   OPERATION_METADATA_KEY,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   ReplicaOperationField,
   STRING,
   classifySystemPartition,
-  getControlPlaneNodeStatePublicationProfile,
   getOperationMetadataValue,
   getOperationMetadataObject,
   getOperationMetadataString,
@@ -71,47 +68,6 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       stepsHistory,
       OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED,
     ) === true;
-  }
-
-  replaceDeferredNodeStateUpdatePayload(nodeId, payload) {
-    const deferredRetry = this.nodeStateUpdateDeferredRetries.get(nodeId);
-    if (!deferredRetry) {
-      return false;
-    }
-    const publicationMode = this.resolveNodeStateUpdatePublicationMode(
-      payload?.[ControlPlaneField.STATE],
-      this.isHeartbeatOnlyNodeStateUpdate(payload),
-      payload,
-    );
-    const publicationProfile = getControlPlaneNodeStatePublicationProfile({
-      publicationMode,
-    });
-    if (
-      publicationProfile?.deferOnPressure !== true &&
-      deferredRetry.retryClass ===
-        NODE_STATE_UPDATE_RETRY_CLASS.PUBLICATION_PRESSURE
-    ) {
-      this.clearDeferredNodeStateUpdateRetry(nodeId);
-      return false;
-    }
-    deferredRetry.payload = this.buildDeferredNodeStateUpdatePayload(payload);
-    return true;
-  }
-
-  /**
-   * Cancel and clear one deferred node-state retry slot.
-   * @param {string} nodeId
-   * @private
-   */
-  clearDeferredNodeStateUpdateRetry(nodeId) {
-    const deferredRetry = this.nodeStateUpdateDeferredRetries.get(nodeId);
-    if (!deferredRetry) {
-      return;
-    }
-    if (deferredRetry.timeoutHandle) {
-      this.clearTimeoutFn(deferredRetry.timeoutHandle);
-    }
-    this.nodeStateUpdateDeferredRetries.delete(nodeId);
   }
 
   /**
@@ -172,46 +128,6 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
    */
   buildOperationDispatchQueueFacade() {
     return buildOperationDispatchQueueFacade(this);
-  }
-
-  /**
-   * Build one queue name for a node-state update shard.
-   * @param {number} shardIndex - Zero-based shard index.
-   * @return {string}
-   * @private
-   */
-  buildNodeStateUpdateQueueName(shardIndex) {
-    if (this.nodeStateUpdateQueueShardCount <= 1) {
-      return DISPATCH_QUEUE_NAME.NODE_STATE_UPDATE;
-    }
-    return `${DISPATCH_QUEUE_NAME.NODE_STATE_UPDATE}-${shardIndex}`;
-  }
-
-  /**
-   * Resolve one node-state update reconcile shard for a node.
-   * Assignments are stable for process lifetime to preserve owner-key ordering.
-   * @param {string} nodeId - Node ID.
-   * @return {OwnerKeyReconcileQueue}
-   * @private
-   */
-  resolveNodeStateUpdateQueue(nodeId) {
-    if (
-      !Array.isArray(this.nodeStateUpdateQueues) ||
-      this.nodeStateUpdateQueues.length <= 1
-    ) {
-      return this.nodeStateUpdateQueue;
-    }
-
-    const assignedQueueIndex = this.nodeStateUpdateQueueAssignments.get(nodeId);
-    if (Number.isFinite(assignedQueueIndex)) {
-      return this.nodeStateUpdateQueues[assignedQueueIndex];
-    }
-
-    const queueIndex =
-      this.nextNodeStateUpdateQueueIndex % this.nodeStateUpdateQueues.length;
-    this.nextNodeStateUpdateQueueIndex += 1;
-    this.nodeStateUpdateQueueAssignments.set(nodeId, queueIndex);
-    return this.nodeStateUpdateQueues[queueIndex];
   }
 
   /**
@@ -694,48 +610,11 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
    * @param {Object} payload - Control message payload.
    * @private
    */
-  async forwardToLeader(mgService, payload, options = {}) {
-    const requiredTables = Array.isArray(options.requiredTables) ?
-      [
-        ...new Set(
-          options.requiredTables.filter(
-            (tableName) =>
-              typeof tableName === 'string' &&
-                tableName.length > 0,
-          ),
-        ),
-      ] :
-      [];
-    if (requiredTables.length > 0) {
-      const ingressDecision =
-        options.ingressDecision ||
-        (await this.resolveMessageGroupIngressDecision(
-          mgService,
-          requiredTables,
-        ));
-      if (
-        typeof mgService?.forwardMetadataIngressPayloadToLeader !==
-        'function'
-      ) {
-        throw this.buildIngressReadinessError(
-          ingressDecision,
-          DISPATCH_ERROR_MSG.METADATA_FORWARD_PATH_UNAVAILABLE,
-        );
-      }
-      await mgService.forwardMetadataIngressPayloadToLeader(payload, {
-        requiredTables,
-        forwardedByNodeId: this.nodeId,
-      });
-      return;
-    }
-
+  async forwardToLeader(mgService, payload) {
     const leaderId = mgService.getLeaderId();
     if (!leaderId) {
-      const ingressDecision =
-        options.ingressDecision ||
-        this.resolveMessageGroupIngressReadiness(mgService, requiredTables);
       throw this.buildIngressReadinessError(
-        ingressDecision,
+        this.resolveMessageGroupIngressReadiness(mgService),
         DISPATCH_READINESS_MESSAGE.CONTROL_PLANE_LEADER_NOT_READY,
       );
     }

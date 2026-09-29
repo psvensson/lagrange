@@ -208,6 +208,7 @@ class CreateMessageGroupPhase {
     this.delegates = options.delegates || {};
     this.pendingCreateSelfHostedMessageGroupRow = null;
     this.createSelfHostedMetadataFlushPromise = null;
+    this.registrationEvidenceByReplicaId = new Map();
   }
 
   /**
@@ -452,7 +453,9 @@ class CreateMessageGroupPhase {
             useLocalSeedRegistrationShortcut === true,
         },
       );
-      return;
+      this.registrationEvidenceByReplicaId.set(replicaId,
+        Object.freeze({...serviceData}));
+      return serviceData;
     }
 
     const retryPolicy =
@@ -530,7 +533,9 @@ class CreateMessageGroupPhase {
             attempt,
           },
         );
-        return;
+        this.registrationEvidenceByReplicaId.set(replicaId,
+          Object.freeze({...serviceData}));
+        return serviceData;
       } catch (error) {
         lastError = error;
         const elapsedMs = nowFn() - startTime;

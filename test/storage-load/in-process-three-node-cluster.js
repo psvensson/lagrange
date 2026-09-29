@@ -7,7 +7,6 @@
  */
 import {join} from 'node:path';
 import {mkdirSync} from 'node:fs';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -17,6 +16,7 @@ import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js'
 import {
   cleanupTestEnvironment,
   createInProcHttpPost,
+  createVirginSeedBootstrapService,
   getUniquePort,
   gracefulJoiningShutdown,
   gracefulShutdown,
@@ -113,7 +113,7 @@ async function startSeed(runDir) {
   const dataDirectoryManager = DataDirectoryManager.getInstance();
   dataDirectoryManager.initialize();
   const wsPort = getUniquePort();
-  const bootstrapService = new BootstrapService({
+  const bootstrapService = await createVirginSeedBootstrapService({
     nodeId: SEED_NODE_ID,
     nodeAddress: LOCALHOST_WS + wsPort,
     wsPort,
@@ -158,6 +158,7 @@ async function joinNode(seed, runDir, nodeId, index) {
   mkdirSync(dataDir, {recursive: true});
   const wsPort = getUniquePort();
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId,
     nodeAddress: LOCALHOST_WS + wsPort,
     seedNodeAddress: SEED_HTTP_ADDRESS,

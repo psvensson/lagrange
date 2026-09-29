@@ -463,6 +463,24 @@ test(
       messageGroupServices: new Map(),
       cdcIntegrationService: mockCdcIntegrationService,
       sqlQueryEngine: mockSqlQueryEngine,
+      controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows(_tableName, _sql, params) {
+          const row = systemCacheData.services.find((service) =>
+            service.service_id === params[0],
+          );
+          return {success: true, rows: row ? [{...row}] : []};
+        },
+        async submitMutation(mutation) {
+          await mockCdcIntegrationService.insertSystemTableRow(
+            mutation.tableName,
+            mutation.row || {
+              ...mutation.data,
+              service_id: mutation.whereClause?.service_id,
+            },
+          );
+          return {success: true, affectedRows: 1};
+        },
+      },
     });
     await api.initialize(0, {listen: false});
 

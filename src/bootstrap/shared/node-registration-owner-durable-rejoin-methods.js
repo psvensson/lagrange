@@ -17,15 +17,17 @@ import {resolveAdvertisedWebSocketAddress} from
   '../../transport/node-address-resolution.js';
 import {resolveAutoRejoinStartupDecision} from '../rejoin-hints.js';
 import {
+  buildStaleNodeIncarnationError,
+  normalizeKnownNodeBootIncarnation,
+} from '../../control-plane/control-plane-error-classification.js';
+import {
   AUTHORITATIVE_ROW_READ_STATE,
 } from '../rejoin-hints-constants.js';
 import {
   AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE,
   AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS,
   DURABLE_REJOIN_REQUIRED_SERVICE_IDS,
-  JOIN_ADMISSION_PUBLICATION,
   JOIN_ADMISSION_RESOLUTION_SOURCE,
-  LOCAL_STR_1YR7Z,
   LOG_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
   LOG_CLUSTER_INCARNATION_FENCE_UNAVAILABLE,
   REUSABLE_JOIN_ADMISSION_CONNECTION_STATES,
@@ -39,16 +41,21 @@ const NON_REUSABLE_NODE_STATUSES = Object.freeze([
   NODE_STATE.STOPPED,
 ]);
 
+const NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED =
+  'Node boot incarnation advance was not observed on the authoritative row';
+
 /**
  * A reused durable membership row must never re-publish a terminal status
  * or a stale lease/heartbeat from the previous incarnation. Reentry
- * normalizes the row to JOINING with a fresh heartbeat and a cleared lease;
- * the canonical ready transition promotes it from there.
+ * normalizes the row to JOINING with a fresh heartbeat and a cleared lease,
+ * stamped with THIS boot's incarnation; the canonical ready transition
+ * promotes it from there.
  * @param {Object} nodeRow - Authoritative durable node row.
  * @param {number} now - Current timestamp.
+ * @param {number} bootIncarnation - This boot's incarnation.
  * @return {Object} Reentry-normalized node row.
  */
-function buildReentryNormalizedNodeRow(nodeRow, now) {
+function buildReentryNormalizedNodeRow(nodeRow, now, bootIncarnation) {
   const persistedStatus = normalizeString(nodeRow?.[COLUMN.STATUS]);
   const reusableStatus =
     NON_REUSABLE_NODE_STATUSES.includes(persistedStatus) ?
@@ -60,7 +67,13 @@ function buildReentryNormalizedNodeRow(nodeRow, now) {
     [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
     [COLUMN.LAST_HEARTBEAT]: now,
     [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+    [COLUMN.BOOT_INCARNATION]: bootIncarnation,
   };
+}
+
+function readObservedBootIncarnation(nodeRow) {
+  const observed = nodeRow?.[COLUMN.BOOT_INCARNATION];
+  return observed === undefined ? null : observed;
 }
 
 /**
@@ -145,9 +158,11 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     const reusedNodeRow = buildReentryNormalizedNodeRow(
       authoritativeNodeRow,
       now,
+      this.getRegistrationBootIncarnation(),
     );
     return {
       nodeRow: reusedNodeRow,
+      observedNodeRow: authoritativeNodeRow,
       endpointRow: authoritativeEndpointRow,
       metaEndpointRows,
       resolution: {
@@ -217,7 +232,9 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       nodeRow: buildReentryNormalizedNodeRow(
         authoritativeNodeRow,
         this.delegates.getNow()(),
+        this.getRegistrationBootIncarnation(),
       ),
+      observedNodeRow: authoritativeNodeRow,
       endpointRow: authoritativeEndpointOutcome.row,
       metaEndpointRows: metaEndpointOutcome.rows,
       resolution: {
@@ -275,18 +292,136 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   }
 
   async refreshExistingDurableRejoinMembership(existingMembership) {
-    const nodeRow = existingMembership?.nodeRow || null;
-    const refreshResult = await this.upsertJoinPublicationRow(
-      JOIN_ADMISSION_PUBLICATION.NODE_MEMBERSHIP_REFRESH,
-      nodeRow,
+    const advanced = await this.advanceNodeBootIncarnation(
+      existingMembership?.observedNodeRow || null,
+      existingMembership?.nodeRow || null,
     );
-    if (!refreshResult?.success) {
-      throw new Error(
-        LOCAL_STR_1YR7Z +
-        `${refreshResult?.error}`,
-      );
+    await this.advanceReusedEndpointRows(existingMembership);
+    return advanced;
+  }
+
+  // The reused endpoint rows move to this boot with the node row: each is
+  // advanced by one CAS on its observed (older) incarnation, never written
+  // over a newer owner. The cache is then seeded with this boot's rows.
+  async advanceReusedEndpointRows(existingMembership) {
+    const bootIncarnation = this.getRegistrationBootIncarnation();
+    const reused = [
+      [TABLES.NODE_ENDPOINTS, existingMembership?.endpointRow],
+      ...(existingMembership?.metaEndpointRows || []).map((row) =>
+        [TABLES.SERVICE_ENDPOINTS, row]),
+    ].filter(([, row]) => row);
+    for (const [tableName, row] of reused) {
+      const result = await this.upsertSystemTableRowWithRetry(tableName, row);
+      if (result?.success === false) {
+        throw new Error(
+          `${NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED}: ${tableName}`);
+      }
     }
-    return refreshResult;
+    existingMembership.endpointRow = existingMembership.endpointRow ?
+      {...existingMembership.endpointRow,
+        [COLUMN.BOOT_INCARNATION]: bootIncarnation} :
+      existingMembership.endpointRow;
+    existingMembership.metaEndpointRows =
+      (existingMembership.metaEndpointRows || []).map((row) =>
+        ({...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}));
+  }
+
+  getRegistrationBootIncarnation() {
+    return this.delegates.getBootIncarnation?.() || 0;
+  }
+
+  /**
+   * The explicit incarnation transition owned by registration / durable
+   * rejoin: one CAS on the OBSERVED older boot incarnation writing this
+   * boot's row. Lifecycle publication never advances an incarnation, so a
+   * READY publication for this boot can only match a row this verb advanced.
+   * No retry here: an unobserved advance is a typed deferred error the join
+   * registration re-enters on.
+   * @param {Object} observedNodeRow - Authoritative row the advance replaces.
+   * @param {Object} nextNodeRow - Row stamped with this boot's incarnation.
+   * @return {Promise<Object>} The advanced row.
+   */
+  async advanceNodeBootIncarnation(observedNodeRow, nextNodeRow) {
+    const nextIncarnation = normalizeKnownNodeBootIncarnation(
+      nextNodeRow?.[COLUMN.BOOT_INCARNATION],
+    );
+    this.assertNodeBootIncarnationNotStale(
+      normalizeKnownNodeBootIncarnation(
+        readObservedBootIncarnation(observedNodeRow),
+      ),
+      nextIncarnation,
+    );
+    let result = null;
+    try {
+      result = await this.getMembershipPublicationRuntimeOwner()
+        .advanceJoinNodeBootIncarnation(
+          {
+            [COLUMN.NODE_ID]: this.nodeId,
+            [COLUMN.BOOT_INCARNATION]:
+              readObservedBootIncarnation(observedNodeRow),
+          },
+          nextNodeRow,
+          this.getJoinTimeUpsertOptions(),
+        );
+    } catch (_error) {
+      result = null;
+    }
+    if (result?.success !== false &&
+        Number(result?.partitionResult?.affectedRows) > 0) {
+      return nextNodeRow;
+    }
+    return this.resolveNodeBootIncarnationAdvanceByReadback(
+      nextNodeRow,
+      nextIncarnation,
+    );
+  }
+
+  /**
+   * Resumed join-admission progress from an earlier boot still carries that
+   * boot's incarnation; advance it before this boot publishes lifecycle.
+   * Progress already on this boot is left untouched.
+   * @param {Object} progress - Resolved existing join-admission progress.
+   * @return {Promise<void>}
+   */
+  async advanceStaleJoinAdmissionIncarnation(progress) {
+    const observedIncarnation = readObservedBootIncarnation(
+      progress?.observedNodeRow,
+    );
+    if (observedIncarnation === this.getRegistrationBootIncarnation()) {
+      return;
+    }
+    await this.advanceNodeBootIncarnation(
+      progress.observedNodeRow,
+      progress.nodeRow,
+    );
+  }
+
+  assertNodeBootIncarnationNotStale(knownIncarnation, nextIncarnation) {
+    if (knownIncarnation > nextIncarnation) {
+      throw buildStaleNodeIncarnationError({
+        nodeId: this.nodeId,
+        receivedIncarnation: nextIncarnation,
+        knownIncarnation,
+      });
+    }
+  }
+
+  async resolveNodeBootIncarnationAdvanceByReadback(
+    nextNodeRow,
+    nextIncarnation,
+  ) {
+    const observedRow = await this.readAuthoritativeDurableRejoinNodeRow();
+    const knownIncarnation = normalizeKnownNodeBootIncarnation(
+      readObservedBootIncarnation(observedRow),
+    );
+    this.assertNodeBootIncarnationNotStale(knownIncarnation, nextIncarnation);
+    if (knownIncarnation === nextIncarnation) {
+      return nextNodeRow;
+    }
+    const error = new Error(NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED);
+    error.deferRetry = true;
+    error.retryAfterMs = AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS;
+    throw error;
   }
 
   activateExistingDurableRejoinMembership(existingMembership) {
