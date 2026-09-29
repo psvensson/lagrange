@@ -32,8 +32,11 @@ import {
   encodeProposal,
 } from './raft-rs-proposal-codec.js';
 import {normalizedTransferRequest} from './raft-rs-leadership-transfer.js';
-import {RaftRsReplicaLifecycleOwner} from
-  './raft-rs-replica-lifecycle-owner.js';
+import {
+  RaftRsReplicaLifecycleOwner,
+  registerRuntimeLifecycle,
+  unregisterRuntimeLifecycle,
+} from './raft-rs-replica-lifecycle-owner.js';
 import {registerPeerIdentityReservationOwner} from
   './raft-rs-membership-administration.js';
 import {
@@ -353,11 +356,12 @@ function createRaftRsOperationPort(request) {
         coreOk('closed-without-runtime') : lifecycle.active ?
           lifecycle.execute(() => dispatcher.close({enterCore: true})) :
           dispatcher.close({enterCore: false});
-      lifecycle.unregister();
+      unregisterRuntimeLifecycle(port, lifecycle);
       unregisterMembershipOwner();
       return result;
     },
   });
+  registerRuntimeLifecycle(port, lifecycle);
   if (request[RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION] !== true &&
       lifecycle.active) {
     startScheduling();

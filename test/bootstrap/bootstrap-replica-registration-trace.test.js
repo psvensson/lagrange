@@ -31,6 +31,7 @@ function initializeTestEnvironment() {
 
 function createBootstrapService(config = {}) {
   return new BootstrapService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: `ws://127.0.0.1:${TEST_WS_PORT}`,
     wsPort: TEST_WS_PORT,

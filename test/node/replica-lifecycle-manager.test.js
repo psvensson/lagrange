@@ -11,13 +11,15 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import {
-  ReplicaLifecycleManager,
+  ReplicaLifecycleManager as ProductionReplicaLifecycleManager,
   ReplicaStatus,
   MessageType,
   AckStatus,
 } from '../../src/node/replica-lifecycle-manager.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createCanonicalLifecycleServiceRow} from
+  '../test-helpers/lifecycle-state-store.js';
 
 /**
  * Create a mock CDC integration service.
@@ -57,7 +59,9 @@ function createMockCDCService() {
  */
 function createMockCache(data = {}) {
   const cache = {
-    services: data.services || [],
+    services: (data.services || []).map(
+      (service, index) => createCanonicalLifecycleServiceRow(service, index),
+    ),
     nodes: data.nodes || [],
   };
 
@@ -71,7 +75,9 @@ function createMockCache(data = {}) {
       return items.find((item) => item.service_id === id || item.node_id === id);
     },
     setServices(services) {
-      cache.services = services;
+      cache.services = services.map(
+        (service, index) => createCanonicalLifecycleServiceRow(service, index),
+      );
     },
   };
 }
@@ -108,6 +114,56 @@ function createMockPartitionServiceFactory() {
       async syncFromLeader() {},
     };
   };
+}
+
+function createTestControlPlaneGateway(systemTableCache, cdc) {
+  return {
+    async readAuthoritativeRows(tableName, sql, params) {
+      if (sql.includes('service_type = ?')) {
+        return {success: true, rows: systemTableCache.filter(
+          tableName,
+          (row) => row.service_type === params[0] &&
+            row.status === params[1] && row.node_id === params[2],
+        )};
+      }
+      const row = systemTableCache.get(tableName, params[0]);
+      return {success: true, rows: row ? [{...row}] : []};
+    },
+    async submitMutation(mutation) {
+      let result;
+      if (mutation.operation === 'insert') {
+        result = await cdc.insertSystemTableRow(
+          mutation.tableName, mutation.row,
+        );
+      } else if (mutation.operation === 'delete') {
+        result = await cdc.deleteSystemTableRow(
+          mutation.tableName, mutation.whereClause,
+        );
+      } else {
+        result = await cdc.updateSystemTableRow(
+          mutation.tableName, mutation.whereClause, mutation.data,
+        );
+      }
+      const affectedRows = result?.partitionResult?.affectedRows ?? 1;
+      return {
+        success: true,
+        outcome: affectedRows === 1 ? 'applied' : 'observed_state_changed',
+        partitionResult: {affectedRows},
+      };
+    },
+  };
+}
+
+function ReplicaLifecycleManager(options) {
+  return new ProductionReplicaLifecycleManager({
+    ...options,
+    controlPlaneSystemTableGateway:
+      options.controlPlaneSystemTableGateway ||
+      createTestControlPlaneGateway(
+        options.systemTableCache,
+        options.cdcIntegrationService,
+      ),
+  });
 }
 
 test('ReplicaLifecycleManager', async (t) => {
@@ -438,14 +494,14 @@ test('ReplicaLifecycleManager', async (t) => {
 
     // Verify the predicate filters correctly
     if (filterPredicate) {
-      // Should match starting replicas on this node
+      // Should match canonical CREATING replicas on this node
       t.ok(
         filterPredicate({
           node_id: 'test-node',
           service_type: 'partition',
-          status: ReplicaStatus.STARTING,
+          status: 'creating',
         }),
-        'predicate matches starting replicas',
+        'predicate matches canonical creating replicas',
       );
 
       // Should not match active replicas
@@ -492,7 +548,7 @@ test('ReplicaLifecycleManager', async (t) => {
         partition_id: 'partition-1',
         node_id: 'test-node',
         service_type: 'partition',
-        status: ReplicaStatus.STARTING,
+        status: 'syncing',
         updated_at: 12345,
       };
       const mockCache = createMockCache({
@@ -521,17 +577,22 @@ test('ReplicaLifecycleManager', async (t) => {
         mockCDC.operations[0]?.whereClause,
         {
           service_id: 'replica-1',
+          service_type: 'partition',
+          partition_id: 'partition-1',
           node_id: 'test-node',
-          status: ReplicaStatus.STARTING,
-          updated_at: 12345,
+          replica_id: 'replica-1',
+          group_id: null,
+          created_at: 12345,
+          status: 'syncing',
+          state_entered_at: 12345,
         },
-        'recovery guard should target the observed replica snapshot',
+        'canonical recovery guard should target exact source generation',
       );
 
       manager.shutdown();
     });
 
-  t.test('node recovery - quarantines on-disk replica DB with no services row',
+  t.test('node recovery - leaves rowless storage to durable cleanup ownership',
     async (t) => {
       const mockCache = createMockCache({
         services: [
@@ -574,14 +635,14 @@ test('ReplicaLifecycleManager', async (t) => {
 
       t.ok(fs.existsSync(assignedDb),
         'assigned replica file must be untouched');
-      t.notOk(fs.existsSync(orphanedDb),
-        'orphaned replica file must no longer sit at its readable path');
-      t.ok(fs.existsSync(`${orphanedDb}.quarantined`),
-        'orphaned replica file must be quarantined, not deleted');
-      t.equal(recoveryComplete?.quarantinedOrphanedFiles, 1,
-        'recovery payload reports the quarantined orphan');
-      t.equal(recoveryComplete?.reconciliationSweepCompleted, true,
-        'recovery payload reports the sweep completed');
+      t.ok(fs.existsSync(orphanedDb),
+        'legacy recovery cannot move rowless storage without a cleanup owner');
+      t.notOk(fs.existsSync(`${orphanedDb}.quarantined`),
+        'legacy recovery has no second quarantine authority');
+      t.equal(recoveryComplete?.quarantinedOrphanedFiles, 0,
+        'legacy recovery reports no ownerless quarantine action');
+      t.equal(recoveryComplete?.reconciliationSweepCompleted, false,
+        'durable cleanup ownership remains outside legacy recovery');
 
       manager.shutdown();
     });

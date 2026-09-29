@@ -36,6 +36,8 @@ import {
 import {evaluatePartitionReplicaTopology} from
   './admin-shared-metadata-consistency.js';
 import {AdminCacheOwnerState} from './admin-cache-owner-state.js';
+import {readCurrentEndpointRows} from
+  '../control-plane/owners/endpoint-incarnation-currentness.js';
 
 // ── file-local constants ────────────────────────────────────────────────────
 const EMPTY_STRING = '';
@@ -664,12 +666,9 @@ class AdminPreflightSnapshot extends AdminCacheOwnerState {
       typeof this.systemTableCache.count === 'function' ?
         this.systemTableCache.count(TABLES.NODE_ENDPOINTS) :
         this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS).length;
-    const serviceEndpointsCount =
-      typeof this.systemTableCache.count === 'function' ?
-        this.systemTableCache.count(TABLES.SERVICE_ENDPOINTS) :
-        this.systemTableCache.getAll(
-          TABLES.SERVICE_ENDPOINTS,
-        ).length;
+    // Feeds the discovery repair policy: current-incarnation endpoints only.
+    const serviceEndpointsCount = readCurrentEndpointRows(
+      this.systemTableCache, TABLES.SERVICE_ENDPOINTS).length;
 
     return {
       sysPostgresWireServiceCount,

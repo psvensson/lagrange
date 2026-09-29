@@ -14,6 +14,7 @@ import {
   NUM,
   SERVICE_TYPE,
   TABLES,
+  isPartitionCleanupServiceRow,
 } from '../constants/index.js';
 import {ReplicaStatus} from './replica-status.js';
 import {
@@ -573,7 +574,8 @@ class StorageCapacityAccountingService {
    */
   shouldCountService(service) {
     const status = service?.[COLUMN.STATUS];
-    return status !== ReplicaStatus.REMOVED;
+    return !isPartitionCleanupServiceRow(service) &&
+      status !== ReplicaStatus.REMOVED;
   }
 
   /**

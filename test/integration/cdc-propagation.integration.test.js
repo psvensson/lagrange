@@ -18,12 +18,12 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {CDCConfirmationTracker} from '../../src/cdc/cdc-confirmation-tracker.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   TEST_CONFIG,
@@ -94,7 +94,7 @@ test('CDC propagation integration', {timeout: 120000}, async (t) => {
     const seedNodeId = generateUniqueNodeId(nodeIdCounter++);
     const seedWsPort = await getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -203,7 +203,7 @@ test('CDC propagation integration', {timeout: 120000}, async (t) => {
     const seedNodeId = generateUniqueNodeId(nodeIdCounter++);
     const seedWsPort = await getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -300,7 +300,7 @@ test('CDC propagation integration', {timeout: 120000}, async (t) => {
     const seedNodeId = generateUniqueNodeId(nodeIdCounter++);
     const seedWsPort = await getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -402,7 +402,7 @@ test('CDC propagation integration', {timeout: 120000}, async (t) => {
     const seedNodeId = generateUniqueNodeId(nodeIdCounter++);
     const seedWsPort = await getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

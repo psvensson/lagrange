@@ -337,8 +337,9 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       Object.freeze({
         functionName: 'reconcileRemovedReplicaCleanup',
         requiredFragments: Object.freeze([
-          'getPartitionServiceRowOwner().removeReplica',
-          'completeDurableRemoval',
+          'bindAuthoritativeRemovalAuthority',
+          'takeoverRemovingRowForCleanupOrThrow',
+          'completeCleanupTombstoneOrThrow',
         ]),
       }),
     ]),

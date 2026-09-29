@@ -1,0 +1,53 @@
+{
+  "schema": "solve-quest/2",
+  "id": "replica-lifecycle-durable-generation",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "ReplicaStateMachine is the sole lifecycle owner for each partition-replica services row, and its handoff to ReplicaRemovalDurableCleanup is linearized on one exact durable generation: every existing-row lifecycle update is an UPDATE guarded by service_id, source status, and the source row's state_entered_at, or updated_at only for an observed legacy row without state_entered_at; an explicit non-apply or zero-row result cannot advance local state; an outcome-unknown REMOVING write fences every non-removal successor until an authoritative point observation proves the intended generation or a same-intent idempotent redrive resolves it; restart and stale or same-state ABA evidence carry their observed generation into the same CAS; canonical partition-leader settlement is confirmed or remains retry debt before services-row deletion or runtime retirement; and only that settled REMOVING generation may terminalize, while repeated completion and already-absent rows are idempotent and never recreate lifecycle authority.",
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/replica-lifecycle-durable-generation.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-owner-interaction",
+      "statement": "ReplicaStateMachine owns services lifecycle state; ReplicaRemovalDurableCleanup consumes its settled REMOVING outcome before deletion and local cleanup. FAILED, recovery, timeout handling, cache hydration, and ReplicaHandler may not become alternate lifecycle or cleanup authorities."
+    },
+    {
+      "id": "exact-durable-generation-cas",
+      "statement": "Every transition of an existing services row is a primary-key UPDATE whose predicate includes service_id, the admitted source status, and the observed source generation timestamp. Cache absence never authorizes UPSERT; initial creation and the explicit persist:false local fallback remain separate contracts."
+    },
+    {
+      "id": "durable-outcome-decides-local-commit",
+      "statement": "Only a confirmed durable apply or an authoritative observation of the exact intended generation may commit local lifecycle state. Deferred, malformed, unknown, or zero-row mutation outcomes remain typed retry debt and never manufacture a local transition."
+    },
+    {
+      "id": "unknown-removal-is-monotonic",
+      "statement": "After a REMOVING write whose acknowledgement is lost, no FAILED, recovery, hydration, timeout, clear, or same-ID incarnation may cross the uncertainty fence. Resolution uses the canonical authoritative read path or an idempotent REMOVING redrive, never cached inference."
+    },
+    {
+      "id": "leader-settlement-precedes-deletion",
+      "statement": "The existing conditional canonical partition-leader clear must be confirmed, or retained as reconstructible debt, before services-row deletion, runtime retirement, success emission, or local terminal completion. The Quest does not invent a second leader writer."
+    },
+    {
+      "id": "settled-removing-only-terminal",
+      "statement": "Only the same durable REMOVING generation with settled leader debt may become terminal. A stale recovery row, a different generation, or a non-REMOVING state cannot terminalize; repeated cleanup and authoritative absence are idempotent and never recreate the row."
+    },
+    {
+      "id": "restart-reentry-and-aba-proof",
+      "statement": "The witnesses cover queued and synchronous re-entry, process restart after an applied write with lost acknowledgement, stale-cache recovery, same-state ABA, and repeated terminal redrive through production owner paths."
+    },
+    {
+      "id": "red-on-revert-without-weakening",
+      "statement": "Each load-bearing production mechanism has a deterministic red-on-revert witness. No timeout or budget is widened, no assertion becomes eventual, no adversarial case is removed, and no ratchet baseline is raised."
+    },
+    {
+      "id": "repair-scope-frozen",
+      "statement": "This Quest repairs only the durable-generation and removal-settlement mechanism exposed by final verification. The five previously approved repair families remain frozen unless this witness or an exact-head gate demonstrates a new causal mechanism."
+    }
+  ],
+  "sealedAt": "6831054b1916c9be4db6b13e2b8dec7ba2d03e0c"
+}

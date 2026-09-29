@@ -1,6 +1,8 @@
 import {assignAdminServiceDiscoveryReadinessContextMethods} from './admin-service-discovery-readiness-context-methods.js';
 import {assignAdminServiceDiscoveryReplicaReadinessMethods} from './admin-service-discovery-replica-readiness-methods.js';
 import {assignAdminServiceDiscoveryTableReadinessMethods} from './admin-service-discovery-table-readiness-methods.js';
+import {readCurrentEndpointRows} from
+  '../control-plane/owners/endpoint-incarnation-currentness.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -159,11 +161,10 @@ function assignAdminServiceDiscoveryReadinessMethods(
       return false;
     }
 
+    // Feeds the discovery repair policy: current-incarnation endpoints only.
     resolveDiscoveryServiceEndpointsCount() {
-      if (typeof this.systemTableCache.count === 'function') {
-        return this.systemTableCache.count(TABLES.SERVICE_ENDPOINTS);
-      }
-      return this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS).length;
+      return readCurrentEndpointRows(this.systemTableCache,
+        TABLES.SERVICE_ENDPOINTS).length;
     }
 
     resolveDiscoveryMetadataNodeCoverage() {

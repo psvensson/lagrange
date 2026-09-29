@@ -21,6 +21,10 @@ import {MessageRouter} from '../../src/transport/message-router.js';
 import {ReplicaLifecycleManager} from '../../src/node/replica-lifecycle-manager.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {createLifecycleCdcServiceForCache} from
+  '../test-helpers/lifecycle-state-store.js';
+import {committedStampFor} from
+  '../node/replica-handler-bootstrap-stamps.js';
 
 /**
  * Initialize test environment.
@@ -64,24 +68,7 @@ function createTestSchema(tableName) {
 }
 
 function createMockCDCIntegrationService(systemTableCache) {
-  return {
-    async insertSystemTableRow(tableName, data) {
-      systemTableCache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      systemTableCache.applySystemTableChange(
-        tableName,
-        'UPDATE',
-        {...whereClause, ...data},
-      );
-      return {success: true};
-    },
-    async upsertSystemTableRow(tableName, data) {
-      systemTableCache.applySystemTableChange(tableName, 'UPSERT', data);
-      return {success: true};
-    },
-  };
+  return createLifecycleCdcServiceForCache(systemTableCache);
 }
 
 /**
@@ -138,7 +125,6 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
 
       // Create lifecycle manager on joining node
       const systemTableCache = new SystemTableCache();
-      const cdcIntegrationService = createMockCDCIntegrationService(systemTableCache);
       const now = Date.now();
       systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
         table_id: 'test_table',
@@ -163,6 +149,8 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
         created_at: now,
         updated_at: now,
       });
+      const cdcIntegrationService =
+        createMockCDCIntegrationService(systemTableCache);
       const createdReplicas = [];
       const lifecycleManager = new ReplicaLifecycleManager({
         nodeId: joiningNodeId,
@@ -230,6 +218,7 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
         leader_replica_id: 'ws-test-partition-r1',
         key_range: {start: null, end: null},
         schema: createTestSchema('test_table'),
+        bootstrap_membership: committedStampFor(['ws-test-partition-r1']),
         timestamp: Date.now(),
       };
 

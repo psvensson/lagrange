@@ -8,6 +8,8 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TABLES} from '../../src/constants/index.js';
+import {FIXTURE_ENDPOINT_INCARNATION} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 ConfigurationManager.getInstance().initialize();
 LoggingService.getInstance().initialize({level: 'error'});
@@ -28,54 +30,39 @@ function createDiscoveryCache() {
   const cache = new SystemTableCache();
   const updatedAt = Date.now();
 
-  cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
-    id: 'node-1',
-    address: 'localhost:8080',
-    status: 'active',
-  });
-  cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
-    id: 'node-2',
-    address: 'localhost:8081',
-    status: 'active',
-  });
-
+  // Each node is registered at its boot incarnation and publishes its
+  // postgres-wire endpoint at that same incarnation.
+  const nodes = [['node-1', 8080, '10.0.0.1'], ['node-2', 8081, '10.0.0.2']];
+  for (const [nodeId, port] of nodes) {
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+      id: nodeId,
+      node_id: nodeId,
+      address: `localhost:${port}`,
+      status: 'active',
+    });
+  }
   cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
     service_id: 'sys-postgres-wire',
     service_name: 'sys-postgres-wire',
     replica_count: 2,
     runtime_kind: 'native_js',
   });
-
-  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-    endpoint_id: 'sys-postgres-wire-ep-node-1',
-    service_id: 'sys-postgres-wire',
-    node_id: 'node-1',
-    protocol: 'postgresql',
-    address: '10.0.0.1',
-    port: 5432,
-    health_status: 'healthy',
-    metadata: JSON.stringify({
-      service_name: 'sys-postgres-wire',
+  for (const [nodeId, , address] of nodes) {
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
+      endpoint_id: `sys-postgres-wire-ep-${nodeId}`,
+      service_id: 'sys-postgres-wire',
+      node_id: nodeId,
       protocol: 'postgresql',
-      version: '1.0.0',
-    }),
-    updated_at: updatedAt,
-  });
-  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-    endpoint_id: 'sys-postgres-wire-ep-node-2',
-    service_id: 'sys-postgres-wire',
-    node_id: 'node-2',
-    protocol: 'postgresql',
-    address: '10.0.0.2',
-    port: 5432,
-    health_status: 'healthy',
-    metadata: JSON.stringify({
-      service_name: 'sys-postgres-wire',
-      protocol: 'postgresql',
-      version: '1.0.0',
-    }),
-    updated_at: updatedAt,
-  });
+      address,
+      port: 5432,
+      health_status: 'healthy',
+      metadata: JSON.stringify({service_name: 'sys-postgres-wire',
+        protocol: 'postgresql', version: '1.0.0'}),
+      updated_at: updatedAt,
+    });
+  }
 
   cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
     id: 'table-benchmark-events',

@@ -1,3 +1,5 @@
+import {FIXTURE_ENDPOINT_INCARNATION} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 export function registerAdminWebSocketApiLoadBenchmarkTests({
   test,
   AdminWebSocketAPI,
@@ -219,7 +221,9 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
     const updatedAt = Date.now();
 
     cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       id: 'node-2',
+      node_id: 'node-2',
       address: 'localhost:8081',
       status: 'active',
     });
@@ -232,6 +236,7 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
     });
 
     cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       endpoint_id: 'sys-postgres-wire-ep-node-1',
       service_id: 'sys-postgres-wire',
       node_id: 'node-1',
@@ -248,6 +253,7 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
     });
 
     cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       endpoint_id: 'sys-postgres-wire-ep-node-2',
       service_id: 'sys-postgres-wire',
       node_id: 'node-2',

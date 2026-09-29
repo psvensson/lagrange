@@ -182,6 +182,8 @@ function answerSettledStatement(service, {recorded, command}) {
     partitionId: service.partitionId,
     logIndex: recorded.logIndex,
     replayOfLogIndex: recorded.logIndex,
+    ...(typeof command?.timestamp === 'string' && command.timestamp.length > 0 ?
+      {originHlc: command.timestamp} : {}),
   };
   if (recorded.outcome === PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED) {
     return {
@@ -203,6 +205,8 @@ function answerSettledStatement(service, {recorded, command}) {
     success: false,
     error: recorded.failureMessage,
     failureCode: recorded.failureCode,
+    committed: true,
+    outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
     ...settledAt,
   };
 }
@@ -273,6 +277,8 @@ function settleFailedCommittedStatement(service, {error, command, entryKey,
     success: false,
     error: error.message,
     failureCode: failureCodeOf(error),
+    committed: true,
+    outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
     ...identity,
   }));
   return PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED;

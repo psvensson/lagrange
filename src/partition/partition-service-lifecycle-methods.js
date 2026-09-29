@@ -46,10 +46,33 @@ function clearPartitionLifecycleListeners(service) {
   }
 }
 
-function closePartitionPersistenceResources(service) {
-  if (service.transport) {
-    service.transport.unregister(service.unifiedAddress);
+// Retire this replica's exact transport handler inside its lifecycle lane
+// (owner decision N2): an activation that confirmed this handler and issued
+// its ACTIVE CAS in the lane completes first; a later one finds it gone. A
+// successor's handler under the same address is never removed.
+async function retirePartitionTransportHandler(service) {
+  const transport = service.transport;
+  if (!transport) return;
+  const retire = () => {
+    if (typeof transport.unregisterExact === PARTITION_SERVICE_TYPE.FUNCTION &&
+        service.transportHandler) {
+      transport.unregisterExact(service.unifiedAddress,
+        service.transportHandler);
+    } else {
+      transport.unregister(service.unifiedAddress);
+    }
+  };
+  const lane = service.resolveHandlerRetirementLane?.() ||
+    service.replicaStateMachine;
+  if (typeof lane?.retireReplicaHandler === PARTITION_SERVICE_TYPE.FUNCTION &&
+      service.replicaId) {
+    await lane.retireReplicaHandler(service.replicaId, retire);
+    return;
   }
+  retire();
+}
+
+function closePartitionPersistenceResources(service) {
   if (service.db) {
     service.db.close();
     service.db = null;
@@ -158,6 +181,7 @@ class PartitionServiceLifecycleMethods {
       await Promise.allSettled([...this.pendingCDCEventDeliveries]);
       this.pendingCDCEventDeliveries.clear();
     }
+    await retirePartitionTransportHandler(this);
     closePartitionPersistenceResources(this);
     this.initialized = false;
     this.cdcSubscribers.clear();

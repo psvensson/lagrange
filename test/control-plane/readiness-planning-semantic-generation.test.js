@@ -20,6 +20,8 @@ import {
   readConnectedNodeFingerprint,
   shouldResetReadinessBuildAttempts,
 } from '../../src/control-plane/readiness-planning-version-contract.js';
+import {FIXTURE_ENDPOINT_INCARNATION} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 const NODE_A = 'node-a';
 const NODE_B = 'node-b';
@@ -91,6 +93,7 @@ function createFixture(initialRows = {}) {
 function nodeRow(nodeId) {
   return {
     [COLUMN.NODE_ID]: nodeId,
+    [COLUMN.BOOT_INCARNATION]: FIXTURE_ENDPOINT_INCARNATION,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.CONNECTION_STATE]: 'ready',
     [COLUMN.LAST_HEARTBEAT]: 1_000,
@@ -115,6 +118,7 @@ function serviceRow(serviceId, nodeId, partitionId = USER_PARTITION_ID) {
 function endpointRow(endpointId, nodeId, status = ENDPOINT_STATUS.ACTIVE) {
   return {
     [COLUMN.ADDRESS]: `ws://${nodeId}`,
+    [COLUMN.BOOT_INCARNATION]: FIXTURE_ENDPOINT_INCARNATION,
     [COLUMN.ENDPOINT_ID]: endpointId,
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.STATUS]: status,
@@ -322,6 +326,27 @@ test('endpoint and active-service classification follows canonical first/last ' 
     'deleting the last active service changes shared membership evidence');
   t.end();
 });
+
+test('a NODES boot-incarnation advance re-judges endpoint presence (I9)',
+  (t) => {
+    const withIncarnation = (row, incarnation) =>
+      ({...row, [COLUMN.BOOT_INCARNATION]: incarnation});
+    const early = createFixture({[TABLES.NODES]: [nodeRow(NODE_A)]});
+    t.equal(early.apply(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT,
+      withIncarnation(endpointRow('endpoint-g2', NODE_A), 2)).globalChanged,
+    false, 'an endpoint of a newer incarnation is not yet current evidence');
+    t.equal(early.apply(TABLES.NODES, CDC_OPERATION.UPDATE,
+      withIncarnation(nodeRow(NODE_A), 2)).globalChanged, true,
+    'the NODES advance makes it current');
+
+    const stale = createFixture({[TABLES.NODES]: [nodeRow(NODE_A)]});
+    stale.apply(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT,
+      endpointRow('endpoint-g1', NODE_A));
+    t.equal(stale.apply(TABLES.NODES, CDC_OPERATION.UPDATE,
+      withIncarnation(nodeRow(NODE_A), 2)).globalChanged, true,
+    'the NODES advance retires the previous incarnation\'s endpoint');
+    t.end();
+  });
 
 test('candidate membership and row moves retain exact old/new attribution',
   (t) => {

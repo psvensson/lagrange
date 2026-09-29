@@ -594,8 +594,8 @@ class NodeJoiningReadySignalReadiness
       });
   }
   /**
-   * Disable control-plane heartbeat reporting when a caller explicitly wants
-   * direct CDC heartbeats to be the active publication path.
+   * Disable routed heartbeat reporting when ordinary join should use the
+   * local adapter into the canonical state-publication owner.
    * @return {void}
    * @private
    */

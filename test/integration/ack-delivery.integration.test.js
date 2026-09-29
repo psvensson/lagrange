@@ -28,6 +28,8 @@ import {
   committedStampOfAnswer,
   validateBootstrapMembershipStamp,
 } from '../../src/raft/raft-committed-membership-stamp.js';
+import {createLifecycleCdcServiceForCache} from
+  '../test-helpers/lifecycle-state-store.js';
 
 let portCounter = 33000;
 
@@ -72,21 +74,7 @@ function schema(name) {
 }
 
 function createMockCDCService(cache) {
-  return {
-    async insertSystemTableRow(tableName, data) {
-      cache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true, operation: 'INSERT', tableName, data};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      const merged = {...whereClause, ...data};
-      cache.applySystemTableChange(tableName, 'UPDATE', merged);
-      return {success: true, operation: 'UPDATE', tableName, whereClause, data: merged};
-    },
-    async upsertSystemTableRow(tableName, data) {
-      cache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true, operation: 'UPSERT', tableName, data};
-    },
-  };
+  return createLifecycleCdcServiceForCache(cache);
 }
 
 async function wait(cond, ms = 1500) {
@@ -138,7 +126,6 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
     await wait(() => res.part.isLeader);
 
     const systemTableCache = new SystemTableCache();
-    const cdcIntegrationService = createMockCDCService(systemTableCache);
     const now = Date.now();
     systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
       table_id: 't1',
@@ -163,6 +150,7 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
       created_at: now,
       updated_at: now,
     });
+    const cdcIntegrationService = createMockCDCService(systemTableCache);
 
     const created = [];
     res.lc = new ReplicaLifecycleManager({

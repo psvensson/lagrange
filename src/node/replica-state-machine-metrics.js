@@ -4,6 +4,8 @@ import {
   REPLICA_STATE_MACHINE_OPERATION,
   REPLICA_STATE_MACHINE_STATE,
 } from './replica-state-machine-constants.js';
+import {advanceReplicaRevision} from
+  './replica-state-machine-serialization.js';
 
 const ReplicaState = REPLICA_STATE_MACHINE_STATE;
 
@@ -147,6 +149,8 @@ function removeFromTracking(stateMachine, replicaId) {
 
   stateMachine.stateCounts[state.state]--;
   stateMachine.replicas.delete(replicaId);
+  stateMachine.canonicalLeaderClearSettlementByReplicaId.delete(replicaId);
+  advanceReplicaRevision(stateMachine, replicaId);
 
   stateMachine.logger.debug(
     REPLICA_STATE_MACHINE_LOG_MSG.REMOVE_TRACKING_SUCCESS,
@@ -233,17 +237,50 @@ function resetMetrics(stateMachine) {
   stateMachine._initializeMetrics();
 }
 
-/**
- * Clear all tracked replicas.
- * @param {ReplicaStateMachine} stateMachine - Owning state machine instance.
- */
-function clear(stateMachine) {
-  stateMachine.stopTimeoutChecker();
+function finalizeClear(stateMachine) {
   stateMachine.replicas.clear();
+  stateMachine.serviceRowPersistInFlightByServiceId.clear();
   for (const state of Object.keys(stateMachine.stateCounts)) {
     stateMachine.stateCounts[state] = REPLICA_STATE_MACHINE_NUM.ZERO;
   }
   stateMachine._initializeMetrics();
+  return true;
+}
+
+/**
+ * Stop lifecycle admission, drain already-invoked durable writes, then clear
+ * tracked replicas. Outcome-unknown removal intent and generation-bound
+ * side-effect debt deliberately survive this shutdown-only boundary so stale
+ * hydration cannot erase authority that the durable store may contain.
+ * @param {ReplicaStateMachine} stateMachine - Owning state machine instance.
+ * @return {boolean|Promise<boolean>} True once no durable write can land.
+ */
+function clear(stateMachine) {
+  stateMachine.stopTimeoutChecker();
+  stateMachine.replicaMutationAdmissionClosed = true;
+  if (stateMachine.clearInFlight) {
+    return stateMachine.clearInFlight;
+  }
+  // Close and invalidate every current admission before waiting. An invoked
+  // durable write may still settle during the drain, but its old generation
+  // can no longer commit local state or authorize a queued successor.
+  const replicaIds = new Set([
+    ...stateMachine.replicas.keys(),
+    ...stateMachine.serviceRowPersistInFlightByServiceId.keys(),
+  ]);
+  for (const replicaId of replicaIds) {
+    advanceReplicaRevision(stateMachine, replicaId);
+  }
+  const pendingMutations = [
+    ...stateMachine.serviceRowPersistInFlightByServiceId.values(),
+  ];
+  if (pendingMutations.length === REPLICA_STATE_MACHINE_NUM.ZERO) {
+    return finalizeClear(stateMachine);
+  }
+  const clearPromise = Promise.allSettled(pendingMutations).then(() =>
+    finalizeClear(stateMachine));
+  stateMachine.clearInFlight = clearPromise;
+  return clearPromise;
 }
 
 export {

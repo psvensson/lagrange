@@ -12,21 +12,12 @@ import {
 } from './replica-dispatch-retained-verification.js';
 
 const {
-  ControlPlaneField,
   DISPATCH_DEFAULT,
   DISPATCH_LOG_MSG,
-  NODE_STATE_UPDATE_RETRY_ACTION,
-  NODE_STATE_UPDATE_RETRY_CLASS,
   NODE_STATE_UPDATE_RETRY_POLICY,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
-  STALE_NODE_INCARNATION_CODE,
-  getControlPlaneErrorCode,
-  getControlPlaneErrorMessage,
-  getControlPlaneNodeStatePublicationProfile,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
@@ -49,20 +40,6 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) {
       return DISPATCH_DEFAULT.OPERATION_DISPATCH_QUEUE_SHARD_COUNT;
-    }
-    return Math.max(1, Math.floor(numeric));
-  }
-
-  /**
-   * Normalize node-state queue shard count to a safe positive integer.
-   * @param {*} value - Candidate shard count.
-   * @return {number}
-   * @private
-   */
-  normalizeNodeStateUpdateQueueShardCount(value) {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) {
-      return REPLICA_DISPATCH_SERVICE_LITERAL.FOUR;
     }
     return Math.max(1, Math.floor(numeric));
   }
@@ -488,144 +465,6 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     this.clearWorkflowOwnerOperationDispatchDeferredRetry(operationId);
   }
 
-  /**
-   * Determine whether one node-state write failure should be retried through
-   * the owner queue instead of surfacing as a terminal reconcile error.
-   * @param {Error} error
-   * @return {boolean}
-   * @private
-   */
-  shouldDeferNodeStateUpdateRetry(error, payload = null) {
-    if (!error) {
-      return false;
-    }
-    // Terminal refusal: a stale-incarnation writer can never become fresh by
-    // retrying, so the reconcile callback must rethrow instead of parking the
-    // payload on the deferred-retry loop forever.
-    if (error.code === STALE_NODE_INCARNATION_CODE) {
-      return false;
-    }
-    const nextState = payload?.[ControlPlaneField.STATE];
-    const isHeartbeatOnly = this.isHeartbeatOnlyNodeStateUpdate(payload);
-    const publicationMode = this.resolveNodeStateUpdatePublicationMode(
-      nextState,
-      isHeartbeatOnly,
-      payload,
-    );
-    const publicationProfile = getControlPlaneNodeStatePublicationProfile({
-      publicationMode,
-    });
-    const retryClass = this.resolveNodeStateUpdateRetryClass(error);
-    if (
-      retryClass === NODE_STATE_UPDATE_RETRY_CLASS.PUBLICATION_PRESSURE &&
-      publicationProfile?.deferOnPressure !== true
-    ) {
-      return false;
-    }
-    if (error?.deferRetry === true) {
-      return true;
-    }
-    if (error?.code === REPLICA_DISPATCH_SERVICE_LITERAL.NODE_ROW_MISSING) {
-      return true;
-    }
-    if (Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0) {
-      return true;
-    }
-    if (isRetryableControlPlaneError(error)) {
-      return true;
-    }
-    const message = error?.message || String(error);
-    if (
-      typeof this.cdcIntegrationService?.isTransientCdcError ===
-        'function' &&
-      this.cdcIntegrationService.isTransientCdcError(message)
-    ) {
-      return true;
-    }
-    return (
-      (message.includes(REPLICA_DISPATCH_SERVICE_LITERAL.CONNECTION_TO_NODE) &&
-        message.includes(REPLICA_DISPATCH_SERVICE_LITERAL.CLOSED)) ||
-      message.includes(
-        REPLICA_DISPATCH_SERVICE_LITERAL.NO_CONNECTION_TO_NODE,
-      ) ||
-      message.includes(REPLICA_DISPATCH_SERVICE_LITERAL.QUERY_ROUTING_FAILED) ||
-      message.includes(
-        REPLICA_DISPATCH_SERVICE_LITERAL.FAILED_TO_FORWARD_WRITE_TO_LEADER,
-      ) ||
-      message.includes(REPLICA_DISPATCH_SERVICE_LITERAL.MESSAGE_TIMEOUT)
-    );
-  }
-
-  /**
-   * Resolve one retry delay for deferred node-state writes.
-   * @param {Error} error
-   * @return {number}
-   * @private
-   */
-  resolveNodeStateUpdateRetryAfterMs(error) {
-    if (Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0) {
-      return Math.max(1, Math.floor(error.retryAfterMs));
-    }
-    return this.nodeStateUpdateRetryAfterMs;
-  }
-
-  resolveNodeStateUpdateRetryClass(error) {
-    const errorCode = getControlPlaneErrorCode(error);
-    const errorMessage = getControlPlaneErrorMessage(error);
-    if (
-      errorCode === QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE ||
-      errorMessage.includes(QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE) ||
-      errorMessage.includes(QUERY_ERROR_MSG.QUERY_ROUTING_FAILED) ||
-      errorMessage.includes(QUERY_ERROR_MSG.NO_ACTIVE_SERVICE_FOR_PARTITION) ||
-      errorMessage.includes(
-        REPLICA_DISPATCH_SERVICE_LITERAL.FAILED_TO_FORWARD_WRITE_TO_LEADER,
-      )
-    ) {
-      return NODE_STATE_UPDATE_RETRY_CLASS.PUBLICATION_PRESSURE;
-    }
-    return NODE_STATE_UPDATE_RETRY_CLASS.TRANSIENT;
-  }
-
-  resolveNodeStateUpdateRetryFailureCount(nodeId, retryClass) {
-    const existingState = this.nodeStateUpdateRetryStateByNodeId.get(nodeId);
-    if (!existingState || existingState.retryClass !== retryClass) {
-      return 1;
-    }
-    const currentFailureCount = Number(existingState.failureCount);
-    if (
-      !Number.isFinite(currentFailureCount) ||
-      currentFailureCount < 1
-    ) {
-      return 1;
-    }
-    return currentFailureCount + 1;
-  }
-
-  resolveNodeStateUpdateRetryDelayBounds(retryClass, baseRetryAfterMs) {
-    if (retryClass === NODE_STATE_UPDATE_RETRY_CLASS.PUBLICATION_PRESSURE) {
-      return Object.freeze({
-        baseRetryAfterMs: Math.max(
-          baseRetryAfterMs,
-          this.nodeStateUpdateRetryAfterMs *
-            NODE_STATE_UPDATE_RETRY_POLICY.PUBLICATION_PRESSURE_MIN_DELAY_MULTIPLIER,
-        ),
-        maxRetryAfterMs: Math.max(
-          baseRetryAfterMs,
-          this.nodeStateUpdateRetryAfterMs *
-            NODE_STATE_UPDATE_RETRY_POLICY.PUBLICATION_PRESSURE_MAX_DELAY_MULTIPLIER,
-        ),
-      });
-    }
-    return Object.freeze({
-      baseRetryAfterMs,
-      maxRetryAfterMs: Math.max(
-        baseRetryAfterMs,
-        baseRetryAfterMs *
-          NODE_STATE_UPDATE_RETRY_POLICY.TRANSIENT_MAX_DELAY_MULTIPLIER,
-      ),
-    });
-  }
-
   computeNodeStateUpdateRetryDelayMs(
     baseRetryAfterMs,
     failureCount,
@@ -641,131 +480,6 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
       remainingBackoffSteps -= 1;
     }
     return retryAfterMs;
-  }
-
-  buildNodeStateUpdateRetryDecision(nodeId, error) {
-    const baseRetryAfterMs = this.resolveNodeStateUpdateRetryAfterMs(error);
-    const retryClass = this.resolveNodeStateUpdateRetryClass(error);
-    const failureCount = this.resolveNodeStateUpdateRetryFailureCount(
-      nodeId,
-      retryClass,
-    );
-    const retryDelayBounds = this.resolveNodeStateUpdateRetryDelayBounds(
-      retryClass,
-      baseRetryAfterMs,
-    );
-    return Object.freeze({
-      action: NODE_STATE_UPDATE_RETRY_ACTION.SCHEDULE_DEFERRED,
-      retryClass,
-      failureCount,
-      retryAfterMs: this.computeNodeStateUpdateRetryDelayMs(
-        retryDelayBounds.baseRetryAfterMs,
-        failureCount,
-        retryDelayBounds.maxRetryAfterMs,
-      ),
-    });
-  }
-
-  recordDeferredNodeStateUpdateRetryState(nodeId, retryDecision, error) {
-    if (!nodeId || !retryDecision) {
-      return;
-    }
-    this.nodeStateUpdateRetryStateByNodeId.set(
-      nodeId,
-      Object.freeze({
-        retryClass: retryDecision.retryClass,
-        failureCount: retryDecision.failureCount,
-        retryAfterMs: retryDecision.retryAfterMs,
-        errorMessage:
-          getControlPlaneErrorMessage(error) ||
-          REPLICA_DISPATCH_SERVICE_LITERAL.EMPTY_STRING,
-      }),
-    );
-  }
-
-  clearNodeStateUpdateRetryState(nodeId) {
-    this.nodeStateUpdateRetryStateByNodeId.delete(nodeId);
-  }
-
-  /**
-   * Store the latest node-state payload and arm one deferred retry timer.
-   * @param {string} nodeId
-   * @param {Object} payload
-   * @param {Error} error
-   * @return {number}
-   * @private
-   */
-  deferNodeStateUpdateRetry(nodeId, payload, error) {
-    if (!nodeId || !payload) {
-      return this.nodeStateUpdateRetryAfterMs;
-    }
-
-    const deferredPayload = this.buildDeferredNodeStateUpdatePayload(payload);
-    const retryDecision = this.buildNodeStateUpdateRetryDecision(nodeId, error);
-    const retryAfterMs = retryDecision.retryAfterMs;
-    const desiredAttemptAt = Date.now() + retryAfterMs;
-    this.recordDeferredNodeStateUpdateRetryState(nodeId, retryDecision, error);
-    const existing = this.nodeStateUpdateDeferredRetries.get(nodeId);
-    if (existing) {
-      existing.payload = deferredPayload;
-      existing.errorMessage =
-        getControlPlaneErrorMessage(error) ||
-        REPLICA_DISPATCH_SERVICE_LITERAL.EMPTY_STRING;
-      existing.retryClass = retryDecision.retryClass;
-      existing.failureCount = retryDecision.failureCount;
-      if (existing.timeoutHandle) {
-        this.clearTimeoutFn(existing.timeoutHandle);
-      }
-      existing.nextAttemptAt = desiredAttemptAt;
-      existing.timeoutHandle = this.armDeferredNodeStateUpdateRetry(
-        nodeId,
-        retryAfterMs,
-      );
-      return retryAfterMs;
-    }
-
-    const deferredRetry = {
-      payload: deferredPayload,
-      nextAttemptAt: desiredAttemptAt,
-      errorMessage:
-        getControlPlaneErrorMessage(error) ||
-        REPLICA_DISPATCH_SERVICE_LITERAL.EMPTY_STRING,
-      retryClass: retryDecision.retryClass,
-      failureCount: retryDecision.failureCount,
-      timeoutHandle: null,
-    };
-    deferredRetry.timeoutHandle = this.armDeferredNodeStateUpdateRetry(
-      nodeId,
-      retryAfterMs,
-    );
-    this.nodeStateUpdateDeferredRetries.set(nodeId, deferredRetry);
-    return retryAfterMs;
-  }
-
-  /**
-   * Arm the deferred retry timer for one node-state update owner key.
-   * @param {string} nodeId
-   * @param {number} delayMs
-   * @return {*}
-   * @private
-   */
-  armDeferredNodeStateUpdateRetry(nodeId, delayMs) {
-    return this.setTimeoutFn(() => {
-      const deferredRetry = this.nodeStateUpdateDeferredRetries.get(nodeId);
-      if (!deferredRetry) {
-        return;
-      }
-      this.nodeStateUpdateDeferredRetries.delete(nodeId);
-      this.resolveNodeStateUpdateQueue(nodeId).enqueue(
-        nodeId,
-        RECONCILE_REASON.NODE_STATE_UPDATE_MESSAGE,
-        {payload: deferredRetry.payload},
-      );
-      this.logger.debug(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_DEFERRED_RETRY, {
-        nodeId,
-        retryAfterMs: delayMs,
-      });
-    }, delayMs);
   }
 
   /**

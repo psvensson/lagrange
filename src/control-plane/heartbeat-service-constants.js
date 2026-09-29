@@ -41,6 +41,8 @@ const HEARTBEAT_STATE = Object.freeze({
 });
 
 const HEARTBEAT_LOG_MSG = Object.freeze({
+  ENDPOINT_WRITE_NOT_CURRENT:
+    'Node endpoint not written: this incarnation does not own the row',
   INITIALIZED: 'HeartbeatService initialized',
   STARTED: 'HeartbeatService started',
   STOPPED: 'HeartbeatService stopped',

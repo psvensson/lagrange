@@ -1,13 +1,19 @@
 import {
   ConnectWebSocketPhase,
 } from '../../src/bootstrap/phases/connect-websocket-phase.js';
+import {
+  FIXTURE_ENDPOINT_INCARNATION,
+  registeredNodeRow,
+} from '../test-helpers/endpoint-incarnation-fixture.js';
 
 function createBootstrapResponseWithPeerEndpoints(...nodeIds) {
   return {
     seedNodeId: 'seed-node',
     seedNodeWsAddress: 'ws://seed-node:8082',
     systemTableSnapshots: {
+      nodes: nodeIds.map((nodeId) => registeredNodeRow(nodeId)),
       node_endpoints: nodeIds.map((nodeId) => ({
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         endpoint_id: `${nodeId}-ws`,
         node_id: nodeId,
         transport_type: 'ws',
@@ -231,6 +237,9 @@ export function registerConnectWebSocketPhaseMeshTests({
         nodeEndpoints: [],
       };
       const systemTableCache = {
+        // Registered nodes at the fixture incarnation (endpoint authority).
+        get: (tableName, nodeId) =>
+          (tableName === 'nodes' ? registeredNodeRow(nodeId) : null),
         filter(tableName, predicate) {
           if (tableName !== 'node_endpoints') {
             return [];
@@ -297,6 +306,7 @@ export function registerConnectWebSocketPhaseMeshTests({
             repairCalls.push([...missingNodeIds]);
             cacheState.nodeEndpoints = [
               {
+                boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
                 endpoint_id: 'peer-cache-miss-ws',
                 node_id: 'peer-cache-miss',
                 transport_type: 'ws',
@@ -348,6 +358,9 @@ export function registerConnectWebSocketPhaseMeshTests({
         nodeEndpoints: [],
       };
       const systemTableCache = {
+        // Registered nodes at the fixture incarnation (endpoint authority).
+        get: (tableName, nodeId) =>
+          (tableName === 'nodes' ? registeredNodeRow(nodeId) : null),
         filter(tableName, predicate) {
           if (tableName !== 'node_endpoints') {
             return [];
@@ -392,6 +405,7 @@ export function registerConnectWebSocketPhaseMeshTests({
             seedNodeWsAddress: 'ws://seed-node:8082',
             systemTableSnapshots: {
               node_endpoints: [{
+                boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
                 endpoint_id: 'peer-cache-miss-bootstrap-ws',
                 node_id: 'peer-cache-miss',
                 transport_type: 'ws',
@@ -421,6 +435,7 @@ export function registerConnectWebSocketPhaseMeshTests({
             repairCalls.push([...missingNodeIds]);
             cacheState.nodeEndpoints = [
               {
+                boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
                 endpoint_id: 'peer-cache-miss-ws',
                 node_id: 'peer-cache-miss',
                 transport_type: 'ws',
@@ -500,7 +515,9 @@ export function registerConnectWebSocketPhaseMeshTests({
               bootstrapAdmissionPeerHintNodeIds: ['peer-admission-hint'],
             },
             systemTableSnapshots: {
+              nodes: [registeredNodeRow('peer-admission-hint')],
               node_endpoints: [{
+                boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
                 endpoint_id: 'peer-admission-hint-bootstrap-ws',
                 node_id: 'peer-admission-hint',
                 transport_type: 'ws',

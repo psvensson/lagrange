@@ -86,6 +86,7 @@ const SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES = Object.freeze([
   'previous_state',
   'trigger_reason',
   'error_message',
+  'cleanup_token',
 ]);
 
 const SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES = Object.freeze([
@@ -100,7 +101,6 @@ const SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES = Object.freeze([
 const SYSTEM_TABLE_CACHE_SERVICE_TERMINAL_REQUIRED_FIELD_NAMES = Object.freeze([
   ...SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES,
   'status',
-  'state_entered_at',
   'updated_at',
 ]);
 

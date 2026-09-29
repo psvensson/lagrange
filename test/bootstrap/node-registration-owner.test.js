@@ -22,11 +22,14 @@ import {
 import {
   AUTHORITATIVE_ROW_READ_STATE,
 } from '../../src/bootstrap/rejoin-hints-constants.js';
+import {NODE_REGISTRATION_OUTCOME} from
+  '../../src/control-plane/owners/node-registration-incarnation-write.js';
 
 const TEST_NODE_ID = 'test-node-registration-owner';
 const TEST_NODE_ADDRESS = 'joiner-host:8080';
 const TEST_WS_PORT = 8082;
 const TEST_NOW_MS = 1_710_000_000_000;
+const TEST_BOOT_INCARNATION = 7;
 const TEST_LOGGER = {
   info: () => {},
   warn: () => {},
@@ -76,17 +79,24 @@ const TEST_CLUSTER_INCARNATION_FENCE_ALLOWED = Object.freeze({
 
 function buildPublicationOwnerRecorder(publicationCalls) {
   return {
-    upsertJoinNode: async (row, options) => {
-      publicationCalls.push({kind: 'node', row, options});
-      return {success: true};
+    // The monotonic NODES registration (D-7) at this boot's incarnation.
+    registerJoinNodeAtIncarnation: async (row, bootIncarnation, options) => {
+      publicationCalls.push({kind: 'node',
+        row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}, options});
+      return {outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow: null,
+        error: null};
     },
-    upsertJoinNodeEndpoint: async (row, options) => {
-      publicationCalls.push({kind: 'node_endpoint', row, options});
-      return {success: true};
-    },
-    upsertJoinServiceEndpoint: async (row, options) => {
-      publicationCalls.push({kind: 'service_endpoint', row, options});
-      return {success: true};
+    // The endpoint write owner: births/advances each endpoint row at this
+    // boot's exact incarnation (the endpoint incarnation authority).
+    writeJoinEndpointAtIncarnation: async (tableName, row, bootIncarnation,
+      options) => {
+      publicationCalls.push({
+        kind: tableName === TABLES.NODE_ENDPOINTS ?
+          'node_endpoint' : 'service_endpoint',
+        row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation},
+        options,
+      });
+      return {outcome: 'applied', result: {success: true}};
     },
   };
 }
@@ -119,6 +129,7 @@ function createDelegates() {
       resolveBudgetRow: (nodeRow) => buildBudgetResolution(nodeRow),
     }),
     getNodeCapabilities: () => TEST_NODE_CAPABILITIES,
+    getBootIncarnation: () => TEST_BOOT_INCARNATION,
   };
 }
 
@@ -154,17 +165,24 @@ test(
   async (t) => {
     const publicationCalls = [];
     const membershipPublicationRuntimeOwner = {
-      upsertJoinNode: async (row, options) => {
-        publicationCalls.push({kind: 'node', row, options});
-        return {success: true};
+      // The monotonic NODES registration (D-7) at this boot's incarnation.
+      registerJoinNodeAtIncarnation: async (row, bootIncarnation, options) => {
+        publicationCalls.push({kind: 'node',
+          row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}, options});
+        return {outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow: null,
+          error: null};
       },
-      upsertJoinNodeEndpoint: async (row, options) => {
-        publicationCalls.push({kind: 'node_endpoint', row, options});
-        return {success: true};
-      },
-      upsertJoinServiceEndpoint: async (row, options) => {
-        publicationCalls.push({kind: 'service_endpoint', row, options});
-        return {success: true};
+      // The endpoint write owner: births/advances each endpoint row at this
+      // boot's exact incarnation (the endpoint incarnation authority).
+      writeJoinEndpointAtIncarnation: async (tableName, row, bootIncarnation,
+        options) => {
+        publicationCalls.push({
+          kind: tableName === TABLES.NODE_ENDPOINTS ?
+            'node_endpoint' : 'service_endpoint',
+          row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation},
+          options,
+        });
+        return {outcome: 'applied', result: {success: true}};
       },
     };
     const owner = new NodeRegistrationOwner({
@@ -206,6 +224,11 @@ test(
       NODE_STATE.JOINING,
       'join admission stays non-active until the ready-lease heartbeat',
     );
+    t.equal(
+      nodeCalls[0].row[COLUMN.BOOT_INCARNATION],
+      TEST_BOOT_INCARNATION,
+      'join acquisition durably binds the boot incarnation',
+    );
     const joinMutationOptions = publicationCalls.map((call) => call.options);
     t.ok(
       joinMutationOptions.every((options) => options?.skipCacheWait === true),
@@ -236,18 +259,30 @@ test(
   'node progress before publishing missing endpoints',
   async (t) => {
     const publicationCalls = [];
+    const incarnationAdvances = [];
     const membershipPublicationRuntimeOwner = {
-      upsertJoinNode: async (row, options) => {
-        publicationCalls.push({kind: 'node', row, options});
-        return {success: true};
+      // The monotonic NODES registration (D-7) at this boot's incarnation.
+      registerJoinNodeAtIncarnation: async (row, bootIncarnation, options) => {
+        publicationCalls.push({kind: 'node',
+          row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation}, options});
+        return {outcome: NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow: null,
+          error: null};
       },
-      upsertJoinNodeEndpoint: async (row, options) => {
-        publicationCalls.push({kind: 'node_endpoint', row, options});
-        return {success: true};
+      // The endpoint write owner: births/advances each endpoint row at this
+      // boot's exact incarnation (the endpoint incarnation authority).
+      writeJoinEndpointAtIncarnation: async (tableName, row, bootIncarnation,
+        options) => {
+        publicationCalls.push({
+          kind: tableName === TABLES.NODE_ENDPOINTS ?
+            'node_endpoint' : 'service_endpoint',
+          row: {...row, [COLUMN.BOOT_INCARNATION]: bootIncarnation},
+          options,
+        });
+        return {outcome: 'applied', result: {success: true}};
       },
-      upsertJoinServiceEndpoint: async (row, options) => {
-        publicationCalls.push({kind: 'service_endpoint', row, options});
-        return {success: true};
+      advanceJoinNodeBootIncarnation: async (whereClause, row) => {
+        incarnationAdvances.push({whereClause, row});
+        return {success: true, partitionResult: {affectedRows: 1}};
       },
     };
     const owner = new NodeRegistrationOwner({
@@ -294,6 +329,17 @@ test(
       nodeCalls.length,
       0,
       'should not rewrite the canonical nodes row when authoritative progress exists',
+    );
+    t.equal(incarnationAdvances.length, 1,
+      'progress from an earlier boot is advanced to this boot exactly once');
+    t.same(incarnationAdvances[0]?.whereClause, {
+      [COLUMN.NODE_ID]: TEST_NODE_ID,
+      [COLUMN.BOOT_INCARNATION]: null,
+    }, 'the advance is a CAS on the observed (unknown) boot incarnation');
+    t.equal(
+      incarnationAdvances[0]?.row?.[COLUMN.BOOT_INCARNATION],
+      TEST_BOOT_INCARNATION,
+      'the advance writes this boot incarnation',
     );
     t.equal(
       endpointCalls.length,
@@ -520,7 +566,10 @@ test(
       'withdrawal should update node, node endpoint, and service endpoint');
     t.match(updateCalls[0], {
       tableName: TABLES.NODES,
-      whereClause: {[COLUMN.NODE_ID]: TEST_NODE_ID},
+      whereClause: {
+        [COLUMN.NODE_ID]: TEST_NODE_ID,
+        [COLUMN.BOOT_INCARNATION]: TEST_BOOT_INCARNATION,
+      },
       data: {
         [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
         [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,
@@ -529,14 +578,20 @@ test(
     });
     t.match(updateCalls[1], {
       tableName: TABLES.NODE_ENDPOINTS,
-      whereClause: {[COLUMN.ENDPOINT_ID]: `ep-${TEST_NODE_ID}-ws`},
+      whereClause: {
+        [COLUMN.ENDPOINT_ID]: `ep-${TEST_NODE_ID}-ws`,
+        [COLUMN.BOOT_INCARNATION]: TEST_BOOT_INCARNATION,
+      },
       data: {
         [COLUMN.STATUS]: ENDPOINT_STATUS.INACTIVE,
       },
     });
     t.match(updateCalls[2], {
       tableName: TABLES.SERVICE_ENDPOINTS,
-      whereClause: {[COLUMN.ENDPOINT_ID]: 'meta-endpoint-1'},
+      whereClause: {
+        [COLUMN.ENDPOINT_ID]: 'meta-endpoint-1',
+        [COLUMN.BOOT_INCARNATION]: TEST_BOOT_INCARNATION,
+      },
       data: {
         health_status: TEST_SERVICE_ENDPOINT_UNHEALTHY,
       },

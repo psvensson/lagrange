@@ -62,6 +62,13 @@ Required patterns:
 5. CDC-replicated row mutations are addressed by canonical primary key.
 6. Multi-row transitions either transition rows one by one by primary key or
    use an explicit transaction wrapper that preserves row identity.
+7. A partition-replica lifecycle update names the source status and the exact
+   durable version column/value (`state_entered_at`, or legacy `updated_at`).
+   A zero-row or unavailable outcome retains retry debt and never advances
+   local state.
+8. Physical partition storage cleanup requires a current durable cleanup owner
+   on the same `services.service_id` primary key. A live row and a cleanup owner
+   cannot coexist, and ordinary creation is INSERT-only at that key.
 
 Forbidden patterns:
 
@@ -69,6 +76,8 @@ Forbidden patterns:
 - full-row replacement for existing lifecycle rows
 - recreating missing rows inside updater code
 - broad `UPDATE` or `DELETE` statements as the primary CDC mutation path
+- upserting a `services` row (including recovery or registration shortcuts)
+- treating a cache hit or generic row absence as physical-cleanup authority
 - one persisted field carrying unrelated claim, lease, workflow, and entity
   lifecycle semantics
 

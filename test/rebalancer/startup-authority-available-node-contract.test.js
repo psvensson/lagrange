@@ -180,6 +180,7 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
     nodeId: 'node-2',
     nodeAddress: 'node-2:8080',
     nodeCapabilities: [],
+    bootIncarnation: 1,
     now: NOW_MS,
   });
   const joiningReadyNode = {
@@ -192,6 +193,7 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
       nodeId: 'node-3',
       nodeAddress: 'node-3:8080',
       nodeCapabilities: [],
+      bootIncarnation: 1,
       now: NOW_MS,
     }),
     connection_state: STATE.DISCONNECTED,

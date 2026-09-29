@@ -34,6 +34,8 @@ import {
 import {
   resolveControlPlaneSnapshotRevisionMetadata,
 } from '../control-plane/control-plane-snapshot-revision.js';
+import {readCurrentEndpointRows} from
+  '../control-plane/owners/endpoint-incarnation-currentness.js';
 
 const LOCAL_STR_SELF = 'self';
 const LOCAL_STR_UNKNOWN = 'unknown';
@@ -459,7 +461,7 @@ class JoinReadinessEvaluatorSnapshotMethods {
 
     const requiredNodeIds = [this.nodeId];
     const nodeEndpointRows =
-      systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [];
+      readCurrentEndpointRows(systemTableCache, TABLES.NODE_ENDPOINTS);
     const visibleNodeEndpointNodeIds = new Set();
 
     for (const row of nodeEndpointRows) {
