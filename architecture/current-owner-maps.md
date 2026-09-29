@@ -471,17 +471,34 @@ The current shared building blocks for control-plane work are:
      spread-changing service visibility no longer depends on a periodic timer
      or on diagnostics repairing stale publication metadata
 27. `ReplicaRemovalDurableCleanup`
-   - owned by `ReplicaHandler.reconcileRemovedReplicaCleanup(...)`
-   - derives one idempotent removal cleanup contract from:
-     - local replica lifecycle state
-     - canonical partition `services` row ownership
-     - optional tracked local runtime service cleanup
-   - emits one durable cleanup action through
-     `PartitionServiceRowOwner.removeReplica(...)` before an already-removed
-     partition replica can complete a remove request
+   - owned jointly at one serialized boundary by `ReplicaHandler` and
+     `ReplicaCleanupTombstoneOwner`
+   - binds ordinary removal to the exact durable `REMOVING` generation, settles
+     the existing conditional leader clear, and atomically changes that same
+     `services.service_id` row into an exact-token `partition_cleanup` owner
+   - permits DB/WAL/SHM/journal cleanup only while an owner-required point read
+     still observes that exact token; partial or unknown outcomes retain the
+     marker for restart
+   - releases ownership only after the storage owner positively observes every
+     artifact absent and an exact-token DELETE applies or is observed absent
    - is shared by REPLACE source-removal replay and priority control-plane
-     recovery so local `REMOVED` state does not bypass durable service truth
-     when the cache misses a stale service row
+     recovery so local `REMOVED` state, stale cache projection, and generic row
+     absence cannot bypass durable service truth
+28. `ReplicaStorageCleanupAdmission`
+   - uses `services.service_id` as the single durable arbitration key between
+     live creation and rowless orphan cleanup; both contenders are INSERT-only
+   - freezes local-node cleanup tokens once before request admission at startup;
+     only those exact pre-admission tokens may resume persisted cleanup debt,
+     while disk-only candidates must acquire their own token
+   - keeps full cleanup asynchronous after the admission barrier; ordinary
+     `OWNED` results never borrow another client's token or touch storage
+   - acquires the directory-local SQLite process-owner lock before provenance,
+     rejoin, or replica storage work. A second process sharing the canonical
+     directory fails closed; shutdown, startup unwind, and process death release
+     the lock
+   - allows independent nodes or owner clients to race durable cleanup
+     acquisition safely after each process has established its own directory
+     ownership
 
 New control-plane work should extend these shared owners before adding
 feature-local mechanics.
@@ -584,6 +601,7 @@ heuristics.
 | Rebalancer entity interaction contract | `rebalancer-entity-identity.js`, `entity-service-row-read.js`, `operation-workflow-remove-safety-entity-tier.js`, and the explicit dispatch map in `operation-workflow-owner-shared.js` | raw operation-ingress identity normalized once; canonical persisted `(entityType, entityId)`; entity-owned SERVICES row identity; durable `membership_publication_epoch`; lifecycle status/raft readiness; entity policy floor | partition rows by `partition_id` with partition quorum/leadership safety; message-group rows by `group_id` with message-group replicated availability; runtime replicas only as canonical `entityId-rN`; unsupported or untyped operations fail before persistence/replay/dispatch; the planning epoch is read only from its operation column | coordinator admission/topology reads, operation-ledger serialization/replay, epoch-fenced dispatch, remove/replace safety, observed completion, handler dispatch | callers must not reconstruct a persisted entity from `partitionId`, accept alternate casing/field shapes for SERVICES rows, accept a bare runtime entity id as a replica id, recover the planning epoch from `stepsHistory`, run a background compatibility reconciler, fall back an unknown handler to the partition handler, or add an entity enum/policy without completing the interaction matrix | `rebalancer-entity-interaction-contract.test.js`, `assignment-epoch-fencing.test.js`, `replica-operations-schema-migration.test.js`, runtime-service canonical target handoff regression, static single-owner-form guard, MovieLens service-affinity convergence |
 | Rebalancer concurrent-budget read mode | `RebalanceCoordinator.resolveConcurrentBudgetReadMode(...)` | cache counts, priority-partition classification, saturation recheck evidence | `cache_only`, `owner_rpc_recheck_on_saturation` | add/replace/remove admission, priority recovery serial gates, planner diagnostics | callers must not reintroduce `preferAuthoritativeCount` or perform their own saturation fallback outside the coordinator contract | concurrent-budget admission traces, serial-gate diagnostics, coordinator/rebalancer regression tests |
 | Node-state recovery publication | `NodeJoiningService.sendControlPlaneNodeStateUpdate(...)`, `ReplicaDispatchService.deferNodeStateUpdateRetry(...)`, and `MessageRouter` pending replacement | latest heartbeat-only node-state payload per target/node owner key, deferred retry slot per node, retry-after budget, transport pending replacement evidence | deferred recovery publication plus heartbeat-only pending replacement on `node_state_update:<target>:<node>` | node-joining recovery publication, replica-dispatch retry replay, transport diagnostics | callers must not let repeated heartbeat-only `NODE_STATE_UPDATE` deliveries accumulate in the pending queue when one owner slot already represents the latest semantic update | node-state deferred retry maps, router pending replacement results, queue source summaries, retry-after diagnostics |
+| Node READY publication | `NodeRegistrationOwner` acquires canonical `JOINING` identity; `HeartbeatService` supplies immediate/periodic level-triggered wake; `ReplicaDispatchService` is the sole semantic durable publisher | authoritative NODES row with exact `node_id`, `boot_incarnation`, source status/connection, `created_at`, and observed `last_heartbeat`; branded NODE_STATE_UPDATE payload | applied, exact-destination idempotent, stale incarnation, source changed, destination not observed/retryable, or missing registration | ordinary join local adapter and durable-rejoin routed adapter; readiness/projection consumers of the resulting row | heartbeat observation must not mutate READY directly; ingress must not weaken the exact source predicate, recreate a missing registration, treat transport ACK as completion, or accept a different incarnation/state after zero-row/lost outcome | full CAS predicate, authoritative outcome readback, per-node retry queue, R1-R5 wake/incarnation witnesses, direct-writer census guard |
 | Heartbeat lease scheduler interaction | `HeartbeatService.start(...)` interval callback owns heartbeat attempts; `runScheduledMembershipPublicationReconcileTick(...)` owns membership reconcile single-flight independently | heartbeat attempt state and watchdog; membership-publication reconcile state and owner check | one interval drive with two independent in-flight owners | node ready-lease renewal and membership-publication convergence | membership reconciliation must not be awaited from or retain the heartbeat attempt; adding an independent reconcile drive requires removing any older coupled drive in the same change | heartbeat attempt diagnostics, scheduled-reconcile diagnostics, slow-reconcile/non-blocking-heartbeat regression |
 | Active-gate snapshot coverage handoff | `buildPublicationActiveGateHandoffContract(...)` consumes canonical `snapshotCoverage`; `AdminControlSnapshot` alone projects `activeNodeViews` into it | explicit expected cohort, durable published cohort, canonical snapshot coverage `{nodeIds, revision?, fresh?, state?}` | coverage evidence has one internal field shape; durable publication remains a distinct owner input | membership publication, admin/control snapshot serving, load-readiness promotion gate | callers must not pass `activeNodeViews` as an alternate contract input, let projected node views override the durable published set, or serialize a second short node-set dialect | active-gate fence evidence, served-snapshot coverage regression, contract tests that ignore retired short field names |
 | Cross-subsystem control-message completion | `CONTROL_PLANE_MESSAGE_COMPLETION_CONTRACT`; message-type-scoped `MessageGroupService.registerApplicationMessageCompletionHandler(...)`; `OwnerKeyReconcileQueue.enqueueAndWait(...)` for node-state publication; the durable replica-operation workflow owner for dispatch wakes | receiver owner-commit result or durable replica-operation state and executor outcome | `durable_state_publication` and `owner_wake_admission`; transport ACK remains queue-pressure evidence only, while the router service response carries the registered owner completion | join READY completion, node-state receiver acknowledgement, replica-operation wake delivery and follow-up verification | callers must not advance durable state from message-group or router admission, register two completion owners for one message type, classify a new control message without naming its completion owner, swallow unrelated application interactions, add an independent read owner to certify a completed write, or make a wake transport ACK own workflow completion | per-message completion-handler registry, per-node reconcile queue state, operation workflow retry/retention diagnostics, completion-contract coverage test |

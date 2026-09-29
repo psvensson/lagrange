@@ -38,6 +38,7 @@ describe('seed and joining startup integration', () => {
 
   it('seed startup service initializes runtime ownership wiring', () => {
     const bootstrapService = new BootstrapService({
+      bootIncarnation: 1,
       nodeId: 'seed-node',
       nodeAddress: `127.0.0.1:${seedRestPort}`,
       wsPort: seedRestPort + wsOffset,
@@ -51,6 +52,7 @@ describe('seed and joining startup integration', () => {
   it('joining startup service initializes runtime ownership wiring', () => {
     const joiningRestPort = seedRestPort + 1;
     const joiningService = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'join-node',
       nodeAddress: `127.0.0.1:${joiningRestPort}`,
       seedNodeAddress: `http://127.0.0.1:${seedRestPort}`,
@@ -64,6 +66,7 @@ describe('seed and joining startup integration', () => {
 
   it('seed runtime owner exposes control-plane readiness through rebalance coordinator ownership', () => {
     const bootstrapService = new BootstrapService({
+      bootIncarnation: 1,
       nodeId: 'seed-node',
       nodeAddress: `127.0.0.1:${seedRestPort}`,
       wsPort: seedRestPort + wsOffset,

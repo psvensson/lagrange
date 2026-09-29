@@ -33,6 +33,7 @@ function initializeTestEnvironment() {
 
 function createSelfHostedService(nodeId = 'join-node-1') {
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId,
     nodeAddress: 'ws://localhost:19090',
     seedNodeAddress: 'http://localhost:8080',

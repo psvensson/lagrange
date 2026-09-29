@@ -34,6 +34,8 @@ import {
   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
   CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
 } from '../../src/control-plane/control-plane-snapshot-owner.js';
+import {FIXTURE_ENDPOINT_INCARNATION} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 // Initialize services for tests
 ConfigurationManager.getInstance().initialize();
@@ -65,6 +67,7 @@ test(
       address: 'node-peer/partition/peer-table-p1-r1',
     });
     writableCache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       endpoint_id: 'endpoint-node-local',
       node_id: 'node-local',
       transport_type: 'ws',
@@ -72,6 +75,7 @@ test(
       status: 'active',
     });
     writableCache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       endpoint_id: 'endpoint-node-peer',
       node_id: 'node-peer',
       transport_type: 'ws',
@@ -721,6 +725,7 @@ test(
   async (t) => {
     const writableCache = createPopulatedCache();
     writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       id: 'node-2',
       address: 'localhost:8081',
       status: 'active',
@@ -791,6 +796,7 @@ test(
   async (t) => {
     const writableCache = createPopulatedCache();
     writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       id: 'node-2',
       address: 'localhost:8081',
       status: 'active',
@@ -885,6 +891,7 @@ test(
   async (t) => {
     const writableCache = createPopulatedCache();
     writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       id: 'node-2',
       address: 'localhost:8081',
       status: 'active',
@@ -996,6 +1003,7 @@ test(
   async (t) => {
     const writableCache = createPopulatedCache();
     writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       id: 'node-2',
       address: 'localhost:8081',
       status: 'active',

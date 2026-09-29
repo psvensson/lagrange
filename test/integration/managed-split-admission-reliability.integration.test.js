@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {SeedPartitionsPhase} from
+  '../../src/bootstrap/phases/seed-partitions-phase.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
@@ -28,6 +29,7 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   cleanupTestEnvironment,
+  createVirginSeedBootstrapService,
   getUniquePort,
   initializeTestEnvironment,
   waitFor,
@@ -117,9 +119,8 @@ async function bootstrapManagedSplitFixture(tableName) {
   config.setByPath('rebalancer.storageAdmissionMode', 'enforce');
   config.setByPath('latency.propagationMode', 'grouped');
   config.setByPath('partition.defaultReplicaCount', 1);
-
   const wsPort = getUniquePort();
-  const bootstrapService = new BootstrapService({
+  const bootstrapService = await createVirginSeedBootstrapService({
     nodeId: FIXTURE_NODE_ID,
     nodeAddress: `ws://127.0.0.1:${wsPort}`,
     wsPort,
@@ -315,7 +316,7 @@ async function seedProvisioningAdmissionFixture(fixture, tableName) {
   const syntheticUnifiedAddress =
     `${SYNTHETIC_NODE_ID}/${SERVICE_TYPE.PARTITION}/${syntheticServiceId}`;
 
-  await cdcIntegrationService.upsertSystemTableRow(TABLES.SERVICES, {
+  await cdcIntegrationService.insertSystemTableRow(TABLES.SERVICES, {
     service_id: syntheticServiceId,
     service_type: SERVICE_TYPE.PARTITION,
     node_id: SYNTHETIC_NODE_ID,
@@ -380,6 +381,54 @@ async function seedProvisioningAdmissionFixture(fixture, tableName) {
 
   return getPartitionRow(systemTableCache, tableName);
 }
+
+test('managed split seed fixture refuses cleanup-owned and conflicting ' +
+  'durable identities', async (t) => {
+  const replicaId = 'services-p1-r1';
+  const partitionId = 'services-p1';
+  const refusalCases = [
+    {
+      label: 'cleanup ownership',
+      code: 'CLEANUP_IN_PROGRESS',
+      admission: {empty: false, rows: [{service_id: replicaId,
+        service_type: SERVICE_TYPE.PARTITION_CLEANUP,
+        partition_id: partitionId, node_id: FIXTURE_NODE_ID,
+        status: 'cleanup_owned'}]},
+    },
+    {
+      label: 'conflicting identity',
+      code: 'CREATE_OWNER_DEFERRED',
+      admission: {empty: false, rows: [{service_id: replicaId,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: 'other-partition', node_id: FIXTURE_NODE_ID,
+        status: SERVICE_STATUS.ACTIVE}]},
+    },
+    {label: 'missing authoritative admission',
+      code: 'CREATE_OWNER_DEFERRED', admission: null},
+  ];
+  for (const refusalCase of refusalCases) {
+    let storageOpened = false;
+    const phase = new SeedPartitionsPhase({delegates: {
+      getLogger: () => ({debug() {}}),
+      getNodeId: () => FIXTURE_NODE_ID,
+      getStartupServicesAdmission: () => refusalCase.admission,
+      resolveBootstrapReplicaOptions: () => ({replicaId, partitionId}),
+      getPartitionServices: () => {
+        storageOpened = true;
+        return new Map();
+      },
+    }});
+    const rejection = await t.rejects(
+      phase.createBootstrapPartitionReplica({definition: {serviceId: replicaId}}),
+      /storage admission deferred/u,
+      `${refusalCase.label} remains fail closed`,
+    );
+    t.equal(rejection.code, refusalCase.code,
+      `${refusalCase.label} preserves its typed refusal`);
+    t.equal(storageOpened, false,
+      `${refusalCase.label} refuses before partition storage access`);
+  }
+});
 
 test('managed split persists blocked split admission instead of generic failure',
   {timeout: TEST_TIMEOUT_MS}, async (t) => {

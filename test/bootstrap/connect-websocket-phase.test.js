@@ -7,13 +7,20 @@ import {
   MessageRouterSetup,
 } from '../../src/bootstrap/shared/message-router-setup.js';
 import {registerConnectWebSocketPhaseMeshTests} from './connect-websocket-phase-mesh-test-cases.js';
+import {
+  registeredNodeRow,
+  withEndpointIncarnation,
+} from '../test-helpers/endpoint-incarnation-fixture.js';
 
 function createBootstrapResponseWithPeerEndpoints(...nodeIds) {
   return {
     seedNodeId: 'seed-node',
     seedNodeWsAddress: 'ws://seed-node:8082',
     systemTableSnapshots: {
-      node_endpoints: nodeIds.map((nodeId) => ({
+      // Each peer is registered at its incarnation and publishes its
+      // endpoint at that same incarnation.
+      nodes: nodeIds.map((nodeId) => registeredNodeRow(nodeId)),
+      node_endpoints: nodeIds.map((nodeId) => withEndpointIncarnation({
         endpoint_id: `${nodeId}-ws`,
         node_id: nodeId,
         transport_type: 'ws',

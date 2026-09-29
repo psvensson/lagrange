@@ -614,6 +614,7 @@ test('BootstrapAPI - bootstrap join readiness reuses the seed runtime owner read
       recordProbeResult() {},
     };
     const bootstrapService = new BootstrapService({
+      bootIncarnation: 1,
       nodeId: 'seed-node-1',
       nodeAddress: '127.0.0.1:9999',
       wsPort: 10001,

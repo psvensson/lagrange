@@ -170,3 +170,79 @@ test('reaper leaves terminal and non-joining rows alone',
     );
     t.end();
   });
+
+// A durable NODES table behind the gateway: the sweep reads a snapshot, and
+// `beforeReap` runs between that read and the reaper's final mutation.
+function buildDurableService(row, beforeReap = () => {}) {
+  initEnv();
+  const durable = new Map([[row.node_id, {...row}]]);
+  const updates = [];
+  const gateway = createMockControlPlaneSystemTableGateway({
+    readAuthoritativeRows: async () => ({success: true,
+      rows: [...durable.values()].map((node) => ({...node}))}),
+    updateSystemTableRow: async (tableName, whereClause, data) => {
+      if (tableName === 'nodes') beforeReap(durable);
+      updates.push({tableName, whereClause, data});
+      const current = tableName === 'nodes' ?
+        durable.get(whereClause.node_id) : null;
+      const matches = Boolean(current) && Object.entries(whereClause)
+        .every(([column, value]) => (current[column] ?? null) === value);
+      if (matches) durable.set(current.node_id, {...current, ...data});
+      return {success: true, partitionResult: {affectedRows: matches ? 1 : 0}};
+    },
+  });
+  const service = new LeaseService({
+    nodeId: 'leader-node',
+    nodeLeaseOwner: {disconnectNodeDueToLeaseExpiry: async () => ({
+      success: true, partitionResult: {affectedRows: 0}})},
+    systemTableCache: {getAll: () => [...durable.values()]},
+    controlPlaneSystemTableGateway: gateway,
+    messageGroupServices: [{isLeaderReplica: () => true}],
+    messageRouter: null,
+    now: () => NOW,
+  });
+  service.initialize();
+  return {service, durable, updates};
+}
+
+test('a reap authorized by an expired lease L1 cannot stop a node renewed to L2',
+  async (t) => {
+    const expiredL1 = buildNodeRow({node_id: 'node-renewed',
+      boot_incarnation: 3, ready_lease_expires_at: NOW - 1000});
+    const {service, durable, updates} = buildDurableService(expiredL1,
+      (table) => table.set('node-renewed', {...table.get('node-renewed'),
+        ready_lease_expires_at: NOW + 60000, last_heartbeat: NOW}));
+    const reaped = [];
+    service.on('staleRowReaped', ({nodeId}) => reaped.push(nodeId));
+
+    await service.sweepExpiredLeases();
+
+    t.match(updates.find((u) => u.data?.status === 'stopped')?.whereClause, {
+      node_id: 'node-renewed', status: 'joining', boot_incarnation: 3,
+      ready_lease_expires_at: NOW - 1000, last_heartbeat: NOW - 5000,
+    }, 'the reap carries the exact lease observation that authorized it');
+    t.equal(durable.get('node-renewed').status, 'joining',
+      'the renewed current incarnation stays alive');
+    t.notOk(updates.some((u) => u.tableName !== 'nodes'),
+      'zero endpoint reaps follow a superseded observation');
+    t.same(reaped, [], 'no reap is reported');
+    t.end();
+  });
+
+test('a genuinely expired stranded joining row is reaped exactly once',
+  async (t) => {
+    const {service, durable, updates} = buildDurableService(buildNodeRow({
+      node_id: 'node-expired', boot_incarnation: 3,
+      ready_lease_expires_at: NOW - 1000}));
+    const reaped = [];
+    service.on('staleRowReaped', ({nodeId}) => reaped.push(nodeId));
+
+    await service.sweepExpiredLeases();
+    await service.sweepExpiredLeases();
+
+    t.equal(durable.get('node-expired').status, 'stopped');
+    t.same(reaped, ['node-expired'], 'reaped once across two sweeps');
+    t.equal(updates.filter((u) => u.data?.status === 'stopped').length, 1,
+      'the stopped row is never re-reaped');
+    t.end();
+  });

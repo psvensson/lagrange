@@ -10,7 +10,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {ClusterReadinessSignal} from '../../src/rebalancer/cluster-readiness-signal.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ReplicaOperationResponseStatus} from
@@ -22,6 +21,7 @@ import {CDC_PROPAGATED_TABLES} from '../../src/cache/cache-constants.js';
 import {STATE} from '../../src/constants/index.js';
 import {CDCConfirmationTracker} from '../../src/cdc/cdc-confirmation-tracker.js';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   getUniquePort,
@@ -61,7 +61,7 @@ test('Control plane dispatch integration', async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440050';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

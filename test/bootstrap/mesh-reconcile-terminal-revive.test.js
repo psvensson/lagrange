@@ -22,6 +22,10 @@ import assert from 'node:assert';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConnectWebSocketPhase} from
   '../../src/bootstrap/phases/connect-websocket-phase.js';
+import {
+  FIXTURE_ENDPOINT_INCARNATION,
+  registeredNodeRow,
+} from '../test-helpers/endpoint-incarnation-fixture.js';
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -48,6 +52,9 @@ function makeLogger() {
 // the test can flip node-b's canonical endpoint to the NEW port mid-run.
 function makeSystemTableCache(getAddressForNodeId) {
   return {
+    // node-b is registered at the incarnation its endpoint carries.
+    get: (tableName, nodeId) =>
+      (tableName === 'nodes' ? registeredNodeRow(nodeId) : null),
     filter(tableName, predicate) {
       if (tableName !== 'node_endpoints') {
         return [];
@@ -56,6 +63,7 @@ function makeSystemTableCache(getAddressForNodeId) {
       const addrB = getAddressForNodeId('node-b');
       if (addrB) {
         rows.push({
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'ep-node-b-ws',
           node_id: 'node-b',
           transport_type: 'ws',

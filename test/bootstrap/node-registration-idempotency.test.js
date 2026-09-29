@@ -13,6 +13,8 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {TABLES} from '../../src/constants/index.js';
+import {insertViaUpsert} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 /**
  * Wire a NodeJoiningService so registerNodeInCluster can
@@ -30,6 +32,9 @@ function createWiredService({
 }) {
   const mockCDCService = {
     sqlQueryEngine: {},
+    insertSystemTableRow(...args) {
+      return insertViaUpsert(this, args);
+    },
     upsertSystemTableRow: async (tableName, rowData) => {
       upsertCalls.push({tableName, rowData});
       return {success: true};
@@ -40,6 +45,8 @@ function createWiredService({
     nodeId,
     nodeAddress,
     seedNodeAddress: 'ws://seed:8000',
+    // Registration stamps this boot's incarnation on the nodes row.
+    bootIncarnation: 1,
   });
   service.cdcIntegrationService = mockCDCService;
   service.sendControlPlaneNodeStateUpdate = async () => {

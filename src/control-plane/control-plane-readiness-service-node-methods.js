@@ -4,6 +4,8 @@ import {resolvePublishedActiveNodeIds} from
   './active-node-publication-snapshots.js';
 import {NODE_LIVENESS_SEMANTIC_STATE} from
   './node-liveness-semantic-projection-owner.js';
+import {readCurrentEndpointRows} from
+  './owners/endpoint-incarnation-currentness.js';
 const {
   COLUMN,
   MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,
@@ -257,7 +259,7 @@ const controlPlaneReadinessNodeMethods = {
       typeof this.systemTableCache?.getAll === 'function'
     ) {
       const nodeEndpointRows =
-        this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [];
+        readCurrentEndpointRows(this.systemTableCache, TABLES.NODE_ENDPOINTS);
       for (const serviceRow of serviceRows) {
         const nodeId = serviceRow?.[COLUMN.NODE_ID] || null;
         if (nodeId) {
@@ -301,9 +303,7 @@ const controlPlaneReadinessNodeMethods = {
         this.systemTableCache.getAll(TABLES.SERVICES) || [] :
         [];
     const nodeEndpointRows =
-      typeof this.systemTableCache?.getAll === 'function' ?
-        this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [] :
-        [];
+      readCurrentEndpointRows(this.systemTableCache, TABLES.NODE_ENDPOINTS);
     const nodeIds = new Set();
     for (const nodeRow of nodeRows) {
       const nodeId = nodeRow?.[COLUMN.NODE_ID] || null;

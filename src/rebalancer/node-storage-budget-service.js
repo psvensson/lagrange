@@ -14,8 +14,11 @@ import {
   TABLES,
 } from '../constants/index.js';
 import {
-  CONTROL_PLANE_MUTATION_OPERATION,
-} from '../control-plane/control-plane-system-table-gateway.js';
+  NODE_REGISTRATION_OUTCOME,
+  buildSupersededRegistrationError,
+  readAuthoritativeNodeRow,
+  writeNodeRegistrationAtIncarnation,
+} from '../control-plane/owners/node-registration-incarnation-write.js';
 import {
   createControlPlaneRuntimeBundle,
 } from '../control-plane/control-plane-runtime-bundle.js';
@@ -239,22 +242,34 @@ class NodeStorageBudgetService {
     const workloadProfile = buildControlPlaneWorkloadProfile(
       CONTROL_PLANE_WORKLOAD_CLASS.NODE_METADATA_MUTATION,
     );
-    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
-      tableName: TABLES.NODES,
-      row: budgetRow,
-    }, {
+    // Monotonic registration (D-7): birth, or one CAS over an older boot
+    // incarnation; a newer incarnation's row is never replaced.
+    const gateway = this.getControlPlaneSystemTableGateway();
+    const writeOptions = {
       ...upsertOptions,
       workloadClass: workloadProfile.workloadClass,
       workClass: workloadProfile.workClass,
       deliveryPriority: 'critical',
+    };
+    const registration = await writeNodeRegistrationAtIncarnation({
+      row: budgetRow,
+      bootIncarnation: budgetRow[COLUMN.BOOT_INCARNATION],
+      observe: () => readAuthoritativeNodeRow(gateway, nodeId),
+      insert: (row) => gateway.insertSystemTableRow(TABLES.NODES, row,
+        writeOptions),
+      advance: (whereClause, row) => gateway.updateSystemTableRow(
+        TABLES.NODES, whereClause, row, writeOptions),
     });
-
-    if (!result?.success) {
-      throw new Error(
-        result?.error || NODE_STORAGE_BUDGET_ERROR_MSG.REGISTRATION_FAILED,
-      );
+    if (registration.outcome === NODE_REGISTRATION_OUTCOME.REFUSED_STALE) {
+      throw buildSupersededRegistrationError(nodeId,
+        budgetRow[COLUMN.BOOT_INCARNATION], registration.observedRow);
     }
+    if (registration.outcome !== NODE_REGISTRATION_OUTCOME.ACCEPTED &&
+        registration.outcome !== NODE_REGISTRATION_OUTCOME.CURRENT) {
+      throw registration.error ||
+        new Error(NODE_STORAGE_BUDGET_ERROR_MSG.REGISTRATION_FAILED);
+    }
+    const result = {success: true, outcome: registration.outcome};
 
     if (resolution.isValid) {
       this.logger.info(STORAGE_CAPACITY_LOG_MSG.BUDGET_RESOLVED, {

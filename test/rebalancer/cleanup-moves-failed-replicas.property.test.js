@@ -20,7 +20,9 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {createMockCdcService, createTestRebalancer} from './test-helpers.js';
+import {createTestRebalancer} from './test-helpers.js';
+import {createLifecycleCdcService} from
+  '../test-helpers/lifecycle-state-store.js';
 
 test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
   t.beforeEach(async () => {
@@ -52,7 +54,7 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
         async (partitionId, nodeId, replicaId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'coordinator-node',
-            cdcIntegrationService: createMockCdcService(),
+            cdcIntegrationService: createLifecycleCdcService(),
           });
 
           // Set up replica in failed state (via pending -> failed)
@@ -145,7 +147,7 @@ test('Property 5: Cleanup Moves for Failed Replicas', async (t) => {
         async (partitionId, nodeId, replicaIds) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
-            cdcIntegrationService: createMockCdcService(),
+            cdcIntegrationService: createLifecycleCdcService(),
           });
 
           // Set up replicas in failed state

@@ -23,6 +23,8 @@ import {
   TRANSPORT_TYPE,
   ENDPOINT_STATUS,
 } from '../../src/constants/index.js';
+import {insertViaUpsert} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 ConfigurationManager.resetInstance();
 LoggingService.resetInstance();
@@ -81,6 +83,9 @@ function isValidUUID(str) {
 function createMockCDCService(mockQueryEngine) {
   return {
     sqlQueryEngine: mockQueryEngine,
+    insertSystemTableRow(...args) {
+      return insertViaUpsert(this, args);
+    },
     async upsertSystemTableRow(tableName, rowData) {
       const columns = Object.keys(rowData);
       const placeholders = columns.map(() => '?').join(', ');
@@ -115,6 +120,7 @@ function createWiredService({nodeId, nodeAddress, executedQueries}) {
   const mockCDCService = createMockCDCService(mockQueryEngine);
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId,
     nodeAddress,
     seedNodeAddress: 'ws://seed:8000',

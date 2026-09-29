@@ -33,6 +33,7 @@ test('subscribeToCDCEvents - subscribes to all CDC event types', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -65,6 +66,7 @@ test('subscribeToCDCEvents - handles CDC events correctly', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -106,6 +108,7 @@ test('subscribeToCDCEvents - throws error if CDC service not available', async (
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -132,6 +135,7 @@ test('subscribeToCDCEvents - retries on subscription failure', async (t) => {
 
   let callCount = 0;
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -165,6 +169,7 @@ test('subscribeToCDCEvents - verifies subscriptions are active', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -207,6 +212,7 @@ test('subscribeToCDCEvents - exhausts retries when listeners never register', as
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',

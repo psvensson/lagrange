@@ -197,6 +197,7 @@ class BootstrapService extends EventEmitter {
       this.config.replicaRegistrationTraceEnabled,
     );
     this.bootstrapReadinessState = options.readinessState || null;
+    this.startupServicesAdmission = options.startupServicesAdmission || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.onLocalAdminRuntimeReady =
       typeof options.onLocalAdminRuntimeReady === LOCAL_STR_FUNCTION ?
