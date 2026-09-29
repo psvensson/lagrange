@@ -537,6 +537,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         getPartitionServices: () => this.partitionServices,
         getMessageGroupServices: () => this.messageGroupServices,
         getNodeStorageBudgetService: () => this.getNodeStorageBudgetService(),
+        getBootIncarnation: () => this.bootIncarnation,
         getSystemTableCache: () =>
           NodeService.getInstance().getSystemTableCache(),
         ensureLatencyTopologyOwners: () => this.ensureLatencyTopologyOwners(),
@@ -631,6 +632,10 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         triggerJoinReconciler: (reason) => this.triggerJoinReconciler(reason),
         getBootstrapResponse: () => this.bootstrapResponse,
         getBootstrapReadinessState: () => this.bootstrapReadinessState,
+        attachMessageGroupService: (service) => {
+          this.dispatchService?.attachMessageGroupService(service);
+          this.leaseService?.messageGroupServices?.add(service);
+        },
         getSeedNodeId: () => this.seedNodeId,
         getSeedNodeAddress: () => this.seedNodeAddress,
         getHttpPostImpl: () => this.httpPostImpl,

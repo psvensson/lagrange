@@ -5,6 +5,7 @@ import {
   REPLICA_STATE_MACHINE_NUM,
   REPLICA_STATE_MACHINE_STATE,
 } from './replica-state-machine-constants.js';
+import {getReplicaRevision} from './replica-state-machine-serialization.js';
 
 const ReplicaState = REPLICA_STATE_MACHINE_STATE;
 
@@ -23,6 +24,7 @@ function startTimeoutChecker(stateMachine) {
     // on the same tick. Fire-and-forget — failures back off per row and
     // retry on later ticks.
     stateMachine._reconcileLocalOnlyServiceRows?.()?.catch?.(() => null);
+    stateMachine.reconcileCanonicalLeaderClearDebtNow?.()?.catch?.(() => null);
   }, stateMachine.timeoutCheckIntervalMs);
   stateMachine.timeoutCheckInterval.unref();
 
@@ -82,6 +84,8 @@ function checkTimeouts(stateMachine) {
       timedOutReplicas.push({
         replicaId,
         state: state.state,
+        stateSnapshot: state,
+        revision: getReplicaRevision(stateMachine, replicaId),
         elapsed,
         timeout,
         partitionId: state.partitionId,
@@ -109,6 +113,26 @@ function checkTimeouts(stateMachine) {
       elapsed: timedOut.elapsed,
       timeout: timedOut.timeout,
     });
+
+    const currentState = stateMachine.replicas.get(timedOut.replicaId);
+    const observedRevisionStillCurrent =
+      currentState === timedOut.stateSnapshot &&
+      getReplicaRevision(stateMachine, timedOut.replicaId) ===
+        timedOut.revision;
+    if (!observedRevisionStillCurrent) {
+      continue;
+    }
+
+    if (timedOut.state === ReplicaState.REMOVING) {
+      if (currentState) {
+        // Durable removal intent is monotonic. The timeout event remains
+        // diagnostic while the removal owner continues/re-drives through its
+        // own path; re-arming bounds repeated diagnostics without inventing
+        // FAILED cleanup authority.
+        currentState.timeoutStartedAt = now;
+      }
+      continue;
+    }
 
     stateMachine.transition(timedOut.replicaId, ReplicaState.FAILED, {
       partitionId: timedOut.partitionId,

@@ -1,7 +1,11 @@
 import {
   COLUMN,
   HTTP_STATUS,
+  TABLES,
+  isPartitionCleanupServiceRow,
 } from '../../constants/index.js';
+import {classifyControlPlaneMutationResult} from
+  '../../control-plane/control-plane-mutation-outcome-classifier.js';
 import {
   OWNER_OUTCOME_FRESHNESS,
   OWNER_OUTCOME_STATE,
@@ -20,14 +24,15 @@ import {
 import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../bootstrap-constants.js';
-import {TABLES} from '../../constants/index.js';
 import {runRetryableControlPlaneWrite} from
   '../shared/retryable-control-plane-write.js';
 
-const LOCAL_STR_UPSERT = 'upsert';
+const LOCAL_STR_INSERT = 'insert';
+const LOCAL_STR_UPDATE = 'update';
 const LOCAL_STR_RETRYABLE_REGISTER_SERVICE_METADATA_WRIT = 'retryable register-service metadata write failure';
 const LOCAL_STR_SYNCING = 'syncing';
 const LOCAL_STR_STOPPING = 'stopping';
+const CLEANUP_IN_PROGRESS_CODE = 'CLEANUP_IN_PROGRESS';
 const LOCAL_STR_PRESERVING_MOVE_REPLICA_HANDOFF_RESERVAT = 'Preserving MOVE_REPLICA handoff reservation after retryable register-service failure';
 
 const REGISTER_SERVICE_SQL_ENGINE_UNAVAILABLE_RETRY_AFTER_MS =
@@ -346,13 +351,35 @@ class ServiceRegistrationHandoffOwner {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 
-  async writeRegisteredServiceRowWithRetry(serviceData, registeredServiceRow) {
+  async writeRegisteredServiceRowWithRetry(
+    serviceData,
+    registeredServiceRow,
+    previousRegisteredServiceRow = null,
+  ) {
+    const previousVersionColumn = Number.isFinite(
+      previousRegisteredServiceRow?.state_entered_at,
+    ) ? 'state_entered_at' : 'updated_at';
+    const existingHandoff = previousRegisteredServiceRow !== null;
+    const mutation = existingHandoff ? {
+      operation: LOCAL_STR_UPDATE,
+      tableName: TABLES.SERVICES,
+      whereClause: {
+        service_id: previousRegisteredServiceRow.service_id,
+        service_type: previousRegisteredServiceRow.service_type,
+        partition_id: previousRegisteredServiceRow.partition_id,
+        node_id: previousRegisteredServiceRow.node_id,
+        status: previousRegisteredServiceRow.status,
+        [previousVersionColumn]:
+          previousRegisteredServiceRow[previousVersionColumn],
+      },
+      data: registeredServiceRow,
+    } : {
+      operation: LOCAL_STR_INSERT,
+      tableName: TABLES.SERVICES,
+      row: registeredServiceRow,
+    };
     return runRetryableControlPlaneWrite(
-      () => this.delegates.executeBootstrapControlPlaneMutation({
-        operation: LOCAL_STR_UPSERT,
-        tableName: TABLES.SERVICES,
-        row: registeredServiceRow,
-      }, {
+      () => this.delegates.executeBootstrapControlPlaneMutation(mutation, {
         skipCacheWait: true,
       }),
       {
@@ -464,6 +491,17 @@ class ServiceRegistrationHandoffOwner {
 
       assignmentContext =
         await this.delegates.validateMoveReplicaAssignmentToken(serviceData);
+      previousRegisteredServiceRow =
+        await this.delegates.readCurrentRegisteredServiceRow(
+          serviceData[COLUMN.SERVICE_ID],
+        );
+      if (isPartitionCleanupServiceRow(previousRegisteredServiceRow)) {
+        const error = new Error('Replica cleanup is in progress');
+        error.code = CLEANUP_IN_PROGRESS_CODE;
+        error.errorCode = error.code;
+        error.deferRetry = true;
+        throw error;
+      }
       this.delegates.assertSingleOwnerReplicaRegistration(
         serviceData,
         assignmentContext,
@@ -472,13 +510,6 @@ class ServiceRegistrationHandoffOwner {
         serviceData,
         assignmentContext,
       );
-      if (handoffContext) {
-        previousRegisteredServiceRow =
-          await this.delegates.readCurrentRegisteredServiceRow(
-            serviceData[COLUMN.SERVICE_ID],
-          );
-      }
-
       if (handoffContext) {
         await this.delegates.executeMoveReplicaHandoffPhase(
           handoffContext,
@@ -499,12 +530,38 @@ class ServiceRegistrationHandoffOwner {
           await this.writeRegisteredServiceRowWithRetry(
             serviceData,
             registeredServiceRow,
+            handoffContext ? previousRegisteredServiceRow : null,
           );
-        if (mutationResult?.success === false) {
-          throw this.delegates.buildBootstrapControlPlaneQueryError(
-            mutationResult,
-            BOOTSTRAP_API_ERROR.SERVICE_REGISTRATION_FAILED,
-          );
+        if (!classifyControlPlaneMutationResult(mutationResult).applied) {
+          const observed =
+            await this.delegates.readCurrentRegisteredServiceRow(
+              registeredServiceRow[COLUMN.SERVICE_ID],
+            );
+          if (isPartitionCleanupServiceRow(observed)) {
+            const cleanupError = new Error('Replica cleanup is in progress');
+            cleanupError.code = CLEANUP_IN_PROGRESS_CODE;
+            cleanupError.errorCode = cleanupError.code;
+            cleanupError.deferRetry = true;
+            throw cleanupError;
+          }
+          const versionColumn = Number.isFinite(
+            registeredServiceRow.state_entered_at,
+          ) ? 'state_entered_at' : 'updated_at';
+          const idempotent = observed?.service_id ===
+              registeredServiceRow.service_id &&
+            observed?.service_type === registeredServiceRow.service_type &&
+            observed?.node_id === registeredServiceRow.node_id &&
+            observed?.status === registeredServiceRow.status &&
+            observed?.[versionColumn] ===
+              registeredServiceRow[versionColumn];
+          if (idempotent) {
+            targetServiceRowWritten = true;
+          } else {
+            throw this.delegates.buildBootstrapControlPlaneQueryError(
+              mutationResult,
+              BOOTSTRAP_API_ERROR.SERVICE_REGISTRATION_FAILED,
+            );
+          }
         }
       } catch (mutationError) {
         throw this.delegates.buildBootstrapControlPlaneMutationError(

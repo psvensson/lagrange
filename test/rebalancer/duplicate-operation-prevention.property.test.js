@@ -80,6 +80,7 @@ function createMockSqlQueryEngine(options = {}) {
     insertDelay = 0,
   } = options;
 
+  const reservations = new Set();
   const operations = new Map(
     existingOperations.map((operation) => [
       operation.operation_id,
@@ -122,8 +123,16 @@ function createMockSqlQueryEngine(options = {}) {
         };
       }
 
-      if (sql.includes('INSERT INTO replica_operations') ||
-          sql.includes('INSERT OR IGNORE')) {
+      // Reservations are their own table: the coordinator arbitrates them by
+      // an INSERT OR IGNORE on the reservation primary key.
+      if (sql.includes('INTO storage_reservations')) {
+        const reservationId = params[0];
+        const changes = reservations.has(reservationId) ? 0 : 1;
+        reservations.add(reservationId);
+        return {success: true, changes};
+      }
+
+      if (sql.includes('INSERT INTO replica_operations')) {
         // Insert new operation
         const [
           operationId, type, partitionId, replicaId, targetClaimKey,

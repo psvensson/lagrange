@@ -1,5 +1,4 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -14,6 +13,7 @@ import {
   cleanupTestEnvironment,
   getUniquePort,
   gracefulShutdown,
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   TEST_CONFIG,
 } from './helpers/cluster-test-helpers.js';
@@ -58,7 +58,7 @@ async function withSeedApi(t, apiOptions, run) {
 
   const seedNodeId = '550e8400-e29b-41d4-a716-446655440230';
   const seedWsPort = getUniquePort();
-  const bootstrapService = new BootstrapService({
+  const bootstrapService = await createVirginSeedBootstrapService({
     nodeId: seedNodeId,
     nodeAddress: `ws://localhost:${seedWsPort}`,
     wsPort: seedWsPort,

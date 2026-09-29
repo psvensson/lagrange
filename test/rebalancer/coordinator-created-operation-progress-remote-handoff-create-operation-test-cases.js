@@ -39,6 +39,14 @@ import {
   REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS,
 } from './coordinator-created-operation-progress-remote-handoff-fixture-builders.js';
 
+// Tables this engine does not model: reads answer empty and writes (such as
+// the storage-reservation INSERT OR IGNORE) are acknowledged as applied,
+// never reported as a zero-row conflict.
+function answerUnmodelledStatement(sql) {
+  const isWrite = /^\s*(INSERT|UPDATE|DELETE)\b/iu.test(sql);
+  return {success: true, rows: [], affectedRows: isWrite ? 1 : 0};
+}
+
 export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
   test,
 }) {
@@ -106,7 +114,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         operationRows.set(row.operation_id, row);
         return {success: true, affectedRows: 1};
       }
-      return {success: true, rows: [], affectedRows: 0};
+      return answerUnmodelledStatement(normalizedSql);
     };
 
     let deliveryAttempt = 0;
@@ -437,7 +445,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         operationRows.set(row.operation_id, row);
         return {success: true, affectedRows: 1};
       }
-      return {success: true, rows: [], affectedRows: 0};
+      return answerUnmodelledStatement(normalizedSql);
     };
 
     const coordinator = new RebalanceCoordinator({
@@ -622,7 +630,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         operationRows.set(row.operation_id, row);
         return {success: true, affectedRows: 1};
       }
-      return {success: true, rows: [], affectedRows: 0};
+      return answerUnmodelledStatement(normalizedSql);
     };
 
     const coordinator = new RebalanceCoordinator({

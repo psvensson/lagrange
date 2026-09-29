@@ -233,6 +233,7 @@ const createBootstrapResponseFromCache = (systemTableCache, options = {}) => {
 test('phaseQuerySystemState succeeds when CDC pipeline is ready',
   async (t) => {
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       seedNodeAddress: 'ws://127.0.0.1:19090',
@@ -258,6 +259,7 @@ test('phaseQuerySystemState succeeds when CDC pipeline is ready',
 test('phaseQuerySystemState restores durable local partition services ' +
   'before node admission writes', async (t) => {
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
     startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
@@ -297,6 +299,7 @@ test('phaseQuerySystemState restores durable local partition services ' +
 test('phaseQuerySystemState skips blocking backfill when bootstrap snapshot covers discovery-critical tables',
   async (t) => {
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       seedNodeAddress: 'ws://127.0.0.1:19090',
@@ -361,6 +364,7 @@ test('phaseQuerySystemState skips blocking backfill when bootstrap snapshot cove
 test('phaseQuerySystemState backfills only missing discovery-critical tables when bootstrap snapshot is incomplete',
   async (t) => {
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       seedNodeAddress: 'ws://127.0.0.1:19090',
@@ -418,6 +422,7 @@ test('phaseQuerySystemState backfills only missing discovery-critical tables whe
 test('phaseQuerySystemState fails on blocking discovery backfill failure',
   async (t) => {
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       seedNodeAddress: 'ws://127.0.0.1:19090',
@@ -471,6 +476,7 @@ test('phaseQuerySystemState fails on blocking discovery backfill failure',
 test('phaseQuerySystemState tolerates opportunistic backfill failures after join readiness',
   async (t) => {
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       seedNodeAddress: 'ws://127.0.0.1:19090',
@@ -532,6 +538,7 @@ test('phaseQuerySystemState tolerates opportunistic backfill failures after join
 test('phaseQuerySystemState fails on CDC readiness gate timeout',
   async (t) => {
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       seedNodeAddress: 'ws://127.0.0.1:19090',
@@ -566,6 +573,7 @@ test('phaseQuerySystemState fails on CDC readiness gate timeout',
 test('phaseQuerySystemState timeout error lists unmet conditions',
   async (t) => {
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       seedNodeAddress: 'ws://127.0.0.1:19090',

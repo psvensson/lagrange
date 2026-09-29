@@ -51,6 +51,7 @@ test('NodeJoiningService retries ready heartbeat before failing join readiness',
     const sleepDelays = [];
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'node-ready-retry',
       nodeAddress: 'ws://localhost:19090',
       seedNodeAddress: 'http://localhost:18080',
@@ -130,6 +131,7 @@ test('NodeJoiningService waits for local query transport readiness before sendin
     const sleepDelays = [];
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'node-ready-transport-gate',
       nodeAddress: 'ws://localhost:19091',
       seedNodeAddress: 'http://localhost:18081',
@@ -194,6 +196,7 @@ test('NodeJoiningService opens the ready heartbeat for control-ready metadata pu
     const sleepDelays = [];
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'node-ready-traffic-gate',
       nodeAddress: 'ws://localhost:19093',
       seedNodeAddress: 'http://localhost:18082',
@@ -263,6 +266,7 @@ test('NodeJoiningService opens the ready heartbeat during the lifecycle stable w
     const sleepDelays = [];
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'node-ready-stable-window-gate',
       nodeAddress: 'ws://localhost:19094',
       seedNodeAddress: 'http://localhost:18083',
@@ -332,6 +336,7 @@ test('NodeJoiningService opens the ready heartbeat for seed-authorized INIT diag
     const sleepDelays = [];
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'node-ready-init-diagnostics-lag',
       nodeAddress: 'ws://localhost:19095',
       seedNodeAddress: 'http://localhost:18084',

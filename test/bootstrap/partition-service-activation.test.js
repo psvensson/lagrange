@@ -2,7 +2,147 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   activatePartitionServiceRows,
   PARTITION_SERVICE_ACTIVATION_ERROR,
+  settlePartitionServiceActiveAdmission,
 } from '../../src/bootstrap/shared/partition-service-activation.js';
+
+function createActiveAdmissionService(snapshotFactory) {
+  const calls = {leader: 0, role: 0, repairs: []};
+  const service = {
+    isLeader: true,
+    role: 'leader',
+    pendingRoleUpdate: 'leader',
+    persistedRole: 'follower',
+    pendingLeaderNodeUpdate: 'node-a',
+    persistedLeaderNodeId: null,
+    reassertDurableRaftRole() {
+      calls.role += 1;
+      return true;
+    },
+    reassertDurableLeaderNodeId() {
+      calls.leader += 1;
+      return true;
+    },
+    sqlQueryEngine: {
+      queryExecutor: {
+        getPartitionRoutingSnapshot: () => snapshotFactory(service),
+        async maybeAwaitDeniedPartitionRoutingRepair(snapshot, options) {
+          calls.repairs.push({snapshot, options});
+          return true;
+        },
+      },
+    },
+  };
+  return {calls, service};
+}
+
+test('exact ACTIVE admission reasserts current owner evidence when the ' +
+  'canonical leader is absent before or during admission', async (t) => {
+  for (const electionTiming of ['before', 'during']) {
+    const fixture = createActiveAdmissionService((service) => {
+      if (electionTiming === 'during') {
+        service.isLeader = true;
+        service.role = 'leader';
+      }
+      return {
+        canonicalLeaderNodeId: null,
+        canonicalLeaderRoutingGapState: 'leader_unknown',
+        deniedByNodeId: {},
+        activeAddressedServiceCount: 1,
+        routableServiceCount: 0,
+      };
+    });
+    if (electionTiming === 'during') {
+      fixture.service.isLeader = false;
+      fixture.service.role = 'follower';
+    }
+
+    const diagnostic = await settlePartitionServiceActiveAdmission({
+      partitionId: 'p1',
+      replicaId: 'p1-r1',
+      service: fixture.service,
+    });
+
+    t.equal(fixture.calls.role, 1,
+      `${electionTiming} election reasserts current durable role`);
+    t.equal(fixture.calls.leader, 1,
+      `${electionTiming} election reasserts canonical leader ownership`);
+    t.equal(diagnostic.runtimeIsLeader, true);
+    t.equal(diagnostic.canonicalLeaderNodeId, null);
+    t.equal(diagnostic.activeAddressedServiceCount, 1);
+    t.equal(diagnostic.routableServiceCount, 0,
+      'ACTIVE plus address is explicitly not equivalent to routable');
+  }
+});
+
+test('exact ACTIVE admission refreshes the readiness owner when the ' +
+  'canonical leader is denied', async (t) => {
+  const snapshot = {
+    canonicalLeaderNodeId: 'node-a',
+    canonicalLeaderRoutingGapState: 'leader_service_present',
+    deniedByNodeId: {'node-a': {reasonCodes: ['routing_not_ready']}},
+    activeAddressedServiceCount: 1,
+    routableServiceCount: 0,
+  };
+  const fixture = createActiveAdmissionService(() => snapshot);
+  const diagnostic = await settlePartitionServiceActiveAdmission({
+    partitionId: 'p1',
+    replicaId: 'p1-r1',
+    service: fixture.service,
+  });
+
+  t.equal(fixture.calls.repairs.length, 1,
+    'ACTIVE admission level-triggers authoritative readiness repair');
+  t.equal(fixture.calls.repairs[0].snapshot, snapshot,
+    'repair receives the exact discriminator snapshot');
+  t.equal(fixture.calls.role, 0,
+    'known canonical leadership does not manufacture a role write');
+  t.equal(fixture.calls.leader, 0,
+    'known canonical leadership does not manufacture a leader write');
+  t.equal(diagnostic.readinessRefreshAttempted, true);
+});
+
+test('join discovery is evaluated only after exact ACTIVE installation',
+  async (t) => {
+    let installed = false;
+    const snapshots = [];
+    const service = {
+      partitionId: 'p1',
+      initialized: true,
+      sqlQueryEngine: {
+        queryExecutor: {
+          getPartitionRoutingSnapshot() {
+            snapshots.push(installed);
+            return {
+              canonicalLeaderNodeId: 'node-a',
+              deniedByNodeId: {},
+              activeAddressedServiceCount: installed ? 1 : 0,
+              routableServiceCount: installed ? 1 : 0,
+            };
+          },
+        },
+      },
+    };
+    const activatedCount = await activatePartitionServiceRows({
+      nodeId: 'node-a',
+      systemTableWriter: {
+        async updateSystemTableRow() {
+          return {success: true, partitionResult: {affectedRows: 1}};
+        },
+      },
+      replicaStateMachine: {
+        async activateRegisteredReplica() {
+          installed = true;
+          return {status: 'active'};
+        },
+      },
+      isReplicaHandlerRegistered: () => true,
+      partitionServices: new Map([['p1-r1', service]]),
+    });
+
+    t.equal(activatedCount, 1);
+    t.same(snapshots, [true],
+      'discovery/readiness observes only the installed exact generation');
+  });
 
 test('activatePartitionServiceRows requires initialized runtime',
   async (t) => {
@@ -13,6 +153,7 @@ test('activatePartitionServiceRows requires initialized runtime',
           updateSystemTableRow: async () => ({success: true}),
           upsertSystemTableRow: async () => ({success: true}),
         },
+        replicaStateMachine: {activateRegisteredReplica: async () => ({})},
         messageRouter: {
           isRegistered: () => true,
         },
@@ -32,12 +173,19 @@ test('activatePartitionServiceRows requires initialized runtime',
 
 test('activatePartitionServiceRows requires per-replica handler registration',
   async (t) => {
+    const activated = [];
     await t.rejects(
       activatePartitionServiceRows({
         nodeId: 'node-a',
         systemTableWriter: {
           updateSystemTableRow: async () => ({success: true}),
           upsertSystemTableRow: async () => ({success: true}),
+        },
+        replicaStateMachine: {
+          async activateRegisteredReplica(options) {
+            activated.push(options.replicaId);
+            return {};
+          },
         },
         messageRouter: {
           isRegistered: (address) =>
@@ -60,13 +208,15 @@ test('activatePartitionServiceRows requires per-replica handler registration',
       ),
       'activation should fail closed until every partition handler is routable',
     );
+    t.same(activated, [],
+      'all handler prerequisites are preflighted before the first mutation');
   });
 
-test('activatePartitionServiceRows can defer pressure admission failures',
+test('activatePartitionServiceRows retains pressure admission failures as debt',
   async (t) => {
     const deferred = [];
 
-    await t.resolves(
+    await t.rejects(
       activatePartitionServiceRows({
         nodeId: 'node-a',
         systemTableWriter: {
@@ -85,6 +235,15 @@ test('activatePartitionServiceRows can defer pressure admission failures',
             throw error;
           },
         },
+        replicaStateMachine: {
+          async activateRegisteredReplica() {
+            const error = new Error('control_plane_pressure_degraded');
+            error.code = 'CONTROL_PLANE_PRESSURE_DEGRADED';
+            error.deferRetry = true;
+            error.retryAfterMs = 250;
+            throw error;
+          },
+        },
         messageRouter: {
           isRegistered: () => true,
         },
@@ -94,10 +253,10 @@ test('activatePartitionServiceRows can defer pressure admission failures',
             initialized: true,
           }],
         ]),
-        deferTransientFailures: true,
         onDeferredActivation: (details) => deferred.push(details),
       }),
-      'seed/join activation should not fail hard on pressure admission deferrals when deferral is enabled',
+      {code: 'CONTROL_PLANE_PRESSURE_DEGRADED'},
+      'seed/join activation must return retryable debt to its workflow owner',
     );
 
     t.equal(

@@ -67,6 +67,7 @@ test('NodeJoiningService - retries register-service on assignment token unknown'
     const retryDelays = [];
     const warnEvents = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440107',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -158,6 +159,7 @@ test('NodeJoiningService - surfaces repeated assignment token unknown for outer 
     const retryDelays = [];
     const warnEvents = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-44665544010a',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -259,6 +261,7 @@ test('NodeJoiningService - includes assignment_id on MOVE_REPLICA register-servi
 
     let capturedPayload = null;
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440105',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -310,6 +313,7 @@ test('NodeJoiningService - MOVE_REPLICA register-service keeps progress-path ' +
   const observedTimeoutMs = [];
   const retryDelays = [];
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
@@ -395,6 +399,7 @@ test('NodeJoiningService - MOVE_REPLICA register-service caps long request ' +
   const observedTimeoutMs = [];
   const retryDelays = [];
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
@@ -467,6 +472,7 @@ test('NodeJoiningService - bypasses HTTP register-service for local seed self-re
     const upsertCalls = [];
     const seededRows = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'seed-node-1',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -520,6 +526,7 @@ test('NodeJoiningService - bypasses HTTP register-service for query-state self-h
     const upsertCalls = [];
     const seededRows = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'join-node-self-hosted',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -576,6 +583,7 @@ test('NodeJoiningService - query-state shortcut preserves retryable ' +
   let httpCalls = 0;
   let upsertCalls = 0;
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'join-node-shortcut-pressure',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -645,6 +653,7 @@ test('NodeJoiningService - query-state shortcut keeps terminal ' +
   let httpCalls = 0;
   let upsertCalls = 0;
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'join-node-shortcut-terminal',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -709,6 +718,7 @@ test('NodeJoiningService - MOVE_REPLICA seed registration preserves ' +
   const upsertCalls = [];
   const seededRows = [];
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
@@ -774,6 +784,7 @@ test('NodeJoiningService - fails fast on unauthorized replica owner conflict at 
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-ownership-1',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -815,6 +826,7 @@ test(
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-ownership-2',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -857,6 +869,7 @@ test('NodeJoiningService - retries generic HTTP 503 and honors retry hints with 
     let attempts = 0;
     const retryDelays = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440101',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -909,6 +922,7 @@ test('NodeJoiningService - exhausted retryable seed-contact timeouts preserve ' 
   let currentNow = 0;
   const retryDelays = [];
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: '550e8400-e29b-41d4-a716-446655440109',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -953,6 +967,7 @@ test('NodeJoiningService - exhausted seed-contact transport failures preserve ' 
   let currentNow = 0;
   const retryDelays = [];
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: '550e8400-e29b-41d4-a716-446655440120',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -1025,6 +1040,7 @@ test('NodeJoiningService - contact-seed request timeout uses remaining retry bud
     const observedTimeoutMs = [];
     const retryDelays = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440119',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1114,6 +1130,7 @@ test('NodeJoiningService - retryable seed-contact bootstrap authority ' +
   const observedTimeoutMs = [];
   const retryDelays = [];
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: '550e8400-e29b-41d4-a716-446655440110',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',

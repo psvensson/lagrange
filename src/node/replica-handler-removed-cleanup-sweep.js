@@ -2,33 +2,36 @@
  * Startup sweep owning removed-replica cleanup debt (rebalancer safety-audit
  * finding 12).
  *
- * A replica removal deletes the authoritative services row BEFORE local
- * runtime cleanup; a failed cleanup (or a crash in between) strands the
- * replica's DB/WAL/SHM files while the coordinator terminates the
- * operation on the completion outcome, so nothing ever retries the
- * idempotent reconcileRemovedReplicaCleanup path and the orphan sits on
- * disk indefinitely. The pre-existing startup reconciliation sweep only
- * quarantines (renames) the main .db for nodes-p* partitions and leaves
- * WAL/SHM behind, so a removal orphan keeps a readable -wal file at its
- * original path.
+ * A replica removal atomically replaces the exact durable REMOVING row with
+ * a non-routable cleanup marker before touching storage. A failed cleanup
+ * (or a crash in between) retains that marker so a later startup can resume
+ * the exact token without exposing an ownership gap. Historical row-less
+ * artifacts are discovery inputs only: the sweep must win an INSERT-only
+ * marker before it may delete them.
  *
- * This sweep gives the debt a durable owner: at startup the node compares
- * its partitions directory against authoritative services rows and deletes
- * — via the canonical reconcileRemovedReplicaCleanup retry path — every
- * replica file with no assigned row (explicit REMOVED cleanup debt is also
- * reconciled, but the reconcile itself deletes the row before cleaning, so
- * both shapes converge on "no assigned row"). Quarantined evidence from the
- * reconciliation sweep is not re-deleted. A deletion failure leaves the
- * file in place so the NEXT startup retries it: the orphan is eventually
- * deletable and the retry stays reachable. An unreadable partitions
- * directory fails closed (skipped, surfaced) rather than deleting against
- * ambiguous evidence.
+ * Startup first freezes the local node's persisted markers behind an
+ * admission barrier. Only those frozen tokens may resume; ordinary disk
+ * candidates must acquire their own marker and never borrow another
+ * claimant's token. Quarantined evidence is not re-deleted. Partial or
+ * unknown deletion retains the marker for the next startup. An unreadable
+ * partitions directory fails closed rather than deleting against ambiguous
+ * evidence.
  */
+
+import {SERVICE_TYPE} from '../constants/index.js';
+import {
+  REPLICA_CLEANUP_ACQUIRE_OUTCOME,
+} from './replica-cleanup-tombstone-owner.js';
+import {replicaStorageArtifactsAbsent} from './replica-storage-artifacts.js';
 
 const LOCAL_DB_EXT_LENGTH = '.db'.length;
 const QUARANTINED_SUFFIX = '.quarantined';
-const WAL_SUFFIX = '-wal';
-const SHM_SUFFIX = '-shm';
+const REPLICA_STORAGE_ARTIFACT_SUFFIXES = Object.freeze([
+  '',
+  '-wal',
+  '-shm',
+  '-journal',
+]);
 const LOCAL_ZERO = 0;
 
 function buildReplicaFileName(replicaId, storageDefault) {
@@ -41,6 +44,7 @@ function buildAssignedReplicaFileKeys(handler, systemTableName, storageDefault) 
     systemTableName.SERVICES,
     (row) =>
       row.node_id === handler.nodeId &&
+      row.service_type === SERVICE_TYPE.PARTITION &&
       typeof row.partition_id === 'string' &&
       row.partition_id.length > LOCAL_ZERO &&
       typeof (row.replica_id || row.service_id) === 'string' &&
@@ -76,20 +80,27 @@ function listOnDiskReplicaDbFiles(partitionsDir, fs, path, storageDefault) {
     } catch (_error) {
       return {files, partitionsDirReadable: false};
     }
+    const keys = new Set();
     for (const replicaEntry of replicaEntries) {
-      if (replicaEntry.isFile() &&
-        replicaEntry.name.endsWith(storageDefault.DB_EXT)) {
-        files.push(`${partitionEntry.name}/${replicaEntry.name}`);
-      }
+      if (!replicaEntry.isFile()) continue;
+      const dbIndex = replicaEntry.name.indexOf(storageDefault.DB_EXT);
+      if (dbIndex <= LOCAL_ZERO) continue;
+      const suffix = replicaEntry.name.slice(
+        dbIndex + storageDefault.DB_EXT.length,
+      );
+      if (!REPLICA_STORAGE_ARTIFACT_SUFFIXES.includes(suffix)) continue;
+      keys.add(`${partitionEntry.name}/` +
+        replicaEntry.name.slice(LOCAL_ZERO,
+          dbIndex + storageDefault.DB_EXT.length));
     }
+    files.push(...keys);
   }
   return {files, partitionsDirReadable: true};
 }
 
 function hasVisibleOrphanFiles(partitionsDir, key, fs, path) {
   const dbPath = path.join(partitionsDir, key);
-  return [dbPath, `${dbPath}${WAL_SUFFIX}`, `${dbPath}${SHM_SUFFIX}`]
-    .some((filePath) => fs.existsSync(filePath));
+  return !replicaStorageArtifactsAbsent(fs, dbPath);
 }
 
 function parseReplicaFileKey(key) {
@@ -107,6 +118,32 @@ function parseReplicaFileKey(key) {
   return {partitionId, replicaId};
 }
 
+async function resolveSweepCleanupAuthority(owner, startupAuthorities,
+  handler, replicaId, partitionId) {
+  const resumed = await owner.resumePersistedAtStartup(
+    startupAuthorities,
+    {replicaId, partitionId, nodeId: handler.nodeId},
+  );
+  if (resumed) return resumed;
+  const acquired = await owner.acquire({
+    replicaId,
+    partitionId,
+    nodeId: handler.nodeId,
+    reason: 'startup_orphan_cleanup',
+  });
+  if (acquired.outcome === REPLICA_CLEANUP_ACQUIRE_OUTCOME.LIVE_GENERATION) {
+    return false;
+  }
+  return acquired.outcome === REPLICA_CLEANUP_ACQUIRE_OUTCOME.ACQUIRED ?
+    acquired.authority : null;
+}
+
+async function completeSweepCleanup(owner, authority, fs, dbPath) {
+  if (!replicaStorageArtifactsAbsent(fs, dbPath)) return false;
+  if (!await owner.requireCurrent(authority)) return false;
+  return owner.release(authority, {artifactsAbsent: true});
+}
+
 /**
  * Run the removed-replica cleanup-debt sweep for one handler.
  * @param {Object} handler ReplicaHandler instance (method receiver shape).
@@ -115,7 +152,11 @@ function parseReplicaFileKey(key) {
  * @return {Promise<Object>} Sweep report
  *   ({sweepCompleted, candidates, deleted, failed}).
  */
-async function sweepRemovedReplicaCleanupDebt(handler, options) {
+async function sweepRemovedReplicaCleanupDebt(
+  handler,
+  options,
+  startupAuthorities = new Map(),
+) {
   const {
     fs,
     path,
@@ -154,18 +195,41 @@ async function sweepRemovedReplicaCleanupDebt(handler, options) {
   // reconciliation sweep may already have quarantined the main .db; the
   // removal debt still owns the stranded WAL/SHM, and quarantined evidence
   // is never re-deleted here.
-  const orphaned = onDisk.files.filter((key) =>
+  const candidates = new Set(onDisk.files.filter((key) =>
     !assigned.has(key) &&
     !key.endsWith(QUARANTINED_SUFFIX) &&
-    hasVisibleOrphanFiles(partitionsDir, key, fs, path));
+    hasVisibleOrphanFiles(partitionsDir, key, fs, path)));
+  for (const authority of startupAuthorities.values()) {
+    candidates.add(`${authority.partitionId}/${buildReplicaFileName(
+      authority.replicaId,
+      STORAGE_DEFAULT,
+    )}`);
+  }
+  const orphaned = [...candidates];
   let deleted = LOCAL_ZERO;
   let failed = LOCAL_ZERO;
   for (const key of orphaned) {
     const {partitionId, replicaId} = parseReplicaFileKey(key);
     try {
-      // The canonical idempotent reconcile path: remove the (absent)
-      // authoritative row, then delete the replica's files.
-      await handler.reconcileRemovedReplicaCleanup(replicaId, partitionId);
+      const owner = handler.getReplicaCleanupTombstoneOwner();
+      // Only a marker frozen before request admission may be resumed. A new
+      // acquisition may use only the token proposed by this process; an
+      // OWNED result is another live claimant and is never borrowed.
+      const authority = await resolveSweepCleanupAuthority(
+        owner, startupAuthorities, handler, replicaId, partitionId);
+      if (authority === false) continue;
+      if (!authority || !await owner.requireCurrent(authority)) {
+        throw new Error(`Cleanup ownership unavailable for ${replicaId}`);
+      }
+      await handler.cleanupReplicaResources(
+        partitionId,
+        replicaId,
+        authority,
+      );
+      const dbPath = path.join(partitionsDir, key);
+      if (!await completeSweepCleanup(owner, authority, fs, dbPath)) {
+        throw new Error(`Cleanup completion deferred for ${replicaId}`);
+      }
       deleted += 1;
       handler.logger.info(
         REPLICA_HANDLER_LOG_MSG.REMOVED_CLEANUP_SWEEP_DELETED,

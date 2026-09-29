@@ -8,8 +8,6 @@ import {
 
 const {
   COLUMN,
-  CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT,
-  ControlPlaneField,
   DISPATCH_DEFAULT,
   DISPATCH_LOG_MSG,
   MEMBERSHIP_PUBLICATION_STATUS,
@@ -17,16 +15,11 @@ const {
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   STATE,
-  compareNodeHeartbeatWatermarks,
   getControlPlaneErrorMessage,
-  getControlPlaneNodeStatePublicationProfile,
   getControlPlaneRetryAfterMs,
-  getNodeHeartbeatWatermark,
   isCoordinatorOwnedOperationType,
   isRetryableControlPlaneError,
-  resolveControlPlaneNodeStatePublicationMode,
   resolveReadyNodePublicationAdvancementState,
-  resolveReplayControlPlaneNodeStatePublicationMode,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
 const READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS = Object.freeze({});
@@ -203,87 +196,6 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
   }
 
   /**
-   * Build a comparable watermark from one NODE_STATE_UPDATE payload.
-   * @param {Object} payload - Control-plane node-state payload.
-   * @return {Object|null}
-   * @private
-   */
-  getNodeStateUpdateWatermark(payload) {
-    if (!payload || typeof payload !== 'object') {
-      return null;
-    }
-
-    const payloadNodeRow = payload[ControlPlaneField.NODE_ROW];
-    const watermarkRow =
-      payloadNodeRow && typeof payloadNodeRow === 'object' ?
-        {...payloadNodeRow} :
-        {};
-    const heartbeatAt = Number(payload[ControlPlaneField.HEARTBEAT_AT]);
-    const readyLeaseExpiresAt = Number(
-      payload[ControlPlaneField.READY_LEASE_EXPIRES_AT],
-    );
-    if (Number.isFinite(heartbeatAt)) {
-      watermarkRow[COLUMN.LAST_HEARTBEAT] = heartbeatAt;
-    }
-    if (Number.isFinite(readyLeaseExpiresAt)) {
-      watermarkRow[COLUMN.READY_LEASE_EXPIRES_AT] = readyLeaseExpiresAt;
-    }
-    if (typeof payload[ControlPlaneField.STATE] === 'string') {
-      watermarkRow[COLUMN.CONNECTION_STATE] = payload[ControlPlaneField.STATE];
-    }
-    const watermark = getNodeHeartbeatWatermark(watermarkRow);
-    if (!watermark) {
-      return null;
-    }
-    if (
-      watermark.lastHeartbeat === null &&
-      watermark.readyLeaseExpiresAt === null &&
-      watermark.connectionState === null
-    ) {
-      return null;
-    }
-    return watermark;
-  }
-
-  /**
-   * Accept only forward node-state watermark progression.
-   * @param {Object|null} previous - Previous watermark.
-   * @param {Object|null} next - Candidate watermark.
-   * @return {boolean}
-   * @private
-   */
-  isNodeStateUpdateWatermarkNewer(previous, next) {
-    if (!previous) {
-      return true;
-    }
-    if (!next) {
-      return true;
-    }
-    if (previous.lastHeartbeat === null && next.lastHeartbeat !== null) {
-      return true;
-    }
-    if (previous.lastHeartbeat !== null && next.lastHeartbeat === null) {
-      return false;
-    }
-    if (
-      previous.readyLeaseExpiresAt === null &&
-      next.readyLeaseExpiresAt !== null
-    ) {
-      return true;
-    }
-    if (
-      previous.readyLeaseExpiresAt !== null &&
-      next.readyLeaseExpiresAt === null
-    ) {
-      return false;
-    }
-    return (
-      compareNodeHeartbeatWatermarks(previous, next) >
-      REPLICA_DISPATCH_SERVICE_LITERAL.ZERO
-    );
-  }
-
-  /**
    * Keep dispatch readiness refresh bounded so one slow authoritative read
    * cannot head-of-line block the owner queue while sync recovery evidence is
    * already available locally.
@@ -372,80 +284,6 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
         this.clearTimeoutFn(timeoutHandle);
       }
     }
-  }
-
-  /**
-   * Build canonical write options for NODE_STATE_UPDATE persistence.
-   * @param {string} nodeId
-   * @param {string} nextState
-   * @param {boolean} [isHeartbeatOnly=false]
-   * @return {Object}
-   * @private
-   */
-  resolveNodeStateUpdatePublicationMode(
-    nextState,
-    isHeartbeatOnly = false,
-    payload = null,
-  ) {
-    return resolveControlPlaneNodeStatePublicationMode({
-      publicationMode: payload?.[ControlPlaneField.NODE_STATE_PUBLICATION_MODE],
-      heartbeatOnly: isHeartbeatOnly === true,
-      state: nextState,
-    });
-  }
-
-  buildDeferredNodeStateUpdatePayload(payload) {
-    if (!payload || typeof payload !== 'object') {
-      return payload;
-    }
-    const isHeartbeatOnly = this.isHeartbeatOnlyNodeStateUpdate(payload);
-    if (isHeartbeatOnly !== true) {
-      return payload;
-    }
-    const nextPublicationMode =
-      resolveReplayControlPlaneNodeStatePublicationMode({
-        publicationMode:
-          payload?.[ControlPlaneField.NODE_STATE_PUBLICATION_MODE],
-        heartbeatOnly: isHeartbeatOnly,
-        replayContext: CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT.DEFERRED_PENDING,
-        state: payload?.[ControlPlaneField.STATE],
-      });
-    if (
-      payload?.[ControlPlaneField.NODE_STATE_PUBLICATION_MODE] ===
-      nextPublicationMode
-    ) {
-      return payload;
-    }
-    return {
-      ...payload,
-      [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]: nextPublicationMode,
-    };
-  }
-
-  buildNodeStateUpdateWriteOptions(
-    nodeId,
-    nextState,
-    isHeartbeatOnly = false,
-    payload = null,
-  ) {
-    const publicationMode = this.resolveNodeStateUpdatePublicationMode(
-      nextState,
-      isHeartbeatOnly,
-      payload,
-    );
-    const publicationProfile = getControlPlaneNodeStatePublicationProfile({
-      publicationMode,
-    });
-    return {
-      allowCoalescing: true,
-      coalescingKey: `node-state:${nodeId}`,
-      deliveryPriority: publicationProfile.deliveryPriority,
-      pressureRetryAfterMs: this.nodeStateUpdateRetryAfterMs,
-      queryTimeoutMs: this.nodeStateUpdateQueryTimeoutMs,
-      skipCacheWait: true,
-      workloadClass: publicationProfile.workloadClass,
-      workClass: publicationProfile.workClass,
-    };
   }
 
   resolveMembershipPublicationService() {

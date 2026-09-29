@@ -27,6 +27,7 @@ const TEST_NODE_ID = 'test-node-registration-owner';
 const TEST_NODE_ADDRESS = 'joiner-host:8080';
 const TEST_WS_PORT = 8082;
 const TEST_NOW_MS = 1_710_000_000_000;
+const TEST_BOOT_INCARNATION = 7;
 const TEST_LOGGER = {
   info: () => {},
   warn: () => {},
@@ -119,6 +120,7 @@ function createDelegates() {
       resolveBudgetRow: (nodeRow) => buildBudgetResolution(nodeRow),
     }),
     getNodeCapabilities: () => TEST_NODE_CAPABILITIES,
+    getBootIncarnation: () => TEST_BOOT_INCARNATION,
   };
 }
 
@@ -206,6 +208,11 @@ test(
       NODE_STATE.JOINING,
       'join admission stays non-active until the ready-lease heartbeat',
     );
+    t.equal(
+      nodeCalls[0].row[COLUMN.BOOT_INCARNATION],
+      TEST_BOOT_INCARNATION,
+      'join acquisition durably binds the boot incarnation',
+    );
     const joinMutationOptions = publicationCalls.map((call) => call.options);
     t.ok(
       joinMutationOptions.every((options) => options?.skipCacheWait === true),
@@ -236,6 +243,7 @@ test(
   'node progress before publishing missing endpoints',
   async (t) => {
     const publicationCalls = [];
+    const incarnationAdvances = [];
     const membershipPublicationRuntimeOwner = {
       upsertJoinNode: async (row, options) => {
         publicationCalls.push({kind: 'node', row, options});
@@ -248,6 +256,10 @@ test(
       upsertJoinServiceEndpoint: async (row, options) => {
         publicationCalls.push({kind: 'service_endpoint', row, options});
         return {success: true};
+      },
+      advanceJoinNodeBootIncarnation: async (whereClause, row) => {
+        incarnationAdvances.push({whereClause, row});
+        return {success: true, partitionResult: {affectedRows: 1}};
       },
     };
     const owner = new NodeRegistrationOwner({
@@ -294,6 +306,17 @@ test(
       nodeCalls.length,
       0,
       'should not rewrite the canonical nodes row when authoritative progress exists',
+    );
+    t.equal(incarnationAdvances.length, 1,
+      'progress from an earlier boot is advanced to this boot exactly once');
+    t.same(incarnationAdvances[0]?.whereClause, {
+      [COLUMN.NODE_ID]: TEST_NODE_ID,
+      [COLUMN.BOOT_INCARNATION]: null,
+    }, 'the advance is a CAS on the observed (unknown) boot incarnation');
+    t.equal(
+      incarnationAdvances[0]?.row?.[COLUMN.BOOT_INCARNATION],
+      TEST_BOOT_INCARNATION,
+      'the advance writes this boot incarnation',
     );
     t.equal(
       endpointCalls.length,
@@ -520,7 +543,10 @@ test(
       'withdrawal should update node, node endpoint, and service endpoint');
     t.match(updateCalls[0], {
       tableName: TABLES.NODES,
-      whereClause: {[COLUMN.NODE_ID]: TEST_NODE_ID},
+      whereClause: {
+        [COLUMN.NODE_ID]: TEST_NODE_ID,
+        [COLUMN.BOOT_INCARNATION]: TEST_BOOT_INCARNATION,
+      },
       data: {
         [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
         [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,

@@ -50,6 +50,8 @@ import {
 } from './replica-handler-constants.js';
 import {ReplicaCreationProgressReporter} from '../utils/replica-creation-progress-reporter.js';
 import {ReplicaStateMachine} from './replica-state-machine.js';
+import {ReplicaCleanupTombstoneOwner} from
+  './replica-cleanup-tombstone-owner.js';
 import {assignReplicaHandlerLifecycleMethods} from './replica-handler-lifecycle-methods.js';
 import {assignReplicaHandlerCreateMethods} from './replica-handler-create-methods.js';
 import {
@@ -100,6 +102,7 @@ class ReplicaHandler extends EventEmitter {
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway || null;
     this.partitionServiceRowOwner = null;
+    this.replicaCleanupTombstoneOwner = null;
     this.messageRouter = options.messageRouter || null;
     this.rpcClient = options.rpcClient || null;
     this.createPartitionService = options.createPartitionService || null;
@@ -189,6 +192,7 @@ assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   PRESSURE_WORK_CLASS,
   PARTITION_METADATA_MISSING_PREFIX,
   PartitionServiceRowOwner,
+  ReplicaCleanupTombstoneOwner,
   REPLICA_HANDLER_ADDRESS,
   REPLICA_HANDLER_ERRNO,
   REPLICA_HANDLER_ERROR_MSG,

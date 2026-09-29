@@ -19,6 +19,8 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {createLifecycleStateStore} from
+  '../test-helpers/lifecycle-state-store.js';
 
 /**
  * Create a mock CDC integration service.
@@ -26,23 +28,28 @@ import {
  * @return {Object} Mock CDC service.
  */
 function createMockCDCService(cache) {
+  const store = createLifecycleStateStore({
+    services: cache?.filter?.('services', () => true) || [],
+    partitions: cache?.filter?.('partitions', () => true) || [],
+  });
   return {
+    executeAuthoritativeSystemTableRead:
+      store.adapters.executeAuthoritativeSystemTableRead,
     async insertSystemTableRow(tableName, data) {
       cache?.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true, operation: 'INSERT', tableName, data};
+      return store.adapters.insertSystemTableRow(tableName, data);
     },
     async updateSystemTableRow(tableName, whereClause, data) {
       const merged = {...whereClause, ...data};
       cache?.applySystemTableChange(tableName, 'UPDATE', merged);
-      return {success: true, operation: 'UPDATE', tableName, whereClause, data: merged};
+      return store.adapters.updateSystemTableRow(tableName, whereClause, data);
     },
-    async upsertSystemTableRow(tableName, data) {
-      cache?.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true, operation: 'UPSERT', tableName, data};
+    async upsertSystemTableRow(tableName, _data) {
+      throw new Error(`Fixture forbids generic ${tableName} upsert`);
     },
     async deleteSystemTableRow(tableName, whereClause) {
       cache?.applySystemTableChange(tableName, 'DELETE', whereClause);
-      return {success: true, operation: 'DELETE', tableName, whereClause};
+      return store.adapters.deleteSystemTableRow(tableName, whereClause);
     },
   };
 }
@@ -160,7 +167,6 @@ test('ReplicaHandler idempotency property tests', async (t) => {
     await fc.assert(
       fc.asyncProperty(replicaIdArb, statusArb, async (replicaId, status) => {
         const cache = createSeededCache();
-        const mockCDC = createMockCDCService(cache);
         const nodeId = 'test-node';
 
         // Seed the cache with a replica in the given status
@@ -175,6 +181,7 @@ test('ReplicaHandler idempotency property tests', async (t) => {
           created_at: Date.now(),
           updated_at: Date.now(),
         });
+        const mockCDC = createMockCDCService(cache);
 
         const handler = new ReplicaHandler({
           nodeId: nodeId,
@@ -192,28 +199,46 @@ test('ReplicaHandler idempotency property tests', async (t) => {
           replicaId: replicaId,
         };
 
-        const response = await handler.handleCreateReplica(request);
+        let response = null;
+        let refusal = null;
+        try {
+          response = await handler.handleCreateReplica(request);
+        } catch (error) {
+          refusal = error;
+        }
 
         // Verify idempotency response matches cache state and tracked runtime.
         if (status === ReplicaStatus.ACTIVE) {
+          if (refusal) return false;
           t.equal(
             response.status,
             ReplicaOperationResponseStatus.INITIATED,
             `ACTIVE cache-only replica should return INITIATED for repair (replicaId: ${replicaId})`,
           );
         } else if (status === ReplicaStatus.CREATING || status === ReplicaStatus.SYNCING) {
+          if (refusal) return false;
           t.equal(
             response.status,
             ReplicaOperationResponseStatus.IN_PROGRESS,
             `${status} replica should return IN_PROGRESS (replicaId: ${replicaId})`,
           );
-        } else {
-          // For REMOVING, REMOVED, FAILED - the handler should initiate a new creation
-          // (these are terminal or error states, not in-progress creation states)
+        } else if (status === ReplicaStatus.FAILED) {
+          if (refusal) return false;
           t.ok(
             response.status === ReplicaOperationResponseStatus.INITIATED ||
-            response.status === ReplicaOperationResponseStatus.IN_PROGRESS,
-            `${status} replica should allow re-creation (replicaId: ${replicaId})`,
+              response.status === ReplicaOperationResponseStatus.IN_PROGRESS,
+            'FAILED generation may be re-driven without replacing its ' +
+              `durable identity (replicaId: ${replicaId})`,
+          );
+        } else {
+          // A durable generation remains the canonical identity owner until
+          // its removal protocol atomically hands ownership to cleanup. A
+          // same-ID create must not overwrite REMOVING/REMOVED rows.
+          t.equal(
+            refusal?.code,
+            'REPLICA_IDENTITY_CONFLICT',
+            `${status} durable generation should refuse same-ID creation ` +
+              `(replicaId: ${replicaId})`,
           );
         }
 
