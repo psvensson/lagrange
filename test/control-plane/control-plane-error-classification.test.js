@@ -187,6 +187,36 @@ test('isRetryableControlPlaneError follows nested participant pressure ' +
   );
 });
 
+test('isRetryableControlPlaneError preserves typed deterministic aggregate outcomes',
+  async (t) => {
+    const terminal = {
+      success: false,
+      error: 'Distributed operation failed due to participant failures',
+      errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+      participantFailures: [{
+        error: 'UNIQUE constraint failed: services.service_id',
+        failureCode: 'SQLITE_CONSTRAINT_PRIMARYKEY',
+        committed: true,
+        outcome: 'statement_failed',
+      }],
+    };
+    t.equal(isRetryableControlPlaneError(terminal), false,
+      'generic aggregate text cannot retry a committed deterministic failure');
+    t.equal(isRetryableControlPlaneError({...terminal,
+      participantFailures: [{
+        error: 'No connection to node p2',
+        failureCode: 'OUTCOME_UNKNOWN',
+        committed: false,
+        outcome: 'unknown',
+      }]}), true, 'nested transport uncertainty remains retryable');
+    t.equal(isRetryableControlPlaneError({...terminal,
+      participantFailures: [{
+        error: 'control_plane_pressure_degraded',
+        errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+        deferRetry: true,
+      }]}), true, 'nested pressure remains retryable');
+  });
+
 test('getControlPlaneFailureSummary prioritizes authoritative source gaps over ' +
   'broader participant failures', async (t) => {
   const result = {

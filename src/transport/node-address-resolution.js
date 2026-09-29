@@ -11,6 +11,8 @@ import {
 import {deriveTransportWebSocketPort} from
   '../config/listener-port-model.js';
 import {normalizeToWebSocketAddress} from '../constants/transport.js';
+import {isEndpointCurrentForNode} from
+  '../control-plane/owners/endpoint-incarnation-authority.js';
 
 const LOCAL_STR_LBRACKET = '[';
 const LOCAL_STR_RBRACKET = ']';
@@ -370,7 +372,9 @@ function resolveAdvertisedEndpointHost(options = {}) {
     null;
 }
 
-function getActiveWebSocketEndpointRows(rows, targetNodeId) {
+// Only an endpoint of the node's current authoritative incarnation is a
+// routing target (the endpoint incarnation authority).
+function getActiveWebSocketEndpointRows(rows, targetNodeId, nodeRow) {
   if (!Array.isArray(rows) || rows.length === 0 || !targetNodeId) {
     return [];
   }
@@ -378,6 +382,7 @@ function getActiveWebSocketEndpointRows(rows, targetNodeId) {
   return rows
     .filter((row) => {
       return row?.[COLUMN.NODE_ID] === targetNodeId &&
+        isEndpointCurrentForNode(row, nodeRow) &&
         row?.[COLUMN.STATUS] === ENDPOINT_STATUS.ACTIVE &&
         row?.[COLUMN.TRANSPORT_TYPE] === TRANSPORT_TYPE.WEBSOCKET &&
         typeof row?.[COLUMN.ADDRESS] === 'string' &&
@@ -393,6 +398,9 @@ function getCacheEndpointRows(systemTableCache, targetNodeId) {
   if (!systemTableCache || !targetNodeId) {
     return [];
   }
+  const nodeRow = typeof systemTableCache.get === 'function' ?
+    systemTableCache.get(TABLES.NODES, targetNodeId) || null :
+    null;
   if (typeof systemTableCache.filter === 'function') {
     return getActiveWebSocketEndpointRows(
       systemTableCache.filter(
@@ -400,21 +408,27 @@ function getCacheEndpointRows(systemTableCache, targetNodeId) {
         (row) => row?.[COLUMN.NODE_ID] === targetNodeId,
       ),
       targetNodeId,
+      nodeRow,
     );
   }
   if (typeof systemTableCache.getAll === 'function') {
     return getActiveWebSocketEndpointRows(
       systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [],
       targetNodeId,
+      nodeRow,
     );
   }
   return [];
 }
 
 function getBootstrapSnapshotEndpointRows(bootstrapResponse, targetNodeId) {
+  const snapshots = bootstrapResponse?.systemTableSnapshots;
+  const nodeRow = (snapshots?.[TABLES.NODES] || []).find((row) =>
+    row?.[COLUMN.NODE_ID] === targetNodeId) || null;
   return getActiveWebSocketEndpointRows(
-    bootstrapResponse?.systemTableSnapshots?.node_endpoints || [],
+    snapshots?.node_endpoints || [],
     targetNodeId,
+    nodeRow,
   );
 }
 

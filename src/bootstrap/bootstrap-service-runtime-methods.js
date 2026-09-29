@@ -25,6 +25,8 @@ import {
   COLUMN,
   TABLES,
 } from '../constants/index.js';
+import {isEndpointCurrentForNode} from
+  '../control-plane/owners/endpoint-incarnation-authority.js';
 
 const BootstrapPhase = BOOTSTRAP_PHASE;
 const BootstrapEvent = BOOTSTRAP_EVENT;
@@ -47,7 +49,10 @@ function createBootstrapServiceRuntimeMethods() {
       ) ||
         (systemTableCache?.getAll?.(TABLES.SERVICE_ENDPOINTS) || [])
           .filter((row) => row?.[COLUMN.NODE_ID] === this.nodeId);
-      return localEndpointRows.length > 0;
+      // Only this node's current incarnation's endpoints count as published.
+      const nodeRow = systemTableCache?.get?.(TABLES.NODES, this.nodeId) || null;
+      return localEndpointRows.some((row) =>
+        isEndpointCurrentForNode(row, nodeRow));
     },
 
     async activateMessageGroupServiceRows() {
@@ -59,6 +64,9 @@ function createBootstrapServiceRuntimeMethods() {
         messageGroupServiceHandler: this.messageGroupServiceHandler,
         endpointsPublished: this.hasPublishedLocalServiceEndpoints(),
         messageGroupServices: this.messageGroupServices,
+        registrationEvidenceByReplicaId:
+          this.seedRegistrationPhase
+            ?.messageGroupRegistrationEvidenceByReplicaId,
         onDeferredActivation: ({groupId, replicaId, error}) => {
           this.logger.warn(
             BOOTSTRAP_RUNTIME_LOG_MSG

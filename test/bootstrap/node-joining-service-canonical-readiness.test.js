@@ -66,6 +66,7 @@ test('NodeJoiningService - canonical readiness accepts local kernel ingress',
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-local-ingress',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -113,6 +114,7 @@ test('NodeJoiningService - canonical readiness snapshot tracks active required n
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-required-node-ids',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -152,6 +154,7 @@ test('NodeJoiningService - canonical readiness snapshot does not use partial rea
     const JOINING_NODE_ID = 'joining-node-startup-authority-empty';
     const PARTIAL_READY_NODE_ID = 'seed-node';
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: JOINING_NODE_ID,
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -199,6 +202,7 @@ test('NodeJoiningService - canonical readiness snapshot uses startup authority w
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-topology-meta',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -268,6 +272,7 @@ test('NodeJoiningService - canonical readiness snapshot surfaces behind revision
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-topology-regression',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -325,6 +330,7 @@ test('NodeJoiningService - canonical join timeout preserves topology diagnostics
     let now = 0;
     const errorEvents = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-join-gate-3',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -428,6 +434,7 @@ test('NodeJoiningService - canonical readiness blocked log includes control-plan
     let now = 0;
     const warnEvents = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-join-gate-blocked',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -503,6 +510,7 @@ test('NodeJoiningService - canonical readiness treats self target as unreachable
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-self-transport-gate',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -555,6 +563,7 @@ test('NodeJoiningService - canonical join readiness repairs endpoint visibility'
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-join-gate-repair',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -626,6 +635,7 @@ test('NodeJoiningService - canonical join readiness snapshot waits for endpoint 
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-endpoint-gate',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -708,6 +718,7 @@ test('NodeJoiningService - authoritative cache backfill closes the CDC blind win
       });
 
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'joining-node-backfill-gate',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -828,6 +839,7 @@ test('NodeJoiningService - authoritative backfill merges divergent replica snaps
       });
 
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'joining-node-replica-merge',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -964,6 +976,7 @@ async (t) => {
     });
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-publication-backfill',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1046,6 +1059,7 @@ test(
       });
 
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'joining-node-bootstrap-snapshot',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -1123,6 +1137,7 @@ test(
       });
 
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'joining-node-snapshot-first',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',
@@ -1225,6 +1240,7 @@ test('NodeJoiningService - authoritative backfill coalesces concurrent identical
       });
 
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: 'joining-node-backfill-single-flight',
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',

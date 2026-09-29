@@ -21,6 +21,8 @@ import {
 } from '../../src/constants/index.js';
 import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {insertViaUpsert} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 const TEST_CLUSTER_INCARNATION_FENCE_ALLOWED = Object.freeze({
   state: 'current',
@@ -36,6 +38,9 @@ test('registerNodeInCluster() - should create the canonical nodes row and upsert
     const upsertCalls = [];
     const mockCDCService = {
       sqlQueryEngine: {},
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async (tableName, rowData) => {
         upsertCalls.push({tableName, rowData});
         return {success: true};
@@ -47,6 +52,7 @@ test('registerNodeInCluster() - should create the canonical nodes row and upsert
       nodeId: 'test-node-123',
       nodeAddress: 'ws://localhost:9000',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
     });
 
     // Set the mock CDC service
@@ -85,6 +91,8 @@ test('registerNodeInCluster() - should create the canonical nodes row and upsert
       Number.isFinite(nodeCall.rowData.ready_lease_expires_at),
       'join registration should not assign the ready lease before ready signaling',
     );
+    t.equal(nodeCall.rowData.boot_incarnation, 1,
+      'the row is born at this process\'s exact boot incarnation');
 
     const endpointCall = upsertCalls.find((call) =>
       call.tableName === TABLES.NODE_ENDPOINTS);
@@ -107,10 +115,39 @@ test('registerNodeInCluster() - should create the canonical nodes row and upsert
     t.equal(endpointCall.rowData.status, ENDPOINT_STATUS.ACTIVE, 'should set status to active');
   });
 
+test('registerNodeInCluster() - refuses without a startup-minted incarnation ' +
+  'and writes no row', async (t) => {
+  const upsertCalls = [];
+  const service = new NodeJoiningService({
+    nodeId: 'test-node-no-incarnation',
+    nodeAddress: 'ws://localhost:9001',
+    seedNodeAddress: 'ws://seed:8000',
+  });
+  service.cdcIntegrationService = {
+    sqlQueryEngine: {},
+    insertSystemTableRow(...args) {
+      return insertViaUpsert(this, args);
+    },
+    upsertSystemTableRow: async (tableName, rowData) => {
+      upsertCalls.push({tableName, rowData});
+      return {success: true};
+    },
+  };
+
+  await t.rejects(service.registerNodeInCluster(),
+    /positive boot incarnation/u,
+    'registration without this boot\'s identity fails closed');
+  t.notOk(upsertCalls.some((call) => call.tableName === TABLES.NODES),
+    'no NODES row is born without an incarnation');
+});
+
 test('registerNodeInCluster() - should canonicalize raw node address to websocket endpoint', async (t) => {
   const upsertCalls = [];
   const mockCDCService = {
     sqlQueryEngine: {},
+    insertSystemTableRow(...args) {
+      return insertViaUpsert(this, args);
+    },
     upsertSystemTableRow: async (tableName, rowData) => {
       upsertCalls.push({tableName, rowData});
       return {success: true};
@@ -121,6 +158,7 @@ test('registerNodeInCluster() - should canonicalize raw node address to websocke
     nodeId: 'test-node-canonical-endpoint',
     nodeAddress: 'joiner-host:8080',
     seedNodeAddress: 'ws://seed:8000',
+    bootIncarnation: 1,
   });
   service.cdcIntegrationService = mockCDCService;
   service.sendControlPlaneNodeStateUpdate = async () => {
@@ -144,6 +182,9 @@ test('registerNodeInCluster() - should publish explicit advertised websocket end
   const upsertCalls = [];
   const mockCDCService = {
     sqlQueryEngine: {},
+    insertSystemTableRow(...args) {
+      return insertViaUpsert(this, args);
+    },
     upsertSystemTableRow: async (tableName, rowData) => {
       upsertCalls.push({tableName, rowData});
       return {success: true};
@@ -155,6 +196,7 @@ test('registerNodeInCluster() - should publish explicit advertised websocket end
     nodeAddress: 'joiner-host:8080',
     advertisedNodeWsAddress: 'ws://172.20.0.42:8082',
     seedNodeAddress: 'ws://seed:8000',
+    bootIncarnation: 1,
   });
   service.cdcIntegrationService = mockCDCService;
   service.sendControlPlaneNodeStateUpdate = async () => {
@@ -177,6 +219,9 @@ test('registerNodeInCluster() - should publish explicit advertised websocket end
 test('registerNodeInCluster() - should throw error if query fails', async (t) => {
   const mockCDCService = {
     sqlQueryEngine: {},
+    insertSystemTableRow(...args) {
+      return insertViaUpsert(this, args);
+    },
     upsertSystemTableRow: async () => {
       return {success: false, error: 'Database error'};
     },
@@ -187,6 +232,7 @@ test('registerNodeInCluster() - should throw error if query fails', async (t) =>
     nodeId: 'test-node-456',
     nodeAddress: 'ws://localhost:9001',
     seedNodeAddress: 'ws://seed:8000',
+    bootIncarnation: 1,
   });
 
   // Set the mock CDC service
@@ -213,6 +259,7 @@ test('registerNodeInCluster() - should throw error if CDC service not available'
     nodeId: 'test-node-789',
     nodeAddress: 'ws://localhost:9002',
     seedNodeAddress: 'ws://seed:8000',
+    bootIncarnation: 1,
   });
 
   // Don't set CDC service (it's null)
@@ -231,6 +278,9 @@ test('registerNodeInCluster() - should skip cache waits before CDC subscriptions
     const upsertCalls = [];
     const mockCDCService = {
       sqlQueryEngine: {},
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async (tableName, rowData, options) => {
         upsertCalls.push({tableName, rowData, options});
         return {success: true};
@@ -241,6 +291,7 @@ test('registerNodeInCluster() - should skip cache waits before CDC subscriptions
       nodeId: 'test-node-join-cache-wait',
       nodeAddress: 'ws://localhost:9003',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
       wsPort: 9003,
     });
     service.cdcIntegrationService = mockCDCService;
@@ -290,6 +341,9 @@ test('registerNodeInCluster() - should skip cache waits even after CDC subscript
     const upsertCalls = [];
     const mockCDCService = {
       sqlQueryEngine: {},
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async (tableName, rowData, options) => {
         upsertCalls.push({tableName, rowData, options});
         return {success: true};
@@ -300,6 +354,7 @@ test('registerNodeInCluster() - should skip cache waits even after CDC subscript
       nodeId: 'test-node-join-cache-wait-active',
       nodeAddress: 'ws://localhost:9004',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
       wsPort: 9004,
     });
     service.cdcIntegrationService = mockCDCService;
@@ -353,6 +408,7 @@ test('registerNodeInCluster() - should use join phase SQL fallback when CDC muta
       nodeId: 'test-node-join-sql-fallback',
       nodeAddress: 'ws://localhost:9014',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
       wsPort: 9014,
     });
     service.cdcIntegrationService = {};
@@ -411,10 +467,14 @@ test('registerNodeInCluster() - should use the registration owner path for nodes
       nodeId: 'test-node-owner-path',
       nodeAddress: 'ws://localhost:9010',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
     });
 
     service.cdcIntegrationService = {
       sqlQueryEngine: {},
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async (tableName, rowData) => {
         upsertCalls.push({tableName, rowData});
         return {success: true};
@@ -458,6 +518,7 @@ test('registerNodeInCluster() - should retry transient participant failures duri
       nodeId: 'test-node-admission-retry',
       nodeAddress: 'ws://localhost:9012',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
     });
     service.config.joinAdmissionWriteRetryTimeoutMs = 1000;
     service.sleep = async () => {};
@@ -465,6 +526,9 @@ test('registerNodeInCluster() - should retry transient participant failures duri
     let nodeWriteAttempts = 0;
     service.cdcIntegrationService = {
       sqlQueryEngine: {},
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async (tableName, rowData) => {
         upsertCalls.push({tableName, rowData});
         if (tableName === TABLES.NODES) {
@@ -522,6 +586,7 @@ test('registerNodeInCluster() - should retry admission at phase scope when the f
       nodeId: 'test-node-phase-admission-retry',
       nodeAddress: 'ws://localhost:9013',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
     });
 
     let nowMs = 0;
@@ -535,6 +600,9 @@ test('registerNodeInCluster() - should retry admission at phase scope when the f
 
     service.cdcIntegrationService = {
       sqlQueryEngine: {},
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async (tableName) => {
         if (tableName === TABLES.NODES) {
           nodeWriteAttempts += 1;
@@ -590,11 +658,15 @@ test('registerNodeInCluster() - should fail narrowly on seed participant failure
       nodeId: 'test-node-seed-restart-failure',
       nodeAddress: 'ws://localhost:9011',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
     });
     service.config.joinAdmissionWriteRetryTimeoutMs = 0;
 
     service.cdcIntegrationService = {
       sqlQueryEngine: {},
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async (tableName, rowData) => {
         if (tableName === TABLES.NODES) {
           throw participantFailure;
@@ -659,6 +731,7 @@ test('registerNodeInCluster() - should reuse canonical membership during durable
     t.after(() => NodeService.resetInstance());
 
     const upsertCalls = [];
+    const incarnationAdvances = [];
     const nodeId = 'test-node-durable-rejoin';
     const nodeAddress = 'joiner-host:8080';
     const cache = new SystemTableCache();
@@ -692,6 +765,7 @@ test('registerNodeInCluster() - should reuse canonical membership during durable
       nodeId,
       nodeAddress,
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
       wsPort: 8082,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       clusterIncarnationFence: TEST_CLUSTER_INCARNATION_FENCE_ALLOWED,
@@ -740,9 +814,16 @@ test('registerNodeInCluster() - should reuse canonical membership during durable
         }
         return {success: true, rows: []};
       },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async (tableName, rowData) => {
         upsertCalls.push({tableName, rowData});
         return {success: true};
+      },
+      updateSystemTableRow: async (tableName, whereClause, rowData) => {
+        incarnationAdvances.push({tableName, whereClause, rowData});
+        return {success: true, partitionResult: {affectedRows: 1}};
       },
     };
     service.sendControlPlaneNodeStateUpdate = async () => {
@@ -750,24 +831,50 @@ test('registerNodeInCluster() - should reuse canonical membership during durable
     };
 
     const result = await service.registerNodeInCluster();
+    const endpointAdvances = incarnationAdvances.filter((call) =>
+      call.tableName !== TABLES.NODES);
+    incarnationAdvances.splice(0, incarnationAdvances.length,
+      ...incarnationAdvances.filter((call) => call.tableName === TABLES.NODES));
 
     t.equal(
       upsertCalls.length,
+      0,
+      'durable rejoin never upserts over the canonical nodes row',
+    );
+    t.same(
+      endpointAdvances.map((call) => [call.tableName, call.whereClause,
+        call.rowData.boot_incarnation]),
+      [
+        [TABLES.NODE_ENDPOINTS,
+          {endpoint_id: `ep-${nodeId}-ws`, boot_incarnation: 0}, 1],
+        [TABLES.SERVICE_ENDPOINTS,
+          {endpoint_id: `${META_SERVICE_ID.POSTGRES_WIRE}-ep-${nodeId}`,
+            boot_incarnation: 0}, 1],
+      ],
+      'the reused endpoint rows advance with the node by one CAS each on ' +
+        'their observed (legacy) incarnation',
+    );
+    t.equal(
+      incarnationAdvances.length,
       1,
-      'durable rejoin should refresh the canonical nodes row so peers learn the node is connected but not yet ready',
+      'durable rejoin refreshes the canonical nodes row with one ' +
+        'incarnation-advance CAS so peers learn it is connected but not ready',
     );
-    t.equal(
-      upsertCalls[0]?.tableName,
-      TABLES.NODES,
-      'durable rejoin should only refresh the canonical nodes row when endpoint metadata is already reusable',
+    t.same(
+      incarnationAdvances[0]?.whereClause,
+      {node_id: nodeId, boot_incarnation: null},
+      'the refresh is fenced by the observed (older) boot incarnation',
     );
-    t.equal(
-      upsertCalls[0]?.rowData?.connection_state,
-      STATE.CONNECTED,
-      'durable rejoin refresh should preserve CONNECTED admission state',
+    t.match(
+      incarnationAdvances[0]?.rowData,
+      {
+        connection_state: STATE.CONNECTED,
+        boot_incarnation: 1,
+      },
+      'the refresh stamps this boot incarnation and CONNECTED admission state',
     );
     t.notOk(
-      Number.isFinite(upsertCalls[0]?.rowData?.ready_lease_expires_at),
+      Number.isFinite(incarnationAdvances[0]?.rowData?.ready_lease_expires_at),
       'durable rejoin refresh should explicitly clear the ready lease until READY signaling completes',
     );
     t.equal(
@@ -836,6 +943,7 @@ test('registerNodeInCluster() - should not treat cache-only durable rejoin metad
       nodeId,
       nodeAddress,
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
       wsPort: 8082,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
     });
@@ -843,6 +951,9 @@ test('registerNodeInCluster() - should not treat cache-only durable rejoin metad
       sqlQueryEngine: {},
       executeAuthoritativeSystemTableRead: async () => {
         return {success: true, rows: []};
+      },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
       },
       upsertSystemTableRow: async (tableName, rowData) => {
         upsertCalls.push({tableName, rowData});
@@ -904,11 +1015,15 @@ test('registerNodeInCluster() - should fall back to fresh admission writes when 
       nodeId,
       nodeAddress: 'new-host:8080',
       seedNodeAddress: 'ws://seed:8000',
+      bootIncarnation: 1,
       wsPort: 8082,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
     });
     service.cdcIntegrationService = {
       sqlQueryEngine: {},
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async (tableName, rowData) => {
         upsertCalls.push({tableName, rowData});
         return {success: true};

@@ -257,7 +257,8 @@ class PartitionNodeCluster {
    */
   retireReplica(replicaId, reason) {
     return raftRsLifecycleAdministration.retireReplica(
-      replicaId, reason, {groupId: this.partitionId});
+      replicaId, reason, {groupId: this.partitionId,
+        runtime: this.node(replicaId)});
   }
 
   /**

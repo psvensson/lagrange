@@ -455,6 +455,7 @@ describe('Shared setup ownership (Req 9.5, 11.1)', () => {
     );
 
     const joiner = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'join-owner-node',
       nodeAddress: 'ws://localhost:9000',
       seedNodeAddress: 'ws://seed:8000',

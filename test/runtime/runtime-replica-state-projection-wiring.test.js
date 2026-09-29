@@ -181,8 +181,11 @@ test('placed replica lifecycle projects create-once-then-update ' +
   t.equal(afterStart[2].data.status, 'active',
     'started replica projects ACTIVE (what the rebalancer and ' +
       'observers filter on)');
-  t.same(afterStart[2].whereClause, {service_id: SVC_ID},
-    'updates are primary-key addressed (ARCH-0029)');
+  t.same(afterStart[2].whereClause, {
+    service_id: SVC_ID,
+    service_type: 'runtime_service',
+    node_id: HOST_NODE_ID,
+  }, 'updates are exact-identity addressed (ARCH-0029)');
   t.equal(afterStart[2].data.created_at, undefined,
     'transitions never rewrite the identity created_at');
 
@@ -198,8 +201,11 @@ test('placed replica lifecycle projects create-once-then-update ' +
     'a stopped replica row is DELETED (mirrors the partition and ' +
       'message-group row owners — no lingering stopped rows to skew ' +
       'the planner)');
-  t.same(last.whereClause, {service_id: SVC_ID},
-    'the delete is primary-key addressed');
+  t.same(last.whereClause, {
+    service_id: SVC_ID,
+    service_type: 'runtime_service',
+    node_id: HOST_NODE_ID,
+  }, 'the delete is exact-identity addressed');
   t.equal(
     afterStop.filter((w) => w.kind === 'insert').length,
     1,

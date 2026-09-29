@@ -16,12 +16,8 @@ import {
 } from '../bootstrap/replication-target-authority.js';
 import {SERVICE_TYPE} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
-import {
-  CONTROL_PLANE_MUTATION_OPERATION,
-} from '../control-plane/control-plane-system-table-gateway.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
-import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   REPLICA_RECOVERY_DEFAULT,
   REPLICA_RECOVERY_ENTITY_TYPE,
@@ -38,8 +34,8 @@ import {
   selectReplicaRecoveryTargetNodes,
   sortReplicaRecoveryNodesByLoad,
 } from './replica-recovery-placement.js';
-
-const LOCAL_STR_CRITICAL = 'critical';
+import {insertRecoveryServiceRow} from
+  './replica-recovery-service-row-admission.js';
 
 /**
  * Node status values.
@@ -501,6 +497,7 @@ class ReplicaRecoveryService extends EventEmitter {
    */
   async createPartitionReplica(partition, nodeId) {
     const serviceId = uuidv4();
+    const timestamp = Date.now();
 
     this.logger.info(REPLICA_RECOVERY_LOG_MSG.CREATE_PARTITION_REPLICA, {
       partitionId: partition.partition_id,
@@ -510,23 +507,21 @@ class ReplicaRecoveryService extends EventEmitter {
     });
 
     try {
-      await this.getControlPlaneSystemTableGateway().submitMutation({
-        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
-        tableName: SYSTEM_TABLE_NAME.SERVICES,
-        row: {
-          service_id: serviceId,
-          node_id: nodeId,
-          service_type: ServiceType.PARTITION_REPLICA,
-          partition_id: partition.partition_id,
-          table_id: partition.table_id,
-          status: ReplicaStatus.STARTING,
-          created_at: Date.now(),
-          id: serviceId,
-        },
-      }, {
-        workClass: PRESSURE_WORK_CLASS.CRITICAL,
-        deliveryPriority: LOCAL_STR_CRITICAL,
-      });
+      const row = {
+        service_id: serviceId,
+        node_id: nodeId,
+        service_type: ServiceType.PARTITION_REPLICA,
+        partition_id: partition.partition_id,
+        group_id: null,
+        replica_id: serviceId,
+        table_id: partition.table_id,
+        status: ReplicaStatus.STARTING,
+        state_entered_at: timestamp,
+        created_at: timestamp,
+        updated_at: timestamp,
+        id: serviceId,
+      };
+      await insertRecoveryServiceRow(this, row);
 
       this.recoveryCount++;
 
@@ -562,6 +557,7 @@ class ReplicaRecoveryService extends EventEmitter {
    */
   async createMessageGroupReplica(group, nodeId) {
     const serviceId = uuidv4();
+    const timestamp = Date.now();
 
     this.logger.info(REPLICA_RECOVERY_LOG_MSG.CREATE_MESSAGE_GROUP_REPLICA, {
       groupId: group.group_id,
@@ -570,22 +566,20 @@ class ReplicaRecoveryService extends EventEmitter {
     });
 
     try {
-      await this.getControlPlaneSystemTableGateway().submitMutation({
-        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
-        tableName: SYSTEM_TABLE_NAME.SERVICES,
-        row: {
-          service_id: serviceId,
-          node_id: nodeId,
-          service_type: ServiceType.MESSAGE_GROUP_REPLICA,
-          group_id: group.group_id,
-          status: ReplicaStatus.STARTING,
-          created_at: Date.now(),
-          id: serviceId,
-        },
-      }, {
-        workClass: PRESSURE_WORK_CLASS.CRITICAL,
-        deliveryPriority: LOCAL_STR_CRITICAL,
-      });
+      const row = {
+        service_id: serviceId,
+        node_id: nodeId,
+        service_type: ServiceType.MESSAGE_GROUP_REPLICA,
+        partition_id: null,
+        group_id: group.group_id,
+        replica_id: serviceId,
+        status: ReplicaStatus.STARTING,
+        state_entered_at: timestamp,
+        created_at: timestamp,
+        updated_at: timestamp,
+        id: serviceId,
+      };
+      await insertRecoveryServiceRow(this, row);
 
       this.recoveryCount++;
 

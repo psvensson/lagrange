@@ -47,6 +47,7 @@ const {
   hasControlPlaneMutationRoutingGapFailureSignature,
   hasSystemTableOwnerHandoffFailureSignature,
   isRetryableControlPlaneError,
+  isTerminalTypedDistributedFailure,
   normalizeDeliveryPriority,
   resolveSystemTableMutationDeliveryPriority,
   shouldEmitTableWriteMetric,
@@ -136,9 +137,7 @@ class CDCRoutedMutationReadiness {
         };
       } catch (error) {
         if (
-          this.isTransientCdcError(
-            error?.message || CDC_INTEGRATION_SERVICE_LITERAL.EMPTY,
-          )
+          this.isTransientCdcError(error)
         ) {
           issued.answer = error;
           continue;
@@ -166,7 +165,7 @@ class CDCRoutedMutationReadiness {
     }
     return isPartitionWriteFailureCode(result?.failureCode) ?
       isReroutableWriteFailureCode(result.failureCode) :
-      this.isTransientCdcError(result?.error || '');
+      this.isTransientCdcError(result);
   }
 
   validateTableName(tableName) {
@@ -571,7 +570,7 @@ class CDCRoutedMutationReadiness {
         errorLike?.message || errorLike?.error || '';
     // A partition write answer: by the control plane's one classifier (its
     // code when the caller holds it, else its text).
-    return (
+    return !isTerminalTypedDistributedFailure(errorLike) && (
       isRetryableControlPlaneError(errorLike) ||
       message.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
       message === ERRORS.QUERY_FAILED ||

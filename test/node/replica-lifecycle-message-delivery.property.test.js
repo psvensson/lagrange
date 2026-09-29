@@ -20,31 +20,37 @@ import {
 } from '../../src/node/replica-lifecycle-manager.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createLifecycleStateStore} from
+  '../test-helpers/lifecycle-state-store.js';
 
 /**
  * Create a mock CDC integration service.
+ * @param {Object} _cache Retained for the shared fixture constructor contract.
  * @return {Object} Mock CDC service.
  */
-function createMockCDCService() {
+function createMockCDCService(_cache) {
   const operations = [];
+  const store = createLifecycleStateStore();
 
   return {
     operations,
+    executeAuthoritativeSystemTableRead:
+      store.adapters.executeAuthoritativeSystemTableRead,
     async insertSystemTableRow(tableName, data) {
       operations.push({type: 'insert', tableName, data});
-      return {success: true};
+      return store.adapters.insertSystemTableRow(tableName, data);
     },
     async updateSystemTableRow(tableName, whereClause, data) {
       operations.push({type: 'update', tableName, whereClause, data});
-      return {success: true};
+      return store.adapters.updateSystemTableRow(tableName, whereClause, data);
     },
     async deleteSystemTableRow(tableName, whereClause) {
       operations.push({type: 'delete', tableName, whereClause});
-      return {success: true};
+      return store.adapters.deleteSystemTableRow(tableName, whereClause);
     },
     async upsertSystemTableRow(tableName, data) {
       operations.push({type: 'upsert', tableName, data});
-      return {success: true};
+      throw new Error(`Fixture forbids generic ${tableName} upsert`);
     },
     reset() {
       operations.length = 0;
@@ -107,11 +113,12 @@ test('Property 77: Replica Lifecycle Message Delivery', async (t) => {
         fc.uuid(), // replica_id
         fc.string({minLength: 1, maxLength: 20}), // table_name
         async (requestId, partitionId, replicaId, tableName) => {
-          const mockCDC = createMockCDCService();
+          const systemTableCache = createMockSystemTableCache();
+          const mockCDC = createMockCDCService(systemTableCache);
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
-            systemTableCache: createMockSystemTableCache(),
+            systemTableCache,
             cdcIntegrationService: mockCDC,
             createPartitionService: createMockPartitionServiceFactory(),
             dataDir: '/tmp/test-lifecycle',
@@ -155,11 +162,12 @@ test('Property 77: Replica Lifecycle Message Delivery', async (t) => {
         fc.uuid(), // partition_id
         fc.uuid(), // replica_id
         async (requestId, partitionId, replicaId) => {
-          const mockCDC = createMockCDCService();
+          const systemTableCache = createMockSystemTableCache();
+          const mockCDC = createMockCDCService(systemTableCache);
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
-            systemTableCache: createMockSystemTableCache(),
+            systemTableCache,
             cdcIntegrationService: mockCDC,
             createPartitionService: createMockPartitionServiceFactory(),
             dataDir: '/tmp/test-lifecycle',
@@ -209,11 +217,12 @@ test('Property 77: Replica Lifecycle Message Delivery', async (t) => {
         fc.uuid(), // partition_id
         fc.uuid(), // replica_id
         async (requestId, partitionId, replicaId) => {
-          const mockCDC = createMockCDCService();
+          const systemTableCache = createMockSystemTableCache();
+          const mockCDC = createMockCDCService(systemTableCache);
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
-            systemTableCache: createMockSystemTableCache(),
+            systemTableCache,
             cdcIntegrationService: mockCDC,
             createPartitionService: createMockPartitionServiceFactory(),
             dataDir: '/tmp/test-lifecycle',
@@ -254,12 +263,13 @@ test('Property 77: Replica Lifecycle Message Delivery', async (t) => {
         fc.uuid(), // partition_id
         fc.uuid(), // replica_id
         async (requestId, partitionId, replicaId) => {
-          const mockCDC = createMockCDCService();
+          const systemTableCache = createMockSystemTableCache();
+          const mockCDC = createMockCDCService(systemTableCache);
           const nodeId = 'test-node-' + requestId.slice(0, 8);
 
           const manager = new ReplicaLifecycleManager({
             nodeId,
-            systemTableCache: createMockSystemTableCache(),
+            systemTableCache,
             cdcIntegrationService: mockCDC,
             createPartitionService: createMockPartitionServiceFactory(),
             dataDir: '/tmp/test-lifecycle',

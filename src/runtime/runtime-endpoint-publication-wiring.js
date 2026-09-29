@@ -9,6 +9,15 @@ import {
   buildRuntimeEndpointRow,
   deriveEndpointId,
 } from './runtime-endpoint-writer.js';
+import {COLUMN} from '../constants/index.js';
+import {
+  isEndpointIncarnationOutcomeCompleted,
+  mutateEndpointAtIncarnation,
+  readAuthoritativeEndpointRow,
+  writeEndpointAtIncarnation,
+} from '../control-plane/owners/endpoint-incarnation-authority.js';
+
+const SERVICE_ENDPOINTS_TABLE = SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS;
 
 const LOGICAL_SERVICE_ID_LIST_SEPARATOR = ', ';
 
@@ -70,9 +79,21 @@ function resolveLogicalServiceId(systemTableCache, replicaId) {
   return matchingServiceIds[0];
 }
 
+// A completed incarnation outcome is the owner's mutation result; an
+// unresolved write error is rethrown; a stale or unknown-incarnation outcome
+// is a typed non-success the runtime lifecycle records.
+function settleEndpointOutcome(outcome) {
+  if (isEndpointIncarnationOutcomeCompleted(outcome.outcome)) {
+    return outcome.result || {success: true, outcome: outcome.outcome};
+  }
+  if (outcome.error) throw outcome.error;
+  return {success: false, outcome: outcome.outcome};
+}
+
 function wireRuntimeEndpointPublication(options = {}) {
   assertRuntimeEndpointPublicationOptions(options);
   const {
+    bootIncarnation,
     nodeId,
     serviceEndpointsOwner,
     serviceRuntimeLifecycle,
@@ -81,7 +102,7 @@ function wireRuntimeEndpointPublication(options = {}) {
 
   // Both directions resolve the replica's logical service from the desired
   // state the runtime-service rebalancer placed it for: one owner, one path.
-  serviceRuntimeLifecycle.setEndpointWriter(async (
+  const writeRuntimeEndpointAtIncarnation = async (
     replicaId,
     _runtimeKind,
     endpointIntent,
@@ -96,10 +117,23 @@ function wireRuntimeEndpointPublication(options = {}) {
       nodeId,
       endpointIntent,
     );
-    return serviceEndpointsOwner.upsertEndpoint(endpointRow, mutationContext);
-  });
+    // Birth or refresh at this node's exact boot incarnation: a newer
+    // incarnation's endpoint for the same (service, node) is never replaced.
+    return settleEndpointOutcome(await writeEndpointAtIncarnation({
+      row: endpointRow,
+      bootIncarnation,
+      observe: () => readAuthoritativeEndpointRow(
+        serviceEndpointsOwner.getGateway(), SERVICE_ENDPOINTS_TABLE,
+        endpointRow[COLUMN.ENDPOINT_ID]),
+      insert: (row) => serviceEndpointsOwner.insertEndpoint(row,
+        mutationContext),
+      update: (whereClause, data) => serviceEndpointsOwner.updateWhere(
+        whereClause, data, mutationContext),
+    }));
+  };
+  serviceRuntimeLifecycle.setEndpointWriter(writeRuntimeEndpointAtIncarnation);
 
-  serviceRuntimeLifecycle.setEndpointRemover(async (
+  const removeRuntimeEndpointAtIncarnation = async (
     replicaId,
     _runtimeNodeId,
     mutationContext = {},
@@ -108,11 +142,23 @@ function wireRuntimeEndpointPublication(options = {}) {
       systemTableCache,
       replicaId,
     );
-    return serviceEndpointsOwner.removeEndpoint(
-      deriveEndpointId(logicalServiceId, nodeId),
-      mutationContext,
-    );
-  });
+    // Remove only this incarnation's endpoint: the predicate carries the
+    // exact boot incarnation, so a replacement boot's endpoint (same
+    // deterministic id) is never deleted by delayed teardown.
+    const endpointId = deriveEndpointId(logicalServiceId, nodeId);
+    return settleEndpointOutcome(await mutateEndpointAtIncarnation({
+      bootIncarnation,
+      whereClause: {[COLUMN.ENDPOINT_ID]: endpointId},
+      deletes: true,
+      write: (whereClause) => serviceEndpointsOwner.deleteWhere(whereClause,
+        mutationContext),
+      observe: () => readAuthoritativeEndpointRow(
+        serviceEndpointsOwner.getGateway(), SERVICE_ENDPOINTS_TABLE,
+        endpointId),
+    }));
+  };
+  serviceRuntimeLifecycle.setEndpointRemover(
+    removeRuntimeEndpointAtIncarnation);
 
   return Object.freeze({
     nodeId,

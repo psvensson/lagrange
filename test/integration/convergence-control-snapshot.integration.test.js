@@ -1,5 +1,4 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -8,6 +7,7 @@ import {NODE_CLIENT_CONTROL_SNAPSHOT_SQL} from '../distributed/harness/constants
 import {
   cleanupTestEnvironment,
   getUniquePort,
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
@@ -103,7 +103,7 @@ test('Convergence uses local control snapshot when distributed admin SQL reads f
 
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440261';
     const seedWsPort = getUniquePort();
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

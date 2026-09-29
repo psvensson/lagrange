@@ -97,6 +97,8 @@ class QuerySystemStatePhase {
           this.delegates.getCdcSubscriptionsActive(),
         getNodeStorageBudgetService: () =>
           this.delegates.getNodeStorageBudgetService(),
+        getBootIncarnation: () =>
+          this.delegates.getBootIncarnation?.() || 0,
         getSystemTableCache: () =>
           this.delegates.getSystemTableCache?.() || null,
         getJoinLifecycleIntentType: () =>

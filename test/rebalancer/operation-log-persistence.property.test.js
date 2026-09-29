@@ -84,7 +84,7 @@ function createTestCoordinatorWithPersistence() {
         return {success: true, affectedRows: 1};
       }
 
-      if (sql.includes('INSERT INTO storage_reservations')) {
+      if (sql.includes('INTO storage_reservations')) {
         return {success: true, affectedRows: 1};
       }
 

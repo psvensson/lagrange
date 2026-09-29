@@ -180,6 +180,7 @@ const CONTROL_PLANE_GATEWAY_LIMIT = Object.freeze({
 });
 const CONTROL_PLANE_GATEWAY_ERROR_CODE = Object.freeze({
   MUTATION_TRACKING_SATURATED: 'CONTROL_PLANE_MUTATION_TRACKING_SATURATED',
+  SERVICES_UPSERT_FORBIDDEN: 'SERVICES_UPSERT_FORBIDDEN',
 });
 const GATEWAY_ERROR_MSG = Object.freeze({
   AUTHORITATIVE_READ_AUTHORITY_TOKEN_REQUIRED:
@@ -198,6 +199,8 @@ const GATEWAY_ERROR_MSG = Object.freeze({
     'ControlPlaneSystemTableGateway requires whereClause for update/delete',
   MUTATION_DATA_REQUIRED:
     'ControlPlaneSystemTableGateway requires update data for update',
+  SERVICES_UPSERT_FORBIDDEN:
+    'SERVICES rows require INSERT-only admission or identity-fenced UPDATE',
 });
 const GATEWAY_LOG_MSG = Object.freeze({
   READ_DEFERRED: 'Control-plane metadata read deferred',

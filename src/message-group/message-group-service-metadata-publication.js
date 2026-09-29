@@ -3,7 +3,7 @@
  * row-mutation helper construction (raft role + leader-node id writes).
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
  */
-import {COLUMN, TABLES} from '../constants/index.js';
+import {COLUMN, SERVICE_TYPE, TABLES} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   getTrafficReadinessSnapshot,
@@ -130,7 +130,13 @@ function assignMetadataPublication(serviceClass) {
         ...hostedMutationTimers(this),
         tableName: SYSTEM_TABLE_NAME.SERVICES,
         buildWhereClause: (_role, context = {}) => {
-          const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
+          const whereClause = {
+            [COLUMN.SERVICE_ID]: this.replicaId,
+            [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+            [COLUMN.GROUP_ID]: this.groupId,
+            [COLUMN.REPLICA_ID]: this.replicaId,
+            [COLUMN.NODE_ID]: this.nodeId,
+          };
           const cachedRow = context.cachedRow;
           if (
             typeof cachedRow?.raft_role === 'string' &&

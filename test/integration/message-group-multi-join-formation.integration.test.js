@@ -17,9 +17,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {request as httpRequest} from 'node:http';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
-import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
 import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
@@ -30,13 +28,14 @@ import {
 } from '../../src/constants/index.js';
 import {WASM_SERVICE_PROTOCOL} from '../../src/wasm-service/wasm-service-constants.js';
 import {
+  createVirginSeedBootstrapService,
+  createJoiningNodeFixtureOwner,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   createInProcHttpPost,
   getUniquePort,
   TEST_CONFIG,
   waitFor,
-  gracefulJoiningShutdown,
   gracefulShutdown,
 } from './helpers/cluster-test-helpers.js';
 
@@ -311,7 +310,7 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
   });
 
   const seedWsPort = getUniquePort();
-  const bootstrapService = new BootstrapService({
+  const bootstrapService = await createVirginSeedBootstrapService({
     nodeId: SEED_NODE_ID,
     nodeAddress: `ws://localhost:${seedWsPort}`,
     wsPort: seedWsPort,
@@ -321,7 +320,7 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
   let bootstrapResult = null;
   let seedApi = null;
   let seedQueryEngine = null;
-  const joiningServices = [];
+  const joiningNodeFixtures = createJoiningNodeFixtureOwner();
   const joiningServicesByNode = new Map();
   const joinResultsByNode = new Map();
   const adminApis = [];
@@ -360,7 +359,7 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
       let joinResult = null;
       for (let attempt = 1; attempt <= JOIN_ATTEMPTS_PER_NODE; attempt += 1) {
         const joiningWsPort = getUniquePort();
-        joiningService = new NodeJoiningService({
+        joiningService = joiningNodeFixtures.create({
           nodeId: joiningNodeId,
           nodeAddress: `ws://localhost:${joiningWsPort}`,
           seedNodeAddress: 'http://localhost:0',
@@ -372,7 +371,11 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
           },
           httpPost,
         });
-        joiningServices.push(joiningService);
+        t.equal(
+          joiningNodeFixtures.assertDistinctNodePaths(),
+          true,
+          'every logical join node owns a distinct canonical data directory',
+        );
 
         joinResult = await joiningService.join();
         if (joinResult.success) {
@@ -383,8 +386,7 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
             `${joinResult.error || 'unknown error'}`,
         );
         if (attempt < JOIN_ATTEMPTS_PER_NODE) {
-          joiningServices.pop();
-          await gracefulJoiningShutdown(joiningService);
+          await joiningNodeFixtures.shutdownAttempt(joiningService);
           joiningService = null;
         }
       }
@@ -657,9 +659,7 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
     for (let index = adminApis.length - 1; index >= 0; index -= 1) {
       await adminApis[index].adminApi.shutdown().catch(() => {});
     }
-    for (let index = joiningServices.length - 1; index >= 0; index -= 1) {
-      await gracefulJoiningShutdown(joiningServices[index]);
-    }
+    await joiningNodeFixtures.shutdownAll();
     await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
     await cleanupTestEnvironment();
   }
