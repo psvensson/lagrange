@@ -2,6 +2,8 @@ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js'
 import {COLUMN} from '../constants/index.js';
 import {normalizeKnownNodeBootIncarnation} from
   './control-plane-error-classification.js';
+import {classifyControlPlaneMutationResult} from
+  './control-plane-mutation-outcome-classifier.js';
 import {
   isAuthoritativeControlPlaneRowReadSuccessful,
   readAuthoritativeControlPlaneRows,
@@ -60,13 +62,6 @@ function buildNodeIncarnationWhereClause(nodeId, bootIncarnation) {
     [COLUMN.NODE_ID]: nodeId,
     [COLUMN.BOOT_INCARNATION]: bootIncarnation,
   };
-}
-
-function affectedRowsOf(result) {
-  const affectedRows = Number(
-    result?.partitionResult?.affectedRows ?? result?.affectedRows,
-  );
-  return Number.isFinite(affectedRows) ? affectedRows : null;
 }
 
 async function readNodeRow(gateway, nodeId) {
@@ -146,7 +141,8 @@ async function applyNodeTerminalTransition(options) {
   } catch (writeError) {
     error = writeError;
   }
-  if (error === null && affectedRowsOf(result) > 0) {
+  if (error === null &&
+      classifyControlPlaneMutationResult(result).applied === true) {
     return Object.freeze({
       outcome: NODE_TERMINAL_TRANSITION_OUTCOME.APPLIED, result, error,
     });

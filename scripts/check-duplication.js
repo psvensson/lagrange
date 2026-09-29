@@ -168,10 +168,11 @@ const RATCHET_TARGETS = [
     // closure fixtures converged on the shared durable/projection owner,
     // then 775/29717 -> 773/29693 after the joiner fixtures shared one
     // boot-incarnation factory per file.
-    // 2026-09-29: tightened 29693 -> 29651 after the endpoint and
-    // runtime-generation fixtures shared one incarnation fixture.
-    baselineCloneGroupCount: 773,
-    baselineDuplicatedLineCount: 29651,
+    // 2026-09-29: tightened 773/29693 -> 772/29624 after the endpoint and
+    // runtime-generation fixtures shared one incarnation fixture and the
+    // user-table discovery seed stopped restating its per-node rows.
+    baselineCloneGroupCount: 772,
+    baselineDuplicatedLineCount: 29624,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

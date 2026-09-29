@@ -30,6 +30,8 @@ import {
 import {
   buildAffinityDemoLiveReport,
 } from '../../examples/service-data-affinity/affinity-demo-live-report.js';
+import {insertViaUpsert} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 const NODE_ID = 'node-chronology';
 const OLD_OWNER_WRITE_AT_MS = 1_000;
@@ -128,6 +130,9 @@ function buildHeartbeatService(options = {}) {
         success: true,
         partitionResult: {affectedRows: 1},
       }),
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async () => ({
         success: true,
         partitionResult: {affectedRows: 1},
@@ -206,6 +211,9 @@ test('production seams retain owner-write to CDC chronology in MovieLens report'
           success: true,
           partitionResult: {affectedRows: 1},
         };
+      },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
       },
       async upsertSystemTableRow() {
         return {success: true, partitionResult: {affectedRows: 1}};

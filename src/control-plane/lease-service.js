@@ -17,6 +17,8 @@ import {emitInvariant} from '../invariants/invariant-emitter.js';
 import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
 import {assertCritical} from '../utils/assert.js';
 import {NodeReadyLeaseAuthority} from './node-ready-lease-authority.js';
+import {classifyControlPlaneMutationResult} from
+  './control-plane-mutation-outcome-classifier.js';
 import {endpointIncarnationPredicate} from
   './owners/endpoint-incarnation-authority.js';
 import {
@@ -530,7 +532,7 @@ class LeaseService extends EventEmitter {
         });
         continue;
       }
-      if (!(Number(result?.partitionResult?.affectedRows) > 0)) {
+      if (classifyControlPlaneMutationResult(result).applied !== true) {
         // A renewal, rejoin or other transition replaced the observation
         // that authorized this reap: nothing destructive follows.
         this.logger.info(LEASE_LOG_MSG.REAPER_SKIPPED_OBSERVATION_SUPERSEDED,

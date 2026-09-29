@@ -28,7 +28,7 @@
   "censusSize": 2254,
   "digest": "fnv1a32-ee81a7fc",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-62b7743f",
+  "observationDigest": "fnv1a32-1e269f60",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4163,7 +4163,8 @@
     "test/convergence/dt-movielens-ready-lease-chronology-discriminator.test.js": {
       "files": [
         "src/control-plane/node-lifecycle-publication.js",
-        "src/control-plane/node-ready-lease-authority.js"
+        "src/control-plane/node-ready-lease-authority.js",
+        "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/convergence/dt-priority-partition-spread-cold-boot-network.test.js": {
@@ -6745,6 +6746,11 @@
     "test/integration/three-node-seed-rebalance.integration.test.js": {
       "files": [
         "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
+    "test/integration/user-table-local-cdc-readiness.integration.test.js": {
+      "files": [
+        "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/integration/user-table-metadata-fanout.integration.test.js": {
