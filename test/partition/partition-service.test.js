@@ -713,7 +713,11 @@ test('PartitionService - flushes services role update when local services leader
     t.equal(updates[0].tableName, SYSTEM_TABLE_NAME.SERVICES, 'should target services');
     t.same(updates[0].whereClause, {
       service_id: 'services-p1-r1',
-    }, 'should update the local services replica row');
+      service_type: 'partition',
+      partition_id: 'services-p1',
+      replica_id: 'services-p1-r1',
+      node_id: 'node-1',
+    }, 'should fence the role write to the full replica identity');
     t.equal(
       updates[0].data?.raft_role,
       RaftRole.FOLLOWER,

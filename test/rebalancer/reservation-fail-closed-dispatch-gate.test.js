@@ -203,7 +203,7 @@ function createTrackingSqlEngine(options = {}) {
       if (sql.includes('INSERT INTO replica_operations')) {
         return insertOperationRow(operations, params);
       }
-      if (sql.includes('INSERT INTO storage_reservations')) {
+      if (sql.includes('INTO storage_reservations')) {
         return insertReservationRow(reservations, params, options);
       }
       if (sql.includes('UPDATE storage_reservations')) {

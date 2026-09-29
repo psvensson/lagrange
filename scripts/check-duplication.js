@@ -65,8 +65,12 @@ const RATCHET_TARGETS = [
     // 2026-09-26: tightened 56/1815 -> 55/1777 on the O1 committed-read
     // branch (the partition row branch of the creation stamp deleted, the
     // bootstrap metadata carriers looped; checker hint).
-    baselineCloneGroupCount: 55,
-    baselineDuplicatedLineCount: 1777,
+    // 2026-09-28: tightened 55/1777 -> 55/1760 after extracting the shared
+    // distributed UPDATE/DELETE mutation-result owner (checker hint).
+    // 2026-09-29: tightened 55/1760 -> 54/1731 after the seed and joiner
+    // runtime-service handler setup converged on one guarded initializer.
+    baselineCloneGroupCount: 54,
+    baselineDuplicatedLineCount: 1731,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -157,8 +161,21 @@ const RATCHET_TARGETS = [
     // 2026-09-26 (integration 2): fix-f1 781/29963 and fix-f2 786/30288
     // merged at the lower of each pair, then tightened to 780/29947 on the
     // checker's hint.
-    baselineCloneGroupCount: 780,
-    baselineDuplicatedLineCount: 29947,
+    // 2026-09-27: tightened duplicated lines 29947 -> 29940 after the durable
+    // lifecycle witness shared its authoritative-read fixture, then 29940 ->
+    // 29935 after the final seed-admission fixtures removed their overlap.
+    // 2026-09-28: tightened 779/29888 -> 775/29717 after the lifecycle
+    // closure fixtures converged on the shared durable/projection owner,
+    // then 775/29717 -> 773/29693 after the joiner fixtures shared one
+    // boot-incarnation factory per file.
+    // 2026-09-29: tightened 773/29693 -> 772/29624 after the endpoint and
+    // runtime-generation fixtures shared one incarnation fixture and the
+    // user-table discovery seed stopped restating its per-node rows; then
+    // 29624 -> 29578 after the active-node projection cases shared one
+    // ready-node row factory and the bootstrap ready-nodes fixture shared
+    // the incarnation fixture.
+    baselineCloneGroupCount: 772,
+    baselineDuplicatedLineCount: 29578,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

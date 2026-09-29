@@ -11,6 +11,7 @@ import {
   ENTRYPOINT_LOG_MSG,
   ENTRYPOINT_RUNTIME_VALUE,
 } from './constants/entrypoint.js';
+import {raiseBootIncarnationFloor} from './bootstrap/boot-incarnation-owner.js';
 
 const LOCAL_STR_ABORT = 'abort';
 const LOCAL_STR_UNAVAILABLE = 'unavailable';
@@ -94,6 +95,12 @@ async function resolveFailedJoinReattempt(options) {
   });
   await options.bootstrapAPI.shutdown();
   await options.nodeJoiningService.cleanup();
+  // A newer incarnation superseded this lifecycle: record it durably so the
+  // next lifecycle (this reattempt or a restart) reserves above it.
+  if (options.joinResult.supersededBootIncarnation > 0) {
+    await raiseBootIncarnationFloor(options.dataDir,
+      options.joinResult.supersededBootIncarnation);
+  }
   const allowed = options.joinResult.retryable === true &&
     joinAttempt + LOCAL_NUM_ONE < options.reattemptPolicy.maxAttempts;
   if (!allowed) {

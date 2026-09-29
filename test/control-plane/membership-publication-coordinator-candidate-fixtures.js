@@ -8,6 +8,8 @@ import {
   isValidMembershipLifecycleTransition,
 } from '../../src/control-plane/membership-lifecycle-constants.js';
 import {CONTROL_PLANE_PRIORITY_RECOVERY_REASON} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {FIXTURE_ENDPOINT_INCARNATION} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 const MEMBERSHIP_PUBLICATION_ADMISSION_STATE_BLOCKED = 'blocked';
 
 const MEMBERSHIP_PUBLICATION_ADMISSION_REASON_CLUSTER_INTEGRITY =
@@ -755,18 +757,21 @@ test('deriveMembershipPublicationCandidate refreshes stale priority spread metad
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
         },
         {
           node_id: 'node-2',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
         },
         {
           node_id: 'node-3',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 5000,
@@ -807,6 +812,7 @@ test('deriveMembershipPublicationCandidate refreshes stale priority spread metad
       nodeEndpointRows: [
         {
           endpoint_id: 'node-1-ws',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           node_id: 'node-1',
           transport_type: 'ws',
           status: 'active',
@@ -814,6 +820,7 @@ test('deriveMembershipPublicationCandidate refreshes stale priority spread metad
         },
         {
           endpoint_id: 'node-2-ws',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           node_id: 'node-2',
           transport_type: 'ws',
           status: 'active',
@@ -821,6 +828,7 @@ test('deriveMembershipPublicationCandidate refreshes stale priority spread metad
         },
         {
           endpoint_id: 'node-3-ws',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           node_id: 'node-3',
           transport_type: 'ws',
           status: 'active',

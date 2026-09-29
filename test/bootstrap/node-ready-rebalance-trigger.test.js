@@ -69,6 +69,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
     'limits node_ready rebalance fanout to convergence-critical leader partitions',
     async (t) => {
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
       });
@@ -148,6 +149,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
     'keeps non-node_ready rebalance fanout on all leader partitions',
     async (t) => {
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
       });
@@ -188,6 +190,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
 
   await t.test('schedules one rebalance trigger per node-ready transition', async (t) => {
     const bootstrapService = new BootstrapService({
+      bootIncarnation: 1,
       nodeId: 'seed-node',
       nodeAddress: 'localhost:8080',
       config: {
@@ -228,6 +231,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
 
   await t.test('ignores invalid transitions and expired ready lease', async (t) => {
     const bootstrapService = new BootstrapService({
+      bootIncarnation: 1,
       nodeId: 'seed-node',
       nodeAddress: 'localhost:8080',
       config: {
@@ -264,6 +268,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
     'ignores local node ready transitions because self-readiness is runtime-owned',
     async (t) => {
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {
@@ -295,6 +300,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
     'ignores remote node ready transitions after bootstrap hands off to runtime ownership',
     async (t) => {
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {
@@ -331,6 +337,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
     'fails closed for delayed ready CDC rows that are no longer ready at decision time',
     async (t) => {
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {
@@ -390,6 +397,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
     'logs no-transition skip at debug level to avoid default log noise',
     async (t) => {
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {
@@ -438,6 +446,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
     'treats delayed ready-lease refresh from an expired prior row as a fresh transition',
     async (t) => {
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {
@@ -486,6 +495,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
     'schedules rebalance when UPDATE payload omits node_id but previous row has identity',
     async (t) => {
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {
@@ -534,6 +544,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
       const nodeId = 'node-7';
 
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {
@@ -563,6 +574,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
       const nodeId = 'node-retry';
 
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {
@@ -603,6 +615,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
       const nodeId = 'node-local-observed-ready';
       const now = Date.now();
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {
@@ -671,6 +684,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
 
   await t.test('cleanup cancels pending node-ready rebalance timers', async (t) => {
     const bootstrapService = new BootstrapService({
+      bootIncarnation: 1,
       nodeId: 'seed-node',
       nodeAddress: 'localhost:8080',
       config: {
@@ -714,6 +728,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
     async (t) => {
       const nodeId = 'node-pending-dedupe';
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {
@@ -752,6 +767,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
     async (t) => {
       const nodeId = 'node-flap';
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {
@@ -818,6 +834,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
       const nodeId = 'node-stale-regression';
       const now = Date.now();
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {
@@ -899,6 +916,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
       const nodeId = 'node-local-observed-stale-regression';
       const now = Date.now();
       const bootstrapService = new BootstrapService({
+        bootIncarnation: 1,
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {

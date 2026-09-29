@@ -2,7 +2,9 @@ import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
+  SERVICE_STATUS,
   SERVICE_TYPE,
+  STATE,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 
@@ -57,7 +59,19 @@ function createCanonicalPartitionOperationRow(operationRow) {
   };
 }
 
+// The node lifecycle owner's durable READY write. Dispatch never writes node
+// state; it observes readiness only through the NODES cache/CDC triggers.
+function applyDurableReadyNodeRow(nodeRow, heartbeatAt, readyLeaseExpiresAt) {
+  return Object.assign(nodeRow, {
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+    last_heartbeat: heartbeatAt,
+    ready_lease_expires_at: readyLeaseExpiresAt,
+  });
+}
+
 export {
+  applyDurableReadyNodeRow,
   claimPendingOperation,
   createCanonicalPartitionOperationRow,
   initializeAtomicClaimTestEnvironment,

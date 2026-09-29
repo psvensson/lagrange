@@ -4,6 +4,7 @@ import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
 const config = ConfigurationManager.getInstance();
+const ORIGIN_HLC = '1785630280000:1:node-2';
 if (!config.isInitialized()) {
   config.initialize();
 }
@@ -80,6 +81,43 @@ test('DistributedWriteCoordinator - routes multi-row INSERT to all partitions', 
   t.same(result.partitions, ['p1', 'p2']);
   t.same(result.rows.map((row) => row.id).sort(), ['alice', 'zack']);
 });
+
+test('DistributedWriteCoordinator preserves the shared committed origin HLC',
+  async (t) => {
+    const coordinator = new DistributedWriteCoordinator({
+      partitionResolver: {},
+      queryExecutor: {
+        async executeUpdate() {
+          return {
+            success: true,
+            affectedRows: 1,
+            rows: [],
+            originHlc: ORIGIN_HLC,
+          };
+        },
+      },
+      getTablePartitions() {
+        return [];
+      },
+      getTableInfo() {
+        return {primaryKey: 'id'};
+      },
+    });
+    const ast = new SQLParser(
+      'UPDATE users SET status = \'active\' WHERE id = 1',
+    ).parse();
+    const plan = coordinator.createWritePlan(ast, [], {
+      partitionIds: ['p1'],
+    });
+
+    const result = await coordinator.executePlan(plan, []);
+
+    t.equal(
+      result.originHlc,
+      ORIGIN_HLC,
+      'the outer write owner retains the exact participant CDC version',
+    );
+  });
 
 test('DistributedWriteCoordinator - surfaces participant failures', async (t) => {
   const coordinator = new DistributedWriteCoordinator({
@@ -160,6 +198,59 @@ test('DistributedWriteCoordinator delegates participant retry ownership', async 
     'the aggregation owner must not replay a canonical delivery outcome',
   );
 });
+
+test('DistributedWriteCoordinator preserves committed deterministic failure identity',
+  async (t) => {
+    let executions = 0;
+    const coordinator = new DistributedWriteCoordinator({
+      partitionResolver: {},
+      queryExecutor: {
+        async executeInsert() {
+          return {success: true, affectedRows: 0, rows: []};
+        },
+        async executeUpdate() {
+          executions += 1;
+          return executions === 1 ? {
+            success: false,
+            error: 'UNIQUE constraint failed: services.service_id',
+            failureCode: 'SQLITE_CONSTRAINT_PRIMARYKEY',
+            committed: true,
+            outcome: 'statement_failed',
+            logIndex: 41,
+            entryId: 'entry-41',
+          } : {success: true, affectedRows: 1, rows: []};
+        },
+        async executeDelete() {
+          return {success: true, affectedRows: 0, rows: []};
+        },
+      },
+      getTablePartitions: () => [],
+      getTableInfo: () => ({primaryKey: 'id'}),
+    });
+    const ast = new SQLParser(
+      'UPDATE users SET status = \'active\' WHERE id = 1',
+    ).parse();
+    const firstPlan = coordinator.createWritePlan(ast, [], {
+      partitionIds: ['p1'], operationId: 'operation-41',
+      idempotencyKey: 'entry-41',
+    });
+    const failed = await coordinator.executePlan(firstPlan, []);
+    t.match(failed.firstFailedParticipant, {
+      failureCode: 'SQLITE_CONSTRAINT_PRIMARYKEY',
+      committed: true,
+      outcome: 'statement_failed',
+      logIndex: 41,
+      entryId: 'entry-41',
+    }, 'aggregate retains the committed participant disposition');
+    t.equal(executions, 1, 'deterministic failing executor runs once');
+    const nextPlan = coordinator.createWritePlan(ast, [], {
+      partitionIds: ['p1'], operationId: 'operation-42',
+      idempotencyKey: 'entry-42',
+    });
+    t.equal((await coordinator.executePlan(nextPlan, [])).success, true,
+      'a distinct subsequent write advances independently');
+    t.equal(executions, 2, 'no retry storm minted extra execution identities');
+  });
 
 test('DistributedWriteCoordinator - propagates global execution options to participants',
   async (t) => {

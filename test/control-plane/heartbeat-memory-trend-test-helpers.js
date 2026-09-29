@@ -5,6 +5,12 @@ import {
 } from '../../src/control-plane/heartbeat-service.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  FIXTURE_BOOT_INCARNATION,
+  createNodeLifecyclePublicationFixture,
+} from '../test-helpers/node-lifecycle-publication-fixture.js';
+import {insertViaUpsert} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 const HEARTBEAT_REPORTER_PUBLICATION_PATH = Object.freeze({
   NODE_STATE_REPORTER: 'node_state_reporter',
@@ -49,6 +55,11 @@ function createMockCache() {
 
 function createMockCdc() {
   return {
+    // A node endpoint is born by INSERT at the node's incarnation and
+    // refreshed by an incarnation-fenced UPDATE (endpoint incarnation
+    // authority); the applied row count is the durable outcome.
+    insertSystemTableRow: async () => ({success: true,
+      partitionResult: {affectedRows: 1}}),
     updateSystemTableRow: async () => ({success: true}),
     upsertSystemTableRow: async () => ({success: true}),
   };
@@ -65,8 +76,19 @@ function createHeartbeatService(options = {}) {
       messageRouter: options.messageRouter || null,
     });
   return new RawHeartbeatService({
+    bootIncarnation: FIXTURE_BOOT_INCARNATION,
     ...options,
     controlPlaneSystemTableGateway,
+    nodeLifecyclePublication:
+      options.nodeLifecyclePublication ||
+      createNodeLifecyclePublicationFixture({
+        controlPlaneSystemTableGateway,
+        systemTableCache: options.systemTableCache,
+        authoritativeNodeRow: options.authoritativeNodeRow,
+        nodeId: options.nodeId,
+        bootIncarnation: options.bootIncarnation,
+        now: options.now,
+      }),
   });
 }
 
@@ -92,6 +114,7 @@ function createHeartbeatUpdateRow(nodeAddress = '10.0.0.1:8080') {
 }
 
 export {
+  insertViaUpsert,
   createHeartbeatUpdateRow,
   createMockCache,
   createMockCdc,
