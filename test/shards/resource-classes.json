@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2240,
+    "ordinary": 2242,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2257,
-  "digest": "fnv1a32-71f24c9f",
+  "censusSize": 2259,
+  "digest": "fnv1a32-97be568b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -177,6 +177,7 @@
     "test/bootstrap/lifecycle-owner-replica-routing.test.js": "ordinary",
     "test/bootstrap/lifecycle-unification.test.js": "ordinary",
     "test/bootstrap/mesh-reconcile-terminal-revive.test.js": "ordinary",
+    "test/bootstrap/message-group-activation-handler-boundary.test.js": "ordinary",
     "test/bootstrap/message-group-assignment-centralization.test.js": "ordinary",
     "test/bootstrap/message-group-assignment.test.js": "ordinary",
     "test/bootstrap/message-group-service-activation.test.js": "ordinary",
@@ -1116,6 +1117,7 @@
     "test/node/replica-state-delegation.test.js": "ordinary",
     "test/node/replica-state-machine-authoritative-transition.test.js": "ordinary",
     "test/node/replica-state-machine-registered-activation.test.js": "ordinary",
+    "test/node/replica-state-machine-time-source.test.js": "ordinary",
     "test/node/replica-state-machine-transitions.property.test.js": "ordinary",
     "test/node/replica-state-machine.test.js": "ordinary",
     "test/node/replica-status-state-machine.property.test.js": "ordinary",

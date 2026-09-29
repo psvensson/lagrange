@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 269,
+    "bootstrap-membership": 271,
     "cdc-metadata": 59,
     "cli-tooling": 96,
     "control-plane": 203,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2257,
-  "digest": "fnv1a32-59051e7b",
+  "censusSize": 2259,
+  "digest": "fnv1a32-d8ed816f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-5330fa49",
+  "observationDigest": "fnv1a32-33716239",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -197,6 +197,7 @@
     "test/bootstrap/lifecycle-owner-replica-routing.test.js": "bootstrap-membership",
     "test/bootstrap/lifecycle-unification.test.js": "bootstrap-membership",
     "test/bootstrap/mesh-reconcile-terminal-revive.test.js": "bootstrap-membership",
+    "test/bootstrap/message-group-activation-handler-boundary.test.js": "bootstrap-membership",
     "test/bootstrap/message-group-assignment-centralization.test.js": "bootstrap-membership",
     "test/bootstrap/message-group-assignment.test.js": "bootstrap-membership",
     "test/bootstrap/message-group-service-activation.test.js": "bootstrap-membership",
@@ -1136,6 +1137,7 @@
     "test/node/replica-state-delegation.test.js": "bootstrap-membership",
     "test/node/replica-state-machine-authoritative-transition.test.js": "bootstrap-membership",
     "test/node/replica-state-machine-registered-activation.test.js": "bootstrap-membership",
+    "test/node/replica-state-machine-time-source.test.js": "bootstrap-membership",
     "test/node/replica-state-machine-transitions.property.test.js": "bootstrap-membership",
     "test/node/replica-state-machine.test.js": "bootstrap-membership",
     "test/node/replica-status-state-machine.property.test.js": "bootstrap-membership",
@@ -2692,6 +2694,28 @@
         "src/bootstrap/phases/connect-websocket-phase.js"
       ]
     },
+    "test/bootstrap/message-group-activation-handler-boundary.test.js": {
+      "files": [
+        "src/bootstrap/join-cleanup-handler.js",
+        "src/bootstrap/owners/move-replica-handoff-owner.js",
+        "src/bootstrap/phases/create-message-group-replica-lifecycle.js",
+        "src/bootstrap/phases/seed-cleanup-handler.js",
+        "src/bootstrap/phases/seed-message-groups-phase.js",
+        "src/bootstrap/shared/message-group-service-activation.js",
+        "src/message-group/message-group-service-row-owner.js",
+        "src/node/message-group-service-handler.js",
+        "src/node/replica-handler-runtime-methods.js",
+        "src/node/replica-state-machine-serialization.js",
+        "src/node/replica-transport-handler-identity.js",
+        "src/node/runtime-service-handler.js"
+      ],
+      "directories": [
+        "src/bootstrap",
+        "src/message-group",
+        "src/node",
+        "src/partition"
+      ]
+    },
     "test/bootstrap/meta-service-endpoint-registration.test.js": {
       "files": [
         "src/bootstrap/shared/runtime-service-handler-setup.js",
@@ -2821,11 +2845,10 @@
     },
     "test/bootstrap/partition-activation-handler-boundary.test.js": {
       "files": [
-        "src/bootstrap/phases/create-message-group-replica-lifecycle.js",
-        "src/bootstrap/phases/seed-message-groups-phase.js",
         "src/bootstrap/shared/partition-service-activation.js",
         "src/node/replica-state-machine-registered-activation.js",
         "src/node/replica-state-machine-serialization.js",
+        "src/node/replica-transport-handler-identity.js",
         "src/partition/partition-service-lifecycle-methods.js"
       ],
       "directories": [
@@ -12006,6 +12029,7 @@
     "test/simulation/formation-attribution-provenance.test.js": {
       "files": [
         "src/bootstrap/pipeline/startup-pipeline-runner.js",
+        "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-diagnostics-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
@@ -12030,6 +12054,7 @@
     "test/simulation/formation-sim-bootstrap-owner-entry.test.js": {
       "files": [
         "src/bootstrap/pipeline/startup-pipeline-runner.js",
+        "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-diagnostics-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
@@ -12038,6 +12063,7 @@
     },
     "test/simulation/formation-sim-charged-seed-host.test.js": {
       "files": [
+        "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json"
       ]
@@ -12054,36 +12080,42 @@
     },
     "test/simulation/formation-sim-production-bootstrap-phase-one.test.js": {
       "files": [
+        "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json"
       ]
     },
     "test/simulation/formation-sim-production-five-node-composition.test.js": {
       "files": [
+        "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json"
       ]
     },
     "test/simulation/formation-sim-production-handoff.test.js": {
       "files": [
+        "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json"
       ]
     },
     "test/simulation/formation-sim-production-message-groups.test.js": {
       "files": [
+        "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json"
       ]
     },
     "test/simulation/formation-sim-production-partitions.test.js": {
       "files": [
+        "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json"
       ]
     },
     "test/simulation/formation-sim-production-transcript-determinism.test.js": {
       "files": [
+        "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json"
       ],

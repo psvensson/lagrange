@@ -5,6 +5,7 @@
  * Requirements: 1.1, 1.2, 1.3, 2.1-2.8
  */
 
+import {resolveTimeSource} from '../time/time-source.js';
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
@@ -139,9 +140,12 @@ class ReplicaStateMachine extends EventEmitter {
       this.cdcIntegrationService || this.controlPlaneSystemTableGateway,
       REPLICA_STATE_MACHINE_ERROR_MSG.MISSING_CDC_SERVICE,
     );
+    // Timers run on the node's canonical time source (RealTimeSource when none
+    // is given, i.e. the host timers); an explicit now() still wins for stamps.
+    this.timeSource = resolveTimeSource({timeSource: options.timeSource});
     this.now = typeof options.now === 'function' ?
       options.now :
-      REPLICA_STATE_MACHINE_NOW;
+      options.timeSource ? () => this.timeSource.now() : REPLICA_STATE_MACHINE_NOW;
     this.systemTableCache = options.systemTableCache || null;
 
     // CL-016: service rows seeded into the LOCAL cache by the priority

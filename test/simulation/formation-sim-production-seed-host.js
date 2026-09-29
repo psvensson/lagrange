@@ -15,6 +15,8 @@
 import {TRANSPORT_EVENT} from '../../src/constants/transport.js';
 import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {DURABLE_EVIDENCE_STATE} from
+  '../../src/bootstrap/rejoin-hints-constants.js';
 import {
   BOOTSTRAP_PHASE,
 } from '../../src/bootstrap/bootstrap-constants.js';
@@ -323,6 +325,12 @@ function createProductionSeedSimHost(environment, options = {}) {
   const bootstrap = new BootstrapService({
     nodeId, nodeAddress, wsPort,
     nodeService: environment.nodeService, routerFactory, randomSource,
+    // The simulated seed is virgin: no data directory, so no durable SERVICES
+    // identity. Production reads this at startup (readSeedStartupStorageAdmission).
+    startupServicesAdmission: Object.freeze({
+      state: DURABLE_EVIDENCE_STATE.MISSING, rows: [], conflicting: false,
+      empty: true,
+    }),
   });
   // A seed phase is production's work, and production already owns the
   // boundary it is entered through: StartupPipelineRunner.run() is where
@@ -571,8 +579,16 @@ function createProductionSeedSimHost(environment, options = {}) {
       transcript.record('PHASE_REGISTRATION_STARTED', {
         nodeId, phase: PHASE_REGISTRATION,
       });
-      await runSeedPhase(PHASE_REGISTRATION,
-        () => bootstrap.seedRegistrationPhase.phaseRegistration());
+      await runSeedPhase(PHASE_REGISTRATION, () => {
+        // Production's REGISTRATION checkpoint creates the replica lifecycle
+        // owner before the phase (bootstrap-service-seed-workflow.js).
+        if (!bootstrap.replicaStateMachine) {
+          bootstrap.seedRuntimeBridgeOwner
+            .ensureBootstrapCdcIntegrationService();
+          bootstrap.initializeReplicaStateMachine();
+        }
+        return bootstrap.seedRegistrationPhase.phaseRegistration();
+      });
       transcript.record('PHASE_REGISTRATION_COMPLETED', {
         nodeId, phase: PHASE_REGISTRATION,
       });

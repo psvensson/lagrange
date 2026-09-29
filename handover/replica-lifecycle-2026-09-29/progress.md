@@ -394,3 +394,19 @@ Lead decisions recorded: keep dormant entries as named debt; null lease reads as
 - STOPPED EDITING (round 8 implementer). Nothing committed; solve/quests untouched; temporary base worktree removed.
 - R8 residual closed by the lead: removed the raw `messageRouter.unregister(unifiedAddress)` in `stopJoinPartitionReplica` (node-joining-message-group-runtime-delegation.js) after `partition.shutdown()`, which already retires the exact handler in the lane (same class as the R7 seed stop-hook removal; the R7 census regex missed the `?.(` form). MG census updated; partition + MG boundary + join MG activation tests 116/116.
 - R8 NOT run (budget): complexity/cognitive, duplication (no slack, highest risk), unused exports, deps, shard/metadata regeneration for the new test file, impact-contracts, guidelines, runtime-grammar, metadata-gateway, durable-generation check, lab cone. The two candidate-only reds are being classified (see the classification note when it lands). Next: finish those, then the re-freeze per owner-decisions-2026-09-29f.md section 5.
+
+## ROUND 8 (cont., lead, cloud session 2026-09-29) — owner guidance items 1-12
+- Push gate on 2b6bff920 (normal, no bypass) failed in static-analysis-postpush with 3/22 audits: test:complexity
+  (1797 > 1796: the new createJoinMessageGroupReplica complexity 13), audit:shards (new MG boundary test unclassified;
+  metadata regeneration had been skipped), audit:impact-contracts (followed from the unclassified file). Repaired:
+  envelope-logger extraction (complexity 1796/1796, no baseline change); shard metadata regenerated, byte-stable on re-run.
+- Clock-owner census: round8/clock-owner-census.md. Existing owner (src/time/time-source.js via NodeService.getTimeSource)
+  -> RSM timers wired through it; seed passes its node time source; production default unchanged.
+  Witness test/node/replica-state-machine-time-source.test.js (red-on-revert: 2).
+- Simulator: frozen-simulator compatibility correction in formation-sim-production-seed-host.js (admission contract +
+  REGISTRATION-checkpoint RSM creation mirror). production-partitions 3/3, production-handoff 5/5.
+- Property: bootstrap-mode-routing valid-operation domain documented; rejection property red-on-revert verified.
+- Handler-removal census: round8/mg-removal-census.md. OPEN: seed-cleanup-handler.js:342,581 raw PARTITION removals
+  (ordering-safe per R7 census, but non-exact) and the identity-helper fallback for transports without unregisterExact.
+- Recovery bundle: round8/round8.bundle (+RESTORE.md, SHA256SUMS) at 0a95cb4ec, kept OUT of Git (untracked, sent to the owner as files); disaster recovery only.
+- Tests: 34 files touching RSM / replica-handler-setup / MG create lifecycle 1166/1166; boundary tests 116/116.

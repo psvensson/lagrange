@@ -18,7 +18,7 @@ function startTimeoutChecker(stateMachine) {
     return;
   }
 
-  stateMachine.timeoutCheckInterval = setInterval(() => {
+  stateMachine.timeoutCheckInterval = stateMachine.timeSource.setInterval(() => {
     stateMachine._checkTimeouts();
     // CL-021: converge deferred durable services rows (local-only marker)
     // on the same tick. Fire-and-forget — failures back off per row and
@@ -26,7 +26,7 @@ function startTimeoutChecker(stateMachine) {
     stateMachine._reconcileLocalOnlyServiceRows?.()?.catch?.(() => null);
     stateMachine.reconcileCanonicalLeaderClearDebtNow?.()?.catch?.(() => null);
   }, stateMachine.timeoutCheckIntervalMs);
-  stateMachine.timeoutCheckInterval.unref();
+  stateMachine.timeoutCheckInterval?.unref?.();
 
   stateMachine.logger.debug(
     REPLICA_STATE_MACHINE_LOG_MSG.TIMEOUT_CHECKER_STARTED,
@@ -43,7 +43,7 @@ function startTimeoutChecker(stateMachine) {
  */
 function stopTimeoutChecker(stateMachine) {
   if (stateMachine.timeoutCheckInterval !== null) {
-    clearInterval(stateMachine.timeoutCheckInterval);
+    stateMachine.timeSource.clearInterval(stateMachine.timeoutCheckInterval);
     stateMachine.timeoutCheckInterval = null;
 
     stateMachine.logger.debug(

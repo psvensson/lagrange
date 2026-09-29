@@ -55,7 +55,7 @@ const ERROR_MSG = Object.freeze({
  */
 class ReplicaHandlerSetup {
   static createReplicaStateMachine(options = {}) {
-    const {nodeId, cdcIntegrationService, systemTableCache} = options;
+    const {nodeId, cdcIntegrationService, systemTableCache, timeSource} = options;
     if (!nodeId) {
       throw new DependencyError(
         REPLICA_HANDLER_SETUP_NAME,
@@ -78,6 +78,7 @@ class ReplicaHandlerSetup {
       nodeId,
       cdcIntegrationService,
       systemTableCache,
+      timeSource,
     });
     replicaStateMachine.startTimeoutChecker();
     const loggingService = LoggingService.getInstance();
@@ -121,6 +122,7 @@ class ReplicaHandlerSetup {
       rpcClient,
       executorOutcomeEmitter,
       replicaStateMachine: existingReplicaStateMachine,
+      timeSource,
     } = options;
 
     // Validate required dependencies
@@ -170,6 +172,7 @@ class ReplicaHandlerSetup {
         nodeId,
         cdcIntegrationService,
         systemTableCache,
+        timeSource,
       });
 
     // S6 snapshot catch-up wiring: BOTH production factories (bootstrap and

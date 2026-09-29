@@ -2,14 +2,14 @@
 
 First divergence for both: the WIP tree 78b0cfbd3 over base 6831054b1.
 
-## bootstrap-mode-routing.property (test/cdc) — FIXTURE DEBT, FIXED
+## bootstrap-mode-routing.property (test/cdc) — candidate exposes a stale property-generator domain; dedicated rejection proof added (final classification: independent verifier)
 - Refusal is intended: `src/cdc/cdc-integration-service-mutations.js:166-170` (SERVICES_UPSERT_FORBIDDEN) and the gateway
   `assertSystemTableMutationAllowed`; ledger rows I3/I6; quest log.ndjson:9 verifier REJECT led to it.
 - Failing seeds: -1913585971 (path 7:2:2:2:2), 1468758261 (path 4:2:2:2:2).
 - Applied in commit: the three routing properties exclude only (services, upsert) via `fc.pre`; a new property pins the
   refusal in every mode (red at base). Both seeds 5/5, 15/15 unseeded. TODO: record in fixture-incarnation-inventory.md.
 
-## formation-sim-production-partitions C-1/C-2 (and C-3 passes) — FIXTURE DEBT, NOT APPLIED (owner confirm)
+## formation-sim-production-partitions C-1/C-2 — candidate exposes a stale simulator constructor contract; frozen-simulator compatibility correction APPLIED (final classification: independent verifier)
 - `src/bootstrap/phases/seed-partitions-phase.js:77-91,217-221` fails closed when `startupServicesAdmission` is null.
   Production supplies it (`src/lagrange-runtime-startup.js:417` readSeedStartupStorageAdmission); cluster-test-helpers was
   already adapted. The simulator seed host (`test/simulation/formation-sim-production-seed-host.js:323`) does not.
@@ -17,7 +17,7 @@ First divergence for both: the WIP tree 78b0cfbd3 over base 6831054b1.
   contract this quest changed; the simulator freeze (solve/epics/formation-seed-decoupling.md) forbids realism work, so the
   owner should confirm this counts as contract adaptation, not simulator work.
 
-## NEW, not in the handover: more candidate-only simulator reds, same root cause — OWNER DECISION NEEDED
+## formation-sim-charged-seed-host #6-8, formation-sim-production-handoff D-1..D-5 — stale constructor + timing contract; resolved by the clock-owner wiring (clock-owner-census.md) plus the REGISTRATION-checkpoint mirror
 - formation-sim-charged-seed-host #6-8 and formation-sim-production-handoff D-1..D-5 (base: handoff 5/5 green).
 - After the admission patch the next gap: `PartitionServiceRowOwner requires ReplicaStateMachine for activation`
   (src/partition/partition-service-row-owner.js:338-341); the candidate creates the RSM in the seed workflow REGISTRATION
@@ -26,3 +26,14 @@ First divergence for both: the WIP tree 78b0cfbd3 over base 6831054b1.
   the seam guard `nondeterministic_owner_seam: setInterval` from ReplicaStateMachine.startTimeoutChecker
   (src/node/replica-state-machine-timeouts.js:21, real setInterval instead of the node clock).
 - Options: inject the node clock into ReplicaStateMachine timeouts (src, in this quest), or treat as simulator work (frozen).
+
+## Round-8 resolution (owner guidance 2026-09-29 items 3-5, 9)
+- Property: the routing properties are documented as quantifying over VALID writes; the separate property pins the
+  refusal through the real CDC policy owner (CDCIntegrationService.upsertSystemTableRow). Red-on-revert verified:
+  disabling the SERVICES refusal at cdc-integration-service-mutations.js:166 turns exactly that property red.
+- Simulator compatibility correction (test/simulation/formation-sim-production-seed-host.js only): passes the production
+  `startupServicesAdmission` contract (virgin/empty, as readSeedStartupStorageAdmission returns for an empty data dir) and
+  mirrors the production REGISTRATION checkpoint's RSM creation (bootstrap-service-seed-workflow.js:290-294) before
+  phaseRegistration. Production contract unchanged; no simulation semantics, lifecycle behaviour, assertion or timing changed.
+  Production was NOT changed to tolerate the absence of the admission.
+- "Production unaffected" is NOT claimed here; the independent verifier decides.

@@ -31,6 +31,24 @@ function attachMessageGroupServiceBeforePublish(delegates, messageGroup) {
 const formatJoinReplicaMissingAtStart = (replicaId) =>
   `Join message-group replica ${replicaId} missing at start`;
 
+/**
+ * Build the debug envelope logger for a join message-group handler.
+ * @param {Object} options - Join replica options (logEnvelope).
+ * @param {Object} logger - Join logger.
+ * @param {string} address - Handler address.
+ * @return {Function|null} Envelope observer, or null when not logging.
+ */
+function buildJoinEnvelopeLogger(options, logger, address) {
+  if (!options.logEnvelope) return null;
+  return (envelope) => {
+    logger.debug(JOINING_LOG_MSG.JOIN_MESSAGE_RECEIVED, {
+      address,
+      envelopeType: envelope?.type || envelope?.payload?.type,
+      from: envelope?.from || envelope?.payload?.address,
+    });
+  };
+}
+
 const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
   /**
    * Create a join message-group replica with unified lifecycle.
@@ -90,18 +108,7 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
       messageRouter,
       address: unifiedAddress,
       resolveLane: () => this.delegates.getReplicaStateMachine?.() || null,
-      onEnvelope: options.logEnvelope ? (envelope) => {
-        logger.debug(
-          JOINING_LOG_MSG.JOIN_MESSAGE_RECEIVED,
-          {
-            address: unifiedAddress,
-            envelopeType:
-              envelope?.type || envelope?.payload?.type,
-            from:
-              envelope?.from || envelope?.payload?.address,
-          },
-        );
-      } : null,
+      onEnvelope: buildJoinEnvelopeLogger(options, logger, unifiedAddress),
     });
 
     if (options.logRegistration) {

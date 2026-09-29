@@ -94,6 +94,7 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
           nodeId: this.nodeId,
           cdcIntegrationService,
           systemTableCache: this.getSystemTableCache(),
+          timeSource: this.nodeService?.getTimeSource?.(),
         });
       return this.replicaStateMachine;
     },

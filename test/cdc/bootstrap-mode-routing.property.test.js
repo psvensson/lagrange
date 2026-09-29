@@ -42,10 +42,13 @@ const WRITABLE_TABLES = Object.values(SYSTEM_TABLE_NAME);
 const WRITE_OPERATIONS = ['insert', 'update', 'delete', 'upsert'];
 
 /**
- * SERVICES rows admit INSERT-only or identity-fenced UPDATE; the CDC boundary
- * refuses a SERVICES UPSERT before any routing decision (I3,
- * SERVICES_UPSERT_FORBIDDEN). That write is never routed, so the routing
- * properties exclude it and a dedicated property pins the refusal.
+ * The routing properties quantify over VALID system-table writes only.
+ * SERVICES rows admit INSERT-only or identity-fenced UPDATE; the real CDC
+ * policy owner refuses a SERVICES UPSERT before any routing decision (I3,
+ * SERVICES_UPSERT_FORBIDDEN). That write is outside the valid-operation domain,
+ * so the routing properties exclude it and the separate property
+ * 'SERVICES upsert is refused before routing in every mode' proves it fails
+ * closed (red if the prohibition is removed).
  * @param {string} tableName - System table name.
  * @param {string} operation - One of WRITE_OPERATIONS.
  * @return {boolean} True when the CDC boundary refuses the write.
