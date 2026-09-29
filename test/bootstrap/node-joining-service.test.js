@@ -15,6 +15,7 @@ import {
 import {NodeService} from '../../src/node/node-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
+  establishJoinReplicaLifecycleOwner,
   initializeTestEnvironment,
   installNodeJoiningReplicaStateMachine,
 } from './node-joining-service-test-support.js';
@@ -596,6 +597,7 @@ test('NodeJoiningService - ready signal metadata gate uses seed-contact authorit
     service.rpcClient = {};
     service.cdcIntegrationService = {};
     service.heartbeatService = {};
+    establishJoinReplicaLifecycleOwner(service);
     service.getLeaderMessageGroupService = () => ({});
     service.seedContactStartupAuthority = TEST_SEED_CONTACT_AUTHORITY;
 

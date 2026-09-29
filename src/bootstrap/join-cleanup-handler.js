@@ -620,15 +620,8 @@ class JoinCleanupHandler {
     await LatencyTopologySetup.stop(latencyTopology);
     this.delegates.setLatencyTopology(null);
 
-    const replicaHandler = this.delegates.getReplicaHandler();
     const messageRouter = this.delegates.getMessageRouter();
-    if (replicaHandler) {
-      replicaHandler.unregisterFromRouter(messageRouter);
-      await replicaHandler.shutdown();
-      this.delegates.setReplicaHandler(null);
-    }
-
-    await this.clearReplicaStateMachine();
+    await this.releaseReplicaLifecycleOwner(messageRouter);
     // Stop all runtime drivers (request/call cell workers) before the
     // service maps come down: the per-replica REMOVE_REPLICA stop path
     // never runs at whole-node teardown, so without this sweep the
@@ -685,14 +678,24 @@ class JoinCleanupHandler {
     this.delegates.setRebalanceCoordinator(null);
   }
 
-  async clearReplicaStateMachine() {
-    const replicaStateMachine = this.delegates.getReplicaStateMachine();
-    if (!replicaStateMachine) {
-      return;
+  // Release the incarnation's one recorded lifecycle owner (its timer stops
+  // even when a field projection is absent), so nothing can be orphaned.
+  async releaseReplicaLifecycleOwner(messageRouter) {
+    const released = this.delegates.releaseReplicaLifecycleOwner();
+    const replicaHandler =
+      released?.replicaHandler || this.delegates.getReplicaHandler();
+    if (replicaHandler) {
+      replicaHandler.unregisterFromRouter(messageRouter);
+      await replicaHandler.shutdown();
+      this.delegates.setReplicaHandler(null);
     }
-    replicaStateMachine.stopTimeoutChecker();
-    await replicaStateMachine.clear();
-    this.delegates.setReplicaStateMachine(null);
+    const replicaStateMachine =
+      released?.replicaStateMachine || this.delegates.getReplicaStateMachine();
+    if (replicaStateMachine) {
+      replicaStateMachine.stopTimeoutChecker();
+      await replicaStateMachine.clear();
+      this.delegates.setReplicaStateMachine(null);
+    }
   }
 
   async shutdownRpcClient() {

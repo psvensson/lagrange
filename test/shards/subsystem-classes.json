@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 271,
+    "bootstrap-membership": 272,
     "cdc-metadata": 59,
     "cli-tooling": 96,
     "control-plane": 203,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2259,
-  "digest": "fnv1a32-d8ed816f",
+  "censusSize": 2260,
+  "digest": "fnv1a32-85b0e98b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-33716239",
+  "observationDigest": "fnv1a32-a7b3ca56",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -185,6 +185,7 @@
     "test/bootstrap/join-readiness-startup-authority.test.js": "bootstrap-membership",
     "test/bootstrap/join-readiness-warming-node-exclusion.property.test.js": "bootstrap-membership",
     "test/bootstrap/join-readiness-warming-node-preservation.property.test.js": "bootstrap-membership",
+    "test/bootstrap/join-resume-replica-lifecycle-owner.test.js": "bootstrap-membership",
     "test/bootstrap/join-retry-patience-selectable.test.js": "bootstrap-membership",
     "test/bootstrap/join-session-store.test.js": "bootstrap-membership",
     "test/bootstrap/join-startup-owner-routing.test.js": "bootstrap-membership",
@@ -2673,6 +2674,14 @@
         "test/integration/helpers/cluster-test-helpers.js"
       ]
     },
+    "test/bootstrap/join-resume-replica-lifecycle-owner.test.js": {
+      "files": [
+        "src/control-plane/owners/service-endpoints-owner.js",
+        "src/entrypoint-runtime-join-startup-policy.js",
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
     "test/bootstrap/join-retry-patience-selectable.test.js": {
       "files": [
         "src/node/replica-state-machine.js",
@@ -2757,6 +2766,12 @@
     "test/bootstrap/node-joining-lease-registration.test.js": {
       "files": [
         "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/bootstrap/node-joining-ready-signal-retry.test.js": {
+      "files": [
+        "src/node/replica-state-machine.js",
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/bootstrap/node-joining-service-bootstrap-resume-budget.test.js": {

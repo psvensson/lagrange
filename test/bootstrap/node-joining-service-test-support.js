@@ -14,6 +14,8 @@ import {NodeService} from '../../src/node/node-service.js';
 import {ReplicaStateMachine} from
   '../../src/node/replica-state-machine.js';
 import {TABLES} from '../../src/constants/index.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {createCanonicalLifecycleServiceRow} from
   '../test-helpers/lifecycle-state-store.js';
 
@@ -78,4 +80,28 @@ export function installNodeJoiningReplicaStateMachine(
   };
   service.replicaStateMachine = replicaStateMachine;
   return replicaStateMachine;
+}
+
+/**
+ * Establish the joiner's replica lifecycle owner through the real acquisition
+ * owner, as the infrastructure segment does. Join infrastructure readiness is
+ * answered by that owner for the service's boot incarnation, so a fixture
+ * that declares the infrastructure ready must acquire it, not set a field.
+ * The owner's timer runs on a private virtual clock (never a host timer).
+ * @param {Object} service NodeJoiningService fixture.
+ * @return {{replicaHandler: Object, replicaStateMachine: Object}}
+ */
+export function establishJoinReplicaLifecycleOwner(service) {
+  const acquired = service.replicaLifecycleOwner.acquire({
+    nodeId: service.nodeId,
+    messageRouter: {register() {}, unregister() {}},
+    cdcIntegrationService: {updateSystemTableRow: async () => true},
+    systemTableCache: new SystemTableCache(),
+    createPartitionService: async () => null,
+    ownerIncarnation: service.bootIncarnation,
+    timeSource: new VirtualTimeSource(),
+  });
+  service.replicaHandler = acquired.replicaHandler;
+  service.replicaStateMachine = acquired.replicaStateMachine;
+  return acquired;
 }

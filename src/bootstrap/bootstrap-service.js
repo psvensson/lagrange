@@ -29,6 +29,7 @@ import {v4 as _uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {DataDirectoryManager as _DataDirectoryManager} from '../storage/data-directory-manager.js';
 import {NodeService} from '../node/node-service.js';
+import {ReplicaLifecycleOwner} from './shared/replica-handler-setup.js';
 import {
   MessageGroupService as _MessageGroupService,
 } from '../message-group/message-group-service.js';
@@ -251,6 +252,9 @@ class BootstrapService extends EventEmitter {
     // Unified lifecycle owners for hard-cutover startup orchestration.
     this.serviceLifecycleManager = null;
     this.serviceReconciler = null;
+    // The one replica lifecycle owner of this boot incarnation; the handler
+    // and state machine fields below are its projections.
+    this.replicaLifecycleOwner = new ReplicaLifecycleOwner();
     // Replica handler for CREATE_REPLICA/REMOVE_REPLICA execution
     this.replicaHandler = null;
 

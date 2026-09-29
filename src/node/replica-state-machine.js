@@ -103,6 +103,26 @@ const VALID_TRANSITIONS = REPLICA_STATE_MACHINE_VALID_TRANSITIONS;
  */
 const DEFAULT_TIMEOUTS = REPLICA_STATE_MACHINE_DEFAULT_TIMEOUTS;
 
+const REPLICA_LIFECYCLE_OWNER_INCARNATION_FIELD = 'ownerIncarnation';
+
+/**
+ * Stamp a replica lifecycle authority with the node boot incarnation that
+ * owns it, read-only: an owner minted for incarnation G is never reused for
+ * G+1 (ReplicaLifecycleOwner fences on it). 0 means pre-incarnation.
+ * @param {Object} target - ReplicaStateMachine or ReplicaHandler.
+ * @param {number} [ownerIncarnation]
+ */
+function defineReplicaLifecycleOwnerIncarnation(target, ownerIncarnation) {
+  Object.defineProperty(target, REPLICA_LIFECYCLE_OWNER_INCARNATION_FIELD, {
+    value: Number.isSafeInteger(ownerIncarnation) && ownerIncarnation > 0 ?
+      ownerIncarnation :
+      0,
+    enumerable: true,
+    writable: false,
+    configurable: false,
+  });
+}
+
 /**
  * ReplicaStateMachine - Central state machine for replica lifecycle.
  * Enforces valid transitions and emits events for all state changes.
@@ -121,6 +141,7 @@ class ReplicaStateMachine extends EventEmitter {
    * @param {number} [options.removingTimeoutMs] - Timeout for removing state.
    * @param {number} [options.timeoutCheckIntervalMs] - Interval for timeout
    *   checks.
+   * @param {number} [options.ownerIncarnation] - Owning node boot incarnation.
    */
   constructor(options = {}) {
     super();
@@ -132,6 +153,7 @@ class ReplicaStateMachine extends EventEmitter {
       options.nodeId,
       REPLICA_STATE_MACHINE_ERROR_MSG.MISSING_NODE_ID,
     );
+    defineReplicaLifecycleOwnerIncarnation(this, options.ownerIncarnation);
 
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.controlPlaneSystemTableGateway =
@@ -508,6 +530,10 @@ class ReplicaStateMachine extends EventEmitter {
     stopTimeoutChecker(this);
   }
 
+  isTimeoutCheckerArmed() {
+    return this.timeoutCheckInterval !== null;
+  }
+
   _checkTimeouts() {
     return checkTimeouts(this);
   }
@@ -717,6 +743,7 @@ class ReplicaStateMachine extends EventEmitter {
 export {
   ReplicaStateMachine,
   ReplicaState,
+  defineReplicaLifecycleOwnerIncarnation,
   VALID_TRANSITIONS,
   DEFAULT_TIMEOUTS,
 };

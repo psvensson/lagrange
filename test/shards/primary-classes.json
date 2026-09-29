@@ -4,12 +4,12 @@
   "counts": {
     "unit": 1988,
     "integration": 75,
-    "bootstrap": 189,
+    "bootstrap": 190,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2259,
-  "digest": "fnv1a32-af9787af",
+  "censusSize": 2260,
+  "digest": "fnv1a32-c6775d82",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -166,6 +166,7 @@
     "test/bootstrap/join-readiness-startup-authority.test.js": "bootstrap",
     "test/bootstrap/join-readiness-warming-node-exclusion.property.test.js": "bootstrap",
     "test/bootstrap/join-readiness-warming-node-preservation.property.test.js": "bootstrap",
+    "test/bootstrap/join-resume-replica-lifecycle-owner.test.js": "bootstrap",
     "test/bootstrap/join-retry-patience-selectable.test.js": "bootstrap",
     "test/bootstrap/join-session-store.test.js": "bootstrap",
     "test/bootstrap/join-startup-owner-routing.test.js": "bootstrap",

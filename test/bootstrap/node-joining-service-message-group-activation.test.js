@@ -14,6 +14,7 @@ import {
 } from '../../src/bootstrap/message-group-assignment.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {RealTimeSource} from '../../src/time/time-source.js';
 import {
   initializeTestEnvironment,
 } from './node-joining-service-test-support.js';
@@ -60,6 +61,9 @@ import {insertViaUpsert} from
 import {publishRegisteredEndpoint} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 
+// The canonical node clock the joiner hands its replica lifecycle owner.
+const nodeTimeSource = new RealTimeSource();
+
 test('NodeJoiningService - blocking authoritative backfill uses critical delivery priority',
   async (t) => {
     initializeTestEnvironment();
@@ -71,6 +75,9 @@ test('NodeJoiningService - blocking authoritative backfill uses critical deliver
       NodeService.getInstance = () => ({
         getSystemTableCache() {
           return cache;
+        },
+        getTimeSource() {
+          return nodeTimeSource;
         },
       });
 
@@ -181,6 +188,9 @@ test('NodeJoiningService - pressure-degraded backfill skips replica fanout',
         getSystemTableCache() {
           return cache;
         },
+        getTimeSource() {
+          return nodeTimeSource;
+        },
       });
 
       const service = new NodeJoiningService({
@@ -279,6 +289,9 @@ test('NodeJoiningService - registerNodeInCluster seeds local discovery-critical 
       NodeService.getInstance = () => ({
         getSystemTableCache() {
           return cache;
+        },
+        getTimeSource() {
+          return nodeTimeSource;
         },
       });
 
@@ -382,6 +395,9 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
       NodeService.getInstance = () => ({
         getSystemTableCache() {
           return cache;
+        },
+        getTimeSource() {
+          return nodeTimeSource;
         },
       });
 
@@ -795,6 +811,9 @@ test('NodeJoiningService - replica factory should preserve join mode from replic
         getSystemTableCache() {
           return cache;
         },
+        getTimeSource() {
+          return nodeTimeSource;
+        },
       });
 
       PartitionService.prototype.initialize = async function() {};
@@ -893,6 +912,9 @@ test('NodeJoiningService - replica factory subscribes exactly the propagated cac
       NodeService.getInstance = () => ({
         getSystemTableCache() {
           return cache;
+        },
+        getTimeSource() {
+          return nodeTimeSource;
         },
       });
 
@@ -1034,6 +1056,9 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
       NodeService.getInstance = () => ({
         getSystemTableCache() {
           return cache;
+        },
+        getTimeSource() {
+          return nodeTimeSource;
         },
       });
 

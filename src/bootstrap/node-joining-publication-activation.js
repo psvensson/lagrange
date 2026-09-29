@@ -45,7 +45,6 @@ const {
   NODE_JOINING_SERVICE_LITERAL,
   NodeService,
   PartitionService,
-  ReplicaHandlerSetup,
   SQLQueryEngine,
   STARTUP_JOIN_MODE,
   STRING,
@@ -203,8 +202,10 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       this.tablePolicyService.initialize();
     }
     const createPartitionService = async (options) =>
-      this.createJoinLocalPartitionService({...options, messageGroupService}); // Use shared ReplicaHandlerSetup component
-    const {replicaHandler, replicaStateMachine} = ReplicaHandlerSetup.create({
+      this.createJoinLocalPartitionService({...options, messageGroupService});
+    // Reacquire this incarnation's one lifecycle owner; mint only when none
+    // is recorded (a preserved join resume re-enters this segment).
+    const acquired = this.replicaLifecycleOwner.acquire({
       nodeId: this.nodeId,
       messageRouter: this.messageRouter,
       cdcIntegrationService: cdcIntegrationService,
@@ -214,9 +215,11 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       rpcClient: this.rpcClient,
       executorOutcomeEmitter:
         this.rebalanceCoordinator?.executorOutcomeEmitter,
+      ownerIncarnation: this.bootIncarnation,
+      timeSource: NodeService.getInstance().getTimeSource(),
     });
-    this.replicaHandler = replicaHandler;
-    this.replicaStateMachine = replicaStateMachine;
+    this.replicaHandler = acquired.replicaHandler;
+    this.replicaStateMachine = acquired.replicaStateMachine;
     this.logger.info(JOINING_LOG_MSG.REPLICA_HANDLER_READY, {
       nodeId: this.nodeId,
       hasMessageGroupService: !!messageGroupService,

@@ -39,6 +39,7 @@ const {
   NodeService,
   NodeState,
   QuerySystemStatePhase,
+  ReplicaLifecycleOwner,
   STARTUP_JOIN_MODE,
   STORAGE_DEFAULT,
   StartupRuntimeHandoffOwner,
@@ -194,7 +195,10 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     this.serviceInstallationReconcilerOwnerHandle = null;
     this.systemMetadataOwners = null;
     this.serviceReconciler = null; // Replica handler for CREATE_REPLICA/REMOVE_REPLICA execution
-    this.replicaHandler = null; // Replica state machine for tracking replica lifecycle states
+    // The one replica lifecycle owner of this incarnation; the two fields
+    // below are its projections.
+    this.replicaLifecycleOwner = new ReplicaLifecycleOwner();
+    this.replicaHandler = null;
     this.replicaStateMachine = null; // Decomposed control plane services
     this.heartbeatService = null;
     this.leaseService = null;

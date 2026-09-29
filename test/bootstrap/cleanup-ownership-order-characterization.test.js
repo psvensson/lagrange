@@ -439,6 +439,8 @@ test('join cleanup drains replica handler before CDC SQL teardown',
       setEndpointService: noop,
       getDispatchService: () => null,
       setDispatchService: noop,
+      // No acquisition record in this fixture: the projections are torn down.
+      releaseReplicaLifecycleOwner: () => null,
       getReplicaHandler: () => delegates.replicaHandler,
       setReplicaHandler: (value) => {
         events.push('setReplicaHandler');

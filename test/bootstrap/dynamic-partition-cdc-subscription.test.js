@@ -8,6 +8,7 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ReplicaHandlerSetup} from '../../src/bootstrap/shared/replica-handler-setup.js';
 import {TABLES} from '../../src/constants/index.js';
+import {RealTimeSource} from '../../src/time/time-source.js';
 import {
   BOOTSTRAP_PHASE,
   JOINING_PHASE,
@@ -132,9 +133,13 @@ async function withCapturedReplicaFactory(
       };
     }
 
+    const nodeTimeSource = new RealTimeSource();
     NodeService.getInstance = () => ({
       getSystemTableCache() {
         return cache;
+      },
+      getTimeSource() {
+        return nodeTimeSource;
       },
     });
 

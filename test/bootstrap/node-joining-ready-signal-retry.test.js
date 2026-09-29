@@ -4,6 +4,9 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
+  establishJoinReplicaLifecycleOwner,
+} from './node-joining-service-test-support.js';
+import {
   LIFECYCLE_PHASE,
   LIFECYCLE_REASON,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
@@ -378,6 +381,7 @@ test('NodeJoiningService opens the ready heartbeat for seed-authorized INIT diag
       },
       start: () => {},
     };
+    establishJoinReplicaLifecycleOwner(service);
 
     const originalGetInstance = NodeService.getInstance;
     NodeService.getInstance = () => ({

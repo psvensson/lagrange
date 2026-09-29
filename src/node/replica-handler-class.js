@@ -49,7 +49,10 @@ import {
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
 import {ReplicaCreationProgressReporter} from '../utils/replica-creation-progress-reporter.js';
-import {ReplicaStateMachine} from './replica-state-machine.js';
+import {
+  ReplicaStateMachine,
+  defineReplicaLifecycleOwnerIncarnation,
+} from './replica-state-machine.js';
 import {ReplicaCleanupTombstoneOwner} from
   './replica-cleanup-tombstone-owner.js';
 import {assignReplicaHandlerLifecycleMethods} from './replica-handler-lifecycle-methods.js';
@@ -93,10 +96,12 @@ class ReplicaHandler extends EventEmitter {
    * @param {Function} options.createPartitionService - Factory for creating partitions.
    * @param {string} options.dataDir - Base data directory for partition storage.
    * @param {Object} [options.replicaStateMachine] - Replica lifecycle state machine.
+   * @param {number} [options.ownerIncarnation] - Owning node boot incarnation.
    */
   constructor(options = {}) {
     super();
     this.nodeId = options.nodeId || REPLICA_HANDLER_DEFAULT.NODE_ID;
+    defineReplicaLifecycleOwnerIncarnation(this, options.ownerIncarnation);
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.controlPlaneSystemTableGateway =

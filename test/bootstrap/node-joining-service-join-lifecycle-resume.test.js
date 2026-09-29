@@ -15,6 +15,7 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
+  establishJoinReplicaLifecycleOwner,
   initializeTestEnvironment,
 } from './node-joining-service-test-support.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -714,6 +715,7 @@ test('NodeJoiningService - resumes same join session without replaying ' +
   };
   service.initializeReplicaHandler = () => {
     phaseCalls.push('replica-handler');
+    establishJoinReplicaLifecycleOwner(service);
   };
   service.initializeMessageGroupServiceHandler = () => {
     phaseCalls.push('message-group-handler');
@@ -995,6 +997,7 @@ test('NodeJoiningService - readiness retry resumes skipped checkpoints with ' +
   service.phaseWaitForLeadership = async () => {};
   service.initializeJoinInfrastructure = async () => {
     calls.infrastructure += 1;
+    establishJoinReplicaLifecycleOwner(service);
     service.rpcClient = {};
     service.cdcIntegrationService = {};
     service.heartbeatService = {

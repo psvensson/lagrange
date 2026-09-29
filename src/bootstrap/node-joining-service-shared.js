@@ -24,7 +24,10 @@ import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {NodeService} from '../node/node-service.js';
-import {ReplicaHandlerSetup} from './shared/replica-handler-setup.js';
+import {
+  ReplicaHandlerSetup,
+  ReplicaLifecycleOwner,
+} from './shared/replica-handler-setup.js';
 import {CDCIntegrationSetup} from './shared/cdc-integration-setup.js';
 import {ControlPlaneSetup} from './shared/control-plane-setup.js';
 import {LatencyTopologySetup} from './shared/latency-topology-setup.js';
@@ -359,6 +362,7 @@ const NODE_JOINING_SERVICE_RUNTIME_SERVICE_SHARED = Object.freeze({
   RAFT_ROLE,
   RPCClient,
   ReplicaHandlerSetup,
+  ReplicaLifecycleOwner,
   ReplicaStatus,
   RuntimeServiceHandlerSetup,
   SERVICE_DESCRIPTOR_FIELD,

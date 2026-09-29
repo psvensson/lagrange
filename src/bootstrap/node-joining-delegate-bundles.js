@@ -448,6 +448,7 @@ function assignNodeJoiningDelegateBundleMethods(ServiceClass) {
         setDispatchService: (v) => {
           self.dispatchService = v;
         },
+        releaseReplicaLifecycleOwner: () => self.replicaLifecycleOwner.release(),
         getReplicaHandler: () => self.replicaHandler,
         setReplicaHandler: (v) => {
           self.replicaHandler = v;

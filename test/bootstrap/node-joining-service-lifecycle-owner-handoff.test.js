@@ -22,6 +22,7 @@ import {
 import {NODE_SERVICE_EVENT} from '../../src/node/node-constants.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
+  establishJoinReplicaLifecycleOwner,
   initializeTestEnvironment,
 } from './node-joining-service-test-support.js';
 
@@ -73,6 +74,7 @@ function stubDurableRejoin(service, calls, options = {}) {
     service.messageRouter = {
       deliver: async () => ({acknowledged: true}),
       setExternalAdmissionEnabled() {},
+      unregister() {},
     };
   };
   service.phaseCreateSelfHostedMessageGroup = async () => {
@@ -86,6 +88,7 @@ function stubDurableRejoin(service, calls, options = {}) {
   service.phaseWaitForLeadership = async () => {};
   service.initializeJoinInfrastructure = async () => {
     calls.infrastructure.push(attempt);
+    establishJoinReplicaLifecycleOwner(service);
     service.rpcClient = {
       async shutdown() {},
     };

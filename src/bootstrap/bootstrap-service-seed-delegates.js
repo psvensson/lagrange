@@ -479,9 +479,14 @@ function buildCleanupDelegates(service) {
       }
     },
     clearReplicaStateMachine: async () => {
-      if (self.replicaStateMachine) {
-        self.replicaStateMachine.stopTimeoutChecker();
-        await self.replicaStateMachine.clear();
+      // Release the incarnation's one recorded lifecycle owner first: its
+      // timer stops even when the field projection is absent.
+      const released = self.replicaLifecycleOwner.release();
+      const replicaStateMachine =
+        released?.replicaStateMachine || self.replicaStateMachine;
+      if (replicaStateMachine) {
+        replicaStateMachine.stopTimeoutChecker();
+        await replicaStateMachine.clear();
         self.replicaStateMachine = null;
       }
     },

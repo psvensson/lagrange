@@ -9,7 +9,6 @@ import {
 import {
   shouldAttachPartitionCdcPropagation,
 } from './shared/cdc-propagation-filter.js';
-import {ReplicaHandlerSetup} from './shared/replica-handler-setup.js';
 import {
   buildPartitionCdcPropagationSubscriber,
 } from './shared/partition-cdc-propagation-subscriber.js';
@@ -82,19 +81,19 @@ function assertBootstrapReplicaActiveState(
 function createBootstrapServiceReplicaHandlerRuntimeMethods() {
   return {
     initializeReplicaStateMachine() {
-      if (this.replicaStateMachine) {
-        return this.replicaStateMachine;
-      }
       const cdcIntegrationService = this.cdcIntegrationService;
       if (!cdcIntegrationService) {
         throw new Error(bootstrapError.CDC_REPLICA_HANDLER_MISSING);
       }
+      // Reacquire this incarnation's one lifecycle owner, minted once on the
+      // node's canonical time source.
       this.replicaStateMachine =
-        ReplicaHandlerSetup.createReplicaStateMachine({
+        this.replicaLifecycleOwner.acquireStateMachine({
           nodeId: this.nodeId,
           cdcIntegrationService,
           systemTableCache: this.getSystemTableCache(),
-          timeSource: this.nodeService?.getTimeSource?.(),
+          timeSource: this.nodeService.getTimeSource(),
+          ownerIncarnation: this.bootIncarnation,
         });
       return this.replicaStateMachine;
     },
@@ -269,7 +268,7 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
         return partition;
       };
 
-      const {replicaHandler, replicaStateMachine} = ReplicaHandlerSetup.create({
+      const acquired = this.replicaLifecycleOwner.acquire({
         nodeId: this.nodeId,
         messageRouter: this.messageRouter,
         cdcIntegrationService: cdcIntegrationService,
@@ -279,11 +278,12 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
         rpcClient: this.rpcClient,
         executorOutcomeEmitter:
           this.rebalanceCoordinator?.executorOutcomeEmitter,
-        replicaStateMachine: this.replicaStateMachine,
+        timeSource: this.nodeService.getTimeSource(),
+        ownerIncarnation: this.bootIncarnation,
       });
 
-      this.replicaHandler = replicaHandler;
-      this.replicaStateMachine = replicaStateMachine;
+      this.replicaHandler = acquired.replicaHandler;
+      this.replicaStateMachine = acquired.replicaStateMachine;
 
       const partitionRegistrationStartedAt = Date.now();
       this.writeBootstrapReplicaRegistrationTrace(
