@@ -172,6 +172,8 @@ async function persistJoinSeedRejoinHints(options) {
       peerAddresses: options.peerAddresses,
       clusterId: options.clusterId || null,
       clusterNodeCount: ENTRYPOINT_DEFAULT.JOIN_HINT_CLUSTER_NODE_COUNT,
+      // Projection of the owner's reservation (boot-incarnation-owner.js).
+      bootIncarnation: options.bootIncarnation,
     });
   } catch (error) {
     options.logger.warn(

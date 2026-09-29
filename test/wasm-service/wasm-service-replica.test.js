@@ -534,7 +534,11 @@ describe('WasmServiceReplica', () => {
         await replica.flushRoleUpdate();
 
         assert.deepEqual(updateArgs[0], TABLES.SERVICES);
-        assert.deepEqual(updateArgs[1], {[COLUMN.SERVICE_ID]: 'wsr-1'});
+        assert.deepEqual(updateArgs[1], {
+          [COLUMN.SERVICE_ID]: 'wsr-1',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
+          [COLUMN.NODE_ID]: 'node-1',
+        });
         assert.equal(updateArgs[2][COLUMN.RAFT_ROLE], RAFT_ROLE.LEADER);
         assert.deepEqual(
           updateArgs[3]?.expectedCacheFields,
@@ -589,7 +593,11 @@ describe('WasmServiceReplica', () => {
         await replica.flushLeaderNodeUpdate();
 
         assert.deepEqual(updateArgs[0], TABLES.SERVICES);
-        assert.deepEqual(updateArgs[1], {[COLUMN.SERVICE_ID]: 'wsr-1'});
+        assert.deepEqual(updateArgs[1], {
+          [COLUMN.SERVICE_ID]: 'wsr-1',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
+          [COLUMN.NODE_ID]: 'node-1',
+        });
         assert.equal(updateArgs[2][COLUMN.NODE_ID], 'node-2');
         assert.equal(updateArgs[2][COLUMN.RAFT_ROLE], RAFT_ROLE.LEADER);
         assert.deepEqual(

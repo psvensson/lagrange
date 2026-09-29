@@ -24,6 +24,8 @@ import {COLUMN, NUM, SERVICE_STATUS, TABLES} from '../../src/constants/index.js'
 import {
   STORAGE_BUDGET_SOURCE,
 } from '../../src/rebalancer/storage-capacity-constants.js';
+import {insertViaUpsert} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 /**
  * Build a minimal node row for testing.
@@ -43,6 +45,9 @@ function buildNodeRow(overrides = {}) {
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.LAST_HEARTBEAT]: Date.now(),
     [COLUMN.CREATED_AT]: Date.now(),
+    // Every production registration row carries its reserved boot
+    // incarnation (boot-incarnation-owner.js).
+    [COLUMN.BOOT_INCARNATION]: 1,
     ...overrides,
   };
 }
@@ -89,6 +94,9 @@ describe('NodeStorageBudgetSetup', () => {
 
     it('should return initialized NodeStorageBudgetService', () => {
       const mockCdc = {
+        insertSystemTableRow(...args) {
+          return insertViaUpsert(this, args);
+        },
         upsertSystemTableRow: async () => ({success: true}),
       };
       const service = NodeStorageBudgetSetup.create({
@@ -110,6 +118,9 @@ describe('NodeStorageBudgetSetup', () => {
     beforeEach(() => {
       upsertCalls = [];
       mockCdc = {
+        insertSystemTableRow(...args) {
+          return insertViaUpsert(this, args);
+        },
         upsertSystemTableRow: async (tableName, rowData) => {
           upsertCalls.push({tableName, rowData});
           return {success: true};
@@ -205,6 +216,9 @@ describe('Bootstrap pipeline budget integration', () => {
   it('should call budget resolution during seed bootstrap', async () => {
     const upsertCalls = [];
     const mockCdc = {
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async (tableName, rowData) => {
         upsertCalls.push({tableName, rowData});
         return {success: true};
@@ -244,6 +258,9 @@ describe('Bootstrap pipeline budget integration', () => {
   it('should call budget resolution during join', async () => {
     const upsertCalls = [];
     const mockCdc = {
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async (tableName, rowData) => {
         upsertCalls.push({tableName, rowData});
         return {success: true};
@@ -360,6 +377,9 @@ describe('Heartbeat budget preservation (Req 9.2)', () => {
 describe('Startup diagnostics (Req 9.4)', () => {
   it('should return resolution with budget and source', async () => {
     const mockCdc = {
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async () => ({success: true}),
     };
     const service = NodeStorageBudgetSetup.create({
@@ -397,6 +417,9 @@ describe('Startup diagnostics (Req 9.4)', () => {
 
   it('should return invalid resolution when disk unavailable', async () => {
     const mockCdc = {
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async () => ({success: true}),
     };
     const service = NodeStorageBudgetSetup.create({
@@ -434,6 +457,9 @@ describe('Startup diagnostics (Req 9.4)', () => {
 describe('Shared setup ownership (Req 9.5, 11.1)', () => {
   it('should create service via single owner path', () => {
     const mockCdc = {
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async () => ({success: true}),
     };
     const service = NodeStorageBudgetSetup.create({
@@ -455,6 +481,7 @@ describe('Shared setup ownership (Req 9.5, 11.1)', () => {
     );
 
     const joiner = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'join-owner-node',
       nodeAddress: 'ws://localhost:9000',
       seedNodeAddress: 'ws://seed:8000',

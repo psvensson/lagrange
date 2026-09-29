@@ -482,6 +482,20 @@ class SystemMetadataOwnerBase {
     );
   }
 
+  async updateWhere(whereClause, data, options = {}) {
+    return this.executeMutation(
+      LOCAL_STR_UPDATE,
+      {whereClause, data},
+      options,
+      (mutationOptions) => this.requireGateway().updateSystemTableRow(
+        this.getTableName(),
+        whereClause,
+        data,
+        mutationOptions,
+      ),
+    );
+  }
+
   async deleteByPrimaryKey(primaryKeyValue, options = {}) {
     return this.executeMutation(
       LOCAL_STR_DELETE,
@@ -490,6 +504,19 @@ class SystemMetadataOwnerBase {
       (mutationOptions) => this.requireGateway().deleteSystemTableRow(
         this.getTableName(),
         {[this.getPrimaryKeyField()]: primaryKeyValue},
+        mutationOptions,
+      ),
+    );
+  }
+
+  async deleteWhere(whereClause, options = {}) {
+    return this.executeMutation(
+      LOCAL_STR_DELETE,
+      {whereClause},
+      options,
+      (mutationOptions) => this.requireGateway().deleteSystemTableRow(
+        this.getTableName(),
+        whereClause,
         mutationOptions,
       ),
     );

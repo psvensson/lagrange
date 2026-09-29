@@ -11,8 +11,14 @@ import {
 } from '../bootstrap-api-constants.js';
 import {BOOTSTRAP_PIPELINE_ERROR_CODE} from '../bootstrap-constants.js';
 import {COLUMN, HTTP_STATUS, TABLES} from '../../constants/index.js';
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_READ_LEADER_MODE,
+  readAuthoritativeControlPlaneRows,
+} from '../../control-plane/control-plane-system-table-gateway.js';
 const SERVICE_REGISTRATION_VISIBILITY_OWNER_LITERAL = Object.freeze({
   BOOTSTRAP_API_SERVICE_REGISTRATION: 'bootstrap_api_service_registration',
+  AUTHORITATIVE_READ_UNAVAILABLE: 'unavailable',
   AUTHORITATIVE_SERVICES_CACHE_REPAIR_FAILED_DURING_REGISTER_SERVICE_VISIBILITY_WAIT:
     'Authoritative services-cache repair failed during register-service visibility wait',
 });
@@ -27,6 +33,7 @@ const REGISTERED_SERVICE_CACHE_OPTIONAL_FIELDS = Object.freeze([
   COLUMN.REPLICA_ID,
   COLUMN.ADDRESS,
 ]);
+const SERVICE_OWNER_READ_DEFERRED_CODE = 'SERVICE_OWNER_READ_DEFERRED';
 class ServiceRegistrationVisibilityOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
@@ -39,9 +46,6 @@ class ServiceRegistrationVisibilityOwner {
   }
   getCdcIntegrationService() {
     return this.delegates.getCdcIntegrationService?.() || null;
-  }
-  async executeBootstrapControlPlaneQuery(sql, params) {
-    return this.delegates.executeBootstrapControlPlaneQuery?.(sql, params);
   }
   buildRegisterServiceValidationError(...args) {
     return this.delegates.buildRegisterServiceValidationError?.(...args);
@@ -147,14 +151,23 @@ class ServiceRegistrationVisibilityOwner {
     return mismatchFields;
   }
   async readRegisteredServiceFromStorage(serviceId) {
-    const executeQuery = this.delegates.executeBootstrapControlPlaneQuery;
-    if (typeof executeQuery !== 'function') {
+    const gateway = this.delegates.getControlPlaneSystemTableGateway?.();
+    if (!gateway) {
       return {row: null, error: null};
     }
     try {
-      const result = await this.executeBootstrapControlPlaneQuery(
+      const result = await readAuthoritativeControlPlaneRows(
+        gateway,
+        TABLES.SERVICES,
         BOOTSTRAP_API_SQL.SELECT_REGISTERED_SERVICE_BY_ID,
         [serviceId],
+        {
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+          deliveryPriority: 'critical',
+          workClass: 'critical',
+        },
       );
       if (!result || result.success === false) {
         return {
@@ -383,11 +396,23 @@ class ServiceRegistrationVisibilityOwner {
     if (typeof serviceId !== 'string' || serviceId.length === 0) {
       return null;
     }
-    const cachedRow = this.getSystemTableCache()?.get?.(TABLES.SERVICES, serviceId) || null;
-    if (cachedRow) {
-      return {...cachedRow};
-    }
     const storageLookup = await this.readRegisteredServiceFromStorage(serviceId);
+    if (storageLookup?.error) {
+      const error = new Error(storageLookup.error);
+      error.code = SERVICE_OWNER_READ_DEFERRED_CODE;
+      error.errorCode = error.code;
+      error.deferRetry = true;
+      error.statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
+      error.retryAfterMs =
+        BOOTSTRAP_API_DEFAULT.BOOTSTRAP_ADMISSION_RETRY_AFTER_MS;
+      error.details = {
+        tableName: TABLES.SERVICES,
+        serviceId,
+        authoritativeRead:
+          SERVICE_REGISTRATION_VISIBILITY_OWNER_LITERAL.AUTHORITATIVE_READ_UNAVAILABLE,
+      };
+      throw error;
+    }
     if (storageLookup?.row) {
       return {...storageLookup.row};
     }

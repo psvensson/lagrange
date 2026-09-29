@@ -24,6 +24,8 @@ import {
   buildReadinessByNodeId,
 } from '../control-plane/active-node-projection.js';
 import {AdminControlSnapshotNodeViewProjection} from './admin-control-snapshot-node-view-projection.js';
+import {selectCurrentEndpointRows} from
+  '../control-plane/owners/endpoint-incarnation-currentness.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const PARTITION_STATE_NORMAL = 'NORMAL';
 /**
@@ -118,7 +120,8 @@ class AdminControlSnapshotCoverageGapEvaluation extends AdminControlSnapshotNode
       }
       visibleNodeIds.add(nodeId);
     }
-    for (const endpointRow of nodeEndpointRows) {
+    for (const endpointRow of selectCurrentEndpointRows(nodeEndpointRows,
+      nodeRows)) {
       if (!this.isActiveWebSocketEndpoint(endpointRow)) {
         continue;
       }

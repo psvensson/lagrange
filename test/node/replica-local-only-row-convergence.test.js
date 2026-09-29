@@ -106,8 +106,8 @@ test('CL-021: deferred durable services rows converge', async (t) => {
       t.equal(calls.mutations.length, 1, 'one durable attempt made');
       t.equal(
         calls.mutations[0].operation.toLowerCase(),
-        'upsert',
-        'local-only rows persist via idempotent UPSERT',
+        'insert',
+        'local-only rows persist via insert-only admission',
       );
 
       // Backoff: an immediate next pass skips the row.
@@ -337,6 +337,8 @@ test('CL-021: deferred durable services rows converge', async (t) => {
       gateway.failNext = false;
       const stateMachine = createStateMachine({gateway, nowRef});
       await seedLocalOnlyReplica(stateMachine);
+      const lifecycleGeneration = stateMachine.getState(REPLICA_ID)
+        .durableVersion;
       // Time advances long after the state was entered.
       nowRef.value += 120_000;
 
@@ -351,6 +353,16 @@ test('CL-021: deferred durable services rows converge', async (t) => {
           'time (a stale stamp would lose cache merges yet overwrite the ' +
           'durable row for later hydrators)',
       );
+      t.equal(row.state_entered_at, lifecycleGeneration,
+        'cache freshness cannot silently advance the lifecycle CAS token');
+      await stateMachine._applyTransition(REPLICA_ID, 'creating', {
+        partitionId: PARTITION_ID,
+        nodeId: NODE_ID,
+        serviceId: REPLICA_ID,
+      }, {persist: true, validate: false});
+      t.equal(calls.mutations[1].whereClause.state_entered_at,
+        lifecycleGeneration,
+        'the next lifecycle transition CASes the converged row generation');
       stateMachine.shutdown?.();
     },
   );

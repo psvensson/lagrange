@@ -11,6 +11,8 @@ import {
 import {deriveTransportWebSocketPort} from
   '../config/listener-port-model.js';
 import {normalizeToWebSocketAddress} from '../constants/transport.js';
+import {isEndpointCurrentForNode} from
+  '../control-plane/owners/endpoint-incarnation-currentness.js';
 
 const LOCAL_STR_LBRACKET = '[';
 const LOCAL_STR_RBRACKET = ']';
@@ -370,7 +372,9 @@ function resolveAdvertisedEndpointHost(options = {}) {
     null;
 }
 
-function getActiveWebSocketEndpointRows(rows, targetNodeId) {
+// Only an endpoint of the node's current authoritative incarnation is a
+// routing target (the endpoint incarnation authority).
+function getActiveWebSocketEndpointRows(rows, targetNodeId, nodeRow) {
   if (!Array.isArray(rows) || rows.length === 0 || !targetNodeId) {
     return [];
   }
@@ -378,6 +382,7 @@ function getActiveWebSocketEndpointRows(rows, targetNodeId) {
   return rows
     .filter((row) => {
       return row?.[COLUMN.NODE_ID] === targetNodeId &&
+        isEndpointCurrentForNode(row, nodeRow) &&
         row?.[COLUMN.STATUS] === ENDPOINT_STATUS.ACTIVE &&
         row?.[COLUMN.TRANSPORT_TYPE] === TRANSPORT_TYPE.WEBSOCKET &&
         typeof row?.[COLUMN.ADDRESS] === 'string' &&
@@ -389,10 +394,19 @@ function getActiveWebSocketEndpointRows(rows, targetNodeId) {
     });
 }
 
+// The authoritative/current NODES row of the target: the one incarnation
+// every endpoint candidate is judged against (I9, owner decision F-R1).
+function getAuthoritativeNodeRow(systemTableCache, targetNodeId) {
+  return typeof systemTableCache?.get === 'function' ?
+    systemTableCache.get(TABLES.NODES, targetNodeId) || null :
+    null;
+}
+
 function getCacheEndpointRows(systemTableCache, targetNodeId) {
   if (!systemTableCache || !targetNodeId) {
     return [];
   }
+  const nodeRow = getAuthoritativeNodeRow(systemTableCache, targetNodeId);
   if (typeof systemTableCache.filter === 'function') {
     return getActiveWebSocketEndpointRows(
       systemTableCache.filter(
@@ -400,21 +414,29 @@ function getCacheEndpointRows(systemTableCache, targetNodeId) {
         (row) => row?.[COLUMN.NODE_ID] === targetNodeId,
       ),
       targetNodeId,
+      nodeRow,
     );
   }
   if (typeof systemTableCache.getAll === 'function') {
     return getActiveWebSocketEndpointRows(
       systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [],
       targetNodeId,
+      nodeRow,
     );
   }
   return [];
 }
 
-function getBootstrapSnapshotEndpointRows(bootstrapResponse, targetNodeId) {
+// A bootstrap-snapshot endpoint is a candidate only: it is judged against
+// the authoritative NODES row, never the snapshot's own node copy, so the
+// snapshot cannot self-certify both identity and address. Without an
+// authoritative NODES row nothing is current (fail closed).
+function getBootstrapSnapshotEndpointRows(bootstrapResponse, targetNodeId,
+  systemTableCache) {
   return getActiveWebSocketEndpointRows(
     bootstrapResponse?.systemTableSnapshots?.node_endpoints || [],
     targetNodeId,
+    getAuthoritativeNodeRow(systemTableCache, targetNodeId),
   );
 }
 
@@ -476,8 +498,8 @@ function resolveNodeWebSocketAddressResult(options = {}) {
     });
   }
 
-  const bootstrapEndpointRows =
-    getBootstrapSnapshotEndpointRows(bootstrapResponse, targetNodeId);
+  const bootstrapEndpointRows = getBootstrapSnapshotEndpointRows(
+    bootstrapResponse, targetNodeId, systemTableCache);
   const bootstrapEndpointAddress =
     bootstrapEndpointRows[0]?.[COLUMN.ADDRESS];
   if (typeof bootstrapEndpointAddress === 'string' &&

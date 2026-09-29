@@ -60,6 +60,7 @@ test('NodeJoiningService - move-replica bootstrap defer keeps configured ' +
   const observedTimeoutMs = [];
   const retryDelays = [];
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
@@ -156,6 +157,7 @@ test('NodeJoiningService - fresh bootstrap-not-ready evidence bounds long ' +
   let currentNow = 0;
   const observedTimeoutMs = [];
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: '550e8400-e29b-41d4-a716-446655440124',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -259,6 +261,7 @@ test('NodeJoiningService - retained bootstrap-not-ready timeout clears stale ' +
   let currentNow = 0;
   const observedTimeoutMs = [];
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: '550e8400-e29b-41d4-a716-446655440125',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -349,6 +352,7 @@ test('NodeJoiningService - retained retryable seed-contact evidence ' +
   let currentNow = 0;
   const observedTimeoutMs = [];
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: '550e8400-e29b-41d4-a716-446655440111',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -491,6 +495,7 @@ test('NodeJoiningService - client deadline bootstrap defer uses fixed resume cap
 
     let currentNow = 0;
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440121',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -570,6 +575,7 @@ test('NodeJoiningService - retained client deadline evidence keeps transport ' +
   let attempts = 0;
   let currentNow = 0;
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: '550e8400-e29b-41d4-a716-446655440122',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -662,6 +668,7 @@ test('NodeJoiningService - surfaces retryable bootstrap authority after one ' +
   let currentNow = 0;
   const retryDelays = [];
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: '550e8400-e29b-41d4-a716-446655440112',
     nodeAddress: 'ws://localhost:9090',
     seedNodeAddress: 'http://localhost:8080',
@@ -762,6 +769,7 @@ test('NodeJoiningService - contacting-seed bootstrap-not-ready resumes on ' +
   };
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
@@ -816,6 +824,7 @@ test('NodeJoiningService - leader metadata incomplete uses fixed retryable ' +
 
   let currentNow = 0;
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
@@ -905,6 +914,7 @@ test('NodeJoiningService - retained seed-contact evidence does not turn a ' +
   });
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
@@ -952,6 +962,7 @@ test('NodeJoiningService - fixed attempt cap still stops non-bootstrap ' +
   const TEST_FAILURE_PHASE = JoiningPhase.QUERYING_STATE;
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
@@ -990,6 +1001,7 @@ test('NodeJoiningService - treats bootstrap validation/conflict failures as term
     let attempts = 0;
     const retryDelays = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440102',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',

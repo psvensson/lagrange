@@ -54,6 +54,9 @@ import {
 } from '../../src/constants/index.js';
 import {CDC_EVENT} from '../../src/cdc/cdc-constants.js';
 import {EventEmitter} from 'events';
+import {
+  FIXTURE_ENDPOINT_INCARNATION,
+} from '../test-helpers/endpoint-incarnation-fixture.js';
 
 const NODES_ROUTING_PARTITION_ID = 'nodes-p1';
 const REMOTE_CANONICAL_LEADER_NODE_ID = 'seed-node-1';
@@ -64,6 +67,7 @@ test('NodeJoiningService - keeps heartbeat-maintenance NODE_STATE_UPDATE on the 
 
     const nowMs = 2000;
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-heartbeat-maintenance',
       nodeAddress: 'ws://localhost:9095531',
       seedNodeAddress: 'http://localhost:8080',
@@ -146,6 +150,7 @@ test('NodeJoiningService - prefers live local control-plane ingress over a stale
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-local-ingress',
       nodeAddress: 'ws://localhost:90956',
       seedNodeAddress: 'http://localhost:8080',
@@ -208,6 +213,7 @@ test('NodeJoiningService - READY heartbeats ignore a stale local ingress lease '
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-local-routing-gap',
     nodeAddress: 'ws://localhost:909561',
     seedNodeAddress: 'http://localhost:8080',
@@ -286,6 +292,7 @@ test('NodeJoiningService - READY heartbeats ignore a stale local ingress lease '
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-local-leader-gap',
     nodeAddress: 'ws://localhost:909562',
     seedNodeAddress: 'http://localhost:8080',
@@ -368,6 +375,7 @@ test('NodeJoiningService - READY heartbeats retry a local ingress fallback ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-local-leader-gap-fallback',
     nodeAddress: 'ws://localhost:9095621',
     seedNodeAddress: 'http://localhost:8080',
@@ -463,6 +471,7 @@ test('NodeJoiningService - READY heartbeats evaluate local target routing on ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-local-repair-gap',
     nodeAddress: 'ws://localhost:909563',
     seedNodeAddress: 'http://localhost:8080',
@@ -560,6 +569,7 @@ test('NodeJoiningService - does not retry NODE_STATE_UPDATE on non-transport fai
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-no-retry',
       nodeAddress: 'ws://localhost:9096',
       seedNodeAddress: 'http://localhost:8080',
@@ -615,6 +625,7 @@ test('NodeJoiningService - reconnects disconnected cluster peers during mesh con
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-3',
       nodeAddress: 'ws://localhost:9092',
       seedNodeAddress: 'http://localhost:8080',
@@ -624,12 +635,16 @@ test('NodeJoiningService - reconnects disconnected cluster peers during mesh con
     service.bootstrapResponse = {
       systemTableSnapshots: {
         nodes: [
-          {node_id: 'joining-node-3', node_address: 'localhost:9092'},
-          {node_id: 'peer-disconnected', node_address: 'localhost:8081'},
-          {node_id: 'peer-connected', node_address: 'localhost:8082'},
+          {node_id: 'joining-node-3', node_address: 'localhost:9092',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION},
+          {node_id: 'peer-disconnected', node_address: 'localhost:8081',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION},
+          {node_id: 'peer-connected', node_address: 'localhost:8082',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION},
         ],
         node_endpoints: [
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: 'ep-peer-disconnected-ws',
             node_id: 'peer-disconnected',
             transport_type: TRANSPORT_TYPE.WEBSOCKET,
@@ -638,6 +653,7 @@ test('NodeJoiningService - reconnects disconnected cluster peers during mesh con
             status: ENDPOINT_STATUS.ACTIVE,
           },
           {
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
             endpoint_id: 'ep-peer-connected-ws',
             node_id: 'peer-connected',
             transport_type: TRANSPORT_TYPE.WEBSOCKET,
@@ -681,6 +697,7 @@ test('NodeJoiningService - prefers authoritative cache nodes during mesh connect
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-4',
       nodeAddress: 'ws://localhost:9093',
       seedNodeAddress: 'http://localhost:8080',
@@ -689,8 +706,10 @@ test('NodeJoiningService - prefers authoritative cache nodes during mesh connect
     service.bootstrapResponse = {
       systemTableSnapshots: {
         nodes: [
-          {node_id: 'joining-node-4', node_address: 'localhost:9093'},
-          {node_id: 'seed-node', node_address: 'localhost:8080'},
+          {node_id: 'joining-node-4', node_address: 'localhost:9093',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION},
+          {node_id: 'seed-node', node_address: 'localhost:8080',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION},
         ],
       },
     };
@@ -699,16 +718,19 @@ test('NodeJoiningService - prefers authoritative cache nodes during mesh connect
     const systemTableCache = nodeService.getSystemTableCache();
     service.systemTableCache = systemTableCache;
     systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'joining-node-4',
       node_address: 'localhost:9093',
       status: 'active',
     });
     systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'seed-node',
       node_address: 'localhost:8080',
       status: 'active',
     });
     systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'late-peer',
       node_address: 'localhost:8084',
       status: 'active',
@@ -717,6 +739,7 @@ test('NodeJoiningService - prefers authoritative cache nodes during mesh connect
       TABLES.NODE_ENDPOINTS,
       CDC_OPERATION.INSERT,
       {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         endpoint_id: 'ep-late-peer-ws',
         node_id: 'late-peer',
         transport_type: TRANSPORT_TYPE.WEBSOCKET,
@@ -756,6 +779,7 @@ test('NodeJoiningService - mesh connect includes non-terminal peers once canonic
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-4b',
       nodeAddress: 'ws://localhost:9098',
       seedNodeAddress: 'http://localhost:8080',
@@ -765,11 +789,13 @@ test('NodeJoiningService - mesh connect includes non-terminal peers once canonic
     const systemTableCache = nodeService.getSystemTableCache();
     service.systemTableCache = systemTableCache;
     systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'joining-node-4b',
       node_address: 'localhost:9098',
       status: 'active',
     });
     systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'peer-joining',
       node_address: 'localhost:8088',
       status: 'joining',
@@ -779,6 +805,7 @@ test('NodeJoiningService - mesh connect includes non-terminal peers once canonic
       TABLES.NODE_ENDPOINTS,
       CDC_OPERATION.INSERT,
       {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         endpoint_id: 'ep-peer-joining-ws',
         node_id: 'peer-joining',
         transport_type: TRANSPORT_TYPE.WEBSOCKET,
@@ -815,6 +842,7 @@ test('NodeJoiningService - ready state update triggers mesh reconciliation witho
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-5',
       nodeAddress: 'ws://localhost:9094',
       seedNodeAddress: 'http://localhost:8080',
@@ -823,8 +851,10 @@ test('NodeJoiningService - ready state update triggers mesh reconciliation witho
     service.bootstrapResponse = {
       systemTableSnapshots: {
         nodes: [
-          {node_id: 'joining-node-5', node_address: 'localhost:9094'},
-          {node_id: 'seed-node', node_address: 'localhost:8080'},
+          {node_id: 'joining-node-5', node_address: 'localhost:9094',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION},
+          {node_id: 'seed-node', node_address: 'localhost:8080',
+            boot_incarnation: FIXTURE_ENDPOINT_INCARNATION},
         ],
       },
     };
@@ -833,16 +863,19 @@ test('NodeJoiningService - ready state update triggers mesh reconciliation witho
     const systemTableCache = nodeService.getSystemTableCache();
     service.systemTableCache = systemTableCache;
     systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'joining-node-5',
       node_address: 'localhost:9094',
       status: 'active',
     });
     systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'seed-node',
       node_address: 'localhost:8080',
       status: 'active',
     });
     systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       node_id: 'late-peer',
       node_address: 'localhost:8085',
       status: 'active',
@@ -851,6 +884,7 @@ test('NodeJoiningService - ready state update triggers mesh reconciliation witho
       TABLES.NODE_ENDPOINTS,
       CDC_OPERATION.INSERT,
       {
+        boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
         endpoint_id: 'ep-late-peer-ready-ws',
         node_id: 'late-peer',
         transport_type: TRANSPORT_TYPE.WEBSOCKET,
@@ -898,6 +932,7 @@ test('NodeJoiningService - canonical endpoint CDC triggers one coalesced mesh re
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-cdc-mesh',
       nodeAddress: 'ws://localhost:9101',
       seedNodeAddress: 'http://localhost:8080',
@@ -965,6 +1000,7 @@ test('NodeJoiningService - steady ready heartbeats skip redundant mesh reconcili
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-6',
       nodeAddress: 'ws://localhost:9095',
       seedNodeAddress: 'http://localhost:8080',
@@ -1033,6 +1069,7 @@ test('NodeJoiningService - steady ready heartbeats ignore stopped peers in mesh 
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-7',
       nodeAddress: 'ws://localhost:9096',
       seedNodeAddress: 'http://localhost:8080',
@@ -1107,6 +1144,7 @@ test('NodeJoiningService - shouldReconnectClusterMesh ignores peers already conn
 
     for (const peerConnectionState of ['connecting', 'reconnecting']) {
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: `joining-node-${peerConnectionState}`,
         nodeAddress: 'ws://localhost:9097',
         seedNodeAddress: 'http://localhost:8080',
@@ -1165,6 +1203,7 @@ test('NodeJoiningService - fails without seed node address', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'test-node-1',
     nodeAddress: 'ws://localhost:9090',
     // No seedNodeAddress
@@ -1187,6 +1226,7 @@ test('NodeJoiningService - submits join and durable rejoin intent through member
     ]) {
       const intents = [];
       const service = new NodeJoiningService({
+        bootIncarnation: 1,
         nodeId: `test-node-${startupMode}`,
         nodeAddress: 'ws://localhost:9090',
         seedNodeAddress: 'http://localhost:8080',

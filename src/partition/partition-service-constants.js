@@ -3,7 +3,6 @@ import {STRING} from '../constants/strings.js';
 import {TABLES} from '../constants/tables.js';
 import {TIME_MS} from '../constants/time.js';
 import {RAFT_ELECTION_TIMING} from '../raft/constants.js';
-
 const PARTITION_SERVICE_DEFAULT = Object.freeze({
   NODE_ID: STRING.UNKNOWN,
   MEMORY_DB_PATH: ':memory:',
@@ -48,7 +47,6 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   USER_TRANSACTION_WRITE_RETRY_MAX_DELAY_MS: NUM.HUNDRED,
   USER_TRANSACTION_WRITE_DEFER_BUDGET_MS: TIME_MS.SECOND * NUM.TWO,
 });
-
 // Where a prepared session's state lives. No PREPARE marker is proposed while
 // a session stages on the partition's connection (consensus persistence
 // never runs inside a user transaction), so a prepared session is local to
@@ -57,7 +55,6 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
 const PARTITION_TRANSACTION_PREPARED_STATE = Object.freeze({
   LOCAL_STAGING: 'local-staging',
 });
-
 const PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON = Object.freeze({
   INITIAL_DELAY: 'initial_delay',
   DEFERRED_RECHECK: 'deferred_recheck',
@@ -276,6 +273,7 @@ const PARTITION_SERVICE_DB = Object.freeze({
 });
 
 const PARTITION_SERVICE_COLUMN = Object.freeze({
+  CLEANUP_TOKEN: 'cleanup_token',
   BOOT_INCARNATION: 'boot_incarnation',
   CONNECTION_STATE: 'connection_state',
   LEGACY_WS_CONNECTION_STATE: 'ws_connection_state',
@@ -298,6 +296,7 @@ const PARTITION_SERVICE_COLUMN = Object.freeze({
 });
 
 const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
+  ADD_CLEANUP_TOKEN: 'ADD COLUMN cleanup_token TEXT',
   ADD_BOOT_INCARNATION:
     'ADD COLUMN boot_incarnation INTEGER NOT NULL DEFAULT 0',
   ADD_CONNECTION_STATE:
@@ -442,6 +441,7 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   STARTING_ELECTION_TIMER: 'Starting Raft election timer',
   APPLIED_RUNTIME_RAFT_TIMING: 'Applied runtime raft timing configuration',
   CREATED_TABLE: 'Created table',
+  ADDED_SERVICES_CLEANUP_TOKEN: 'Added cleanup_token column to services table',
   ADDED_CONNECTION_STATE: 'Added connection_state column to nodes table',
   MIGRATED_CONNECTION_STATE_FROM_LEGACY_WS:
     'Migrated connection_state values from legacy ws_connection_state column',

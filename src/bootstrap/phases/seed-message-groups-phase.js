@@ -162,6 +162,10 @@ class SeedMessageGroupsPhase {
 
     await messageGroup.initialize();
 
+    if (typeof d.attachMessageGroupService === 'function') {
+      d.attachMessageGroupService(messageGroup);
+    }
+
     d.getMessageGroupServices().set(
       options.replicaId, messageGroup,
     );

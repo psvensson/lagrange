@@ -237,6 +237,8 @@ class BootstrapAPI {
           getSystemTableCache: () => this.getSystemTableCache(),
           executeBootstrapControlPlaneQuery: (sql, params, options) =>
             this.executeBootstrapControlPlaneQuery(sql, params, options),
+          getControlPlaneSystemTableGateway: () =>
+            this.getControlPlaneSystemTableGateway(),
           getCdcIntegrationService: () => this.getCdcIntegrationService(),
           buildRegisterServiceValidationError: (...args) =>
             this.buildRegisterServiceValidationError(...args),
