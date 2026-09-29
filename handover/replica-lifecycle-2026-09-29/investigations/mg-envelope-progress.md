@@ -1,0 +1,12 @@
+# mg-envelope progress
+- 2026-09-28: read CLAUDE.md + rules.md; node_modules symlinked; generating import graph + test metadata next.
+- metadata regenerated (audit:shards OK); witness red-on-revert (7 fail) / green (20 assertions). Running set A (42 files).
+- set A (42 files: test/message-group + replica-dispatch NSU + rpc + raft-provider-contract + read-router) green 2862 assertions. Preflight run 1 next.
+- preflight x2 green (85 assertions each). Cone vs main = 287 tests WIDENED; running.
+- per-file static (eslint, literals, decision-boundaries, ambient, silent-catch, file-size, hot-path, solve-binary) green.
+- Analysis: router messageId == inner MG messageId (deliver uses message.messageId) -> dedupe/ack keys unchanged; router timestamp numeric (ignored) & MG envelope has none -> HLC unchanged. Control types are DIRECT_ONLY (single attempt, no raft persistence).
+- Behaviour change: forwarded NSU/REPLICA_OPERATION_DISPATCH now run leader's ReplicaDispatch completion (enqueueNodeStateUpdateAndWait / handleReplicaOperationDispatch); leader errors now propagate back through forwarder's sendMessage (throws) to original sender; forwarder now waits for leader's durable write.
+- Neither forwarder inspects the leader's completion result; forwardedBy early-return yields completionCompleted:true without delivery.
+- Sibling (out of scope): RPCClient.call via MG sendMessage -> MessageGroupServiceHandler reads envelope.payload = MG envelope; no src caller of rpcClient.call -> latent.
+- cone vs main 287/287 green (9503 assertions).
+- committed c3cfd229f (hook passed, regenerated owner-debt inventory). duplication/complexity/cognitive/unused-exports/cycles ratchets OK, unchanged. No own child processes alive (a preflight PID 225639/225640 belongs to scratchpad/ready-owner/cand-q1, another agent). DONE.
