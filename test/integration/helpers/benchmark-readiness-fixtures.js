@@ -1,6 +1,8 @@
 import {AdminWebSocketAPI} from '../../../src/admin/admin-websocket-api.js';
 import {SystemTableCache} from '../../../src/cache/system-table-cache.js';
 import {TABLES} from '../../../src/constants/index.js';
+import {TEST_BOOT_INCARNATION} from
+  '../../test-helpers/boot-incarnation-fixture.js';
 
 const DEFAULT_TABLE_NAME = 'benchmark_events';
 const DEFAULT_TABLE_ID = 'table-benchmark-events';
@@ -45,8 +47,12 @@ function buildReplicaReadiness({
 function seedNode(cache, node) {
   cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
     id: node.id,
+    node_id: node.id,
     address: node.address,
     status: 'active',
+    // Service discovery advertises only endpoints of the node's current
+    // incarnation (I9); the fixture teaches the one test value.
+    boot_incarnation: TEST_BOOT_INCARNATION,
   });
 }
 
@@ -55,6 +61,7 @@ function seedServiceEndpoint(cache, node, updatedAt) {
     endpoint_id: `${DEFAULT_SERVICE_ID}-ep-${node.id}`,
     service_id: DEFAULT_SERVICE_ID,
     node_id: node.id,
+    boot_incarnation: TEST_BOOT_INCARNATION,
     protocol: DEFAULT_PROTOCOL,
     address: node.endpointAddress,
     port: node.port,

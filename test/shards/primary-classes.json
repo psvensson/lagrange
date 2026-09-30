@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 1997,
-    "integration": 75,
+    "integration": 76,
     "bootstrap": 193,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2272,
-  "digest": "fnv1a32-c8f5b44a",
+  "censusSize": 2273,
+  "digest": "fnv1a32-17ba2c7d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1023,6 +1023,7 @@
     "test/integration/user-table-metadata-fanout.integration.test.js": "convergence-probe",
     "test/integration/versioned-cdc-readiness-convergence.integration.test.js": "integration",
     "test/integration/websocket-create-replica-ack.integration.test.js": "integration",
+    "test/integration/zz-scratch-cdc.test.js": "integration",
     "test/invariants/invariant-catalog.test.js": "unit",
     "test/live-query/live-query-manager.test.js": "unit",
     "test/live-query/live-query-service.test.js": "unit",

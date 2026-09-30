@@ -5,7 +5,7 @@
     "admin-diagnostics": 113,
     "architecture-governance": 19,
     "bootstrap-membership": 280,
-    "cdc-metadata": 59,
+    "cdc-metadata": 60,
     "cli-tooling": 96,
     "control-plane": 204,
     "convergence-topology": 92,
@@ -25,10 +25,10 @@
     "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2272,
-  "digest": "fnv1a32-61c52398",
+  "censusSize": 2273,
+  "digest": "fnv1a32-4d4547ed",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ad2cbe45",
+  "observationDigest": "fnv1a32-95bce5a9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1042,6 +1042,7 @@
     "test/integration/user-table-metadata-fanout.integration.test.js": "cdc-metadata",
     "test/integration/versioned-cdc-readiness-convergence.integration.test.js": "cdc-metadata",
     "test/integration/websocket-create-replica-ack.integration.test.js": "transport-messaging",
+    "test/integration/zz-scratch-cdc.test.js": "cdc-metadata",
     "test/invariants/invariant-catalog.test.js": "architecture-governance",
     "test/live-query/live-query-manager.test.js": "query-sql",
     "test/live-query/live-query-service.test.js": "query-sql",
@@ -6505,6 +6506,11 @@
         "wit"
       ]
     },
+    "test/integration/benchmark-replica-instability-admission.integration.test.js": {
+      "files": [
+        "test/test-helpers/boot-incarnation-fixture.js"
+      ]
+    },
     "test/integration/benchmark-system-table-read-path.integration.test.js": {
       "files": [
         "Dockerfile",
@@ -6583,7 +6589,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "test/node/replica-handler-bootstrap-stamps.js",
-        "test/test-helpers/lifecycle-state-store.js"
+        "test/test-helpers/lifecycle-state-store.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/integration/cross-worker-cdc.integration.test.js": {
@@ -6959,6 +6966,15 @@
         "src/rebalancer/replica-operation-constants.js",
         "test/node/replica-handler-bootstrap-stamps.js",
         "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/integration/zz-scratch-cdc.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js"
+      ],
+      "env": [
+        "SCRATCH_LOG",
+        "SKIP2"
       ]
     },
     "test/live-query/live-query-startup-wiring.test.js": {
