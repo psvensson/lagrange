@@ -48,9 +48,19 @@ function createMockCache(nodeId, services = []) {
   };
 }
 
-function createMockCDCService() {
+function createMockCDCService(services = []) {
   return {
     updateSystemTableRow: async () => ({success: true}),
+    executeAuthoritativeSystemTableRead: async (
+      tableName,
+      _sql,
+      params,
+    ) => ({
+      success: true,
+      rows: tableName === 'services' ?
+        services.filter((row) => row.service_id === params[0]) :
+        [],
+    }),
   };
 }
 
@@ -90,6 +100,8 @@ test('Property 7: Recovery State Handling', async (t) => {
               service_type: 'partition',
               partition_id: partitionId,
               status: 'creating',
+              state_entered_at: 1,
+              updated_at: 1,
             },
           ];
 
@@ -97,7 +109,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
-            cdcIntegrationService: createMockCDCService(),
+            cdcIntegrationService: createMockCDCService(services),
           });
 
           const result = await stateMachine.handleNodeRecovery({
@@ -140,6 +152,8 @@ test('Property 7: Recovery State Handling', async (t) => {
               service_type: 'partition',
               partition_id: partitionId,
               status: 'syncing',
+              state_entered_at: 1,
+              updated_at: 1,
             },
           ];
 
@@ -147,7 +161,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
-            cdcIntegrationService: createMockCDCService(),
+            cdcIntegrationService: createMockCDCService(services),
           });
 
           const result = await stateMachine.handleNodeRecovery({
@@ -175,7 +189,7 @@ test('Property 7: Recovery State Handling', async (t) => {
    * Property: For any 'removing' replica on recovery, it is transitioned to
    * 'removed'.
    */
-  t.test('removing replicas transition to removed on recovery', async (t) => {
+  t.test('removing replicas remain bound for exact cleanup on recovery', async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.uuid(), // service_id
@@ -190,6 +204,8 @@ test('Property 7: Recovery State Handling', async (t) => {
               service_type: 'partition',
               partition_id: partitionId,
               status: 'removing',
+              state_entered_at: 1,
+              updated_at: 1,
             },
           ];
 
@@ -197,7 +213,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
-            cdcIntegrationService: createMockCDCService(),
+            cdcIntegrationService: createMockCDCService(services),
           });
 
           const result = await stateMachine.handleNodeRecovery({
@@ -205,20 +221,20 @@ test('Property 7: Recovery State Handling', async (t) => {
             nodeId,
           });
 
-          // Check that replica was transitioned to removed
+          // Recovery retains the exact generation for the cleanup owner.
           const replicaState = stateMachine.getState(serviceId);
 
           stateMachine.clear();
 
-          return result.removingToRemoved === 1 &&
+          return result.removingToRemoved === 0 &&
             replicaState !== null &&
-            replicaState.state === ReplicaState.REMOVED;
+            replicaState.state === ReplicaState.REMOVING;
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('removing replicas transition to removed on recovery');
+    t.pass('removing replicas remain bound for exact cleanup on recovery');
   });
 
   /**
@@ -243,6 +259,8 @@ test('Property 7: Recovery State Handling', async (t) => {
               service_type: 'partition',
               partition_id: `partition-creating-${i}`,
               status: 'creating',
+              state_entered_at: 1,
+              updated_at: 1,
             });
           }
 
@@ -254,6 +272,8 @@ test('Property 7: Recovery State Handling', async (t) => {
               service_type: 'partition',
               partition_id: `partition-syncing-${i}`,
               status: 'syncing',
+              state_entered_at: 1,
+              updated_at: 1,
             });
           }
 
@@ -265,6 +285,8 @@ test('Property 7: Recovery State Handling', async (t) => {
               service_type: 'partition',
               partition_id: `partition-removing-${i}`,
               status: 'removing',
+              state_entered_at: 1,
+              updated_at: 1,
             });
           }
 
@@ -272,7 +294,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
-            cdcIntegrationService: createMockCDCService(),
+            cdcIntegrationService: createMockCDCService(services),
           });
 
           const result = await stateMachine.handleNodeRecovery({
@@ -284,8 +306,8 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           return result.creatingToFailed === creatingCount &&
             result.syncingToFailed === syncingCount &&
-            result.removingToRemoved === removingCount &&
-            result.total === creatingCount + syncingCount + removingCount;
+            result.removingToRemoved === 0 &&
+            result.total === creatingCount + syncingCount;
         },
       ),
       {numRuns: 10},
@@ -320,7 +342,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
-            cdcIntegrationService: createMockCDCService(),
+            cdcIntegrationService: createMockCDCService(services),
           });
 
           const result = await stateMachine.handleNodeRecovery({
@@ -367,7 +389,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
-            cdcIntegrationService: createMockCDCService(),
+            cdcIntegrationService: createMockCDCService(services),
           });
 
           const result = await stateMachine.handleNodeRecovery({
@@ -408,6 +430,8 @@ test('Property 7: Recovery State Handling', async (t) => {
               service_type: 'partition',
               partition_id: `partition-creating-${i}`,
               status: 'creating',
+              state_entered_at: 1,
+              updated_at: 1,
             });
           }
 
@@ -418,6 +442,8 @@ test('Property 7: Recovery State Handling', async (t) => {
               service_type: 'partition',
               partition_id: `partition-syncing-${i}`,
               status: 'syncing',
+              state_entered_at: 1,
+              updated_at: 1,
             });
           }
 
@@ -428,6 +454,8 @@ test('Property 7: Recovery State Handling', async (t) => {
               service_type: 'partition',
               partition_id: `partition-removing-${i}`,
               status: 'removing',
+              state_entered_at: 1,
+              updated_at: 1,
             });
           }
 
@@ -435,7 +463,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
-            cdcIntegrationService: createMockCDCService(),
+            cdcIntegrationService: createMockCDCService(services),
           });
 
           let emittedEvent = null;
@@ -454,8 +482,8 @@ test('Property 7: Recovery State Handling', async (t) => {
             emittedEvent.nodeId === nodeId &&
             emittedEvent.creatingToFailed === creatingCount &&
             emittedEvent.syncingToFailed === syncingCount &&
-            emittedEvent.removingToRemoved === removingCount &&
-            emittedEvent.total === creatingCount + syncingCount + removingCount;
+            emittedEvent.removingToRemoved === 0 &&
+            emittedEvent.total === creatingCount + syncingCount;
         },
       ),
       {numRuns: 10},
@@ -477,7 +505,7 @@ test('Property 7: Recovery State Handling', async (t) => {
 
           const stateMachine = new ReplicaStateMachine({
             nodeId,
-            cdcIntegrationService: createMockCDCService(),
+            cdcIntegrationService: createMockCDCService(services),
           });
 
           const result = await stateMachine.handleNodeRecovery({

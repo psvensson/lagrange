@@ -17,7 +17,6 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {request as httpRequest} from 'node:http';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -30,6 +29,7 @@ import {
 } from '../../src/constants/index.js';
 import {WASM_SERVICE_PROTOCOL} from '../../src/wasm-service/wasm-service-constants.js';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   createInProcHttpPost,
@@ -311,7 +311,7 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
   });
 
   const seedWsPort = getUniquePort();
-  const bootstrapService = new BootstrapService({
+  const bootstrapService = await createVirginSeedBootstrapService({
     nodeId: SEED_NODE_ID,
     nodeAddress: `ws://localhost:${seedWsPort}`,
     wsPort: seedWsPort,

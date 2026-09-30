@@ -16,6 +16,7 @@ import {
   REPLICA_HANDLER_SERVICE,
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
+import {durableRowVersion} from './replica-state-machine-recovery.js';
 import {resolveSnapshotStateForTransition} from './replica-handler-transition-policy.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
@@ -110,6 +111,7 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
             REPLICA_HANDLER_TYPEOF.FUNCTION &&
           (existing || localReplica)
         ) {
+          const durableVersion = durableRowVersion(existing);
           this.replicaStateMachine.registerReplicaSnapshot(replicaId, {
             partitionId,
             nodeId: existing?.node_id || this.nodeId,
@@ -123,6 +125,8 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
               existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
             serviceAddress:
               existing?.address || this.buildTrackedServiceAddress(replicaId),
+            durableVersionColumn: durableVersion?.column,
+            durableVersion: durableVersion?.value,
           });
         }
         let transitionResult = await Promise.resolve(

@@ -97,6 +97,8 @@ const TEST_RETRYABLE_CREATE_STATUS_RETRY_AFTER_MS = 1;
  * @param {SystemTableCache} [cache] - Optional cache to update.
  * @param {Object} [options] - Optional behavior overrides.
  * @param {Function} [options.executeSQL] - SQL execution callback.
+ * @param {Function} [options.executeAuthoritativeSystemTableRead] - Owner
+ *   read callback.
  * @return {Object} Mock CDC service.
  */
 function createMockCDCService(cache, options = {}) {
@@ -104,15 +106,67 @@ function createMockCDCService(cache, options = {}) {
   const executeSQL = typeof options.executeSQL === 'function' ?
     options.executeSQL :
     null;
+  const executeAuthoritativeSystemTableRead =
+    typeof options.executeAuthoritativeSystemTableRead === 'function' ?
+      options.executeAuthoritativeSystemTableRead :
+      (tableName, sql, params) => {
+        let row = cache?.get?.(tableName, params[0]) || null;
+        const matchingOperations = operations.filter((operation) => {
+          const serviceId = operation.data?.service_id ||
+            operation.whereClause?.service_id;
+          return operation.tableName === tableName &&
+            serviceId === params[0];
+        });
+        const appliedDelete = row === null && matchingOperations.some(
+          (operation) => operation.type === 'delete',
+        );
+        if (!appliedDelete) {
+          for (const operation of matchingOperations) {
+            if (operation.type !== 'delete') {
+              row = {...(row || operation.whereClause), ...operation.data};
+            }
+          }
+        }
+        if (row) return {success: true, rows: [row]};
+        if (!executeSQL) return {success: true, rows: []};
+        operations.push({type: 'executeSQL', sql, params});
+        return executeSQL(sql, params);
+      };
 
   const service = {
     operations,
+    async executeAuthoritativeSystemTableRead(
+      tableName,
+      sql,
+      params,
+      requestOptions,
+    ) {
+      operations.push({
+        type: 'authoritativeRead',
+        tableName,
+        sql,
+        params,
+        requestOptions,
+      });
+      return executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        requestOptions,
+      );
+    },
     async insertSystemTableRow(tableName, data) {
       operations.push({type: 'insert', tableName, data});
       cache?.applySystemTableChange(tableName, 'INSERT', data);
       return {success: true, operation: 'INSERT', tableName, data};
     },
     async updateSystemTableRow(tableName, whereClause, data) {
+      const current = cache?.get?.(tableName, whereClause.service_id);
+      if (data.status === 'cleanup_owned' &&
+          Number.isFinite(current?.updated_at) &&
+          current.updated_at >= data.updated_at) {
+        data = {...data, updated_at: current.updated_at + 1};
+      }
       const merged = {...whereClause, ...data};
       operations.push({type: 'update', tableName, whereClause, data: merged});
       cache?.applySystemTableChange(tableName, 'UPDATE', merged);
@@ -292,7 +346,7 @@ function applyGatewayMutationToCache(cache, mutation) {
   if (mutation.tableName !== SYSTEM_TABLE_NAME.SERVICES) {
     return;
   }
-  if (mutation.operation === 'upsert') {
+  if (mutation.operation === 'upsert' || mutation.operation === 'insert') {
     cache.applySystemTableChange(mutation.tableName, 'INSERT', mutation.row);
     return;
   }

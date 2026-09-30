@@ -19,6 +19,8 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {createAuthoritativeCacheRead} from
+  '../test-helpers/row-absence-heal-scenarios.js';
 
 /**
  * Create a mock CDC integration service.
@@ -27,6 +29,7 @@ import {
  */
 function createMockCDCService(cache) {
   return {
+    executeAuthoritativeSystemTableRead: createAuthoritativeCacheRead(cache),
     async insertSystemTableRow(tableName, data) {
       cache?.applySystemTableChange(tableName, 'INSERT', data);
       return {success: true, operation: 'INSERT', tableName, data};

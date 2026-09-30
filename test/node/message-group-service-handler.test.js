@@ -57,16 +57,45 @@ function createMockCache(data = {}) {
   };
 }
 
-function createMockCdc() {
+function createMockCdc(cache) {
   const operations = [];
+  const inserts = [];
   const upserts = [];
   const updates = [];
   const deletes = [];
   return {
     operations,
+    inserts,
     upserts,
     updates,
     deletes,
+    async executeAuthoritativeSystemTableRead(tableName, _sql, params) {
+      const serviceId = params[0];
+      let row = cache.get(tableName, serviceId);
+      for (const operation of operations) {
+        const operationServiceId = operation.data?.service_id ||
+          operation.keyObj?.service_id || operation.whereClause?.service_id;
+        if (operation.tableName !== tableName ||
+            operationServiceId !== serviceId) {
+          continue;
+        }
+        if (operation.type === 'delete') {
+          row = null;
+        } else {
+          row = {
+            ...(row || operation.keyObj),
+            ...(operation.data || operation.updateData),
+          };
+        }
+      }
+      return {success: true, rows: row ? [row] : []};
+    },
+    async insertSystemTableRow(tableName, data) {
+      const entry = {type: 'insert', tableName, data};
+      operations.push(entry);
+      inserts.push(entry);
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
     async upsertSystemTableRow(tableName, data) {
       const entry = {type: 'upsert', tableName, data};
       operations.push(entry);
@@ -77,11 +106,13 @@ function createMockCdc() {
       const entry = {type: 'update', tableName, keyObj, updateData};
       operations.push(entry);
       updates.push(entry);
+      return {success: true, partitionResult: {affectedRows: 1}};
     },
     async deleteSystemTableRow(tableName, whereClause) {
       const entry = {type: 'delete', tableName, whereClause};
       operations.push(entry);
       deletes.push(entry);
+      return {success: true, partitionResult: {affectedRows: 1}};
     },
   };
 }
@@ -111,7 +142,7 @@ function createHandler(overrides = {}) {
     ],
     replica_operations: overrides.operations || [],
   });
-  const cdc = overrides.cdc || createMockCdc();
+  const cdc = overrides.cdc || createMockCdc(cache);
 
   const handler = new MessageGroupServiceHandler({
     nodeId: overrides.nodeId || 'test-node',
@@ -267,13 +298,13 @@ describe('MessageGroupServiceHandler', () => {
         ReplicaStatus.ACTIVE,
       );
       assert.equal(cdc.updates.length, 0);
-      assert.equal(cdc.upserts.length, 1);
-      assert.equal(cdc.upserts[0].tableName, 'services');
-      assert.equal(cdc.upserts[0].data.service_id, 'mg-1-r4');
-      assert.equal(cdc.upserts[0].data.group_id, 'mg-1');
-      assert.equal(cdc.upserts[0].data.node_id, 'test-node');
-      assert.equal(cdc.upserts[0].data.status, SERVICE_STATUS.ACTIVE);
-      assert.equal(cdc.operations[0].type, 'upsert');
+      assert.equal(cdc.inserts.length, 1);
+      assert.equal(cdc.inserts[0].tableName, 'services');
+      assert.equal(cdc.inserts[0].data.service_id, 'mg-1-r4');
+      assert.equal(cdc.inserts[0].data.group_id, 'mg-1');
+      assert.equal(cdc.inserts[0].data.node_id, 'test-node');
+      assert.equal(cdc.inserts[0].data.status, SERVICE_STATUS.ACTIVE);
+      assert.equal(cdc.operations[0].type, 'insert');
     });
 
   it('creates a message-group replica from explicit topology when cache is sparse',
@@ -330,7 +361,7 @@ describe('MessageGroupServiceHandler', () => {
           'node-c/message-group/mg-1-r3',
         ],
       );
-      assert.equal(cdc.upserts.length, 1);
+      assert.equal(cdc.inserts.length, 1);
     });
 
   it('rejects incomplete explicit topology for a message-group replica',

@@ -14,6 +14,7 @@ test('MessageGroupServiceRowOwner - activateReplica updates status without rewri
         },
         async updateSystemTableRow(tableName, whereClause, updateData, options) {
           updates.push({tableName, whereClause, updateData, options});
+          return {success: true, partitionResult: {affectedRows: 1}};
         },
       },
     });
@@ -33,6 +34,8 @@ test('MessageGroupServiceRowOwner - activateReplica updates status without rewri
     t.same(updates[0].whereClause, {
       service_id: 'mg-1-r1',
       service_type: 'message_group',
+      group_id: 'mg-1',
+      node_id: 'node-a',
     });
     t.notOk(
       Object.prototype.hasOwnProperty.call(

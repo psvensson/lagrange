@@ -468,12 +468,15 @@ export async function registerReplicaHandlerTailMoreTests({
       (op) => op.type === 'delete' && op.tableName === SYSTEM_TABLE_NAME.SERVICES,
     );
     t.ok(deleteOp, 'service row deleted via CDC');
-    t.same(deleteOp.whereClause, {
+    t.match(deleteOp.whereClause, {
       service_id: 'replica-1',
-      service_type: 'partition',
+      service_type: 'partition_cleanup',
       partition_id: 'partition-1',
       node_id: 'test-node',
-    }, 'partition removal should delete through the canonical typed owner path');
+      status: 'cleanup_owned',
+      cleanup_token: String,
+      updated_at: Number,
+    }, 'partition removal releases only its exact cleanup marker');
 
     handler.shutdown();
   });
@@ -603,32 +606,41 @@ export async function registerReplicaHandlerTailMoreTests({
         updated_at: Date.now(),
       });
       const mockCDC = createMockCDCService(cache);
-      let replicaState = ReplicaStatus.ACTIVE;
       let removingAttempts = 0;
       let durableRemovingObserved = false;
       let durableRemovalCompleted = false;
-      const raceReplicaStateMachine = {
-        getState() {
-          return replicaState;
-        },
-        transition(_replicaId, newState) {
-          if (newState === ReplicaStatus.REMOVING) {
-            removingAttempts += 1;
-            if (removingAttempts === 1) {
-              replicaState = ReplicaStatus.FAILED;
-              return false;
-            }
-            replicaState = ReplicaStatus.REMOVING;
-            durableRemovingObserved = true;
-            return true;
-          }
-          replicaState = newState;
-          return true;
-        },
-        completeDurableRemoval() {
-          replicaState = ReplicaStatus.REMOVED;
-          durableRemovalCompleted = true;
-        },
+      const raceReplicaStateMachine = new ReplicaStateMachine({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+      });
+      const transition = raceReplicaStateMachine.transition.bind(
+        raceReplicaStateMachine,
+      );
+      raceReplicaStateMachine.transition = async (
+        replicaId,
+        newState,
+        context,
+      ) => {
+        if (newState !== ReplicaStatus.REMOVING) {
+          return transition(replicaId, newState, context);
+        }
+        removingAttempts += 1;
+        if (removingAttempts === 1) {
+          await transition(replicaId, ReplicaStatus.FAILED, context);
+          return false;
+        }
+        const result = await transition(replicaId, newState, context);
+        durableRemovingObserved = result === true;
+        return result;
+      };
+      const completeDurableRemovalWithAuthority = raceReplicaStateMachine
+        .completeDurableRemovalWithAuthority.bind(raceReplicaStateMachine);
+      raceReplicaStateMachine.completeDurableRemovalWithAuthority = async (
+        ...args
+      ) => {
+        const result = await completeDurableRemovalWithAuthority(...args);
+        durableRemovalCompleted = result === true;
+        return result;
       };
 
       const handler = new ReplicaHandler({
@@ -693,9 +705,9 @@ export async function registerReplicaHandlerTailMoreTests({
         'late failed-state removal should still converge the local replica to removed',
       );
       t.equal(
-        replicaState,
-        ReplicaStatus.REMOVED,
-        'late failed-state removal should finish with one canonical removed lifecycle state',
+        raceReplicaStateMachine.getState(TEST_LATE_FAILED_REMOVE_REPLICA_ID),
+        null,
+        'late failed-state removal should clear completed lifecycle tracking',
       );
       t.equal(
         durableRemovalCompleted,

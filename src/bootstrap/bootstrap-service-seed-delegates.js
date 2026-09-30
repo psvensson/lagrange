@@ -131,6 +131,8 @@ function buildPhaseExecutionDelegates(service) {
       null,
     getBootstrapReadinessState: () =>
       self.bootstrapReadinessState,
+    getStartupServicesAdmission: () =>
+      self.startupServicesAdmission,
     getPartitionReplicaProgressReporter: () =>
       self.partitionReplicaProgressReporter,
     getInitialMessageGroupId: () =>
@@ -471,10 +473,10 @@ function buildCleanupDelegates(service) {
         self.runtimeServiceHandler = null;
       }
     },
-    clearReplicaStateMachine: () => {
+    clearReplicaStateMachine: async () => {
       if (self.replicaStateMachine) {
         self.replicaStateMachine.stopTimeoutChecker();
-        self.replicaStateMachine.clear();
+        await self.replicaStateMachine.clear();
         self.replicaStateMachine = null;
       }
     },

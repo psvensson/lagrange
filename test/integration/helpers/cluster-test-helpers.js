@@ -18,6 +18,9 @@ import {LogsTableService} from '../../../src/logging/logs-table-service.js';
 import {NodeService} from '../../../src/node/node-service.js';
 import {AddressManager} from '../../../src/address/address-manager.js';
 import {ServiceThreadManager} from '../../../src/threading/service-thread-manager.js';
+import {BootstrapService} from '../../../src/bootstrap/bootstrap-service.js';
+import {readSeedStartupStorageAdmission} from
+  '../../../src/bootstrap/seed-startup-storage-admission.js';
 import {
   clearRegisteredControlPlaneSystemTableGateway,
 } from '../../../src/control-plane/control-plane-gateway-registry.js';
@@ -168,6 +171,28 @@ export function initializeTestEnvironment(options = {}) {
   // Initialize logging at error level to reduce noise
   const logging = LoggingService.getInstance();
   logging.initialize({level: 'error'});
+}
+
+/**
+ * Construct a seed bootstrap fixture only after the production durable
+ * SERVICES-identity reader positively proves a virgin data directory.
+ * Direct BootstrapService construction deliberately remains fail closed.
+ * @param {Object} options BootstrapService options.
+ * @return {Promise<BootstrapService>} Admitted bootstrap fixture.
+ */
+export async function createVirginSeedBootstrapService(options = {}) {
+  const manager = options.dataDirectoryManager;
+  const dataDir = typeof options.dataDir === 'string' ? options.dataDir :
+    manager?.isInitialized?.() === true ? manager.getDataDir() :
+      ConfigurationManager.getInstance().get('storage.dataDir');
+  const startupServicesAdmission = await readSeedStartupStorageAdmission(
+    dataDir,
+    (acquisition) => acquisition,
+  );
+  if (startupServicesAdmission.empty !== true) {
+    throw new Error('Virgin seed fixture found durable SERVICES identity');
+  }
+  return new BootstrapService({...options, startupServicesAdmission});
 }
 
 /**

@@ -14,6 +14,7 @@ test('PartitionServiceRowOwner - activateReplica updates status without rewritin
         },
         async updateSystemTableRow(tableName, whereClause, updateData, options) {
           updates.push({tableName, whereClause, updateData, options});
+          return {success: true, partitionResult: {affectedRows: 1}};
         },
       },
     });
@@ -33,6 +34,8 @@ test('PartitionServiceRowOwner - activateReplica updates status without rewritin
     t.same(updates[0].whereClause, {
       service_id: 'p1-r1',
       service_type: 'partition',
+      partition_id: 'p1',
+      node_id: 'node-a',
     });
     t.notOk(
       Object.prototype.hasOwnProperty.call(
@@ -78,6 +81,7 @@ test('PartitionServiceRowOwner - critical system partitions use critical service
         },
         async updateSystemTableRow(tableName, whereClause, updateData, options) {
           updates.push({tableName, whereClause, updateData, options});
+          return {success: true, partitionResult: {affectedRows: 1}};
         },
       },
     });
@@ -135,6 +139,7 @@ test('PartitionServiceRowOwner - follower activation does not rewrite canonical 
         },
         async updateSystemTableRow(tableName, whereClause, updateData, options) {
           updates.push({tableName, whereClause, updateData, options});
+          return {success: true, partitionResult: {affectedRows: 1}};
         },
       },
     });
@@ -153,34 +158,34 @@ test('PartitionServiceRowOwner - follower activation does not rewrite canonical 
     t.equal(updates[0].tableName, 'services');
   });
 
-test('PartitionServiceRowOwner - removeReplica deletes one typed partition service row',
+test('PartitionServiceRowOwner - registerReplica uses insert-only admission',
   async (t) => {
-    const deletes = [];
+    const inserts = [];
     const owner = new PartitionServiceRowOwner({
+      now: () => 1234,
       systemTableWriter: {
-        async deleteSystemTableRow(tableName, whereClause, options) {
-          deletes.push({tableName, whereClause, options});
+        async insertSystemTableRow(tableName, row, options) {
+          inserts.push({tableName, row, options});
+          return {success: true, partitionResult: {affectedRows: 1}};
         },
       },
     });
 
-    await owner.removeReplica({
+    await owner.registerReplica({
       partitionId: 'p1',
       replicaId: 'p1-r2',
       nodeId: 'node-b',
     });
 
-    t.equal(deletes.length, 1, 'remove should issue one delete');
-    t.equal(deletes[0].tableName, 'services');
-    t.same(deletes[0].whereClause, {
-      service_id: 'p1-r2',
-      service_type: 'partition',
-      partition_id: 'p1',
-      node_id: 'node-b',
-    });
+    t.equal(inserts.length, 1, 'registration should issue one insert');
+    t.equal(inserts[0].tableName, 'services');
+    t.equal(inserts[0].row.service_id, 'p1-r2');
+    t.equal(inserts[0].row.service_type, 'partition');
     t.equal(
-      deletes[0].options?.coalescingKey,
-      'services:p1-r2',
-      'remove should coalesce by partition service row',
+      inserts[0].options?.coalescingKey,
+      'services:p1-r2:create:1234',
+      'registration should carry generation-specific diagnostics',
     );
+    t.equal(inserts[0].options?.allowCoalescing, false,
+      'create admissions must not coalesce across lifetimes');
   });

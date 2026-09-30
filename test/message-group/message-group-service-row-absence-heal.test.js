@@ -10,7 +10,7 @@
  * 2026-08-16 — the partition-owner heal alone did not cover this owner).
  * Same contract as the partition owner: a zero affected-row count on the
  * primary-key-pinned WHERE proves durable absence and re-issues the
- * canonical registration upsert; matched or unwitnessed counts keep the
+ * canonical registration insert; matched or unwitnessed counts keep the
  * update-only contract.
  */
 import {

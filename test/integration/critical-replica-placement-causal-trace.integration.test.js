@@ -23,7 +23,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
@@ -54,6 +53,7 @@ import {
   getUniquePort,
   gracefulJoiningShutdown,
   gracefulShutdown,
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   stopAllRebalancers,
   waitFor,
@@ -292,7 +292,7 @@ test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
     const seedWsPort = getUniquePort();
     const node2WsPort = getUniquePort();
     const node3WsPort = getUniquePort();
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: SEED_NODE_ID,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

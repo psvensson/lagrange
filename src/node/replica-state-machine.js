@@ -8,6 +8,8 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
+import {classifyControlPlaneMutationResult} from
+  '../control-plane/control-plane-mutation-outcome-classifier.js';
 import {
   REPLICA_STATE_MACHINE_DEFAULT,
   REPLICA_STATE_MACHINE_DEFAULT_TIMEOUTS,
@@ -27,12 +29,17 @@ import {
   buildCdcPersistenceOptions,
   buildCreateCdcData,
   buildUpdateCdcData,
-  clearCanonicalPartitionLeaderIfNeeded,
   createReplicaRowInCdc,
   getControlPlaneSystemTableGateway,
   hasOtherActivePartitionReplicaOnLeaderNode,
   updateReplicaStateInCdc,
 } from './replica-state-machine-transition.js';
+import {
+  clearCanonicalPartitionLeaderIfNeeded,
+  hasCanonicalLeaderClearIdentity,
+  settleCanonicalLeaderMutation,
+} from
+  './replica-state-machine-leader-clear.js';
 import {
   canStartOperation,
   clear,
@@ -52,10 +59,24 @@ import {
   stopTimeoutChecker,
 } from './replica-state-machine-timeouts.js';
 import {
+  bindAuthoritativeRemovalAuthority,
+  completeDurableRemovalWithAuthority,
   handleNodeRecovery,
-  registerReplicaForRecovery,
+  installAuthoritativeReplicaLifecycleInLane,
   registerReplicaSnapshot,
 } from './replica-state-machine-recovery.js';
+import {
+  observeAuthoritativeReplicaLifecycle,
+  rowMatchesReplicaLifecycle,
+} from './replica-state-machine-lifecycle-observation.js';
+import {
+  captureReplicaAdmission,
+  getReplicaRevision,
+  isCanonicalLeaderClearSettled,
+  isReplicaAdmissionCurrent,
+  recordCanonicalLeaderClearSettlement,
+  runSerializedReplicaMutation,
+} from './replica-state-machine-serialization.js';
 
 /**
  * Replica state constants.
@@ -128,10 +149,9 @@ class ReplicaStateMachine extends EventEmitter {
     this.systemTableCache = options.systemTableCache || null;
 
     // CL-016: service rows seeded into the LOCAL cache by the priority
-    // create fallback, whose durable write is still unconfirmed. The
-    // lifecycle persistence path must UPSERT (not UPDATE) these until a
-    // durable write commits, because the local cache no longer proxies
-    // remote existence for them.
+    // create fallback, whose durable write is still unconfirmed. Their
+    // dedicated reconcile owner may INSERT; lifecycle transitions remain
+    // conditional UPDATEs bound to the tracked source generation.
     this.localOnlyServiceRowIds = new Set();
     // CL-021: per-row retry backoff for converging those deferred durable
     // writes on the timeout-checker tick (serviceId -> {delayMs,
@@ -143,6 +163,15 @@ class ReplicaStateMachine extends EventEmitter {
     // persist promise). Unserialized, the slower write lands second and
     // can regress the durable row to an older state.
     this.serviceRowPersistInFlightByServiceId = new Map();
+    // Monotonic per-replica source revision for transition admission. Every
+    // tracked-state mutation advances it, including direct hydration/removal,
+    // so queued intents cannot survive ABA state changes or out-of-band writes.
+    this.replicaRevisionByReplicaId = new Map();
+    this.uncertainRemovingIntentByReplicaId = new Map();
+    this.canonicalLeaderClearDebtByReplicaId = new Map();
+    this.canonicalLeaderClearSettlementByReplicaId = new Map();
+    this.replicaMutationAdmissionClosed = false;
+    this.clearInFlight = null;
 
     this.replicas = new Map();
     this.stateCounts = {
@@ -252,17 +281,28 @@ class ReplicaStateMachine extends EventEmitter {
    * already been deleted.
    * @param {string} replicaId - Replica identifier.
    * @param {Object} context - Additional context.
-   * @return {boolean} True when local tracking was finalized.
+   * @return {boolean|Promise<boolean>} True when local tracking was finalized.
    */
   completeDurableRemoval(replicaId, context = {}) {
+    if (this.canonicalLeaderClearDebtByReplicaId.has(replicaId)) {
+      return false;
+    }
     const existingState = this.replicas.get(replicaId);
     if (!existingState) {
-      return true;
+      return false;
+    }
+
+    if (existingState.state === ReplicaState.REMOVING &&
+        !isCanonicalLeaderClearSettled(this, replicaId)) {
+      return false;
     }
 
     if (existingState.state === ReplicaState.REMOVED) {
-      this.removeFromTracking(replicaId);
-      return true;
+      return this.removeFromTracking(replicaId);
+    }
+
+    if (existingState.state !== ReplicaState.REMOVING) {
+      return false;
     }
 
     const transitionResult = this._applyTransition(
@@ -274,11 +314,27 @@ class ReplicaStateMachine extends EventEmitter {
         validate: false,
       },
     );
-    if (transitionResult !== true) {
-      return false;
-    }
-    this.removeFromTracking(replicaId);
-    return true;
+    const finishRemoval = (result) => result === true ?
+      this.removeFromTracking(replicaId) : false;
+    return transitionResult instanceof Promise ?
+      transitionResult.then(finishRemoval) : finishRemoval(transitionResult);
+  }
+
+  completeDurableRemovalWithAuthority(
+    replicaId,
+    authority,
+    action,
+    onComplete,
+    context = {},
+  ) {
+    return completeDurableRemovalWithAuthority(
+      this,
+      replicaId,
+      authority,
+      action,
+      onComplete,
+      context,
+    );
   }
 
   _applyTransition(replicaId, newState, context = {}, options = {}) {
@@ -352,7 +408,13 @@ class ReplicaStateMachine extends EventEmitter {
   }
 
   removeFromTracking(replicaId) {
-    return removeFromTracking(this, replicaId);
+    const admission = captureReplicaAdmission(this, replicaId);
+    return runSerializedReplicaMutation(this, replicaId, () => {
+      if (!isReplicaAdmissionCurrent(this, replicaId, admission)) {
+        return false;
+      }
+      return removeFromTracking(this, replicaId);
+    });
   }
 
   _updatePeakConcurrentOperations() {
@@ -372,7 +434,7 @@ class ReplicaStateMachine extends EventEmitter {
   }
 
   clear() {
-    clear(this);
+    return clear(this);
   }
 
   getControlPlaneSystemTableGateway() {
@@ -414,9 +476,8 @@ class ReplicaStateMachine extends EventEmitter {
   }
 
   /**
-   * CL-016: mark a service row as seeded locally (durable write deferred);
-   * lifecycle persistence will UPSERT instead of UPDATE for it until a
-   * durable write commits.
+   * CL-016: mark a service row as seeded locally (durable write deferred).
+   * Only the dedicated reconcile owner may INSERT that missing generation.
    * @param {string} serviceId
    * @return {void}
    */
@@ -479,7 +540,7 @@ class ReplicaStateMachine extends EventEmitter {
    * mode=load ACTIVE-wait surface). Runs on the existing timeout-checker
    * tick; per-row exponential backoff bounds the failure-log rate while
    * the control plane is still recovering. The durable write is the same
-   * idempotent UPSERT lifecycle persistence already uses for local-only
+   * insert-only lifecycle admission already uses for local-only
    * rows, and success clears the marker inside _updateReplicaStateInCdc.
    * @return {Promise<number>} Rows durably converged this pass.
    */
@@ -535,22 +596,23 @@ class ReplicaStateMachine extends EventEmitter {
           this.clearServiceRowLocalOnly(serviceId);
           continue;
         }
-        // Fresh-stamped copy: the durable apply is a full-row replace and
-        // cache merges resolve by updated_at — a write stamped with the
-        // (arbitrarily old) state-entry time could lose to merges yet
-        // overwrite the durable row for later hydrators (verification
-        // finding). The copy never mutates tracked state.
+        // Preserve the lifecycle generation used by later conditional
+        // transitions. Only the cache-ordering timestamp is refreshed: an
+        // A retry that silently advances state_entered_at would make the next
+        // tracked-state CAS use the old generation forever.
         const stampedState = {
           ...replicaState,
-          stateEnteredAt: nowMs,
+          durableUpdatedAt: nowMs,
         };
-        const reconcilePromise = this._updateReplicaStateInCdc(
-          stampedState,
-          stampedState,
-        );
-        this.serviceRowPersistInFlightByServiceId.set(
-          serviceId,
-          reconcilePromise,
+        const reconcilePromise = Promise.resolve(
+          runSerializedReplicaMutation(this, serviceId, async () => {
+            const result = await this._createReplicaRowInCdc(stampedState);
+            if (result === true ||
+                classifyControlPlaneMutationResult(result).applied) {
+              this.clearServiceRowLocalOnly(serviceId);
+            }
+            return result;
+          }),
         );
         try {
           await reconcilePromise;
@@ -574,13 +636,6 @@ class ReplicaStateMachine extends EventEmitter {
           );
         } catch (_error) {
           this._armLocalOnlyServiceRowRetry(serviceId, retryState, nowMs);
-        } finally {
-          if (
-            this.serviceRowPersistInFlightByServiceId.get(serviceId) ===
-            reconcilePromise
-          ) {
-            this.serviceRowPersistInFlightByServiceId.delete(serviceId);
-          }
         }
       }
     } finally {
@@ -589,16 +644,114 @@ class ReplicaStateMachine extends EventEmitter {
     return persisted;
   }
 
+  /**
+   * Retry leader-row cleanup after an authoritative lifecycle generation was
+   * already durably applied. The lifecycle transition stays committed; this
+   * queue only converges its recorded cross-owner side-effect debt.
+   * @return {Promise<number>} Debt entries cleared in this pass.
+   */
+  async reconcileCanonicalLeaderClearDebtNow() {
+    let reconciled = REPLICA_STATE_MACHINE_NUM.ZERO;
+    for (const [replicaId, debt] of
+      [...this.canonicalLeaderClearDebtByReplicaId.entries()]) {
+      const settled = await this.settleCanonicalLeaderClearDebt(replicaId);
+      if (settled === true &&
+          this.canonicalLeaderClearDebtByReplicaId.get(replicaId) !== debt) {
+        reconciled += REPLICA_STATE_MACHINE_NUM.ONE;
+      }
+    }
+    return reconciled;
+  }
+
+  /**
+   * Settle leader clearing for one exact lifecycle generation. Thrown,
+   * deferred and non-applied outcomes retain debt; a different lifecycle
+   * generation fences execution without pretending the old debt settled.
+   * @param {string} replicaId
+   * @return {Promise<boolean>} True only when no leader-clear debt remains.
+   */
+  async settleCanonicalLeaderClearDebt(replicaId) {
+    let debt = this.canonicalLeaderClearDebtByReplicaId.get(replicaId);
+    if (!debt) {
+      const currentState = this.replicas.get(replicaId) || null;
+      if (!hasCanonicalLeaderClearIdentity(currentState)) {
+        return false;
+      }
+      if (isCanonicalLeaderClearSettled(this, replicaId)) {
+        return true;
+      }
+      // A restart legitimately loses the in-memory side-effect record while
+      // the durable REMOVING row remains its reconstructible authority.
+      debt = Object.freeze({
+        replicaState: currentState,
+        revision: getReplicaRevision(this, replicaId),
+      });
+      this.canonicalLeaderClearDebtByReplicaId.set(replicaId, debt);
+    }
+    return Promise.resolve(runSerializedReplicaMutation(
+      this,
+      replicaId,
+      async () => {
+        if (this.canonicalLeaderClearDebtByReplicaId.get(replicaId) !== debt) {
+          return false;
+        }
+        const currentState = this.replicas.get(replicaId) || null;
+        if (getReplicaRevision(this, replicaId) !== debt.revision ||
+            currentState !== debt.replicaState) {
+          return false;
+        }
+        const lifecycleObservation =
+          await observeAuthoritativeReplicaLifecycle(this, replicaId);
+        if (lifecycleObservation.available !== true) return false;
+        if (!rowMatchesReplicaLifecycle(
+          lifecycleObservation.row,
+          debt.replicaState,
+        )) {
+          if (lifecycleObservation.row) {
+            installAuthoritativeReplicaLifecycleInLane(
+              this,
+              replicaId,
+              lifecycleObservation.row,
+            );
+          }
+          return false;
+        }
+        try {
+          if (await settleCanonicalLeaderMutation(
+            this,
+            debt.replicaState,
+          ) !== true) return false;
+        } catch (_error) {
+          return false;
+        }
+        if (this.canonicalLeaderClearDebtByReplicaId.get(replicaId) === debt) {
+          this.canonicalLeaderClearDebtByReplicaId.delete(replicaId);
+        }
+        recordCanonicalLeaderClearSettlement(
+          this,
+          replicaId,
+          debt.replicaState,
+          debt.revision,
+        );
+        return true;
+      },
+    ));
+  }
+
   async handleNodeRecovery(options = {}) {
     return handleNodeRecovery(this, options);
   }
 
-  registerReplicaSnapshot(replicaId, context = {}) {
-    return registerReplicaSnapshot(this, replicaId, context);
+  bindAuthoritativeRemovalAuthority(replicaId, context = {}) {
+    return bindAuthoritativeRemovalAuthority(this, replicaId, context);
   }
 
-  _registerReplicaForRecovery(replicaId, context) {
-    registerReplicaForRecovery(this, replicaId, context);
+  observeAuthoritativeReplicaLifecycle(replicaId) {
+    return observeAuthoritativeReplicaLifecycle(this, replicaId);
+  }
+
+  registerReplicaSnapshot(replicaId, context = {}) {
+    return registerReplicaSnapshot(this, replicaId, context);
   }
 }
 

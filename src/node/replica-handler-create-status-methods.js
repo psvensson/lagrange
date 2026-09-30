@@ -16,6 +16,9 @@ import {
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {durableRowVersion} from './replica-state-machine-recovery.js';
+import {REPLICA_CLEANUP_ERROR_CODE} from
+  './replica-cleanup-tombstone-owner.js';
 import {
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_SERVICE,
@@ -35,6 +38,7 @@ function registerCachedFailedCreateSnapshot(
   partitionId,
   cachedService,
 ) {
+  const durableVersion = durableRowVersion(cachedService);
   handler.replicaStateMachine.registerReplicaSnapshot(replicaId, {
     partitionId,
     nodeId: cachedService.node_id || handler.nodeId,
@@ -44,6 +48,8 @@ function registerCachedFailedCreateSnapshot(
       cachedService.service_type || REPLICA_HANDLER_SERVICE.TYPE,
     serviceAddress:
       cachedService.address || handler.buildTrackedServiceAddress(replicaId),
+    durableVersionColumn: durableVersion?.column,
+    durableVersion: durableVersion?.value,
   });
 }
 
@@ -153,28 +159,36 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
      * @private
      */
     async persistReplicaCreateInitialStatus(options = {}) {
-      const {operationId, partitionId, replicaId} = options;
+      const {
+        operationId,
+        partitionId,
+        replicaId,
+        pendingStatusPersisted = false,
+      } = options;
       if (await this.restartFailedReplicaCreateStatus(options)) {
         return true;
       }
-      if (this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
-        await this.commitPriorityReplicaCreateStatusLocally({
-          operationId,
-          partitionId,
-          replicaId,
-        });
-        return true;
-      }
       try {
-        await this.persistReplicaStatusWithRetry(replicaId, ReplicaStatus.PENDING, {
-          partitionId,
-        });
+        if (!pendingStatusPersisted) {
+          await this.persistReplicaStatusWithRetry(
+            replicaId,
+            ReplicaStatus.PENDING,
+            {partitionId},
+          );
+        }
         this.throwIfShuttingDown();
+        if (this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
+          return this.persistPriorityReplicaCreateCreatingStatus(options);
+        }
         await this.persistReplicaStatusWithRetry(replicaId, ReplicaStatus.CREATING, {
           partitionId,
         });
         return true;
       } catch (error) {
+        if (error?.code ===
+          REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IN_PROGRESS) {
+          throw error;
+        }
         if (isRetryableControlPlaneError(error) !== true) {
           throw error;
         }
@@ -282,6 +296,10 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         });
         return true;
       } catch (error) {
+        if (error?.code ===
+          REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IN_PROGRESS) {
+          throw error;
+        }
         if (isRetryableControlPlaneError(error) !== true) {
           throw error;
         }

@@ -63,10 +63,16 @@ function createHandlerCache() {
 }
 
 function createMockCDCService(cache) {
+  const result = (applied) => ({
+    success: true,
+    outcome: applied ? 'applied' : 'observed_state_changed',
+    partitionResult: {affectedRows: applied ? 1 : 0},
+  });
   return {
     async insertSystemTableRow(tableName, data) {
+      if (cache.get(tableName, data.service_id)) return result(false);
       cache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true};
+      return result(true);
     },
     async updateSystemTableRow(tableName, whereClause, data) {
       cache.applySystemTableChange(
@@ -81,8 +87,27 @@ function createMockCDCService(cache) {
       return {success: true};
     },
     async deleteSystemTableRow(tableName, whereClause) {
+      const row = cache.get(tableName, whereClause.service_id);
+      const applied = row && Object.entries(whereClause).every(
+        ([key, value]) => row[key] === value,
+      );
+      if (!applied) return result(false);
       cache.applySystemTableChange(tableName, 'DELETE', whereClause);
-      return {success: true};
+      return result(true);
+    },
+    async executeAuthoritativeSystemTableRead(tableName, sql, params) {
+      if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
+          sql.includes('service_type = ?')) {
+        return {
+          success: true,
+          rows: cache.getAll(tableName).filter((row) =>
+            row.service_type === params[0] &&
+            row.status === params[1] &&
+            row.node_id === params[2]),
+        };
+      }
+      const row = cache.get(tableName, params[0]);
+      return {success: true, rows: row ? [row] : []};
     },
   };
 }
@@ -228,18 +253,22 @@ test('removed-replica cleanup debt owner', async (t) => {
         ReplicaOperationResponseStatus.INITIATED,
         'removal is initiated',
       );
-      await removed;
+      await t.rejects(removed, /disk busy: unlink failed/,
+        'the removal remains retryable while cleanup ownership is durable');
       t.equal(liveService.shutdownCalls, 1,
         'the live service was shut down before the file cleanup failed');
-      t.equal(
-        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID),
-        undefined,
-        'the authoritative services row is gone even though cleanup failed',
+      const cleanupMarker = cache.get(
+        SYSTEM_TABLE_NAME.SERVICES,
+        TEST_REPLICA_ID,
       );
+      t.equal(cleanupMarker?.service_type, 'partition_cleanup',
+        'failed cleanup retains durable non-routable ownership');
+      t.type(cleanupMarker?.cleanup_token, 'string',
+        'the retained cleanup ownership has an exact token');
       t.equal(
         handler.getLocalReplica(TEST_REPLICA_ID)?.status,
-        ReplicaStatus.REMOVED,
-        'the operation terminates as REMOVED despite the failed cleanup',
+        ReplicaStatus.REMOVING,
+        'local state remains nonterminal while cleanup is incomplete',
       );
 
       // Stranded by the failed cleanup, invisible to any future REMOVE
@@ -254,10 +283,7 @@ test('removed-replica cleanup debt owner', async (t) => {
 
       // The durable owner: a fresh handler instance on the same data dir
       // (the restart) must retry the reconcile cleanup at startup.
-      const restartHandler = createHandler({
-        cache: createHandlerCache(),
-        dataDir,
-      });
+      const restartHandler = createHandler({cache, dataDir});
       restartHandler.initialize();
       const report = await restartHandler.removedReplicaCleanupDebtSweepTask;
 
@@ -341,15 +367,13 @@ test('removed-replica cleanup debt owner', async (t) => {
         TEST_ORPHAN_PARTITION_ID,
         TEST_ORPHAN_REPLICA_ID,
       );
-      const handler = createHandler({
-        cache: createHandlerCache(),
-        dataDir,
-      });
+      const cache = createHandlerCache();
+      const handler = createHandler({cache, dataDir});
       // Simulate a reconcile failure on the startup sweep itself (e.g. the
       // control plane was unavailable during boot): the deletion fails, the
       // orphan stays on disk, and the debt report counts it instead of
       // silently dropping it.
-      handler.reconcileRemovedReplicaCleanup = async () => {
+      handler.cleanupReplicaResources = async () => {
         throw new Error('control plane unavailable during sweep');
       };
       handler.initialize();
@@ -359,15 +383,19 @@ test('removed-replica cleanup debt owner', async (t) => {
       t.ok(fs.existsSync(orphanDbPath),
         'a failed sweep leaves the orphan on disk (retryable debt)');
 
-      // The next sweep (the next startup in production) retries the debt
-      // with a healthy reconcile path and the orphan is eventually deleted.
-      delete handler.reconcileRemovedReplicaCleanup;
-      const retryReport = await handler.sweepRemovedReplicaCleanupDebt();
+      // A new process captures the marker in its frozen pre-admission
+      // startup snapshot. An ordinary live sweep is deliberately forbidden
+      // from borrowing the first process's token.
+      await handler.shutdown();
+      const restartHandler = createHandler({cache, dataDir});
+      restartHandler.initialize();
+      const retryReport =
+        await restartHandler.removedReplicaCleanupDebtSweepTask;
       t.equal(retryReport.deleted, 1,
         'a later sweep retries the reconcile and deletes the orphan');
       t.notOk(fs.existsSync(orphanDbPath),
         'the orphan is eventually deleted');
-      await handler.shutdown();
+      await restartHandler.shutdown();
     },
   );
 });

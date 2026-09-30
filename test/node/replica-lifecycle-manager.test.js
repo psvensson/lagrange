@@ -11,7 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import {
-  ReplicaLifecycleManager,
+  ReplicaLifecycleManager as ProductionReplicaLifecycleManager,
   ReplicaStatus,
   MessageType,
   AckStatus,
@@ -108,6 +108,56 @@ function createMockPartitionServiceFactory() {
       async syncFromLeader() {},
     };
   };
+}
+
+function createTestControlPlaneGateway(systemTableCache, cdc) {
+  return {
+    async readAuthoritativeRows(tableName, sql, params) {
+      if (sql.includes('service_type = ?')) {
+        return {success: true, rows: systemTableCache.filter(
+          tableName,
+          (row) => row.service_type === params[0] &&
+            row.status === params[1] && row.node_id === params[2],
+        )};
+      }
+      const row = systemTableCache.get(tableName, params[0]);
+      return {success: true, rows: row ? [{...row}] : []};
+    },
+    async submitMutation(mutation) {
+      let result;
+      if (mutation.operation === 'insert') {
+        result = await cdc.insertSystemTableRow(
+          mutation.tableName, mutation.row,
+        );
+      } else if (mutation.operation === 'delete') {
+        result = await cdc.deleteSystemTableRow(
+          mutation.tableName, mutation.whereClause,
+        );
+      } else {
+        result = await cdc.updateSystemTableRow(
+          mutation.tableName, mutation.whereClause, mutation.data,
+        );
+      }
+      const affectedRows = result?.partitionResult?.affectedRows ?? 1;
+      return {
+        success: true,
+        outcome: affectedRows === 1 ? 'applied' : 'observed_state_changed',
+        partitionResult: {affectedRows},
+      };
+    },
+  };
+}
+
+function ReplicaLifecycleManager(options) {
+  return new ProductionReplicaLifecycleManager({
+    ...options,
+    controlPlaneSystemTableGateway:
+      options.controlPlaneSystemTableGateway ||
+      createTestControlPlaneGateway(
+        options.systemTableCache,
+        options.cdcIntegrationService,
+      ),
+  });
 }
 
 test('ReplicaLifecycleManager', async (t) => {
@@ -521,6 +571,8 @@ test('ReplicaLifecycleManager', async (t) => {
         mockCDC.operations[0]?.whereClause,
         {
           service_id: 'replica-1',
+          service_type: 'partition',
+          partition_id: 'partition-1',
           node_id: 'test-node',
           status: ReplicaStatus.STARTING,
           updated_at: 12345,
@@ -531,7 +583,7 @@ test('ReplicaLifecycleManager', async (t) => {
       manager.shutdown();
     });
 
-  t.test('node recovery - quarantines on-disk replica DB with no services row',
+  t.test('node recovery - leaves rowless storage to durable cleanup ownership',
     async (t) => {
       const mockCache = createMockCache({
         services: [
@@ -574,14 +626,14 @@ test('ReplicaLifecycleManager', async (t) => {
 
       t.ok(fs.existsSync(assignedDb),
         'assigned replica file must be untouched');
-      t.notOk(fs.existsSync(orphanedDb),
-        'orphaned replica file must no longer sit at its readable path');
-      t.ok(fs.existsSync(`${orphanedDb}.quarantined`),
-        'orphaned replica file must be quarantined, not deleted');
-      t.equal(recoveryComplete?.quarantinedOrphanedFiles, 1,
-        'recovery payload reports the quarantined orphan');
-      t.equal(recoveryComplete?.reconciliationSweepCompleted, true,
-        'recovery payload reports the sweep completed');
+      t.ok(fs.existsSync(orphanedDb),
+        'legacy recovery cannot move rowless storage without a cleanup owner');
+      t.notOk(fs.existsSync(`${orphanedDb}.quarantined`),
+        'legacy recovery has no second quarantine authority');
+      t.equal(recoveryComplete?.quarantinedOrphanedFiles, 0,
+        'legacy recovery reports no ownerless quarantine action');
+      t.equal(recoveryComplete?.reconciliationSweepCompleted, false,
+        'durable cleanup ownership remains outside legacy recovery');
 
       manager.shutdown();
     });

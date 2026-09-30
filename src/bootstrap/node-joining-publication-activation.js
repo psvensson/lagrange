@@ -11,6 +11,8 @@ import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
   '../partition/partition-service-constants.js';
 import {COMMITTED_MEMBERSHIP_REFUSAL} from
   '../raft/raft-committed-membership-constants.js';
+import {assertDurableRejoinStorageAdmission} from
+  './durable-rejoin-storage-admission.js';
 
 // A durable-rejoin replica that holds no durable record is refused at its
 // consensus port (owner decision O4): it is not restored, not activated and
@@ -18,7 +20,6 @@ import {COMMITTED_MEMBERSHIP_REFUSAL} from
 // target. Every other restore failure still aborts the rejoin.
 const DURABLE_REJOIN_RECORD_MISSING_MSG =
   'Durable rejoin replica refused: no durable consensus record (O4)';
-
 function isDurableRecordMissingRefusal(error) {
   return error?.code ===
       PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED &&
@@ -230,6 +231,9 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    * @private
    */
   async createJoinLocalPartitionService(options) {
+    await assertDurableRejoinStorageAdmission(
+      this.replicaStateMachine, options,
+    );
     const cdcIntegrationService = this.createCdcIntegrationService();
     const systemTableCache = NodeService.getInstance().getSystemTableCache();
     if (!this.tablePolicyService) {

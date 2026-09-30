@@ -29,7 +29,7 @@ export async function registerReplicaHandlerCreateAdmissionTests({
   ReplicaOperationResponseStatus,
 }) {
   t.test(
-    'handleCreateReplica - returns ACK before slow pending status persistence completes',
+    'handleCreateReplica - wins durable admission before ACK or runtime open',
     async (t) => {
       const cache = createSeededCache();
       seedReplicaOperation(cache, 'op-slow-pending');
@@ -78,27 +78,10 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         replicaId: 'replica-slow',
       });
 
-      const response = await Promise.race([
-        responsePromise,
-        new Promise((_, reject) => {
-          setTimeout(() => {
-            reject(new Error(
-              'CREATE_REPLICA ACK should not wait for pending status persistence',
-            ));
-          }, 25);
-        }),
-      ]);
-
-      t.equal(
-        response.status,
-        ReplicaOperationResponseStatus.INITIATED,
-        'CREATE_REPLICA should ACK immediately even when pending status persistence is slow',
-      );
-      t.equal(
-        handler.getLocalReplica('replica-slow')?.status,
-        ReplicaStatus.PENDING,
-        'local idempotency state should still become pending before ACK',
-      );
+      let responseSettled = false;
+      responsePromise.finally(() => {
+        responseSettled = true;
+      });
       t.same(
         createdReplicaIds,
         [],
@@ -109,20 +92,29 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       t.equal(
         pendingStatusStarted,
         true,
-        'slow pending-status persistence should begin in the detached background task after ACK',
+        'durable insert admission begins before the response settles',
       );
+      t.equal(responseSettled, false,
+        'CREATE_REPLICA does not ACK before durable identity admission');
       t.type(
         releasePendingStatus,
         'function',
-        'background pending-status persistence should expose the test release gate',
+        'pending admission exposes the deterministic release gate',
       );
 
-      releasePendingStatus();
-      await waitForReplicaEvent(
+      const created = waitForReplicaEvent(
         handler,
         'replicaCreated',
         'replicaCreationFailed',
       );
+      releasePendingStatus();
+      const response = await responsePromise;
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.INITIATED,
+        'ACK follows durable ownership admission',
+      );
+      await created;
 
       t.same(
         createdReplicaIds,
@@ -336,8 +328,8 @@ export async function registerReplicaHandlerCreateAdmissionTests({
 
       t.equal(
         creatingWriteCount,
-        0,
-        'priority CREATING status should be local-first, not a startup gate',
+        1,
+        'priority create wins durable identity before local CREATING fallback',
       );
       t.same(
         serviceMutationOperations
@@ -346,10 +338,10 @@ export async function registerReplicaHandlerCreateAdmissionTests({
             mutation.status === ReplicaStatus.ACTIVE,
           ),
         [
-          {operation: 'upsert', status: ReplicaStatus.SYNCING},
+          {operation: 'update', status: ReplicaStatus.SYNCING},
           {operation: 'update', status: ReplicaStatus.ACTIVE},
         ],
-        'post-start lifecycle writes should upsert missing service rows before updating them',
+        'post-start lifecycle writes remain source-generation CAS updates',
       );
       t.same(
         createdReplicaIds,
@@ -633,8 +625,8 @@ export async function registerReplicaHandlerCreateAdmissionTests({
       );
       t.equal(
         syncingMutation?.operation,
-        'upsert',
-        'lifecycle write UPSERTs while remote existence is unconfirmed',
+        'update',
+        'lifecycle writes cannot turn cache uncertainty into UPSERT authority',
       );
       t.equal(
         replicaStateMachine.isServiceRowLocalOnly(
@@ -648,4 +640,3 @@ export async function registerReplicaHandlerCreateAdmissionTests({
     },
   );
 }
-

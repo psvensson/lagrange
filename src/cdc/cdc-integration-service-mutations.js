@@ -1,5 +1,6 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {buildSystemTableMutationSqlParts} from './cdc-system-table-mutation-sql-helpers.js';
+import {TABLES} from '../constants/index.js';
 
 const {
   CDCOperationType,
@@ -16,6 +17,7 @@ const {
   shouldLogTableWriteFailure,
   logSystemTableWriteFailure,
 } = CDC_INTEGRATION_SERVICE_SHARED;
+const SERVICES_UPSERT_FORBIDDEN_CODE = 'SERVICES_UPSERT_FORBIDDEN';
 
 
 /**
@@ -157,6 +159,13 @@ export async function deleteSystemTableRow(context, tableName, whereClause, opti
  */
 export async function upsertSystemTableRow(context, tableName, data, options = {}) {
   context.validateTableName(tableName);
+  if (tableName === TABLES.SERVICES) {
+    const error = new Error(
+      'SERVICES rows require INSERT-only admission or identity-fenced UPDATE',
+    );
+    error.code = SERVICES_UPSERT_FORBIDDEN_CODE;
+    throw error;
+  }
   context.validateData(data, CDC_OPERATION_LABEL.UPSERT);
   const upsertData = context.prepareInsertData(tableName, data, {
     generatePrimaryKey: false,

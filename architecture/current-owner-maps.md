@@ -471,17 +471,34 @@ The current shared building blocks for control-plane work are:
      spread-changing service visibility no longer depends on a periodic timer
      or on diagnostics repairing stale publication metadata
 27. `ReplicaRemovalDurableCleanup`
-   - owned by `ReplicaHandler.reconcileRemovedReplicaCleanup(...)`
-   - derives one idempotent removal cleanup contract from:
-     - local replica lifecycle state
-     - canonical partition `services` row ownership
-     - optional tracked local runtime service cleanup
-   - emits one durable cleanup action through
-     `PartitionServiceRowOwner.removeReplica(...)` before an already-removed
-     partition replica can complete a remove request
+   - owned jointly at one serialized boundary by `ReplicaHandler` and
+     `ReplicaCleanupTombstoneOwner`
+   - binds ordinary removal to the exact durable `REMOVING` generation, settles
+     the existing conditional leader clear, and atomically changes that same
+     `services.service_id` row into an exact-token `partition_cleanup` owner
+   - permits DB/WAL/SHM/journal cleanup only while an owner-required point read
+     still observes that exact token; partial or unknown outcomes retain the
+     marker for restart
+   - releases ownership only after the storage owner positively observes every
+     artifact absent and an exact-token DELETE applies or is observed absent
    - is shared by REPLACE source-removal replay and priority control-plane
-     recovery so local `REMOVED` state does not bypass durable service truth
-     when the cache misses a stale service row
+     recovery so local `REMOVED` state, stale cache projection, and generic row
+     absence cannot bypass durable service truth
+28. `ReplicaStorageCleanupAdmission`
+   - uses `services.service_id` as the single durable arbitration key between
+     live creation and rowless orphan cleanup; both contenders are INSERT-only
+   - freezes local-node cleanup tokens once before request admission at startup;
+     only those exact pre-admission tokens may resume persisted cleanup debt,
+     while disk-only candidates must acquire their own token
+   - keeps full cleanup asynchronous after the admission barrier; ordinary
+     `OWNED` results never borrow another client's token or touch storage
+   - acquires the directory-local SQLite process-owner lock before provenance,
+     rejoin, or replica storage work. A second process sharing the canonical
+     directory fails closed; shutdown, startup unwind, and process death release
+     the lock
+   - allows independent nodes or owner clients to race durable cleanup
+     acquisition safely after each process has established its own directory
+     ownership
 
 New control-plane work should extend these shared owners before adding
 feature-local mechanics.

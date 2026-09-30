@@ -16,6 +16,7 @@ export {SQL} from './sql.js';
 export {SERVICE_STATUS} from './service-status.js';
 export {
   SERVICE_TYPE,
+  isPartitionCleanupServiceRow,
   SERVICE_PROFILE,
   SERVICE_READ_LOCALITY,
   SERVICE_PARTITION_ACCESS_COL,

@@ -226,6 +226,7 @@ and must remain single-path:
 | Identity: `service_id`, `service_type`, `node_id`, `partition_id`, `group_id`, `replica_id`, `address`, `created_at` | Canonical service-row creation owner for that service kind | Written on initial row creation only; later code must not recreate or replace these fields ad hoc |
 | Lifecycle: `status`, `state_entered_at`, `previous_state`, `trigger_reason`, `error_message`, `updated_at` | `ReplicaStateMachine` for partition replicas; corresponding canonical lifecycle owner for other service kinds | Updated through the lifecycle owner only |
 | Raft metadata: `raft_role` | `PartitionService` / `MessageGroupService` role persistence path | Written independently of lifecycle state; no other component may shadow or rewrite it |
+| Rowless partition-storage cleanup: `service_type = partition_cleanup`, `status = cleanup_owned`, `cleanup_token` | `ReplicaCleanupTombstoneOwner` | Acquired by INSERT on an absent key, or by exact-generation UPDATE from `REMOVING`; retained until every owned DB/WAL/SHM/journal artifact is positively absent; released by exact-token DELETE |
 
 Hard rules:
 
@@ -235,6 +236,17 @@ Hard rules:
 3. `INSERT OR REPLACE` is not allowed for steady-state lifecycle updates.
 4. Cache rows may be observed for routing or diagnostics, but must not be used
    to reconstruct owner-managed fields for writes.
+5. All `services` creators use INSERT-only admission. A non-applied or
+   acknowledgement-lost INSERT is resolved by an owner-RPC/leader-required
+   point read: the exact live row is idempotent success, a cleanup marker is
+   typed `CLEANUP_IN_PROGRESS`, a conflicting live row is a conflict, and an
+   unavailable answer is a retryable defer.
+6. Cleanup markers are bounded non-lifecycle owner rows. They are excluded from
+   hydration as replicas, routing, placement counts, readiness, and runtime
+   construction. Marker takeover nulls live-only replica fields.
+7. Physical storage deletion accepts only a freshly revalidated exact cleanup
+   token. REMOVING status alone, generic row absence, or another token never
+   authorizes unlinking.
 
 ### Non-Propagated Tables (queryable from owning partition only)
 

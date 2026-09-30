@@ -21,6 +21,8 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {createAuthoritativeCacheRead} from
+  '../test-helpers/row-absence-heal-scenarios.js';
 
 // Lifecycle scenarios: every create carries the committed-membership stamp
 // its scenario's creator would have produced (owner decision O1).
@@ -36,7 +38,9 @@ const TEST_ACTIVE_CACHE_REPLICA_ID = 'replica-1';
  * @return {Object} Mock CDC service.
  */
 function createMockCDCService(cache) {
+  const authoritativeRead = createAuthoritativeCacheRead(cache);
   return {
+    executeAuthoritativeSystemTableRead: authoritativeRead,
     async insertSystemTableRow(tableName, data) {
       cache?.applySystemTableChange(tableName, 'INSERT', data);
       return {success: true, operation: 'INSERT', tableName, data};

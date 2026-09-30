@@ -522,6 +522,9 @@ test('BootstrapAPI - register-service returns retryable 503 when the control-pla
       systemTableCache: createEmptySystemTableCache(),
       sqlQueryEngine: {executeQuery: async () => ({success: true})},
       controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows() {
+          return {success: true, rows: []};
+        },
         async submitMutation() {
           return {
             success: false,
@@ -744,6 +747,9 @@ test('BootstrapAPI - register-service retries deferred services publication befo
       systemTableCache: createEmptySystemTableCache(),
       sqlQueryEngine: {executeQuery: async () => ({success: true})},
       controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows() {
+          return {success: true, rows: []};
+        },
         async submitMutation() {
           mutationAttempts += 1;
           if (mutationAttempts === 1) {
@@ -916,7 +922,7 @@ async (t) => {
     'bootstrap register-service should route through the SQL fallback once');
   t.match(
     sqlCalls[0].sql,
-    /^INSERT OR REPLACE INTO services \(/,
+    /^INSERT INTO services \(/,
     'register-service should persist through the canonical services table',
   );
   t.notMatch(
@@ -961,6 +967,9 @@ async (t) => {
       },
     },
     controlPlaneSystemTableGateway: {
+      async readAuthoritativeRows() {
+        return {success: true, rows: []};
+      },
       async submitMutation(mutation) {
         submittedMutations.push(mutation);
         return {success: true, affectedRows: 1};
@@ -1009,7 +1018,15 @@ test('BootstrapAPI - register-service acknowledges plain self-hosted registratio
       systemTableCache: createEmptySystemTableCache(),
       sqlQueryEngine: {
         async executeQuery() {
+          return {success: true, rows: [], affectedRows: 1};
+        },
+      },
+      controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows() {
           return {success: true, rows: []};
+        },
+        async submitMutation() {
+          return {success: true, affectedRows: 1};
         },
       },
       cdcIntegrationService: null,

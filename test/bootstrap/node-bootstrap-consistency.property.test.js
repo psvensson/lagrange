@@ -13,7 +13,6 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {v4 as uuidv4, validate as uuidValidate} from 'uuid';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
@@ -27,6 +26,8 @@ import {ServiceThreadManager} from '../../src/threading/service-thread-manager.j
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 import {URL} from 'url';
+import {createVirginSeedBootstrapService} from
+  '../integration/helpers/cluster-test-helpers.js';
 
 const ports = createPortAllocator(import.meta.url);
 function getUniquePort() {
@@ -150,7 +151,7 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
       const seedNodeId = uuidv4();
       const seedWsPort = getUniquePort();
 
-      bootstrapService = new BootstrapService({
+      bootstrapService = await createVirginSeedBootstrapService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         wsPort: seedWsPort,
@@ -225,7 +226,7 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
       const seedNodeId = uuidv4();
       const seedWsPort = getUniquePort();
 
-      bootstrapService = new BootstrapService({
+      bootstrapService = await createVirginSeedBootstrapService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         wsPort: seedWsPort,
@@ -311,7 +312,7 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
       const seedNodeId = uuidv4();
       const seedWsPort = getUniquePort();
 
-      bootstrapService = new BootstrapService({
+      bootstrapService = await createVirginSeedBootstrapService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         wsPort: seedWsPort,

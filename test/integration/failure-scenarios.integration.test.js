@@ -15,7 +15,6 @@ import {
   TERMINAL_STATUSES,
 } from '../../src/rebalancer/replica-status.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SERVICE_TYPE} from '../../src/constants/index.js';
@@ -23,6 +22,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../../src/control-plane/control-plane-readiness-constants.js';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   getUniquePort,
@@ -269,7 +269,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440001';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -399,7 +399,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440002';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -605,7 +605,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440003';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -743,7 +743,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440010';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -821,7 +821,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440011';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -876,7 +876,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440012';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -1199,7 +1199,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440013';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

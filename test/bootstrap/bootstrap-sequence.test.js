@@ -27,6 +27,8 @@ import {
 } from '../../src/bootstrap/seed-startup-session-store.js';
 import {ControlPlaneSetup} from
   '../../src/bootstrap/shared/control-plane-setup.js';
+import {createVirginSeedBootstrapService} from
+  '../integration/helpers/cluster-test-helpers.js';
 
 const ports = createPortAllocator(import.meta.url);
 const BOOTSTRAP_SEQUENCE_TEST_TIMEOUT_MS = 90000;
@@ -597,7 +599,7 @@ test('Bootstrap sequence - services created after self-connection', async (t) =>
   const wsPort = getRandomPort();
   const nodeId = `test-node-${Date.now()}`;
 
-  const bootstrap = new BootstrapService({
+  const bootstrap = await createVirginSeedBootstrapService({
     nodeId,
     nodeAddress: `ws://localhost:${wsPort}`,
     wsPort,

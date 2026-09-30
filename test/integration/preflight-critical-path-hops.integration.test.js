@@ -16,7 +16,6 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {v4 as uuidv4} from 'uuid';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -46,6 +45,7 @@ import {
   getUniquePort,
   gracefulJoiningShutdown,
   gracefulShutdown,
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   stopAllRebalancers,
   TEST_CONFIG,
@@ -176,7 +176,7 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
   const seedWsPort = getUniquePort();
   const joiningWsPorts = joiningNodeIds.map(() => getUniquePort());
 
-  const bootstrapService = new BootstrapService({
+  const bootstrapService = await createVirginSeedBootstrapService({
     nodeId: seedNodeId,
     nodeAddress: `ws://localhost:${seedWsPort}`,
     wsPort: seedWsPort,
