@@ -27,8 +27,10 @@ import {isIssuedBootIncarnation} from './boot-incarnation-contract.js';
  * directory process owner guarantees a single writer.
  *
  * The rejoin hints document is only a projection of the reservation. The
- * counter it carried before this owner existed is read once as a floor, so
- * an upgraded data directory continues above every incarnation it issued.
+ * counter it carried before this owner existed is read as a floor only while
+ * no reservation exists (the one-time migration), so an upgraded data
+ * directory continues above every incarnation it issued; once the
+ * reservation is durable, the hints never gate, raise or lower issuance.
  */
 const BOOT_INCARNATION_FILENAME = 'boot-incarnation.json';
 const BOOT_INCARNATION_STATE_VERSION = 1;
@@ -83,7 +85,6 @@ function readOwnedReservationState(file) {
 }
 
 function readOwnedReservation(file) {
-  if (!stateFileExists(file)) return NOTHING_ISSUED;
   const state = readOwnedReservationState(file);
   if (!exactKeys(state, BOOT_INCARNATION_STATE_FIELDS) ||
       state.version !== BOOT_INCARNATION_STATE_VERSION ||
@@ -93,8 +94,9 @@ function readOwnedReservation(file) {
   return state.reserved;
 }
 
-// The legacy floor carried by the rejoin hints, from the hints reader's typed
-// outcome. ABSENT (no hints file, or hints written before incarnations
+// The legacy floor carried by the rejoin hints (consulted only before the
+// owner's reservation exists: the one-time migration), from the hints
+// reader's typed outcome. ABSENT (no hints file, or hints written before incarnations
 // existed and carrying no counter) is a real "issued nothing": floor 0.
 // PRESENT but unreadable, unparseable, or carrying a counter the owner could
 // not have issued fails closed: a damaged projection may hide an incarnation
@@ -128,8 +130,13 @@ function readHintsCounter(hints) {
  */
 async function readIssuedBootIncarnation(dataDir) {
   const file = resolveBootIncarnationPath(dataDir);
-  return Math.max(readOwnedReservation(file),
-    await readLegacyHintsFloor(dataDir));
+  // Once the owner's reservation exists it is the SOLE authority (a present
+  // but damaged one fails closed, never falling back to the hints). Legacy
+  // hints are a one-time migration source, read only while no reservation
+  // has ever been durably created.
+  return stateFileExists(file) ?
+    readOwnedReservation(file) :
+    readLegacyHintsFloor(dataDir);
 }
 
 /**

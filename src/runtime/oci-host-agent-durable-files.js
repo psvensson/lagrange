@@ -158,7 +158,21 @@ function readCanonicalJson(file, errorCode) {
   }
 }
 
+// The one durable atomic replacement: write a fresh temporary file, fsync it,
+// rename it over the target, fsync the directory. A crash leaves the old or
+// the new bytes, never a torn file, and the new bytes survive power loss once
+// this returns.
 function writeAtomicDurable(file, value, hooks = {}) {
+  writeAtomicDurableBytes(file, canonicalJsonBytes(value), hooks);
+}
+
+/**
+ * Durably and atomically replace `file` with `bytes` (see writeAtomicDurable).
+ * @param {string} file
+ * @param {Buffer} bytes
+ * @param {Object} [hooks] - Test seam: afterFileSync / afterDirectorySync.
+ */
+function writeAtomicDurableBytes(file, bytes, hooks = {}) {
   const directory = path.dirname(file);
   const temporary = path.join(
     directory,
@@ -171,7 +185,7 @@ function writeAtomicDurable(file, value, hooks = {}) {
     FILE_MODE,
   );
   try {
-    writeAll(descriptor, canonicalJsonBytes(value));
+    writeAll(descriptor, bytes);
     fs.fsyncSync(descriptor);
   } finally {
     fs.closeSync(descriptor);
@@ -276,5 +290,6 @@ export {
   validHex256,
   validOwnerId,
   writeAtomicDurable,
+  writeAtomicDurableBytes,
   writeExclusiveDurable,
 };

@@ -8,8 +8,10 @@
  * plus one generic contract every census writer must satisfy.
  */
 import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
-import {readdirSync, readFileSync, statSync} from 'node:fs';
-import {join, relative} from 'node:path';
+import fs, {readdirSync, readFileSync, statSync} from 'node:fs';
+import fsPromises from 'node:fs/promises';
+import {syncBuiltinESMExports} from 'node:module';
+import {dirname, join, relative} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {test} from '../../src/test-helpers/tap.js';
@@ -434,3 +436,183 @@ test('B7: with the owner file present, legacy hints never lower it',
         'the next reservation continues above the owner file');
     });
   });
+
+// B8: legacy hints are a one-time migration source. Once the owner's
+// reservation durably exists it is the sole authority: the hints are never
+// read, and cannot gate, raise or lower issuance.
+const HIGHER_LEGACY_COUNTER = 40;
+
+// Record every filesystem touch of `targetPath` (async and sync reads,
+// opens) while `run` executes. The owner and the hints reader import these
+// builtins, so their exports are re-synced for the instrumented window.
+async function recordTouches(targetPath, run) {
+  const touched = [];
+  const record = (name, candidate) => {
+    if (String(candidate) === targetPath) touched.push(name);
+  };
+  const originals = {
+    readFile: fsPromises.readFile,
+    open: fsPromises.open,
+    readFileSync: fs.readFileSync,
+    openSync: fs.openSync,
+    lstatSync: fs.lstatSync,
+  };
+  fsPromises.readFile = (candidate, ...args) => {
+    record('readFile', candidate);
+    return originals.readFile(candidate, ...args);
+  };
+  fsPromises.open = (candidate, ...args) => {
+    record('open', candidate);
+    return originals.open(candidate, ...args);
+  };
+  for (const name of ['readFileSync', 'openSync', 'lstatSync']) {
+    fs[name] = (candidate, ...args) => {
+      record(name, candidate);
+      return originals[name](candidate, ...args);
+    };
+  }
+  syncBuiltinESMExports();
+  try {
+    return {result: await run(), touched};
+  } finally {
+    Object.assign(fsPromises, {
+      readFile: originals.readFile, open: originals.open,
+    });
+    Object.assign(fs, {
+      readFileSync: originals.readFileSync,
+      openSync: originals.openSync,
+      lstatSync: originals.lstatSync,
+    });
+    syncBuiltinESMExports();
+  }
+}
+
+test('B8: with the owner present, corrupt hints are never read and never ' +
+  'gate, repair or rewrite anything', async (t) => {
+  await withDataDir(async (dataDir) => {
+    await reserveBootIncarnation(dataDir);
+    const reserved = await reserveBootIncarnation(dataDir);
+    const hintsPath = join(dataDir, REJOIN_HINTS_FILENAME);
+    const damaged = DAMAGED_HINTS['truncated JSON'];
+    await writeHints(dataDir, damaged);
+    const {result, touched} = await recordTouches(hintsPath,
+      () => reserveBootIncarnation(dataDir));
+    t.equal(result, reserved + 1,
+      'the reservation proceeds from the owner state alone');
+    t.same(touched, [], 'the hints file is not even read');
+    const raised = await recordTouches(hintsPath,
+      () => raiseBootIncarnationFloor(dataDir, reserved + 5));
+    t.equal(raised.result, reserved + 5,
+      'raising the floor proceeds from the owner state alone');
+    t.same(raised.touched, [], 'raising the floor does not read the hints');
+    t.equal(await readFile(hintsPath, 'utf8'), damaged,
+      'the damaged hints are neither repaired nor rewritten');
+  });
+});
+
+test('B8: with the owner present, a higher or lower legacy counter changes ' +
+  'nothing', async (t) => {
+  await withDataDir(async (dataDir) => {
+    const reserved = await reserveBootIncarnation(dataDir);
+    await writeHints(dataDir, JSON.stringify({
+      localNodeId: NODE_ID, bootIncarnation: HIGHER_LEGACY_COUNTER,
+    }));
+    t.equal(await readIssuedBootIncarnation(dataDir), reserved,
+      'a HIGHER legacy counter does not raise the owner');
+    t.equal(await reserveBootIncarnation(dataDir), reserved + 1,
+      'the next reservation follows the owner, not the hints');
+  });
+});
+
+test('B8: the first migration lands strictly after the highest legacy ' +
+  'incarnation, after which the hints no longer matter', async (t) => {
+  await withDataDir(async (dataDir) => {
+    await writeHints(dataDir, JSON.stringify({
+      localNodeId: NODE_ID, bootIncarnation: HIGHER_LEGACY_COUNTER,
+    }));
+    const migration = await recordTouches(
+      join(dataDir, REJOIN_HINTS_FILENAME),
+      () => reserveBootIncarnation(dataDir));
+    const migrated = migration.result;
+    t.ok(migration.touched.length > 0,
+      'sanity: the instrument sees the hints read during the one migration');
+    t.equal(migrated, HIGHER_LEGACY_COUNTER + 1,
+      'the migrated reservation is strictly after the legacy counter');
+    await rm(join(dataDir, REJOIN_HINTS_FILENAME));
+    t.equal(await reserveBootIncarnation(dataDir), migrated + 1,
+      'deleting the hints after migration has no effect');
+    await writeHints(dataDir, DAMAGED_HINTS['empty file']);
+    t.equal(await reserveBootIncarnation(dataDir), migrated + 2,
+      'corrupting the hints after migration has no effect');
+  });
+});
+
+test('B8: owner absent and corrupt hints still refuse the migration',
+  async (t) => {
+    await withDataDir(async (dataDir) => {
+      await writeHints(dataDir, DAMAGED_HINTS['JSON scalar']);
+      await t.rejects(reserveBootIncarnation(dataDir),
+        {code: STATE_UNREADABLE}, 'no migration from damaged hints');
+      t.equal(await ownerStateExists(dataDir), false,
+        'no owner reservation was created');
+    });
+  });
+
+test('B8: the hints writer replaces the file through the durable atomic ' +
+  'primitive (temp write, fsync, rename, directory fsync)', async (t) => {
+  await withDataDir(async (dataDir) => {
+    const hintsPath = join(dataDir, REJOIN_HINTS_FILENAME);
+    const events = [];
+    const pathByDescriptor = new Map();
+    const originals = {
+      openSync: fs.openSync, writeSync: fs.writeSync,
+      fsyncSync: fs.fsyncSync, renameSync: fs.renameSync,
+    };
+    fs.openSync = (candidate, ...args) => {
+      const descriptor = originals.openSync(candidate, ...args);
+      pathByDescriptor.set(descriptor, String(candidate));
+      return descriptor;
+    };
+    fs.writeSync = (descriptor, ...args) => {
+      events.push(['write', pathByDescriptor.get(descriptor)]);
+      return originals.writeSync(descriptor, ...args);
+    };
+    fs.fsyncSync = (descriptor) => {
+      events.push(['fsync', pathByDescriptor.get(descriptor)]);
+      return originals.fsyncSync(descriptor);
+    };
+    fs.renameSync = (from, to) => {
+      events.push(['rename', String(from), String(to)]);
+      return originals.renameSync(from, to);
+    };
+    try {
+      await persistBootstrapRejoinHints({
+        dataDir, nodeId: NODE_ID, nodeAddress: 'node-f1:8080',
+        nodeRole: 'seed', peerAddresses: ['peer:8080'], bootIncarnation: 1,
+      });
+    } finally {
+      Object.assign(fs, originals);
+    }
+    const rename = events.find(([kind]) => kind === 'rename');
+    t.ok(rename && rename[2] === hintsPath,
+      'the hints file is replaced by renaming a temporary file over it');
+    const temporary = rename?.[1];
+    t.ok(temporary && temporary !== hintsPath &&
+      dirname(temporary) === dataDir, 'the temporary sits beside the target');
+    const order = events.map(([kind, first]) => {
+      if (kind === 'rename') return 'rename';
+      if (first === temporary) return `${kind}:temporary`;
+      if (first === dataDir) return `${kind}:directory`;
+      return `${kind}:other`;
+    });
+    const firstWrite = order.indexOf('write:temporary');
+    const fileSync = order.indexOf('fsync:temporary');
+    const renamed = order.indexOf('rename');
+    const directorySync = order.indexOf('fsync:directory');
+    t.ok(firstWrite >= 0 && firstWrite < fileSync && fileSync < renamed &&
+      renamed < directorySync,
+    `temp write -> file fsync -> rename -> directory fsync (${order})`);
+    t.ok(JSON.parse(await readFile(hintsPath, 'utf8')).bootIncarnation === 1,
+      'the replaced hints are readable');
+  });
+});

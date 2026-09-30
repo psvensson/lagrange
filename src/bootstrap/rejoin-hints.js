@@ -1,4 +1,5 @@
-import {rename, writeFile} from 'node:fs/promises';
+import {writeAtomicDurableBytes} from
+  '../runtime/oci-host-agent-durable-files.js';
 import {join} from 'node:path';
 import {TABLES} from '../constants/index.js';
 import {buildClusterIncarnationFence} from './cluster-incarnation-fence.js';
@@ -13,7 +14,6 @@ import {
   AUTO_REJOIN_MEMBERSHIP_OUTCOME_BY_STATE,
   DURABLE_EVIDENCE_STATE,
   REJOIN_HINTS_FILENAME,
-  REJOIN_HINTS_TEMP_SUFFIX,
   REJOIN_HINTS_WRITE_INTERVAL_MS,
   STARTUP_JOIN_MODE,
   TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT,
@@ -94,7 +94,6 @@ const UNKNOWN_AUTO_REJOIN_DECISION_STATE_ERROR_PREFIX =
   'Unknown auto-rejoin startup decision state: ';
 const UNKNOWN_AUTO_REJOIN_MEMBERSHIP_OUTCOME_STATE_ERROR_PREFIX =
   'Unknown auto-rejoin membership outcome state: ';
-let rejoinHintsTempSequence = 0;
 
 // Attach the cluster identity to one hints snapshot only when one exists:
 // an absent identity leaves the field OFF the object entirely so a
@@ -216,20 +215,19 @@ function resolveRejoinHintsPath(dataDir) {
   return join(normalizedDataDir, REJOIN_HINTS_FILENAME);
 }
 
+// Hints are replaced through the repository's one durable atomic-replacement
+// owner (temp write, file fsync, rename, directory fsync), the same primitive
+// the boot incarnation owner uses: a crash or power loss leaves the previous
+// or the new hints, never a torn or empty file.
 async function persistRejoinHintsSnapshot(dataDir, snapshot) {
   const hintsPath = resolveRejoinHintsPath(dataDir);
   if (!hintsPath) {
     return null;
   }
-
-  const tempPath = `${hintsPath}${REJOIN_HINTS_TEMP_SUFFIX}.` +
-    `${process.pid}.${rejoinHintsTempSequence++}`;
-  await writeFile(
-    tempPath,
+  writeAtomicDurableBytes(hintsPath, Buffer.from(
     JSON.stringify(snapshot, null, JSON_INDENT_SPACES) + JSON_LINE_SUFFIX,
     UTF8_ENCODING,
-  );
-  await rename(tempPath, hintsPath);
+  ));
   return snapshot;
 }
 
@@ -681,7 +679,6 @@ class RejoinHintsPersistenceService {
       REJOIN_HINTS_WRITE_INTERVAL_MS;
     this.timer = null;
     this.persistChain = Promise.resolve();
-    this.persistSequence = 0;
   }
 
   start() {
@@ -723,15 +720,10 @@ class RejoinHintsPersistenceService {
       now: this.now,
     });
     try {
-      rejoinHintsTempSequence = Math.max(
-        rejoinHintsTempSequence,
-        this.persistSequence,
-      );
       const persisted = await persistRejoinHintsSnapshot(
         this.dataDir,
         snapshot,
       );
-      this.persistSequence = rejoinHintsTempSequence;
       if (!persisted) {
         return null;
       }
