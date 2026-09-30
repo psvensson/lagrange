@@ -174,14 +174,27 @@ function actualRow(deployment, nodeId) {
     .find((row) => row.service_id === deployment.replicaByNode[nodeId]);
 }
 
+function causallyLaterServiceRow(row) {
+  const updatedAt = Number(row?.updated_at);
+  assert.ok(
+    Number.isFinite(updatedAt),
+    'the synthetic services row must carry an owner timestamp',
+  );
+  return {...row, updated_at: updatedAt + 1};
+}
+
 // Retire the ready Cell actual on one node through the replicated services
-// rows the resolvers read; returns the restore step.
+// rows the resolvers read; returns a causally-later restore. A CDC DELETE
+// deliberately leaves a tombstone, so replaying the byte-identical old row
+// would be a stale resurrection rather than a legitimate reappearance.
 function retireActual(deployment, nodeId) {
-  const row = {...actualRow(deployment, nodeId)};
+  const current = actualRow(deployment, nodeId);
+  assert.ok(current, `ready Cell row missing for ${nodeId}`);
+  const row = {...current};
   deployment.systemTableCache.applySystemTableChange(
     TABLES.SERVICES, CDC_OPERATION.DELETE, row);
   return () => deployment.systemTableCache.applySystemTableChange(
-    TABLES.SERVICES, CDC_OPERATION.UPSERT, row);
+    TABLES.SERVICES, CDC_OPERATION.UPSERT, causallyLaterServiceRow(row));
 }
 
 // Intercept the next Cell delivery on the shared message router; returns
@@ -317,7 +330,10 @@ describe('public CALL outcome classes through a real pg client', () => {
           cache.applySystemTableChange(
             TABLES.SERVICES, CDC_OPERATION.DELETE, moved);
           cache.applySystemTableChange(
-            TABLES.SERVICES, CDC_OPERATION.UPSERT, original);
+            TABLES.SERVICES,
+            CDC_OPERATION.UPSERT,
+            causallyLaterServiceRow(original),
+          );
         }
       });
 
