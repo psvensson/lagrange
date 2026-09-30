@@ -39,6 +39,17 @@ import {
   REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS,
 } from './coordinator-created-operation-progress-remote-handoff-fixture-builders.js';
 
+function createAllowAllStorageAdmissionService() {
+  return {
+    async checkAdd() {
+      return {allowed: true, decisionType: 'admitted'};
+    },
+    async checkReplace() {
+      return {allowed: true, decisionType: 'admitted'};
+    },
+  };
+}
+
 export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
   test,
 }) {
@@ -48,6 +59,8 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
     const operationRows = new Map();
     const deferredTimers = [];
     const deliveries = [];
+    const storageAdmissionService =
+      createAllowAllStorageAdmissionService();
 
     const authoritativeRead = async (tableName, sql, params = []) => {
       if (tableName === 'replica_operations' &&
@@ -192,7 +205,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         entityId: 'sql_write_operations-p1',
         nodeId: 'node-target',
         replicaId: 'sql_write_operations-p1-r1',
-        skipProvisioningAdmissionRecheck: true,
       });
 
       await new Promise((resolve) => {
@@ -515,7 +527,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         entityId: 'control_plane_publications-p1',
         nodeId: 'node-target',
         replicaId: 'control_plane_publications-p1-r1',
-        skipProvisioningAdmissionRecheck: true,
       });
 
       await new Promise((resolve) => {
@@ -700,7 +711,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         entityId: 'control_plane_publications-p1',
         nodeId: 'node-target',
         replicaId: 'control_plane_publications-p1-r1',
-        skipProvisioningAdmissionRecheck: true,
       });
 
       await new Promise((resolve) => {
