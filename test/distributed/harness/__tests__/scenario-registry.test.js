@@ -52,8 +52,8 @@ const EXPECTED_LOCAL_THREE_NODE_EXECUTION_GATE_IDS = [
   'stale-publication-durable-truth-ahead',
 ];
 
-test('scenario-registry tracks the canonical 24-scenario matrix', (t) => {
-  assert.equal(CANONICAL_SCENARIO_MATRIX.length, 24);
+test('scenario-registry tracks the canonical 25-scenario matrix', (t) => {
+  assert.equal(CANONICAL_SCENARIO_MATRIX.length, 25);
   t.end();
 });
 
@@ -89,7 +89,7 @@ test('scenario-registry normalizes config basenames from paths', (t) => {
 test('scenario-registry lists canonical entries for a specific config', (t) => {
   const entries = listCanonicalScenarioEntries('local-three-node.json');
 
-  assert.equal(entries.length, 10);
+  assert.equal(entries.length, 11);
   assert.deepEqual(
     entries.map((entry) => entry.name),
     [
@@ -98,6 +98,7 @@ test('scenario-registry lists canonical entries for a specific config', (t) => {
       'network-partition-split-brain',
       'node-failure-rebalance',
       'public-path-multinode-baseline',
+      'public-seam-durability',
       'rolling-restart',
       'three-node-seed-rebalance',
       'user-table-leader-placement-spread',
@@ -137,7 +138,7 @@ test('scenario-registry selects canonical scenarios in matrix order', (t) => {
 test('scenario-registry formats canonical scenario matrix lines', (t) => {
   const lines = formatCanonicalScenarioMatrixLines();
 
-  assert.equal(lines.length, 24);
+  assert.equal(lines.length, 25);
   assert.equal(lines[0], 'local-three-node.json|admin-query-smoke');
   assert.equal(
     lines[lines.length - 1],

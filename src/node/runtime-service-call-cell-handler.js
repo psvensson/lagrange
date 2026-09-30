@@ -96,8 +96,12 @@ function buildInvocationFailure(error, overrides = {}) {
   };
 }
 
+// A typed failure raised after the runtime invocation started is not
+// proof that the component did not run: either fact marks it invoked.
 function resolveInvocationFailureStarted(error, invocationStarted) {
-  if (error instanceof CallCellRoutingError) return error.invoked;
+  if (error instanceof CallCellRoutingError) {
+    return error.invoked || invocationStarted;
+  }
   return invocationStarted;
 }
 
@@ -355,7 +359,7 @@ async function buildLocalShardBatch(handler, payload, route, invocation) {
 function assertCallCellRouteTenant(route, securityContext) {
   if (route.tenantId === securityContext.tenantId) return;
   throw new CallCellRoutingError(
-    CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE,
+    CALL_CELL_ROUTE_ERROR_CODE.AUTHORIZATION_FAILED,
     CALL_CELL_RUNTIME_MESSAGE.ROUTE_TENANT_MISMATCH,
     {preserveReplicaState: true},
   );

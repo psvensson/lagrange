@@ -20,6 +20,10 @@ import {createApplicationRuntimeGeneration} from
   './application-runtime-generation.js';
 import {createApplicationDatabaseExecutionOptions} from
   './application-database-statement-policy.js';
+import {
+  projectApplicationDatabaseResult,
+  projectEngineFailureCause,
+} from './application-database-result.js';
 
 const LOCAL_STR_BEGIN = 'BEGIN';
 const LOCAL_STR_COMMIT = 'COMMIT';
@@ -134,13 +138,17 @@ async function executeCanonical(sqlCore, sql, params, options, operation) {
   let result;
   try {
     result = await sqlCore.executeQuery(sql, params, options);
-  } catch (cause) {
-    throw translateQueryFailure(cause, operation, cause);
+  } catch (thrown) {
+    throw translateQueryFailure(
+      thrown,
+      operation,
+      projectEngineFailureCause(thrown),
+    );
   }
   if (readOwnData(result, FAILURE_METADATA_PROPERTY.SUCCESS) !== true) {
     throw translateQueryFailure(result, operation);
   }
-  return result;
+  return projectApplicationDatabaseResult(result);
 }
 
 function createSessionId(applicationId) {

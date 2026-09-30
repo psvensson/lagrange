@@ -1,5 +1,6 @@
 const APPLICATION_DATABASE_ERROR_CODE = Object.freeze({
   APPLICATION_ID_REQUIRED: 'APPLICATION_ID_REQUIRED',
+  DIAGNOSTIC_STATEMENT_RESERVED: 'DIAGNOSTIC_STATEMENT_RESERVED',
   INVALID_ARGUMENT: 'INVALID_ARGUMENT',
   QUERY_FAILED: 'QUERY_FAILED',
   RUNTIME_ACTIVE: 'RUNTIME_ACTIVE',
@@ -16,6 +17,8 @@ const APPLICATION_DATABASE_ERROR_CODE = Object.freeze({
 const APPLICATION_DATABASE_ERROR_MSG = Object.freeze({
   APPLICATION_ID_REQUIRED: 'applicationId must be a non-empty primitive string',
   CALLBACK_REQUIRED: 'transaction callback must be a function',
+  DIAGNOSTIC_STATEMENT_RESERVED:
+    'EXPLAIN DISTRIBUTED is an operator diagnostic, not an application statement',
   INVALID_CONFIGURATION:
     'configuration must contain only supported own data values',
   INVALID_PARAMS: 'params must be a dense array of supported SQL bind values',

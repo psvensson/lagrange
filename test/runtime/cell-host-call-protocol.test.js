@@ -197,7 +197,7 @@ test('typed terminal and retryable failures cross the buffer intact',
     });
     try {
       await harness.ready();
-      await harness.createClient(GENEROUS_WAIT_BUDGET_MS, 3);
+      await harness.createClient(GENEROUS_WAIT_BUDGET_MS, 4);
 
       failure = Object.assign(new Error('binding not allowed'), {
         code: HOST_CALL_ERROR_CODE.TARGET_NOT_ALLOWED,
@@ -216,6 +216,17 @@ test('typed terminal and retryable failures cross the buffer intact',
       assert.equal(retryable.payload.code,
         HOST_CALL_ERROR_CODE.TARGET_UNAVAILABLE);
       assert.equal(retryable.payload.retryable, true);
+
+      // A delegate that knows its delegated outcome supplies retryability
+      // explicitly; the code is then only a translation.
+      failure = Object.assign(new Error('target ran, outcome unknown'), {
+        code: HOST_CALL_ERROR_CODE.TARGET_UNAVAILABLE,
+        retryable: false,
+      });
+      const executed = await harness.call('executed', '{}');
+      assert.equal(executed.payload.code,
+        HOST_CALL_ERROR_CODE.TARGET_UNAVAILABLE);
+      assert.equal(executed.payload.retryable, false);
 
       failure = new Error('secret parent internals');
       const unknown = await harness.call('boom', '{}');

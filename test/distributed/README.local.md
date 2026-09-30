@@ -269,11 +269,36 @@ Use these values with `--scenario`:
 3. `network-partition-split-brain`
 4. `node-failure-rebalance`
 5. `public-path-multinode-baseline`
-6. `rolling-restart`
-7. `three-node-seed-rebalance`
-8. `user-table-leader-placement-spread`
-9. `wasm-service-failover`
-10. `write-ack-visibility`
+6. `public-seam-durability` (status: PREPARED, blocked on the rs-raft cutover;
+   see below)
+7. `rolling-restart`
+8. `three-node-seed-rebalance`
+9. `user-table-leader-placement-spread`
+10. `wasm-service-failover`
+11. `write-ack-visibility`
+
+`public-seam-durability` is the provider-neutral durability scenario at the
+public seam: it writes an image-like object (`objects` BYTEA row plus an
+`object_history` row, one transaction) through a node's PostgreSQL-wire
+client, reads it from the other nodes, stops a joiner (chosen by harness
+role), keeps writing through a survivor, starts the joiner, and requires
+identical, exactly-once state on every node plus no topology-bearing key in
+any public result. It never reads consensus state. It first scales
+`sys-postgres-wire` to one password-mode replica per node (the documented
+operator scale path; disable with
+`scenarios.publicSeamDurability.publicClient.provisionListener: false`). The
+binding step is off by default (`scenarios.publicSeamDurability.binding.enabled:
+true` deploys account-summary through the shared service pipeline and calls it
+before the stop and after the restart). The report ends with
+`certification: PREPARED_BLOCKED_ON_RS_RAFT_CUTOVER` while the runtime's
+default consensus provider (`src/raft/raft-provider-control.js`) is the
+legacy one, and `certification: CANDIDATE` once it is not; the owner decides
+whether a CANDIDATE run certifies. Known binding-result finding: the
+account-summary call result carries `contributingShards` (a placement count),
+which the leak check catches, so with the binding enabled both binding steps
+FAIL on it; that is a finding for the call owner's result shape
+(CallCellInvoker), not a scenario defect. Unit test:
+`test/distributed/harness/__tests__/public-seam-durability-scenario.test.js`.
 
 ### Canonical 5-node matrix
 

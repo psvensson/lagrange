@@ -29,6 +29,7 @@ import {
   CALL_CELL_ROUTE_ERROR_CODE,
   createCallChildInvocationId,
   normalizeCallArguments,
+  publicCallOutcomeOf,
 } from './call-cell-routing-contract.js';
 
 // One bridged binding call per request invocation (brief "Recursion And
@@ -72,12 +73,13 @@ const REQUEST_CALL_BRIDGE_MESSAGE = Object.freeze({
     'Binding call target is currently unavailable',
 });
 
-// The one owner-level failure decision table: CallCellRoutingError codes
-// from the delegated invoker onto the closed host-call code set. Any
-// code absent here — component/handler failures, ack-only, transport,
-// unknown or untyped throws — maps to the fixed target_failed record.
-// Retryability is NOT decided here: the host-call protocol derives it
-// from its canonical code map.
+// The code translation table: CallCellRoutingError codes from the
+// delegated invoker onto the closed host-call code set. Any code absent
+// here — component/handler failures, ack-only, transport, unknown or
+// untyped throws — maps to the fixed target_failed record. Retryability
+// is NOT decided by code: a delegated failure carries the call routing
+// contract's retrySafe (publicCallOutcomeOf), the one owner of whether
+// guest code of that invocation can have run.
 const CALL_CELL_TO_HOST_CALL_CODE = Object.freeze({
   [CALL_CELL_ROUTE_ERROR_CODE.AUTHENTICATION_FAILED]:
     HOST_CALL_ERROR_CODE.TARGET_NOT_ALLOWED,
@@ -108,9 +110,10 @@ const CALL_CELL_TO_HOST_CALL_CODE = Object.freeze({
 const REQUEST_CALL_BRIDGE_DELEGATED_FAILURE_LOG =
   'request-call bridge: delegated call-cell invocation failed';
 
-function bridgeFailure(code) {
+function bridgeFailure(code, retryable = false) {
   const error = new Error(REQUEST_CALL_BRIDGE_MESSAGE[code]);
   error.code = code;
+  error.retryable = retryable;
   return error;
 }
 
@@ -259,7 +262,8 @@ function createRequestCellCallBridge(options = {}) {
       });
       throw bridgeFailure(
         CALL_CELL_TO_HOST_CALL_CODE[error?.code] ??
-          HOST_CALL_ERROR_CODE.TARGET_FAILED);
+          HOST_CALL_ERROR_CODE.TARGET_FAILED,
+        publicCallOutcomeOf(error).retrySafe);
     }
   }
 
