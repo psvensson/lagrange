@@ -12,6 +12,10 @@ import {
 import {NodeReadyLeaseAuthority} from
   '../../src/control-plane/node-ready-lease-authority.js';
 import {COLUMN, SERVICE_STATUS, STATE} from '../../src/constants/index.js';
+import {
+  NODE_REGISTRATION_OUTCOME,
+  writeNodeRegistrationAtIncarnation,
+} from '../../src/control-plane/owners/node-registration-incarnation-write.js';
 
 const NODE_ID = 'node-lifecycle';
 const READY_LEASE_MS = 15_000;
@@ -181,15 +185,21 @@ test('NOT_APPLIED_SOURCE_UNCHANGED: a zero-row CAS on a liveness race is a ' +
 
 test('REFUSED_SOURCE_CHANGED: READY is published only from JOINING or ACTIVE',
   async (t) => {
-    for (const status of [SERVICE_STATUS.STOPPED, 'failed', 'shutting_down']) {
+    for (const status of ['failed', 'shutting_down']) {
       const durable = createDurableNodes(registeredRow({status}));
       const result = await createPublication(durable).publish(readyRequest());
       t.equal(result.outcome, OUTCOME.REFUSED_SOURCE_CHANGED, status);
       t.equal(durable.writes.length, 0, `${status}: zero writes`);
     }
+    const stopped = createDurableNodes(
+      registeredRow({status: SERVICE_STATUS.STOPPED}));
+    const result = await createPublication(stopped).publish(readyRequest());
+    t.equal(result.outcome, OUTCOME.REFUSED_TERMINAL_STATE,
+      'a terminal source is refused as terminal');
+    t.equal(stopped.writes.length, 0, 'stopped: zero writes');
   });
 
-test('REFUSED_SOURCE_CHANGED: a concurrent lifecycle change observed on ' +
+test('REFUSED_TERMINAL_STATE: a concurrent terminal transition observed on ' +
   'readback is terminal', async (t) => {
   const source = registeredRow();
   const durable = createDurableNodes(source, {
@@ -198,7 +208,56 @@ test('REFUSED_SOURCE_CHANGED: a concurrent lifecycle change observed on ' +
     },
   });
   const result = await createPublication(durable).publish(readyRequest());
-  t.equal(result.outcome, OUTCOME.REFUSED_SOURCE_CHANGED);
+  t.equal(result.outcome, OUTCOME.REFUSED_TERMINAL_STATE);
+});
+
+test('N2 liveness: a delayed liveness publication of a STOPPED generation ' +
+  'never mutates it; the next generation registers its own endpoint',
+async (t) => {
+  const stoppedG1 = registeredRow({status: SERVICE_STATUS.STOPPED,
+    connection_state: STATE.DISCONNECTED, ready_lease_expires_at: null});
+  const delayedLiveness = readyRequest({state: STATE.CONNECTED,
+    nodeAddress: '10.9.9.9:9999', heartbeatAt: NOW + 5_000,
+    capabilities: ['other']});
+  // G1 already STOPPED when the delayed liveness arrives.
+  const durable = createDurableNodes(stoppedG1);
+  const refused = await createPublication(durable).publish(delayedLiveness);
+  t.equal(refused.outcome, OUTCOME.REFUSED_TERMINAL_STATE,
+    'typed terminal refusal');
+  t.equal(durable.writes.length, 0, 'no mutation is issued');
+  t.same(durable.current(), stoppedG1, 'the durable G1 row is unchanged');
+
+  // G1 stops between the source read and the CAS: the final mutation's
+  // predicate (observed non-terminal status) cannot match the STOPPED row.
+  const racing = createDurableNodes(registeredRow(), {
+    beforeWrite: () => racing.replace({...stoppedG1}),
+  });
+  const raced = await createPublication(racing).publish(delayedLiveness);
+  t.equal(raced.outcome, OUTCOME.REFUSED_TERMINAL_STATE,
+    'the lost race is named by the readback');
+  t.equal(racing.writes[0].whereClause.status, 'joining',
+    'the predicate carries the observed non-terminal status');
+  t.same(racing.current(), stoppedG1,
+    'no address, connection, incarnation or state change on the STOPPED row');
+
+  // G2 establishes its connection data through the registration owner.
+  const g2Row = {...stoppedG1, node_address: '10.9.9.9:9999',
+    status: 'joining', connection_state: STATE.CONNECTED,
+    last_heartbeat: NOW, boot_incarnation: 4};
+  const registration = await writeNodeRegistrationAtIncarnation({
+    row: g2Row, bootIncarnation: 4,
+    observe: async () => ({available: true, row: durable.current()}),
+    insert: async () => ({success: false}),
+    advance: (whereClause, row) => durable.gateway.updateSystemTableRow(
+      'nodes', whereClause, row),
+  });
+  t.equal(registration.outcome, NODE_REGISTRATION_OUTCOME.ACCEPTED,
+    'G2 registers over the STOPPED G1 row');
+  t.equal(durable.current().node_address, '10.9.9.9:9999',
+    'with its own endpoint data');
+  const g2Ready = await createPublication(durable).publish(
+    readyRequest({bootIncarnation: 4, nodeAddress: '10.9.9.9:9999'}));
+  t.equal(g2Ready.outcome, OUTCOME.APPLIED, 'and G2 publishes READY normally');
 });
 
 test('REFUSED_STALE_INCARNATION: a lower boot is a zombie and writes nothing',

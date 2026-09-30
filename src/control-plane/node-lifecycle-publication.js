@@ -50,6 +50,7 @@ const NODE_LIFECYCLE_PUBLICATION_OUTCOME = Object.freeze({
   RESOLVED_BY_READBACK: 'resolved_by_readback',
   NOT_APPLIED_SOURCE_UNCHANGED: 'not_applied_source_unchanged',
   REFUSED_SOURCE_CHANGED: 'refused_source_changed',
+  REFUSED_TERMINAL_STATE: 'refused_terminal_state',
   REFUSED_STALE_INCARNATION: 'refused_stale_incarnation',
   REFUSED_ROW_MISSING: 'refused_row_missing',
   REFUSED_INCARNATION_REQUIRED: 'refused_incarnation_required',
@@ -93,6 +94,14 @@ const NODE_LIFECYCLE_PUBLICATION_STATES = Object.freeze([
 const READY_SOURCE_STATUSES = Object.freeze([
   NODE_STATE.JOINING,
   SERVICE_STATUS.ACTIVE,
+]);
+
+// Terminal lifecycle statuses: written only by the terminal-transition owner
+// (graceful shutdown, failed-join withdrawal, stranded-join reaper); never a
+// source of liveness or READY publication. A new boot establishes its row
+// through the registration owner.
+const TERMINAL_NODE_STATUSES = Object.freeze([
+  NODE_STATE.STOPPED,
 ]);
 
 const NODE_TELEMETRY_COLUMNS = Object.freeze([
@@ -227,8 +236,26 @@ function assertPublicationRequest(request) {
   }
 }
 
+function isTerminalNodeRow(row) {
+  return TERMINAL_NODE_STATUSES.includes(readColumn(row, COLUMN.STATUS));
+}
+
+function resolveSourceRefusalOutcome(row, knownIncarnation, bootIncarnation) {
+  if (knownIncarnation > bootIncarnation) {
+    return NODE_LIFECYCLE_PUBLICATION_OUTCOME.REFUSED_STALE_INCARNATION;
+  }
+  if (knownIncarnation !== bootIncarnation) {
+    return NODE_LIFECYCLE_PUBLICATION_OUTCOME.REFUSED_SOURCE_CHANGED;
+  }
+  return isTerminalNodeRow(row) ?
+    NODE_LIFECYCLE_PUBLICATION_OUTCOME.REFUSED_TERMINAL_STATE : null;
+}
+
 // The row the CAS must still observe: full identity plus the lifecycle and
-// liveness columns the source policy decided on.
+// liveness columns the source policy decided on. Its status is always the
+// observed NON-terminal status (resolveSourceRefusal admits no terminal
+// source), so the final mutation can never match a terminal row: a row
+// stopped after the read fails the CAS and the readback names it.
 function buildSourcePredicate(source, bootIncarnation) {
   return {
     [COLUMN.NODE_ID]: source[COLUMN.NODE_ID],
@@ -381,25 +408,17 @@ class NodeLifecyclePublication {
     );
   }
 
-  // The incarnation fence: a lower boot is a zombie writer; a row still on
-  // another boot has not been advanced by the registration verb, which owns
-  // that transition, so publication must not advance it.
+  // The source fence, for the source read and the lost-outcome readback
+  // alike: a lower boot is a zombie writer; a row still on another boot has
+  // not been advanced by the registration verb, which owns that transition,
+  // so publication must not advance it; a terminal row of this boot is not
+  // a publication source at all (it has no admissible CAS predicate).
   resolveSourceRefusal(row, bootIncarnation) {
     const knownIncarnation =
       normalizeKnownNodeBootIncarnation(row[COLUMN.BOOT_INCARNATION]);
-    if (knownIncarnation > bootIncarnation) {
-      return freezeOutcome(
-        NODE_LIFECYCLE_PUBLICATION_OUTCOME.REFUSED_STALE_INCARNATION,
-        {knownIncarnation},
-      );
-    }
-    if (knownIncarnation !== bootIncarnation) {
-      return freezeOutcome(
-        NODE_LIFECYCLE_PUBLICATION_OUTCOME.REFUSED_SOURCE_CHANGED,
-        {knownIncarnation},
-      );
-    }
-    return null;
+    const refusal = resolveSourceRefusalOutcome(row, knownIncarnation,
+      bootIncarnation);
+    return refusal === null ? null : freezeOutcome(refusal, {knownIncarnation});
   }
 
   resolveNextState(request, source, now) {

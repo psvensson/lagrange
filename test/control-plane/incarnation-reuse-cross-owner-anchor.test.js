@@ -303,7 +303,7 @@ test('N7: a reaped boot incarnation is terminal: a late G1 READY is ' +
 
   const lateG1 = await ready(G1);
   t.equal(lateG1.outcome,
-    NODE_LIFECYCLE_PUBLICATION_OUTCOME.REFUSED_SOURCE_CHANGED,
+    NODE_LIFECYCLE_PUBLICATION_OUTCOME.REFUSED_TERMINAL_STATE,
     'the late G1 READY is refused (a terminal refusal, never re-driven)');
   t.same(durable.rowsOf(TABLES.NODES).get(NODE_ID), reaped,
     'G1 stays reaped: no fenced resurrection');
