@@ -34,7 +34,7 @@ function registerMessageGroupTransportHandler(messageGroup, registration) {
  * replica's lifecycle owner.
  * @param {Object} retirement - {messageGroup, messageRouter, address,
  *   replicaId}.
- * @return {Promise<void>}
+ * @return {Promise<string>} A REPLICA_HANDLER_RETIREMENT_OUTCOME.
  */
 function retireMessageGroupTransportHandler(retirement) {
   const messageGroup = retirement.messageGroup || null;

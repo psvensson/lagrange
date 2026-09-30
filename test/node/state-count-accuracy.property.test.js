@@ -18,6 +18,8 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createLifecycleCdcService} from
   '../test-helpers/lifecycle-state-store.js';
+import {withRegisteredActivationHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 function createMockCDCService() {
   return createLifecycleCdcService();
@@ -70,10 +72,10 @@ test('Property 11: State Count Accuracy', async (t) => {
       fc.asyncProperty(
         fc.array(fc.uuid(), {minLength: 1, maxLength: 10}),
         async (replicaIds) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           // Transition each replica through various states
           for (const replicaId of replicaIds) {
@@ -107,10 +109,10 @@ test('Property 11: State Count Accuracy', async (t) => {
         fc.array(fc.uuid(), {minLength: 2, maxLength: 8}),
         fc.integer({min: 0, max: 3}),
         async (replicaIds, transitionDepth) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           // Transition replicas to different depths
           for (let i = 0; i < replicaIds.length; i++) {
@@ -148,10 +150,10 @@ test('Property 11: State Count Accuracy', async (t) => {
       fc.asyncProperty(
         fc.array(fc.uuid(), {minLength: 0, maxLength: 10}),
         async (replicaIds) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           // Transition replicas to pending
           for (const replicaId of replicaIds) {
@@ -187,10 +189,10 @@ test('Property 11: State Count Accuracy', async (t) => {
           {minLength: 1, maxLength: 6},
         ),
         async (replicaIds, targetStates) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           // Transition each replica to its target state
           for (let i = 0; i < replicaIds.length; i++) {
@@ -237,10 +239,10 @@ test('Property 11: State Count Accuracy', async (t) => {
         fc.array(fc.uuid(), {minLength: 1, maxLength: 6}),
         fc.integer({min: 0, max: 5}),
         async (replicaIds, numToRemove) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           // First get all replicas to active state
           for (const replicaId of replicaIds) {

@@ -41,6 +41,8 @@ import {
 import {registerReplicaHandlerTailTests} from './replica-handler-tail-test-cases.js';
 import {createReplicaLifecycleStateMachineFixture} from
   '../test-helpers/lifecycle-state-store.js';
+import {bindRegisteredReplicaHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 // Lifecycle scenarios: every create carries the committed-membership stamp
 // its scenario's creator would have produced (owner decision O1).
@@ -204,15 +206,13 @@ function createMockCDCService(cache, options = {}) {
  * @return {Function} Factory function.
  */
 function createMockPartitionServiceFactory() {
-  return async (options) => {
-    return {
-      partitionId: options.partitionId,
-      replicaId: options.replicaId,
-      initialized: true,
-      async shutdown() {},
-      async syncFromLeader() {},
-    };
-  };
+  return async (options) => bindRegisteredReplicaHandler({
+    partitionId: options.partitionId,
+    replicaId: options.replicaId,
+    initialized: true,
+    async shutdown() {},
+    async syncFromLeader() {},
+  }, options);
 }
 
 /**
@@ -778,13 +778,13 @@ test('ReplicaHandler', async (t) => {
         cdcIntegrationService: mockCDC,
         createPartitionService: async (options) => {
           createCalls.push(options);
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
       });
 

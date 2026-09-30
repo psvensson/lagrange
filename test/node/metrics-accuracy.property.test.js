@@ -18,6 +18,8 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createLifecycleCdcService} from
   '../test-helpers/lifecycle-state-store.js';
+import {withRegisteredActivationHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 function createMockCDCService() {
   return createLifecycleCdcService();
@@ -104,10 +106,10 @@ test('Property 14: Metrics Accuracy', async (t) => {
       fc.asyncProperty(
         fc.array(fc.uuid(), {minLength: 1, maxLength: 5}),
         async (replicaIds) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           // Track expected transition counts manually
           const expectedCounts = new Map();
@@ -158,10 +160,10 @@ test('Property 14: Metrics Accuracy', async (t) => {
       fc.asyncProperty(
         fc.integer({min: 1, max: 5}),
         async (numFailures) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           // Create replicas and transition them to failed
           for (let i = 0; i < numFailures; i++) {
@@ -203,12 +205,12 @@ test('Property 14: Metrics Accuracy', async (t) => {
       fc.asyncProperty(
         fc.integer({min: 1, max: 5}),
         async (numReplicas) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
             maxConcurrentAdds: 10,
             maxConcurrentRemoves: 10,
-          });
+          }));
 
           // Create multiple replicas in pending state (concurrent adds)
           for (let i = 0; i < numReplicas; i++) {
@@ -269,10 +271,10 @@ test('Property 14: Metrics Accuracy', async (t) => {
         fc.constantFrom(...ALL_STATES.filter((s) => s !== ReplicaState.REMOVED)),
         fc.integer({min: 1, max: 3}),
         async (targetState, numReplicas) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           // Transition replicas to the target state
           for (let i = 0; i < numReplicas; i++) {
@@ -308,12 +310,12 @@ test('Property 14: Metrics Accuracy', async (t) => {
         fc.integer({min: 1, max: 3}),
         fc.integer({min: 1, max: 3}),
         async (numAdds, numRemoves) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
             maxConcurrentAdds: 10,
             maxConcurrentRemoves: 10,
-          });
+          }));
 
           // Create replicas in add transitional states
           for (let i = 0; i < numAdds; i++) {

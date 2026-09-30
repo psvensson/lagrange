@@ -14,6 +14,8 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {createInProcessMockTransport as createMockTransport} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -55,29 +57,6 @@ const nodeIdArbitrary = fc.string({minLength: 1, maxLength: 15})
  * Generate a random odd replica count (1, 3, or 5).
  */
 const oddReplicaCountArbitrary = fc.constantFrom(1, 3, 5);
-
-/**
- * Create a mock transport for testing.
- */
-function createMockTransport() {
-  const handlers = new Map();
-
-  return {
-    register: (address, handler) => {
-      handlers.set(address, handler);
-    },
-    unregister: (address) => {
-      handlers.delete(address);
-    },
-    deliver: async (address, message) => {
-      const handler = handlers.get(address);
-      if (handler) {
-        return handler({payload: message});
-      }
-      return {acknowledged: false, error: 'No handler'};
-    },
-  };
-}
 
 /**
  * Feature: single-node-replica-placement-fix

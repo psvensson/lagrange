@@ -25,6 +25,8 @@ import {
   getExpectedReplicaStateMutationBundleCount,
   getServiceMutationCalls,
 } from './replica-state-machine-property-helpers.js';
+import {withRegisteredActivationHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 // Valid transition sequences for testing
 const VALID_TRANSITION_SEQUENCES = [
@@ -76,10 +78,10 @@ test('Property 6: State Persistence via CDC', async (t) => {
           async (transitionSequence, replicaId, partitionId) => {
             const mockCdc = createMockCdcService();
 
-            const stateMachine = new ReplicaStateMachine({
+            const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
               nodeId: 'test-node',
               cdcIntegrationService: mockCdc,
-            });
+            }));
 
             // Execute transition sequence
             for (const state of transitionSequence) {
@@ -127,10 +129,10 @@ test('Property 6: State Persistence via CDC', async (t) => {
         async (replicaId, partitionId, reason) => {
           const mockCdc = createMockCdcService();
 
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: mockCdc,
-          });
+          }));
 
           // Execute a transition
           const result = await stateMachine.transition(
@@ -185,10 +187,10 @@ test('Property 6: State Persistence via CDC', async (t) => {
             },
           });
 
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: mockCdc,
-          });
+          }));
 
           // Execute transition and await it
           const result = await stateMachine.transition(
@@ -220,10 +222,10 @@ test('Property 6: State Persistence via CDC', async (t) => {
         async (replicaId, partitionId) => {
           const mockCdc = createMockCdcService();
 
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: mockCdc,
-          });
+          }));
 
           // Execute two transitions
           await stateMachine.transition(
@@ -270,7 +272,7 @@ test('Property 6: State Persistence via CDC', async (t) => {
 
   t.test('requires CDC service', async (t) => {
     t.throws(
-      () => new ReplicaStateMachine({nodeId: 'test-node'}),
+      () => withRegisteredActivationHandler(new ReplicaStateMachine({nodeId: 'test-node'})),
       /cdcIntegrationService/,
       'should require CDC integration service',
     );

@@ -28,6 +28,7 @@ import {
   captureReplicaAdmission,
   isCanonicalLeaderClearSettled,
   isReplicaAdmissionCurrent,
+  runPersistedTransitionEffect,
   runSerializedReplicaMutation,
 } from './replica-state-machine-serialization.js';
 import {clearLeaderOrRecordDebt} from
@@ -375,16 +376,17 @@ function runTransitionAttempt(
         commit,
       }));
   }
-  return persistTransitionAttempt({
-    stateMachine,
-    replicaId,
-    newState,
-    existingState,
-    admission,
-    transitionState,
-    context,
-    commit,
-  });
+  return runPersistedTransitionEffect(stateMachine, replicaId, newState,
+    context, () => persistTransitionAttempt({
+      stateMachine,
+      replicaId,
+      newState,
+      existingState,
+      admission,
+      transitionState,
+      context,
+      commit,
+    }));
 }
 
 async function resolveUncertainRemovingTransition({

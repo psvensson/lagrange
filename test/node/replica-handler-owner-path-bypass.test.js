@@ -56,6 +56,8 @@ import {
   createCanonicalLifecycleServiceRow,
   createLifecycleCdcServiceForCache,
 } from '../test-helpers/lifecycle-state-store.js';
+import {bindRegisteredReplicaHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 // Lifecycle scenarios: every create carries the committed-membership stamp
 // its scenario's creator would have produced (owner decision O1).
@@ -133,13 +135,13 @@ function createMockCDCService(cache) {
  * @return {Function} Factory that returns a minimal partition service.
  */
 function createMockPartitionServiceFactory() {
-  return async (options) => ({
+  return async (options) => bindRegisteredReplicaHandler({
     partitionId: options.partitionId,
     replicaId: options.replicaId,
     initialized: true,
     async shutdown() {},
     async syncFromLeader() {},
-  });
+  }, options);
 }
 
 /**
@@ -740,7 +742,8 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         dataDir: tempDir,
         systemTableCache: cache,
         cdcIntegrationService: cdcService,
-        createPartitionService: async () => partitionService,
+        createPartitionService: async (options) =>
+          bindRegisteredReplicaHandler(partitionService, options),
       });
       handler.initialize();
 

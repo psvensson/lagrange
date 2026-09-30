@@ -10,6 +10,8 @@ import {
   genesisStampFor,
   withBootstrapStamp,
 } from './replica-handler-bootstrap-stamps.js';
+import {bindRegisteredReplicaHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 export async function registerReplicaHandlerCreateTopologyTests({
   t,
@@ -56,13 +58,13 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
       });
 
@@ -123,13 +125,13 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
       });
 
@@ -330,13 +332,13 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
       });
 
@@ -439,13 +441,13 @@ export async function registerReplicaHandlerCreateTopologyTests({
         createPartitionService: async (options) => {
           capturedOptions = options;
           resolveFactoryCalled();
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
       });
 
@@ -513,13 +515,13 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
       });
 
@@ -587,13 +589,13 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
       });
 
@@ -673,13 +675,13 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
       });
 
@@ -845,13 +847,13 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
       });
       handler.initialize();
@@ -912,13 +914,13 @@ export async function registerReplicaHandlerCreateTopologyTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
       });
       handler.initialize();

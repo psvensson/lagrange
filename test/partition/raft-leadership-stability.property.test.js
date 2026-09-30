@@ -14,6 +14,8 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {createInProcessMockTransport as createMockTransport} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -287,30 +289,6 @@ test('Property 1: Partition status reflects correct leader state', async (t) => 
 
   t.pass('Partition status reflects correct leader state');
 });
-
-/**
- * Create a mock transport for testing.
- * Routes messages between registered handlers.
- */
-function createMockTransport() {
-  const handlers = new Map();
-
-  return {
-    register: (address, handler) => {
-      handlers.set(address, handler);
-    },
-    unregister: (address) => {
-      handlers.delete(address);
-    },
-    deliver: async (address, message) => {
-      const handler = handlers.get(address);
-      if (handler) {
-        return handler({payload: message});
-      }
-      return {acknowledged: false, error: 'No handler'};
-    },
-  };
-}
 
 /**
  * Feature: single-node-replica-placement-fix

@@ -10,6 +10,8 @@ import {
   createLifecycleControlPlaneGatewayForCache,
   createReplicaLifecycleStateMachineFixture,
 } from '../test-helpers/lifecycle-state-store.js';
+import {bindRegisteredReplicaHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 export async function registerReplicaHandlerTailMoreTests({
   t,
@@ -300,14 +302,17 @@ export async function registerReplicaHandlerTailMoreTests({
         dataDir: tempDir,
       });
 
-      handler.localServices.set('replica-1', {
+      const activationService = bindRegisteredReplicaHandler({
+        replicaId: 'replica-1',
         getRole() {
           return RAFT_ROLE.LEADER;
         },
-      });
+      }, {resolveHandlerRetirementLane: () => handler.replicaStateMachine});
+      handler.localServices.set('replica-1', activationService);
 
       await handler.updateReplicaStatus('replica-1', ReplicaStatus.ACTIVE, {
         partitionId: 'partition-1',
+        activationService,
       });
 
       const activeUpdate = mockCDC.operations.find((op) =>
