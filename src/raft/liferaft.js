@@ -194,9 +194,8 @@ class LifeRaft extends BaseLifeRaft {
   /**
    * Mark this replica candidacy-reluctant for a bounded window: election
    * delays drawn by timeout() are inflated CANDIDACY_RELUCTANCE_MULTIPLIER-x
-   * so a live caught-up peer wins the succession first. Called by the drain
-   * step-down path; explicit-duration elections (requestElectionNow) bypass
-   * timeout() and are unaffected.
+   * so a live caught-up peer wins the succession first. Explicit-duration
+   * elections bypass timeout() and are unaffected.
    * @param {number=} windowMs reluctance window; defaults to
    *   CANDIDACY_RELUCTANCE_WINDOW_MS.
    * @return {LifeRaft} this

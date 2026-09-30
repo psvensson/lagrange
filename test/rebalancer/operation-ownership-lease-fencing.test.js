@@ -54,6 +54,29 @@ import {
   RebalanceCoordinator,
 } from '../../src/rebalancer/rebalance-coordinator.js';
 import {
+  PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+  PRIORITY_RECOVERY_PROGRESS_OWNER,
+  PRIORITY_RECOVERY_WAIT_MODE,
+  PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
+} from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
+import {
+  PRIORITY_RECOVERY_COMPLETION_STATE,
+} from '../../src/control-plane/priority-recovery-completion.js';
+import {
+  OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION,
+  resolveOperationWorkflowOwnerTargetProgressReentryAction,
+} from '../../src/rebalancer/operation-workflow-owner-priority-recovery-reentry.js';
+import {
+  OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED,
+} from '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
+import {
+  WORKFLOW_STEP_TO_STATUS,
+} from '../../src/rebalancer/replica-operation-progress.js';
+import {
+  REPLICA_OPERATION_UPDATE_DISPOSITION,
+} from '../../src/rebalancer/replica-operation-update-disposition.js';
+import {
   OperationType,
   ReplicaStatus,
   createOperation,
@@ -66,6 +89,12 @@ import {
   createMockPolicyService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+
+const {
+  PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE,
+  PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE,
+  PRIORITY_RECOVERY_OPERATION_DRAIN_STATE,
+} = OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED;
 
 const TEST_NODE_ID = 'lease-node-local';
 const TEST_REMOTE_NODE_ID = 'lease-node-remote';
@@ -315,11 +344,18 @@ test(
       OPERATION_DRAIN_OWNER_AVAILABILITY.FENCED_BY_LIVE_LEASE,
       'a live remote lease is the typed fence state (never raw null)',
     );
+    // SUPERSEDED (R09) by the owner decision of 2026-09-25, quest
+    // replace-source-removal-owner (claim L1): this assertion previously
+    // pinned `unavailable: true` for a live lease, contradicting the fence
+    // contract (operation-owner-availability-policy.js module header) and
+    // releasing REPLACEs whose owners were alive. A live lease held by the
+    // recorded owner means the owner is AVAILABLE; that is what fences
+    // remote settlement.
     t.equal(
       liveLeaseVerdict.unavailable,
-      true,
-      'the owner stays unavailable to remote settlement while its lease ' +
-        'lives even though routing readiness reports it unready',
+      false,
+      'the leased owner is available, so remote settlement stays fenced ' +
+        'even though routing readiness reports it unready',
     );
 
     const expiredLeaseVerdict = resolveOperationDrainOwnerAvailability({
@@ -370,14 +406,18 @@ test(
           owner.resolveTimeoutCheckNowMs() +
             REPLICA_OPERATION_OWNER_LEASE_TTL_MS,
       });
+      // SUPERSEDED (R09) by the owner decision of 2026-09-25, quest
+      // replace-source-removal-owner (claim L1): previously pinned `true`.
+      // A live lease makes the recorded owner available, which is what
+      // fences the drain's remote settlement.
       t.equal(
         owner.isPriorityRecoveryDrainOwnerUnavailable(
           TEST_REMOTE_NODE_ID,
           liveLeasedOperation,
         ),
-        true,
-        'a live lease keeps the drain owner fenced even with the ' +
-          'heuristic reporting unready',
+        false,
+        'a live lease keeps the drain owner available (fenced) even with ' +
+          'the heuristic reporting unready',
       );
 
       const expiredLeaseOperation = buildOrdinaryAddOperation({
@@ -403,6 +443,422 @@ test(
       );
     } finally {
       await coordinator.shutdown();
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// live-lease-verdict-polarity (owner decision 2026-09-25, quest
+// replace-source-removal-owner, frozen claims L1/L2)
+//
+// L1: while the RECORDED owner holds a live lease, no remote actor treats it
+// as unavailable: the drain does not release the REPLACE, the stale-FAIL
+// does not settle it, the re-entry wake does not skip its owner.
+// L2: an expired or absent lease keeps the routing-heuristic verdict, so the
+// un-wedge path for a genuinely unavailable owner still works.
+// The oracle is the module contract (live lease of the recorded owner =>
+// available and fenced; otherwise the heuristic) over the lease module's own
+// state enumeration.
+// ---------------------------------------------------------------------------
+
+const PRIORITY_PARTITION_ID = 'sql_transactions-p1';
+const TEST_SOURCE_NODE_ID = 'lease-node-source';
+const WITNESS_OBSERVED_AT_MS = LIVE_LEASE_OBSERVED_AT_MS;
+const ROUTING_READINESS_VALUES = Object.freeze([true, false]);
+// The R-1c settlement: the unavailable owner's REPLACE failed with its
+// source retained (the target is dead).
+const R1C_SETTLEMENT_MESSAGE = 'replace_owner_unavailable_source_retained';
+const DRAIN_SETTLEMENT = Object.freeze({
+  COMPLETE: 'complete',
+  FAIL: 'fail',
+});
+const WITNESS_COMMITTED_TRANSITION_OUTCOME = Object.freeze({
+  committed: true,
+  disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
+});
+// REPLACE phases crossed with the verdict: ACTIVE and STOPPING are
+// release-eligible by step; SYNCING is release-eligible once the target is
+// observed ACTIVE.
+const WITNESS_REPLACE_PHASES = Object.freeze([
+  Object.freeze({step: WORKFLOW_STEP.ACTIVE, targetStatus: null}),
+  Object.freeze({step: WORKFLOW_STEP.STOPPING, targetStatus: null}),
+  Object.freeze({
+    step: WORKFLOW_STEP.SYNCING,
+    targetStatus: ReplicaStatus.ACTIVE,
+  }),
+]);
+
+// One lease fixture per lease-module state. A new lease state without a
+// fixture fails the enumeration check below.
+const LEASE_FIXTURE_BY_STATE = new Map([
+  [
+    REPLICA_OPERATION_OWNER_LEASE_STATE.ACTIVE,
+    Object.freeze({ownerLeaseExpiresAt: LIVE_LEASE_EXPIRES_AT_MS}),
+  ],
+  [
+    REPLICA_OPERATION_OWNER_LEASE_STATE.EXPIRED,
+    Object.freeze({ownerLeaseExpiresAt: LEASE_ANCHOR_MS}),
+  ],
+  [REPLICA_OPERATION_OWNER_LEASE_STATE.UNFENCED, Object.freeze({})],
+]);
+
+function leaseFencesRecordedOwner(leaseState) {
+  return leaseState === REPLICA_OPERATION_OWNER_LEASE_STATE.ACTIVE;
+}
+
+function expectRemoteOwnerUnavailable(leaseState, routingReady) {
+  return !leaseFencesRecordedOwner(leaseState) && routingReady !== true;
+}
+
+function expectDrainOwnerVerdict(leaseState, routingReady) {
+  if (leaseFencesRecordedOwner(leaseState)) {
+    return {
+      state: OPERATION_DRAIN_OWNER_AVAILABILITY.FENCED_BY_LIVE_LEASE,
+      unavailable: false,
+      heuristicConsulted: false,
+    };
+  }
+  return {
+    state: routingReady ?
+      OPERATION_DRAIN_OWNER_AVAILABILITY.HEURISTIC_AVAILABLE :
+      OPERATION_DRAIN_OWNER_AVAILABILITY.HEURISTIC_UNAVAILABLE,
+    unavailable: routingReady !== true,
+    heuristicConsulted: true,
+  };
+}
+
+function* enumerateLeaseCells() {
+  for (const leaseState of Object.values(REPLICA_OPERATION_OWNER_LEASE_STATE)) {
+    for (const routingReady of ROUTING_READINESS_VALUES) {
+      yield {leaseState, routingReady};
+    }
+  }
+}
+
+function describeCell(cell, phase = null) {
+  return `lease=${cell.leaseState} routingReady=${cell.routingReady}` +
+    (phase ? ` step=${phase.step}` : '');
+}
+
+function resolveVerdictForCell(cell, operationOverrides = {}) {
+  let heuristicCalls = 0;
+  const verdict = resolveOperationDrainOwnerAvailability({
+    ownerNodeId: TEST_REMOTE_NODE_ID,
+    nodeId: TEST_NODE_ID,
+    operation: buildOrdinaryAddOperation({
+      ...LEASE_FIXTURE_BY_STATE.get(cell.leaseState),
+      ...operationOverrides,
+    }),
+    nowMs: WITNESS_OBSERVED_AT_MS,
+    isOwnerRoutingReady: () => {
+      heuristicCalls += 1;
+      return cell.routingReady;
+    },
+  });
+  return {verdict, heuristicCalls};
+}
+
+test(
+  'live-lease verdict polarity: the verdict table over lease state x ' +
+    'routing heuristic follows the fence contract',
+  async (t) => {
+    for (const leaseState of Object.values(
+      REPLICA_OPERATION_OWNER_LEASE_STATE,
+    )) {
+      const fixture = LEASE_FIXTURE_BY_STATE.get(leaseState);
+      t.ok(fixture, `lease state ${leaseState} has a witness fixture`);
+      t.equal(
+        resolveOperationOwnerLeaseState(
+          buildOrdinaryAddOperation(fixture),
+          WITNESS_OBSERVED_AT_MS,
+        ).state,
+        leaseState,
+        `the ${leaseState} fixture is that state per the lease module`,
+      );
+    }
+    for (const cell of enumerateLeaseCells()) {
+      const {verdict, heuristicCalls} = resolveVerdictForCell(cell);
+      const expected = expectDrainOwnerVerdict(
+        cell.leaseState,
+        cell.routingReady,
+      );
+      t.equal(verdict.state, expected.state, `state: ${describeCell(cell)}`);
+      t.equal(
+        verdict.unavailable,
+        expected.unavailable,
+        `unavailable: ${describeCell(cell)}`,
+      );
+      t.equal(
+        heuristicCalls > 0,
+        expected.heuristicConsulted,
+        'heuristic consulted only without a fencing lease: ' +
+          describeCell(cell),
+      );
+    }
+  },
+);
+
+test(
+  'live-lease verdict polarity: only the RECORDED owner\'s live lease ' +
+    'fences; a live lease attributed to another node defers to the heuristic',
+  async (t) => {
+    for (const routingReady of ROUTING_READINESS_VALUES) {
+      const cell = {
+        leaseState: REPLICA_OPERATION_OWNER_LEASE_STATE.ACTIVE,
+        routingReady,
+      };
+      const recorded = resolveVerdictForCell(cell, {
+        ownerNodeId: TEST_REMOTE_NODE_ID,
+      });
+      t.equal(
+        recorded.verdict.state,
+        OPERATION_DRAIN_OWNER_AVAILABILITY.FENCED_BY_LIVE_LEASE,
+        `a live lease held by the recorded owner fences (ready=${routingReady})`,
+      );
+      t.equal(recorded.verdict.unavailable, false);
+
+      const foreign = resolveVerdictForCell(cell, {
+        ownerNodeId: TEST_TARGET_NODE_ID,
+      });
+      const expected = expectDrainOwnerVerdict(
+        REPLICA_OPERATION_OWNER_LEASE_STATE.EXPIRED,
+        routingReady,
+      );
+      t.equal(
+        foreign.verdict.state,
+        expected.state,
+        `a foreign live lease is not the recorded owner's (ready=${routingReady})`,
+      );
+      t.equal(foreign.verdict.unavailable, expected.unavailable);
+      t.equal(foreign.heuristicCalls, 1, 'the heuristic decides instead');
+      t.equal(
+        foreign.verdict.lease.state,
+        REPLICA_OPERATION_OWNER_LEASE_STATE.ACTIVE,
+        'the verdict still reports the observed lease',
+      );
+    }
+  },
+);
+
+function buildPriorityReplaceOperation(phase, leaseState) {
+  const operation = createOperation({
+    operationId: `op-lease-replace-${phase.step}-${leaseState}`,
+    type: OperationType.REPLACE,
+    partitionId: PRIORITY_PARTITION_ID,
+    replicaId: `${PRIORITY_PARTITION_ID}-r7`,
+    sourceNodeId: TEST_SOURCE_NODE_ID,
+    targetNodeId: TEST_REMOTE_NODE_ID,
+  });
+  operation.entityType = SERVICE_TYPE.PARTITION;
+  operation.entityId = PRIORITY_PARTITION_ID;
+  operation.workflowStep = phase.step;
+  operation.status = WORKFLOW_STEP_TO_STATUS[phase.step];
+  operation.createdAt = LEASE_ANCHOR_MS - 1_000;
+  operation.updatedAt = LEASE_ANCHOR_MS;
+  operation.stepsHistory = [
+    {step: WORKFLOW_STEP.PENDING, timestamp: LEASE_ANCHOR_MS - 1_000},
+    {step: phase.step, timestamp: LEASE_ANCHOR_MS},
+  ];
+  return Object.assign(operation, LEASE_FIXTURE_BY_STATE.get(leaseState));
+}
+
+// Arms the upstream drain evidence (completion, source snapshot, step age,
+// target observation) that is NOT a verdict input, and records every
+// settlement. The verdict itself runs unstubbed; only its routing probe is
+// set per cell.
+function armDrainOwner(owner, {
+  phase, routingReady, sourceState, stepStale, targetDead = false,
+}) {
+  const settlements = [];
+  const failMessages = [];
+  owner.timeSource = {now: () => WITNESS_OBSERVED_AT_MS};
+  owner.isNodeReadyForRouting = () => routingReady;
+  owner.readAvailablePriorityRecoveryPlanningSnapshot = async () => null;
+  owner.buildPriorityRecoveryAssessmentContextForOperation = () => null;
+  owner.buildPriorityRecoveryCompletionForOperation = () =>
+    Object.freeze({state: PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED});
+  owner.resolvePriorityRecoveryRemoteSupersededTargetDrainError = () => null;
+  owner.buildPriorityRecoveryOperationDrainSourceSnapshot = async () =>
+    Object.freeze({
+      state: sourceState,
+      sourceReplicaId: null,
+      observationState: null,
+      lifecycleStatus: null,
+    });
+  owner.isPriorityRecoveryOperationDrainStepStale = () => stepStale;
+  owner.repository.getObservedReplicaStatusFromCache = () =>
+    targetDead ? ReplicaStatus.FAILED : phase.targetStatus;
+  owner.completeOperation = async () => {
+    settlements.push(DRAIN_SETTLEMENT.COMPLETE);
+    return WITNESS_COMMITTED_TRANSITION_OUTCOME;
+  };
+  owner.failOperation = async (_operation, message) => {
+    settlements.push(DRAIN_SETTLEMENT.FAIL);
+    failMessages.push(message);
+    return WITNESS_COMMITTED_TRANSITION_OUTCOME;
+  };
+  return {settlements, failMessages};
+}
+
+async function sweepDrainCell(cell, phase, drainEvidence) {
+  initializeConfig();
+  const {coordinator} = createLeaseCoordinatorHarness();
+  try {
+    const owner = coordinator.workflowOwner;
+    const operation = buildPriorityReplaceOperation(phase, cell.leaseState);
+    const {settlements, failMessages} = armDrainOwner(owner, {
+      phase,
+      routingReady: cell.routingReady,
+      ...drainEvidence,
+    });
+    const recordedOwner = owner.repository.resolveOperationOwnerNodeId(
+      operation,
+    );
+    const snapshot =
+      await owner.buildPriorityRecoveryOperationDrainSnapshot(operation);
+    await owner.reconcilePriorityRecoveryOperationDrain(operation, snapshot);
+    return {recordedOwner, snapshot, settlements, failMessages};
+  } finally {
+    await coordinator.shutdown();
+  }
+}
+
+// SUPERSEDED (R09) by the owner decisions of 2026-09-25 (approved REPLACE
+// design R-1b/R-1c/A6, owner decision D2; amendment-1 step 3 and §4), quest
+// replace-source-removal-owner. These two callers were witnessed with the L2
+// "un-wedge" release and a step-age stale-FAIL of a REPLACE whose lease had
+// lapsed and whose owner read unready. Under the completed design:
+//  - R-1b: the drain never releases (closes) a partition REPLACE, whatever
+//    the lease and the heuristic say; it hands the REPLACE back to its owner;
+//  - A6/S9: a REPLACE at ACTIVE or STOPPING is never stale by step age
+//    (earlier steps keep the existing staleness policy);
+//  - R-1c: at ACTIVE the only non-owner FAIL has the owner unavailable (the
+//    unchanged lease verdict) AND the target replica marked FAILED by the
+//    failure detector;
+//  - D2: after the intent (STOPPING) no remote FAIL at all.
+// L1 (a live lease never releases, settles or skips) holds in every cell.
+test(
+  'live-lease verdict polarity, caller 1 (drain release): R-1b - the drain ' +
+    'never releases a partition REPLACE in any lease or routing cell',
+  async (t) => {
+    for (const phase of WITNESS_REPLACE_PHASES) {
+      for (const cell of enumerateLeaseCells()) {
+        const outcome = await sweepDrainCell(cell, phase, {
+          sourceState:
+            PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.REMOVAL_REQUIRED,
+          stepStale: false,
+        });
+        const label = describeCell(cell, phase);
+        t.equal(outcome.recordedOwner, TEST_REMOTE_NODE_ID,
+          `the leased target is the recorded owner: ${label}`);
+        t.not(outcome.snapshot.state,
+          PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.OWNER_UNAVAILABLE_RELEASED,
+          `never released: ${label}`);
+        t.same(outcome.settlements, [], `no settlement: ${label}`);
+      }
+    }
+  },
+);
+
+test(
+  'live-lease verdict polarity, caller 2 (stale-FAIL remote settle): R-1c - ' +
+    'an ACTIVE REPLACE is failed remotely only with an unavailable owner and ' +
+    'a dead target; a STOPPING one never; step age alone fails neither',
+  async (t) => {
+    for (const targetDead of [false, true]) {
+      for (const phase of WITNESS_REPLACE_PHASES) {
+        for (const cell of enumerateLeaseCells()) {
+          const outcome = await sweepDrainCell(cell, phase, {
+            sourceState:
+              PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE
+                .EVIDENCE_UNAVAILABLE,
+            stepStale: true,
+            targetDead,
+          });
+          const label = `${describeCell(cell, phase)} targetDead=${targetDead}`;
+          // STOPPING (D2): never. ACTIVE (S9/A6): only R-1c, a dead target.
+          // SYNCING (pre-ACTIVE): the existing step-stale policy still applies.
+          const settledStep = phase.step === WORKFLOW_STEP.SYNCING ||
+            (phase.step === WORKFLOW_STEP.ACTIVE && targetDead);
+          const settled = settledStep &&
+            expectRemoteOwnerUnavailable(cell.leaseState, cell.routingReady);
+          t.equal(
+            outcome.snapshot.ownerState ===
+              PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE
+                .REMOTE_SETTLE_ALLOWED,
+            settled,
+            `remote settle permission: ${label}`,
+          );
+          t.same(
+            outcome.settlements,
+            settled ? [DRAIN_SETTLEMENT.FAIL] : [],
+            `settlements: ${label}`,
+          );
+          if (settled && phase.step === WORKFLOW_STEP.ACTIVE) {
+            t.same(outcome.failMessages,
+              [R1C_SETTLEMENT_MESSAGE],
+              `R-1c names its settlement (source retained): ${label}`);
+          }
+        }
+      }
+    }
+  },
+);
+
+function buildSourceRemovalReentrySnapshot() {
+  return Object.freeze({
+    actuation: Object.freeze({
+      owner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.SOURCE_REMOVAL,
+    }),
+    progress: Object.freeze({
+      currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.SOURCE_REMOVAL,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+      waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+    }),
+  });
+}
+
+test(
+  'live-lease verdict polarity, caller 3 (re-entry wake): a live owner ' +
+    'lease never skips its owner as no longer repair-eligible; an ' +
+    'expired/absent lease with an unready owner still skips it (L2)',
+  async (t) => {
+    for (const phase of WITNESS_REPLACE_PHASES) {
+      for (const cell of enumerateLeaseCells()) {
+        initializeConfig();
+        const {coordinator} = createLeaseCoordinatorHarness();
+        try {
+          const owner = coordinator.workflowOwner;
+          owner.timeSource = {now: () => WITNESS_OBSERVED_AT_MS};
+          owner.isNodeReadyForRouting = () => cell.routingReady;
+          const action =
+            resolveOperationWorkflowOwnerTargetProgressReentryAction(
+              owner,
+              buildSourceRemovalReentrySnapshot(),
+              buildPriorityReplaceOperation(phase, cell.leaseState),
+            );
+          const skipped = expectRemoteOwnerUnavailable(
+            cell.leaseState,
+            cell.routingReady,
+          );
+          t.equal(
+            action,
+            skipped ?
+              OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION.SKIP :
+              OPERATION_WORKFLOW_OWNER_TARGET_PROGRESS_REENTRY_ACTION
+                .WAKE_REMOTE_OWNER,
+            `re-entry action: ${describeCell(cell, phase)}`,
+          );
+        } finally {
+          await coordinator.shutdown();
+        }
+      }
     }
   },
 );

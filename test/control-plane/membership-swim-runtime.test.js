@@ -18,6 +18,7 @@ import {
   buildSwimPingAddress,
 } from '../../src/control-plane/membership-swim-prober.js';
 import {SWIM_MEMBER_STATE} from '../../src/control-plane/membership-swim-detector.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -43,6 +44,7 @@ async function waitFor(condition, timeoutMs = 2000, intervalMs = 10) {
 
 function makeRouter(nodeId, port) {
   const router = new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId,
     nodeAddress: `ws://127.0.0.1:${port}`,
     wsPort: port,

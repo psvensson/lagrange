@@ -23,7 +23,6 @@ import {
 } from '../bootstrap/traffic-readiness-utils.js';
 import {InMemoryLogAdapter} from '../raft/in-memory-log-adapter.js';
 import {LeaderActivationGate} from '../raft/leader-activation-gate.js';
-import {LeaderActivationScheduler} from '../raft/leader-activation-scheduler.js';
 import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';
 import {LiferaftProvider} from '../raft/liferaft-provider.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
@@ -269,16 +268,14 @@ class MessageGroupService extends EventEmitter {
     // State
     this.initialized = false;
     this.isLeader = false;
-    this.leaderActivationScheduler =
-      options.leaderActivationScheduler ||
-      LeaderActivationScheduler.getShared({
+    this.leaderActivationGate = new LeaderActivationGate({
+      holdoffMs: this.leaderActivationStabilizationMs,
+      activationScheduler: options.leaderActivationScheduler || null,
+      sharedActivationScheduler: {
         nodeId: this.nodeId,
         spacingMs: this.leaderActivationNodeSpacingMs,
         timeSource: this.providedTimeSource || undefined,
-      });
-    this.leaderActivationGate = new LeaderActivationGate({
-      holdoffMs: this.leaderActivationStabilizationMs,
-      activationScheduler: this.leaderActivationScheduler,
+      },
       timeSource: this.providedTimeSource || undefined,
     });
     this.lastLeaderCdcResubscribeTerm = undefined;

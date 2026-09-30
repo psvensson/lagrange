@@ -16,6 +16,12 @@ import {
 } from '../../src/query/query-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import * as partitionWriteKernel from
+  '../../src/partition/partition-write-kernel.js';
+import * as proposalQueueConstants from
+  '../../src/partition/proposal-queue-constants.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
 import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
@@ -235,6 +241,55 @@ test('CDCIntegrationService - transient detection includes leader-transition que
     );
     t.end();
   });
+
+test('CDCIntegrationService - local write routing preserves typed terminal ' +
+  'participant disposition', (t) => {
+  const service = new CDCIntegrationService({nodeId: 'test-node'});
+  const terminalAggregate = {
+    success: false,
+    error: 'Distributed operation failed due to participant failures',
+    participantFailures: [{
+      failureCode: 'SQLITE_CONSTRAINT_PRIMARYKEY',
+      committed: true,
+      outcome: 'statement_failed',
+    }],
+  };
+
+  t.equal(
+    service.isLocalSystemTableWriteRoutedOn(terminalAggregate),
+    false,
+    'a committed deterministic participant failure must not be replayed',
+  );
+  t.end();
+});
+
+// F-ae / F-z census: a partition write its replica did not take because it
+// is recovering consensus, or released with an outcome it cannot know, is
+// retried like a write that found no leader (the texts the write kernel
+// answers with are the ones the errors owner lists for routing again).
+test('CDCIntegrationService - a partition write refused during consensus ' +
+  'recovery, or released with an unknown outcome, is transient',
+async (t) => {
+  const service = new CDCIntegrationService({nodeId: 'test-node'});
+  const recovery = partitionWriteKernel.buildPartitionWriteLeadershipRefusal({
+    outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+    recoveryRequired: true,
+    reason: 'recovery-deferred',
+    phase: 'application',
+    retryAfterMs: 0,
+  }, 'cdc-p1');
+  t.equal(service.isTransientCdcError(recovery.error), true,
+    `a recovery refusal is retried (${recovery.error})`);
+  const released = partitionWriteKernel.buildReleasedPendingWriteAnswer({
+    entryId: 'cdc-entry',
+    proposal: proposalQueueConstants.PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED,
+    logIndex: null,
+  }, 'cdc-p1', {cause:
+    partitionWriteKernel.PARTITION_WRITE_RELEASE_CAUSE?.LEADERSHIP_LOST});
+  t.equal(service.isTransientCdcError(released.error), true,
+    `a released write whose outcome is unknown is retried (${released.error})`);
+  t.end();
+});
 
 test('CDCIntegrationService retries retryable control-plane write admission ' +
   'failures through the shared SQL-routed path', async (t) => {

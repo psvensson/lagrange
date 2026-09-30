@@ -1,5 +1,9 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
+  ReplicaOperationField,
+  ReplicaOperationVisibilityClass,
+} from './replica-operation-constants.js';
+import {
   CREATE_REARM_DISPATCH_OPERATION_TYPES,
   DISPATCH_PENDING_WORKFLOW_STEPS,
   REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS,
@@ -43,6 +47,7 @@ const {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
+const SAFETY_DEFERRED_RETRY_BOUNDARY = 'safety_retry';
 const DISPATCH_REARM_RECONCILE_BLOCKING_STATUSES = Object.freeze(
   new Set([
     ReplicaStatus.PENDING,
@@ -462,7 +467,13 @@ function resolveDeferredRetryVisibleOperation(
     return visibilityObservation.operation;
   }
   if (visibilityObservation?.deferredOutcome && fallbackOperation) {
-    return owner.cloneOperationSnapshot(fallbackOperation);
+    // BR12: the copy is the previous snapshot, marked as such so an effect
+    // boundary waits on it rather than acting.
+    return {
+      ...owner.cloneOperationSnapshot(fallbackOperation),
+      [ReplicaOperationField.VISIBILITY_CLASS]:
+        ReplicaOperationVisibilityClass.DEFERRED_SNAPSHOT,
+    };
   }
   return null;
 }
@@ -488,6 +499,95 @@ function handleDeferredDispatchRetryFailure(owner, operation, error) {
       partitionId: operation?.partitionId || null,
       workflowStep: operation?.workflowStep || null,
       error: error?.message || error?.error || String(error),
+    },
+  );
+}
+// The deferred remove-safety re-entry: one owner body shared by the 1 s
+// fallback timer and the readiness wake (quest replace-source-removal-owner,
+// design R-2). It re-reads the operation, and only a non-terminal, locally
+// owned, still-deferrable operation re-runs EXECUTE, which re-evaluates
+// remove safety from authoritative reads. A wake is never authority.
+async function runDeferredSafetyRetryInLane(
+  owner,
+  operationId,
+  operation,
+  boundary,
+) {
+  const visibilityObservation =
+    await owner.repository.getOperationByIdVisibilityObservation(
+      operationId,
+      {
+        allowPriorityRecoveryDeferredVisibility: true,
+      },
+    );
+  const currentOperation = owner.resolveDeferredRetryVisibleOperation(
+    visibilityObservation,
+    operation,
+  );
+  if (
+    !currentOperation ||
+    owner.repository.isOperationTerminal(currentOperation) ||
+    !owner.repository.isOperationLocallyOwned(currentOperation) ||
+    !owner.isSafetyDeferredRetryableOperation(currentOperation)
+  ) {
+    return;
+  }
+  await owner.runOperationOwnerAction(
+    OPERATION_OWNER_ACTION.EXECUTE,
+    currentOperation,
+    {
+      boundary,
+      workflowStep: currentOperation.workflowStep || null,
+      partitionId: currentOperation.partitionId || null,
+      runInlineWhenOwnerLaneHeld: true,
+    },
+  );
+}
+// Run the deferred remove-safety body in its OWN operation-lane turn. A plain
+// lane submission JOINS an in-flight holder and discards the new factory
+// (durable-workflow-coordinator runExclusive), which lost 5 of 11 lab timer
+// fires (BR2a). The owner's retained turn (runRetainedOperationOwnerAction,
+// OPERATION_OWNER_TURN_POLICY.RETAIN) waits for the holder and resubmits, so
+// the re-entry always runs. context.onAdmitted runs when the turn starts.
+function runDeferredSafetyReentryTurn(owner, operation, context) {
+  const operationId = operation?.operationId || null;
+  return owner.runRetainedOperationOwnerAction(operationId, () => {
+    if (typeof context.onAdmitted === 'function') {
+      context.onAdmitted();
+    }
+    return runDeferredSafetyRetryInLane(
+      owner,
+      operationId,
+      operation,
+      context.boundary,
+    );
+  }).catch((retryError) => {
+    handleDeferredSafetyRetryFailure(owner, operation, retryError, context);
+  });
+}
+function handleDeferredSafetyRetryFailure(owner, operation, retryError, context) {
+  const operationId = operation?.operationId || null;
+  if (
+    owner.deferTransitionRetry(operationId, retryError, {
+      boundary: context.boundary,
+      partitionId: operation?.partitionId || null,
+      workflowStep: operation?.workflowStep || null,
+      updatedAt: operation?.updatedAt,
+      createdAt: operation?.createdAt,
+      operationSnapshot: operation,
+    })
+  ) {
+    return;
+  }
+  owner.logger.error(
+    REBALANCE_COORDINATOR_LOG_MSG.OPERATION_DISPATCH_RETRY_FAILED,
+    {
+      operationId,
+      partitionId: operation?.partitionId || null,
+      workflowStep: operation?.workflowStep || null,
+      deferReason: context.deferReason ?? null,
+      error:
+        retryError?.message || retryError?.error || String(retryError),
     },
   );
 }
@@ -526,63 +626,11 @@ function scheduleDeferredSafetyRetry(owner, operation, deferReason, errorMessage
       );
       return;
     }
-    return owner.operationWorkflowRunExclusive(
-      owner.getOperationOwnerSingleFlightKey(operationId),
-      async () => {
-        const visibilityObservation =
-          await owner.repository.getOperationByIdVisibilityObservation(
-            operationId,
-            {
-              allowPriorityRecoveryDeferredVisibility: true,
-            },
-          );
-        const currentOperation = owner.resolveDeferredRetryVisibleOperation(
-          visibilityObservation,
-          operation,
-        );
-        if (
-          !currentOperation ||
-          owner.repository.isOperationTerminal(currentOperation) ||
-          !owner.repository.isOperationLocallyOwned(currentOperation) ||
-          !owner.isSafetyDeferredRetryableOperation(currentOperation)
-        ) {
-          return;
-        }
-        await owner.runOperationOwnerAction(
-          OPERATION_OWNER_ACTION.EXECUTE,
-          currentOperation,
-          {
-            boundary: 'safety_retry',
-            workflowStep: currentOperation.workflowStep || null,
-            partitionId: currentOperation.partitionId || null,
-            runInlineWhenOwnerLaneHeld: true,
-          },
-        );
-      },
-    ).catch((retryError) => {
-      if (
-        owner.deferTransitionRetry(operationId, retryError, {
-          boundary: 'safety_retry',
-          partitionId: operation?.partitionId || null,
-          workflowStep: operation?.workflowStep || null,
-          updatedAt: operation?.updatedAt,
-          createdAt: operation?.createdAt,
-          operationSnapshot: operation,
-        })
-      ) {
-        return;
-      }
-      owner.logger.error(
-        REBALANCE_COORDINATOR_LOG_MSG.OPERATION_DISPATCH_RETRY_FAILED,
-        {
-          operationId,
-          partitionId: operation?.partitionId || null,
-          workflowStep: operation?.workflowStep || null,
-          deferReason,
-          error:
-            retryError?.message || retryError?.error || String(retryError),
-        },
-      );
+    // A fire that finds the lane held must not be lost (BR2a): it takes its
+    // own retained turn after the holder.
+    return runDeferredSafetyReentryTurn(owner, operation, {
+      boundary: SAFETY_DEFERRED_RETRY_BOUNDARY,
+      deferReason,
     });
   }, SAFETY_DEFERRED_RETRY_DELAY_MS);
   owner.safetyDeferredRetryTimerByOperationId.set(operationId, timerHandle);
@@ -642,6 +690,7 @@ export {
   resolveDispatchRearmFromProgressReconcileState,
   resolveTransitionRetryGraceTimeoutCeilingMs,
   resumeDeferredTransitionOperation,
+  runDeferredSafetyReentryTurn,
   scheduleCoordinatorCreatedRemoteHandoffFollowUp,
   scheduleDeferredSafetyRetry,
   shouldDeferRetryableDispatchFailure,

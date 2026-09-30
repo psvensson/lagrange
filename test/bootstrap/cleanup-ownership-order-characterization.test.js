@@ -51,6 +51,7 @@ const silentLogger = {
  */
 function createSeedService(overrides = {}) {
   const service = new BootstrapService({
+    bootIncarnation: 1,
     nodeId: SEED_NODE_ID,
     nodeAddress: SEED_NODE_ADDRESS,
     wsPort: null,
@@ -67,6 +68,7 @@ function createSeedService(overrides = {}) {
  */
 function createJoinService(overrides = {}) {
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: JOIN_NODE_ID,
     nodeAddress: JOIN_NODE_ADDRESS,
     seedNodeAddress: SEED_NODE_ADDRESS,
@@ -437,6 +439,8 @@ test('join cleanup drains replica handler before CDC SQL teardown',
       setEndpointService: noop,
       getDispatchService: () => null,
       setDispatchService: noop,
+      // No acquisition record in this fixture: the projections are torn down.
+      releaseReplicaLifecycleOwner: () => null,
       getReplicaHandler: () => delegates.replicaHandler,
       setReplicaHandler: (value) => {
         events.push('setReplicaHandler');

@@ -49,6 +49,7 @@ import {
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from '../../src/control-plane/publication-owner-constants.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 
@@ -204,6 +205,7 @@ function createSeedCompletionHost() {
   const hosts = createNodeHosts(cache, {nodeId: NODE_ID});
   const timers = createVirtualTimers();
   const heartbeatService = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
     cdcIntegrationService: hosts.cdcIntegrationService,

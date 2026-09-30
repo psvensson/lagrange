@@ -6,6 +6,12 @@
 // (reconstruction without resumption is NOT recovery).
 //
 // Each test was verified red-on-revert against the mechanism it pins.
+//
+// The durable Raft log is the rs-raft durable store: the barrier and the
+// replayed deltas are read from a partition restarted over commands committed
+// through its own operation port (partition-rs-raft-restart-fixture.js), and
+// every index compared against is the core's, read back on an independent
+// connection.
 
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,6 +23,7 @@ import {
 import {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
+  PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
 import {
   buildReplayCursorCheckpoint,
@@ -39,6 +46,14 @@ import {
 import {
   RAFT_ROLE,
 } from '../../src/raft/constants.js';
+import {
+  readCommittedIndependently,
+  restartOverCommittedCommands,
+} from './partition-rs-raft-restart-fixture.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {encodeProposal} from '../../src/raft/raft-rs-proposal-codec.js';
+import {RAFT_RS_ENTRY_TYPE} from
+  '../../src/raft/raft-rs-ready-loop-constants.js';
 
 const FIXTURE_PARTITION_ID = 'users-p1';
 const FIXTURE_WORKFLOW_ID = 'split-wf-1';
@@ -60,6 +75,33 @@ function buildSplitRawMetadata(overrides = {}) {
 
 function buildLogger() {
   return {info() {}, warn() {}, error() {}, debug() {}};
+}
+
+const SOURCE_TABLE = 'users';
+const SOURCE_SCHEMA = Object.freeze({
+  columns: [
+    {name: 'id', type: 'TEXT', primaryKey: true},
+    {name: 'value', type: 'TEXT'},
+  ],
+});
+
+function insertCommand(id) {
+  return {
+    entryId: `insert-${id}`,
+    type: PARTITION_SERVICE_OPERATION.INSERT,
+    sql: `INSERT INTO ${SOURCE_TABLE} (id, value) VALUES (?, ?)`,
+    params: [id, `value-${id}`],
+  };
+}
+
+// A restarted source partition whose rs-raft store holds `commands`.
+function restartedSource(commands) {
+  return restartOverCommittedCommands({
+    partitionId: FIXTURE_PARTITION_ID,
+    tableId: SOURCE_TABLE,
+    tableName: SOURCE_TABLE,
+    schema: SOURCE_SCHEMA,
+  }, commands);
 }
 
 // ── Receipt 1: persisted snapshot barrier + replay watermark ────────
@@ -100,55 +142,82 @@ test('replay cursor checkpoint rides the source ack into the durable ' +
 test('the split worker stamps the snapshot barrier from the durable ' +
   'Raft log and carries the cursor on the catch-up acknowledgement',
 async () => {
-  const proto = PartitionService.prototype;
-  const acks = [];
-  const context = {
-    partitionId: FIXTURE_PARTITION_ID,
-    logger: buildLogger(),
-    splitReplication: {
-      metadata: {
-        sourcePartitionId: FIXTURE_PARTITION_ID,
-        targetPartitionIds: [...FIXTURE_TARGET_IDS],
-        targetPartitionVersion: 2,
-        workflowId: FIXTURE_WORKFLOW_ID,
-        primaryKeyColumn: 'id',
+  const source = await restartedSource(
+    [insertCommand('a'), insertCommand('b')]);
+  try {
+    const proto = PartitionService.prototype;
+    const acks = [];
+    // The restarted source itself, with the snapshot/backfill/transport
+    // collaborators replaced: the barrier is read from its own durable log.
+    const context = Object.assign(Object.create(source.restarted), {
+      logger: buildLogger(),
+      splitReplication: {
+        metadata: {
+          sourcePartitionId: FIXTURE_PARTITION_ID,
+          targetPartitionIds: [...FIXTURE_TARGET_IDS],
+          targetPartitionVersion: 2,
+          workflowId: FIXTURE_WORKFLOW_ID,
+          primaryKeyColumn: 'id',
+        },
+        phase: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
+        pendingEntries: [],
+        flushPromise: null,
+        lastError: null,
       },
-      phase: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
-      pendingEntries: [],
-      flushPromise: null,
-      lastError: null,
-    },
-    storage: {
-      getLastIndex: () => 77,
-    },
-    seedSplitReplayCursorFromDurableLog:
-      proto.seedSplitReplayCursorFromDurableLog,
-    openSplitSnapshotDatabase: () => ({close() {}}),
-    backfillSplitSnapshot: async () => {},
-    flushSplitReplicationQueue: async () => {},
-    emitSplitSourceAck: async (metadata, status, checkpoint) => {
-      acks.push({status, checkpoint: checkpoint || null});
-      return {result: 'accepted', splitCutoverApplied: true};
-    },
-  };
-  await proto.runSplitReplicationWorkflow.call(context);
-  const catchupAck = acks.find(
-    (ack) => ack.status === 'catchup_ready',
-  );
-  assert.ok(catchupAck, 'the catch-up ack must be emitted');
-  assert.equal(
-    catchupAck.checkpoint?.[
-      SPLIT_ACK_CHECKPOINT_FIELD.SNAPSHOT_BARRIER_INDEX
-    ],
-    77,
-    'the barrier must come from the durable Raft log index',
-  );
-  assert.equal(
-    catchupAck.checkpoint?.[
-      SPLIT_ACK_CHECKPOINT_FIELD.REPLAY_WATERMARK_INDEX
-    ],
-    77,
-  );
+      openSplitSnapshotDatabase: () => ({close() {}}),
+      backfillSplitSnapshot: async () => {},
+      flushSplitReplicationQueue: async () => {},
+      emitSplitSourceAck: async (metadata, status, checkpoint) => {
+        acks.push({status, checkpoint: checkpoint || null});
+        return {result: 'accepted', splitCutoverApplied: true};
+      },
+    });
+    // The window the runtime owner opens between persisting a commit index
+    // and applying the entries it covers (finishReady: putCommitIndex, then
+    // sends, then applyEntries): one more entry is durably committed but
+    // not yet applied, so the state machine the backfill copies does not
+    // hold it. Written through the store's own write API.
+    const store = new RaftRsDurableStore(source.restarted.db);
+    const {hardState} = store.readDurableRecord(FIXTURE_PARTITION_ID);
+    const unapplied = String(Number(hardState.commit) + 1);
+    store.appendEntries(FIXTURE_PARTITION_ID, [{
+      index: unapplied,
+      term: hardState.term,
+      entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
+      data: Buffer.from(encodeProposal(insertCommand('unapplied')))
+        .toString('base64'),
+    }]);
+    store.putCommitIndex(FIXTURE_PARTITION_ID, unapplied);
+    await proto.runSplitReplicationWorkflow.call(context);
+    // The restarted incarnation may have committed and applied its own
+    // leader entry, so the applied index is read when the barrier was taken,
+    // not before.
+    const {appliedIndex, commitIndex} = readCommittedIndependently(
+      source.dbPath, FIXTURE_PARTITION_ID);
+    assert.ok(commitIndex > appliedIndex,
+      `precondition: the commit index ${commitIndex} runs ahead of the ` +
+      `applied index ${appliedIndex}`);
+    const catchupAck = acks.find(
+      (ack) => ack.status === 'catchup_ready',
+    );
+    assert.ok(catchupAck, 'the catch-up ack must be emitted');
+    assert.equal(
+      catchupAck.checkpoint?.[
+        SPLIT_ACK_CHECKPOINT_FIELD.SNAPSHOT_BARRIER_INDEX
+      ],
+      appliedIndex,
+      'the barrier must be the rs-raft applied index (what the backfill ' +
+        'copies)',
+    );
+    assert.equal(
+      catchupAck.checkpoint?.[
+        SPLIT_ACK_CHECKPOINT_FIELD.REPLAY_WATERMARK_INDEX
+      ],
+      appliedIndex,
+    );
+  } finally {
+    await source.dispose();
+  }
 });
 
 test('a transition without a recorded cursor normalizes to null ' +
@@ -169,78 +238,90 @@ test('a transition without a recorded cursor normalizes to null ' +
 // ── Receipt 2: raft-log delta replay behind the watermark ───────────
 
 test('reconstruction seeds the catch-up queue from the durable Raft ' +
-  'log behind the persisted watermark, not the volatile array', () => {
-  const logEntries = [
-    {index: 40, data: {type: 'INSERT', sql: 'ins-40'}},
-    {index: 41, data: {type: 'INSERT', sql: 'ins-41'}},
-    // The barrier: covered by the snapshot, never replayed.
-    {index: 42, data: {type: 'INSERT', sql: 'ins-42'}},
-    // Non-write control entries are filtered out of the mirror replay.
-    {index: 43, data: {type: 'PREPARE_TRANSACTION', sql: 'prep-43'}},
-    {index: 44, data: {type: 'DELETE', sql: 'del-44'}},
-  ];
-  const service = {
-    partitionId: FIXTURE_PARTITION_ID,
-    logger: buildLogger(),
-    normalizeSplitTransitionMetadata:
-      PartitionService.prototype.normalizeSplitTransitionMetadata,
-    storage: {
-      getEntriesFrom(startIndex) {
-        return logEntries.filter((entry) => entry.index >= startIndex);
-      },
-    },
-    splitReplication: null,
+  'log behind the persisted watermark, not the volatile array', async () => {
+  const deleteCommand = {
+    entryId: 'delete-a',
+    type: PARTITION_SERVICE_OPERATION.DELETE,
+    sql: `DELETE FROM ${SOURCE_TABLE} WHERE id = ?`,
+    params: ['a'],
   };
-  const metadata = normalizeSplitTransitionMetadataForService(
-    service,
-    buildSplitRawMetadata({
-      [PARTITION_TRANSITION_METADATA_FIELD.SOURCE_CHECKPOINT]:
-        buildReplayCursorCheckpoint(SPLIT_ACK_CHECKPOINT_FIELD, 41, 42),
-    }),
-  );
+  const source = await restartedSource([
+    insertCommand('a'),
+    insertCommand('b'),
+    // The barrier: covered by the snapshot, never replayed.
+    insertCommand('c'),
+    // Non-write control entries are filtered out of the mirror replay.
+    {
+      type: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+      sessionId: 'session-control',
+      epoch: 1,
+      writeSet: [`${SOURCE_TABLE}:z`],
+    },
+    deleteCommand,
+  ]);
+  try {
+    const [, second, third, , fifth] = source.committed;
+    const checkpoint = buildReplayCursorCheckpoint(
+      SPLIT_ACK_CHECKPOINT_FIELD, second.index, third.index);
+    const metadata = normalizeSplitTransitionMetadataForService(
+      source.restarted,
+      buildSplitRawMetadata({
+        [PARTITION_TRANSITION_METADATA_FIELD.SOURCE_CHECKPOINT]: checkpoint,
+      }),
+    );
 
-  const handle = reconstructSplitExecutionStateForService(service, {
-    phase: PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
-    metadata: buildSplitRawMetadata({
-      [PARTITION_TRANSITION_METADATA_FIELD.SOURCE_CHECKPOINT]:
-        buildReplayCursorCheckpoint(SPLIT_ACK_CHECKPOINT_FIELD, 41, 42),
-    }),
-  });
+    const handle = reconstructSplitExecutionStateForService(
+      source.restarted, {
+        phase: PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
+        metadata: buildSplitRawMetadata({
+          [PARTITION_TRANSITION_METADATA_FIELD.SOURCE_CHECKPOINT]: checkpoint,
+        }),
+      });
 
-  assert.ok(handle, 'execution handle must reconstruct');
-  assert.deepEqual(
-    handle.pendingEntries.map((entry) => entry.logIndex),
-    [44],
-    'deltas behind the watermark must replay from the log in order',
-  );
-  assert.deepEqual(
-    handle.pendingEntries.map((entry) => entry.sql),
-    ['del-44'],
-  );
-  assert.equal(handle.snapshotBarrierIndex, 41);
-  assert.equal(handle.replayWatermarkIndex, 42);
-  assert.ok(metadata, 'normalizer must surface the same cursor');
+    assert.ok(handle, 'execution handle must reconstruct');
+    assert.deepEqual(
+      handle.pendingEntries.map((entry) => entry.logIndex),
+      [fifth.index],
+      'deltas behind the watermark must replay from the log in order',
+    );
+    assert.deepEqual(
+      handle.pendingEntries.map((entry) => entry.sql),
+      [fifth.command.sql],
+    );
+    assert.equal(handle.snapshotBarrierIndex, second.index);
+    assert.equal(handle.replayWatermarkIndex, third.index);
+    assert.ok(metadata, 'normalizer must surface the same cursor');
+  } finally {
+    await source.dispose();
+  }
 });
 
 test('loadDurableDeltasBehindWatermark stamps each delta with its ' +
-  'logIndex so the drain advances the watermark per delivery', () => {
-  const service = {
-    storage: {
-      getEntriesFrom(startIndex) {
-        return startIndex === 8 ?
-          [{index: 8, data: {type: 'UPDATE', sql: 'u8'}}] :
-          [];
-      },
+  'logIndex so the drain advances the watermark per delivery', async () => {
+  const source = await restartedSource([
+    insertCommand('a'),
+    {
+      entryId: 'update-a',
+      type: PARTITION_SERVICE_OPERATION.UPDATE,
+      sql: `UPDATE ${SOURCE_TABLE} SET value = ? WHERE id = ?`,
+      params: ['updated', 'a'],
     },
-  };
-  const deltas = loadDurableDeltasBehindWatermark(service, 7);
-  assert.equal(deltas.length, 1);
-  assert.equal(deltas[0].logIndex, 8);
-  assert.equal(deltas[0].sql, 'u8');
-  // No durable log / no watermark: no replay (the live queue alone
-  // serves post-resumption writes).
-  assert.deepEqual(loadDurableDeltasBehindWatermark({}, 7), []);
-  assert.deepEqual(loadDurableDeltasBehindWatermark(service, null), []);
+  ]);
+  try {
+    const [inserted, updated] = source.committed;
+    const deltas = loadDurableDeltasBehindWatermark(
+      source.restarted, inserted.index);
+    assert.equal(deltas.length, 1);
+    assert.equal(deltas[0].logIndex, updated.index);
+    assert.equal(deltas[0].sql, updated.command.sql);
+    // No durable log / no watermark: no replay (the live queue alone
+    // serves post-resumption writes).
+    assert.deepEqual(loadDurableDeltasBehindWatermark({}, inserted.index), []);
+    assert.deepEqual(
+      loadDurableDeltasBehindWatermark(source.restarted, null), []);
+  } finally {
+    await source.dispose();
+  }
 });
 
 // ── Receipt 3: bounded delta queue ──────────────────────────────────
@@ -304,57 +385,55 @@ test('the merge mirror delta queue is bounded by the same capacity ' +
 
 test('leader activation on a restarted source resumes the split ' +
   'replication worker against the durable cursor', async () => {
-  const proto = PartitionService.prototype;
-  const rawMetadata = buildSplitRawMetadata({
-    [PARTITION_TRANSITION_METADATA_FIELD.SOURCE_CHECKPOINT]:
-      buildReplayCursorCheckpoint(SPLIT_ACK_CHECKPOINT_FIELD, 10, 12),
-  });
-  const workerCalls = [];
-  const context = {
-    partitionId: FIXTURE_PARTITION_ID,
-    role: RAFT_ROLE.LEADER,
-    splitReplication: null,
-    mergeReplication: null,
-    logger: buildLogger(),
-    systemTableCache: {
-      getAll(tableName) {
-        return tableName === 'tables' ?
-          [{
-            partition_transition_state:
-              PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
-            partition_transition_metadata: rawMetadata,
-          }] :
-          [];
+  const source = await restartedSource(
+    [insertCommand('a'), insertCommand('b')]);
+  try {
+    const [first, second] = source.committed;
+    const proto = PartitionService.prototype;
+    const rawMetadata = buildSplitRawMetadata({
+      [PARTITION_TRANSITION_METADATA_FIELD.SOURCE_CHECKPOINT]:
+        buildReplayCursorCheckpoint(
+          SPLIT_ACK_CHECKPOINT_FIELD, first.index, first.index),
+    });
+    const workerCalls = [];
+    const context = Object.assign(Object.create(source.restarted), {
+      role: RAFT_ROLE.LEADER,
+      splitReplication: null,
+      mergeReplication: null,
+      logger: buildLogger(),
+      systemTableCache: {
+        getAll(tableName) {
+          return tableName === 'tables' ?
+            [{
+              partition_transition_state:
+                PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
+              partition_transition_metadata: rawMetadata,
+            }] :
+            [];
+        },
       },
-    },
-    storage: {
-      getEntriesFrom() {
-        return [{index: 13, data: {type: 'INSERT', sql: 'ins-13'}}];
+      runSplitReplicationWorkflow() {
+        workerCalls.push(this.splitReplication?.phase || null);
+        return Promise.resolve();
       },
-    },
-    normalizeSplitTransitionMetadata(rawMetadata) {
-      return proto.normalizeSplitTransitionMetadata.call(this, rawMetadata);
-    },
-    reconstructSplitExecutionState: proto.reconstructSplitExecutionState,
-    runSplitReplicationWorkflow() {
-      workerCalls.push(this.splitReplication?.phase || null);
-      return Promise.resolve();
-    },
-  };
+    });
 
-  const resumed = await proto.startOrResumeSplitReplicationFromDurable
-    .call(context);
+    const resumed = await proto.startOrResumeSplitReplicationFromDurable
+      .call(context);
 
-  assert.equal(resumed, true, 'the worker must be resumed');
-  assert.equal(workerCalls.length, 1, 'the worker must run exactly once');
-  assert.ok(context.splitReplication, 'execution state must reconstruct');
-  assert.deepEqual(
-    context.splitReplication.pendingEntries.map((entry) => entry.logIndex),
-    [13],
-    'the resumed worker replays from the durable log behind the ' +
-      'persisted watermark',
-  );
-  assert.equal(context.splitReplication.replayWatermarkIndex, 12);
+    assert.equal(resumed, true, 'the worker must be resumed');
+    assert.equal(workerCalls.length, 1, 'the worker must run exactly once');
+    assert.ok(context.splitReplication, 'execution state must reconstruct');
+    assert.deepEqual(
+      context.splitReplication.pendingEntries.map((entry) => entry.logIndex),
+      [second.index],
+      'the resumed worker replays from the durable log behind the ' +
+        'persisted watermark',
+    );
+    assert.equal(context.splitReplication.replayWatermarkIndex, first.index);
+  } finally {
+    await source.dispose();
+  }
 });
 
 test('leader-owned activation invokes mirror worker resumption: ' +

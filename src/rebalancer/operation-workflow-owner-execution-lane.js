@@ -581,6 +581,8 @@ class OperationWorkflowOwnerExecutionLane
    * @param {Object} [options]
    * @param {boolean} [options.terminalTransitionRepair] - Arm repair when the
    *   confirmation does not positively confirm visibility.
+   * @param {Object} [options.repairPersistOptions] - The terminal write's
+   *   admission options (a REPLACE FAILED's step CAS), kept by its repair.
    * @return {Promise<void>}
    */
   async confirmCommittedTransitionPersistence(operation, options = {}) {
@@ -596,6 +598,7 @@ class OperationWorkflowOwnerExecutionLane
           this,
           operation,
           TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_FAILED,
+          options.repairPersistOptions,
         );
       }
       return;
@@ -603,7 +606,8 @@ class OperationWorkflowOwnerExecutionLane
     if (!repairOnUnconfirmed) {
       return;
     }
-    this.resolveTerminalTransitionConfirmationOutcome(operation, visibility);
+    this.resolveTerminalTransitionConfirmationOutcome(operation, visibility,
+      options.repairPersistOptions);
   }
 
   /**
@@ -629,10 +633,13 @@ class OperationWorkflowOwnerExecutionLane
    * other outcome (DEFERRED — the silent class) arms it.
    * @param {Object} operation
    * @param {Object|null} visibility
+   * @param {Object} [repairPersistOptions] - The options the terminal was
+   *   admitted with, re-used by its repair.
    * @return {void}
    * @private
    */
-  resolveTerminalTransitionConfirmationOutcome(operation, visibility) {
+  resolveTerminalTransitionConfirmationOutcome(operation, visibility,
+    repairPersistOptions) {
     if (
       visibility?.confirmationState ===
         REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED &&
@@ -645,6 +652,7 @@ class OperationWorkflowOwnerExecutionLane
       this,
       operation,
       TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_DEFERRED,
+      repairPersistOptions,
     );
   }
 

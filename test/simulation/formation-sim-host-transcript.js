@@ -104,7 +104,19 @@ function createHostTranscript({network} = {}) {
   };
 }
 
+// A serialized transcript with its instants removed: equal exactly when the
+// same boundaries happened in the same causal order, whenever they happened.
+// For witnesses comparing runs whose consensus timing production does not
+// make repeatable (owner decision O2; see networkTranscriptStructure in the
+// seed host): the rs-raft core's own election timeouts move the virtual
+// instant of every boundary that waits on a partition leader.
+const VIRTUAL_INSTANT_FIELD = / virtualTimeMs=\d+/gu;
+
+function transcriptCausalOrder(serialized) {
+  return serialized.replace(VIRTUAL_INSTANT_FIELD, '');
+}
+
 export {
   SEALED_ENTRY_REFUSAL, UNKNOWN_EVENT_REFUSAL, UNKNOWN_FIELD_REFUSAL,
-  createHostTranscript,
+  createHostTranscript, transcriptCausalOrder,
 };

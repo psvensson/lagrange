@@ -10,12 +10,14 @@
 import {describe, it, beforeEach, afterEach, mock} from 'node:test';
 import assert from 'node:assert';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 describe('MessageRouter IPC Handler Registration', () => {
   let router;
 
   beforeEach(() => {
     router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-1',
       inProcess: true,
     });

@@ -39,6 +39,7 @@ import {ServiceRuntimeLifecycle} from
   '../../src/runtime/service-runtime-lifecycle.js';
 import {WasmComponentDriver} from
   '../../src/runtime/wasm-component-driver.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const NODE_ID = 'runtime-access-live-node';
 const TENANT_ID = 'tenant-a';
@@ -332,6 +333,7 @@ describe('minimal deployment runtime access production path', () => {
         };
 
       const setup = await ControlPlaneSetup.create({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         cdcIntegrationService,
         messageRouter,
         nodeAddress: '127.0.0.1:7410',

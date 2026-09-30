@@ -22,6 +22,8 @@ import {
 import {
   createProductionSimNodeEnvironment, createProductionSimScenario,
 } from './formation-sim-production-node-environment.js';
+import {reserveSimulatedBootIncarnation} from
+  './formation-sim-boot-incarnation.js';
 import {
   createProductionSeedSimHost,
 } from './formation-sim-production-seed-host.js';
@@ -104,7 +106,8 @@ test('A2c-1. five node environments coexist without sharing node-local state',
 test('A2c-2. mounting the seed on node-0 changes nothing on node-1 to node-4',
   async () => {
     const {scenario, environments} = fiveEnvironments();
-    const seed = createProductionSeedSimHost(environments.get(SEED_ID));
+    const seed = createProductionSeedSimHost(environments.get(SEED_ID),
+      {bootIncarnation: await reserveSimulatedBootIncarnation()});
 
     await runOnSimulationGenerationRoot(GENERATION, () =>
       runOnExecutionNode(SEED_ID, () => seed.phaseInfrastructure()));

@@ -3,15 +3,18 @@ import {CONFIG_KEY, DEFAULT_CONFIG} from './config/config-constants.js';
 import {LoggingService} from './logging/logging-service.js';
 import {HLCClockService} from './hlc/hlc-clock-service.js';
 import {DataDirectoryManager} from './storage/data-directory-manager.js';
+import {acquireDataDirectoryProcessOwner, bindDataDirectoryProcessOwner} from
+  './storage/data-directory-process-owner.js';
 import {BootstrapService} from './bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from './bootstrap/bootstrap-api.js';
 import {createControlPlaneWriteHealthProvider} from
   './bootstrap/control-plane-write-health-owner.js';
+import {reserveBootIncarnation} from './bootstrap/boot-incarnation-owner.js';
 import {
-  mintBootIncarnation,
   readPersistedLocalClusterId,
   readPersistedLocalNodeId,
 } from './bootstrap/rejoin-hints.js';
+import {readSeedStartupStorageAdmission} from './bootstrap/seed-startup-storage-admission.js';
 import {NodeJoiningService} from './bootstrap/node-joining-service.js';
 import {NodeService} from './node/node-service.js';
 import {
@@ -44,13 +47,13 @@ import {
   resolveSystemCacheHandles as resolveMetadataHandles,
   shutdownDynamicConfigWiring,
 } from './entrypoint-runtime-helpers.js';
-import {shutdownAdminRuntimeComposition} from
-  './entrypoint-runtime-admin-composition.js';
+import {shutdownAdminRuntimeComposition} from './entrypoint-runtime-admin-composition.js';
 import {
   persistJoinSeedRejoinHints,
   resolveSeedContactUrls,
 } from './entrypoint-runtime-join-decision.js';
 import {
+  reportDryRunCompletion,
   resolveBootSourceProvenance,
   resolveJoinReattemptPolicy,
   resolveLocalClusterIncarnationFence,
@@ -85,8 +88,7 @@ const METADATA_GETTER_KEY = 'getSystemTableCache';
 const METADATA_REQUIRED_ERROR_KEY = 'SYSTEM_TABLE_CACHE_REQUIRED';
 async function awaitStartupAcquisition(promise, signal) {
   const result = await promise;
-  throwIfStartupAborted(signal);
-  return result;
+  throwIfStartupAborted(signal); return result;
 }
 async function startJoinNode(options) {
   throwIfStartupAborted(options.signal);
@@ -108,7 +110,7 @@ async function startJoinNode(options) {
     options.signal,
   );
   const bootIncarnation = await awaitStartupAcquisition(
-    mintBootIncarnation(dataDirectoryManager.getDataDir()),
+    reserveBootIncarnation(dataDirectoryManager.getDataDir()),
     options.signal,
   );
   await awaitStartupAcquisition(persistJoinSeedRejoinHints({
@@ -206,7 +208,7 @@ async function startJoinNode(options) {
 
   if (!joinResult.success) {
     const retry = await awaitStartupAcquisition(resolveFailedJoinReattempt({
-      bootstrapAPI,
+      bootstrapAPI, dataDir: dataDirectoryManager.getDataDir(),
       joinAttempt: options._joinAttempt,
       joinResult,
       logger: mainLogger,
@@ -401,7 +403,7 @@ async function startSeedNode(options) {
 
   mainLogger.info(ENTRYPOINT_LOG_MSG.STARTING_SEED);
   const bootIncarnation = await awaitStartupAcquisition(
-    mintBootIncarnation(dataDirectoryManager.getDataDir()),
+    reserveBootIncarnation(dataDirectoryManager.getDataDir()),
     options.signal,
   );
   const clusterIncarnationFence = await awaitStartupAcquisition(
@@ -412,6 +414,8 @@ async function startSeedNode(options) {
     }),
     options.signal,
   );
+  const startupServicesAdmission = await readSeedStartupStorageAdmission(
+    dataDirectoryManager.getDataDir(), awaitStartupAcquisition, options.signal);
 
   const readinessState = createReadinessStateWithDiagnostics(
     mainLogger,
@@ -429,6 +433,7 @@ async function startSeedNode(options) {
     clusterIncarnationFence,
     readinessState,
     bootIncarnation,
+    startupServicesAdmission,
   });
   options.cleanupLedger.defer(() => bootstrapService.shutdown());
 
@@ -688,7 +693,6 @@ async function runStartupWithCleanup(cleanupLedger, startup) {
     throw error;
   }
 }
-
 async function acquireLagrangeRuntime(options, cleanupLedger) {
   const environment = options.environment;
   const cliArgs = options.cliArgs;
@@ -723,6 +727,9 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
 
   const dataDirectoryManager = DataDirectoryManager.getInstance();
   dataDirectoryManager.initialize();
+  const dataDirectoryProcessOwner = acquireDataDirectoryProcessOwner(
+    dataDirectoryManager.getDataDir());
+  cleanupLedger.defer(() => dataDirectoryProcessOwner.release());
 
   const hlcClock = new HLCClockService(config.get(CONFIG_KEY.NODE_ID), {
     maxDrift: config.get(CONFIG_KEY.HLC_MAX_DRIFT_MS),
@@ -736,12 +743,10 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
   );
 
   if (cliArgs.dryRun) {
-    mainLogger.info(ENTRYPOINT_LOG_MSG.DRY_RUN_COMPLETED, {
+    dataDirectoryProcessOwner.release();
+    return reportDryRunCompletion({logger: mainLogger,
       nodeId: config.get(CONFIG_KEY.NODE_ID),
-      dataDir: dataDirectoryManager.getDataDir(),
-      provider: selectedRaftProvider,
-    });
-    return Object.freeze({dryRun: true});
+      dataDir: dataDirectoryManager.getDataDir(), provider: selectedRaftProvider});
   }
 
   const startupJoinDecision = await awaitStartupAcquisition(resolveStartupJoinDecision({
@@ -753,8 +758,9 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
   }), options.signal);
   const rolloutControls = resolveRolloutControlsFromEnvironment(environment);
 
+  let runtime;
   if (startupJoinDecision.seedNodeAddress) {
-    return startJoinNode({
+    runtime = await startJoinNode({
       cleanupLedger,
       config,
       mainLogger,
@@ -767,17 +773,12 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
       env: environment,
       signal: options.signal,
     });
+  } else {
+    runtime = await startSeedNode({cleanupLedger, config, mainLogger,
+      dataDirectoryManager, rolloutControls, env: environment,
+      signal: options.signal});
   }
-
-  return startSeedNode({
-    cleanupLedger,
-    config,
-    mainLogger,
-    dataDirectoryManager,
-    rolloutControls,
-    env: environment,
-    signal: options.signal,
-  });
+  return bindDataDirectoryProcessOwner(runtime, dataDirectoryProcessOwner);
 }
 async function startLagrangeRuntime(options) {
   const claimAccepted = options.processClaim ?
@@ -795,5 +796,4 @@ async function startLagrangeRuntime(options) {
     () => acquireLagrangeRuntime(options, cleanupLedger),
   );
 }
-
 export {startLagrangeRuntime};

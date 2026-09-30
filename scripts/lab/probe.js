@@ -1,9 +1,15 @@
 import {spawn, spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import {StringDecoder} from 'node:string_decoder';
 
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
+import {LANE_JOBS_CAP_ENV, RESOURCE_CLASS_EXCLUSIVE}
+  from '../checks/test-resource-classification-constants.js';
+import {THERMAL_REFUSAL_LINE} from '../checks/wait-for-thermal-headroom.js';
+import {formatTestFilesSummary} from '../run-test-files.js';
 import {capture, killGroup, run} from './process.js';
 import {loadState, saveState} from './state.js';
 
@@ -92,6 +98,223 @@ export async function probeRemoteNode(sshTarget) {
   }
   return probeWindows(sshTarget);
 }
+
+// ---------------------------------------------------------------------------
+// Sharing the lab between agents and projects (owner directive 2026-09-23:
+// runs that could not see each other overwhelmed a lab machine). Every lab
+// host has ONE machine-wide lock, `${LAB_LOCK_DIR:-$HOME/.lab}/machine.lock`,
+// which whoever runs anything heavy there - a test corpus, a formation, a
+// benchmark - takes with flock and a bounded wait, and one holder record
+// beside it, `machine.holder.json`, written by the holder under the lock and
+// removed by it on exit. flock is the lock; the record is for people and for
+// `lab fleet`, and a record whose lock is free is stale evidence, never a
+// lock. The convention is plain shell (docs/development/home-lab.md,
+// "Sharing the lab between agents and projects"), so another project follows
+// it with nothing from here. In this repository the lines below are its one
+// owner: discovery reads a machine's lock with them, and the placement
+// wrapper and a formation's hold on each node take it with them.
+
+// The convention's exit statuses: 98 is the busy refusal its recipe's
+// `flock -w N 9 || exit 98` gives, 97 a host that cannot take part, 143 a
+// holder stopped by a signal.
+const LAB_LOCK_EXIT = Object.freeze({SETUP: 97, BUSY: 98, TERMINATED: 143});
+const MS_PER_SECOND = 1000;
+const MS_PER_MINUTE = 60 * MS_PER_SECOND;
+// No wait is longer, whatever the caller's budget: a host held for longer is
+// another run's, and the caller goes elsewhere or refuses.
+const LAB_LOCK_WAIT_MAX_MS = 30 * MS_PER_MINUTE;
+const LAB_LOCK_WAIT_MIN_SECONDS = 1;
+// A released hold's session gets this long to remove its record and end.
+const LAB_HOLD_RELEASE_GRACE_MS = 5 * MS_PER_SECOND;
+// How a holder names itself: this repository, and who placed the work
+// (LAGRANGE_LAB_AGENT, such as claude:SESSION, or this controller's process).
+const LAB_PROJECT = 'lagrange';
+const LAB_AGENT_ENV = 'LAGRANGE_LAB_AGENT';
+const LAB_AGENT_SEPARATOR = ':';
+const LAB_TEST_PURPOSE = 'test:';
+const LAB_PURPOSE_SEPARATOR = ',';
+// What a lab-side shell prints about the lock: busy, with the holder's record
+// when there is one, and held.
+const LAB_LOCK_LINE = Object.freeze({BUSY: 'machine-lock-busy=', HELD: 'machine-lock-held'});
+// What discovery found of a machine's lock, from the probe's answer.
+const LAB_LOCK_STATE = Object.freeze({
+  FREE: 'free', BUSY: 'busy', STALE: 'stale-record', UNKNOWN: 'unknown',
+});
+const LAB_LOCK_PROBED = Object.freeze({HELD: 'held', FREE: 'free'});
+// What a formation's hold on one node came to.
+const LAB_HOLD = Object.freeze({HELD: 'held', BUSY: 'busy', FAILED: 'failed'});
+const LAB_HOLDER_UNKNOWN = '?';
+const LAB_HOLD_REASON_SEPARATOR = ': ';
+const LAB_LOCK_TEXT = Object.freeze({
+  FREE: 'free',
+  BUSY: 'busy: ',
+  STALE_DEAD: 'stale record (pid dead)',
+  STALE_LOCK_FREE: 'stale record (lock free)',
+  UNKNOWN: 'lock unknown',
+  NO_RECORD: 'held (no holder record)',
+  UNREADABLE: 'held (unreadable holder record)',
+  EXPECTED: ', expected ',
+  MINUTES: ' min',
+});
+const LAB_LOCK_PATHS = Object.freeze([
+  'lab_dir="${LAB_LOCK_DIR:-$HOME/.lab}"',
+  'lab_lock="$lab_dir/machine.lock"; lab_holder="$lab_dir/machine.holder.json"',
+]);
+// A record read bounded and onto one line: another project may write it over
+// several.
+const LAB_HOLDER_READ = 'head -c 4096 "$lab_holder" 2>/dev/null | tr -d \'\\r\\n\'';
+// Discovery's view of the lock: whether it is held - asked with `flock -n`,
+// which releases at once, and never of a lock file it would have to create -
+// and the holder record as written, with whether its pid still runs. The
+// probe reads; it never takes the lock. A host that cannot say reports
+// nothing, which reads as unknown.
+const LAB_LOCK_PROBE = Object.freeze([
+  ...LAB_LOCK_PATHS,
+  'if [ -f "$lab_holder" ]; then',
+  `  say machine_holder "$(${LAB_HOLDER_READ})"`,
+  '  holder_pid="$(sed -n \'s/.*"pid"[ ]*:[ ]*\\([0-9][0-9]*\\).*/\\1/p\' "$lab_holder" | ' +
+    'head -n 1)"',
+  '  if [ -n "$holder_pid" ]; then if ps -p "$holder_pid" >/dev/null 2>&1; then ' +
+    'say machine_holder_pid_alive yes; else say machine_holder_pid_alive no; fi; fi',
+  'fi',
+  'if [ ! -e "$lab_lock" ]; then say machine_lock free',
+  'elif command -v flock >/dev/null 2>&1 && [ -r "$lab_lock" ]; then',
+  '  flock -n "$lab_lock" true 2>/dev/null',
+  '  case $? in 0) say machine_lock free;; 1) say machine_lock held;; esac',
+  'fi',
+]);
+// Take the lock on fd 9, waiting at most $lock_wait seconds - as a job, so a
+// stop signal ends the wait at once - and, busy, name the holder's record and
+// exit busy without touching it.
+const LAB_LOCK_TAKE = Object.freeze([
+  `mkdir -p "$lab_dir" || exit ${LAB_LOCK_EXIT.SETUP}`,
+  `exec 9>"$lab_lock" || exit ${LAB_LOCK_EXIT.SETUP}`,
+  'flock -w "$lock_wait" 9 & pid=$!',
+  'wait "$pid"; locked=$?; pid=""',
+  `if [ "$locked" != 0 ]; then echo "${LAB_LOCK_LINE.BUSY}$(${LAB_HOLDER_READ})"; ` +
+    `exit ${LAB_LOCK_EXIT.BUSY}; fi`,
+]);
+// Under the lock, the holder record: the caller's fields ($holder_head,
+// $expected_minutes) around what only the holder knows - when it started and
+// its pid. Whoever sets `holding` removes it on exit.
+const LAB_LOCK_RECORD = Object.freeze([
+  'printf \'{%s,"startedAt":"%s","expectedMinutes":%s,"pid":%s}\\n\' "$holder_head" ' +
+    '"$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$expected_minutes" "$$" > "$lab_holder" || ' +
+    `exit ${LAB_LOCK_EXIT.SETUP}`,
+  'holding=1',
+]);
+// A formation's hold on one node: the lock taken and recorded as above, then
+// kept for as long as the controller keeps this session's input open. Its
+// end - a release, or the session's own - lets the shell exit, which removes
+// the record and frees the machine.
+const LAB_HOLD_SCRIPT = [
+  'set -u',
+  'lock_wait="$1"; holder_head="$2"; expected_minutes="$3"',
+  'set --',
+  'pid=""; holding=""',
+  ...LAB_LOCK_PATHS,
+  'trap \'if [ -n "$holding" ]; then rm -f "$lab_holder"; fi\' EXIT',
+  'trap \'if [ -n "$pid" ]; then kill "$pid" 2>/dev/null; fi; ' +
+    `exit ${LAB_LOCK_EXIT.TERMINATED}' HUP INT TERM`,
+  'if ! command -v flock >/dev/null 2>&1; then echo "a lab hold needs flock here" >&2; ' +
+    `exit ${LAB_LOCK_EXIT.SETUP}; fi`,
+  ...LAB_LOCK_TAKE,
+  ...LAB_LOCK_RECORD,
+  `echo ${LAB_LOCK_LINE.HELD}`,
+  'cat >/dev/null 9>&-',
+].join('\n');
+
+// Seconds for `flock -w`: the caller's budget, at least a second, never more
+// than the lab's cap.
+function labLockWaitSeconds(waitMs) {
+  return Math.max(LAB_LOCK_WAIT_MIN_SECONDS,
+    Math.ceil(Math.min(waitMs, LAB_LOCK_WAIT_MAX_MS) / MS_PER_SECOND));
+}
+
+// The arguments a lab shell takes the lock with: its wait, the head of its
+// holder record - this project, the agent, the controller, the purpose and
+// the commit, as JSON members - and the minutes it expects to hold the
+// machine.
+function labLockArgs({waitMs, purpose, expectedMs, sha, env}) {
+  const controller = os.hostname();
+  const agent = env[LAB_AGENT_ENV] ||
+    [LAB_PROJECT, controller, process.pid].join(LAB_AGENT_SEPARATOR);
+  const head = JSON.stringify({project: LAB_PROJECT, agent, controller, purpose, sha});
+  return [String(labLockWaitSeconds(waitMs)), head.slice(1, -1),
+    String(Math.ceil(expectedMs / MS_PER_MINUTE))];
+}
+
+// What a test run tells other agents it is doing: its lanes.
+function labTestPurpose(lanes) {
+  return `${LAB_TEST_PURPOSE}${[...new Set(lanes)].join(LAB_PURPOSE_SEPARATOR)}`;
+}
+
+// A holder record as its holder wrote it, when it is a JSON object.
+function parseLabHolder(text) {
+  if (!text) return null;
+  try {
+    const record = JSON.parse(text);
+    return record !== null && typeof record === 'object' && !Array.isArray(record) ?
+      record : null;
+  } catch {
+    return null;
+  }
+}
+
+// The holder a lab shell named when it refused busy, from its lines.
+function busyHolder(lines) {
+  const line = lines.find((one) => one.startsWith(LAB_LOCK_LINE.BUSY));
+  return parseLabHolder(line?.slice(LAB_LOCK_LINE.BUSY.length));
+}
+
+/**
+ * Who holds a machine, as a person reads it: `held by AGENT (PROJECT,
+ * PURPOSE) since STARTED`, a field the holder left out shown as unknown.
+ * @param {Object|null} holder a holder record
+ * @return {string}
+ */
+export function labHolderText(holder) {
+  if (!holder) return LAB_LOCK_TEXT.NO_RECORD;
+  return `held by ${holder.agent ?? LAB_HOLDER_UNKNOWN} (${holder.project ?? LAB_HOLDER_UNKNOWN}` +
+    `, ${holder.purpose ?? LAB_HOLDER_UNKNOWN}) since ${holder.startedAt ?? LAB_HOLDER_UNKNOWN}`;
+}
+
+// A machine's lock for the fleet: who holds it and for how long they expect
+// to, or that it is free, a stale record, or not known.
+function labLockText(lock) {
+  if (lock.state === LAB_LOCK_STATE.BUSY) return `${LAB_LOCK_TEXT.BUSY}${heldText(lock)}`;
+  if (lock.state === LAB_LOCK_STATE.STALE) {
+    return lock.holderPidAlive === false ? LAB_LOCK_TEXT.STALE_DEAD :
+      LAB_LOCK_TEXT.STALE_LOCK_FREE;
+  }
+  return lock.state === LAB_LOCK_STATE.FREE ? LAB_LOCK_TEXT.FREE : LAB_LOCK_TEXT.UNKNOWN;
+}
+
+function heldText(lock) {
+  if (!lock.holder) return lock.record ? LAB_LOCK_TEXT.UNREADABLE : LAB_LOCK_TEXT.NO_RECORD;
+  return `${labHolderText(lock.holder)}${LAB_LOCK_TEXT.EXPECTED}` +
+    `${lock.holder.expectedMinutes ?? LAB_HOLDER_UNKNOWN}${LAB_LOCK_TEXT.MINUTES}`;
+}
+
+// The probe's lock lines as discovery records them: the lock decides busy or
+// free, and a record whose lock is free is stale.
+function parseMachineLock(values) {
+  const record = capabilityText(values.machine_holder);
+  return {
+    state: machineLockState(values.machine_lock, record),
+    record,
+    holder: parseLabHolder(record),
+    holderPidAlive: capabilityFlag(values.machine_holder_pid_alive),
+  };
+}
+
+function machineLockState(probed, record) {
+  if (probed === LAB_LOCK_PROBED.HELD) return LAB_LOCK_STATE.BUSY;
+  if (probed !== LAB_LOCK_PROBED.FREE) return LAB_LOCK_STATE.UNKNOWN;
+  return record ? LAB_LOCK_STATE.STALE : LAB_LOCK_STATE.FREE;
+}
+
+export {LAB_HOLD};
 
 // ---------------------------------------------------------------------------
 // Test capability: what a machine can actually run, measured rather than
@@ -221,6 +444,7 @@ const CAPABILITY_SCRIPT = [
   '  say repo_present no',
   'fi',
   `say cpu_sample_ms "$(node -e '${CPU_SAMPLE_SCRIPT}' 2>/dev/null)"`,
+  ...LAB_LOCK_PROBE,
 ].join('\n');
 
 function capabilityNumber(value) {
@@ -280,6 +504,7 @@ export function parseCapability(text, probedAt = Date.now()) {
     },
     movielensSha256: repoPresent ? capabilityText(values.movielens_sha256) : null,
     cpuSampleMs: capabilityNumber(values.cpu_sample_ms),
+    machineLock: parseMachineLock(values),
   };
 }
 
@@ -760,6 +985,7 @@ const FLEET_TEXT = Object.freeze({
   GAPS_OPEN: ' (gaps: ',
   GAPS_CLOSE: ')',
   LIST: ', ',
+  LOCK: ' | ',
 });
 
 /**
@@ -790,7 +1016,8 @@ export function recordFleet(state, fleet, now = Date.now()) {
 
 /**
  * One line per machine: identity-merged, unreachable, ready or not, and the
- * gaps placement would route around, with speed relative to the controller.
+ * gaps placement would route around, with speed relative to the controller;
+ * then who holds the machine under the lab convention, when it answered.
  * @param {Array<Object>} fleet
  * @return {string[]}
  */
@@ -801,8 +1028,13 @@ export function formatFleet(fleet) {
     const factor = cap?.cpuSampleMs && reference ?
       (cap.cpuSampleMs / reference).toFixed(FLEET_FACTOR_DIGITS) : FLEET_UNKNOWN;
     return `${entry.name.padEnd(FLEET_NAME_COLUMN)} cores=${cap?.cores ?? FLEET_UNKNOWN} ` +
-      `speed x${factor} ${fleetVerdict(entry)}${fleetGaps(entry)}`;
+      `speed x${factor} ${fleetVerdict(entry)}${fleetGaps(entry)}${fleetLock(cap)}`;
   });
+}
+
+function fleetLock(capability) {
+  return capability?.machineLock ?
+    `${FLEET_TEXT.LOCK}${labLockText(capability.machineLock)}` : EMPTY;
 }
 
 function fleetVerdict(entry) {
@@ -833,8 +1065,6 @@ function fleetGaps(entry) {
 
 const PLACEMENT_ENV = 'LAGRANGE_PLACEMENT';
 const PLACEMENT_LOCAL = 'local';
-const MS_PER_SECOND = 1000;
-const MS_PER_MINUTE = 60 * MS_PER_SECOND;
 // Below this the whole plan costs less on the controller than waiting for a
 // lab machine's setup is worth: the common small cone never probes at all.
 const PLACEMENT_MIN_PLAN_MS = 5 * MS_PER_MINUTE;
@@ -853,14 +1083,17 @@ const PLACEMENT_RERUN_CAP = 20;
 const PLACEMENT_DEADLINE_FACTOR = 3;
 const PLACEMENT_DEADLINE_FLOOR_MS = 30 * MS_PER_MINUTE;
 const PLACEMENT_EXIT = Object.freeze({
-  SETUP: 97, BUSY: 98, INTERRUPTED: 130, TERMINATED: 143, SSH: 255,
+  SETUP: LAB_LOCK_EXIT.SETUP, BUSY: LAB_LOCK_EXIT.BUSY, INTERRUPTED: 130,
+  TERMINATED: LAB_LOCK_EXIT.TERMINATED, SSH: 255,
 });
 const PLACEMENT_SHELL_LINE = /^placement-shell=(\d+)$/mu;
 // A stopped shard's shell gets this long to clean up before its connection
 // is cut.
 const PLACEMENT_STOP_GRACE_MS = 10 * MS_PER_SECOND;
-const PLACEMENT_RED_LINE = /^not ok (\S+) \(\d+ assertions, \d+ms\)$/u;
-const PLACEMENT_GREEN_LINE = /^ok (\S+) \(\d+ assertions, \d+ms\)$/u;
+// The runner's per-file verdict line: `ok|not ok FILE (N assertions, Tms)`.
+const PLACEMENT_VERDICT_LINE = /^(ok|not ok) (\S+) \((\d+) assertions, \d+ms\)$/u;
+const PLACEMENT_VERDICT_GREEN = 'ok';
+const PLACEMENT_VERDICT_PART = Object.freeze({VERDICT: 1, FILE: 2, ASSERTIONS: 3});
 const PLACEMENT_RETRIED_PASS_LINE = /^# retried-once pass (\S+)$/u;
 // A bundle upload that has not finished by this is a stalled machine.
 const PLACEMENT_UPLOAD_DEADLINE_SECONDS = 300;
@@ -899,11 +1132,18 @@ const PLACEMENT_WRAPPER_EXIT = 'exit "$status";';
 const PLACEMENT_PARENT = 'test-output/placement-worktrees';
 const PLACEMENT_LOG_PARENT = 'test-output/placement';
 const PLACEMENT_FILES_MARK = 'LAGRANGE_PLACEMENT_FILES';
-const PLACEMENT_KEEP_GOING = '--keep-going';
 const PLACEMENT_MACHINE_FACTOR_ENV = 'LAGRANGE_TEST_MACHINE_FACTOR';
 const PLACEMENT_FACTOR_STEPS = 10;
 const PLACEMENT_MINUTE_DIGITS = 1;
 const PLACEMENT_LINE = /\r?\n/u;
+// How often a streamed shard's relay files are read for new lines.
+const PLACEMENT_TAIL_POLL_MS = 250;
+const PLACEMENT_READ_FLAG = 'r';
+const PLACEMENT_STREAM = Object.freeze({OUT: 'out', ERR: 'err'});
+// The controller child's file list, named for this process and a count.
+const PLACEMENT_CHILD_LIST_PREFIX = 'controller-';
+const PLACEMENT_CHILD_LIST_SUFFIX = '.files';
+let childListCount = 0;
 // Keepalive for a long run: a dead connection is noticed within a minute.
 const SSH_RUN_OPTIONS = Object.freeze([
   SSH_OPTION, 'ConnectTimeout=5',
@@ -918,7 +1158,8 @@ const PLACEMENT_GIT = 'git';
 const PLACEMENT_GIT_HAS_COMMIT = Object.freeze(['cat-file', '-e']);
 const PLACEMENT_GIT_IS_ANCESTOR = Object.freeze(['merge-base', '--is-ancestor']);
 const PLACEMENT_GIT_HEAD = Object.freeze(['rev-parse', 'HEAD']);
-const PLACEMENT_CHILD_EVENT = Object.freeze({ERROR: 'error', EXIT: 'exit'});
+const PLACEMENT_CHILD_EVENT = Object.freeze({ERROR: 'error', EXIT: 'exit', CLOSE: 'close',
+  DATA: 'data', END: 'end'});
 const PLACEMENT_STDIO_IGNORE = 'ignore';
 const PLACEMENT_NEWLINE = '\n';
 const PLACEMENT_VERSION_SEPARATOR = '.';
@@ -941,6 +1182,17 @@ const PLACEMENT_TEXT = Object.freeze({
   RED_THERE: ' file(s) red there are decided on the controller',
   OVER_CAP: 'remote reds exceed the rerun cap: breakage, reported red without a rerun',
   MISS: ' passed on the controller: routed away from ',
+  FAIL_FAST: 'fail-fast asks for the first red, which a placed run cannot give',
+  THERMAL_UNFIT: 'host-thermal-unfit ',
+  HOST_BUSY: 'host-busy ',
+  HELD_BY: ' held-by ',
+  SINCE: ' since ',
+  NO_HOLDER: ' held-by (no holder record)',
+  MOVED_FROM: ' (from ',
+  MOVED_CLOSE: ')',
+  REFUSED_BUSY: 'held by another agent',
+  REFUSED_HOT: 'too hot to run',
+  NO_NEXT_HOST: ', and no ready lab host is left',
   DEADLINE: 'deadline',
   INTERRUPTED: 'interrupted',
 });
@@ -1035,6 +1287,9 @@ export function placementMachines(fleet, state, {controllerFactor = 1} = {}) {
       name: entry.name,
       controller: false,
       speed,
+      // The measured capacity a hand run's decision is printed with.
+      cores: cap.cores,
+      memKiB: cap.memKiB,
       factor: Math.max(1, Math.ceil(speed * controllerFactor * PLACEMENT_FACTOR_STEPS) /
         PLACEMENT_FACTOR_STEPS),
       sshTarget: node.ssh,
@@ -1050,12 +1305,14 @@ export function placementMachines(fleet, state, {controllerFactor = 1} = {}) {
 }
 
 // A lab machine a shard can go to: discovered ready this run, answering, not
-// the controller reached a second time, with an ssh target, the checkout
-// path, the commit that checkout is at and a speed sample.
+// the controller reached a second time, not held by another agent under the
+// lab convention, with an ssh target, the checkout path, the commit that
+// checkout is at and a speed sample. A stale holder record is no lock.
 function isPlaceable(entry, node) {
   const cap = entry.capability;
   const distinct = !entry.controller && !entry.error && !entry.sameMachineAs;
-  const reachable = Boolean(node?.ssh) && entry.readiness?.ready === true;
+  const reachable = Boolean(node?.ssh) && entry.readiness?.ready === true &&
+    cap?.machineLock?.state !== LAB_LOCK_STATE.BUSY;
   return distinct && reachable && Boolean(cap?.repoPath) && Boolean(cap.repo?.head) &&
     cap.cpuSampleMs > 0;
 }
@@ -1097,24 +1354,123 @@ function deadlineFor(shard) {
 // controller; one with neither never reported, and the controller runs it. A
 // runner killed mid-batch, a truncated script or a lost connection can leave
 // any number of files unreported whatever the exit status (verifier round 1).
-function shardVerdicts(shard, outcome) {
-  const given = new Set(shard.files);
+function logVerdicts(files, log) {
+  const given = new Set(files);
   const green = new Set();
   const red = new Set();
-  for (const line of String(outcome.log || EMPTY).split(PLACEMENT_LINE)) {
-    const passed = PLACEMENT_GREEN_LINE.exec(line) || PLACEMENT_RETRIED_PASS_LINE.exec(line);
-    if (passed && given.has(passed[1])) green.add(passed[1]);
-    const failed = PLACEMENT_RED_LINE.exec(line);
-    if (failed && given.has(failed[1])) red.add(failed[1]);
+  const assertions = new Map();
+  const lines = String(log || EMPTY).split(PLACEMENT_LINE);
+  for (const line of lines) {
+    const verdict = PLACEMENT_VERDICT_LINE.exec(line);
+    const file = verdict?.[PLACEMENT_VERDICT_PART.FILE];
+    if (verdict && given.has(file)) {
+      (verdict[PLACEMENT_VERDICT_PART.VERDICT] === PLACEMENT_VERDICT_GREEN ? green : red)
+        .add(file);
+      assertions.set(file, Number(verdict[PLACEMENT_VERDICT_PART.ASSERTIONS]));
+    }
+    const retried = PLACEMENT_RETRIED_PASS_LINE.exec(line);
+    if (retried && given.has(retried[1])) green.add(retried[1]);
   }
-  for (const line of String(outcome.log || EMPTY).split(PLACEMENT_LINE)) {
+  for (const line of lines) {
     const retried = PLACEMENT_RETRIED_PASS_LINE.exec(line);
     if (retried) red.delete(retried[1]);
   }
   return {
-    red: [...red],
-    fallback: shard.files.filter((file) => !green.has(file) && !red.has(file)),
+    green, red, assertions,
+    unreported: files.filter((file) => !green.has(file) && !red.has(file)),
   };
+}
+
+function shardVerdicts(shard, outcome) {
+  const {red, unreported} = logVerdicts(shard.files, outcome.log);
+  return {red: [...red], fallback: unreported};
+}
+
+// A host whose runner refused as too hot is a typed placement outcome: its
+// runner's own refusal line, relayed in its stream.
+function reportThermalUnfit(name, lines, write) {
+  if (!lines.some((line) => THERMAL_REFUSAL_LINE.test(line))) return;
+  write(`${PLACEMENT_TEXT.PREFIX}${PLACEMENT_TEXT.THERMAL_UNFIT}${name}`);
+}
+
+// A host another agent held for the whole of the shard's wait is a typed
+// placement outcome, naming the holder its lab shell relayed.
+function reportHostBusy(name, lines, write) {
+  const holder = busyHolder(lines);
+  write(`${PLACEMENT_TEXT.PREFIX}${PLACEMENT_TEXT.HOST_BUSY}${name}` + (holder ?
+    `${PLACEMENT_TEXT.HELD_BY}${holder.agent ?? LAB_HOLDER_UNKNOWN}${PLACEMENT_TEXT.SINCE}` +
+      `${holder.startedAt ?? LAB_HOLDER_UNKNOWN}` : PLACEMENT_TEXT.NO_HOLDER));
+}
+
+// Start one lab shard, telling other agents what it is and how long it
+// expects to hold the machine: its lanes and its own estimate, which is also
+// the longest it waits for the machine lock.
+function startShard(shard, {deps, sha, forward, costs}) {
+  const lanes = costs.filter((cost) => shard.files.includes(cost.file)).map((cost) => cost.lane);
+  return deps.runRemote(shard, {sha, deadlineMs: deadlineFor(shard), forward,
+    holder: {purpose: labTestPurpose(lanes), expectedMs: shard.loadMs}});
+}
+
+// The next ready host for files whose host refused them: the fastest this
+// run has not tried that takes every one, charged its setup and its speed.
+function nextHostFor(files, {machines, tried, costs}) {
+  const priced = costs.filter((cost) => files.includes(cost.file));
+  const machine = machines.filter((one) => !tried.has(one.name)).sort(bySpeed)
+    .find((one) => priced.every((cost) => fits(one, cost)));
+  if (!machine) return null;
+  return {machine, files, loadMs: PLACEMENT_REMOTE_SETUP_MS +
+    priced.reduce((sum, cost) => sum + cost.ms / cost.jobs, 0) * machine.speed};
+}
+
+// Whether a lab host refused its shard, as a typed placement outcome: held
+// by another agent for the whole wait (the lab shell's busy exit), or too
+// hot to run (its runner's thermal refusal). Reported once; null if it ran.
+function hostRefusal(shard, outcome, write) {
+  const lines = String(outcome.log || EMPTY).split(PLACEMENT_LINE);
+  if (outcome.status === PLACEMENT_EXIT.BUSY) {
+    reportHostBusy(shard.machine.name, lines, write);
+    return PLACEMENT_TEXT.REFUSED_BUSY;
+  }
+  if (!lines.some((line) => THERMAL_REFUSAL_LINE.test(line))) return null;
+  reportThermalUnfit(shard.machine.name, lines, write);
+  return PLACEMENT_TEXT.REFUSED_HOT;
+}
+
+// A started shard's settled outcomes: the one re-placement policy. The files
+// a host that refused never ran go on to the next ready host this run has
+// not tried - a host that refused is never tried again in it - and, with none
+// left, to the controller. What it did run is settled as it ran.
+async function followShard(shard, run, context) {
+  const outcome = await run.done;
+  const refusal = hostRefusal(shard, outcome, context.write);
+  if (!refusal) return [{shard, outcome}];
+  const {unreported} = logVerdicts(shard.files, outcome.log);
+  const ran = {shard: {...shard, files: shard.files.filter((file) => !unreported.includes(file))},
+    outcome};
+  if (unreported.length === 0) return [ran];
+  const next = nextHostFor(unreported, context);
+  if (!next) {
+    context.write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${unreported.length}` +
+      `${PLACEMENT_TEXT.UNREPORTED}${refusal}${PLACEMENT_TEXT.NO_NEXT_HOST}`);
+    context.leftover.push(...unreported);
+    return [ran];
+  }
+  context.tried.add(next.machine.name);
+  context.write(`${PLACEMENT_TEXT.PREFIX}${next.machine.name}: ${next.files.length} files, ` +
+    `~${minutes(next.loadMs)} min${PLACEMENT_TEXT.MOVED_FROM}${shard.machine.name}` +
+    `${PLACEMENT_TEXT.MOVED_CLOSE}`);
+  const moved = await startShard(next, context);
+  context.runs.push(moved);
+  return [ran, ...await followShard(next, moved, context)];
+}
+
+// A lab machine's own lines, shown under its name.
+function relayShardLines(shard, outcome, write) {
+  for (const stream of [outcome.log, outcome.errors]) {
+    for (const line of String(stream || EMPTY).split(PLACEMENT_LINE)) {
+      if (line) write(`[${shard.machine.name}] ${line}`);
+    }
+  }
 }
 
 /**
@@ -1123,7 +1479,7 @@ function shardVerdicts(shard, outcome) {
  * @param {string[]} files
  * @param {Object} deps
  * @param {Function} deps.planCosts files -> [{file, ms, jobs}]
- * @param {Function} deps.runLocal (files, {keepGoing}) -> exit status
+ * @param {Function} deps.runLocal (files, {failFast}) -> exit status
  * @param {Function} deps.lastGreen file -> whether its controller result is green
  * @param {Function} deps.commitAt () -> the sha the tree exactly is, or null
  * @param {Function} deps.discover async () -> {machines, record(name, key, files)}
@@ -1133,19 +1489,21 @@ function shardVerdicts(shard, outcome) {
  *   files while lab shards run, without blocking this process
  * @param {Object} [deps.signals] where SIGINT, SIGTERM and SIGHUP arrive (process)
  * @param {Function} [deps.exit] process.exit
- * @param {boolean} [deps.keepGoing]
+ * @param {boolean} [deps.failFast] the explicit opt-in to stop at the first
+ *   red batch; such a run is never placed
  * @param {Object} [deps.env]
  * @param {Function} [deps.write]
  * @return {Promise<number>} exit status
  */
 export async function runPlacedTestFiles(files, deps) {
-  const {env = process.env, keepGoing = false,
+  const {env = process.env, failFast = false,
     write = (line) => process.stdout.write(`${line}\n`)} = deps;
   const local = (reason) => {
     if (reason) write(`${PLACEMENT_TEXT.LOCAL}${reason}`);
-    return deps.runLocal(files, {keepGoing});
+    return deps.runLocal(files, {failFast});
   };
   if (env[PLACEMENT_ENV] === PLACEMENT_LOCAL) return local(null);
+  if (failFast) return local(PLACEMENT_TEXT.FAIL_FAST);
   const costs = deps.planCosts(files);
   const aloneMs = costs.reduce((sum, cost) => sum + cost.ms / cost.jobs, 0);
   if (aloneMs < PLACEMENT_MIN_PLAN_MS) return local(null);
@@ -1170,12 +1528,13 @@ export async function runPlacedTestFiles(files, deps) {
       `~${minutes(shard.loadMs)} min`);
   }
   // Every lab shard is on its way before the controller's own files start.
-  const forward = {
-    retry: env[PLACEMENT_FORWARDED_ENV.RETRY] || EMPTY,
-    tapTimeout: env[PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT] || EMPTY,
-  };
-  const runs = await Promise.all(remote.map((shard) =>
-    deps.runRemote(shard, {sha, deadlineMs: deadlineFor(shard), forward})));
+  const context = {deps, sha, forward: forwardedPolicy(env), costs, write,
+    machines: fleet.machines, tried: new Set(remote.map((shard) => shard.machine.name)),
+    runs: [], leftover: []};
+  const started = await Promise.all(remote.map((shard) => startShard(shard, context)));
+  context.runs.push(...started);
+  const followed = Promise.all(remote.map((shard, index) =>
+    followShard(shard, started[index], context)));
   // While lab shards run, the controller's own files run in a child process
   // of their own group, never in this process's blocking lanes: a signal
   // handler here could not run until those lanes finished, so a Ctrl-C or a
@@ -1185,44 +1544,61 @@ export async function runPlacedTestFiles(files, deps) {
   let here = null;
   const runHere = (planned) => {
     here = deps.runLocalChild ? deps.runLocalChild(planned) :
-      {done: Promise.resolve(deps.runLocal(planned, {keepGoing: true}))};
+      {done: Promise.resolve(deps.runLocal(planned, {}))};
     return here.done;
   };
-  // The handler stays installed and runs once: a hang-up arrives twice (the
-  // shell resends it, then the kernel), and a second Ctrl-C can come during
-  // the lab shells' grace. A listener removed on first use handed either back
-  // to the default action, which killed this process mid-abort and left the
-  // detached shards running (verifier, placement-fixture-followups round 1).
+  const release = abortOnSignals(deps, () => {
+    here?.abort?.();
+    abortTogether(context.runs);
+  });
+  try {
+    const controllerShard = shards.find((shard) => shard.machine.controller);
+    const statuses = controllerShard ? [await runHere(controllerShard.files)] : [];
+    return await settleRemoteShards((await followed).flat(),
+      {deps, fleet, statuses, write, runHere, leftover: context.leftover});
+  } finally {
+    release();
+  }
+}
+
+// The controller's own retry and timeout policy, handed to a lab machine.
+function forwardedPolicy(env) {
+  return {
+    retry: env[PLACEMENT_FORWARDED_ENV.RETRY] || EMPTY,
+    tapTimeout: env[PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT] || EMPTY,
+  };
+}
+
+// Interrupted, hung up or terminated: cut everything a run started and exit.
+// The handler stays installed and runs once: a hang-up arrives twice (the
+// shell resends it, then the kernel), and a second Ctrl-C can come during
+// the lab shells' grace. A listener removed on first use handed either back
+// to the default action, which killed this process mid-abort and left the
+// detached shards running (verifier, placement-fixture-followups round 1).
+// Returns the removal of the handler.
+function abortOnSignals(deps, cutAll) {
   let aborting = false;
   const interrupted = () => {
     if (aborting) return;
     aborting = true;
-    here?.abort?.();
-    abortTogether(runs);
+    cutAll();
     (deps.exit || process.exit)(PLACEMENT_EXIT.INTERRUPTED);
   };
   const signals = deps.signals || process;
   for (const signal of PLACEMENT_SIGNALS) signals.on(signal, interrupted);
-  try {
-    const controllerShard = shards.find((shard) => shard.machine.controller);
-    const statuses = controllerShard ? [await runHere(controllerShard.files)] : [];
-    return await settleRemoteShards(remote, await Promise.all(runs.map((run) => run.done)),
-      {deps, fleet, statuses, write, runHere});
-  } finally {
+  return () => {
     for (const signal of PLACEMENT_SIGNALS) signals.removeListener(signal, interrupted);
-  }
+  };
 }
 
-async function settleRemoteShards(remote, outcomes, {deps, fleet, statuses, write, runHere}) {
+async function settleRemoteShards(settled, {deps, fleet, statuses, write, runHere, leftover}) {
   const reruns = [];
-  const fallback = [];
-  remote.forEach((shard, index) => {
-    const outcome = outcomes[index];
-    for (const stream of [outcome.log, outcome.errors]) {
-      for (const line of String(stream || EMPTY).split(PLACEMENT_LINE)) {
-        if (line) write(`[${shard.machine.name}] ${line}`);
-      }
-    }
+  // Files no ready lab host was left to take after theirs was held.
+  const fallback = [...leftover];
+  settled.forEach(({shard, outcome}) => {
+    relayShardLines(shard, outcome, write);
+    // Its files not proved there are placed once more, on the controller:
+    // never retried on the machine within this run.
     const {red, fallback: back} = shardVerdicts(shard, outcome);
     if (back.length > 0) {
       write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${back.length}` +
@@ -1255,17 +1631,24 @@ async function settleRemoteShards(remote, outcomes, {deps, fleet, statuses, writ
 // needed), prove it in a throwaway worktree with the workspace links the
 // publisher's gate checkout gets, run the controller-chosen files through the
 // same classified runner, and remove the worktree, ref, bundle and file list
-// on every exit. One placed run per machine at a time (flock where present).
-// Exit 97 is a setup failure and 98 a busy machine: the controller then runs
-// the shard itself. The runner leads its own process group, so the
-// controller's deadline can stop everything it started.
+// on every exit. One heavy run per machine at a time, whoever starts it: the
+// lab convention's machine-wide lock, waited for no longer than the shard's
+// budget, with the holder record beside it for as long as it is held; and
+// inside it this checkout's own lock, which a run placed from another clone
+// by an older wrapper takes alone. Exit 97 is a setup failure and 98 a
+// machine held by another run: the controller then places the shard on the
+// next ready host, or runs it itself. The runner leads its own process group,
+// so the controller's deadline can stop everything it started.
+const PLACEMENT_RESULTS_PREFIX = 'placement-results=';
 const PLACEMENT_SCRIPT_HEAD = [
   'set -u',
-  'repo="$1"; sha="$2"; node_major="$3"; factor="$4"; run="$5"; bundle="$6"; keep="$7"',
-  'retry="$8"; tap_timeout="$9"',
+  'repo="$1"; sha="$2"; node_major="$3"; factor="$4"; run="$5"; bundle="$6"',
+  'retry="$7"; tap_timeout="$8"; results="$9"; lock_wait="${10}"; holder_head="${11}"',
+  'expected_minutes="${12}"',
   // Before nvm, which reads its arguments (see the capability script).
   'set --',
-  'pid=""',
+  'pid=""; holding=""',
+  ...LAB_LOCK_PATHS,
   // The controller stops a shard by signalling this shell, whose trap stops
   // the runner's group and whose exit removes everything below.
   'echo "placement-shell=$$"',
@@ -1273,10 +1656,12 @@ const PLACEMENT_SCRIPT_HEAD = [
   `parent="$repo/${PLACEMENT_PARENT}"`,
   'wt="$parent/$run"; list="$parent/$run.files"; ref="refs/lagrange-placement/$run"',
   // Installed before anything that can fail or be interrupted, so every exit
-  // - busy, a failed fetch, a signal - removes what this run was given.
-  'cleanup() { cd "$repo" || return; git worktree remove --force "$wt" >/dev/null 2>&1; ' +
+  // - busy, a failed fetch, a signal - removes what this run was given, and
+  // last the holder record, if this shell wrote one.
+  'cleanup() { if cd "$repo"; then git worktree remove --force "$wt" >/dev/null 2>&1; ' +
     'rm -rf "$wt"; git worktree prune >/dev/null 2>&1; git update-ref -d "$ref" >/dev/null 2>&1; ' +
-    'rm -f "$list"; if [ -n "$bundle" ]; then rm -f "$bundle"; fi; }',
+    'rm -f "$list"; if [ -n "$bundle" ]; then rm -f "$bundle"; fi; fi; ' +
+    'if [ -n "$holding" ]; then rm -f "$lab_holder"; fi; }',
   'trap cleanup EXIT',
   // Stop the runner's whole group and wait for the runner, so cleanup never
   // races a dying test writing into the worktree. The runner and its tests
@@ -1300,8 +1685,10 @@ const PLACEMENT_SCRIPT_HEAD = [
     '[ -n "$node_major" ] && nvm use "$node_major" >/dev/null 2>&1',
   `common="$(git rev-parse --git-common-dir 2>/dev/null)" || exit ${PLACEMENT_EXIT.SETUP}`,
   'case "$common" in /*) ;; *) common="$repo/$common";; esac',
-  'exec 9>"$common/lagrange-placement.lock"',
-  `flock -n 9 || exit ${PLACEMENT_EXIT.BUSY}`,
+  ...LAB_LOCK_TAKE,
+  'exec 8>"$common/lagrange-placement.lock"',
+  `flock -n 8 || { echo "${LAB_LOCK_LINE.BUSY}"; exit ${PLACEMENT_EXIT.BUSY}; }`,
+  ...LAB_LOCK_RECORD,
   `mkdir -p "$parent" || exit ${PLACEMENT_EXIT.SETUP}`,
   // Under the lock nothing else is placed here, so anything left by an
   // earlier run - a connection lost after its upload, an interrupted one -
@@ -1348,14 +1735,25 @@ const PLACEMENT_SCRIPT_TAIL = [
   `export ${PLACEMENT_MACHINE_FACTOR_ENV}="$factor" ${PLACEMENT_ENV}=${PLACEMENT_LOCAL}`,
   `if [ -n "$retry" ]; then export ${PLACEMENT_FORWARDED_ENV.RETRY}="$retry"; fi`,
   `if [ -n "$tap_timeout" ]; then export ${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}="$tap_timeout"; fi`,
+  // Every lane capped at this host's own processors less one, counted here at
+  // run time: never a per-host constant, never a host's name.
+  `unset ${LANE_JOBS_CAP_ENV}`,
+  'cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null)"',
+  `case "$cores" in ""|*[!0-9]*) ;; 0|1) export ${LANE_JOBS_CAP_ENV}=1;; ` +
+    `*) export ${LANE_JOBS_CAP_ENV}=$((cores - 1));; esac`,
   `echo "placement-env=factor:$${PLACEMENT_MACHINE_FACTOR_ENV} mode:$${PLACEMENT_ENV} ` +
-    `retry:\${${PLACEMENT_FORWARDED_ENV.RETRY}:-} timeout:\${${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}:-}"`,
-  // The machine lock (fd 9) stays with this shell: a test process that
+    `retry:\${${PLACEMENT_FORWARDED_ENV.RETRY}:-} timeout:\${${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}:-} ` +
+    `lanecap:\${${LANE_JOBS_CAP_ENV}:-}"`,
+  // Both locks (fds 8 and 9) stay with this shell: a test process that
   // outlived its run must not hold the machine busy after it.
-  'setsid node scripts/run-classified-test-files.js $keep --stdin < "$list" 9>&- &',
+  'setsid node scripts/run-classified-test-files.js --stdin < "$list" 8>&- 9>&- &',
   'pid=$!',
   'echo "placement-pid=$pid"',
   'wait "$pid"; status=$?',
+  // A results ledger the runner left in the worktree comes back on this
+  // relay, one prefixed line per record, before cleanup removes it.
+  'if [ -n "$results" ] && [ -f "$wt/$results" ]; then ' +
+    `sed 's/^/${PLACEMENT_RESULTS_PREFIX}/' "$wt/$results"; fi`,
   'exit "$status"',
 ];
 
@@ -1389,6 +1787,28 @@ function exitOf(child) {
   return new Promise((resolve) => {
     child.on(PLACEMENT_CHILD_EVENT.ERROR, () => resolve(null));
     child.on(PLACEMENT_CHILD_EVENT.EXIT, (code) => resolve(code));
+  });
+}
+
+// Its exit status once its output streams are also closed: every line read.
+function closeOf(child) {
+  return new Promise((resolve) => {
+    child.on(PLACEMENT_CHILD_EVENT.ERROR, () => resolve(null));
+    child.on(PLACEMENT_CHILD_EVENT.CLOSE, (code) => resolve(code));
+  });
+}
+
+function streamLines(readable, stream, onLine) {
+  let partial = EMPTY;
+  readable.setEncoding(TEXT_UTF8);
+  readable.on(PLACEMENT_CHILD_EVENT.DATA, (text) => {
+    const lines = `${partial}${text}`.split(PLACEMENT_LINE);
+    partial = lines.pop();
+    for (const line of lines) onLine(line, stream);
+  });
+  readable.on(PLACEMENT_CHILD_EVENT.END, () => {
+    if (partial) onLine(partial, stream);
+    partial = EMPTY;
   });
 }
 
@@ -1467,6 +1887,42 @@ function hasExited(child) {
   return child.exitCode !== null || child.signalCode !== null;
 }
 
+// The relay's lines as they land: the ssh session writes the lab machine's
+// output into these files live, so following them is streaming without a
+// second connection. Returns the finish, which delivers the rest and stops.
+function tailLines(file, stream, onLine) {
+  const decoder = new StringDecoder(TEXT_UTF8);
+  let offset = 0;
+  let partial = EMPTY;
+  const emit = (text) => {
+    const lines = `${partial}${text}`.split(PLACEMENT_LINE);
+    partial = lines.pop();
+    for (const line of lines) onLine(line, stream);
+  };
+  const drain = () => {
+    const size = fs.statSync(file).size;
+    if (size <= offset) return;
+    const buffer = Buffer.alloc(size - offset);
+    const fd = fs.openSync(file, PLACEMENT_READ_FLAG);
+    let read = 0;
+    try {
+      read = fs.readSync(fd, buffer, 0, buffer.length, offset);
+    } finally {
+      fs.closeSync(fd);
+    }
+    offset += read;
+    emit(decoder.write(buffer.subarray(0, read)));
+  };
+  const timer = setInterval(drain, PLACEMENT_TAIL_POLL_MS);
+  return () => {
+    clearInterval(timer);
+    drain();
+    emit(decoder.end());
+    if (partial) onLine(partial, stream);
+    partial = EMPTY;
+  };
+}
+
 /**
  * Start one shard on its machine. Returns at once: the upload and the run
  * go on in a process group of their own, reading from and writing to files,
@@ -1475,12 +1931,21 @@ function hasExited(child) {
  * stderr log, or a reason when the shard never ran or its deadline stopped
  * it; `stop` stops it now.
  * @param {{machine: Object, files: string[]}} shard
- * @param {{sha: string, deadlineMs: number, root: string, keepGoing?: boolean,
- *   runId?: string, env?: Object, forward?: {retry?: string, tapTimeout?: string}}} options
+ * `onLine(line, stream)`, when given, receives each line of the relay as it
+ * arrives - stdout as `out`, stderr as `err` - not only at settle; `results`
+ * names a ledger the runner leaves in the worktree, relayed back as prefixed
+ * lines; `gitRoot` is the checkout whose HEAD is the commit (default root).
+ * `holder` is what the shard tells other agents under the lab convention: its
+ * purpose, and the time it expects to hold the machine, which is also the
+ * longest it waits for the machine lock (capped by the lab).
+ * @param {{sha: string, deadlineMs: number, root: string,
+ *   holder: {purpose: string, expectedMs: number},
+ *   runId?: string, env?: Object, forward?: {retry?: string, tapTimeout?: string},
+ *   onLine?: Function, results?: string, gitRoot?: string}} options
  * @return {{done: Promise<Object>, stop: Function}}
  */
-export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true,
-  env = gitProcessEnvironment(), forward = {},
+export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
+  env = gitProcessEnvironment(), forward = {}, onLine = null, results = EMPTY, gitRoot = root,
   runId = `${sha.slice(0, PLACEMENT_RUN_SHA_CHARACTERS)}-` +
     `${Date.now().toString(PLACEMENT_RUN_RADIX)}-${process.pid}`}) {
   const {machine} = shard;
@@ -1492,7 +1957,7 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true
   const scriptFile = `${local}.sh`;
   let bundleFile;
   try {
-    bundleFile = bundleFor(machine, {root, sha, local});
+    bundleFile = bundleFor(machine, {root: gitRoot, sha, local});
   } catch (error) {
     return {done: Promise.resolve({status: PLACEMENT_EXIT.SETUP, log: EMPTY,
       reason: error.message}), stop: () => {}, interrupt: () => null, abort: () => {}};
@@ -1506,8 +1971,9 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true
     bundleFile,
     run: commandLine(remoteCommand(machine, null, [machine.repoPath, sha,
       machine.nodeMajor || EMPTY, String(machine.factor || 1), runId, remoteBundle,
-      keepGoing ? PLACEMENT_KEEP_GOING : EMPTY, forward.retry || EMPTY,
-      forward.tapTimeout || EMPTY], {fromStdin: true})),
+      forward.retry || EMPTY, forward.tapTimeout || EMPTY, results,
+      ...labLockArgs({waitMs: holder.expectedMs, purpose: holder.purpose,
+        expectedMs: holder.expectedMs, sha, env})], {fromStdin: true})),
     scriptFile,
   });
   const output = fs.openSync(logFile, 'w');
@@ -1516,6 +1982,8 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true
     {env, stdio: [PLACEMENT_STDIO_IGNORE, output, errors], detached: true});
   fs.closeSync(output);
   fs.closeSync(errors);
+  const tails = onLine ? [tailLines(logFile, PLACEMENT_STREAM.OUT, onLine),
+    tailLines(errorFile, PLACEMENT_STREAM.ERR, onLine)] : [];
   let stopped = null;
   const stop = (reason) => {
     if (stopped || hasExited(child)) return;
@@ -1529,6 +1997,7 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, keepGoing = true
     deadlineMs);
   const done = exitOf(child).then((status) => {
     clearTimeout(deadline);
+    for (const finish of tails) finish();
     // A wrapper stopped mid-upload never reached its own removals.
     fs.rmSync(scriptFile, {force: true});
     if (bundleFile) fs.rmSync(bundleFile, {force: true});
@@ -1568,6 +2037,58 @@ function abortTogether(runs) {
   for (const one of pending) one.cut();
 }
 
+// ---------------------------------------------------------------------------
+// A formation's hold on a lab machine, under the lab convention above: the
+// same lock and record the placement wrapper takes, in a session of its own
+// that the harness keeps open for the whole formation.
+
+/**
+ * Hold one lab machine for a formation under the lab convention: its lock
+ * taken with a bounded wait and its holder record written, both kept until
+ * `release`. `outcome` settles `{state: 'held'}`, `{state: 'busy', holder}`
+ * (the holder's record, or null) or `{state: 'failed', reason}`.
+ * @param {{name: string, sshTarget: string|null}} machine
+ * @param {{waitMs: number, purpose: string, expectedMs: number, env?: Object,
+ *   root?: string}} request
+ * @return {{outcome: Promise<Object>, release: Function}}
+ */
+export function holdLabMachine(machine, {waitMs, purpose, expectedMs, env = process.env,
+  root = process.cwd()}) {
+  const sha = gitAt(root, PLACEMENT_GIT_HEAD).stdout?.trim() || LAB_HOLDER_UNKNOWN;
+  const [command, args] = remoteCommand(machine, LAB_HOLD_SCRIPT,
+    labLockArgs({waitMs, purpose, expectedMs, sha, env}));
+  const child = spawn(command, args, {env, stdio: PLACEMENT_STDIO_PIPE});
+  const lines = [];
+  const errors = [];
+  const closed = closeOf(child);
+  const outcome = new Promise((resolve) => {
+    streamLines(child.stdout, PLACEMENT_STREAM.OUT, (line) => {
+      lines.push(line);
+      if (line === LAB_LOCK_LINE.HELD) resolve({state: LAB_HOLD.HELD});
+    });
+    streamLines(child.stderr, PLACEMENT_STREAM.ERR, (line) => errors.push(line));
+    closed.then((code) => resolve(holdEnded(code, lines, errors)));
+  });
+  let released = null;
+  const release = () => {
+    if (!released) {
+      child.stdin.end();
+      const cut = setTimeout(() => killGroup(child), LAB_HOLD_RELEASE_GRACE_MS);
+      released = closed.then(() => clearTimeout(cut));
+    }
+    return released;
+  };
+  return {outcome, release};
+}
+
+// A hold whose session ended before it held: busy, naming the holder, or
+// failed with what its shell said.
+function holdEnded(code, lines, errors) {
+  if (code === LAB_LOCK_EXIT.BUSY) return {state: LAB_HOLD.BUSY, holder: busyHolder(lines)};
+  return {state: LAB_HOLD.FAILED,
+    reason: [`exit ${code}`, ...errors].join(LAB_HOLD_REASON_SEPARATOR)};
+}
+
 /**
  * The requirement a machine must meet to run a checkout's corpus: its
  * lockfile digest and its engines floor.
@@ -1604,6 +2125,7 @@ async function discoverPlacement(root, env) {
   await saveState(recordFleet(state, fleet));
   const controllerFactor = Number(env[PLACEMENT_MACHINE_FACTOR_ENV]);
   return {
+    fleet,
     machines: placementMachines(fleet, state, {
       controllerFactor: controllerFactor >= 1 ? controllerFactor : 1,
     }),
@@ -1615,18 +2137,42 @@ async function discoverPlacement(root, env) {
 
 // The controller's own files while lab shards run: the classified runner's
 // entry point as a child in a group of its own, told never to place again.
-// `abort` ends the whole group.
-function runClassifiedChild(root, files, env) {
-  const child = spawn(process.execPath, [PLACEMENT_RUNNER, PLACEMENT_KEEP_GOING,
-    PLACEMENT_RUNNER_STDIN], {
-    cwd: root,
-    env: {...env, [PLACEMENT_ENV]: PLACEMENT_LOCAL},
-    stdio: [PLACEMENT_STDIO_PIPE, PLACEMENT_STDIO_INHERIT, PLACEMENT_STDIO_INHERIT],
-    detached: true,
-  });
-  child.stdin.end(files.join(PLACEMENT_NEWLINE) + PLACEMENT_NEWLINE);
+// `abort` ends the whole group. With `onLine` its output is not inherited but
+// handed over line by line, as a lab shard's relay is, and it is done only
+// once that output has been read to the end.
+//
+// Its file list is its stdin as a FILE, never a socket this process writes:
+// the runner reads stdin synchronously, and a child that got there before
+// this event loop had written found the non-blocking socket empty and died
+// with EAGAIN - every child, when this process was busy for 300 ms after the
+// spawn (found 2026-09-23). The file is unlinked once the child holds it.
+function runClassifiedChild(root, files, env, {onLine = null} = {}) {
+  const output = onLine ? PLACEMENT_STDIO_PIPE : PLACEMENT_STDIO_INHERIT;
+  const listDir = path.join(root, PLACEMENT_LOG_PARENT);
+  fs.mkdirSync(listDir, {recursive: true});
+  const list = path.join(listDir, `${PLACEMENT_CHILD_LIST_PREFIX}${process.pid}-` +
+    `${Date.now().toString(PLACEMENT_RUN_RADIX)}-${childListCount += 1}` +
+    `${PLACEMENT_CHILD_LIST_SUFFIX}`);
+  fs.writeFileSync(list, files.join(PLACEMENT_NEWLINE) + PLACEMENT_NEWLINE);
+  const input = fs.openSync(list, PLACEMENT_READ_FLAG);
+  let child;
+  try {
+    child = spawn(process.execPath, [PLACEMENT_RUNNER, PLACEMENT_RUNNER_STDIN], {
+      cwd: root,
+      env: {...env, [PLACEMENT_ENV]: PLACEMENT_LOCAL},
+      stdio: [input, output, output],
+      detached: true,
+    });
+  } finally {
+    fs.closeSync(input);
+    fs.rmSync(list, {force: true});
+  }
+  if (onLine) {
+    streamLines(child.stdout, PLACEMENT_STREAM.OUT, onLine);
+    streamLines(child.stderr, PLACEMENT_STREAM.ERR, onLine);
+  }
   return {
-    done: exitOf(child).then((status) => status ?? 1),
+    done: (onLine ? closeOf(child) : exitOf(child)).then((status) => status ?? 1),
     abort: () => {
       if (!hasExited(child)) killGroup(child);
     },
@@ -1638,14 +2184,14 @@ function runClassifiedChild(root, files, env) {
 /**
  * The real collaborators of runPlacedTestFiles, given the classified runner's
  * own planning and execution.
- * @param {{root: string, keepGoing?: boolean, env?: Object, planCosts: Function,
+ * @param {{root: string, failFast?: boolean, env?: Object, planCosts: Function,
  *   runLocal: Function, lastGreen: Function}} input
  * @return {Object}
  */
-export function placementDeps({root, keepGoing = false, env = process.env,
+export function placementDeps({root, failFast = false, env = process.env,
   planCosts, runLocal, lastGreen}) {
   return {
-    keepGoing, env, planCosts, runLocal, lastGreen,
+    failFast, env, planCosts, runLocal, lastGreen,
     runLocalChild: (files) => runClassifiedChild(root, files, env),
     commitAt: () => commitAt(root),
     discover: () => discoverPlacement(root, env),
@@ -1653,4 +2199,300 @@ export function placementDeps({root, keepGoing = false, env = process.env,
   };
 }
 
-export {PLACEMENT_ENV, PLACEMENT_EXIT, PLACEMENT_LOCAL, PLACEMENT_MIN_PLAN_MS};
+// ---------------------------------------------------------------------------
+// The hand verb: `lab test <profile> --lane <lane> [--on NAME] [--sha COMMIT]
+// [--split]`. No new placement layer: the exact commit goes out through the
+// same bundle and shard path a placed run uses, and each lane runs under its
+// own job policy because the machine's classified runner plans it again.
+// What is new is who chooses - the operator names a lane, and a machine or
+// none - and that each file's verdict is shown as it lands, not at settle.
+// The machine still comes from this run's discovery, never from a name in
+// any setup; `--on` is a choice made at run time.
+
+const LAB_TEST_PARENT = 'test-output/lab-test-worktrees';
+// What planning a commit's lanes reads: its test tree and its npm scripts.
+const LAB_TEST_PLANNED_PATHS = Object.freeze(['test', 'package.json']);
+// Where a runner leaves its per-file results ledger, and where a machine's
+// copy comes back to, named for the machine.
+const LAB_TEST_RESULTS_FILE = 'test-output/reports/test-results.ndjson';
+const LAB_TEST_RESULTS_DIR = 'test-output/reports';
+const LAB_TEST_RESULTS_STEM = 'test-results-';
+const LAB_TEST_RESULTS_EXTENSION = '.ndjson';
+const LAB_TEST_KIB_PER_GIB = 1024 * 1024;
+const LAB_TEST_MEMORY_DIGITS = 1;
+const LAB_TEST_FAILED = 1;
+const LAB_TEST_GIT = Object.freeze({
+  RESOLVE: Object.freeze(['rev-parse', '--verify', '--quiet', '--end-of-options']),
+  COMMIT_SUFFIX: '^{commit}',
+  ADD: Object.freeze(['worktree', 'add', '--detach', '--no-checkout', '--quiet']),
+  CHECKOUT: Object.freeze(['checkout', '--quiet']),
+  REMOVE: Object.freeze(['worktree', 'remove', '--force']),
+  PATHS: '--',
+});
+const LAB_TEST_TEXT = Object.freeze({
+  PREFIX: 'lab test: ',
+  NAME_ONE: ': commit it, or name a commit with --sha',
+  NOT_A_COMMIT: ' is not a commit here',
+  NOT_READY: ' is not a ready lab machine this run: ',
+  NOT_LISTED: 'not in the inventory',
+  CONTROLLER_TREE: 'the controller runs its lanes in this tree, which is not exactly ',
+  PLANNING_FAILED: 'the commit could not be checked out for planning: ',
+  UNREPORTED: ' file(s) reported no result: ',
+  COPIED: 'results copied to ',
+  LANES: ', ',
+});
+
+function gitMust(root, args) {
+  const result = gitAt(root, args);
+  if (result.status !== 0) {
+    throw new Error(`${LAB_TEST_TEXT.PLANNING_FAILED}${String(result.stderr || EMPTY).trim()}`);
+  }
+  return result;
+}
+
+/**
+ * The commit a hand lab run sends, and a checkout to plan it from. With no
+ * `sha` the tree must be exactly a commit - a working tree is never sent - and
+ * with one, any tree will do: the commit is named. Planning reads that
+ * commit's own test tree, checked out alone into a throwaway worktree whose
+ * HEAD is the commit, which is also what its bundle is made from. `release`
+ * removes it, and may be called any number of times.
+ * @param {{root: string, sha?: string|null}} input
+ * @return {{sha: string, gitRoot: string, release: Function}}
+ */
+export function labTestCommit({root, sha = null}) {
+  const resolved = sha ? resolveCommit(root, sha) : commitAt(root);
+  if (!resolved) throw new Error(`${PLACEMENT_TEXT.NOT_A_COMMIT}${LAB_TEST_TEXT.NAME_ONE}`);
+  const gitRoot = path.join(root, LAB_TEST_PARENT,
+    `${resolved.slice(0, PLACEMENT_RUN_SHA_CHARACTERS)}-` +
+    `${Date.now().toString(PLACEMENT_RUN_RADIX)}-${process.pid}`);
+  fs.mkdirSync(path.dirname(gitRoot), {recursive: true});
+  gitMust(root, [...LAB_TEST_GIT.ADD, gitRoot, resolved]);
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    gitAt(root, [...LAB_TEST_GIT.REMOVE, gitRoot]);
+    fs.rmSync(gitRoot, {recursive: true, force: true});
+  };
+  try {
+    gitMust(gitRoot, [...LAB_TEST_GIT.CHECKOUT, resolved, LAB_TEST_GIT.PATHS,
+      ...LAB_TEST_PLANNED_PATHS]);
+  } catch (error) {
+    release();
+    throw error;
+  }
+  return {sha: resolved, gitRoot, release};
+}
+
+function resolveCommit(root, name) {
+  const result = gitAt(root, [...LAB_TEST_GIT.RESOLVE, `${name}${LAB_TEST_GIT.COMMIT_SUFFIX}`]);
+  if (result.status !== 0) throw new Error(`${name}${LAB_TEST_TEXT.NOT_A_COMMIT}`);
+  return result.stdout.trim();
+}
+
+// The change cone of a hand run is the selector's own plan of the commit,
+// measured from the base the operator named with --base-sha. With none named
+// the selector applies its own default - the merge base with the publication
+// remote, origin/main - so the lab never restates that decision. The named
+// base reaches the one owner of the changed set, which is also what decides a
+// release-surface refusal: a path changed only before the base is not part
+// of the change.
+const LAB_TEST_SELECTOR = Object.freeze({SCRIPT: 'scripts/select-change-tests.js',
+  LIST: '--list', HEAD: '--head', BASE: '--base'});
+
+/**
+ * The selector invocation that lists the change cone of `sha` against
+ * `baseSha`, or against the selector's default base when none is named.
+ * @param {{sha: string, baseSha?: string|null}} input
+ * @return {string[]}
+ */
+export function labTestSelectorArgs({sha, baseSha = null}) {
+  const base = baseSha ? [LAB_TEST_SELECTOR.BASE, baseSha] : [];
+  return [LAB_TEST_SELECTOR.SCRIPT, LAB_TEST_SELECTOR.LIST, LAB_TEST_SELECTOR.HEAD, sha, ...base];
+}
+
+function bySpeed(left, right) {
+  return left.speed - right.speed;
+}
+
+function isExclusiveLane(lane) {
+  return lane.resourceClass === RESOURCE_CLASS_EXCLUSIVE;
+}
+
+/**
+ * Which machine runs which lanes of a hand run. Without --split every lane
+ * goes to one lab machine: the one named, or the fastest measured this run.
+ * With --split the exclusive lane goes there alone - it may share a machine
+ * with nothing - and the other lanes go to whichever is measured faster of
+ * the controller and the next lab machine.
+ * @param {Array<{resourceClass: string, files: string[], jobs: number}>} plan
+ * @param {Array<Object>} machines placementMachines' result
+ * @param {{on?: string|null, split?: boolean, controller?: Object,
+ *   fleet?: Array<Object>}} [options]
+ * @return {Array<{machine: Object, lanes: Array<Object>}>}
+ */
+export function placeLabLanes(plan, machines, {on = null, split = false,
+  controller = CONTROLLER_MACHINE, fleet = []} = {}) {
+  if (machines.length === 0) throw new Error(PLACEMENT_TEXT.NO_MACHINE);
+  const ranked = [...machines].sort(bySpeed);
+  const first = on === null ? ranked[0] : machines.find((machine) => machine.name === on);
+  if (!first) {
+    const entry = fleet.find((one) => one.name === on);
+    throw new Error(`${on}${LAB_TEST_TEXT.NOT_READY}` +
+      `${entry ? fleetVerdict(entry) : LAB_TEST_TEXT.NOT_LISTED}`);
+  }
+  if (!split) return [{machine: first, lanes: plan}];
+  // Stable: on a tie the controller, listed first, keeps the lanes here.
+  const rest = [controller, ...ranked.filter((machine) => machine !== first)].sort(bySpeed)[0];
+  return [
+    {machine: first, lanes: plan.filter(isExclusiveLane)},
+    {machine: rest, lanes: plan.filter((lane) => !isExclusiveLane(lane))},
+  ].filter((assignment) => assignment.lanes.length > 0);
+}
+
+function gibibytes(memKiB) {
+  return memKiB > 0 ? (memKiB / LAB_TEST_KIB_PER_GIB).toFixed(LAB_TEST_MEMORY_DIGITS) :
+    FLEET_UNKNOWN;
+}
+
+/**
+ * The decision, one line per machine, with the capacities it was made from.
+ * @param {Array<{machine: Object, lanes: Array<Object>}>} assignments
+ * @return {string[]}
+ */
+export function formatLabDecision(assignments) {
+  return assignments.map(({machine, lanes}) => {
+    const files = lanes.reduce((sum, lane) => sum + lane.files.length, 0);
+    return `${LAB_TEST_TEXT.PREFIX}${machine.name}: ` +
+      `${lanes.map((lane) => lane.resourceClass).join(LAB_TEST_TEXT.LANES)} (${files} files) ` +
+      `cores=${machine.cores ?? FLEET_UNKNOWN} mem=${gibibytes(machine.memKiB)}GiB ` +
+      `speed x${machine.speed.toFixed(FLEET_FACTOR_DIGITS)}`;
+  });
+}
+
+function controllerMachine(fleet) {
+  const capability = fleet.find((entry) => entry.controller)?.capability;
+  return {...CONTROLLER_MACHINE, cores: capability?.cores ?? null,
+    memKiB: capability?.memKiB ?? null};
+}
+
+// One machine's share, started: its lanes' files, the lines it streamed, and
+// the run to wait for. The controller's share runs as the placed run's own
+// child does; a lab machine's through the shard path, with the commit bundled
+// from the planning checkout.
+function startLabShare({machine, lanes}, {commit, deps, forward, results, costOf, write}) {
+  const files = lanes.flatMap((lane) => lane.files);
+  const lines = [];
+  const onLine = (line, stream) => {
+    if (stream === PLACEMENT_STREAM.OUT) lines.push(line);
+    if (!line.startsWith(PLACEMENT_RESULTS_PREFIX)) write(`[${machine.name}] ${line}`);
+  };
+  if (machine.controller) return {machine, files, lines, run: deps.runLocalChild(files, {onLine})};
+  const loadMs = PLACEMENT_REMOTE_SETUP_MS +
+    files.reduce((sum, file) => sum + (costOf.get(file) || 0), 0) * machine.speed;
+  const run = deps.runRemote({machine, files}, {sha: commit.sha, gitRoot: commit.gitRoot,
+    deadlineMs: deadlineFor({loadMs}), forward, results, onLine,
+    holder: {purpose: labTestPurpose(lanes.map((lane) => lane.resourceClass)),
+      expectedMs: loadMs}});
+  return {machine, files, lines, run};
+}
+
+// A machine's results ledger, back under its name beside the controller's.
+function copyLabResults(share, root, write) {
+  const records = share.lines.filter((line) => line.startsWith(PLACEMENT_RESULTS_PREFIX))
+    .map((line) => line.slice(PLACEMENT_RESULTS_PREFIX.length));
+  if (records.length === 0) return;
+  const file = path.join(LAB_TEST_RESULTS_DIR,
+    `${LAB_TEST_RESULTS_STEM}${safeName(share.machine.name)}${LAB_TEST_RESULTS_EXTENSION}`);
+  fs.mkdirSync(path.join(root, LAB_TEST_RESULTS_DIR), {recursive: true});
+  fs.writeFileSync(path.join(root, file), `${records.join(PLACEMENT_NEWLINE)}${PLACEMENT_NEWLINE}`);
+  write(`${LAB_TEST_TEXT.PREFIX}${share.machine.name}: ${LAB_TEST_TEXT.COPIED}${file}`);
+}
+
+// Every share's verdicts, from its own lines: what it proved, what was red,
+// and what never reported - which is a failure, never a pass.
+async function settleLabShares(shares, {root, write}) {
+  const totals = {total: 0, passed: 0, failed: 0, assertions: 0};
+  let status = 0;
+  for (const share of shares) {
+    const outcome = await share.run.done;
+    const exit = typeof outcome === 'object' ? outcome.status : outcome;
+    const {green, red, assertions, unreported} = logVerdicts(share.files,
+      share.lines.join(PLACEMENT_NEWLINE));
+    const summary = {
+      total: share.files.length,
+      passed: [...green].filter((file) => !red.has(file)).length,
+      failed: red.size + unreported.length,
+      assertions: [...assertions.values()].reduce((sum, count) => sum + count, 0),
+    };
+    reportThermalUnfit(share.machine.name, share.lines, write);
+    if (exit === PLACEMENT_EXIT.BUSY) reportHostBusy(share.machine.name, share.lines, write);
+    write(`${LAB_TEST_TEXT.PREFIX}${share.machine.name}: ${formatTestFilesSummary(summary)}`);
+    if (unreported.length > 0) {
+      write(`${LAB_TEST_TEXT.PREFIX}${share.machine.name}: ${unreported.length}` +
+        `${LAB_TEST_TEXT.UNREPORTED}${outcome?.reason || `exit ${exit}`}`);
+    }
+    copyLabResults(share, root, write);
+    for (const key of Object.keys(totals)) totals[key] += summary[key];
+    if (exit !== 0 || summary.failed > 0) status = LAB_TEST_FAILED;
+  }
+  write(formatTestFilesSummary(totals));
+  return status;
+}
+
+/**
+ * Run a hand lab test: place the planned lanes, start every share, stream
+ * each machine's lines as they land, and end with the runner's own summary,
+ * merged over the machines. The planning checkout is released once every
+ * share has its commit. Interrupted, every share is cut.
+ * @param {{plan: Array<Object>, costs?: Array<Object>, commit: Object,
+ *   on?: string|null, split?: boolean, root: string, results?: string,
+ *   env?: Object, write?: Function}} request
+ * @param {Object} deps labTestDeps' collaborators (discover, runRemote,
+ *   runLocalChild, commitAt; signals and exit optional)
+ * @return {Promise<number>} exit status
+ */
+export async function runLabTest({plan, costs = [], commit, on = null, split = false, root,
+  results = LAB_TEST_RESULTS_FILE, env = process.env,
+  write = (line) => process.stdout.write(`${line}${PLACEMENT_NEWLINE}`)}, deps) {
+  let shares = [];
+  try {
+    const {fleet = [], machines} = await deps.discover();
+    const assignments = placeLabLanes(plan, machines,
+      {on, split, controller: controllerMachine(fleet), fleet});
+    if (assignments.some(({machine}) => machine.controller) && deps.commitAt() !== commit.sha) {
+      throw new Error(`${LAB_TEST_TEXT.CONTROLLER_TREE}${commit.sha}`);
+    }
+    for (const line of formatLabDecision(assignments)) write(line);
+    const costOf = new Map(costs.map((cost) => [cost.file, cost.ms / cost.jobs]));
+    const context = {commit, deps, forward: forwardedPolicy(env), results, costOf, write};
+    shares = assignments.map((assignment) => startLabShare(assignment, context));
+  } finally {
+    commit.release();
+  }
+  const release = abortOnSignals(deps, () => abortTogether(shares.map((share) => share.run)));
+  try {
+    await Promise.all(shares.map((share) => share.run.done));
+  } finally {
+    release();
+  }
+  return settleLabShares(shares, {root, write});
+}
+
+/**
+ * The real collaborators of runLabTest for a checkout.
+ * @param {{root: string, env?: Object}} input
+ * @return {Object}
+ */
+export function labTestDeps({root, env = gitProcessEnvironment()}) {
+  return {
+    discover: () => discoverPlacement(root, env),
+    runRemote: (shard, options) => startRemoteShard(shard, {...options, root, env}),
+    runLocalChild: (files, options) => runClassifiedChild(root, files, env, options),
+    commitAt: () => commitAt(root),
+  };
+}
+
+export {LAB_TEST_RESULTS_FILE, PLACEMENT_ENV, PLACEMENT_EXIT, PLACEMENT_LOCAL,
+  PLACEMENT_MIN_PLAN_MS};

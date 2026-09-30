@@ -51,6 +51,18 @@ function formatReplicatedServiceAddress(
   );
 }
 
+/**
+ * A new replica's bootstrap membership: every replica the given service rows
+ * name, then the joining target, each with its address. It carries the
+ * members the caller observed and nothing else - no member is left out to
+ * anticipate a removal (owner decision D1): a removal reaches the new
+ * replica from its group (on rs-raft, as the committed RemoveNode in the log
+ * it replays), never from its bootstrap.
+ * @param {Object} [options] - {serviceType, serviceRows, targetReplicaId,
+ *   targetNodeId, targetAddress}.
+ * @return {{replicaIds: string[], peerAddresses: string[]}|null} The
+ *   membership, or null for a service type that has none.
+ */
 function buildReplicatedServiceBootstrapTopology(options = {}) {
   const serviceType = normalizeServiceType(options.serviceType);
   const entityType = resolveEntityTypeForServiceType(serviceType);
@@ -61,11 +73,6 @@ function buildReplicatedServiceBootstrapTopology(options = {}) {
   const serviceRows = Array.isArray(options.serviceRows) ?
     options.serviceRows :
     [];
-  const excludeReplicaIds = new Set(
-    (Array.isArray(options.excludeReplicaIds) ? options.excludeReplicaIds : [])
-      .map((replicaId) => normalizeString(replicaId))
-      .filter((replicaId) => replicaId.length > 0),
-  );
   const replicaIds = [];
   const peerAddresses = [];
   const seenReplicaIds = new Set();
@@ -74,8 +81,7 @@ function buildReplicatedServiceBootstrapTopology(options = {}) {
   const appendReplicaTopology = (replicaId, nodeId, address) => {
     const normalizedReplicaId = normalizeString(replicaId);
     const normalizedNodeId = normalizeString(nodeId);
-    if (normalizedReplicaId.length === 0 ||
-        excludeReplicaIds.has(normalizedReplicaId)) {
+    if (normalizedReplicaId.length === 0) {
       return;
     }
 

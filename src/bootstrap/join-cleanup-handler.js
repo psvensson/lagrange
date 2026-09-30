@@ -23,12 +23,13 @@ import {
   JOINING_LOG_MSG,
 } from './node-joining-constants.js';
 import {
-  ADDRESS,
-  ENTITY_TYPE,
   NUM,
 } from '../constants/index.js';
+import {retireMessageGroupTransportHandlers} from
+  './shared/message-group-transport-handler.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 import {
+  STALE_NODE_INCARNATION_CODE,
   isRetryableControlPlaneError,
 } from '../control-plane/control-plane-error-classification.js';
 
@@ -85,6 +86,13 @@ const JOIN_CLEANUP_LIFECYCLE_STOP_PATH_BY_STATE = Object.freeze({
 
 function resolveJoinFailureRetryable(error) {
   return error?.retryable === true || isRetryableControlPlaneError(error);
+}
+
+// A newer incarnation superseded this lifecycle's registration: the next
+// lifecycle must reserve above it (boot-incarnation-owner.js).
+function readSupersededBootIncarnation(error) {
+  return error?.code === STALE_NODE_INCARNATION_CODE &&
+    Number.isSafeInteger(error.knownIncarnation) ? error.knownIncarnation : 0;
 }
 
 /**
@@ -150,6 +158,7 @@ class JoinCleanupHandler {
         error: error.message,
         phase: failedPhase,
         retryable: resolveJoinFailureRetryable(error),
+        supersededBootIncarnation: readSupersededBootIncarnation(error),
         retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
           Math.max(0, Math.floor(error.retryAfterMs)) :
           0,
@@ -189,6 +198,7 @@ class JoinCleanupHandler {
       error: error.message,
       phase: failedPhase,
       retryable: resolveJoinFailureRetryable(error),
+      supersededBootIncarnation: readSupersededBootIncarnation(error),
       retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
         Math.max(0, Math.floor(error.retryAfterMs)) :
         0,
@@ -506,16 +516,12 @@ class JoinCleanupHandler {
         }
       }
 
-      // Unregister from message router
-      if (messageRouter) {
-        for (const [replicaId] of messageGroupServices) {
-          const address =
-            `${this.nodeId}${ADDRESS.SEPARATOR}` +
-            `${ENTITY_TYPE.MESSAGE_GROUP}` +
-            `${ADDRESS.SEPARATOR}${replicaId}`;
-          messageRouter.unregister(address);
-        }
-      }
+      // Retire each replica's exact handler through its lifecycle owner.
+      await retireMessageGroupTransportHandlers({
+        messageGroupServices,
+        messageRouter,
+        nodeId: this.nodeId,
+      });
 
       logger.info(
         JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_MESSAGE_GROUP_DONE, {
@@ -614,15 +620,8 @@ class JoinCleanupHandler {
     await LatencyTopologySetup.stop(latencyTopology);
     this.delegates.setLatencyTopology(null);
 
-    const replicaHandler = this.delegates.getReplicaHandler();
     const messageRouter = this.delegates.getMessageRouter();
-    if (replicaHandler) {
-      replicaHandler.unregisterFromRouter(messageRouter);
-      await replicaHandler.shutdown();
-      this.delegates.setReplicaHandler(null);
-    }
-
-    this.clearReplicaStateMachine();
+    await this.releaseReplicaLifecycleOwner(messageRouter);
     // Stop all runtime drivers (request/call cell workers) before the
     // service maps come down: the per-replica REMOVE_REPLICA stop path
     // never runs at whole-node teardown, so without this sweep the
@@ -679,14 +678,24 @@ class JoinCleanupHandler {
     this.delegates.setRebalanceCoordinator(null);
   }
 
-  clearReplicaStateMachine() {
-    const replicaStateMachine = this.delegates.getReplicaStateMachine();
-    if (!replicaStateMachine) {
-      return;
+  // Release the incarnation's one recorded lifecycle owner (its timer stops
+  // even when a field projection is absent), so nothing can be orphaned.
+  async releaseReplicaLifecycleOwner(messageRouter) {
+    const released = this.delegates.releaseReplicaLifecycleOwner();
+    const replicaHandler =
+      released?.replicaHandler || this.delegates.getReplicaHandler();
+    if (replicaHandler) {
+      replicaHandler.unregisterFromRouter(messageRouter);
+      await replicaHandler.shutdown();
+      this.delegates.setReplicaHandler(null);
     }
-    replicaStateMachine.stopTimeoutChecker();
-    replicaStateMachine.clear();
-    this.delegates.setReplicaStateMachine(null);
+    const replicaStateMachine =
+      released?.replicaStateMachine || this.delegates.getReplicaStateMachine();
+    if (replicaStateMachine) {
+      replicaStateMachine.stopTimeoutChecker();
+      await replicaStateMachine.clear();
+      this.delegates.setReplicaStateMachine(null);
+    }
   }
 
   async shutdownRpcClient() {

@@ -22,6 +22,7 @@ import {
 import {NODE_SERVICE_EVENT} from '../../src/node/node-constants.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
+  establishJoinReplicaLifecycleOwner,
   initializeTestEnvironment,
 } from './node-joining-service-test-support.js';
 
@@ -73,6 +74,7 @@ function stubDurableRejoin(service, calls, options = {}) {
     service.messageRouter = {
       deliver: async () => ({acknowledged: true}),
       setExternalAdmissionEnabled() {},
+      unregister() {},
     };
   };
   service.phaseCreateSelfHostedMessageGroup = async () => {
@@ -86,6 +88,7 @@ function stubDurableRejoin(service, calls, options = {}) {
   service.phaseWaitForLeadership = async () => {};
   service.initializeJoinInfrastructure = async () => {
     calls.infrastructure.push(attempt);
+    establishJoinReplicaLifecycleOwner(service);
     service.rpcClient = {
       async shutdown() {},
     };
@@ -231,6 +234,7 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
     now: () => Date.now(),
   });
   const exhaustedService = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
     seedNodeAddress: SEED_ADDRESS,
@@ -289,6 +293,7 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
   );
 
   const unknownOwnerService = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
     seedNodeAddress: SEED_ADDRESS,
@@ -298,6 +303,7 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
   unknownOwnerService.getLifecycleStateMachine().transition('stopped');
   t.throws(
     () => new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: NODE_ID,
       nodeAddress: NODE_ADDRESS,
       seedNodeAddress: SEED_ADDRESS,
@@ -315,7 +321,10 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
     storage: durableStorage,
     now: () => Date.now(),
   });
+  // The outer reattempt is a new boot lifecycle: it reserves a strictly
+  // larger incarnation than the exhausted attempt (boot-incarnation-owner).
   const service = new NodeJoiningService({
+    bootIncarnation: 2,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
     seedNodeAddress: SEED_ADDRESS,

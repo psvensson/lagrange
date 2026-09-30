@@ -249,6 +249,8 @@ function buildContext(options = {}) {
     publishedActiveNodeIdsPresent,
     durablePublishedActiveNodeIds,
     publishedActiveNodeIds,
+    // Read (b): the members of a row still collecting acknowledgements.
+    pendingCandidateNodeIds: normalizeNodeIdList(options.pendingCandidateNodeIds),
     requiredAckNodeIds: normalizeNodeIdList(options.requiredAckNodeIds),
     acknowledgedNodeIds: normalizeNodeIdList(options.acknowledgedNodeIds),
     pendingAckCount: normalizeNonNegativeInteger(options.pendingAckCount),
@@ -469,6 +471,7 @@ function resolveParticipationState(memberState, flags) {
 function buildParticipationByNodeId(context) {
   const allNodeIds = normalizeNodeIdList([
     ...context.publishedActiveNodeIds,
+    ...context.pendingCandidateNodeIds,
     ...context.projectedServingNodeIds,
     ...context.locallyEligibleNodeIds,
     ...context.recoveryEligibleIncludedNodeIds,
@@ -622,6 +625,8 @@ function buildRecoveryProtocolSnapshot(options = {}) {
     sourceSnapshotVersion: context.sourceSnapshotVersion,
     publishedActiveNodeIdsPresent: context.publishedActiveNodeIdsPresent,
     publishedActiveNodeIds: Object.freeze([...context.publishedActiveNodeIds]),
+    pendingCandidateNodeIds:
+      Object.freeze([...context.pendingCandidateNodeIds]),
     requiredAckNodeIds: Object.freeze([...context.requiredAckNodeIds]),
     acknowledgedNodeIds: Object.freeze([...context.acknowledgedNodeIds]),
     pendingAckCount: context.pendingAckCount,

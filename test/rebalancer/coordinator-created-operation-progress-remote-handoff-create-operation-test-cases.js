@@ -1,4 +1,13 @@
-import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {
+  RebalanceCoordinator as ProductionRebalanceCoordinator,
+} from '../../src/rebalancer/rebalance-coordinator.js';
+import {fixtureCommittedReadCoordinator} from
+  './committed-membership-fixture.js';
+
+// Joins are stamped from the committed-membership read, answered here by
+// the fixture world (owner decision O1).
+const RebalanceCoordinator =
+  fixtureCommittedReadCoordinator(ProductionRebalanceCoordinator);
 import {SERVICE_TYPE, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   OperationType,

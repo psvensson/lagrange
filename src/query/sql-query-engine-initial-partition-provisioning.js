@@ -11,6 +11,7 @@ import {
   throwIfCancellationRequested,
 } from './query-cancellation.js';
 import {OPERATION_OWNER_TURN_POLICY} from '../rebalancer/operation-owner-turn-policy.js';
+import {genesisStamp} from '../raft/raft-committed-membership-stamp.js';
 import {
   isTerminalSuccessfulCreateOperation,
 } from '../rebalancer/replica-operation-progress.js';
@@ -559,6 +560,9 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       partitionId,
       plannedOperations,
     );
+    // The founding cohort's GENESIS stamp (owner decision O1): the second
+    // and last stamp origin beside the creation owner's committed read.
+    const bootstrapMembership = genesisStamp(bootstrapTopology.replicaIds);
     const bootstrapLeaderNodeId =
       this.resolveInitialPartitionBootstrapLeaderNodeId(
         partitionId,
@@ -601,6 +605,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         bootstrapTopology.replicaIds;
       operation[ReplicaOperationField.PEER_ADDRESSES] =
         bootstrapTopology.peerAddresses;
+      operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] =
+        bootstrapMembership;
       const initialStepEntry =
         Array.isArray(operation.stepsHistory) &&
         operation.stepsHistory.length > 0 &&
@@ -613,6 +619,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           bootstrapTopology.replicaIds;
         initialStepEntry[OPERATION_METADATA_KEY.PEER_ADDRESSES] =
           bootstrapTopology.peerAddresses;
+        initialStepEntry[OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP] =
+          bootstrapMembership;
         if (bootstrapTableMetadata) {
           initialStepEntry[OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA] =
             bootstrapTableMetadata;

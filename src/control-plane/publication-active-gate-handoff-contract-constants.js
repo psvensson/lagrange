@@ -254,6 +254,9 @@ const PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD = Object.freeze({
   PUBLICATION_OBSERVATION_STATE: 'publicationObservationState',
   PUBLICATION_OWNER: 'publicationOwner',
   PUBLICATION_PENDING: 'publicationPending',
+  PENDING_CANDIDATE_ACKNOWLEDGED_NODE_IDS:
+    'pendingCandidateAcknowledgedNodeIds',
+  PENDING_CANDIDATE_NODE_IDS: 'pendingCandidateNodeIds',
   PUBLICATION_REVISION: 'publicationRevision',
   PUBLICATION_STATUS: 'publicationStatus',
   PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',

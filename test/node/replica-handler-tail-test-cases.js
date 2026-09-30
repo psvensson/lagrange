@@ -19,14 +19,12 @@ export async function registerReplicaHandlerTailTests({
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
   RAFT_ROLE,
-  LifeRaft,
   TEST_STEP_DOWN_OPERATION_ID,
   TEST_STEP_DOWN_PARTITION_ID,
   TEST_STEP_DOWN_REPLICA_ID,
   TEST_STEP_DOWN_REASON,
   TEST_STEP_DOWN_TARGET_ELECTION_REASON,
   TEST_STEP_DOWN_CORRELATION_ID,
-  TEST_STEP_DOWN_EMPTY_LEADER_ID,
   TEST_STATUS_RETRY_PARTITION_ID,
   TEST_STATUS_RETRY_REPLICA_ID,
   TEST_STATUS_RETRY_OPERATION_ID,
@@ -395,7 +393,8 @@ export async function registerReplicaHandlerTailTests({
       handler.shutdown();
     });
 
-  t.test('handleRemoveReplica cleans service row when local replica is missing',
+  t.test('handleRemoveReplica never infers cleanup authority from a missing ' +
+    'local replica',
     async (t) => {
       const TEST_MISSING_CLEANUP_OPERATION_ID =
         'missing-local-cleanup-op';
@@ -416,10 +415,12 @@ export async function registerReplicaHandlerTailTests({
         partition_id: TEST_MISSING_CLEANUP_PARTITION_ID,
         node_id: TEST_MISSING_CLEANUP_NODE_ID,
         replica_id: TEST_MISSING_CLEANUP_REPLICA_ID,
+        group_id: null,
         raft_role: RAFT_ROLE.FOLLOWER,
-        status: ReplicaStatus.ACTIVE,
+        status: ReplicaStatus.FAILED,
         address: TEST_MISSING_CLEANUP_SERVICE_ADDRESS,
         created_at: Date.now(),
+        state_entered_at: Date.now(),
         updated_at: Date.now(),
       });
       const mockCDC = createMockCDCService(cache);
@@ -443,6 +444,10 @@ export async function registerReplicaHandlerTailTests({
       });
 
       handler.initialize();
+      let cleanupCalls = 0;
+      handler.cleanupReplicaResources = async () => {
+        cleanupCalls += 1;
+      };
 
       const response = await handler.handleRemoveReplica({
         operationId: TEST_MISSING_CLEANUP_OPERATION_ID,
@@ -456,14 +461,15 @@ export async function registerReplicaHandlerTailTests({
         ReplicaOperationResponseStatus.NOT_FOUND,
         'missing local replica should keep the existing response contract',
       );
-      t.notOk(
+      t.equal(
         originalCacheGet(
           SYSTEM_TABLE_NAME.SERVICES,
           TEST_MISSING_CLEANUP_REPLICA_ID,
-        ),
-        'missing local replica should still delete durable service truth',
+        )?.status,
+        ReplicaStatus.FAILED,
+        'missing local state cannot erase a durable FAILED row',
       );
-      t.ok(
+      t.notOk(
         mockCDC.operations.some((op) =>
           op.type === 'delete' &&
           op.tableName === SYSTEM_TABLE_NAME.SERVICES &&
@@ -473,8 +479,10 @@ export async function registerReplicaHandlerTailTests({
             TEST_MISSING_CLEANUP_PARTITION_ID &&
           op.whereClause?.node_id === TEST_MISSING_CLEANUP_NODE_ID,
         ),
-        'missing local replica should route one authoritative services-row delete',
+        'missing local state cannot route an authoritative services-row delete',
       );
+      t.equal(cleanupCalls, 0,
+        'missing local state cannot authorize filesystem cleanup');
 
       handler.shutdown();
     });
@@ -548,6 +556,19 @@ export async function registerReplicaHandlerTailTests({
   t.test('handleRemoveReplica - returns initiated for existing replica',
     async (t) => {
       const cache = createSeededCache();
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+        service_id: 'replica-1',
+        service_type: 'partition',
+        partition_id: 'partition-1',
+        node_id: 'test-node',
+        replica_id: 'replica-1',
+        group_id: null,
+        status: ReplicaStatus.ACTIVE,
+        address: 'test-node/partition/replica-1',
+        created_at: 100,
+        state_entered_at: 100,
+        updated_at: 100,
+      });
       seedReplicaOperation(cache, 'op-1', {type: 'REMOVE'});
       const mockCDC = createMockCDCService(cache);
 
@@ -607,6 +628,19 @@ export async function registerReplicaHandlerTailTests({
   t.test('handleRemoveReplica finalizes local state tracking after durable delete',
     async (t) => {
       const cache = createSeededCache();
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+        service_id: 'replica-1',
+        service_type: 'partition',
+        partition_id: 'partition-1',
+        node_id: 'test-node',
+        replica_id: 'replica-1',
+        group_id: null,
+        status: ReplicaStatus.ACTIVE,
+        address: 'test-node/partition/replica-1',
+        created_at: 100,
+        state_entered_at: 100,
+        updated_at: 100,
+      });
       seedReplicaOperation(cache, 'op-1', {type: 'REMOVE'});
       const mockCDC = createMockCDCService(cache);
       let nowValue = 1000;
@@ -672,12 +706,15 @@ export async function registerReplicaHandlerTailTests({
         service_type: 'partition',
         partition_id: TEST_REMOVE_DELETE_FAILURE_PARTITION_ID,
         node_id: TEST_ACTIVE_REPAIR_NODE_ID,
+        replica_id: TEST_REMOVE_DELETE_FAILURE_REPLICA_ID,
+        group_id: null,
         raft_role: 'follower',
         status: ReplicaStatus.ACTIVE,
         address:
           `${TEST_ACTIVE_REPAIR_NODE_ID}/partition/` +
           `${TEST_REMOVE_DELETE_FAILURE_REPLICA_ID}`,
         created_at: Date.now(),
+        state_entered_at: Date.now(),
         updated_at: Date.now(),
       });
 
@@ -734,8 +771,8 @@ export async function registerReplicaHandlerTailTests({
         TEST_REMOVE_DELETE_FAILURE_REPLICA_ID,
         'failure event should identify the stalled replica',
       );
-      t.equal(shutdownCalls, 0,
-        'local runtime should stay alive when durable delete does not complete');
+      t.equal(shutdownCalls, 1,
+        'runtime is stopped while the cleanup marker excludes recreation');
       t.ok(
         handler.localServices.has(TEST_REMOVE_DELETE_FAILURE_REPLICA_ID),
         'tracked service should remain available for retry',
@@ -746,6 +783,17 @@ export async function registerReplicaHandlerTailTests({
           TEST_REMOVE_DELETE_FAILURE_REPLICA_ID,
         ),
         'authoritative service row should remain until delete succeeds',
+      );
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES,
+          TEST_REMOVE_DELETE_FAILURE_REPLICA_ID)?.status,
+        'cleanup_owned',
+        'a release failure preserves durable cleanup ownership',
+      );
+      t.equal(
+        handler.getLocalReplica(TEST_REMOVE_DELETE_FAILURE_REPLICA_ID)?.status,
+        ReplicaStatus.REMOVING,
+        'local lifecycle remains aligned with the durable removal intent',
       );
 
       handler.shutdown();
@@ -817,10 +865,12 @@ export async function registerReplicaHandlerTailTests({
         partition_id: TEST_STALLED_REMOVE_PARTITION_ID,
         node_id: TEST_STALLED_REMOVE_NODE_ID,
         replica_id: TEST_STALLED_REMOVE_REPLICA_ID,
+        group_id: null,
         raft_role: RAFT_ROLE.FOLLOWER,
         status: ReplicaStatus.REMOVING,
         address: TEST_STALLED_REMOVE_ADDRESS,
         created_at: Date.now(),
+        state_entered_at: Date.now(),
         updated_at: Date.now(),
       });
       const mockCDC = createMockCDCService(cache);
@@ -917,14 +967,14 @@ export async function registerReplicaHandlerTailTests({
 
       const response = await handler.handleRemoveReplica(request);
 
-      t.equal(response.status, ReplicaOperationResponseStatus.COMPLETED,
-        'completed');
+      t.equal(response.status, ReplicaOperationResponseStatus.ERROR,
+        'generationless local terminal state fails closed');
       t.equal(response.replicaId, 'replica-1', 'replicaId in response');
 
       handler.shutdown();
     });
 
-  t.test('handleRemoveReplica cleans durable service truth for already removed cache miss',
+  t.test('handleRemoveReplica refuses generationless removed cache miss cleanup',
     async (t) => {
       const TEST_CACHE_MISS_REMOVED_OPERATION_ID =
         'removed-cache-miss-cleanup-op';
@@ -961,10 +1011,10 @@ export async function registerReplicaHandlerTailTests({
 
       t.equal(
         response.status,
-        ReplicaOperationResponseStatus.COMPLETED,
-        'already removed cache-miss replica should still complete idempotently',
+        ReplicaOperationResponseStatus.ERROR,
+        'generic absence cannot prove deletion of a particular generation',
       );
-      t.ok(
+      t.notOk(
         mockCDC.operations.some((op) =>
           op.type === 'delete' &&
           op.tableName === SYSTEM_TABLE_NAME.SERVICES &&
@@ -973,13 +1023,14 @@ export async function registerReplicaHandlerTailTests({
           op.whereClause?.partition_id === TEST_CACHE_MISS_REMOVED_PARTITION_ID &&
           op.whereClause?.node_id === TEST_CACHE_MISS_REMOVED_NODE_ID,
         ),
-        'cache miss must still route one authoritative services-row delete',
+        'generationless absence cannot authorize a services-row delete',
       );
 
       handler.shutdown();
     });
 
-  t.test('handleRemoveReplica reconciles stale service rows for removed replica',
+  t.test('handleRemoveReplica refuses local REMOVED cleanup when the durable ' +
+    'row is still ACTIVE',
     async (t) => {
       const cache = createSeededCache();
       cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
@@ -987,12 +1038,15 @@ export async function registerReplicaHandlerTailTests({
         service_type: 'partition',
         partition_id: TEST_REMOVED_CLEANUP_PARTITION_ID,
         node_id: TEST_ACTIVE_REPAIR_NODE_ID,
+        replica_id: TEST_REMOVED_CLEANUP_REPLICA_ID,
+        group_id: null,
         raft_role: 'follower',
         status: ReplicaStatus.ACTIVE,
         address:
           `${TEST_ACTIVE_REPAIR_NODE_ID}/partition/` +
           `${TEST_REMOVED_CLEANUP_REPLICA_ID}`,
         created_at: Date.now(),
+        state_entered_at: Date.now(),
         updated_at: Date.now(),
       });
       const mockCDC = createMockCDCService(cache);
@@ -1027,15 +1081,17 @@ export async function registerReplicaHandlerTailTests({
         reason: TEST_REMOVED_CLEANUP_REASON,
       });
 
-      t.equal(response.status, ReplicaOperationResponseStatus.COMPLETED,
-        'already removed replica should still reconcile stale cleanup');
-      t.notOk(cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REMOVED_CLEANUP_REPLICA_ID),
-        'stale service row should be removed durably');
-      t.equal(shutdownCalls, 1,
-        'retry cleanup should still shut down any lingering local runtime');
-      t.notOk(handler.localServices.has(TEST_REMOVED_CLEANUP_REPLICA_ID),
-        'local tracked service should be cleared');
-      t.ok(
+      t.equal(response.status, ReplicaOperationResponseStatus.ERROR,
+        'handler-local terminal status cannot override durable ACTIVE');
+      t.ok(cache.get(
+        SYSTEM_TABLE_NAME.SERVICES,
+        TEST_REMOVED_CLEANUP_REPLICA_ID,
+      ), 'the non-removing durable row remains authoritative');
+      t.equal(shutdownCalls, 0,
+        'runtime cleanup is fenced without durable REMOVING authority');
+      t.ok(handler.localServices.has(TEST_REMOVED_CLEANUP_REPLICA_ID),
+        'the tracked service remains available for a valid removal redrive');
+      t.notOk(
         mockCDC.operations.some((op) =>
           op.type === 'delete' &&
           op.tableName === SYSTEM_TABLE_NAME.SERVICES &&
@@ -1044,7 +1100,7 @@ export async function registerReplicaHandlerTailTests({
           op.whereClause?.partition_id === TEST_REMOVED_CLEANUP_PARTITION_ID &&
           op.whereClause?.node_id === TEST_ACTIVE_REPAIR_NODE_ID,
         ),
-        'stale removed replica should still delete its typed local service row',
+        'no services-row delete may bypass durable REMOVING',
       );
 
       handler.shutdown();
@@ -1058,12 +1114,15 @@ export async function registerReplicaHandlerTailTests({
         service_type: 'partition',
         partition_id: TEST_REMOVED_CLEANUP_PARTITION_ID,
         node_id: TEST_ACTIVE_REPAIR_NODE_ID,
+        replica_id: TEST_REMOVED_CLEANUP_REPLICA_ID,
+        group_id: null,
         raft_role: 'follower',
         status: ReplicaStatus.ACTIVE,
         address:
           `${TEST_ACTIVE_REPAIR_NODE_ID}/partition/` +
           `${TEST_REMOVED_CLEANUP_REPLICA_ID}`,
         created_at: Date.now(),
+        state_entered_at: Date.now(),
         updated_at: Date.now(),
       });
       const mockCDC = createMockCDCService(cache);
@@ -1096,11 +1155,9 @@ export async function registerReplicaHandlerTailTests({
         service: trackedService,
       });
 
-      const removed = waitForReplicaEvent(
-        handler,
-        'replicaRemoved',
-        'replicaRemovalFailed',
-      );
+      const removalFailed = new Promise((resolve) => {
+        handler.once('replicaRemovalFailed', resolve);
+      });
 
       const response = await handler.handleRemoveReplica({
         operationId: TEST_REMOVED_CLEANUP_OPERATION_ID,
@@ -1108,7 +1165,7 @@ export async function registerReplicaHandlerTailTests({
         replicaId: TEST_REMOVED_CLEANUP_REPLICA_ID,
         reason: TEST_REMOVED_CLEANUP_REASON,
       });
-      await removed;
+      await removalFailed;
 
       t.equal(
         response.status,
@@ -1120,17 +1177,15 @@ export async function registerReplicaHandlerTailTests({
         1,
         'durable removal should still attempt one local runtime shutdown',
       );
-      t.notOk(
-        cache.get(
-          SYSTEM_TABLE_NAME.SERVICES,
-          TEST_REMOVED_CLEANUP_REPLICA_ID,
-        ),
-        'durable service truth should be removed even when cleanup needs replay',
-      );
+      t.equal(cache.get(
+        SYSTEM_TABLE_NAME.SERVICES,
+        TEST_REMOVED_CLEANUP_REPLICA_ID,
+      )?.status, 'cleanup_owned',
+      'durable marker remains until cleanup positively completes');
       t.equal(
         handler.getLocalReplica(TEST_REMOVED_CLEANUP_REPLICA_ID)?.status,
-        ReplicaStatus.REMOVED,
-        'local state should mark the replica removed once durable truth is settled',
+        ReplicaStatus.REMOVING,
+        'local state cannot terminalize while durable cleanup is incomplete',
       );
       t.equal(
         handler.getLocalReplica(TEST_REMOVED_CLEANUP_REPLICA_ID)?.service,
@@ -1165,14 +1220,12 @@ export async function registerReplicaHandlerTailTests({
     ReplicaOperationMessageType,
     ReplicaOperationResponseStatus,
     RAFT_ROLE,
-    LifeRaft,
     TEST_STEP_DOWN_OPERATION_ID,
     TEST_STEP_DOWN_PARTITION_ID,
     TEST_STEP_DOWN_REPLICA_ID,
     TEST_STEP_DOWN_REASON,
     TEST_STEP_DOWN_TARGET_ELECTION_REASON,
     TEST_STEP_DOWN_CORRELATION_ID,
-    TEST_STEP_DOWN_EMPTY_LEADER_ID,
     TEST_STATUS_RETRY_PARTITION_ID,
     TEST_STATUS_RETRY_REPLICA_ID,
     TEST_STATUS_RETRY_OPERATION_ID,

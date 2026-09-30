@@ -16,6 +16,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CDC_CONFIRMATION_ERROR_TYPE,
 } from '../../src/constants/cdc-lifecycle-constants.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 const SCHEMA = {
   columns: [
@@ -55,7 +56,7 @@ async function createWiredPartition(cache) {
     timeoutMs: SHORT_TIMEOUT_MS,
   });
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'wiring-p1',
     tableId: 'nodes',
     tableName: 'nodes',
@@ -65,7 +66,7 @@ async function createWiredPartition(cache) {
     dbPath: ':memory:',
     schema: SCHEMA,
     cdcConfirmationTracker: tracker,
-  });
+  }));
 
   await partition.initialize();
   await Promise.resolve();

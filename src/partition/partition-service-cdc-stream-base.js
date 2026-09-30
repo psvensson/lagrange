@@ -6,12 +6,15 @@ import {
 import {
   buildPendingProposal, cdcSqlPreview, classifyQuerySqlMutation,
 } from './partition-service-write-path-helpers.js';
+import {
+  PARTITION_WRITE_RELEASE_CAUSE,
+  buildReleasedPendingWriteAnswer,
+} from './partition-write-kernel.js';
 
 const {
   CDC_LIFECYCLE_LOG_MSG,
   CDC_PIPELINE_METRIC,
   CONTROL_PLANE_PARTITION_IDS,
-  ERRORS,
   PARTITION_CDC_EVENT_BUILD_STATE,
   PARTITION_SERVICE_DB,
   PARTITION_SERVICE_DEFAULT,
@@ -23,7 +26,6 @@ const {
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
   PARTITION_SPLIT_MIRROR_ORIGIN,
-  SQL,
   STRING,
   SYSTEM_TABLE_NAME,
   fs,
@@ -259,10 +261,9 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       partitionIds: [this.partitionId],
     });
   }
+  // A pending commit is registered only for a write the admission owner
+  // admitted, so its entryId is a non-empty string.
   waitForCommittedWrite(entryId, options = {}) {
-    if (typeof entryId !== 'string' || entryId.length === 0) {
-      return Promise.reject(new Error(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE));
-    }
     const timeoutMs =
       Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0 ?
         Math.floor(options.timeoutMs) :
@@ -273,12 +274,16 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       resolvePending = resolve;
       rejectPending = reject;
     });
-    // The commit deadline is this replica's, on this replica's clock.
+    // The commit deadline is this replica's, on this replica's clock. A
+    // write still pending at it is released with the write kernel's typed
+    // answer: one handed to consensus may still commit, so its outcome is not
+    // known here; one never handed to it was not proposed.
     const timeoutId = this.timeSource.setTimeout(() => {
-      this.rejectCommittedWrite(
-        entryId,
-        new Error(`Raft write commit timed out after ${timeoutMs}ms`),
-      );
+      this.proposalQueue.releaseEntry(entryId, (pending) =>
+        buildReleasedPendingWriteAnswer(pending, this.partitionId, {
+          cause: PARTITION_WRITE_RELEASE_CAUSE.COMMIT_DEADLINE_EXCEEDED,
+          deadlineMs: timeoutMs,
+        }));
     }, timeoutMs);
     try {
       this.proposalQueue.enqueue(entryId, buildPendingProposal({
@@ -344,8 +349,16 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     }
     return this.proposalQueue.reject(entryId, error);
   }
-  clearPendingCommittedWrites(reason) {
-    this.proposalQueue.clear(reason);
+  // The one release of every pending write (this replica stops leading, or
+  // shuts down): each is answered by answerOf from what the proposal queue
+  // knew of it.
+  releasePendingCommittedWrites(answerOf) {
+    this.proposalQueue.release(answerOf);
+  }
+  // Where a pending write stands with consensus (a
+  // PROPOSAL_QUEUE_PROPOSAL_STATE); false once it was released or answered.
+  markCommittedWriteProposal(entryId, proposal) {
+    return this.proposalQueue.markProposal(entryId, proposal);
   }
   /**
    * Build a stable key for identifying a committed write entry replay.
@@ -370,74 +383,6 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       command.sql,
       params,
     ].join(PARTITION_SERVICE_LITERAL.VALUE);
-  }
-  /**
-   * Treat duplicate-key INSERT failures as idempotent replay.
-   * Raft recovery can reapply previously-committed INSERT entries after restart.
-   * @param {*} error
-   * @param {Object} command
-   * @return {boolean}
-   * @private
-   */
-  isIdempotentInsertReplayConstraint(error, command) {
-    if (!error || !command?.sql) {
-      return false;
-    }
-    const sqlUpper = String(command.sql).trim().toUpperCase();
-    const isInsertStatement =
-      sqlUpper.startsWith(SQL.INSERT_INTO) ||
-      sqlUpper.startsWith(SQL.INSERT_OR_REPLACE_INTO) ||
-      sqlUpper.startsWith(SQL.INSERT_OR_IGNORE_INTO);
-    if (!isInsertStatement) {
-      return false;
-    }
-    const code = String(error.code || '').toUpperCase();
-    if (code === PARTITION_SERVICE_LITERAL.SQLITE_CONSTRAINT_PRIMARYKEY) {
-      return true;
-    }
-    if (code.startsWith(PARTITION_SERVICE_LITERAL.SQLITE_CONSTRAINT)) {
-      const message = String(error.message || '');
-      if (
-        message
-          .toUpperCase()
-          .includes(PARTITION_SERVICE_LITERAL.UNIQUE_CONSTRAINT_FAILED)
-      ) {
-        return true;
-      }
-    }
-    return false;
-  }
-  /**
-   * Track an applied write key with bounded history for replay dedupe.
-   * @param {string|null} entryKey - Stable write key.
-   * @param {Object|null} durableCommitWitness - Commit identity retained for
-   *   an acknowledged idempotent replay.
-   * @private
-   */
-  trackAppliedEntryKey(entryKey, durableCommitWitness = null) {
-    if (!entryKey) {
-      return;
-    }
-    if (durableCommitWitness && typeof durableCommitWitness === 'object') {
-      this.recentlyAppliedEntryWitnesses.set(
-        entryKey,
-        Object.freeze({...durableCommitWitness}),
-      );
-    }
-    if (this.recentlyAppliedEntryKeys.has(entryKey)) return;
-    this.recentlyAppliedEntryKeys.add(entryKey);
-    this.recentlyAppliedEntryOrder.push(entryKey);
-    if (this.recentlyAppliedEntryOrder.length > this.maxTrackedAppliedEntries) {
-      const oldestKey = this.recentlyAppliedEntryOrder.shift();
-      if (oldestKey) {
-        this.recentlyAppliedEntryKeys.delete(oldestKey);
-        this.recentlyAppliedEntryWitnesses.delete(oldestKey);
-      }
-    }
-  }
-
-  getAppliedEntryDurableCommitWitness(entryKey) {
-    return this.recentlyAppliedEntryWitnesses.get(entryKey) || null;
   }
   /**
    * Extract data from INSERT SQL by querying the inserted row.

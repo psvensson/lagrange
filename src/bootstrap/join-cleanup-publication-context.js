@@ -1,6 +1,10 @@
 import {
   JOINING_CLEANUP_STEP,
 } from './node-joining-constants.js';
+import {
+  resolvePendingMembershipCandidate,
+  resolvePublishedActiveNodeIds,
+} from '../control-plane/active-node-publication-snapshots.js';
 
 const JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
@@ -61,16 +65,38 @@ function resolveLatestMembershipPublicationRow(membershipPublicationService) {
   return null;
 }
 
-function buildFailedJoinMembershipPublicationContext(options = {}) {
+// The membership a failed joiner is retracted from, wherever it is: the
+// pending candidate (the snapshot owner's read (b)) while one collects
+// acknowledgements, else the published membership (read (a)), which is then
+// republished without it. Null when neither names anyone.
+function resolveRetractionMembership(membershipPublicationService) {
   const latestPublicationRow =
-    resolveLatestMembershipPublicationRow(options.membershipPublicationService);
+    resolveLatestMembershipPublicationRow(membershipPublicationService);
+  const pendingCandidate =
+    resolvePendingMembershipCandidate({latestPublicationRow});
+  if (pendingCandidate) {
+    return {publicationRow: latestPublicationRow,
+      nodeIds: pendingCandidate.nodeIds};
+  }
+  const publishedPublicationRow = typeof membershipPublicationService
+    ?.getLatestPublishedPublicationRowSync === 'function' ?
+    membershipPublicationService.getLatestPublishedPublicationRowSync() :
+    latestPublicationRow;
+  const publishedNodeIds = resolvePublishedActiveNodeIds({
+    latestPublicationRow: publishedPublicationRow,
+  });
+  return publishedNodeIds ?
+    {publicationRow: publishedPublicationRow, nodeIds: publishedNodeIds} :
+    null;
+}
+
+function buildFailedJoinMembershipPublicationContext(options = {}) {
+  const retractionMembership = resolveRetractionMembership(
+    options.membershipPublicationService);
+  const latestPublicationRow = retractionMembership?.publicationRow || null;
   const registeredNodeId = options.registeredNodeId;
-  const publishedActiveNodeIds =
-    resolvePublicationRowNodeIds(
-      latestPublicationRow,
-      JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT
-        .PUBLISHED_ACTIVE_NODE_IDS,
-    ).filter((nodeId) => nodeId !== registeredNodeId);
+  const publishedActiveNodeIds = (retractionMembership?.nodeIds || [])
+    .filter((nodeId) => nodeId !== registeredNodeId);
   const acknowledgedNodeIds =
     resolvePublicationRowNodeIds(
       latestPublicationRow,

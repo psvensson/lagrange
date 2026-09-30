@@ -61,6 +61,7 @@ import {
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
+  isTerminalTypedDistributedFailure,
 } from '../control-plane/control-plane-error-classification.js';
 import {
   READ_MODEL_DIVERGENCE_TYPE,
@@ -87,6 +88,8 @@ import {
 import {resolveSystemTableMutationDeliveryPriority} from '../bootstrap/system-partition-classification.js';
 import {getSystemCachePrimaryKeyFieldOrFallback} from '../cache/system-cache-key-descriptor.js';
 import {isTableInternalCachePropagationEnabled} from '../cache/cdc-table-policy.js';
+import {isReroutableWriteFailureCode} from
+  '../partition/partition-write-kernel.js';
 import {CDCEventHandler} from './cdc-event-handler.js';
 import {
   CDC_CONFIG_KEY,
@@ -145,9 +148,6 @@ const CDCOperationType = CDC_OPERATION;
  * Config key for the current epoch in the config table.
  */
 const EPOCH_CONFIG_KEY = CDC_EPOCH_CONFIG_KEY;
-// A delay is armed on the clock it is handed, never on the ambient one.
-const delayOn = (timeSource, ms) =>
-  new Promise((resolve) => timeSource.setTimeout(resolve, ms));
 
 function materializeNormalizedDefaultValue(result) {
   if (
@@ -412,7 +412,10 @@ function isSystemTableOwnerHandoffFailure(errorLike, fallbackTableName = null) {
     return false;
   }
   const errorCode = getControlPlaneErrorCode(errorLike);
-  if (errorCode === QUERY_ERROR_CODE.ROUTER_CONNECTION_CLOSED) {
+  // A partition write answer the caller holds is routed again by its code;
+  // one that reached it only as text, by the fragments below.
+  if (errorCode === QUERY_ERROR_CODE.ROUTER_CONNECTION_CLOSED ||
+      isReroutableWriteFailureCode(errorLike?.failureCode)) {
     return true;
   }
   const errorMessage = getControlPlaneErrorMessage(errorLike);
@@ -730,7 +733,6 @@ export const CDC_INTEGRATION_SERVICE_SHARED = {
   createSqlWriteRouter,
   createTimeoutBudget,
   createTimeoutBudgetError,
-  delayOn,
   getControlPlaneErrorCode,
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
@@ -741,6 +743,7 @@ export const CDC_INTEGRATION_SERVICE_SHARED = {
   hasSystemTableOwnerHandoffFailureSignature,
   isCacheVisibilityTimeoutError,
   isRetryableControlPlaneError,
+  isTerminalTypedDistributedFailure,
   isSystemTableOwnerHandoffFailure,
   isTableInternalCachePropagationEnabled,
   logSystemTableWriteFailure,

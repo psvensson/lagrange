@@ -1,15 +1,26 @@
 // What a production node schedules on: the replicas it hosts, and the
 // reconciler it converges with.
 //
-// Both take their timers, their coalescing hops and their per-action turn
-// from a clock only when the node runtime was SUPPLIED one. A production
-// runtime resolves its own real clock, and resolving one is not being given
-// one: handing that resolved clock on moves LifeRaft from tick-tock to
-// VirtualTick and every hop from setImmediate to a zero-delay timer, which
-// is a different event-loop phase rather than a different substrate. The
-// seed is the only path that hands out node-local authorities, so when it
-// hands out a resolved clock the replicas a node hosts as seed schedule
-// differently from the ones it hosts as joiner.
+// Both arm their consensus scheduling, their coalescing hops and their
+// per-action turn on a clock only when the node runtime was SUPPLIED one. A
+// production runtime resolves its own real clock, and resolving one is not
+// being given one: handing that resolved clock on routes the replica's
+// consensus scheduling through it and moves every hop from setImmediate to a
+// zero-delay timer, which is a different event-loop phase rather than a
+// different substrate. The seed is the only path that hands out node-local
+// authorities, so when it hands out a resolved clock the replicas a node
+// hosts as seed schedule differently from the ones it hosts as joiner.
+//
+// A partition replica runs on one consensus backend, rs-raft, built through
+// the one operation-port construction path; there is no backend to select.
+// The consensus witness asks that port to start scheduling
+// (`raft.startScheduling()`) and reads the primitive it arms; which timer
+// manager the backend chose is the field, not the primitive, and is not
+// read. The commit-apply yield witness this file once carried read liferaft's
+// timer manager, which the operation port does not expose and rs-raft has no
+// counterpart of (it applies a Ready's committed entries inside one ready
+// cycle); it is gone with that subject. Message-group replicas still run
+// liferaft, and their hop witnesses are unchanged.
 //
 // The reconciler's witness lives here rather than under test/service
 // because what it proves is the same seam on the same composition, and one
@@ -29,14 +40,14 @@ import {MessageGroupService} from
   '../../src/message-group/message-group-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
-import {commitEntriesCooperatively} from
-  '../../src/raft/liferaft-commit-scheduler.js';
-import {VirtualTick} from '../../src/raft/virtual-tick.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
 import {
   RECONCILER_ACTION_TYPE,
   ServiceLifecycleManager,
   ServiceReconciler,
 } from '../../src/service/index.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 // The host primitives, captured before any recorder replaces them, so a
 // supplied clock's own delegation is never counted as production reaching
@@ -60,9 +71,12 @@ const TENANT_ID = 'seed-scheduling-tenant';
 const DRIFT_REASON = 'drift';
 const REPLICA_COUNT = 3;
 const SET_IMMEDIATE = 'setImmediate';
-const TIMER_NAME_PREFIX = 'setTimeout(';
-const TIMER_NAME_SUFFIX = ')';
+const SET_TIMEOUT = 'setTimeout';
+const SET_INTERVAL = 'setInterval';
+const DELAY_OPEN = '(';
+const DELAY_CLOSE = ')';
 const ZERO_DELAY_MS = 0;
+const NO_CLOCK_ARMS = 0;
 const NO_HOST_PRIMITIVE = Object.freeze([]);
 // The constructor arms one peer-reconciliation hop of its own; the witness
 // waits for that hop to run so it measures the one it arms itself.
@@ -71,8 +85,12 @@ const PLANNED_ACTION_COUNT = 2;
 const HOP_COUNT_PER_REPLICA = 2;
 const EMPTY_STATE = Object.freeze([]);
 
-const timerName = (delayMs) =>
-  `${TIMER_NAME_PREFIX}${delayMs}${TIMER_NAME_SUFFIX}`;
+const timerName = (primitive, delayMs) =>
+  `${primitive}${DELAY_OPEN}${delayMs}${DELAY_CLOSE}`;
+
+// The primitive without its delay: an election timeout is randomized per
+// replica, so two replicas that schedule alike still arm different delays.
+const primitiveKind = (name) => name.split(DELAY_OPEN)[0];
 
 /**
  * A node runtime that was actually supplied a clock. It delegates to the
@@ -114,6 +132,10 @@ class SuppliedClock {
 const zeroDelayArmCount = (clock) =>
   clock.armedDelays.filter((delayMs) => delayMs === ZERO_DELAY_MS).length;
 
+// Everything the clock has armed, whatever the delay: consensus scheduling
+// arms its tick or election timer, never a zero-delay hop.
+const armedCount = (clock) => clock.armedDelays.length;
+
 /**
  * Record the host primitives production arms, passing each call through so
  * the deferred work still happens.
@@ -126,12 +148,17 @@ function installPrimitiveRecorder(armed) {
     return hostSetImmediate(callback, ...args);
   };
   globalThis.setTimeout = (callback, delayMs, ...args) => {
-    armed.push(timerName(delayMs));
+    armed.push(timerName(SET_TIMEOUT, delayMs));
     return hostSetTimeout(callback, delayMs, ...args);
+  };
+  globalThis.setInterval = (callback, delayMs, ...args) => {
+    armed.push(timerName(SET_INTERVAL, delayMs));
+    return hostSetInterval(callback, delayMs, ...args);
   };
   return () => {
     globalThis.setImmediate = hostSetImmediate;
     globalThis.setTimeout = hostSetTimeout;
+    globalThis.setInterval = hostSetInterval;
   };
 }
 
@@ -175,6 +202,7 @@ const settle = (delayMs) =>
  */
 function productionBootstrapService() {
   return new BootstrapService({
+    bootIncarnation: 1,
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT,
     nodeService: new NodeService(),
   });
@@ -188,6 +216,7 @@ function productionBootstrapService() {
  */
 function suppliedClockBootstrapService(clock) {
   return new BootstrapService({
+    bootIncarnation: 1,
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT,
     nodeService: new NodeService({timeSource: clock}),
   });
@@ -202,14 +231,14 @@ function suppliedClockBootstrapService(clock) {
  * @return {Promise<PartitionService>}
  */
 async function startPartitionReplica(open, label, authorities) {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: `${TABLE_ID}-${label}`,
     tableId: TABLE_ID,
     replicaId: `${TABLE_ID}-${label}-r1`,
     nodeId: NODE_ID,
     dbPath: IN_MEMORY_DB,
     ...authorities,
-  });
+  }));
   open.push(partition);
   await partition.initialize();
   await settle(CONSTRUCTOR_HOP_SETTLE_MS);
@@ -261,9 +290,8 @@ async function messageGroupReplica(open, label, authorities) {
 }
 
 /**
- * Shut one replica down now and stop holding it open. The commit-apply
- * witness runs against a shut-down replica's timer manager so no live
- * cadence arms a primitive inside its measurement window.
+ * Shut one replica down now and stop holding it open, so no live cadence of
+ * it arms a primitive inside a later witness's measurement window.
  * @param {Array<Object>} open - the replicas this test still holds open.
  * @param {Object} replica - the replica to close.
  * @return {Promise<void>}
@@ -272,6 +300,40 @@ async function closeReplica(open, replica) {
   open.splice(open.indexOf(replica), 1);
   await replica.shutdown();
 }
+
+/**
+ * What a replica's consensus scheduling arms: one partition replica, composed
+ * with the given authorities, whose operation port is asked to start
+ * scheduling. The replica is shut down once measured.
+ * @param {Array<Object>} open - the replicas this test still holds open.
+ * @param {string} label - distinguishes this composition's ids.
+ * @param {Object} authorities - hosted-replica authorities, or {}.
+ * @param {Function} [countClockArms] - how many primitives a supplied clock
+ *   has armed so far.
+ * @return {Promise<Object>} the host primitives armed, and how many the
+ *   supplied clock armed meanwhile.
+ */
+async function consensusScheduling(open, label, authorities,
+  countClockArms = () => NO_CLOCK_ARMS) {
+  const partition = await startPartitionReplica(open, `${label}-consensus`,
+    authorities);
+  const beforeStart = countClockArms();
+  let started = null;
+  const armed = primitivesArmedBy(() => {
+    started = partition.raft.startScheduling();
+  });
+  assert.equal(started?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+    'the port starts its scheduling before it returns');
+  const clockArms = countClockArms() - beforeStart;
+  await closeReplica(open, partition);
+  return {armed, clockArms};
+}
+
+/**
+ * @param {Object} measured - from consensusScheduling.
+ * @return {Array<string>} the kinds of host primitive it armed.
+ */
+const armedKinds = ({armed}) => armed.map(primitiveKind);
 
 /**
  * Run one witness and leave nothing armed: a witness that fails early must
@@ -289,41 +351,6 @@ async function withHostedReplicas(run) {
       await replica.shutdown();
     }
   }
-}
-
-const COMMIT_ENTRIES = Object.freeze([
-  Object.freeze({index: 1, command: {op: 'first'}}),
-  Object.freeze({index: 2, command: {op: 'second'}}),
-]);
-
-/**
- * A log that commits ONE entry per slice, so the commit/apply loop still has
- * pending work after the first slice and must take its inter-slice yield.
- * @return {Object} a commit log.
- */
-function oneEntryPerSliceLog() {
-  let committedIndex = ZERO_DELAY_MS;
-  return {
-    getCommittedIndex: () => committedIndex,
-    commitAndApplySlice(pending, options) {
-      const [entry] = pending;
-      committedIndex = entry.index;
-      options.apply(entry.command);
-      return [entry];
-    },
-  };
-}
-
-/**
- * The commit/apply loop's inter-slice yield, taken through the entry point
- * production commits through, on the timer manager the replica built.
- * @param {Object} timers - the replica's LifeRaft timer manager.
- * @return {Promise<Array<string>>} the primitives the yield armed.
- */
-function commitApplyYieldPrimitives(timers) {
-  const raft = {timers, log: oneEntryPerSliceLog(), emit: () => true};
-  return primitivesArmedByAwaited(() =>
-    commitEntriesCooperatively(raft, COMMIT_ENTRIES, () => undefined));
 }
 
 const plannedAction = (index) => ({
@@ -381,19 +408,18 @@ test('a seed-hosted replica schedules like a production replica', () =>
     assert.equal(authorities.nodeService, bootstrap.nodeService,
       'the hosting runtime is still the replica\'s node-local authority');
 
+    const {armed} = await consensusScheduling(open, 'seed', authorities);
+    assert.notDeepEqual(armed, NO_HOST_PRIMITIVE,
+      'consensus scheduling runs on a host timer');
+
     const partition = await startPartitionReplica(open, 'seed', authorities);
-    assert.equal(partition.raft.timers instanceof VirtualTick, false,
-      'LifeRaft keeps its own tick-tock');
     assert.deepEqual(
       primitivesArmedBy(() => partition.scheduleRaftPeerReconciliation()),
       [SET_IMMEDIATE], 'the peer-reconciliation hop is a setImmediate');
     assert.deepEqual(
       primitivesArmedBy(() => partition.scheduleSizeUpdate()),
       [SET_IMMEDIATE], 'the size-update hop is a setImmediate');
-    const timers = partition.raft.timers;
     await closeReplica(open, partition);
-    assert.deepEqual(await commitApplyYieldPrimitives(timers),
-      [SET_IMMEDIATE], 'the commit-apply yield is a setImmediate');
 
     const group = await messageGroupReplica(open, 'seed', authorities);
     assert.deepEqual(
@@ -409,12 +435,13 @@ test('a seed-hosted and a joiner-hosted replica schedule alike', () =>
     // site passes: on one production node these must not differ.
     const hosted = resolveHostedReplicaAuthorities(
       bootstrap.seedMessageGroupsPhase.delegates);
+    assert.deepEqual(
+      armedKinds(await consensusScheduling(open, 'alike-seed', hosted)),
+      armedKinds(await consensusScheduling(open, 'alike-join', {})),
+      'both replicas arm the same consensus scheduling primitive');
+
     const seeded = await startPartitionReplica(open, 'alike-seed', hosted);
     const joined = await startPartitionReplica(open, 'alike-join', {});
-
-    assert.equal(seeded.raft.timers.constructor.name,
-      joined.raft.timers.constructor.name,
-      'both replicas run the same LifeRaft timer manager');
     assert.deepEqual(
       primitivesArmedBy(() => seeded.scheduleRaftPeerReconciliation()),
       primitivesArmedBy(() => joined.scheduleRaftPeerReconciliation()),
@@ -423,13 +450,8 @@ test('a seed-hosted and a joiner-hosted replica schedule alike', () =>
       primitivesArmedBy(() => seeded.scheduleSizeUpdate()),
       primitivesArmedBy(() => joined.scheduleSizeUpdate()),
       'both take the size-update hop the same way');
-    const seededTimers = seeded.raft.timers;
-    const joinedTimers = joined.raft.timers;
     await closeReplica(open, seeded);
     await closeReplica(open, joined);
-    assert.deepEqual(await commitApplyYieldPrimitives(seededTimers),
-      await commitApplyYieldPrimitives(joinedTimers),
-      'both yield between commit-apply slices the same way');
 
     const seedGroup = await messageGroupReplica(open, 'alike-seed', hosted);
     const joinGroup = await messageGroupReplica(open, 'alike-join', {});
@@ -448,9 +470,14 @@ test('a supplied clock still owns hosted replica and reconciler scheduling',
     assert.equal(authorities.timeSource, clock,
       'a runtime that owns a clock hands that clock to its replicas');
 
+    const {armed, clockArms} = await consensusScheduling(open, 'supplied',
+      authorities, () => armedCount(clock));
+    assert.deepEqual(armed, NO_HOST_PRIMITIVE,
+      'consensus scheduling never reaches for a host primitive');
+    assert.equal(clockArms > NO_CLOCK_ARMS, true,
+      'consensus scheduling is armed on the supplied clock');
+
     const partition = await startPartitionReplica(open, 'supplied', authorities);
-    assert.equal(partition.raft.timers instanceof VirtualTick, true,
-      'LifeRaft runs on the supplied clock');
     const beforeHops = zeroDelayArmCount(clock);
     assert.deepEqual(
       primitivesArmedBy(() => partition.scheduleRaftPeerReconciliation()),
@@ -461,10 +488,7 @@ test('a supplied clock still owns hosted replica and reconciler scheduling',
       NO_HOST_PRIMITIVE, 'and neither does the size-update hop');
     assert.equal(zeroDelayArmCount(clock) - beforeHops, HOP_COUNT_PER_REPLICA,
       'both hops were taken on the supplied clock');
-    const timers = partition.raft.timers;
     await closeReplica(open, partition);
-    assert.deepEqual(await commitApplyYieldPrimitives(timers),
-      NO_HOST_PRIMITIVE, 'the commit-apply yield stays on the supplied clock');
 
     const group = await messageGroupReplica(open, 'supplied', authorities);
     assert.deepEqual(

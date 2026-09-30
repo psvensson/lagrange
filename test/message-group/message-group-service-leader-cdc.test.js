@@ -25,6 +25,7 @@ import {RAFT_EVENT} from '../../src/raft/constants.js';
 import {
   CACHE_HYDRATION_TABLES,
 } from '../../src/cache/cache-constants.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // Test-local fixture constants.
 const TEST_PORT_BASE = 25300;
@@ -49,7 +50,7 @@ function createImmediateLeaderActivationScheduler() {
 async function createTestTransport() {
   const port = testPortCounter++;
   const nodeId = `${TEST_NODE_ID_PREFIX}${port}`;
-  const router = new MessageRouter({nodeId, wsPort: port});
+  const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId, wsPort: port});
   await router.initialize({startServer: true});
   return {
     router,

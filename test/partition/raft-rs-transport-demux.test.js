@@ -1,5 +1,4 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
@@ -10,7 +9,9 @@ import {PartitionNodeCluster} from
   '../raft/raft-rs-backend/partition-node-cluster.js';
 import {
   ControllablePartitionRaftProvider,
+  createControllablePartitionService,
 } from './partition-service-test-support.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -34,7 +35,7 @@ test('PartitionService routes semantic raft-rs transport envelopes to the operat
         return {acknowledged: true};
       },
     };
-    const partition = new PartitionService({
+    const partition = createControllablePartitionService({
       partitionId: 'raft-rs-transport-p1',
       tableId: 'raft_rs_transport',
       tableName: 'raft_rs_transport',
@@ -44,9 +45,8 @@ test('PartitionService routes semantic raft-rs transport envelopes to the operat
       nodeId: 'node-r2',
       transport,
       dbPath: ':memory:',
-      raftProvider,
       deferElection: true,
-    });
+    }, raftProvider);
 
     await partition.initialize();
     try {
@@ -118,7 +118,9 @@ test('raft-rs runtime emits a semantic envelope instead of a Liferaft packet',
 
 test('MessageRouter direct Raft delivery accepts the semantic raft-rs envelope',
   async (t) => {
-    const router = new MessageRouter({nodeId: 'node-r1', inProcess: true});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'node-r1', inProcess: true});
     let transmitted = null;
     const ws = {
       readyState: 1,

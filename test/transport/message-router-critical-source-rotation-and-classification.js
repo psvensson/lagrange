@@ -14,6 +14,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {resolveRaftTransportDeliveryOptions} from
   '../../src/raft/constants.js';
 import {registerMessageRouterTailTests} from './message-router-tail-test-cases.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 /**
  * Initialize test environment.
@@ -65,6 +66,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
       const TEST_CONTROL_PLANE_TARGET_ADDRESS =
         'remote-node/service/control-plane';
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: TEST_LOCAL_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
         startServer: false,
@@ -219,6 +221,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
       const TEST_HOT_PENDING_LABEL = 'hot-1';
       const TEST_CONTROL_PLANE_LABEL = 'control-plane';
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: TEST_LOCAL_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
         startServer: false,
@@ -325,6 +328,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
       const TEST_HOT_INITIAL_LABEL = 'hot-initial';
       const TEST_CONTROL_PLANE_LABEL = 'control-plane';
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: TEST_LOCAL_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
         startServer: false,
@@ -484,6 +488,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
         },
       };
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node',
         outboundQueueMaxConcurrent: 1,
         outboundQueueMaxPending: 4,
@@ -539,6 +544,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
         data: {transaction_id: 'txn-1'},
       };
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node',
         outboundQueueMaxConcurrent: 1,
         outboundQueueMaxPending: 4,
@@ -594,6 +600,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
         targetAddress: HEARTBEAT_TARGET_ADDRESS,
       });
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node',
         outboundQueueMaxConcurrent: 1,
         outboundQueueMaxPending: 4,

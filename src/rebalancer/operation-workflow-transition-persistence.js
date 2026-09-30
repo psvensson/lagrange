@@ -1,5 +1,16 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
+  REPLACE_COMPLETION_VERDICT,
+  buildReplaceCompletionRefusal,
+  buildReplaceFailureRefusal,
+  clearReplaceOwnerState,
+  decideReplaceCompletion,
+  isPartitionReplace,
+} from './operation-workflow-replace-owner.js';
+import {
+  admitReplaceTerminalFailure,
+} from './operation-workflow-replace-terminal-admission.js';
+import {
   OperationWorkflowTransitionOrchestration,
 } from './operation-workflow-transition-orchestration.js';
 import {
@@ -47,6 +58,22 @@ const ALREADY_TERMINAL_TRANSITION_OUTCOME = Object.freeze({
   committed: false,
   disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
 });
+
+// A failure of anything but a partition REPLACE: no D2 admission applies.
+const NON_REPLACE_FAILURE_ADMISSION = Object.freeze({
+  refused: false,
+  persistOptions: Object.freeze({}),
+});
+
+// A caller's step metadata recorded on the FAILED step entry.
+function applyFailureStepMetadata(failedStepEntry, options) {
+  if (
+    options.stepMetadata &&
+    typeof options.stepMetadata === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT
+  ) {
+    Object.assign(failedStepEntry, options.stepMetadata);
+  }
+}
 
 class OperationWorkflowTransitionPersistence
   extends OperationWorkflowTransitionOrchestration {
@@ -255,6 +282,7 @@ class OperationWorkflowTransitionPersistence
     });
     this.clearPriorityActiveReplaceRetry(operation?.operationId || null);
     this.clearExecutorOutcomeRetry(operation?.operationId);
+    clearReplaceOwnerState(this, operation?.operationId);
   }
 
   /**
@@ -280,6 +308,7 @@ class OperationWorkflowTransitionPersistence
     projectedOperation,
     transitionOutcome,
     step,
+    persistOptions = {},
   ) {
     this.clearTransitionRetry(operation.operationId);
     // Release only on a proven terminal: lost-to-other-terminal
@@ -305,6 +334,7 @@ class OperationWorkflowTransitionPersistence
         this,
         projectedOperation,
         TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED,
+        persistOptions,
       );
     }
     this.clearDeferredSafetyBlockState(operation.operationId);
@@ -328,6 +358,15 @@ class OperationWorkflowTransitionPersistence
       operation.completedAt !== undefined
     ) {
       return ALREADY_TERMINAL_TRANSITION_OUTCOME;
+    }
+    // R-1a (quest replace-source-removal-owner): every success edge of a
+    // partition REPLACE ends here, and none completes while its source is
+    // still a committed voter on the witness replica.
+    if (isPartitionReplace(operation)) {
+      const decision = await decideReplaceCompletion(this, operation);
+      if (decision.verdict !== REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED) {
+        return buildReplaceCompletionRefusal(decision);
+      }
     }
     const previousStep = operation.workflowStep;
     const stepEntry = this.buildOperationTransitionStepEntry(
@@ -363,16 +402,21 @@ class OperationWorkflowTransitionPersistence
         now;
     };
 
-    const persistFn = async () => {
-      return this.repository.persistOperationUpdate(
-        projectedOperation,
-        {
-          ...this.buildOperationTransitionPersistOptions(),
-          terminalTransition: true,
-          returnDisposition: true,
-        },
-      );
+    const persistOptions = {
+      ...this.buildOperationTransitionPersistOptions(),
+      terminalTransition: true,
+      returnDisposition: true,
     };
+    if (isPartitionReplace(operation)) {
+      persistOptions.terminalAdmission = async () => {
+        const current = await decideReplaceCompletion(this, operation);
+        return current.verdict ===
+          REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED;
+      };
+    }
+    const persistFn = async () =>
+      this.repository.persistOperationUpdate(projectedOperation,
+        persistOptions);
     const transitionOutcome = await this.executeAtomicTransition(
       operation,
       finalStep,
@@ -395,6 +439,7 @@ class OperationWorkflowTransitionPersistence
         projectedOperation,
         transitionOutcome,
         finalStep,
+        persistOptions,
       );
       return transitionOutcome;
     }
@@ -440,6 +485,39 @@ class OperationWorkflowTransitionPersistence
   }
 
   /**
+   * D2: after a partition REPLACE's DURABLE removal intent, only target
+   * death with the source still a voter may end it FAILED; every
+   * elapsed-time or heuristic failure is refused (typed) by failOperation,
+   * and logged here. An admitted REPLACE failure carries the durable step it
+   * was admitted against, for the terminal write's CAS.
+   * @param {Object} operation
+   * @param {string} errorMessage
+   * @param {Object} options
+   * @return {Promise<Object>} Frozen {refused, persistOptions}.
+   */
+  async admitOperationFailure(operation, errorMessage, options) {
+    if (!isPartitionReplace(operation)) {
+      return NON_REPLACE_FAILURE_ADMISSION;
+    }
+    const admission = await admitReplaceTerminalFailure(
+      this, operation, options);
+    if (admission.admitted) {
+      return Object.freeze({refused: false, persistOptions: {
+        expectedWorkflowStep: admission.expectedWorkflowStep}});
+    }
+    this.logger.warn(
+      REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILURE_REFUSED_AFTER_INTENT,
+      {
+        operationId: operation.operationId,
+        partitionId: operation.partitionId,
+        workflowStep: admission.expectedWorkflowStep,
+        errorMessage: this.normalizeErrorMessage(errorMessage, null),
+      },
+    );
+    return Object.freeze({refused: true, persistOptions: {}});
+  }
+
+  /**
    * Fail an operation.
    * @param {Object} operation
    * @param {string} errorMessage
@@ -455,6 +533,11 @@ class OperationWorkflowTransitionPersistence
       operation.completedAt !== undefined
     ) {
       return ALREADY_TERMINAL_TRANSITION_OUTCOME;
+    }
+    const failureAdmission =
+      await this.admitOperationFailure(operation, errorMessage, options);
+    if (failureAdmission.refused) {
+      return buildReplaceFailureRefusal();
     }
     const normalizedError = this.normalizeErrorMessage(
       errorMessage,
@@ -480,12 +563,7 @@ class OperationWorkflowTransitionPersistence
       previousStep,
       now,
     );
-    if (
-      options.stepMetadata &&
-      typeof options.stepMetadata === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT
-    ) {
-      Object.assign(failedStepEntry, options.stepMetadata);
-    }
+    applyFailureStepMetadata(failedStepEntry, options);
     const projectedOperation = {
       ...operation,
       workflowStep: WORKFLOW_STEP.FAILED,
@@ -519,6 +597,7 @@ class OperationWorkflowTransitionPersistence
         projectedOperation,
         {
           ...this.buildOperationTransitionPersistOptions(),
+          ...failureAdmission.persistOptions,
           terminalTransition: true,
           returnDisposition: true,
         },
@@ -534,7 +613,8 @@ class OperationWorkflowTransitionPersistence
         afterCommit: async () => {
           await this.confirmCommittedTransitionPersistence(
             projectedOperation,
-            {terminalTransitionRepair: true},
+            {terminalTransitionRepair: true,
+              repairPersistOptions: failureAdmission.persistOptions},
           );
         },
       },
@@ -548,6 +628,7 @@ class OperationWorkflowTransitionPersistence
         projectedOperation,
         transitionOutcome,
         WORKFLOW_STEP.FAILED,
+        failureAdmission.persistOptions,
       );
       return transitionOutcome;
     }

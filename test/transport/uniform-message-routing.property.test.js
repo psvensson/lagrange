@@ -17,12 +17,14 @@ import assert from 'node:assert';
 import fc from 'fast-check';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {WORKER_ENTITY_TYPE} from '../../src/worker/worker-constants.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 describe('Property 3: Uniform Message Routing', () => {
   let router;
 
   beforeEach(() => {
     router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-1',
       inProcess: true,
     });
@@ -120,6 +122,7 @@ describe('Property 3: Uniform Message Routing', () => {
         fc.constantFrom(WORKER_ENTITY_TYPE.PARTITION, WORKER_ENTITY_TYPE.MESSAGE_GROUP),
         async (nodeId, replicaId, entityType) => {
           const testRouter = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId,
             inProcess: true,
           });

@@ -12,6 +12,7 @@ import {ConfigurationManager} from
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {PartitionService} from
   '../../src/partition/partition-service.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const PREVIOUS_REPLICA_OPERATIONS_SCHEMA = Object.freeze({
   tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
@@ -52,7 +53,7 @@ test('replica_operations restart migrates every current durable owner column',
     );
     const dbPath = path.join(tempDir, 'replica-operations.db');
     const previousPartition = new PartitionService(
-      buildPartitionOptions(dbPath, PREVIOUS_REPLICA_OPERATIONS_SCHEMA),
+      withFoundingStamp(buildPartitionOptions(dbPath, PREVIOUS_REPLICA_OPERATIONS_SCHEMA)),
     );
 
     try {
@@ -60,7 +61,7 @@ test('replica_operations restart migrates every current durable owner column',
       await previousPartition.shutdown();
 
       const currentPartition = new PartitionService(
-        buildPartitionOptions(dbPath, REPLICA_OPERATIONS_SCHEMA),
+        withFoundingStamp(buildPartitionOptions(dbPath, REPLICA_OPERATIONS_SCHEMA)),
       );
       try {
         await currentPartition.initialize();

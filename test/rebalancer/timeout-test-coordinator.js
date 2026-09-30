@@ -6,6 +6,8 @@
 // options.timeSource (DT6): injected TimeSource threaded into the coordinator (default RealTimeSource
 // = the platform clock, byte-identical), so checkTimeouts reads virtual time via the step-9/11 seam.
 
+import {withFixtureCommittedMembership} from
+  './committed-membership-fixture.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   createMockCache,
@@ -207,7 +209,10 @@ function createTimeoutTestCoordinator(options = {}) {
         sqlEngine.executeQuery(sql, params, queryOptions),
     },
     tablePolicyService: createMockPolicyService(),
-    messageRouter: createMockMessageRouter(),
+    // The committed-membership read of a join is the fixture world's (O1),
+    // however a witness later re-points deliver.
+    messageRouter: withFixtureCommittedMembership(createMockMessageRouter(),
+      null),
     sqlQueryEngine: sqlEngine,
     transactionCoordinator: createMockTransactionCoordinator(),
     controlPlaneReadinessService: createMockControlPlaneReadinessService(),

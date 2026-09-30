@@ -1,7 +1,5 @@
-import Database from 'better-sqlite3';
 import {TIME_MS} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
-import {performTrackedLeaderDemotion} from '../raft/tracked-leader-demotion.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../control-plane/timeout-budget.js';
 import {
   PARTITION_SERVICE_LOG_MSG,
@@ -18,16 +16,14 @@ import {
 // indices and followers truncate committed entries without a committedIndex
 // guard), so demotion is the heal's safety prerequisite.
 //
-// Two honest signals, one bound and one strike counter (design-vet ruling):
-//   (a) db.inTransaction continuously beyond the max legal transaction hold —
-//       honest under the zombie (better-sqlite3 reports the open transaction
-//       even though same-connection reads lie about durability), and
-//       registry-INdependent (the run-23 zombie was a REGISTERED session);
-//   (b) the log adapter's declared commit index (stamped before any isOpen
-//       guard) diverging from the DURABLE committedIndex read via a separate
-//       READONLY connection — catches the silently-closed-adapter family that
-//       holds no transaction at all. File-backed partitions only (:memory:
-//       degrades to signal (a), mirroring the split-snapshot accessor).
+// One honest signal, one bound and one strike counter (design-vet ruling):
+// db.inTransaction continuously beyond the max legal transaction hold —
+// honest under the zombie (better-sqlite3 reports the open transaction even
+// though same-connection reads lie about durability), and
+// registry-INdependent (the run-23 zombie was a REGISTERED session). The
+// former second signal compared the retired backend's declared commit index
+// with its `_raft_state` row; the rs-raft partition path keeps neither, so it
+// is gone rather than kept as a reader of a table nothing writes.
 const LEADER_DURABILITY_LEGAL_HOLD_MS =
   TIMEOUT_BUDGET_DEFAULT.PREPARED_HOLD_TIMEOUT_MS;
 const LEADER_DURABILITY_STRIKE_LIMIT = 3;
@@ -53,13 +49,16 @@ const LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK_MS =
 // log matches the followers') is fully electable again.
 const LEADER_DURABILITY_UNFIT_REASON = Object.freeze({
   TRANSACTION_HOLD: 'leader_durability_unfit_transaction_hold',
-  COMMIT_DURABILITY_DIVERGENCE:
-    'leader_durability_unfit_commit_durability_divergence',
 });
-const RAFT_STATE_COMMITTED_INDEX_KEY = 'committedIndex';
-const SELECT_DURABLE_COMMITTED_INDEX =
-  'SELECT value FROM _raft_state WHERE key = ?';
-const MEMORY_DB_PATH = ':memory:';
+// The frozen operation port has no step-down and no candidacy-deferral
+// operation (epic raft-rs-full-cutover finding F1), so neither consequence of
+// unfitness can be carried out. Each is stated as a typed outcome in the
+// unfitness evidence instead of a call that silently does nothing.
+const LEADER_DURABILITY_CONSEQUENCE_OUTCOME = Object.freeze({
+  CANDIDACY_DEFERRAL_UNSUPPORTED:
+    'leader_durability_candidacy_deferral_unsupported',
+  DEMOTION_UNSUPPORTED: 'leader_durability_demotion_unsupported',
+});
 const ABSENT_DURABILITY_TIMESTAMP = null;
 
 class PartitionServiceDurabilityFitnessMethods {
@@ -67,15 +66,11 @@ class PartitionServiceDurabilityFitnessMethods {
     if (!this.leaderDurabilityFitness) {
       this.leaderDurabilityFitness = {
         inTransactionSinceMs: null,
-        divergenceSinceMs: null,
         strikes: 0,
         unfit: false,
         activeReason: null,
         handoffRequestedWhileLeader: false,
         successorlessUnfitSinceMs: ABSENT_DURABILITY_TIMESTAMP,
-        readonlyWatermarkDb: null,
-        readonlyWatermarkUnavailable: false,
-        readonlyWatermarkErrorDeclaredIndex: 0,
       };
       this.isLeaderDurabilityUnfit = false;
     }
@@ -95,9 +90,10 @@ class PartitionServiceDurabilityFitnessMethods {
 
   /**
    * Cluster-informed successor viability (CL-039: never shed leadership
-   * without a viable successor). The default probe reads follower-ack
-   * actuals from the raft log adapter; a single-replica group has no
-   * successor and stays surface-only.
+   * without a viable successor). Without a probe no successor is provable:
+   * the follower-ack actuals the default used to read lived on the retired
+   * backend's log adapter. A single-replica group has no successor and stays
+   * surface-only.
    * @param {Function} probe
    */
   setLeaderDurabilitySuccessorProbe(probe) {
@@ -108,15 +104,6 @@ class PartitionServiceDurabilityFitnessMethods {
   hasViableLeaderDurabilitySuccessor(nowMs) {
     if (this.leaderDurabilitySuccessorProbe) {
       return this.leaderDurabilitySuccessorProbe(nowMs) === true;
-    }
-    const ackWindowMs = TIME_MS.SECOND * 10;
-    const lastAcks = this.logAdapter?.lastFollowerAckAtByAddress;
-    if (lastAcks instanceof Map) {
-      for (const ackAtMs of lastAcks.values()) {
-        if (Number.isFinite(ackAtMs) && nowMs - ackAtMs <= ackWindowMs) {
-          return true;
-        }
-      }
     }
     return false;
   }
@@ -148,75 +135,6 @@ class PartitionServiceDurabilityFitnessMethods {
       nowMs - state.successorlessUnfitSinceMs >=
       LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK_MS
     );
-  }
-
-  /**
-   * Read the DURABLE committed watermark through a separate readonly
-   * connection — same-connection reads lie inside an open transaction and the
-   * adapter's getter serves an in-memory cache. Returns null when no honest
-   * durable read is possible (:memory: partitions, open failure).
-   * @return {number|null}
-   */
-  readDurableCommittedIndexWitness(declaredIndex) {
-    const state = this.getLeaderDurabilityFitnessState();
-    if (!this.dbPath || this.dbPath === MEMORY_DB_PATH) {
-      return null;
-    }
-    if (state.readonlyWatermarkUnavailable) {
-      // Retry once per newly declared commit rather than latching blind
-      // forever on one transient open/read error.
-      if (
-        !Number.isFinite(declaredIndex) ||
-        declaredIndex <= state.readonlyWatermarkErrorDeclaredIndex
-      ) {
-        return null;
-      }
-      state.readonlyWatermarkUnavailable = false;
-    }
-    try {
-      if (!state.readonlyWatermarkDb) {
-        state.readonlyWatermarkDb = new Database(this.dbPath, {
-          readonly: true,
-        });
-      }
-      const row = state.readonlyWatermarkDb
-        .prepare(SELECT_DURABLE_COMMITTED_INDEX)
-        .get(RAFT_STATE_COMMITTED_INDEX_KEY);
-      const durable = Number(row?.value);
-      return Number.isFinite(durable) ? durable : 0;
-    } catch {
-      this.latchReadonlyWatermarkUnavailable(state, declaredIndex);
-      return null;
-    }
-  }
-
-  latchReadonlyWatermarkUnavailable(state, declaredIndex) {
-    state.readonlyWatermarkUnavailable = true;
-    state.readonlyWatermarkErrorDeclaredIndex = Number.isFinite(
-      declaredIndex,
-    ) ?
-      declaredIndex :
-      0;
-    if (state.readonlyWatermarkDb) {
-      try {
-        state.readonlyWatermarkDb.close();
-      } catch {
-        // A failed witness must never mask the sweep.
-      }
-      state.readonlyWatermarkDb = null;
-    }
-  }
-
-  closeLeaderDurabilityFitnessWitness() {
-    const state = this.leaderDurabilityFitness;
-    if (state?.readonlyWatermarkDb) {
-      try {
-        state.readonlyWatermarkDb.close();
-      } catch {
-        // Closing a readonly witness must never mask shutdown.
-      }
-      state.readonlyWatermarkDb = null;
-    }
   }
 
   /**
@@ -283,41 +201,7 @@ class PartitionServiceDurabilityFitnessMethods {
         heldMs,
       };
     }
-
-    return this.observeCommitDurabilityDivergence(nowMs, state, heldMs);
-  }
-
-  // Declared-vs-durable divergence is LEGAL for the length of a legal
-  // participant session: in-session quorum commits join the open transaction
-  // and only become durable at session COMMIT. The signal is stuck only when
-  // the divergence SUSTAINS beyond the same legal hold that bounds signal
-  // (a) — verifier-confirmed a healthy leader inside a legal >=3s session
-  // would otherwise 3-strike into demotion.
-  observeCommitDurabilityDivergence(nowMs, state, heldMs) {
-    const declaredIndex = this.logAdapter?.getLastDeclaredCommitIndex?.();
-    if (!Number.isFinite(declaredIndex) || declaredIndex <= 0) {
-      state.divergenceSinceMs = null;
-      return {stuck: false, heldMs, divergenceMs: 0};
-    }
-    const durableIndex = this.readDurableCommittedIndexWitness(declaredIndex);
-    if (durableIndex === null || declaredIndex <= durableIndex) {
-      state.divergenceSinceMs = null;
-      return {stuck: false, heldMs, divergenceMs: 0};
-    }
-    if (state.divergenceSinceMs === null) {
-      state.divergenceSinceMs = nowMs;
-    }
-    const divergenceMs = nowMs - state.divergenceSinceMs;
-    if (divergenceMs < LEADER_DURABILITY_LEGAL_HOLD_MS) {
-      return {stuck: false, heldMs, divergenceMs};
-    }
-    return {
-      stuck: true,
-      reason: LEADER_DURABILITY_UNFIT_REASON.COMMIT_DURABILITY_DIVERGENCE,
-      declaredIndex,
-      durableIndex,
-      divergenceMs,
-    };
+    return {stuck: false, heldMs};
   }
 
   resolveLeaderDurabilityUnfitConsequence(
@@ -338,8 +222,9 @@ class PartitionServiceDurabilityFitnessMethods {
       role: this.role,
       successorViable,
       heldMs: signal.heldMs,
-      declaredIndex: signal.declaredIndex,
-      durableIndex: signal.durableIndex,
+      candidacyDeferral:
+        LEADER_DURABILITY_CONSEQUENCE_OUTCOME.CANDIDACY_DEFERRAL_UNSUPPORTED,
+      demotion: LEADER_DURABILITY_CONSEQUENCE_OUTCOME.DEMOTION_UNSUPPORTED,
     });
     if (firstDetection) {
       // The loud surfacing lives HERE: the handoff seam itself logs nothing
@@ -350,13 +235,9 @@ class PartitionServiceDurabilityFitnessMethods {
       );
     }
     // The alive zombie's in-memory log matches the followers', so vote rules
-    // do NOT disfavor it: candidacy deferral must be re-asserted every tick
-    // while unfit or it re-wins after the deferral window (CL-033/034
-    // churn). Asserted BEFORE the viability gate — an unfit CANDIDATE win is
-    // unsafe even when no demotion will run (heal-vet hardening G4).
-    if (!this.isSoloReplicaGroup?.()) {
-      this.raft?.deferCandidacy?.();
-    }
+    // do NOT disfavor it: it needs candidacy deferral while unfit (CL-033/034
+    // churn), which the port cannot provide; the evidence above carries
+    // CANDIDACY_DEFERRAL_UNSUPPORTED rather than a no-op call here.
     if (successorViable) {
       state.successorlessUnfitSinceMs = ABSENT_DURABILITY_TIMESTAMP;
     } else if (
@@ -377,8 +258,8 @@ class PartitionServiceDurabilityFitnessMethods {
   /**
    * The demotion tail shared by the normal viable-successor handoff and the
    * C3 successorless bounded fallback; the fallback path is logged LOUD and
-   * distinct before the shared flap-safe demotion sequence (one owner with
-   * the replica handler's tracked handoff). The hook is
+   * distinct. The port has no step-down operation, so no demotion runs: the
+   * evidence handed to the hook carries DEMOTION_UNSUPPORTED. The hook is
    * notification/observability.
    * @param {number} nowMs
    * @param {Object} state
@@ -397,7 +278,6 @@ class PartitionServiceDurabilityFitnessMethods {
         },
       );
     }
-    performTrackedLeaderDemotion(this);
     this.leaderDurabilityUnfitHook?.(evidence);
   }
 }
@@ -417,6 +297,7 @@ function createPartitionServiceDurabilityFitnessMethods() {
 }
 
 export {
+  LEADER_DURABILITY_CONSEQUENCE_OUTCOME,
   LEADER_DURABILITY_UNFIT_REASON,
   createPartitionServiceDurabilityFitnessMethods,
 };

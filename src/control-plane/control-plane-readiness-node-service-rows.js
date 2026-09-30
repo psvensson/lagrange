@@ -1,5 +1,7 @@
 import {ControlPlaneReadinessStartupAuthorityHealth} from './control-plane-readiness-startup-authority-health.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
+import {isAuthoritativeControlPlaneRowReadSuccessful} from
+  './control-plane-system-table-gateway.js';
 import {NODE_LIVENESS_SEMANTIC_STATE} from
   './node-liveness-semantic-projection-owner.js';
 
@@ -30,8 +32,15 @@ class ControlPlaneReadinessNodeServiceRows extends
       this.nodesOwner &&
       typeof this.nodesOwner.listNodes === 'function'
     ) {
+      // Authoritative-preferred (the coordinator's read-source contract):
+      // an unavailable list read answers from the row source, never as "no
+      // rows" - collapsed to [], it made every node look missing to the
+      // publication-planning evaluation and alternated the shared liveness
+      // projection and the readiness feedback (fix-f4).
       const result = await this.nodesOwner.listNodes(options);
-      return Array.isArray(result?.rows) ? result.rows : [];
+      if (isAuthoritativeControlPlaneRowReadSuccessful(result)) {
+        return Array.isArray(result?.rows) ? result.rows : [];
+      }
     }
     if (
       this.nodesOwner &&
@@ -49,15 +58,11 @@ class ControlPlaneReadinessNodeServiceRows extends
         (row) => row?.[COLUMN.NODE_ID] === nodeId,
       );
     }
-    if (
-      options.allowAuthoritativeRefresh === true &&
-      this.servicesOwner &&
-      typeof this.servicesOwner.listServices === 'function'
-    ) {
-      const result = await this.servicesOwner.listServices(options);
-      return Array.isArray(result?.rows) ?
-        result.rows.filter((row) => row?.[COLUMN.NODE_ID] === nodeId) :
-        [];
+    const authoritativeRows = await this.readAuthoritativeServiceRows(options);
+    if (authoritativeRows !== null) {
+      return authoritativeRows.filter(
+        (row) => row?.[COLUMN.NODE_ID] === nodeId,
+      );
     }
     if (
       this.servicesOwner &&
@@ -73,15 +78,23 @@ class ControlPlaneReadinessNodeServiceRows extends
     return this.getNodeServiceRows(nodeId);
   }
 
-  async readAllNodeServiceRows(options = {}) {
+  // The authoritative service rows, or null when none were requested or the
+  // authoritative read was unavailable (the caller then reads its source).
+  async readAuthoritativeServiceRows(options = {}) {
     if (
-      options.allowAuthoritativeRefresh === true &&
-      this.servicesOwner &&
-      typeof this.servicesOwner.listServices === 'function'
+      options.allowAuthoritativeRefresh !== true ||
+      typeof this.servicesOwner?.listServices !== 'function'
     ) {
-      const result = await this.servicesOwner.listServices(options);
-      return Array.isArray(result?.rows) ? result.rows : [];
+      return null;
     }
+    const result = await this.servicesOwner.listServices(options);
+    if (!isAuthoritativeControlPlaneRowReadSuccessful(result)) return null;
+    return Array.isArray(result?.rows) ? result.rows : [];
+  }
+
+  async readAllNodeServiceRows(options = {}) {
+    const authoritativeRows = await this.readAuthoritativeServiceRows(options);
+    if (authoritativeRows !== null) return authoritativeRows;
     if (
       this.servicesOwner &&
       typeof this.servicesOwner.listServicesFromCache === 'function'

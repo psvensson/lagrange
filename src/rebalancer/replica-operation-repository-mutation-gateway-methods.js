@@ -1,3 +1,7 @@
+import {isReroutableWriteError} from '../constants/errors.js';
+import {isReroutableWriteFailureCode} from
+  '../partition/partition-write-kernel.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
   'replica-operation';
@@ -98,20 +102,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       const shouldRetryDeferredCanonicalMutation =
         this.canUseReplicaOperationMutationIngress(mutation?.operation);
       while (true) {
-        const queryOptions = this.buildOperationMutationQueryOptions(
-          options,
-          retryAttempt,
-        );
-        let result = null;
-        try {
-          result = await this.executeReplicaOperationGatewayMutation(
-            mutation,
-            queryOptions,
-            fallback,
-          );
-        } catch (error) {
-          result = error;
-        }
+        const result = await this.executeReplicaOperationGatewayMutationAttempt(
+          mutation, options, fallback, retryAttempt);
         if (result.success || !this.isRetryableOperationPersistError(result)) {
           return result;
         }
@@ -150,6 +142,31 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           remainingMs,
         );
         await this.waitForOperationPersistRetry(waitMs);
+      }
+    }
+
+    async executeReplicaOperationGatewayMutationAttempt(
+      mutation,
+      options,
+      fallback,
+      retryAttempt,
+    ) {
+      if (typeof options.beforeAttempt === 'function' &&
+          await options.beforeAttempt() !== true) {
+        return {success: false, admissionRefused: true};
+      }
+      const queryOptions = this.buildOperationMutationQueryOptions(
+        options,
+        retryAttempt,
+      );
+      try {
+        return await this.executeReplicaOperationGatewayMutation(
+          mutation,
+          queryOptions,
+          fallback,
+        );
+      } catch (error) {
+        return error;
       }
     }
 
@@ -233,13 +250,16 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     }
 
     isRetryableOperationPersistError(errorResult) {
+      // A partition write answer is classified by the control plane's one
+      // classifier: by its code when the result carries it, by its text when
+      // only the text reached the repository.
       if (isRetryableControlPlaneError(errorResult)) {
         return true;
       }
       const errorMessage = this.getOperationPersistErrorMessage(errorResult);
       return (
         typeof errorMessage === 'string' &&
-        (errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
+        (isReroutableWriteError(errorMessage) ||
           errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
           RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS.some((fragment) =>
             errorMessage.includes(fragment),
@@ -372,6 +392,13 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       if (!this.isRetryableOperationPersistError(errorResult)) {
         return false;
       }
+      // A partition write answer that carries its code is routed again by
+      // it; otherwise the error's text and shape decide.
+      return isReroutableWriteFailureCode(errorResult?.failureCode) ||
+        this.hasOperationMutationRouteRepairSignature(errorResult);
+    }
+
+    hasOperationMutationRouteRepairSignature(errorResult) {
       const errorMessage = this.getOperationPersistErrorMessage(errorResult);
       if (
         typeof errorMessage !== 'string' ||
@@ -381,7 +408,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       }
       return (
         hasControlPlaneMutationRoutingGapFailureSignature(errorResult) ||
-        errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
+        isReroutableWriteError(errorMessage) ||
         errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
         RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS.some((fragment) =>
           errorMessage.includes(fragment),

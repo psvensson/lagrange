@@ -15,6 +15,11 @@ import {
   EXECUTOR_OUTCOME_TYPE,
 } from '../../src/rebalancer/executor-outcome-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
+import {registerMessageGroupTransportHandler} from
+  '../../src/bootstrap/shared/message-group-transport-handler.js';
+import {createIdentityTransport} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 import {
   SERVICE_STATUS,
   WORKFLOW_STEP,
@@ -57,16 +62,48 @@ function createMockCache(data = {}) {
   };
 }
 
-function createMockCdc() {
+function createMockCdc(cache) {
   const operations = [];
+  const inserts = [];
   const upserts = [];
   const updates = [];
   const deletes = [];
   return {
     operations,
+    inserts,
     upserts,
     updates,
     deletes,
+    async executeAuthoritativeSystemTableRead(tableName, _sql, params) {
+      const serviceId = params[0];
+      let row = cache.get(tableName, serviceId);
+      for (const operation of operations) {
+        const operationServiceId = operation.data?.service_id ||
+          operation.keyObj?.service_id || operation.whereClause?.service_id;
+        if (operation.tableName !== tableName ||
+            operationServiceId !== serviceId) {
+          continue;
+        }
+        if (operation.type === 'delete') {
+          row = null;
+        } else {
+          row = {
+            ...(row || operation.keyObj),
+            ...(operation.data || operation.updateData),
+          };
+        }
+      }
+      return {success: true, rows: row ? [row] : []};
+    },
+    async readAuthoritativeRows(tableName, sql, params) {
+      return this.executeAuthoritativeSystemTableRead(tableName, sql, params);
+    },
+    async insertSystemTableRow(tableName, data) {
+      const entry = {type: 'insert', tableName, data};
+      operations.push(entry);
+      inserts.push(entry);
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
     async upsertSystemTableRow(tableName, data) {
       const entry = {type: 'upsert', tableName, data};
       operations.push(entry);
@@ -77,11 +114,13 @@ function createMockCdc() {
       const entry = {type: 'update', tableName, keyObj, updateData};
       operations.push(entry);
       updates.push(entry);
+      return {success: true, partitionResult: {affectedRows: 1}};
     },
     async deleteSystemTableRow(tableName, whereClause) {
       const entry = {type: 'delete', tableName, whereClause};
       operations.push(entry);
       deletes.push(entry);
+      return {success: true, partitionResult: {affectedRows: 1}};
     },
   };
 }
@@ -92,9 +131,14 @@ function createHandler(overrides = {}) {
     services: [
       {
         service_id: 'mg-1-r1',
+        replica_id: 'mg-1-r1',
         service_type: 'message_group',
         group_id: 'mg-1',
-        node_id: 'node-a',
+        node_id: 'test-node',
+        status: SERVICE_STATUS.ACTIVE,
+        address: 'test-node/message-group/mg-1-r1',
+        created_at: 100,
+        updated_at: 101,
       },
       {
         service_id: 'mg-1-r2',
@@ -111,10 +155,18 @@ function createHandler(overrides = {}) {
     ],
     replica_operations: overrides.operations || [],
   });
-  const cdc = overrides.cdc || createMockCdc();
+  const cdc = overrides.cdc || createMockCdc(cache);
+  const nodeId = overrides.nodeId || 'test-node';
+  // The created replica's runtime: the production registration records its
+  // exact transport handler and its lifecycle owner (the node's
+  // ReplicaStateMachine) on the service.
+  const transport = createIdentityTransport();
+  const stateMachine = new ReplicaStateMachine({nodeId,
+    controlPlaneSystemTableGateway: {}});
+  const createdReplicas = new Map();
 
   const handler = new MessageGroupServiceHandler({
-    nodeId: overrides.nodeId || 'test-node',
+    nodeId,
     systemTableCache: cache,
     cdcIntegrationService: cdc,
     createMessageGroupReplica: async (options) => {
@@ -125,6 +177,18 @@ function createHandler(overrides = {}) {
       if (overrides.createError) {
         throw new Error(overrides.createError);
       }
+      const address = `${nodeId}/message-group/${options.replicaId}`;
+      const service = {groupId: options.groupId, replicaId: options.replicaId,
+        unifiedAddress: address, transport, isLeaderReplica: () => false,
+        receiveMessage: () => ({acknowledged: true})};
+      if (overrides.registerHandler === false) {
+        service.transportHandler = () => ({acknowledged: true});
+        service.resolveHandlerRetirementLane = () => stateMachine;
+      } else {
+        registerMessageGroupTransportHandler(service, {messageRouter: transport,
+          address, resolveLane: () => stateMachine});
+      }
+      createdReplicas.set(options.replicaId, service);
       return {created: true};
     },
     startMessageGroupReplica: async (options) => {
@@ -142,13 +206,13 @@ function createHandler(overrides = {}) {
       return {stopped: true};
     },
     resolveLocalMessageGroupReplica:
-      overrides.resolveLocalMessageGroupReplica || null,
-    messageRouter: overrides.messageRouter || null,
+      overrides.resolveLocalMessageGroupReplica ||
+      ((replicaId) => createdReplicas.get(replicaId) || null),
     executorOutcomeEmitter: overrides.executorOutcomeEmitter || null,
   });
   handler.initialize();
 
-  return {handler, cache, cdc, calls};
+  return {handler, cache, cdc, calls, transport, createdReplicas};
 }
 
 function flushImmediate() {
@@ -223,13 +287,7 @@ describe('MessageGroupServiceHandler', () => {
 
   it('creates a message-group replica from cache-derived peer topology',
     async () => {
-      const {handler, cdc, calls} = createHandler({
-        messageRouter: {
-          isRegistered(address) {
-            return address === 'test-node/message-group/mg-1-r4';
-          },
-        },
-      });
+      const {handler, cdc, calls} = createHandler();
 
       const response = await handler.handleCreateReplica({
         [ReplicaOperationField.OPERATION_ID]: 'op-create-1',
@@ -254,7 +312,7 @@ describe('MessageGroupServiceHandler', () => {
       );
       assert.ok(
         calls[0].options.peerAddresses.includes(
-          'node-a/message-group/mg-1-r1',
+          'test-node/message-group/mg-1-r1',
         ),
       );
       assert.ok(
@@ -266,14 +324,22 @@ describe('MessageGroupServiceHandler', () => {
         handler.localReplicas.get('mg-1-r4')?.status,
         ReplicaStatus.ACTIVE,
       );
-      assert.equal(cdc.updates.length, 0);
-      assert.equal(cdc.upserts.length, 1);
-      assert.equal(cdc.upserts[0].tableName, 'services');
-      assert.equal(cdc.upserts[0].data.service_id, 'mg-1-r4');
-      assert.equal(cdc.upserts[0].data.group_id, 'mg-1');
-      assert.equal(cdc.upserts[0].data.node_id, 'test-node');
-      assert.equal(cdc.upserts[0].data.status, SERVICE_STATUS.ACTIVE);
-      assert.equal(cdc.operations[0].type, 'upsert');
+      // Owner decision N2 (D1): the row is born STOPPED and becomes ACTIVE
+      // only through the handler-bound activation CAS on that generation.
+      assert.equal(cdc.inserts.length, 1);
+      assert.equal(cdc.inserts[0].tableName, 'services');
+      assert.equal(cdc.inserts[0].data.service_id, 'mg-1-r4');
+      assert.equal(cdc.inserts[0].data.group_id, 'mg-1');
+      assert.equal(cdc.inserts[0].data.node_id, 'test-node');
+      assert.equal(cdc.inserts[0].data.status, SERVICE_STATUS.STOPPED);
+      assert.equal(cdc.updates.length, 1);
+      assert.equal(cdc.updates[0].keyObj.status, SERVICE_STATUS.STOPPED);
+      assert.equal(cdc.updates[0].keyObj.created_at,
+        cdc.inserts[0].data.created_at,
+        'the ACTIVE CAS is fenced by the registered generation');
+      assert.equal(cdc.updates[0].updateData.status, SERVICE_STATUS.ACTIVE);
+      assert.deepEqual(cdc.operations.map((operation) => operation.type),
+        ['insert', 'update']);
     });
 
   it('creates a message-group replica from explicit topology when cache is sparse',
@@ -283,11 +349,6 @@ describe('MessageGroupServiceHandler', () => {
           services: [],
           replica_operations: [],
         }),
-        messageRouter: {
-          isRegistered(address) {
-            return address === 'test-node/message-group/mg-1-r4';
-          },
-        },
       });
 
       const response = await handler.handleCreateReplica({
@@ -330,7 +391,7 @@ describe('MessageGroupServiceHandler', () => {
           'node-c/message-group/mg-1-r3',
         ],
       );
-      assert.equal(cdc.upserts.length, 1);
+      assert.equal(cdc.inserts.length, 1);
     });
 
   it('rejects incomplete explicit topology for a message-group replica',
@@ -359,13 +420,7 @@ describe('MessageGroupServiceHandler', () => {
 
   it('fails closed when the local replica handler is not registered',
     async () => {
-      const {handler, cdc, calls} = createHandler({
-        messageRouter: {
-          isRegistered() {
-            return false;
-          },
-        },
-      });
+      const {handler, cdc, calls} = createHandler({registerHandler: false});
 
       const response = await handler.handleCreateReplica({
         [ReplicaOperationField.OPERATION_ID]: 'op-create-unregistered',
@@ -391,7 +446,10 @@ describe('MessageGroupServiceHandler', () => {
         0,
         'services row publication should fail closed until the replica handler is routable',
       );
-      assert.equal(cdc.updates.length, 0);
+      assert.equal(cdc.inserts.length, 1);
+      assert.equal(cdc.inserts[0].data.status, SERVICE_STATUS.STOPPED,
+        'the registration is a STOPPED birth');
+      assert.equal(cdc.updates.length, 0, 'no ACTIVE CAS without the handler');
     });
 
   it('forwards retryable create-failure metadata on MESSAGE_GROUP_CREATE_FAILED',
@@ -404,11 +462,6 @@ describe('MessageGroupServiceHandler', () => {
 
       const {handler} = createHandler({
         createErrorObj: retryableError,
-        messageRouter: {
-          isRegistered() {
-            return true;
-          },
-        },
         executorOutcomeEmitter: {
           emitOutcome(outcomeType, operationId, workflowStep, options) {
             emittedOutcomes.push({
@@ -460,11 +513,6 @@ describe('MessageGroupServiceHandler', () => {
 
       const {handler} = createHandler({
         createErrorObj: plainError,
-        messageRouter: {
-          isRegistered() {
-            return true;
-          },
-        },
         executorOutcomeEmitter: {
           emitOutcome(outcomeType, operationId, workflowStep, options) {
             emittedOutcomes.push({outcomeType, options});

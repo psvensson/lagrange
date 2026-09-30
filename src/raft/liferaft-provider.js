@@ -7,9 +7,15 @@ import {
 } from './raft-provider-contract-constants.js';
 import {createRaftOperationPort, deepFreeze} from './raft-operation-port.js';
 import {
+  RAFT_LEADERSHIP_TRANSFER_REASON,
   RAFT_MEMBERSHIP_OPERATION,
+  RAFT_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
+import {
+  COMMITTED_MEMBERSHIP_ANSWER_KIND,
+  COMMITTED_MEMBERSHIP_REFUSAL,
+} from './raft-committed-membership-constants.js';
 import {RAFT_EVENT, RAFT_ROLE} from './constants.js';
 
 // The liferaft option keys a partition group's node is constructed with. They
@@ -45,7 +51,6 @@ const LIFERAFT_PROGRESS_PROBE_REASON = Object.freeze({
 });
 
 const LIFERAFT_PROPOSE_TIMEOUT_DEFAULT_MS = 1200;
-const LIFERAFT_IMMEDIATE_ELECTION_TIMEOUT_MS = 1;
 const LIFERAFT_EMPTY_LOG_INDEX = 0;
 const UNSUPPORTED_CONFIGURATION_CHANGE_ERROR =
   'unsupported liferaft configuration change';
@@ -297,6 +302,14 @@ class LiferaftProvider {
         }
         throw new Error(UNSUPPORTED_CONFIGURATION_CHANGE_ERROR);
       },
+      // liferaft has no leader-mediated transfer: the operation is refused
+      // typed, and nothing about the node changes.
+      transferLeadership: () => deepFreeze({
+        outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+        reason: RAFT_LEADERSHIP_TRANSFER_REASON.UNSUPPORTED_BACKEND,
+        retryable: false,
+        recoveryRequired: false,
+      }),
       probePeerProgress: async (peerAddress) => {
         if (!node.log || typeof peerAddress !== 'string' ||
             peerAddress.length === 0) {
@@ -341,6 +354,12 @@ class LiferaftProvider {
         return deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK});
       },
       readStatus: status,
+      // liferaft holds no committed configuration: the read is refused
+      // typed, never answered from its local peer list.
+      [RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP]: () => deepFreeze({
+        kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED,
+        reason: COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE,
+      }),
       configureTick: (timing = {}) => {
         if (Number.isFinite(timing.heartbeatMs)) {
           node.beat = timing.heartbeatMs;
@@ -531,21 +550,6 @@ class LiferaftProvider {
     if (typeof raftNode?.heartbeat === 'function' &&
         typeof raftNode?.timeout === 'function') {
       return raftNode.heartbeat(raftNode.timeout());
-    }
-  }
-
-  /**
-   * Request the next follower election without waiting for the randomized
-   * election timeout. Replacement leader handoff uses this when safe source
-   * removal is blocked on explicit replacement ownership.
-   * @param {Object} raftNode
-   */
-  requestElectionNow(raftNode) {
-    if (typeof raftNode?.campaign === 'function') {
-      return raftNode.campaign({timeoutMs: LIFERAFT_IMMEDIATE_ELECTION_TIMEOUT_MS});
-    }
-    if (typeof raftNode?.heartbeat === 'function') {
-      return raftNode.heartbeat(LIFERAFT_IMMEDIATE_ELECTION_TIMEOUT_MS);
     }
   }
 

@@ -212,7 +212,7 @@ class SeedInfrastructurePhase {
         advertisedNodeWsAddress: d.getAdvertisedNodeWsAddress?.() || null,
         wsPort: wsPort,
         externalAdmissionEnabled: false,
-        bootIncarnation: d.getBootIncarnation?.() || 0,
+        bootIncarnation: d.getBootIncarnation(),
         // The router resolves addresses from THIS runtime's cache.
         nodeService: this.nodeService,
         routerFactory: this.routerFactory,

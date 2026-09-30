@@ -20,11 +20,14 @@ import {buildDurableCommitWitness} from
 import {createMockSystemCache} from
   '../../query/query-executor-test-support.js';
 import {createVirtualNetwork} from './virtual-network.js';
+import {applyCommandThroughApplicationOwner} from
+  '../../partition/partition-service-test-support.js';
 import {connectRaftCluster, driveNetwork} from './raft-network-host.js';
 import {LoadGenerator} from './load-generator.js';
 import {
   assertAcknowledgedWritesVisibleOnReachableNodes,
 } from './acknowledged-write-visibility.js';
+import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
 
 const FAILED_RUN_IDS = Object.freeze([
   'bench-9fc36d55-8126-4f3d-ad77-c3fd1c151d5d-412',
@@ -60,7 +63,7 @@ const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayMap = Function.call.bind(Array.prototype.map);
 
 function createEndToEndPartition() {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId: 'logs-p1',
     tableId: 'logs',
     tableName: 'logs',
@@ -78,7 +81,7 @@ function createEndToEndPartition() {
       ],
     },
     dbPath: ':memory:',
-  });
+  }));
 }
 
 function createEndToEndCoordinator(partition) {
@@ -104,7 +107,7 @@ function createEndToEndCoordinator(partition) {
 }
 
 function createRun13Partition(nodeId, dbPath) {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId: RUN13_PARTITION_ID,
     tableId: 'benchmark_events',
     tableName: 'benchmark_events',
@@ -118,7 +121,7 @@ function createRun13Partition(nodeId, dbPath) {
       ],
     },
     dbPath,
-  });
+  }));
 }
 
 function buildRun13Command(id, index) {
@@ -198,12 +201,27 @@ async function initializeRun13Partitions(tempDir) {
   return partitions;
 }
 
+// The simulated quorum's committed entries reach each partition through the
+// production application-transaction owner, under a group of their own so
+// they never touch the applied state of the partition's own consensus group.
+const RUN13_SIMULATED_GROUP_ID = 'run13-simulated-quorum';
+
 function wireRun13CommitApplication(rafts, partitions, dropAppliedNodeId) {
   for (const nodeId of RUN13_NODE_IDS) {
+    let appliedIndex = 0;
     rafts.get(nodeId).on('commit', (command) => {
       const partition = partitions.get(nodeId);
       if (partition && nodeId !== dropAppliedNodeId) {
-        partition.applyCommittedEntry(command);
+        appliedIndex += 1;
+        applyCommandThroughApplicationOwner({
+          database: partition.db,
+          groupId: RUN13_SIMULATED_GROUP_ID,
+          index: appliedIndex,
+          term: rafts.get(nodeId).term,
+          command,
+          applyCommittedEntry: (committed) =>
+            partition.applyCommittedEntry(committed),
+        });
       }
     });
   }

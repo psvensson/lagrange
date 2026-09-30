@@ -41,6 +41,15 @@ import {
 } from '../../src/transport/inproc-transport.js';
 import {createSealedSourceGeneration} from './snapshot-catchup-fixture.js';
 import {waitForCondition} from './bulk-transfer-socket-fixture.js';
+import {genesisStamp} from
+  '../../src/raft/raft-committed-membership-stamp.js';
+import {
+  createLifecycleCdcService,
+  createLifecycleServiceRow,
+  createLifecycleStateStore,
+} from '../test-helpers/lifecycle-state-store.js';
+import {TEST_BOOT_INCARNATION} from
+  '../test-helpers/boot-incarnation-fixture.js';
 
 // S6 Phase A link 2 guard (quest raft-snapshot-live-rebuild): the
 // onSnapshotCatchupNeeded dispatcher seam is set on services built through
@@ -104,6 +113,9 @@ function createStubRouter(bulkChannelRegistry) {
     nodeId: NODE_ID,
     nodeAddress: `ws://${NODE_ID}:7000`,
     advertisedAddress: `ws://${NODE_ID}:7000`,
+    // The router requires an issued incarnation in production; the bulk dial
+    // identity takes it from here (D5).
+    bootIncarnation: TEST_BOOT_INCARNATION,
     bulkChannelRegistry: bulkChannelRegistry || null,
     register() {},
   };
@@ -111,11 +123,20 @@ function createStubRouter(bulkChannelRegistry) {
 
 function createHandlerSetup(options = {}) {
   const created = [];
+  const lifecycleStore = createLifecycleStateStore({
+    services: [createLifecycleServiceRow({
+      serviceId: REPLICA_ID,
+      replicaId: REPLICA_ID,
+      partitionId: PARTITION_ID,
+      nodeId: NODE_ID,
+      status: 'active',
+    })],
+  });
   const setup = ReplicaHandlerSetup.create({
     nodeId: NODE_ID,
     messageRouter: createStubRouter(options.bulkChannelRegistry),
-    cdcIntegrationService: {},
-    systemTableCache: createStubSystemTableCache(),
+    cdcIntegrationService: createLifecycleCdcService({store: lifecycleStore}),
+    systemTableCache: lifecycleStore.cache,
     createPartitionService: async (serviceOptions) => {
       const service = {
         ...serviceOptions,
@@ -201,6 +222,7 @@ test('PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam',
           tableName: STATE_TABLE,
           replicaId: REPLICA_ID,
           replicaIds: [REPLICA_ID],
+          bootstrapMembership: genesisStamp([REPLICA_ID]),
           nodeId: NODE_ID,
           dbPath,
           schema: {

@@ -10,6 +10,7 @@ import {MessageRouter, ConnectionState, RouterMessageType} from
   '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 /**
  * Initialize test environment.
  */
@@ -44,7 +45,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     cleanupTestEnvironment();
   });
   t.test('should create router with default options', async (t) => {
-    const router = new MessageRouter();
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION});
 
     t.ok(router.routerId, 'should have router ID');
     t.ok(router.nodeId, 'should have node ID');
@@ -57,6 +58,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('should create router with custom options', async (t) => {
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'custom-node-id',
       nodeAddress: 'ws://localhost:9999',
       wsPort: 9999,
@@ -70,7 +72,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
   });
 
   t.test('should initialize without starting server', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
 
     await router.initialize({startServer: false});
 
@@ -81,7 +83,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
   });
 
   t.test('should register and unregister local handlers', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     const handler = () => ({acknowledged: true});
@@ -101,7 +103,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
   });
 
   t.test('should throw when registering non-function handler', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     t.throws(
@@ -114,7 +116,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
   });
 
   t.test('should throw when registering with invalid address format', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     const handler = () => ({acknowledged: true});
@@ -141,7 +143,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
   });
 
   t.test('should reject non-unified addresses', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     const handler = () => ({acknowledged: true});
@@ -157,7 +159,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('should deliver locally without connection via deliverLocal', async (t) => {
     // Local delivery bypasses WebSocket — no self-connection needed.
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     const receivedMessages = [];
@@ -180,7 +182,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
   });
 
   t.test('should route QUERY messages via message-group transport', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     let localHandlerCalls = 0;
@@ -220,7 +222,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('should defer QUERY messages when resolver returns no transport',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'test-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
       await router.initialize();
 
       router.setQueryMessageGroupServiceResolver(() => null);
@@ -244,7 +248,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     });
 
   t.test('should fail QUERY messages when message-group transport is missing', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     const result = await router.deliver('test-node/partition/p1', {
@@ -270,7 +274,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('should preserve typed query transport retry hints from resolver selections',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'test-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
       await router.initialize();
 
       router.setQueryMessageGroupServiceResolver(() => ({
@@ -299,7 +305,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('should expose canonical query transport readiness from resolver selections',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'test-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
       await router.initialize();
 
       router.setQueryMessageGroupServiceResolver(() => ({
@@ -328,7 +336,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('should defer QUERY messages when query transport throws while target reconnects',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'test-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
       await router.initialize();
 
       router.nodeConnections.set('node-2', {
@@ -362,7 +372,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('should preserve explicit deferred retry metadata from query transport failures',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'test-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
       await router.initialize();
 
       router.setQueryMessageGroupServiceResolver(() => ({
@@ -397,7 +409,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('should expose reconnect-before-delivery pressure in the outbound summary',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'test-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
       await router.initialize();
 
       router.pendingNodeConnections.set('node-2', Promise.resolve(null));
@@ -420,7 +434,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     async (t) => {
       const QUERY_TRANSPORT_DELIVERY_SOURCE =
         'control-plane:read:control_plane_publications';
-      const router = new MessageRouter({nodeId: 'test-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
       await router.initialize();
 
       let capturedOptions = null;
@@ -463,7 +479,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     });
 
   t.test('should deliver locally for async handler without connection', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     router.register('test-node/service/async-service', async (envelope) => {
@@ -483,7 +499,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('should return error for handler error without connection', async (t) => {
     // In the unified transport architecture, all messages go through WebSocket
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     router.register('test-node/service/error-service', () => {
@@ -500,7 +516,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
   });
 
   t.test('should return error for unknown service without connection', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     const result = await router.deliver('test-node/service/unknown-service', {data: 'test'});
@@ -512,7 +528,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
   });
 
   t.test('should set service node resolver', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     const resolver = (address) => {
@@ -530,7 +546,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('should recover a missing remote node connection from the node address resolver',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'test-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
       await router.initialize();
 
       const connectCalls = [];
@@ -582,7 +600,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('should surface defer-retry hints when delivery recovery cannot reconnect a target',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'test-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
       await router.initialize({startServer: false});
       t.teardown(async () => {
         await router.shutdown().catch(() => {});
@@ -618,7 +638,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('failed cold dials should not stampede repeated reconnect attempts',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'test-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
       await router.initialize({startServer: false});
       t.teardown(async () => {
         await router.shutdown().catch(() => {});
@@ -655,7 +677,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('should defer to an armed reconnect instead of starting a second recovery dial',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'test-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
       await router.initialize({startServer: false});
       t.teardown(async () => {
         await router.shutdown().catch(() => {});
@@ -707,6 +731,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
   t.test('should fail fast when one remote outbound queue is already saturated',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node',
         outboundQueueMaxConcurrent: 1,
         outboundQueueMaxPending: 1,
@@ -790,7 +815,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('should deliver live Raft packets directly without queueing',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'test-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
       await router.initialize();
 
       const sentMessages = [];
@@ -853,7 +880,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
   t.test('should fall back to queued delivery when Raft socket is not live',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'test-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
       await router.initialize();
 
       let enqueueOutboundCalled = false;
@@ -919,6 +948,7 @@ t.test('MessageRouter reconnect delivery defers promptly when delivery budget ' 
   const connectTimeoutMs = 5000;
   const maxObservedElapsedMs = 500;
   const router = new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: localNodeId,
     connectTimeoutMs,
   });

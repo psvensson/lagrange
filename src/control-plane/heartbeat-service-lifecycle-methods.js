@@ -13,14 +13,19 @@ import {
   HEARTBEAT_STATE,
 } from './heartbeat-service-constants.js';
 import {
-  normalizeHeartbeatPublicationDiagnostics,
   recordHeartbeatPublicationAttempt,
   recordHeartbeatPublicationSuccess,
-  recordHeartbeatPublicationTarget,
 } from './heartbeat-service-write-coalescing.js';
 import {HEARTBEAT_SERVICE_LITERAL, ONE, ZERO} from './heartbeat-service-runtime-state.js';
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
   './membership-publication-row-contract.js';
+import {buildPublicationActiveGateMembershipConvergence} from
+  './publication-active-gate-handoff-contract-helpers.js';
+import {
+  applyNodeTerminalTransition,
+  isNodeTerminalTransitionCompleted,
+  isNodeTerminalTransitionRefused,
+} from './node-terminal-transition-fence.js';
 
 // Phase 4 (4.1c): the membership-publication reconcile is only ever triggered on
 // recovering nodes, never on the stable leader — so when those nodes defer to the
@@ -357,24 +362,11 @@ class HeartbeatServiceLifecycleMethods {
         return;
       }
 
-      const latestPublishedRow = planningSnapshot.latestPublishedPublicationRow;
-      const latestRow = planningSnapshot.latestPublicationRow;
-      const publicationEpoch =
-        latestPublishedRow?.publicationEpoch ??
-        latestRow?.publicationEpoch ??
-        0;
-      const publishedActiveNodeIds =
-        latestPublishedRow?.publishedActiveNodeIds ??
-        latestRow?.publishedActiveNodeIds ??
-        [];
-
       const handoffContract = buildPublicationActiveGateHandoffContract({
         nodeRows: planningSnapshot.nodeRows,
         readinessByNodeId: planningSnapshot.readinessByNodeId,
-        publicationConvergence: {
-          publicationEpoch,
-          publishedActiveNodeIds,
-        },
+        publicationConvergence:
+          buildPublicationActiveGateMembershipConvergence(planningSnapshot),
       });
 
       const missingCount = handoffContract?.missingPublishedCount ?? 0;
@@ -415,6 +407,23 @@ class HeartbeatServiceLifecycleMethods {
     this.logger.info(HEARTBEAT_LOG_MSG.STOPPED, {nodeId: this.nodeId});
   }
   /**
+   * The final graceful-shutdown mutation of this node's own row; the
+   * predicate is the exact node id + boot incarnation.
+   * @param {Object} gateway
+   * @param {Object} whereClause
+   * @param {Object} shutdownRow
+   * @param {Object} writeOptions
+   * @return {Promise<Object>}
+   */ writeShutdownRowAtIncarnation(gateway, whereClause, shutdownRow,
+    writeOptions) {
+    return gateway.updateSystemTableRow(
+      SYSTEM_TABLE_NAME.NODES,
+      whereClause,
+      shutdownRow,
+      writeOptions,
+    );
+  }
+  /**
    * Publish one terminal node row before graceful shutdown tears down the
    * control-plane path. This lets immediate rejoin reuse the same node ID
    * without waiting for ready-lease expiry.
@@ -449,91 +458,38 @@ class HeartbeatServiceLifecycleMethods {
       last_heartbeat: now,
       ready_lease_expires_at: null,
     };
-    const shutdownNodeRow = {...existing, node_id: this.nodeId, ...shutdownRow};
     const queryTimeoutMs = this.resolveHeartbeatWriteQueryTimeoutMs();
-    const reporterTimeoutMs = this.resolveNodeStateReporterTimeoutMs(queryTimeoutMs);
     recordHeartbeatPublicationAttempt({
       diagnostics: this.heartbeatPublicationDiagnostics,
       heartbeatConsecutiveFailures: this.heartbeatConsecutiveFailures,
       startedAtMs: now,
     });
-    if (typeof this.nodeStateReporter === 'function') {
-      try {
-        const reporterResult = await this.callNodeStateReporterWithTimeout(
-          {
-            nodeId: this.nodeId,
-            nodeAddress: shutdownRow.node_address,
-            state: shutdownRow.connection_state,
-            capabilities: shutdownRow.capabilities,
-            heartbeatAt: now,
-            readyLeaseExpiresAt: null,
-            nodeRow: shutdownNodeRow,
-          },
-          reporterTimeoutMs,
-        );
-        const reporterDiagnostics = normalizeHeartbeatPublicationDiagnostics(
-          reporterResult,
-          'node_shutdown_reporter',
-        );
-        const reporterVisible = await this.verifyReporterHeartbeatVisibility(now, {
-          expectedStatus: SERVICE_STATUS.STOPPED,
-          expectedConnectionState: STATE.DISCONNECTED,
-          expectedReadyLeaseCleared: true,
-        });
-        if (!reporterVisible) {
-          recordHeartbeatPublicationSuccess({
-            diagnostics: {
-              ...reporterDiagnostics,
-              publicationPath: HEARTBEAT_SERVICE_LITERAL.NODE_SHUTDOWN_REPORTER_UNVERIFIED,
-            },
-            heartbeatConsecutiveFailures: this.heartbeatConsecutiveFailures,
-            heartbeatPublicationDiagnostics: this.heartbeatPublicationDiagnostics,
-            now,
-            serviceLiteral: HEARTBEAT_SERVICE_LITERAL,
-          });
-          this.logger.info(HEARTBEAT_LOG_MSG.SHUTDOWN_STATUS_PUBLISHED, {
-            nodeId: this.nodeId,
-            publicationPath: HEARTBEAT_SERVICE_LITERAL.NODE_SHUTDOWN_REPORTER_UNVERIFIED,
-          });
-          return true;
-        }
-        recordHeartbeatPublicationSuccess({
-          diagnostics: reporterDiagnostics,
-          heartbeatConsecutiveFailures: this.heartbeatConsecutiveFailures,
-          heartbeatPublicationDiagnostics: this.heartbeatPublicationDiagnostics,
-          now,
-          serviceLiteral: HEARTBEAT_SERVICE_LITERAL,
-        });
-        this.logger.info(HEARTBEAT_LOG_MSG.SHUTDOWN_STATUS_PUBLISHED, {
-          nodeId: this.nodeId,
-          publicationPath: reporterDiagnostics.publicationPath,
-        });
-        return true;
-      } catch (error) {
-        const reporterDiagnostics = normalizeHeartbeatPublicationDiagnostics(
-          error?.publicationDiagnostics || error,
-          'node_shutdown_reporter',
-        );
-        recordHeartbeatPublicationTarget({
-          diagnostics: reporterDiagnostics,
-          heartbeatPublicationDiagnostics: this.heartbeatPublicationDiagnostics,
-          serviceLiteral: HEARTBEAT_SERVICE_LITERAL,
-        });
-        error.publicationDiagnostics = reporterDiagnostics;
-        throw error;
+    // The final mutation carries this process's exact boot incarnation, so a
+    // previous incarnation can never stop its replacement; a zero-row or
+    // unknown outcome is resolved by the NODES owner's readback.
+    const gateway = this.getControlPlaneSystemTableGateway();
+    const transition = await applyNodeTerminalTransition({
+      gateway,
+      nodeId: this.nodeId,
+      bootIncarnation: this.bootIncarnation,
+      destination: {
+        status: shutdownRow.status,
+        connection_state: shutdownRow.connection_state,
+      },
+      write: (whereClause) => this.writeShutdownRowAtIncarnation(
+        gateway, whereClause, shutdownRow,
+        {skipCacheWait: true, queryTimeoutMs}),
+    });
+    if (!isNodeTerminalTransitionCompleted(transition.outcome)) {
+      if (transition.error &&
+          !isNodeTerminalTransitionRefused(transition.outcome)) {
+        throw transition.error;
       }
-    }
-    const updateResult = await this.getControlPlaneSystemTableGateway().updateSystemTableRow(
-      SYSTEM_TABLE_NAME.NODES,
-      {node_id: this.nodeId},
-      shutdownRow,
-      {skipCacheWait: true, queryTimeoutMs},
-    );
-    const affectedRows = Number(updateResult?.partitionResult?.affectedRows);
-    if (affectedRows === 0) {
       this.logger.info(HEARTBEAT_LOG_MSG.SHUTDOWN_STATUS_SKIPPED, {
         nodeId: this.nodeId,
-        reason: HEARTBEAT_SERVICE_LITERAL.NODE_ROW_MISSING_FROM_STORAGE,
+        reason: transition.outcome,
+        bootIncarnation: this.bootIncarnation,
+        knownIncarnation: transition.knownIncarnation ?? null,
       });
       return false;
     }

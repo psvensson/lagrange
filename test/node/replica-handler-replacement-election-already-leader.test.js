@@ -1,10 +1,16 @@
 import t from 'tap';
-import LifeRaft from '../../src/raft/liferaft.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {deepFreeze} from '../../src/raft/raft-operation-port.js';
+import {
+  RAFT_LEADERSHIP_TRANSFER_REASON,
+  RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
+  RAFT_OPERATION_OUTCOME,
+} from '../../src/raft/raft-operation-port-constants.js';
 import {ReplicaOperationReason} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {
   REPLICA_HANDLER_LEADER_HANDOFF_BRANCH,
+  REPLICA_HANDLER_LEADER_HANDOFF_STATE,
   assignReplicaHandlerLeaderHandoffMethods,
 } from '../../src/node/replica-handler-leader-handoff-methods.js';
 
@@ -17,156 +23,163 @@ import {
 // Live-observed (probe-local-run-2026-07-13T0512): the freshly elected
 // ledger target r5 was demoted at 05:18:23.576 and the overloaded seed
 // retook ledger leadership (terms 6/10/13), extending the formation
-// admission freeze. RED-ON-REVERT: the already-leader case below demotes
-// (raft.change to follower) on the unfixed handler.
+// admission freeze.
+//
+// On the operation port both handoffs are one leadership transfer asked of
+// the partition's one issuer (requestLeadershipTransfer): the target names
+// itself, the source asks for its most caught-up voter. The role gates stay:
+// an already-leading or mid-election target, and a source that no longer
+// leads, ask for nothing. The real-core behaviour is witnessed on real
+// partitions in replica-handler-leadership-transfer.test.js.
 
 const TEST_REPLICA_ID = 'replica_operations-p1-r5';
 
-function buildHandlerHost(trackedRole) {
-  const calls = {
-    change: [],
-    deferCandidacy: 0,
-    requestElectionNow: 0,
-    startElectionTimer: 0,
-    cancelLeaderOwnedActivation: 0,
-  };
-  const raft = {
-    change: (transition) => calls.change.push(transition),
-    deferCandidacy: () => {
-      calls.deferCandidacy += 1;
-    },
-  };
-  const raftProvider = {
-    requestElectionNow: () => {
-      calls.requestElectionNow += 1;
-    },
-    startElectionTimer: () => {
-      calls.startElectionTimer += 1;
-    },
-  };
-  const service = {
-    raft,
-    raftProvider,
-    cancelLeaderOwnedActivation: () => {
-      calls.cancelLeaderOwnedActivation += 1;
+function portAnswer(outcome, reason) {
+  return deepFreeze({outcome, reason, retryable: false,
+    recoveryRequired: false});
+}
+
+function buildHandlerHost(trackedRole, answer, service = null) {
+  const transfers = [];
+  const tracked = service || {
+    requestLeadershipTransfer: async (request) => {
+      transfers.push(request);
+      return answer;
     },
   };
   class HandlerHost {
     getTrackedService(replicaId) {
-      return replicaId === TEST_REPLICA_ID ? service : null;
+      return replicaId === TEST_REPLICA_ID ? tracked : null;
     }
     getTrackedReplicaRole(replicaId) {
       return replicaId === TEST_REPLICA_ID ? trackedRole : null;
     }
   }
   assignReplicaHandlerLeaderHandoffMethods(HandlerHost);
-  return {handler: new HandlerHost(), calls};
+  return {handler: new HandlerHost(), transfers};
 }
 
 t.test(
   'replacement election on an already-leader replica completes without ' +
-    'demoting it',
-  (t) => {
-    const {handler, calls} = buildHandlerHost(RAFT_ROLE.LEADER);
-    const result = handler.requestTrackedPartitionLeaderHandoff(
+    'asking for a transfer',
+  async (t) => {
+    const {handler, transfers} = buildHandlerHost(RAFT_ROLE.LEADER);
+    const result = await handler.requestTrackedPartitionLeaderHandoff(
       TEST_REPLICA_ID,
       ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
     );
-    t.equal(result.state, 'completed', 'handoff reports completed');
+    t.equal(result.state, REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED,
+      'handoff reports completed');
     t.equal(
       result.branch,
       REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TARGET_ELECTION_ROLE_NO_OP,
       'the no-op is NAMED in the typed result, not silent',
     );
     t.equal(result.trackedRole, RAFT_ROLE.LEADER, 'judged role echoed');
-    t.strictSame(
-      calls.change,
-      [],
-      'the already-elected replacement is never stepped down',
-    );
-    t.equal(calls.deferCandidacy, 0, 'no candidacy deferral is applied');
-    t.equal(
-      calls.requestElectionNow,
-      0,
-      'no redundant election is requested',
-    );
-    t.equal(
-      calls.startElectionTimer,
-      0,
-      'the election timer is not re-armed',
-    );
-    t.end();
+    t.strictSame(transfers, [],
+      'the already-elected replacement asks for no transfer');
   },
 );
 
 t.test(
-  'replacement election on a follower replica still requests the election',
-  (t) => {
-    const {handler, calls} = buildHandlerHost(RAFT_ROLE.FOLLOWER);
-    const result = handler.requestTrackedPartitionLeaderHandoff(
+  'replacement election on a follower replica asks for leadership named ' +
+    'to itself, once',
+  async (t) => {
+    const {handler, transfers} = buildHandlerHost(RAFT_ROLE.FOLLOWER,
+      portAnswer(RAFT_OPERATION_OUTCOME.CORE_OK,
+        RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_FORWARDED));
+    const result = await handler.requestTrackedPartitionLeaderHandoff(
       TEST_REPLICA_ID,
       ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
     );
-    t.equal(result.state, 'completed', 'handoff reports completed');
-    t.equal(
-      result.branch,
-      REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.ARMED_DIRECTED_ELECTION,
-      'the armed election is distinguishable from a role no-op',
-    );
-    t.equal(calls.requestElectionNow, 1, 'election requested exactly once');
-    t.strictSame(calls.change, [], 'no demotion on the follower path');
-    t.end();
+    t.strictSame(transfers, [{
+      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+      replicaIdentity: TEST_REPLICA_ID,
+    }], 'one transfer, naming the replacement itself');
+    t.equal(result.state, REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED);
+    t.equal(result.branch,
+      REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_FORWARDED,
+      'the forwarded transfer is distinguishable from a role no-op');
+    t.equal(result.transfer.reason,
+      RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_FORWARDED,
+      'the port answer rides along');
   },
 );
 
 t.test(
   'replacement election on a mid-election candidate completes without ' +
     'interference',
-  (t) => {
-    const {handler, calls} = buildHandlerHost(RAFT_ROLE.CANDIDATE);
-    const result = handler.requestTrackedPartitionLeaderHandoff(
+  async (t) => {
+    const {handler, transfers} = buildHandlerHost(RAFT_ROLE.CANDIDATE);
+    const result = await handler.requestTrackedPartitionLeaderHandoff(
       TEST_REPLICA_ID,
       ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
     );
-    t.equal(result.state, 'completed', 'handoff reports completed');
+    t.equal(result.state, REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED);
     t.equal(
       result.branch,
       REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TARGET_ELECTION_ROLE_NO_OP,
       'the mid-election no-op is named',
     );
-    t.strictSame(calls.change, [], 'the candidate is not stepped down');
-    t.equal(calls.requestElectionNow, 0, 'its own election is not preempted');
-    t.end();
+    t.strictSame(transfers, [], 'its own election is not preempted');
   },
 );
 
 t.test(
-  'source-side demotion of a tracked leader is unchanged',
-  (t) => {
-    const {handler, calls} = buildHandlerHost(RAFT_ROLE.LEADER);
-    const result = handler.requestTrackedPartitionLeaderHandoff(
+  'source-side handoff of a tracked leader asks for its most caught-up ' +
+    'successor, once',
+  async (t) => {
+    const {handler, transfers} = buildHandlerHost(RAFT_ROLE.LEADER,
+      portAnswer(RAFT_OPERATION_OUTCOME.CORE_OK,
+        RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_REQUESTED));
+    const result = await handler.requestTrackedPartitionLeaderHandoff(
       TEST_REPLICA_ID,
       ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
     );
-    t.equal(result.state, 'completed', 'handoff reports completed');
-    t.equal(
-      result.branch,
-      REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.DEMOTED_LEADER,
-      'the executed demotion is named',
-    );
-    t.equal(calls.change.length, 1, 'the source leader steps down once');
-    t.equal(
-      calls.change[0]?.state,
-      LifeRaft.FOLLOWER,
-      'demotion targets follower state',
-    );
-    t.equal(calls.deferCandidacy, 1, 'candidacy deferral precedes re-arm');
-    t.equal(calls.startElectionTimer, 1, 'election timer re-armed');
-    t.equal(
-      calls.cancelLeaderOwnedActivation,
-      1,
-      'leader-owned activation cancelled',
-    );
-    t.end();
+    t.strictSame(transfers, [{
+      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP,
+    }], 'the source hands leadership to its most caught-up voter');
+    t.equal(result.state, REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED);
+    t.equal(result.branch,
+      REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REQUESTED,
+      'the requested transfer is named');
   },
 );
+
+t.test('a source replica that no longer leads asks for nothing', async (t) => {
+  const {handler, transfers} = buildHandlerHost(RAFT_ROLE.FOLLOWER);
+  const result = await handler.requestTrackedPartitionLeaderHandoff(
+    TEST_REPLICA_ID,
+    ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
+  );
+  t.equal(result.branch,
+    REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.SOURCE_DEMOTION_ROLE_NO_OP);
+  t.strictSame(transfers, []);
+});
+
+t.test('a refused transfer is REFUSED with the port\'s typed record',
+  async (t) => {
+    const refusal = portAnswer(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      RAFT_LEADERSHIP_TRANSFER_REASON.TARGET_NOT_VOTER);
+    const {handler} = buildHandlerHost(RAFT_ROLE.FOLLOWER, refusal);
+    const result = await handler.requestTrackedPartitionLeaderHandoff(
+      TEST_REPLICA_ID,
+      ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
+    );
+    t.equal(result.state, REPLICA_HANDLER_LEADER_HANDOFF_STATE.REFUSED);
+    t.equal(result.branch,
+      REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REFUSED);
+    t.equal(result.transfer, refusal, 'the refusal is carried, not restated');
+  });
+
+t.test('a tracked service with no transfer authority is NOT_SUPPORTED',
+  async (t) => {
+    const {handler} = buildHandlerHost(RAFT_ROLE.LEADER, null, {});
+    const result = await handler.requestTrackedPartitionLeaderHandoff(
+      TEST_REPLICA_ID,
+      ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
+    );
+    t.equal(result.state, REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED);
+    t.equal(result.branch,
+      REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.PROVIDER_UNSUPPORTED);
+  });

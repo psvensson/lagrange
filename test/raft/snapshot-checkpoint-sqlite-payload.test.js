@@ -9,6 +9,9 @@ import {test} from '../../src/test-helpers/tap.js';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 import {PartitionRaftStorage} from '../../src/partition/partition-raft-storage.js';
 import {
+  PARTITION_SERVICE_SQL,
+} from '../../src/partition/partition-service-constants.js';
+import {
   RAFT_CHECKPOINT_CREATION_OUTCOME,
   RAFT_CHECKPOINT_EXCLUDED_TABLES,
   RAFT_CHECKPOINT_PAYLOAD_FILE,
@@ -51,6 +54,9 @@ function createFixture() {
   const db = new Database(dbPath);
   const adapter = new SQLiteLogAdapter(db, {address: PARTITION_ID, term: TERM});
   const storage = new PartitionRaftStorage(db, PARTITION_ID, adapter);
+  // The participant commit-outcome table is the partition service's own
+  // (its transaction base creates it), not the Raft storage's.
+  db.exec(PARTITION_SERVICE_SQL.CREATE_TRANSACTION_OUTCOME_TABLE);
   db.exec(`CREATE TABLE IF NOT EXISTS ${STATE_TABLE} ` +
     '(id TEXT PRIMARY KEY, payload TEXT)');
   return {

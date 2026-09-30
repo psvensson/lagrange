@@ -30,6 +30,8 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {withRegisteredIncarnations} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 const FAKE_NOW_MS = 1_800_000_000_000;
 const READY_LEASE_EXPIRES_AT_MS = FAKE_NOW_MS + 600_000;
@@ -85,7 +87,7 @@ function createNodeRows() {
 }
 
 function createCache() {
-  const rows = {
+  const rows = withRegisteredIncarnations({
     nodes: createNodeRows(),
     partitions: [
       {
@@ -107,7 +109,7 @@ function createCache() {
       health_status: 'healthy',
     })),
     control_plane_publications: [],
-  };
+  });
   return {
     get(tableName, key) {
       return (rows[tableName] || []).find((row) =>

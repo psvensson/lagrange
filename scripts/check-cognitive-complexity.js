@@ -32,7 +32,11 @@ const TARGET_THRESHOLD = 20;
 // extraction (measured with the checker's tightening hint).
 // 2026-09-15: tightened 161 -> 160 after the remove-safety planning-read
 // split replaced the generic reader's branching with two named contracts.
-const BASELINE_COUNT = 160;
+// 2026-09-23: tightened 160 -> 159 after A11 of raft-rs-single-path-partition-cutover
+// 2026-09-27: tightened 159 -> 157 after durable lifecycle owner extraction
+// 2026-09-28: tightened 157 -> 155 after the node lifecycle publication owner
+// replaced the dispatch node-state write path (measured with the hint).
+const BASELINE_COUNT = 155;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

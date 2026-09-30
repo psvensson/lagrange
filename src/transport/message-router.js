@@ -20,6 +20,10 @@ import {defineMessageRouterDeliveryDelegation} from './message-router-delivery-d
 import {defineMessageRouterStatsShutdown} from './message-router-stats-shutdown.js';
 import {resolveInProcessConnectionEnvironment} from './in-process-connection-environment.js';
 import {resolveTimeSource} from '../time/time-source.js';
+import {requireIssuedBootIncarnation} from
+  '../bootstrap/boot-incarnation-contract.js';
+
+const MESSAGE_ROUTER_SUBJECT = 'MessageRouter';
 
 const {
   ConfigurationManager,
@@ -64,14 +68,11 @@ class MessageRouter extends EventEmitter {
     // refills on an async crypto request every 128 draws.
     this.routerId = options.routerId || uuidv4();
     this.identifyPayload = options.identifyPayload || null;
-    // This boot's locally minted incarnation (rejoin-hints counter). Stamped
-    // on every IDENTIFY frame so receivers fence stale-incarnation (zombie)
-    // identifications; 0 means pre-incarnation and never fences.
-    this.bootIncarnation =
-      Number.isSafeInteger(options.bootIncarnation) &&
-      options.bootIncarnation > TRANSPORT_NUM.ZERO ?
-        Math.floor(options.bootIncarnation) :
-        TRANSPORT_NUM.ZERO;
+    // This boot's incarnation, reserved by the boot incarnation owner and
+    // required. Stamped on every IDENTIFY frame so receivers fence
+    // stale-incarnation (zombie) identifications.
+    this.bootIncarnation = requireIssuedBootIncarnation(
+      options.bootIncarnation, MESSAGE_ROUTER_SUBJECT);
     // Per-node high-water boot incarnation recorded from accepted IDENTIFY
     // frames: a later IDENTIFY from a LOWER incarnation is a zombie and must
     // never rekey the peer slot.

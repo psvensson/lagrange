@@ -3,11 +3,13 @@ import {
   normalizeSemanticNowMs,
   normalizeThresholds,
   projectNodeLivenessSemantics,
+  readNodeLivenessRowFacts,
 } from './node-liveness-semantic-projection.js';
 import {
   copyDenseOwnDataArray,
   copyStrictOwnDataRecord,
 } from '../utils/strict-own-data.js';
+import {compareNodeHeartbeatWatermarks} from '../node/node-readiness-policy.js';
 
 const MapConstructor = Map;
 const SetConstructor = Set;
@@ -47,6 +49,39 @@ function readProjectionEvidence(owner, nodeId) {
   const rawEvidence = recorded || owner.readNodeEvidence(nodeId) ||
     EMPTY_EVIDENCE;
   return copyStrictOwnDataRecord(rawEvidence) || EMPTY_EVIDENCE;
+}
+
+function nodeLivenessRowFactsEqual(left, right) {
+  return left.lastHeartbeatMs === right.lastHeartbeatMs &&
+    left.readyLeaseExpiresAtMs === right.readyLeaseExpiresAtMs &&
+    left.hasReadyLeaseField === right.hasReadyLeaseField &&
+    left.status === right.status &&
+    left.connectionState === right.connectionState;
+}
+
+// Whether caller-held evidence may replace the node row the shared
+// projection last projected. Two views of one node must never alternate the
+// projection (each alternation is a global planning-identity rotation), so
+// the candidate is current only when it is strictly newer by heartbeat
+// watermark, or at the same watermark with the same content the projection
+// reads (status, connection state, heartbeat, lease and its clearing). A
+// candidate without a heartbeat is never current over a projected row that
+// has one, and an absent row never replaces a present one: a row's absence
+// or a same-watermark content change reaches the projection from its
+// source, whose change clears the recorded evidence (fix-f4, F-1).
+function isEvidenceRowCurrent(projectedRow, candidateRow) {
+  if (projectedRow === null || projectedRow === undefined) return true;
+  if (candidateRow === null || candidateRow === undefined) return false;
+  const projected = readNodeLivenessRowFacts(projectedRow);
+  const candidate = readNodeLivenessRowFacts(candidateRow);
+  if (projected.lastHeartbeatMs !== null) {
+    if (candidate.lastHeartbeatMs === null) return false;
+  } else if (candidate.lastHeartbeatMs !== null) {
+    return true;
+  }
+  const order = compareNodeHeartbeatWatermarks(projectedRow, candidateRow);
+  if (order !== 0) return order > 0;
+  return nodeLivenessRowFactsEqual(projected, candidate);
 }
 
 function readSupplementalEvidence(records, nodeId) {
@@ -99,6 +134,7 @@ class NodeLivenessSemanticProjectionOwner {
       source.onSemanticChange : null;
     this.recordsByNodeId = new MapConstructor();
     this.sourceEvidenceByNodeId = new MapConstructor();
+    this.projectedEvidenceRowByNodeId = new MapConstructor();
     this.transportGraceEvidenceByNodeId = new MapConstructor();
     this.provisioningTrustEvidenceByNodeId = new MapConstructor();
     this.pendingSemanticChangesBySequence = new MapConstructor();
@@ -147,8 +183,23 @@ class NodeLivenessSemanticProjectionOwner {
     if (this.stopped) return null;
     const key = normalizeNodeId(nodeId);
     const source = copyStrictOwnDataRecord(evidence) || objectFreeze({});
+    const normalizedNowMs = normalizeSemanticNowMs(nowMs);
+    // The shared projection (the planning identity's liveness input) moves
+    // forward only: evidence older than, or absent against, the row it last
+    // projected answers this caller alone, is not recorded, and publishes
+    // no semantic change. Recorded, two readers holding different views of
+    // one node (the planning build's cache row, the publication-planning
+    // read's missing or authoritative row) flipped the projection several
+    // times per second and rotated the planning identity (fix-f4).
+    if (!isEvidenceRowCurrent(
+      mapPrototypeGet(this.projectedEvidenceRowByNodeId, key),
+      source.nodeRow,
+    )) {
+      return this.evaluateNodeLiveness(key, source, normalizedNowMs)
+        .projection;
+    }
     mapPrototypeSet(this.sourceEvidenceByNodeId, key, objectFreeze(source));
-    return this.reprojectNode(key, normalizeSemanticNowMs(nowMs));
+    return this.reprojectNode(key, normalizedNowMs);
   }
 
   recordAllSourceChanges(nowMs = this.now()) {
@@ -240,6 +291,11 @@ class NodeLivenessSemanticProjectionOwner {
   reprojectNode(nodeId, nowMs, rearm = true) {
     if (this.stopped || !numberIsFinite(nowMs)) return null;
     const evidence = readProjectionEvidence(this, nodeId);
+    mapPrototypeSet(
+      this.projectedEvidenceRowByNodeId,
+      nodeId,
+      evidence.nodeRow ?? null,
+    );
     const result = this.evaluateNodeLiveness(nodeId, evidence, nowMs);
     const previous = mapPrototypeGet(this.recordsByNodeId, nodeId);
     const {record, semanticChanged} = buildProjectionRecord(previous, result);
@@ -396,6 +452,7 @@ class NodeLivenessSemanticProjectionOwner {
     this.clearTimer();
     setPrototypeClear(this.listeners);
     mapPrototypeClear(this.sourceEvidenceByNodeId);
+    mapPrototypeClear(this.projectedEvidenceRowByNodeId);
     mapPrototypeClear(this.transportGraceEvidenceByNodeId);
     mapPrototypeClear(this.provisioningTrustEvidenceByNodeId);
     mapPrototypeClear(this.pendingSemanticChangesBySequence);

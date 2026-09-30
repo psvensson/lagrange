@@ -1,17 +1,15 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {test} from 'node:test';
+import {fileURLToPath} from 'node:url';
 
 import Database from 'better-sqlite3';
 
 import {PartitionService} from
   '../../../src/partition/partition-service.js';
-import {
-  RAFT_BACKEND,
-  RAFT_BACKEND_OPTION,
-} from '../../../src/raft/raft-backend-constants.js';
-import {createRaftProvider} from
-  '../../../src/raft/raft-backend-selection.js';
 import {LiferaftProvider} from '../../../src/raft/liferaft-provider.js';
+import {RaftRsWasmProvider} from '../../../src/raft/raft-rs-provider.js';
 import {RAFT_ROLE} from '../../../src/raft/constants.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../../src/raft/raft-operation-port-constants.js';
@@ -21,7 +19,22 @@ import {
   RAFT_PARTITION_NODE_REQUEST,
   RAFT_PROVIDER_CONTRACT_METHOD,
 } from '../../../src/raft/raft-provider-contract-constants.js';
+import {genesisStamp} from
+  '../../../src/raft/raft-committed-membership-stamp.js';
 
+const ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const OPERATION_PORT_FACTORY_OWNER =
+  'src/partition/partition-service-core-base.js';
+const OPERATION_PORT_FACTORY_DEFINITION =
+  /^\s*(?:async\s+)?createOperationPort\s*\([^)]*\)\s*\{/mu;
+// The request fields only the retired backend read: the durable log it wrote
+// and the term it booted from. The rs-raft store owns both.
+const RETIRED_REQUEST_FIELDS = Object.freeze([
+  RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG,
+  RAFT_PARTITION_NODE_REQUEST.INITIAL_TERM,
+  RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK,
+]);
 const PARTITION_ID = 'seam-partition';
 const REPLICA_ID = 'replica-seam-1';
 const TIMING = Object.freeze({
@@ -36,6 +49,8 @@ function minimalPartitionRequest(overrides = {}) {
     [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: REPLICA_ID,
     [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: REPLICA_ID,
     [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: [REPLICA_ID],
+    [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+      genesisStamp([REPLICA_ID]),
     [RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG]: {
       end: () => undefined,
       getLastInfo: async () => ({index: 0, term: 0, committedIndex: 0}),
@@ -55,71 +70,99 @@ function minimalPartitionRequest(overrides = {}) {
   };
 }
 
-class RecordingLiferaftProvider extends LiferaftProvider {
-  constructor() {
-    super();
+// Records the request production construction builds and the port the
+// production factory returned for it; the port itself is production's.
+class RecordingPartitionService extends PartitionService {
+  constructor(options) {
+    super(options);
     this.requests = [];
     this.ports = [];
   }
 
-  createPartitionPort(request) {
+  createOperationPort(request) {
     this.requests.push(request);
-    const port = super.createPartitionPort(request);
+    const port = super.createOperationPort(request);
     this.ports.push(port);
     return port;
   }
 }
 
-function buildPartition(provider) {
-  return new PartitionService({
+function buildPartition() {
+  return new RecordingPartitionService({
     partitionId: PARTITION_ID,
     tableId: 'seam-table',
     tableName: 'seam_table',
     replicaId: REPLICA_ID,
     replicaIds: [REPLICA_ID],
+    bootstrapMembership: genesisStamp([REPLICA_ID]),
     nodeId: 'node-seam-1',
     dbPath: ':memory:',
     deferElection: true,
-    raftProvider: provider,
   });
 }
 
-test('the partition service asks its provider for the port it runs on',
+function sourceFiles(directory) {
+  return fs.readdirSync(directory, {withFileTypes: true}).flatMap((entry) => {
+    const resolved = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      return sourceFiles(resolved);
+    }
+    return entry.isFile() && entry.name.endsWith('.js') ? [resolved] : [];
+  });
+}
+
+test('the partition service builds the port it runs on through its one factory',
   async () => {
-    const provider = new RecordingLiferaftProvider();
-    const service = buildPartition(provider);
+    const service = buildPartition();
     try {
       await service.initialize();
-      assert.equal(provider.requests.length, 1);
-      assert.equal(service.raft, provider.ports[0]);
+      assert.equal(service.requests.length, 1);
+      assert.equal(service.raft, service.ports[0]);
       assert.deepEqual(Reflect.ownKeys(service.raft).sort(),
         [...RAFT_OPERATION_PORT_METHODS].sort());
+      assert.equal(typeof service.raft.emit, 'undefined',
+        'the port exposes no event emitter');
     } finally {
       await service.shutdown();
     }
   });
 
-test('the request carries exactly the partition requirements', async () => {
-  const provider = new RecordingLiferaftProvider();
-  const service = buildPartition(provider);
-  try {
-    await service.initialize();
-    const [request] = provider.requests;
-    assert.deepEqual(Object.keys(request).sort(),
-      Object.values(RAFT_PARTITION_NODE_REQUEST).sort());
-    assert.equal(request.groupId, service.partitionId);
-    assert.equal(request.peerId, service.replicaId);
-    assert.equal(request.durableStorage, service.db);
-    for (const hook of [
-      'sendToPeer', 'resolvePeerAddress', 'applyCommittedEntry',
-      'snapshotCatchupNeeded', 'applyTransactionRolledBack',
-    ]) {
-      assert.equal(typeof request[hook], 'function');
+test('no production module replaces the partition operation-port factory',
+  () => {
+    const definers = sourceFiles(path.join(ROOT, 'src'))
+      .filter((file) => OPERATION_PORT_FACTORY_DEFINITION.test(
+        fs.readFileSync(file, 'utf8')))
+      .map((file) => path.relative(ROOT, file).split(path.sep).join('/'));
+    assert.deepEqual(definers, [OPERATION_PORT_FACTORY_OWNER],
+      'only the partition core defines createOperationPort; a subclass that ' +
+      'overrides it is a test seam, never a production path');
+  });
+
+test('the request carries the partition requirements and no retired field',
+  async () => {
+    const service = buildPartition();
+    try {
+      await service.initialize();
+      const [request] = service.requests;
+      const contractFields = Object.values(RAFT_PARTITION_NODE_REQUEST);
+      assert.deepEqual(
+        Object.keys(request).filter((key) => !contractFields.includes(key)),
+        [], 'every request field is a declared contract field');
+      assert.deepEqual(
+        RETIRED_REQUEST_FIELDS.filter((field) => Object.hasOwn(request, field)),
+        [], 'the retired backend\'s log, term and rollback hook are gone');
+      assert.equal(request.groupId, service.partitionId);
+      assert.equal(request.peerId, service.replicaId);
+      assert.equal(request.durableStorage, service.db);
+      for (const hook of [
+        'sendToPeer', 'resolvePeerAddress', 'applyCommittedEntry',
+      ]) {
+        assert.equal(typeof request[hook], 'function');
+      }
+    } finally {
+      await service.shutdown();
     }
-  } finally {
-    await service.shutdown();
-  }
-});
+  });
 
 test('the default backend returns the same frozen semantic port contract',
   () => {
@@ -159,15 +202,14 @@ test('the default liferaft port reports leadership as a semantic role', () => {
   }
 });
 
-test('a single-replica partition observes liferaft leadership through the port',
+test('a single-replica partition observes rs-raft leadership through the port',
   async () => {
-    const provider = new RecordingLiferaftProvider();
-    const service = buildPartition(provider);
+    const service = buildPartition();
     try {
       await service.initialize();
       assert.equal(service.isLeader, true);
       assert.equal(service.role, RAFT_ROLE.LEADER);
-      assert.equal(service.raft.readStatus().role, RAFT_ROLE.LEADER);
+      assert.equal((await service.raft.readStatus()).role, RAFT_ROLE.LEADER);
     } finally {
       await service.shutdown();
     }
@@ -208,31 +250,8 @@ test('liferaft step routes inbound vote packets through the Raft data event',
     }
   });
 
-test('the rollback fact crosses the request without exposing an event emitter',
-  async () => {
-    const provider = new RecordingLiferaftProvider();
-    const service = buildPartition(provider);
-    try {
-      await service.initialize();
-      const refreshed = [];
-      const original = service.storage.refreshAppliedWatermarkCacheFromStore
-        .bind(service.storage);
-      service.storage.refreshAppliedWatermarkCacheFromStore = () => {
-        refreshed.push(true);
-        return original();
-      };
-      provider.requests[0].applyTransactionRolledBack();
-      assert.deepEqual(refreshed, [true]);
-      assert.equal(typeof service.raft.emit, 'undefined');
-    } finally {
-      await service.shutdown();
-    }
-  });
-
 test('the experimental backend refuses missing named requirements', () => {
-  const provider = createRaftProvider({
-    [RAFT_BACKEND_OPTION]: RAFT_BACKEND.RAFT_RS_WASM,
-  });
+  const provider = new RaftRsWasmProvider();
   assert.equal(typeof provider[
     RAFT_PROVIDER_CONTRACT_METHOD.CREATE_PARTITION_PORT], 'function');
   for (const field of [

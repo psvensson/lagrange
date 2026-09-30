@@ -1,6 +1,6 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
-import {access, readFile} from 'node:fs/promises';
+import {access, readFile, readdir} from 'node:fs/promises';
 import {parse} from 'yaml';
 import {ADMIN_DEFAULT} from '../../src/admin/admin-constants.js';
 import {
@@ -13,8 +13,11 @@ import {
   validatePgwireRuntimeConfig,
 } from '../../src/runtime/pgwire-descriptor.js';
 import {PGWIRE_DEFAULT} from '../../src/runtime/pgwire-runtime-module.js';
+import {RAFT_RS_BINDING_LAYOUT} from '../../src/raft/raft-rs-core-constants.js';
 
 const UTF8 = 'utf8';
+const RUNTIME_IMAGE_STAGE = /^FROM \S+ AS runtime$/mu;
+const CONTEXT_COPY = /^COPY (?!--from)\S+ \S+$/gmu;
 const PINNED_ACTION_PATTERN = /^[^@\s]+@[a-f0-9]{40}$/u;
 const ACTION_REFERENCE_PATTERN = /^\s*uses:\s*(\S+)/gmu;
 const GOLDEN_CAPABILITY_GATE_COMMAND_ID =
@@ -52,7 +55,67 @@ const ACTIVE_RELEASE_SURFACES = [
   'scripts/release-notes.js',
 ];
 
+// Lab hosts are shared by agents across projects (owner directive
+// 2026-09-23): heavy work reaches one only through the placement wrapper,
+// `lab test` and `lab harness run`, each under the machine-wide lock, or
+// through the documented recipe in another project - never a raw ssh runner.
+const LAB_SHARING_ROOTS = ['scripts', '.github'];
+const LAB_SHARING_TEXT = /\.(?:js|mjs|cjs|sh|ya?ml)$/u;
+const SSH_WORD = /\bssh\b/u;
+// The classified runner or the distributed harness, as a shell command.
+const REMOTE_RUNNER_COMMAND =
+  /\bnode\s+(?:\.\/)?(?:scripts\/run-classified-test-files\.js|test\/distributed\/run\.js)\b/gu;
+const LAB_SHARING_SECTION = /^## Sharing the lab between agents and projects\n([\s\S]*?)(?=^## )/mu;
+const LAB_RECIPE_BLOCK = /```sh\n([\s\S]*?)```/u;
+const LAB_RECIPE_COMMANDS = [
+  /^mkdir -p "\$\{LAB_LOCK_DIR:=\$HOME\/\.lab\}" && exec 9>"\$LAB_LOCK_DIR\/machine\.lock"$/mu,
+  /^flock -w \d+ 9 \|\| exit 98$/mu,
+  /^printf '\{"project":[\s\S]*?> "\$LAB_LOCK_DIR\/machine\.holder\.json"$/mu,
+  /^trap 'rm -f "\$LAB_LOCK_DIR\/machine\.holder\.json"' EXIT$/mu,
+];
+
+// Every shell-command invocation of the runner or the harness in a file that
+// also speaks ssh, as `file: command`.
+async function remoteRunnerInvocations() {
+  const found = [];
+  for (const root of LAB_SHARING_ROOTS) {
+    const entries = await readdir(root, {recursive: true, withFileTypes: true});
+    for (const entry of entries) {
+      if (!entry.isFile() || !LAB_SHARING_TEXT.test(entry.name)) continue;
+      const file = `${entry.parentPath}/${entry.name}`;
+      const text = await readFile(file, UTF8);
+      if (!SSH_WORD.test(text)) continue;
+      for (const match of text.matchAll(REMOTE_RUNNER_COMMAND)) found.push(`${file}: ${match[0]}`);
+    }
+  }
+  return found.sort();
+}
+
 describe('project hardening contracts', () => {
+  it('runs heavy lab work only under the machine-wide lock', async () => {
+    assert.deepEqual(await remoteRunnerInvocations(),
+      ['scripts/lab/probe.js: node scripts/run-classified-test-files.js'],
+      'the placement wrapper is the one remote invocation of the runner or the harness');
+    const [probe, harness, homeLab, runbook] = await Promise.all([
+      readFile('scripts/lab/probe.js', UTF8), readFile('scripts/lab/harness.js', UTF8),
+      readFile('docs/development/home-lab.md', UTF8),
+      readFile('docs/development/solver-runbook.md', UTF8)]);
+    assert.ok(/\$\{LAB_LOCK_DIR:-\$HOME\/\.lab\}/u.test(probe),
+      'and it takes the convention\'s machine-wide lock');
+    assert.ok(!/flock -n 9 \|\|/u.test(probe), 'never a per-checkout lock alone, unwaited');
+    assert.ok(/^import \{[^}]*\bholdLabMachine\b[^}]*\} from '\.\/probe\.js';$/mu.test(harness),
+      'a formation holds its nodes through the same owner');
+    const section = LAB_SHARING_SECTION.exec(homeLab)?.[1] ?? '';
+    const recipe = LAB_RECIPE_BLOCK.exec(section)?.[1] ?? '';
+    for (const command of LAB_RECIPE_COMMANDS) {
+      assert.match(recipe, command, 'another project needs only the four-line recipe');
+    }
+    for (const text of [section, runbook]) {
+      assert.match(text, /never a raw ssh\s+runner\s+invocation/u,
+        'heavy lab work goes through lab test, placement or lab harness run');
+    }
+  });
+
   it('keeps network defaults local and mutation enforcement active', () => {
     assert.equal(ADMIN_DEFAULT.HOST, '127.0.0.1');
     assert.equal(ADMIN_DEFAULT.ENFORCEMENT_MODE, 'enforce');
@@ -113,6 +176,24 @@ describe('project hardening contracts', () => {
     // RELEASE.md must document the CANONICAL whole-system command, not one of
     // the two commands that used to compete for the meaning of "complete".
     assert.match(releaseText, /npm run check:release/u);
+  });
+
+  // Thermal headroom is gated by the runner on every host it runs on, lab
+  // hosts included (owner directive 2026-09-23): the one classified runner
+  // imports the one thermal owner and asks it before every lane batch, so no
+  // placed, local or corpus run can start a batch on a hot machine.
+  it('gates thermal headroom in the classified runner before every batch', async () => {
+    const runner = await readFile('scripts/run-classified-test-files.js', UTF8);
+    assert.match(runner,
+      /^import \{[^}]*\bwaitForThermalHeadroom\b[^}]*\} from '\.\/checks\/wait-for-thermal-headroom\.js';$/mu,
+      'the runner consumes the thermal owner, never a copy of its thresholds');
+    assert.doesNotMatch(runner, /wait-for-thermal-headroom\.js'\]|spawn[^\n]*wait-for-thermal/u,
+      'it calls the owner, never spawns its script');
+    const batchLoop = /for \(let batchIndex = 0;[\s\S]*?\n {4}\}\n/u.exec(runner)?.[0] ?? '';
+    const gateAt = batchLoop.search(/\bgate\(\)/u);
+    const spawnAt = batchLoop.search(/\bspawn\(process\.execPath/u);
+    assert.ok(gateAt >= 0 && spawnAt > gateAt,
+      'inside the batch loop, the gate is asked before the batch is spawned');
   });
 
   it('runs the golden-capability guard-scenario tier in every push gate',
@@ -276,12 +357,14 @@ describe('project hardening contracts', () => {
       .filter((step) => typeof step.run === 'string' &&
         /npm run /u.test(step.run))
       .map((step) => step.run.trim());
-    // --keep-going: the whole corpus means every lane. The classified runner
-    // stops at the first red batch (right for a gate); a finder that stopped
-    // there would leave the exclusive lane, every integration and bootstrap
-    // file, unproved behind one red unit test (2026-09-13).
-    assert.ok(canaryRuns.includes('npm run test:all -- --keep-going'),
+    // The whole corpus means every lane. Keep-going is the classified
+    // runner's one policy; a canary that opted into --fail-fast would leave
+    // the exclusive lane, every integration and bootstrap file, unproved
+    // behind one red unit test (2026-09-13).
+    assert.ok(canaryRuns.includes('npm run test:all'),
       'the canary runs the whole corpus, every lane, not a selection');
+    assert.ok(canaryRuns.every((run) => !run.includes('--fail-fast')),
+      'and never opts out of keep-going');
     assert.deepEqual(release.on.push.tags, ['v*']);
     assert.equal(release.permissions.contents, 'read');
     assert.equal(release.jobs.release.permissions.contents, 'write');
@@ -363,6 +446,29 @@ describe('project hardening contracts', () => {
       /codeberg|forgejo|\.forgejo/iu,
     );
   });
+
+  it('ships the vendored raft-rs binding in the runtime image beside src/',
+    async () => {
+      const [dockerfile, dockerignore] = await Promise.all([
+        readFile('Dockerfile', UTF8),
+        readFile('.dockerignore', UTF8),
+      ]);
+      // The runtime owner resolves the binding at the layout root the
+      // constants name, relative to the directory that holds src/; the image
+      // must carry it there or the rs-raft backend cannot load in it.
+      const bindingRoot = `${RAFT_RS_BINDING_LAYOUT.ROOT.join('/')}/`;
+      const runtimeStage = dockerfile.slice(
+        dockerfile.search(RUNTIME_IMAGE_STAGE));
+      const contextCopies = runtimeStage.match(CONTEXT_COPY) || [];
+      assert.ok(contextCopies.includes('COPY src/ ./src/'),
+        'the runtime stage copies src/ from the build context');
+      assert.ok(contextCopies.includes(`COPY ${bindingRoot} ./${bindingRoot}`),
+        'the runtime stage copies the binding layout root beside src/');
+      const admitted = dockerignore.split('\n').map((line) => line.trim());
+      assert.ok(admitted.includes(`!${bindingRoot}`) &&
+        admitted.includes(`!${bindingRoot}**`),
+      'the build context admits the binding layout root');
+    });
 });
 
 // One contract, not four flags: a prerelease semver tag (0.2.4-rc.0) must

@@ -158,6 +158,9 @@ class NodeRegistrationOwner {
           budgetSource: resolution?.source || null,
         });
       } else {
+        await this.advanceStaleJoinAdmissionIncarnation(
+          existingJoinAdmissionProgress,
+        );
         this.seedJoinTimeCacheRow(TABLES.NODES, budgetRow);
         logger.info(LOG_RESUMING_JOIN_ADMISSION_PROGRESS, {
           nodeId: this.nodeId,
@@ -211,6 +214,7 @@ class NodeRegistrationOwner {
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
       nodeCapabilities: this.delegates.getNodeCapabilities?.() || [],
+      bootIncarnation: this.delegates.getBootIncarnation(),
       now,
     });
   }

@@ -9,7 +9,15 @@ import {test} from '../../src/test-helpers/tap.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {
+  ReplicaHandler as ProductionReplicaHandler,
+} from '../../src/node/replica-handler.js';
+import {scenarioStampingReplicaHandler} from
+  '../node/replica-handler-bootstrap-stamps.js';
+
+// Lifecycle scenarios: every create carries the committed-membership stamp
+// its scenario's creator would have produced (owner decision O1).
+const ReplicaHandler = scenarioStampingReplicaHandler(ProductionReplicaHandler);
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -21,29 +29,12 @@ import {
   cleanupTestEnvironment,
   initializeTestEnvironment,
 } from './helpers/cluster-test-helpers.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {createLifecycleCdcServiceForCache} from
+  '../test-helpers/lifecycle-state-store.js';
 
 function createMockCDCService(cache) {
-  const operations = [];
-
-  return {
-    operations,
-    async insertSystemTableRow(tableName, data) {
-      operations.push({type: 'insert', tableName, data});
-      cache?.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      const merged = {...whereClause, ...data};
-      operations.push({type: 'update', tableName, whereClause, data: merged});
-      cache?.applySystemTableChange(tableName, 'UPDATE', merged);
-      return {success: true};
-    },
-    async upsertSystemTableRow(tableName, data) {
-      operations.push({type: 'upsert', tableName, data});
-      cache?.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true};
-    },
-  };
+  return createLifecycleCdcServiceForCache(cache);
 }
 
 function seedReplicaOperation(cache, operationId, partitionId, replicaId, targetNodeId) {
@@ -127,7 +118,7 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
       cdcIntegrationService,
       dataDir: tempDir,
       createPartitionService: async (options) => {
-        const service = new PartitionService({
+        const service = new PartitionService(withFoundingStamp({
           partitionId: options.partitionId,
           tableId: options.tableId,
           tableName: options.tableName,
@@ -139,7 +130,7 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
           dbPath: options.dbPath,
           suppressLifecycleLogs: true,
           onInitializationStage: options.onInitializationStage,
-        });
+        }));
         await service.initialize();
         return service;
       },

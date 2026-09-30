@@ -20,6 +20,8 @@ import {HTTP_STATUS} from '../src/constants/index.js';
 import {
   resolveStartupJoinDecision,
 } from '../src/entrypoint-runtime-helpers.js';
+import {TEST_BOOT_INCARNATION} from
+  './test-helpers/boot-incarnation-fixture.js';
 
 const TEST_NODE_ID = 'node-local';
 const TEST_NODE_ADDRESS = 'node-local:8080';
@@ -121,6 +123,7 @@ test(
     t.after(() => rm(dataDir, {recursive: true, force: true}));
 
     await persistBootstrapRejoinHints({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -161,6 +164,7 @@ test(
     t.after(() => rm(dataDir, {recursive: true, force: true}));
 
     await persistBootstrapRejoinHints({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -227,6 +231,7 @@ test(
     t.after(() => closeProbeServer(bootstrapReadyPeer));
 
     await persistBootstrapRejoinHints({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,

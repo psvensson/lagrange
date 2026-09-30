@@ -1,9 +1,17 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
+import {
+  CDC_ERROR_CODE,
+  CDC_SHUT_DOWN_WRITE_OUTCOME,
+} from './cdc-constants.js';
+import {ERRORS} from '../constants/errors.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../partition/partition-write-kernel.js';
 
 const {
   CDCEventHandler,
   CDC_LOG_MSG,
   CDC_ERROR_MSG,
+  CDC_INTEGRATION_SERVICE_LITERAL,
   createBootstrapDirectWriteRouter,
   createSqlWriteRouter,
   resolveNodeWebSocketAddress,
@@ -138,12 +146,167 @@ class CDCIntegrationServiceLifecycleMethods {
   }
 
   /**
-   * Mark the service as shutting down. The routed-mutation retry-budget loop
-   * checks this and stops re-arming instead of retrying control-plane writes
-   * forever once the sqlQueryEngine is being torn down on teardown. Idempotent.
+   * Mark the service as shutting down: its terminal lifecycle state. From
+   * here every write it routes answers the typed terminal SHUT_DOWN (see
+   * resolveShutDownAnswer), a new write is refused before it is routed, and
+   * every wait or retry delay it holds for a write is released now instead
+   * of at its budget. Idempotent.
    */
   markShuttingDown() {
     this.isShuttingDown = true;
+    const releases = [...this.shutdownReleases];
+    this.shutdownReleases.clear();
+    for (const release of releases) {
+      release();
+    }
+  }
+
+  /**
+   * Hold a suspended write-side wait until shutdown: `release` runs once when
+   * the service is marked shutting down, at once when it already is.
+   * @param {Function} release
+   * @return {Function} Stops holding the wait (the wait settled first).
+   */
+  holdUntilShutdown(release) {
+    if (this.isShuttingDown === true) {
+      release();
+      return () => {};
+    }
+    this.shutdownReleases.add(release);
+    return () => this.shutdownReleases.delete(release);
+  }
+
+  /**
+   * A write's retry delay on this service's clock, held until shutdown:
+   * shutdown ends it at once, so no timer outlives the terminal state.
+   * @param {number} delayMs
+   * @return {Promise<void>} Settles at the delay or at shutdown.
+   */
+  delayUntilShutdown(delayMs) {
+    return new Promise((resolve) => {
+      let timer = null;
+      const stopHolding = this.holdUntilShutdown(() => {
+        this.timeSource.clearTimeout(timer);
+        resolve();
+      });
+      if (this.isShuttingDown === true) {
+        return;
+      }
+      timer = this.timeSource.setTimeout(() => {
+        stopHolding();
+        resolve();
+      }, delayMs);
+    });
+  }
+
+  /**
+   * The owner's one terminal gate. Every CDC-owned operation class passes it
+   * at its choke point, before it issues work (cdc-terminal-gate.js): an
+   * authoritative read stage, an authoritative cache repair or sweep, a routed
+   * mutation hop. While the service is live it answers nothing (null). Once
+   * terminal, it answers the typed SHUT_DOWN: NOT_ROUTED when nothing was
+   * issued before, or, when an earlier hop of the same operation was issued
+   * (`priorAnswer`, its answer), resolveShutDownAnswer's NOT_CONFIRMED with
+   * that answer as the cause, since that hop's outcome is not known here.
+   * @param {string} stage - A CDC_TERMINAL_STAGE.
+   * @param {*} [priorAnswer] - The answer of an earlier hop, when one ran.
+   * @return {Error|null} The terminal answer, or null while live.
+   */
+  refuseIfTerminal(stage, priorAnswer = undefined) {
+    if (this.isShuttingDown !== true) {
+      return null;
+    }
+    const answer = priorAnswer === undefined ?
+      this.buildShutDownAnswer(CDC_SHUT_DOWN_WRITE_OUTCOME.NOT_ROUTED) :
+      this.resolveShutDownAnswer(priorAnswer);
+    answer.stage = stage;
+    return answer;
+  }
+
+  /**
+   * The answer a write gets from this service. Before shutdown it is the
+   * failure itself. Once the service is shutting down it is the typed
+   * terminal SHUT_DOWN, whatever the failure was: no engine will arrive and
+   * no retry through the service can succeed. The failure stays its cause,
+   * so a released write whose outcome is unknown stays unknown.
+   * @param {*} failure - The failed result or error.
+   * @return {*} The failure, or the terminal answer carrying it.
+   */
+  resolveShutDownAnswer(failure) {
+    if (
+      this.isShuttingDown !== true ||
+      failure?.code === CDC_ERROR_CODE.SHUT_DOWN
+    ) {
+      return failure;
+    }
+    return this.buildShutDownAnswer(
+      CDC_SHUT_DOWN_WRITE_OUTCOME.NOT_CONFIRMED, failure);
+  }
+
+  /**
+   * The terminal answer of an accepted write whose visibility shutdown cut
+   * short: accepted into consensus, its outcome not known to this service.
+   * @return {Error}
+   */
+  buildUnconfirmedWriteShutDownAnswer() {
+    const cause = new Error(ERRORS.WRITE_OUTCOME_UNKNOWN);
+    cause.failureCode = PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN;
+    return this.buildShutDownAnswer(
+      CDC_SHUT_DOWN_WRITE_OUTCOME.NOT_CONFIRMED, cause);
+  }
+
+  /**
+   * @param {string} writeOutcome - A CDC_SHUT_DOWN_WRITE_OUTCOME.
+   * @param {*} [cause] - What the write last answered, when anything.
+   * @return {Error} The typed terminal SHUT_DOWN answer.
+   */
+  buildShutDownAnswer(writeOutcome, cause = null) {
+    const error = new Error(
+      writeOutcome === CDC_SHUT_DOWN_WRITE_OUTCOME.NOT_ROUTED ?
+        CDC_ERROR_MSG.CDC_SHUT_DOWN_NOT_ROUTED :
+        CDC_ERROR_MSG.CDC_SHUT_DOWN,
+    );
+    error.code = CDC_ERROR_CODE.SHUT_DOWN;
+    error.writeOutcome = writeOutcome;
+    if (cause) {
+      error.cause = cause;
+    }
+    return error;
+  }
+
+  /**
+   * Route one write through the current write-router strategy.
+   * @param {string} sql
+   * @param {Array} [params=[]]
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
+   */
+  async executeSQL(sql, params = [], options = {}) {
+    if (
+      !this.writeRouter ||
+      typeof this.writeRouter.execute !== 'function'
+    ) {
+      throw new Error(
+        CDC_INTEGRATION_SERVICE_LITERAL.CDC_WRITE_ROUTER_IS_NOT_CONFIGURED,
+      );
+    }
+    // One exit for every routed write. A write that arrives after shutdown
+    // is refused before it reaches an engine (definitely not applied); a
+    // write in flight at shutdown answers the terminal answer carrying its
+    // last failure, thrown or returned alike.
+    if (this.isShuttingDown === true) {
+      throw this.buildShutDownAnswer(CDC_SHUT_DOWN_WRITE_OUTCOME.NOT_ROUTED);
+    }
+    let result = null;
+    try {
+      result = await this.writeRouter.execute(sql, params, options);
+    } catch (error) {
+      throw this.resolveShutDownAnswer(error);
+    }
+    if (result?.success === false && this.isShuttingDown === true) {
+      throw this.resolveShutDownAnswer(result);
+    }
+    return result;
   }
 
   /**

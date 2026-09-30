@@ -1,16 +1,17 @@
 /**
  * Scenario 'learner-promotion-progress-proof' (quest
  * learner-promotion-progress-proof): a five-node recovery scenario over the
- * REAL owners — live PartitionService leader + learner on a loopback
- * transport with real replication through the partition's Raft operation
- * port (liferaft backend by default), real proof RPC over the
+ * REAL owners — a live PartitionService leader, three live followers and
+ * the learner on a loopback transport with real replication through each
+ * partition's rs-raft operation port, real proof RPC over the
  * application-message channel, and the real promotion gate chain.
  *
  * FIDELITY: in-process deterministic guard (loopback transport, single
- * process). The three passive voters are authoritative service rows (the
- * quorum-shape gates read the cache, not live sockets); the leader and the
- * learner are fully live. Replication lag is injected by dropping
- * leader->learner deliveries — a one-way partition of the replication path.
+ * process). Every voter the leader's configuration names is a live replica
+ * the leader admitted through its production peer path, so the services
+ * rows the quorum-shape gates count each name a live voter. Replication lag
+ * is injected by losing leader->learner deliveries — a one-way partition of
+ * the replication path.
  *
  * Sealed contract exercised end-to-end:
  *  - a deliberately lagging learner is NEVER promoted, no matter how many
@@ -23,34 +24,76 @@
  *    (stale_proof_term), and promotion resumes when the term matches again;
  *  - a membership-epoch divergence refuses (epoch_mismatch) until the
  *    caches converge;
- *  - an idle, exactly-caught-up learner (the snapshot-installed shape: full
- *    log, no traffic, so no acks) still promotes through the SAME contract
- *    via the leader's progress probe;
+ *  - the leader's progress probe answers with typed outcomes: for a
+ *    learner it holds no acknowledged progress for, it sends
+ *    (progress-probe-sent); for an idle learner that caught up through real
+ *    replication, it observes (progress-observed, the match index covering
+ *    the committed prefix), and promotion follows through the SAME contract;
  *  - the quorum-shape gates still refuse (would_exceed_target_replica_count)
  *    even when the progress proof would grant.
+ *
+ * The sealed idle-learner claim - "an exactly-caught-up learner with NO
+ * progress evidence at the leader (the snapshot-installed shape) promotes
+ * because the probe materialises the ack evidence" - cannot be exercised on
+ * rs-raft and is recorded, not faked (epic raft-rs-full-cutover,
+ * solve/epics/raft-rs-full-cutover/findings-2026-09-23.md):
+ *  - F5: snapshot/catch-up is unowned on rs-raft, so no snapshot-installed
+ *    learner shape exists to build; a learner catches up only through real
+ *    replication, which advances the leader's matched index, and nothing
+ *    clears the core's progress record afterwards (matched stays);
+ *  - F18: the rs-raft probe was inert (progress-observed for any finite
+ *    matched index, 0 included, and nothing sent).
+ * So the idle case is the explicit witness of the probe's typed outcomes;
+ * its progress-probe-sent assertion is red until the runtime owner makes
+ * the probe honest (F18).
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {RaftRole} from '../../src/partition/partition-service.js';
+import {PARTITION_SERVICE_MESSAGE_TYPE} from
+  '../../src/partition/partition-service-constants.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
 import {
   LEARNER_PROMOTION_PROOF_DECISION,
   LEARNER_PROMOTION_PROOF_REASON,
 } from '../../src/raft/learner-promotion-progress.js';
+import {RAFT_PEER_PROGRESS_PROBE_REASON} from
+  '../../src/raft/raft-operation-port-constants.js';
 import {
   COMMITTED_ENTRY_COUNT,
   LEARNER_ADDRESS,
+  NO_ACKNOWLEDGED_MATCH_INDEX,
   configureFixtureRuntime,
   createFiveNodeFixture,
   insertPublishedEpochRow,
-  insertServiceRow,
   observeLearnerTerm,
   resetFixtureRuntime,
   waitFor,
+  waitForLeaderReplicationToLearner,
 } from './dt6-learner-promotion-fixture.js';
 
 const LAG_OBSERVATION_MS = 300;
 const PROMOTION_BUDGET_MS = 5000;
 const PUBLICATION_EPOCH_ONE = 1;
+
+// The learner's proof channel with a gate: while closed, every promotion
+// proof request is lost in the network (the learner's typed transport
+// refusal, retried on its cadence), so no proof the leader could grant
+// reaches the learner and no leader-side probe is triggered by one.
+function gatedProofChannel(inner, gate) {
+  return {
+    register: (address, handler) => inner.register(address, handler),
+    unregister: (address) => inner.unregister(address),
+    deliver: async (address, payload, options) => {
+      if (gate.closed &&
+          payload?.type === PARTITION_SERVICE_MESSAGE_TYPE.LEARNER_PROMOTION_PROOF) {
+        return undefined;
+      }
+      return inner.deliver(address, payload, options);
+    },
+  };
+}
 
 beforeEach(() => {
   configureFixtureRuntime();
@@ -90,7 +133,7 @@ async (t) => {
     );
     t.equal(
       leader.raft.readStatus().followerProgress[LEARNER_ADDRESS],
-      undefined,
+      NO_ACKNOWLEDGED_MATCH_INDEX,
       'the leader holds no progress evidence for the partitioned learner',
     );
 
@@ -233,23 +276,81 @@ test('a membership-epoch divergence refuses promotion until the caches ' +
   }
 });
 
-test('an idle exactly-caught-up learner (snapshot-installed shape) ' +
-  'promotes through the same progress contract via the leader probe',
+test('the leader progress probe answers with typed outcomes: it sends to a ' +
+  'learner without acknowledged progress, and observes an idle learner ' +
+  'caught up through real replication, whose promotion then follows',
 async (t) => {
-  const fixture = await createFiveNodeFixture({startPartitioned: true});
+  const gate = {closed: true};
+  const fixture = await createFiveNodeFixture({
+    startPartitioned: true,
+    wrapLearnerTransport: (inner) => gatedProofChannel(inner, gate),
+  });
   const {leader, learner, leaderTransport} = fixture;
   try {
-    // Install-equivalent: seed the learner's durable log, through its log
-    // owner, with the leader's full committed prefix out-of-band (the moral
-    // equivalent of a snapshot transfer), with NO further writes. Pure
-    // heartbeats carry no data, so the learner never acks on its own — the
-    // leader's progress probe must create the evidence.
-    for (let index = 1; index <= COMMITTED_ENTRY_COUNT; index++) {
-      const entry = await leader.logAdapter.get(index);
-      await learner.logAdapter.saveCommand(entry.command, entry.term, entry.index);
-    }
-    leaderTransport.state.dropToLearner = false;
+    const partitioned = leader.raft.readStatus();
+    t.equal(
+      partitioned.followerProgress[LEARNER_ADDRESS],
+      NO_ACKNOWLEDGED_MATCH_INDEX,
+      'precondition: the leader holds no acknowledged progress for the ' +
+        'partitioned learner',
+    );
+    t.equal(
+      partitioned.commitIndex,
+      COMMITTED_ENTRY_COUNT,
+      'precondition: the committed prefix the learner lacks',
+    );
 
+    // Typed outcome 1: behind (matched below the committed prefix) - the
+    // probe triggers one append to the learner (lost here: the replication
+    // path is still partitioned).
+    t.match(
+      await leader.raft.probePeerProgress(LEARNER_ADDRESS),
+      {
+        outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+        reason: RAFT_PEER_PROGRESS_PROBE_REASON.PROGRESS_PROBE_SENT,
+      },
+      'for a learner with no acknowledged progress the probe sends ' +
+        '(typed progress-probe-sent; F18: the inert rs-raft probe reports ' +
+        'progress-observed at match index 0 and sends nothing)',
+    );
+
+    // The learner catches up through real replication while its proof
+    // channel is closed, then goes idle: the leader->learner path is lost
+    // again, so no append, heartbeat or ack flows.
+    leaderTransport.state.dropToLearner = false;
+    t.equal(
+      await waitForLeaderReplicationToLearner(leader, PROMOTION_BUDGET_MS),
+      true,
+      'the learner catches up through real replication',
+    );
+    t.equal(
+      learner.role,
+      RaftRole.LEARNER,
+      'no promotion while no proof reaches the learner',
+    );
+    leaderTransport.state.dropToLearner = true;
+
+    // Typed outcome 2: caught up - the probe observes the leader's own
+    // progress record, which covers the committed prefix.
+    const observed = await leader.raft.probePeerProgress(LEARNER_ADDRESS);
+    t.match(
+      observed,
+      {
+        outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+        reason: RAFT_PEER_PROGRESS_PROBE_REASON.PROGRESS_OBSERVED,
+      },
+      'for the idle caught-up learner the probe reports typed ' +
+        RAFT_PEER_PROGRESS_PROBE_REASON.PROGRESS_OBSERVED,
+    );
+    t.ok(
+      observed.matchIndex >= COMMITTED_ENTRY_COUNT,
+      'the observed match index covers the safe promotion index ' +
+        `(${observed.matchIndex} >= ${COMMITTED_ENTRY_COUNT})`,
+    );
+
+    // The proof channel opens: promotion follows through the same progress
+    // contract with the learner still idle.
+    gate.closed = false;
     const promoted = await waitFor(
       () => learner.role === RaftRole.FOLLOWER,
       PROMOTION_BUDGET_MS,
@@ -257,8 +358,8 @@ async (t) => {
     t.equal(
       promoted,
       true,
-      'snapshot-installed and log-caught-up learners share one progress ' +
-        'contract - the probe materializes ack evidence for the idle case',
+      'the idle caught-up learner promotes through the same progress ' +
+        'contract once its proof reaches the leader',
     );
   } finally {
     await fixture.shutdown();
@@ -268,14 +369,15 @@ async (t) => {
 test('quorum-shape gates still refuse even when the progress proof would ' +
   'grant', async (t) => {
   const fixture = await createFiveNodeFixture({startPartitioned: true});
-  const {learner, leaderCache, leaderTransport} = fixture;
+  const {learner, leaderTransport} = fixture;
   try {
     // Add two surplus ACTIVE voters while the learner still lags (target 5,
     // 6 active): even the single-replacement-above-target allowance cannot
     // admit a 7th voter, so promotion must defer on the replica-count
-    // ceiling regardless of replication progress.
-    insertServiceRow(leaderCache, 'replica-6', 'node-6', RaftRole.FOLLOWER);
-    insertServiceRow(leaderCache, 'replica-7', 'node-7', RaftRole.FOLLOWER);
+    // ceiling regardless of replication progress. Each surplus voter is a
+    // live replica the leader admits, like every other voter.
+    await fixture.admitSurplusVoter('replica-6', 'node-6');
+    await fixture.admitSurplusVoter('replica-7', 'node-7');
     leaderTransport.state.dropToLearner = false;
 
     const ceilingDeferralSeen = await waitFor(

@@ -6,6 +6,7 @@
 // engines floor cannot run the corpus at all.
 
 import assert from 'node:assert/strict';
+import {spawn, spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,7 +14,9 @@ import path from 'node:path';
 import {test} from 'node:test';
 import {parse} from 'yaml';
 
+import {runHarness} from '../../scripts/lab/harness.js';
 import {capture} from '../../scripts/lab/process.js';
+import * as labProbe from '../../scripts/lab/probe.js';
 import {
   MOVIELENS_FILE, MOVIELENS_SHA256, READINESS, corpusReadiness,
   discoverFleet, formatFleet, parseCapability, probeTestCapability, recordFleet,
@@ -356,4 +359,133 @@ test('a capture deadline kills the whole process group', async (t) => {
     }
   }
   assert.equal(alive, false, 'the hung grandchild is killed, not left running');
+});
+
+// ---------------------------------------------------------------------------
+// Sharing the lab between agents and projects (owner directive 2026-09-23):
+// every lab host has one machine-wide lock and a holder record beside it.
+// Discovery reads both without taking the lock, the fleet shows who holds a
+// machine, and a formation holds every node it uses before any node starts.
+
+const HOLDER = Object.freeze({project: 'other-project', agent: 'codex:task-7',
+  controller: 'laptop', purpose: 'formation:rolling-restart', sha: 'e'.repeat(40),
+  startedAt: '2026-09-23T10:00:00Z', expectedMinutes: 25, pid: 4242});
+const HELD_BY = 'held by codex:task-7 (other-project, formation:rolling-restart) since ' +
+  '2026-09-23T10:00:00Z';
+const MINUTE = 60000;
+
+function fleetWithLock(lockLines) {
+  return [{name: 'alpha', controller: false, error: null, sameMachineAs: null,
+    capability: parseCapability(`${FULL}\n${lockLines}`), readiness: readiness(FULL)}];
+}
+
+test('the fleet shows who holds each machine, from its lock and its holder record', () => {
+  const record = `machine_holder=${JSON.stringify(HOLDER)}`;
+  const busy = fleetWithLock(`machine_lock=held\n${record}\nmachine_holder_pid_alive=yes`);
+  assert.match(formatFleet(busy)[0], new RegExp(` \\| busy: ${HELD_BY.replace(/[()]/gu, '\\$&')}` +
+    ', expected 25 min$', 'u'), 'held, with the record of who holds it');
+  assert.deepEqual(JSON.parse(JSON.stringify(busy))[0].capability.machineLock.holder, HOLDER,
+    '--json carries the holder record verbatim');
+  assert.match(formatFleet(fleetWithLock('machine_lock=free'))[0], / \| free$/u);
+  assert.match(formatFleet(fleetWithLock(
+    `machine_lock=free\n${record}\nmachine_holder_pid_alive=no`))[0],
+  / \| stale record \(pid dead\)$/u, 'a record without the lock is evidence, not a lock');
+  assert.match(formatFleet(fleetWithLock('machine_lock=held'))[0],
+    / \| busy: held \(no holder record\)$/u, 'held without a record is still held');
+});
+
+// A lock file in a scratch directory, held by a process group of its own.
+async function holdScratchLock(t, lock) {
+  const holder = spawn('flock', [lock, 'sleep', '60'], {stdio: 'ignore', detached: true});
+  const release = async () => {
+    try {
+      process.kill(-holder.pid, 'SIGKILL');
+    } catch {
+      // already gone
+    }
+    if (holder.exitCode === null && holder.signalCode === null) {
+      await new Promise((resolve) => holder.once('exit', resolve));
+    }
+  };
+  t.after(release);
+  for (let poll = 0; poll < 600 && lockFree(lock); poll += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return {pid: holder.pid, release};
+}
+
+function lockFree(lock) {
+  return spawnSync('flock', ['-n', lock, 'true']).status === 0;
+}
+
+function scratchLabLock(t, extraEnv = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-lock-'));
+  t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+  return {dir, lock: path.join(dir, 'machine.lock'), holder: path.join(dir, 'machine.holder.json'),
+    env: {...process.env, LAB_LOCK_DIR: dir, ...extraEnv}};
+}
+
+test('the probe reads the machine lock and its holder record and never takes the lock',
+  async (t) => {
+    const lab = scratchLabLock(t);
+    const probeHere = () => probeTestCapability({repoPath: process.cwd(),
+      captureCommand: (command, args, options) => capture(command, args, {...options,
+        env: lab.env})});
+    assert.equal((await probeHere()).machineLock?.state, 'free', 'no lock file: free');
+    assert.equal(fs.existsSync(lab.lock), false, 'and the probe created nothing');
+    const other = await holdScratchLock(t, lab.lock);
+    // Another project may write its record over several lines.
+    fs.writeFileSync(lab.holder, `${JSON.stringify({...HOLDER, pid: other.pid}, null, 2)}\n`);
+    const busy = (await probeHere()).machineLock;
+    assert.equal(busy.state, 'busy');
+    assert.deepEqual(busy.holder, {...HOLDER, pid: other.pid}, 'the record as its holder wrote it');
+    assert.equal(lockFree(lab.lock), false, 'the probe left the lock with its holder');
+    await other.release();
+    const stale = (await probeHere()).machineLock;
+    assert.equal(stale.state, 'stale-record', 'a record whose lock is free is stale');
+    assert.equal(stale.holderPidAlive, false, 'and its pid is measured dead');
+  });
+
+test('a formation refuses, typed, when a node is held, before any node starts', async () => {
+  const events = [];
+  const hold = (machine, options) => {
+    events.push(`hold ${machine.name} ${options.purpose}`);
+    return {
+      outcome: Promise.resolve(machine.name === 'b' ? {state: 'busy', holder: HOLDER} :
+        {state: 'held'}),
+      release: async () => events.push(`release ${machine.name}`),
+    };
+  };
+  await assert.rejects(runHarness({
+    nodes: [{name: 'b', ssh: 'lab@b.invalid', ip: '192.0.2.2'},
+      {name: 'a', ssh: 'lab@a.invalid', ip: '192.0.2.1'}],
+    scenario: 'rolling-restart', verbose: false, hold,
+  }), {message: `harness: node b busy, ${HELD_BY}`});
+  assert.deepEqual(events, ['hold a formation:rolling-restart', 'hold b formation:rolling-restart',
+    'release a', 'release b'], 'every node is held in name order first, and a refusal ' +
+    'releases every hold it took');
+});
+
+test('a formation holds a node under the lab convention and releases it', async (t) => {
+  const {holdLabMachine} = labProbe;
+  assert.equal(typeof holdLabMachine, 'function',
+    'the one owner of the lab convention holds a node for a formation');
+  const lab = scratchLabLock(t, {LAGRANGE_LAB_AGENT: 'claude:formation-witness'});
+  const here = {name: 'here', sshTarget: null};
+  const first = holdLabMachine(here, {waitMs: 2000, purpose: 'formation:rolling-restart',
+    expectedMs: 30 * MINUTE, env: lab.env});
+  t.after(() => first.release());
+  assert.deepEqual(await first.outcome, {state: 'held'});
+  const record = JSON.parse(fs.readFileSync(lab.holder, 'utf8'));
+  assert.deepEqual([record.project, record.agent, record.purpose, record.expectedMinutes],
+    ['lagrange', 'claude:formation-witness', 'formation:rolling-restart', 30]);
+  assert.equal(lockFree(lab.lock), false, 'the node is held for as long as the session is open');
+  const second = holdLabMachine(here, {waitMs: 1000, purpose: 'formation:other',
+    expectedMs: MINUTE, env: lab.env});
+  assert.deepEqual(await second.outcome, {state: 'busy', holder: record},
+    'a second formation waits its budget and is refused, naming the holder');
+  await second.release();
+  await first.release();
+  assert.equal(fs.existsSync(lab.holder), false, 'released: the record is gone');
+  assert.equal(lockFree(lab.lock), true, 'and the machine is free');
 });

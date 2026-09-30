@@ -6,7 +6,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
@@ -23,6 +22,7 @@ import {
   getUniquePort,
   gracefulJoiningShutdown,
   gracefulShutdown,
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
@@ -237,7 +237,7 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
       const node2WsPort = getUniquePort();
       const node3WsPort = getUniquePort();
 
-      const bootstrapService = new BootstrapService({
+      const bootstrapService = await createVirginSeedBootstrapService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         wsPort: seedWsPort,
@@ -307,6 +307,7 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
         );
 
         node2JoinService = new NodeJoiningService({
+          bootIncarnation: 1,
           nodeId: node2Id,
           nodeAddress: `ws://localhost:${node2WsPort}`,
           seedNodeAddress: 'http://localhost:0',
@@ -322,6 +323,7 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
         });
 
         node3JoinService = new NodeJoiningService({
+          bootIncarnation: 1,
           nodeId: node3Id,
           nodeAddress: `ws://localhost:${node3WsPort}`,
           seedNodeAddress: 'http://localhost:0',

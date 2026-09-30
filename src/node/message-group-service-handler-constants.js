@@ -71,8 +71,6 @@ const MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
     'MessageGroupServiceHandler requires systemTableCache',
   CREATE_TOPOLOGY_REQUIRED: (groupId, replicaId) =>
     `CREATE_REPLICA for ${groupId} requires canonical peer topology for ${replicaId}`,
-  REPLICA_HANDLER_NOT_REGISTERED: (replicaId) =>
-    `Message-group replica handler was not registered for ${replicaId}`,
 });
 
 const MESSAGE_GROUP_SERVICE_HANDLER_WORKFLOW = Object.freeze({

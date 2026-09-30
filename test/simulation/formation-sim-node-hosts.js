@@ -44,6 +44,7 @@ import {
 } from '../integration/membership-consistency-integration-test-helpers.js';
 import {LEGACY_SIMULATED_NODE_HOST_COMPOSER} from
   './formation-sim-infrastructure-composition.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const QUIET_LOGGER = Object.freeze({warn() {}, info() {}, debug() {}, error() {}});
 const DRAIN_DELAY_MS = 0;
@@ -163,6 +164,7 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
   // scheduled reconcile, which production documents as the sole scheduler for
   // membership reconciliation, and publication work vanished from every node.
   const heartbeatService = assembleHeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId, nodeAddress: `${nodeId}${NODE_ADDRESS_SUFFIX}`,
     systemTableCache: cache, cacheMutationTarget: cache, cdcIntegrationService,
     messageRouter, controlPlaneSystemTableGateway, now,

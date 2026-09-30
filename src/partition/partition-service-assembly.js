@@ -5,6 +5,7 @@ import {createPartitionServiceLearnerPromotionProofMethods} from './partition-se
 import {createPartitionServiceLearnerPromotionWakeMethods} from './partition-service-learner-promotion-wake-methods.js';
 import {createPartitionServiceDurabilityFitnessMethods} from './partition-service-durability-fitness.js';
 import {createPartitionServiceLifecycleMethods} from './partition-service-lifecycle-methods.js';
+import {createPartitionServiceLeadershipTransferMethods} from './partition-service-leadership-transfer.js';
 import {createPartitionServiceMergeReplicationMethods} from './partition-service-merge-replication-methods.js';
 import {createPartitionServiceMergeReplicationResumptionMethods} from './partition-service-merge-replication-resumption-methods.js';
 import {createPartitionServiceSplitMirrorQueueMethods} from './partition-service-split-mirror-queue-methods.js';
@@ -21,6 +22,7 @@ Object.assign(
   createPartitionServiceLearnerPromotionWakeMethods(),
   createPartitionServiceDurabilityFitnessMethods(),
   createPartitionServiceLifecycleMethods(),
+  createPartitionServiceLeadershipTransferMethods(),
   createPartitionServiceMergeReplicationMethods(),
   createPartitionServiceMergeReplicationResumptionMethods(),
   createPartitionServiceSplitMirrorQueueMethods(),

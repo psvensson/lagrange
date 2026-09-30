@@ -11,6 +11,7 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -51,7 +52,7 @@ test('Property 46: Single-Partition ACID - Atomicity', async (t) => {
       insertOpsArb,
       fc.boolean(), // Whether to commit or rollback
       async (ops, shouldCommit) => {
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId: `test-partition-${Date.now()}-${Math.random()}`,
           tableId: 'test_table',
           tableName: 'test_table',
@@ -63,7 +64,7 @@ test('Property 46: Single-Partition ACID - Atomicity', async (t) => {
             ],
           },
           dbPath: ':memory:',
-        });
+        }));
 
         await partition.initialize();
 
@@ -113,7 +114,7 @@ test('Property 46: Single-Partition ACID - Consistency', async (t) => {
     fc.asyncProperty(
       fc.integer({min: 1, max: 100}),
       async (id) => {
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId: `test-partition-${Date.now()}-${Math.random()}`,
           tableId: 'test_table',
           tableName: 'test_table',
@@ -125,7 +126,7 @@ test('Property 46: Single-Partition ACID - Consistency', async (t) => {
             ],
           },
           dbPath: ':memory:',
-        });
+        }));
 
         await partition.initialize();
 
@@ -167,7 +168,7 @@ test('Property 46: Single-Partition ACID - Isolation', async (t) => {
     fc.asyncProperty(
       fc.integer({min: 1, max: 100}),
       async (id) => {
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId: `test-partition-${Date.now()}-${Math.random()}`,
           tableId: 'test_table',
           tableName: 'test_table',
@@ -179,7 +180,7 @@ test('Property 46: Single-Partition ACID - Isolation', async (t) => {
             ],
           },
           dbPath: ':memory:',
-        });
+        }));
 
         await partition.initialize();
 
@@ -228,7 +229,7 @@ test('Property 46: Single-Partition ACID - Durability via Raft', async (t) => {
         // Use a unique file path for this test
         const dbPath = ':memory:';
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId: `test-partition-${Date.now()}-${Math.random()}`,
           tableId: 'test_table',
           tableName: 'test_table',
@@ -240,7 +241,7 @@ test('Property 46: Single-Partition ACID - Durability via Raft', async (t) => {
             ],
           },
           dbPath,
-        });
+        }));
 
         await partition.initialize();
 

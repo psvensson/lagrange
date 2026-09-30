@@ -11,11 +11,18 @@
  * primary fence:
  *
  *  - A LIVE lease held by the recorded owner FENCES remote settlement even
- *    when the heuristic reports the owner unready (its state is
- *    FENCED_BY_LIVE_LEASE, not raw null).
+ *    when the heuristic reports the owner unready: the owner is AVAILABLE
+ *    (state FENCED_BY_LIVE_LEASE, unavailable: false). Owner decision
+ *    2026-09-25 (quest replace-source-removal-owner, claim L1) corrected the
+ *    polarity; the verdict previously reported such an owner unavailable,
+ *    which released and stale-failed REPLACEs whose owners were alive.
+ *  - A live lease attributed to a node OTHER than the recorded owner is not
+ *    the recorded owner's lease and does not fence. The row has no owner
+ *    column, so an unattributed live lease is the recorded owner's.
  *  - An UNFENCED or EXPIRED lease defers to the routing-readiness
- *    routing-readiness heuristic (state HEURISTIC_UNAVAILABLE /
- *    HEURISTIC_AVAILABLE).
+ *    heuristic (state HEURISTIC_UNAVAILABLE / HEURISTIC_AVAILABLE), exactly
+ *    as before the correction (claim L2: the un-wedge path for a genuinely
+ *    unavailable owner).
  *  - Local/self ownership is never "remote unavailable"
  *    (state LOCAL_OR_UNKNOWN_OWNER).
  */
@@ -32,17 +39,6 @@ const OPERATION_DRAIN_OWNER_AVAILABILITY = Object.freeze({
   HEURISTIC_AVAILABLE: 'heuristic_available',
 });
 
-/**
- * Resolve the drain-owner availability verdict for one incomplete operation.
- * @param {Object} options
- * @param {string|null} options.ownerNodeId - Recorded owner of the operation.
- * @param {string} options.nodeId - This node.
- * @param {Object|null} options.operation - Operation (lease fields read).
- * @param {Function} options.isOwnerRoutingReady - Unfenced availability probe;
- *   called only when no live lease fences the decision.
- * @param {number} [options.nowMs]
- * @return {Object} Frozen typed verdict — never a raw null/empty outcome.
- */
 function normalizeOwnerNodeId(options) {
   return typeof options.ownerNodeId === 'string' &&
     options.ownerNodeId.length > 0 ?
@@ -50,25 +46,14 @@ function normalizeOwnerNodeId(options) {
     null;
 }
 
-function resolveNowMs(options) {
-  return Number.isFinite(Number(options.nowMs)) ?
-    Math.floor(Number(options.nowMs)) :
-    Date.now();
-}
-
-function readLiveLeaseExpiryMs(options, nowMs) {
+function isRecordedOwnerLiveLease(lease, ownerNodeId) {
   // The replica_operations row has no owner column: the lease expiry is the
   // durable heartbeat and the RECORDED owner (source/target resolution
-  // upstream) is its attribution. A live lease expiry on a remotely-owned
-  // row is therefore the recorded owner's lease and fences remote
-  // settlement; absent or expired expiries defer to the heuristic.
-  const leaseExpiresAtMs = Number(
-    options.operation?.ownerLeaseExpiresAt ??
-      options.operation?.lease_expires_at,
-  );
-  return Number.isFinite(leaseExpiresAtMs) && leaseExpiresAtMs > nowMs ?
-    Math.floor(leaseExpiresAtMs) :
-    null;
+  // upstream) is its attribution. An unattributed live lease on a
+  // remotely-owned row is therefore the recorded owner's lease; a lease
+  // explicitly attributed to another node is not.
+  return lease.state === REPLICA_OPERATION_OWNER_LEASE_STATE.ACTIVE &&
+    (lease.ownerNodeId === null || lease.ownerNodeId === ownerNodeId);
 }
 
 function resolveHeuristicReady(isOwnerRoutingReady) {
@@ -89,9 +74,11 @@ function buildLocalOrUnknownVerdict() {
 }
 
 function buildLiveLeaseVerdict(ownerNodeId, leaseExpiresAtMs) {
+  // A live lease held by the recorded owner means the owner is available and
+  // fences remote settlement (owner decision 2026-09-25, claim L1).
   return Object.freeze({
     state: OPERATION_DRAIN_OWNER_AVAILABILITY.FENCED_BY_LIVE_LEASE,
-    unavailable: true,
+    unavailable: false,
     lease: Object.freeze({
       state: REPLICA_OPERATION_OWNER_LEASE_STATE.ACTIVE,
       ownerNodeId,
@@ -100,22 +87,29 @@ function buildLiveLeaseVerdict(ownerNodeId, leaseExpiresAtMs) {
   });
 }
 
+/**
+ * Resolve the drain-owner availability verdict for one incomplete operation.
+ * @param {Object} options
+ * @param {string|null} options.ownerNodeId - Recorded owner of the operation.
+ * @param {string} options.nodeId - This node.
+ * @param {Object|null} options.operation - Operation (lease fields read).
+ * @param {Function} options.isOwnerRoutingReady - Unfenced availability probe;
+ *   called only when no live lease of the recorded owner fences the decision.
+ * @param {number} [options.nowMs]
+ * @return {Object} Frozen typed verdict — never a raw null/empty outcome.
+ */
 function resolveOperationDrainOwnerAvailability(options = {}) {
   const ownerNodeId = normalizeOwnerNodeId(options);
   if (ownerNodeId === null || ownerNodeId === options.nodeId) {
     return buildLocalOrUnknownVerdict();
   }
-  const liveLeaseExpiryMs = readLiveLeaseExpiryMs(
-    options,
-    resolveNowMs(options),
-  );
-  if (liveLeaseExpiryMs !== null) {
-    return buildLiveLeaseVerdict(ownerNodeId, liveLeaseExpiryMs);
-  }
   const lease = resolveOperationOwnerLeaseState(
     options.operation,
     options.nowMs,
   );
+  if (isRecordedOwnerLiveLease(lease, ownerNodeId)) {
+    return buildLiveLeaseVerdict(ownerNodeId, lease.leaseExpiresAtMs);
+  }
   const heuristicReady = resolveHeuristicReady(options.isOwnerRoutingReady);
   return Object.freeze({
     state: heuristicReady ?

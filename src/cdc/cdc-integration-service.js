@@ -129,6 +129,8 @@ class CDCIntegrationService extends EventEmitter {
     // Set on teardown so the routed-mutation retry-budget loop stops re-arming
     // instead of retrying writes forever once sqlQueryEngine is being nulled.
     this.isShuttingDown = false;
+    // The write-side waits markShuttingDown releases.
+    this.shutdownReleases = new Set();
   }
 }
 

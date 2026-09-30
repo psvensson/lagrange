@@ -11,6 +11,7 @@ import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   isTerminalStep,
 } from '../../src/rebalancer/replica-operation-progress.js';
+import {createReplaceWitness} from '../rebalancer/replace-witness-fixture.js';
 import {
   createTimeoutTestCoordinator,
 } from '../rebalancer/timeout-test-coordinator.js';
@@ -101,6 +102,7 @@ async function executeLedgerFormationTick({
   executionState,
   planner,
   events,
+  witness,
 }) {
   if (executionState.pendingOperation) {
     await coordinator.completeOperation(
@@ -143,6 +145,10 @@ async function executeLedgerFormationTick({
       ...sourceRow,
       node_id: move.nodeId,
     });
+    // The simulated physical move includes its committed membership change:
+    // the target's configuration no longer holds the source (C1, quest
+    // replace-source-removal-owner - a REPLACE completes only on that).
+    witness.commitRemoval();
   } else if (move.type === REBALANCER_MOVE_TYPE.ADD) {
     const targetReplicaId = operation.replicaId;
     applyRow(cache, 'services', {
@@ -367,6 +373,16 @@ t.test(
     const cache = buildFormationCache();
     const fixture = createTimeoutTestCoordinator();
     fixture.coordinator.systemTableCache = cache;
+    // The REPLACE target's own configuration, as the REPLACE owner reads it
+    // (quest replace-source-removal-owner, C1): the source is a voter until
+    // the tick's physical move commits its removal. F1: the witness answers
+    // as the group's leader (the completion authority is the leader's
+    // answer; the planner picks the target, so it is not known up front).
+    const witness = createReplaceWitness({addressedLeads: true});
+    const router = fixture.coordinator.messageRouter;
+    const baseDeliver = router.deliver.bind(router);
+    router.deliver = async (target, payload, options) =>
+      witness.answer(payload) ?? baseDeliver(target, payload, options);
     // The priority surplus REMOVE placement fence only admits the drain when
     // the strict owner-RPC services lane proves current placement, so the
     // authoritative owner answers from the live formation cache.
@@ -410,6 +426,7 @@ t.test(
           executionState,
           planner,
           events,
+          witness,
         });
         now += delayMs;
       },

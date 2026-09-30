@@ -10,8 +10,10 @@ import {
   DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
 } from '../replication-target-authority.js';
 import {NodeService} from '../../node/node-service.js';
-import {MessageGroupServiceRowOwner} from
-  '../../message-group/message-group-service-row-owner.js';
+import {
+  MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR,
+  MessageGroupServiceRowOwner,
+} from '../../message-group/message-group-service-row-owner.js';
 import {
   getControlPlaneErrorCode,
   getControlPlaneRetryAfterMs,
@@ -208,6 +210,7 @@ class CreateMessageGroupPhase {
     this.delegates = options.delegates || {};
     this.pendingCreateSelfHostedMessageGroupRow = null;
     this.createSelfHostedMetadataFlushPromise = null;
+    this.registrationEvidenceByReplicaId = new Map();
   }
 
   /**
@@ -346,6 +349,12 @@ class CreateMessageGroupPhase {
       this.delegates.getBootstrapResponse();
     const seedNodeAddress =
       this.delegates.getSeedNodeAddress();
+    // A join registration is a birth: the row is born STOPPED (explicit) and
+    // becomes ACTIVE only through the handler-bound activation.
+    if (options.status !== SERVICE_STATUS.STOPPED) {
+      throw new Error(MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR
+        .REGISTRATION_STATUS_STOPPED_REQUIRED);
+    }
     const now = nowFn();
     const moveReplicaAssignment =
       bootstrapResponse?.messageGroupAssignment || null;
@@ -360,13 +369,13 @@ class CreateMessageGroupPhase {
       moveReplicaAssignment.assignmentId || null :
       null;
     const serviceData =
-      MessageGroupServiceRowOwner.buildServiceRow({
+      MessageGroupServiceRowOwner.buildRegistrationRow({
         groupId,
         replicaId,
         nodeId: this.nodeId,
         service,
         timestamp: now,
-        status: options.status || SERVICE_STATUS.ACTIVE,
+        status: options.status,
         extraFields: assignmentId ?
           {
             [JOIN_BACKFILL_QUERY.ASSIGNMENT_ID_FIELD]:
@@ -452,7 +461,9 @@ class CreateMessageGroupPhase {
             useLocalSeedRegistrationShortcut === true,
         },
       );
-      return;
+      this.registrationEvidenceByReplicaId.set(replicaId,
+        Object.freeze({...serviceData}));
+      return serviceData;
     }
 
     const retryPolicy =
@@ -530,7 +541,9 @@ class CreateMessageGroupPhase {
             attempt,
           },
         );
-        return;
+        this.registrationEvidenceByReplicaId.set(replicaId,
+          Object.freeze({...serviceData}));
+        return serviceData;
       } catch (error) {
         lastError = error;
         const elapsedMs = nowFn() - startTime;

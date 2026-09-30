@@ -27,6 +27,7 @@ import {
   CLUSTER_ID_CONFIG_KEY,
 } from '../../src/bootstrap/cluster-identity-constants.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const LOCAL_NODE_ID = 'node-local';
 const LOCAL_NODE_ADDRESS = 'seed-node:8080';
@@ -52,6 +53,7 @@ function createSystemTableCache(nodeRows = [], clusterId = null) {
 
 async function persistSeedHints(dataDir, {nodeRows, clusterId}) {
   const persistence = new RejoinHintsPersistenceService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     dataDir,
     nodeId: LOCAL_NODE_ID,
     nodeAddress: LOCAL_NODE_ADDRESS,

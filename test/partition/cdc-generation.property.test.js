@@ -12,6 +12,7 @@ import fc from 'fast-check';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -98,7 +99,7 @@ test('Property 6: CDC event generated for INSERT operations', async (t) => {
       async (partitionId, tableName, data) => {
         const cdcEvents = [];
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId: tableName,
           tableName,
@@ -112,7 +113,7 @@ test('Property 6: CDC event generated for INSERT operations', async (t) => {
               {name: 'value', type: 'INTEGER'},
             ],
           },
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -175,7 +176,7 @@ test('Property 6: CDC event generated for UPDATE operations', async (t) => {
       async (partitionId, tableName, data, newValue) => {
         const cdcEvents = [];
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId: tableName,
           tableName,
@@ -189,7 +190,7 @@ test('Property 6: CDC event generated for UPDATE operations', async (t) => {
               {name: 'value', type: 'INTEGER'},
             ],
           },
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -255,7 +256,7 @@ test('Property 6: CDC event generated for DELETE operations', async (t) => {
       async (partitionId, tableName, data) => {
         const cdcEvents = [];
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId: tableName,
           tableName,
@@ -269,7 +270,7 @@ test('Property 6: CDC event generated for DELETE operations', async (t) => {
               {name: 'value', type: 'INTEGER'},
             ],
           },
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -339,7 +340,7 @@ test('Property 6: CDC events delivered to multiple subscribers', async (t) => {
           subscriberEvents.push([]);
         }
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId: tableName,
           tableName,
@@ -353,7 +354,7 @@ test('Property 6: CDC events delivered to multiple subscribers', async (t) => {
               {name: 'value', type: 'INTEGER'},
             ],
           },
-        });
+        }));
 
         try {
           await partition.initialize();

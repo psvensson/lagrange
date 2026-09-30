@@ -5,24 +5,34 @@
  * whose delta has been mirrored to the target). Both are persisted with
  * the transition metadata via the source ack checkpoint so a restarted
  * source replays deltas from the durable Raft log — never from the
- * volatile in-memory pendingEntries array.
+ * volatile in-memory pendingEntries array. The durable Raft log is the
+ * rs-raft durable store (partition-committed-log.js).
  */
 
 import {TABLES} from '../constants/tables.js';
+import {
+  readPartitionAppliedIndex,
+  readPartitionCommittedCommands,
+} from './partition-committed-log.js';
 import {PARTITION_SERVICE_OPERATION} from './partition-service-constants.js';
 
 /**
  * Resolve the current Raft log barrier index for a snapshot about to be
- * taken: every entry up to and including this index is covered by the
- * backfill, so the replay watermark starts here.
+ * taken: the rs-raft applied index, written atomically with the state
+ * machine the backfill copies (the commit index can run ahead of it).
+ * Every entry up to and including it is covered by the backfill, so the
+ * replay watermark starts here.
  * @param {Object} service - PartitionService-like context.
- * @return {number|null} The barrier index, or null when no durable log
- *   is available (in-memory test databases).
+ * @return {number|null} The barrier index, or null when the partition has
+ *   no open database or no applied entry yet.
  */
 function resolveSnapshotBarrierIndex(service) {
-  const lastIndex = Number(service?.storage?.getLastIndex?.());
-  return Number.isSafeInteger(lastIndex) && lastIndex > 0 ?
-    lastIndex :
+  if (!service?.db?.open) {
+    return null;
+  }
+  const appliedIndex = Number(readPartitionAppliedIndex(service));
+  return Number.isSafeInteger(appliedIndex) && appliedIndex > 0 ?
+    appliedIndex :
     null;
 }
 
@@ -87,12 +97,12 @@ const MIRRORABLE_LOG_OPERATION_TYPES = Object.freeze(new Set([
 
 /**
  * Load the durable deltas behind the persisted replay watermark from
- * the source partition's Raft log: every committed write entry with
- * `index > watermarkIndex`, in log order, each stamped with its
- * logIndex so the drain advances the watermark per delivery. Returns
- * an empty list when no durable log or no watermark is available — the
- * caller then falls back to the volatile queue only for writes that
- * arrive AFTER resumption.
+ * the source partition's rs-raft log: every applied write entry with
+ * `index > watermarkIndex`, in log order, each stamped with
+ * its logIndex so the drain advances the watermark per delivery.
+ * Returns an empty list when the partition has no open database or no
+ * watermark is available — the caller then falls back to the volatile
+ * queue only for writes that arrive AFTER resumption.
  * @param {Object} service - PartitionService-like context.
  * @param {number|null} watermarkIndex - Persisted replay watermark.
  * @return {Array<Object>}
@@ -101,17 +111,18 @@ function loadDurableDeltasBehindWatermark(service, watermarkIndex) {
   if (!Number.isSafeInteger(watermarkIndex) || watermarkIndex < 1) {
     return [];
   }
-  if (typeof service?.storage?.getEntriesFrom !== 'function') {
+  if (!service?.db?.open) {
     return [];
   }
-  const entries = service.storage.getEntriesFrom(watermarkIndex + 1) || [];
   const deltas = [];
-  for (const logEntry of entries) {
-    const data = logEntry?.data || null;
-    if (!data || !MIRRORABLE_LOG_OPERATION_TYPES.has(data.type)) {
+  for (const entry of readPartitionCommittedCommands(service)) {
+    const logIndex = Number(entry.index);
+    const command = entry.command;
+    if (logIndex <= watermarkIndex ||
+      !MIRRORABLE_LOG_OPERATION_TYPES.has(command?.type)) {
       continue;
     }
-    deltas.push({...data, logIndex: Number(logEntry.index)});
+    deltas.push({...command, logIndex});
   }
   return deltas;
 }

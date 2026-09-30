@@ -23,6 +23,42 @@ operator-visible handoff checkpoints while lifecycle ownership stays with
 `ServiceReconciler`, and canonical topology truth stays in owner rows plus the
 declared read-model contract.
 
+### Boot Incarnation Contract
+
+Every boot lifecycle starts by reserving its boot incarnation through the boot
+incarnation owner (`reserveBootIncarnation` in
+`src/bootstrap/boot-incarnation-owner.js`), the one reservation authority: one
+durable, monotonic counter per data directory. The caller then hands that
+exact incarnation to the lifecycle owners:
+
+```
+node/process startup -> reserveBootIncarnation(dataDir) -> incarnation G
+  -> BootstrapService({bootIncarnation: G})   (seed)
+  -> NodeJoiningService({bootIncarnation: G}) (join, durable rejoin)
+  -> replica lifecycle owner, node-state publication, heartbeat, router
+     IDENTIFY, rejoin hints, NODES rows (each requires it; none defaults it)
+```
+
+- The package exports the reservation operation itself,
+  `reserveBootIncarnation(dataDir)` (from `lagrange-server`), and nothing
+  else of the owner: an embedding caller reserves over the node's data
+  directory, then constructs the lifecycle owner with the result. The
+  operation persists the reservation before returning it, never returns 0,
+  and fails closed on unreadable reservation state
+  (`BOOT_INCARNATION_STATE_UNREADABLE`) or a missing data directory
+  (`BOOT_INCARNATION_DATA_DIR_REQUIRED`).
+- `BootstrapService` requires `bootIncarnation`, including through
+  `BootstrapService.bootstrapOrExit`.
+- `NodeJoiningService` requires `bootIncarnation`.
+- The caller obtains it from the boot incarnation owner; neither service
+  reserves one. A new join attempt after an abandoned one is a new boot
+  lifecycle and reserves a new incarnation.
+- A node lifecycle owner is valid only for one explicitly established node
+  incarnation, so an omitted incarnation cannot be inferred. A missing or
+  unissued value fails closed with `BOOT_INCARNATION_REQUIRED` in the
+  constructor, before any state machine, timer, handler or system-table row
+  exists. The owner never issues 0, and no default is applied.
+
 ### Seed Node Bootstrap
 
 ```
@@ -38,6 +74,9 @@ Phase 2: Message Groups
 └── Elections deferred until Phase 3 complete
 
 Phase 3: Partitions
+├── Prove storage admission before every partition open
+│   ├── a truly virgin data directory may found the initial generation
+│   └── persisted/reseed opens require an exact live durable services row
 ├── Create partition services for all system tables
 ├── Each partition is a 3-replica Raft group
 ├── Start elections for message groups and partitions
@@ -74,6 +113,22 @@ Phase 5: Cache Hydration
 7. Storage Budget -> Resolve and persist node storage budget via NodeStorageBudgetService
 8. Ready -> Node is ready to serve queries
 ```
+
+Before request admission, startup takes one owner-required snapshot of local
+`partition_cleanup` markers. The admission barrier waits for that snapshot, not
+for the full orphan sweep. Only exact tokens present in the frozen snapshot may
+resume cleanup; disk-discovered candidates use INSERT-only acquisition on the
+same `services.service_id` key used by live creation. This preserves asynchronous
+startup cleanup without allowing a later sweeper to borrow another owner's
+token.
+
+Startup enforces one live OS process per canonical data directory. Immediately
+after directory initialization and before provenance, rejoin, or replica work,
+the process holds an exclusive transaction in the directory-local ownership
+database. A second process fails closed with `DATA_DIRECTORY_ALREADY_OWNED`;
+startup failure, abort, dry-run completion, normal shutdown, and process death
+release the kernel-backed lock. Durable key arbitration separately handles
+independent cluster owners racing the same logical identity.
 
 Step 4 consumes the canonical control-plane readiness and publication
 projection. A reconciled node is not treated as published until the durable row

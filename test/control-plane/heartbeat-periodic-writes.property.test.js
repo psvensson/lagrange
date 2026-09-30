@@ -12,15 +12,15 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {HeartbeatService as RawHeartbeatService} from
-  '../../src/control-plane/heartbeat-service.js';
-import {ControlPlaneSystemTableGateway} from
-  '../../src/control-plane/control-plane-system-table-gateway.js';
+import {HeartbeatService,
+  insertViaUpsert,
+} from './heartbeat-memory-trend-test-helpers.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {HEARTBEAT_STATE} from
   '../../src/control-plane/heartbeat-service-constants.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 /**
  * Initialize test singletons.
@@ -71,34 +71,15 @@ function createMockCdc() {
       updateCount++;
       return {success: true};
     },
+    insertSystemTableRow(...args) {
+      return insertViaUpsert(this, args);
+    },
     upsertSystemTableRow: async () => {
       upsertCount++;
       return {success: true};
     },
   };
 }
-
-function createHeartbeatService(options = {}) {
-  const controlPlaneSystemTableGateway =
-    options.controlPlaneSystemTableGateway ||
-    new ControlPlaneSystemTableGateway({
-      nodeId: options.nodeId || null,
-      cdcIntegrationService: options.cdcIntegrationService || null,
-      sqlQueryEngine: options.cdcIntegrationService?.sqlQueryEngine || null,
-      systemTableCache: options.systemTableCache || null,
-      messageRouter: options.messageRouter || null,
-    });
-  return new RawHeartbeatService({
-    ...options,
-    controlPlaneSystemTableGateway,
-  });
-}
-
-function HeartbeatService(options = {}) {
-  return createHeartbeatService(options);
-}
-
-HeartbeatService.prototype = RawHeartbeatService.prototype;
 
 test('Property 13: Heartbeat service periodic writes',
   async (t) => {
@@ -112,6 +93,7 @@ test('Property 13: Heartbeat service periodic writes',
           const mockCache = createMockCache();
 
           const service = new HeartbeatService({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId: 'test-node',
             nodeAddress: 'ws://localhost:8080',
             cdcIntegrationService: mockCdc,

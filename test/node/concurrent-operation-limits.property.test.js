@@ -16,12 +16,13 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createLifecycleCdcService} from
+  '../test-helpers/lifecycle-state-store.js';
+import {withRegisteredActivationHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 function createMockCDCService() {
-  return {
-    updateSystemTableRow: async () => ({success: true}),
-    upsertSystemTableRow: async () => ({success: true}),
-  };
+  return createLifecycleCdcService();
 }
 
 test('Property 12: Concurrent Operation Limits', async (t) => {
@@ -51,11 +52,11 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
         fc.integer({min: 1, max: 5}),
         fc.integer({min: 0, max: 3}),
         async (limit, extraReplicas) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
             maxConcurrentAdds: limit,
-          });
+          }));
 
           // Add replicas up to the limit
           for (let i = 0; i < limit; i++) {
@@ -105,11 +106,11 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
         async (limit, numReplicas) => {
           const belowLimit = Math.min(numReplicas, limit - 1);
 
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
             maxConcurrentAdds: limit,
-          });
+          }));
 
           // Add replicas below the limit
           for (let i = 0; i < belowLimit; i++) {
@@ -143,11 +144,11 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
         fc.integer({min: 1, max: 5}),
         fc.integer({min: 0, max: 3}),
         async (limit, extraReplicas) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
             maxConcurrentRemoves: limit,
-          });
+          }));
 
           // First get replicas to active state, then to removing
           for (let i = 0; i < limit + extraReplicas; i++) {
@@ -204,11 +205,11 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
         async (limit, numReplicas) => {
           const belowLimit = Math.min(numReplicas, limit - 1);
 
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
             maxConcurrentRemoves: limit,
-          });
+          }));
 
           // First get replicas to active state
           for (let i = 0; i < belowLimit; i++) {
@@ -251,11 +252,11 @@ test('Property 12: Concurrent Operation Limits', async (t) => {
       fc.asyncProperty(
         fc.integer({min: 3, max: 6}),
         async (limit) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
             maxConcurrentAdds: limit,
-          });
+          }));
 
           // Distribute replicas across pending, creating, syncing
           // One in each state

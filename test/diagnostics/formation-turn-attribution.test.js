@@ -1042,3 +1042,73 @@ test('a resource with no captured node defers to the live frame instead of hidin
       .turnSegmentCount > 0, 'and charged to the frame\'s node');
     t.end();
   });
+
+// The generation lineage answers "is this dispatching resource the active
+// generation's work". It is read only when a resource dispatches, so it has
+// to hold exactly the resources that can still dispatch: the live set. A
+// charged rs-raft seed scenario creates ~15.9M resources under one generation
+// root, and a lineage that kept every one of them until the generation ended
+// crossed V8's Map limit and the corpus runner's heap cap. The map is exposed
+// here by rewriting the module's export list in an isolated copy, so no
+// production export exists only to be measured.
+const LINEAGE_EXPORT_TARGET = 'export {\n  EXECUTION_NODE_UNBOUND_ERROR,';
+const LINEAGE_EXPORT_REPLACEMENT =
+  'export {\n  asyncGenerationIds,\n  EXECUTION_NODE_UNBOUND_ERROR,';
+const LINEAGE_RESOURCE_COUNT = 5000;
+// The generation's own frames and the few settle turns below: far under the
+// resource count, and independent of it.
+const LINEAGE_LIVE_BOUND = 100;
+
+function nextTurn() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+function runImmediateChain(count) {
+  return new Promise((resolve) => {
+    let remaining = count;
+    const step = () => {
+      remaining -= 1;
+      if (remaining === 0) {
+        resolve();
+        return;
+      }
+      setImmediate(step);
+    };
+    setImmediate(step);
+  });
+}
+
+test('the generation lineage holds the live set, never every resource it saw',
+  async (t) => {
+    const lineageModule = await loadAttributionWithMutation(
+      LINEAGE_EXPORT_TARGET, LINEAGE_EXPORT_REPLACEMENT);
+    const lineage = lineageModule.asyncGenerationIds;
+    let liveTimerTagged = null;
+    let sizeAfterChain = null;
+    let clearedTimerTagged = null;
+    await lineageModule.runOnSimulationGenerationRoot('lineage-bound',
+      async () => {
+        // One resource that stays live across the whole chain.
+        const liveTimer = setTimeout(() => undefined, 60000);
+        const liveTimerId = liveTimer[Symbol.toPrimitive]();
+        // Each immediate is created, dispatched and destroyed in turn.
+        await runImmediateChain(LINEAGE_RESOURCE_COUNT);
+        await nextTurn();
+        await nextTurn();
+        liveTimerTagged = lineage.has(liveTimerId);
+        sizeAfterChain = lineage.size;
+        clearTimeout(liveTimer);
+        await nextTurn();
+        await nextTurn();
+        clearedTimerTagged = lineage.has(liveTimerId);
+      });
+    t.equal(liveTimerTagged, true,
+      'a live resource created inside the generation is still tagged');
+    t.ok(sizeAfterChain < LINEAGE_LIVE_BOUND,
+      `the lineage holds the live set (${sizeAfterChain} entries after ` +
+        `${LINEAGE_RESOURCE_COUNT} destroyed immediates), never every resource`);
+    t.equal(clearedTimerTagged, false,
+      'a destroyed resource leaves the lineage: it can never dispatch again');
+    t.equal(lineage.size, 0, 'and the generation end clears the rest');
+    t.end();
+  });

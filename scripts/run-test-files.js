@@ -8,10 +8,12 @@ import {
   openSync,
   readFileSync,
   readSync,
+  renameSync,
   statSync,
 } from 'node:fs';
 import {spawn, spawnSync} from 'node:child_process';
 import {gitProcessEnvironment} from './checks/git-process-environment.js';
+import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {Parser} from 'tap-parser';
@@ -41,6 +43,12 @@ const RETRY_FAILED_ONCE_OUTCOME = Object.freeze({
   FAIL: 'fail',
   PASS: 'pass',
 });
+const FIRST_ATTEMPT = 1;
+const RETRY_ATTEMPT = 2;
+// A retry keeps the first attempt's output beside its own, never over it.
+const FIRST_ATTEMPT_RESULT_SUFFIX = `.attempt-${FIRST_ATTEMPT}`;
+const PASSED_ON_RETRY_FINDING_PREFIX = '# finding passed-on-retry ';
+const FINDING_SEPARATOR = ': ';
 const PROCESS_KILL_SIGNAL = 'SIGKILL';
 const TAP_RESULT_SUFFIX = '.tap';
 const STDERR_RESULT_SUFFIX = '.stderr';
@@ -74,10 +82,39 @@ const LINE_FEED_BYTE = 0x0a;
 const CARRIAGE_RETURN_BYTE = 0x0d;
 const NOT_FOUND = -1;
 const TEXT_ENCODING = 'utf8';
+const MISSING_FILE_CODE = 'ENOENT';
 const PARENT_DIRECTORY_PREFIX = '..';
 const REASON_SEPARATOR = '; ';
 const NO_FAILURE_REASONS = Object.freeze([]);
 const TEST_PROCESS_NOT_STARTED = 'not_started';
+const FAILED_ASSERTION_PREFIX = 'not ok ';
+// One per-file result ledger: every attempt of every file the CLI runs
+// appends one JSON line here, the durable record of which files are slow,
+// which are red and which pass only on retry. It is git-ignored with the rest
+// of test-output. A library caller names its own ledger or writes none.
+// The runner owns this path whole: the gate executes the runner, so nothing
+// it imports may live outside the modules that trip the full corpus.
+const TEST_RESULTS_LEDGER_ROOT = 'test-output';
+const TEST_RESULTS_LEDGER_DIRECTORY = 'reports';
+const TEST_RESULTS_LEDGER_NAME = 'test-results.ndjson';
+const TEST_RESULTS_LEDGER_FILE = path.join(TEST_RESULTS_LEDGER_ROOT,
+  TEST_RESULTS_LEDGER_DIRECTORY, TEST_RESULTS_LEDGER_NAME);
+// Bounded: past this size the ledger starts over and the full one is kept as
+// the single previous generation, about 30 whole-corpus runs each.
+const TEST_RESULTS_LEDGER_ROTATE_BYTES = 16 * 1024 * 1024;
+const TEST_RESULTS_LEDGER_PREVIOUS_NAME = 'test-results.previous.ndjson';
+const LEDGER_LINE_END = '\n';
+// The host facts a timeout carries, sampled when the file is killed.
+const BYTES_PER_MEBIBYTE = 1024 * 1024;
+const LOAD_AVERAGE_ONE_MINUTE = 0;
+const LOAD_DECIMALS = 2;
+// Hardware-relative budget scaling (hardware-relative-convergence-budget
+// epic): CI lanes and placed lab runs export LAGRANGE_TEST_MACHINE_FACTOR; the
+// reference machine is 1, and non-numeric, absent or below 1 means 1. This is
+// its one reader: the runner records it on a timeout, and the integration
+// budget helper (test/integration/helpers/test-machine-factor.js) scales by it.
+const MACHINE_FACTOR_ENV = 'LAGRANGE_TEST_MACHINE_FACTOR';
+const REFERENCE_MACHINE_FACTOR = 1;
 
 const CLI_OPTION = Object.freeze({
   FILTER: '--filter',
@@ -298,6 +335,7 @@ function prepareTestRun(file, options) {
   }
   return {
     absoluteFile,
+    budgetMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     cwd,
     env,
     file,
@@ -488,10 +526,16 @@ function finalizeTestRun(run, processResult, elapsedMs) {
   closeSync(run.stderrFd);
   const parse = createTapAnalysis();
   let sawTopLevelTime = false;
+  let firstFailedAssertion = null;
   const read = readBoundedOutput(run.outputFile, {
     consume: (chunk) => parse.write(chunk),
     onLinePrefix: (line) => {
       if (line.startsWith(TOP_LEVEL_TIME_PREFIX)) sawTopLevelTime = true;
+      const assertion = line.trimStart();
+      if (firstFailedAssertion === null &&
+          assertion.startsWith(FAILED_ASSERTION_PREFIX)) {
+        firstFailedAssertion = assertion;
+      }
     },
   });
   const analysis = parse.end();
@@ -513,7 +557,9 @@ function finalizeTestRun(run, processResult, elapsedMs) {
     reasons.push(`${FAILURE_REASON.OUTPUT_UNANALYSED}` +
       `${read.dropped} byte(s) of ${read.bytes} were not analysed`);
   }
-  if (processResult.timedOut) reasons.push(FAILURE_REASON.TIMED_OUT);
+  const timeout = processResult.timedOut ?
+    sampleTimeout(run.budgetMs, elapsedMs, run.env) : null;
+  if (timeout) reasons.push(describeTimeout(timeout));
   if (processResult.error) reasons.push(processResult.error.message);
   if (processResult.signal) reasons.push(`test process received ${processResult.signal}`);
   if (processResult.status !== SUCCESS_EXIT_CODE) {
@@ -523,6 +569,8 @@ function finalizeTestRun(run, processResult, elapsedMs) {
     ...analysis,
     elapsedMs,
     file: run.relativeFile,
+    firstFailureLine: reasons.length === 0 ? null :
+      firstFailedAssertion ?? reasons[0],
     ok: reasons.length === 0,
     output,
     outputBytes: read.bytes,
@@ -534,7 +582,78 @@ function finalizeTestRun(run, processResult, elapsedMs) {
     stderr,
     stderrBytes: stderrRead.bytes,
     stderrFile: run.stderrFile,
+    timeout,
   };
+}
+
+/**
+ * The machine factor the environment declares, or 1 on the reference machine.
+ * @param {object} [env] process environment
+ * @return {number} >= 1
+ */
+function resolveTestMachineFactor(env = process.env) {
+  const parsed = Number(env[MACHINE_FACTOR_ENV]);
+  return Number.isFinite(parsed) && parsed >= REFERENCE_MACHINE_FACTOR ?
+    parsed :
+    REFERENCE_MACHINE_FACTOR;
+}
+
+// What the host was doing when a file ran out of budget, so a timeout on a
+// loaded or slow machine reads as a budget question rather than a regression.
+function sampleTimeout(budgetMs, elapsedMs, env) {
+  return {
+    budgetMs,
+    elapsedMs,
+    load1: Number(os.loadavg()[LOAD_AVERAGE_ONE_MINUTE].toFixed(LOAD_DECIMALS)),
+    cores: os.availableParallelism(),
+    freeMemMb: Math.round(os.freemem() / BYTES_PER_MEBIBYTE),
+    machineFactor: resolveTestMachineFactor(env),
+  };
+}
+
+function describeTimeout(timeout) {
+  return `${FAILURE_REASON.TIMED_OUT} after ${timeout.elapsedMs}ms of a ` +
+    `${timeout.budgetMs}ms budget; at the kill load1=${timeout.load1} ` +
+    `cores=${timeout.cores} freeMemMb=${timeout.freeMemMb} ` +
+    `machineFactor=${timeout.machineFactor}`;
+}
+
+// A ledger past its bound becomes the previous generation, replacing the one
+// before it; an absent ledger has nothing to rotate.
+function rotateLedger(ledgerFile) {
+  let size;
+  try {
+    size = statSync(ledgerFile).size;
+  } catch (error) {
+    if (error.code === MISSING_FILE_CODE) return;
+    throw error;
+  }
+  if (size <= TEST_RESULTS_LEDGER_ROTATE_BYTES) return;
+  renameSync(ledgerFile,
+    path.join(path.dirname(ledgerFile), TEST_RESULTS_LEDGER_PREVIOUS_NAME));
+}
+
+function recordAttempt(result, options) {
+  if (!options.ledgerFile) return;
+  const attempt = options.attempt ?? FIRST_ATTEMPT;
+  const line = {
+    file: result.file,
+    attempt,
+    ok: result.ok,
+    assertions: result.assertions,
+    durationMs: result.elapsedMs,
+    retriedOnce: attempt === RETRY_ATTEMPT,
+    firstFailureLine: result.firstFailureLine,
+  };
+  if (result.timeout) line.timeout = result.timeout;
+  mkdirSync(path.dirname(options.ledgerFile), {recursive: true});
+  appendFileSync(options.ledgerFile, JSON.stringify(line) + LEDGER_LINE_END);
+}
+
+function settleResult(result, options) {
+  recordAttempt(result, options);
+  if (options.print !== false) printTestResult(result);
+  return result;
 }
 
 function preparationFailure(file, error) {
@@ -542,6 +661,7 @@ function preparationFailure(file, error) {
     assertions: 0,
     elapsedMs: 0,
     file,
+    firstFailureLine: error.message,
     ok: false,
     output: '',
     reasons: [error.message],
@@ -566,9 +686,7 @@ function runTestFileSync(file, options = {}) {
   try {
     run = prepareTestRun(file, options);
   } catch (error) {
-    const result = preparationFailure(file, error);
-    if (options.print !== false) printTestResult(result);
-    return result;
+    return settleResult(preparationFailure(file, error), options);
   }
   const startedAt = Date.now();
   const processResult = spawnSync(
@@ -578,7 +696,7 @@ function runTestFileSync(file, options = {}) {
       cwd: run.cwd,
       env: run.env,
       stdio: ['ignore', run.stdoutFd, run.stderrFd],
-      timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      timeout: run.budgetMs,
       killSignal: PROCESS_KILL_SIGNAL,
     },
   );
@@ -588,8 +706,7 @@ function runTestFileSync(file, options = {}) {
     status: processResult.status,
     timedOut: processResult.error?.code === 'ETIMEDOUT',
   }, Date.now() - startedAt);
-  if (options.print !== false) printTestResult(result);
-  return result;
+  return settleResult(result, options);
 }
 
 function runTestFile(file, options = {}) {
@@ -597,9 +714,7 @@ function runTestFile(file, options = {}) {
   try {
     run = prepareTestRun(file, options);
   } catch (error) {
-    const result = preparationFailure(file, error);
-    if (options.print !== false) printTestResult(result);
-    return Promise.resolve(result);
+    return Promise.resolve(settleResult(preparationFailure(file, error), options));
   }
   const startedAt = Date.now();
   return new Promise((resolve) => {
@@ -613,7 +728,7 @@ function runTestFile(file, options = {}) {
     const timeout = setTimeout(() => {
       timedOut = true;
       child.kill(PROCESS_KILL_SIGNAL);
-    }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    }, run.budgetMs);
     timeout.unref();
     child.on(PROCESS_EVENT.ERROR, (error) => {
       spawnError = error;
@@ -626,8 +741,7 @@ function runTestFile(file, options = {}) {
         status,
         timedOut,
       }, Date.now() - startedAt);
-      if (options.print !== false) printTestResult(result);
-      resolve(result);
+      resolve(settleResult(result, options));
     });
   });
 }
@@ -644,6 +758,7 @@ async function runTestFiles(files, options = {}) {
       total: 0,
     };
   }
+  if (options.ledgerFile) rotateLedger(options.ledgerFile);
   const jobs = Math.min(options.jobs ?? DEFAULT_JOBS, files.length);
   const results = new Array(files.length);
   let nextFileIndex = 0;
@@ -688,16 +803,38 @@ async function main() {
     process.stderr.write(`${FAILURE_REASON.NO_FILTER_MATCHES}\n`);
     return FAILURE_EXIT_CODE;
   }
-  const summary = await runTestFiles(files, options);
+  const runOptions = {
+    ...options,
+    ledgerFile: path.resolve(process.cwd(), TEST_RESULTS_LEDGER_FILE),
+  };
+  const summary = await runTestFiles(files, runOptions);
   if (summary.reasons.length > 0) {
     process.stderr.write(`${summary.reasons.join(REASON_SEPARATOR)}\n`);
   }
-  process.stdout.write(
-    `# test-files total=${summary.total} pass=${summary.passed} ` +
-    `fail=${summary.failed} assertions=${summary.assertions}\n`,
-  );
+  process.stdout.write(`${formatTestFilesSummary(summary)}\n`);
   if (summary.ok) return SUCCESS_EXIT_CODE;
-  return retryFailedOnce(summary, options);
+  return retryFailedOnce(summary, runOptions);
+}
+
+// The first attempt's output moves aside before the retry reopens its path,
+// so both attempts stay on disk. A file that never started left none.
+function retainFirstAttempt(result) {
+  if (!result.outputFile) return;
+  const retained = `${result.outputFile.slice(0, -TAP_RESULT_SUFFIX.length)}` +
+    `${FIRST_ATTEMPT_RESULT_SUFFIX}${TAP_RESULT_SUFFIX}`;
+  renameSync(result.outputFile, retained);
+  renameSync(result.stderrFile, `${retained}${STDERR_RESULT_SUFFIX}`);
+}
+
+/**
+ * The one summary line a run of test files ends with. A lab run that merges
+ * several machines' verdicts prints the same line, from this owner.
+ * @param {{total: number, passed: number, failed: number, assertions: number}} summary
+ * @return {string}
+ */
+function formatTestFilesSummary(summary) {
+  return `# test-files total=${summary.total} pass=${summary.passed} ` +
+    `fail=${summary.failed} assertions=${summary.assertions}`;
 }
 
 // The policy above, as one exported unit so a witness can hold it: the
@@ -714,22 +851,31 @@ async function retryFailedOnce(summary, options = {}, {
     summary.failed <= RETRY_FAILED_ONCE_MAX_FILES &&
     summary.results.length > 0;
   if (!retryOnce) return FAILURE_EXIT_CODE;
-  const failedFiles = summary.results
-    .filter((result) => !result.ok)
-    .map((result) => result.file);
+  const failedResults = summary.results.filter((result) => !result.ok);
   write(
-    `# retry-failed-once: rerunning ${failedFiles.length}` +
+    `# retry-failed-once: rerunning ${failedResults.length}` +
     RETRY_FAILED_ONCE_BANNER_SUFFIX,
   );
   let retriedAllGreen = true;
-  for (const file of failedFiles) {
-    const retried = await runFile(file, options);
+  const findings = [];
+  for (const failed of failedResults) {
+    const {file} = failed;
+    retainFirstAttempt(failed);
+    const retried = await runFile(file, {...options, attempt: RETRY_ATTEMPT});
     const retriedOutcome = retried.ok ?
       RETRY_FAILED_ONCE_OUTCOME.PASS :
       RETRY_FAILED_ONCE_OUTCOME.FAIL;
+    // This line's shape is read by the placement controller (lab/probe.js).
     write(`# retried-once ${retriedOutcome} ${file}\n`);
     if (!retried.ok) retriedAllGreen = false;
+    if (retried.ok) {
+      findings.push(`${PASSED_ON_RETRY_FINDING_PREFIX}${file}` +
+        `${FINDING_SEPARATOR}${failed.firstFailureLine}\n`);
+    }
   }
+  // A pass on retry is green and still a finding: the run ends by naming
+  // each one with the line its first attempt failed on.
+  for (const finding of findings) write(finding);
   return retriedAllGreen ? SUCCESS_EXIT_CODE : FAILURE_EXIT_CODE;
 }
 
@@ -740,8 +886,11 @@ export {
   RETRY_FAILED_ONCE_ENABLED,
   RETRY_FAILED_ONCE_ENV,
   TEST_NODE_ARGS,
+  TEST_RESULTS_LEDGER_ROTATE_BYTES,
+  resolveTestMachineFactor,
   analyzeTapOutput,
   filterTestFiles,
+  formatTestFilesSummary,
   parseOptions,
   retryFailedOnce,
   runTestFile,

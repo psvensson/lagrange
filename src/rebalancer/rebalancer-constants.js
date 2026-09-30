@@ -244,6 +244,9 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   STEP_CHANGED: 'Operation step changed',
   OPERATION_COMPLETED: 'Operation completed',
   OPERATION_FAILED: 'Operation failed',
+  OPERATION_FAILURE_REFUSED_AFTER_INTENT:
+    'REPLACE failure refused after durable source-removal intent',
+  REPLACE_SOURCE_REMOVAL_WAITING: 'REPLACE source removal waiting',
   OPERATION_BLOCKED_BY_SAFETY_POLICY: 'Operation blocked by safety policy',
   OPERATION_DEFERRED_BY_SAFETY_POLICY: 'Operation deferred by safety policy',
   OPERATION_DISPATCH_RETRY_DEFERRED:
@@ -308,8 +311,6 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
     'operation admission until the ledger spreads',
   PRIORITY_RECOVERY_DRAIN_SETTLED:
     'Priority recovery drain settled operation',
-  BOOTSTRAP_TOPOLOGY_UNRESOLVED:
-    'Create dispatch proceeding without bootstrap topology',
   STEPS_HISTORY_PARSE_ERROR: 'Failed to parse steps_history JSON',
   QUERY_OPERATION_FAILED: 'Failed to query operation from system table',
   QUERY_OPERATIONS_FAILED: 'Failed to query operations from system table',

@@ -272,6 +272,10 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_STATE = Object.freeze({
   // same "wake, not kill" outcome the remote-owner rule produces.
   RECOVERING_DISPATCH_PARKED: 'recovering_dispatch_parked',
   SUPERSEDED_TARGET: 'superseded_target',
+  // R-1b (quest replace-source-removal-owner): where the drain would settle
+  // another operation (CONVERGED, or released), a partition REPLACE is its
+  // owner's to complete from committed membership: the drain hands it back.
+  SOURCE_RETIREMENT_OWNED: 'source_retirement_owned',
 });
 
 const PRIORITY_RECOVERY_OPERATION_DRAIN_OPERATION_TYPES = Object.freeze(
@@ -337,6 +341,10 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE = Object.freeze(
     [
       PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.OWNER_UNAVAILABLE_RELEASED,
       OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN,
+    ],
+    [
+      PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.SOURCE_RETIREMENT_OWNED,
+      OPERATION_LIFECYCLE_ACTION.HAND_BACK_REPLACE_OWNER,
     ],
     [
       PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.NOT_APPLICABLE,

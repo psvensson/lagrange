@@ -4,7 +4,6 @@ const RAFT_PROVIDER_CONTRACT_METHOD = Object.freeze({
   PROPOSE: 'propose',
   JOIN_PEER: 'joinPeer',
   START_ELECTION_TIMER: 'startElectionTimer',
-  REQUEST_ELECTION_NOW: 'requestElectionNow',
   CLEAR_TIMERS: 'clearTimers',
   SHUTDOWN_NODE: 'shutdownNode',
   GET_CURRENT_TERM: 'getCurrentTerm',
@@ -24,6 +23,11 @@ const RAFT_PARTITION_NODE_REQUEST = Object.freeze({
   PEER_ID: 'peerId',
   PEER_ADDRESS: 'peerAddress',
   BOOTSTRAP_PEER_IDS: 'bootstrapPeerIds',
+  // What the group opens from when the replica holds no durable record: a
+  // committed-membership stamp (COMMITTED, a join; GENESIS, a founder) or
+  // the durable record alone (DURABLE_RECORD, a rejoin). Absent, the
+  // bootstrap peer ids are a genesis (owner decision O1).
+  BOOTSTRAP_MEMBERSHIP: 'bootstrapMembership',
   DURABLE_LOG: 'durableLog',
   // The replica's own durable storage handle. A backend whose record is not
   // an entry log - raft-rs keeps a hard state, an applied position, a

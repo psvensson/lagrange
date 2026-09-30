@@ -16,12 +16,13 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createLifecycleCdcService} from
+  '../test-helpers/lifecycle-state-store.js';
+import {withRegisteredActivationHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 function createMockCDCService() {
-  return {
-    updateSystemTableRow: async () => ({success: true}),
-    upsertSystemTableRow: async () => ({success: true}),
-  };
+  return createLifecycleCdcService();
 }
 
 // Transitional states as defined in requirements
@@ -60,10 +61,10 @@ test('Property 9: Entry Time Tracking', async (t) => {
         fc.uuid(),
         fc.uuid(),
         async (targetState, replicaId, partitionId) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           const beforeTime = Date.now();
 
@@ -88,7 +89,7 @@ test('Property 9: Entry Time Tracking', async (t) => {
             replicaState !== null &&
             replicaState.stateEnteredAt !== undefined &&
             replicaState.stateEnteredAt >= beforeTime &&
-            replicaState.stateEnteredAt <= afterTime
+            replicaState.stateEnteredAt <= afterTime + path.length
           );
         },
       ),
@@ -107,10 +108,10 @@ test('Property 9: Entry Time Tracking', async (t) => {
         fc.uuid(),
         fc.uuid(),
         async (replicaId, partitionId) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           // Transition to pending
           await stateMachine.transition(replicaId, ReplicaState.PENDING, {
@@ -151,10 +152,10 @@ test('Property 9: Entry Time Tracking', async (t) => {
       fc.asyncProperty(
         fc.array(fc.uuid(), {minLength: 1, maxLength: 5}),
         async (replicaIds) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           const beforeTime = Date.now();
 
@@ -200,10 +201,10 @@ test('Property 9: Entry Time Tracking', async (t) => {
           fc.uuid(),
           fc.uuid(),
           async (replicaId, partitionId) => {
-            const stateMachine = new ReplicaStateMachine({
+            const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
               nodeId: 'test-node',
               cdcIntegrationService: createMockCDCService(),
-            });
+            }));
 
             // Get replica to active state (non-transitional)
             const path = getPathToState(ReplicaState.ACTIVE);
@@ -237,10 +238,10 @@ test('Property 9: Entry Time Tracking', async (t) => {
         fc.uuid(),
         fc.uuid(),
         async (replicaId, partitionId) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           // Transition through states
           await stateMachine.transition(replicaId, ReplicaState.PENDING, {

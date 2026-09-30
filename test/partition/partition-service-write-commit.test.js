@@ -5,20 +5,30 @@ import {
 } from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import LifeRaftCommitHarnessBase from '../../src/raft/liferaft.js';
-import {RAFT_COMMIT_APPLY_ROLLBACK_EVENT} from
-  '../../src/raft/liferaft-commit-scheduler.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {ControllablePartitionRaftProvider} from
-  './partition-service-test-support.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {
+  ControllablePartitionRaftProvider,
+  createControllablePartitionService,
+} from './partition-service-test-support.js';
+import {PartitionService} from '../../src/partition/partition-service.js';
+import {readCommittedStatementOutcome} from
+  '../../src/partition/partition-committed-statement-outcome.js';
+import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
+  '../../src/partition/partition-committed-statement-outcome-constants.js';
+import {
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
+  PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
-
-const RAFT_COMMIT_APPLY_EFFECT_FAILURE_EVENT =
-  'commit apply effect failure';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
+import {RAFT_RS_PERSISTENCE_ADMISSION} from
+  '../../src/raft/raft-rs-durable-store-constants.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 
 beforeEach(() => {
@@ -35,32 +45,27 @@ afterEach(() => {
   LoggingService.resetInstance();
 });
 
-function createLiferaftCommitHarness(partition) {
-  const request = partition.raftProvider.request;
-  class PartitionCommitHarness extends LifeRaftCommitHarnessBase {
-    initialize(_options, callback) {
-      callback?.();
-    }
+// The applied index the rs-raft durable store holds for the partition's
+// group, read from the store owner on the partition's own database.
+function durableAppliedIndex(partition) {
+  return Number(new RaftRsDurableStore(partition.db)
+    .readDurableRecord(partition.partitionId).appliedIndex);
+}
 
-    prepareCommitApply(command, effects) {
-      return request.applyCommittedEntry(command, effects);
+function countEffectFailureLogs(partition) {
+  const failures = [];
+  const logError = partition.logger.error.bind(partition.logger);
+  partition.logger.error = (message, fields) => {
+    if (message === PARTITION_SERVICE_ERROR_MSG.COMMITTED_ENTRY_EFFECT_FAILED) {
+      failures.push(fields);
     }
-  }
-
-  const raft = new PartitionCommitHarness(partition.unifiedAddress, {
-    Log: function() {
-      return partition.logAdapter;
-    },
-  });
-  raft.on(
-    RAFT_COMMIT_APPLY_ROLLBACK_EVENT,
-    request.applyTransactionRolledBack,
-  );
-  return raft;
+    return logError(message, fields);
+  };
+  return failures;
 }
 
 function createPartition(id, replicaIds) {
-  return new PartitionService({
+  return createControllablePartitionService({
     partitionId: id,
     tableId: 'test_table',
     tableName: 'test_table',
@@ -75,8 +80,7 @@ function createPartition(id, replicaIds) {
       ],
     },
     dbPath: ':memory:',
-    raftProvider: new ControllablePartitionRaftProvider(),
-  });
+  }, new ControllablePartitionRaftProvider());
 }
 
 test('PartitionService waits for committed-entry callback before acking multi-replica writes',
@@ -92,10 +96,10 @@ test('PartitionService waits for committed-entry callback before acking multi-re
     partition.role = 'leader';
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
-    partition.raftProvider.setRole(RAFT_ROLE.LEADER);
+    partition.controllableProvider.setRole(RAFT_ROLE.LEADER);
 
     let proposedEntry = null;
-    partition.raftProvider.setProposeHandler(async (entry) => {
+    partition.controllableProvider.setProposeHandler(async (entry) => {
       proposedEntry = {...entry};
     });
 
@@ -127,11 +131,16 @@ test('PartitionService waits for committed-entry callback before acking multi-re
       'an uncommitted Raft proposal must not mutate the local state machine',
     );
 
-    partition.applyCommittedEntry(proposedEntry);
+    partition.controllableProvider.commit(proposedEntry);
 
     const result = await writePromise;
     t.equal(result.success, true, 'write should succeed after commit');
     t.ok(Number.isFinite(result.logIndex), 'write result should include log index');
+    t.equal(
+      result.originHlc,
+      proposedEntry.timestamp,
+      'write result should expose the exact committed CDC version',
+    );
     t.same(
       result.durableCommitWitness,
       {
@@ -160,10 +169,24 @@ test('PartitionService waits for committed-entry callback before acking multi-re
 
 test('PartitionService retains the durable witness for completed idempotent replay',
   async (t) => {
-    const partition = createPartition('commit-replay', ['commit-replay-r1']);
+    // Production construction: a lone rs-raft leader commits and applies its
+    // own proposal.
+    const partition = new PartitionService(withFoundingStamp({
+      partitionId: 'commit-replay',
+      tableId: 'test_table',
+      tableName: 'test_table',
+      replicaId: 'commit-replay-r1',
+      replicaIds: ['commit-replay-r1'],
+      nodeId: 'test-node',
+      schema: {
+        columns: [
+          {name: 'id', type: 'TEXT', primaryKey: true},
+          {name: 'value', type: 'TEXT'},
+        ],
+      },
+      dbPath: ':memory:',
+    }));
     await partition.initialize();
-    partition.role = 'leader';
-    partition.isLeader = true;
 
     const operation = {
       type: 'INSERT',
@@ -202,10 +225,10 @@ test(
     partition.role = 'leader';
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
-    partition.raftProvider.setRole(RAFT_ROLE.LEADER);
+    partition.controllableProvider.setRole(RAFT_ROLE.LEADER);
 
     let proposedEntry = null;
-    partition.raftProvider.setProposeHandler(async (entry) => {
+    partition.controllableProvider.setProposeHandler(async (entry) => {
       proposedEntry = {...entry};
     });
 
@@ -230,7 +253,7 @@ test(
       'the pending proposal must remain invisible before quorum commit',
     );
 
-    partition.raftProvider.setRole(RAFT_ROLE.FOLLOWER);
+    partition.controllableProvider.setRole(RAFT_ROLE.FOLLOWER);
 
     const demotionOutcome = await Promise.race([
       writeOutcomePromise,
@@ -244,24 +267,25 @@ test(
       'test-timeout',
       'leadership loss should release the write owner without waiting for the 30s commit timer',
     );
-    if (demotionOutcome.kind === 'result') {
-      t.equal(
-        demotionOutcome.result.success,
-        false,
-        'the stale owner should return a retryable failure',
-      );
-      t.equal(
-        demotionOutcome.result.error,
-        'No leader available for write operation',
-        'demotion should surface the canonical leader-unavailable outcome',
-      );
-    } else if (demotionOutcome.kind === 'error') {
-      t.equal(
-        demotionOutcome.error.message,
-        'No leader available for write operation',
-        'demotion should reject with the canonical leader-unavailable outcome',
-      );
-    }
+    // F-z: the write was handed to consensus before the replica stopped
+    // leading, so its outcome is not known here: the answer says so, names
+    // the entry a retry must reuse, and is not a missing-leader refusal.
+    t.equal(demotionOutcome.kind, 'result',
+      'the released write is answered, not thrown');
+    t.equal(
+      demotionOutcome.result?.success,
+      false,
+      'the stale owner does not acknowledge the write',
+    );
+    t.ok(
+      typeof PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN === 'string' &&
+        demotionOutcome.result?.failureCode ===
+          PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+      'a proposed write released on demotion is answered OUTCOME_UNKNOWN ' +
+        `(${JSON.stringify(demotionOutcome.result)})`,
+    );
+    t.equal(demotionOutcome.result?.entryId, proposedEntry?.entryId,
+      'the answer names the proposed entry, so a retry is idempotent');
     t.equal(
       partition.db
         .prepare('SELECT COUNT(*) AS count FROM test_table WHERE id = ?')
@@ -272,7 +296,8 @@ test(
     );
 
     if (demotionOutcome.kind === 'test-timeout') {
-      partition.clearPendingCommittedWrites('test cleanup');
+      partition.releasePendingCommittedWrites(() => ({
+        success: false, error: 'test cleanup'}));
       await writeOutcomePromise;
     }
     await partition.shutdown();
@@ -280,8 +305,8 @@ test(
 );
 
 test(
-  'PartitionService publishes no apply effects when a later transactional ' +
-    'entry rolls back',
+  'PartitionService publishes no apply effects when a committed entry ' +
+    'application rolls back',
   async (t) => {
     const partition = createPartition('commit-rollback', [
       'commit-rollback-r1',
@@ -289,95 +314,142 @@ test(
       'commit-rollback-r3',
     ]);
     await partition.initialize();
-    const commitRaft = createLiferaftCommitHarness(partition);
+    const provider = partition.controllableProvider;
     const firstCommand = {
       type: 'INSERT',
       entryId: 'rollback-entry-1',
       sql: 'INSERT INTO test_table (id, value) VALUES (?, ?)',
       params: ['rollback-row-1', 'value-1'],
     };
-    const failingCommand = {
+    const secondCommand = {
       type: 'INSERT',
       entryId: 'rollback-entry-2',
-      sql: 'INSERT INTO missing_table (id) VALUES (?)',
-      params: ['rollback-row-2'],
+      sql: 'INSERT INTO test_table (id, value) VALUES (?, ?)',
+      params: ['rollback-row-2', 'value-2'],
     };
-    const entries = [firstCommand, failingCommand].map((command, offset) => ({
-      index: offset + 1,
-      term: 2,
-      committed: false,
-      responses: [],
-      command,
-    }));
-    commitRaft.log.saveCommands(entries);
     const committedEvents = [];
     partition.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, (event) => {
       committedEvents.push(event.command.entryId);
     });
+    const appliedBefore = durableAppliedIndex(partition);
+    // The applied-state write of the same transaction fails, so the whole
+    // application transaction rolls back.
+    partition.db.exec(
+      'CREATE TRIGGER fail_applied_progress ' +
+      'BEFORE INSERT ON _raft_rs_applied_state ' +
+      'BEGIN SELECT RAISE(ABORT, \'applied progress failed\'); END');
 
-    await t.rejects(
-      commitRaft.commitEntries(entries),
-      /missing_table/,
-      'the failing state-machine entry rejects the batch',
+    t.throws(
+      () => provider.commit(firstCommand),
+      /applied progress failed/,
+      'the failed applied-state write fails the application transaction',
     );
-    t.equal(commitRaft.log.getCommittedIndex(), 0,
-      'the Raft committed watermark rolls back');
-    t.equal(partition.storage.lastApplied, 0,
-      'the applied watermark cache refreshes from rolled-back storage');
+    t.equal(durableAppliedIndex(partition), appliedBefore,
+      'the rs-raft applied state does not advance');
     t.equal(
       partition.db.prepare('SELECT COUNT(*) AS count FROM test_table').get()
         .count,
       0,
-      'the earlier SQL application rolls back',
+      'the SQL application rolls back with the applied state',
     );
     t.same(committedEvents, [],
       'no committed event escapes the failed transaction');
     t.equal(
-      partition.recentlyAppliedEntryKeys.has(
-        partition.getCommittedEntryKey(firstCommand),
-      ),
-      false,
-      'the replay marker is not published for rolled-back SQL',
+      readCommittedStatementOutcome(partition,
+        partition.getCommittedEntryKey(firstCommand)).state,
+      PARTITION_COMMITTED_STATEMENT_RECORD_STATE.UNSETTLED,
+      'no outcome is recorded for rolled-back SQL',
     );
 
-    const repairedCommand = {
-      ...failingCommand,
-      sql: 'INSERT INTO test_table (id, value) VALUES (?, ?)',
-      params: ['rollback-row-2', 'value-2'],
-    };
-    entries[1] = {...entries[1], command: repairedCommand};
-    commitRaft.log.saveCommand(repairedCommand, 2, 2);
-    let postCommitEffectFailureCount = 0;
-    commitRaft.on(RAFT_COMMIT_APPLY_EFFECT_FAILURE_EVENT, () => {
-      postCommitEffectFailureCount += 1;
-    });
+    partition.db.exec('DROP TRIGGER fail_applied_progress');
+    const effectFailures = countEffectFailureLogs(partition);
     partition.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, () => {
       throw new Error('injected post-commit observer failure');
     });
-    await commitRaft.commitEntries(entries);
+    provider.commit(firstCommand);
+    provider.commit(secondCommand);
 
-    t.equal(commitRaft.log.getCommittedIndex(), 2,
-      'retry durably commits the repaired prefix');
-    t.equal(partition.storage.lastApplied, 2,
-      'retry durably applies the repaired prefix');
+    t.equal(durableAppliedIndex(partition), provider.committedIndex,
+      'the rs-raft applied state covers every durably applied entry');
     t.equal(
       partition.db.prepare('SELECT COUNT(*) AS count FROM test_table').get()
         .count,
       2,
-      'retry applies both rows exactly once',
+      'both committed rows apply exactly once',
     );
     t.same(committedEvents, ['rollback-entry-1', 'rollback-entry-2'],
       'observable commit effects publish only after durable success');
-    t.equal(postCommitEffectFailureCount, 2,
-      'post-commit observer failures cannot reclassify durable apply');
+    t.equal(effectFailures.length, 2,
+      'post-commit observer failures are logged and cannot reclassify ' +
+      'the durable apply');
 
-    commitRaft.end();
     await partition.shutdown();
   },
 );
 
 test(
-  'PartitionService transaction outcome rolls back with its Raft watermark',
+  'a failed statement on a single-replica rs-raft partition is a consumed ' +
+    'outcome, not a host failure',
+  async (t) => {
+    // Production construction: a lone rs-raft leader.
+    const partition = new PartitionService(withFoundingStamp({
+      partitionId: 'statement-failed',
+      tableId: 'test_table',
+      tableName: 'test_table',
+      replicaId: 'statement-failed-r1',
+      replicaIds: ['statement-failed-r1'],
+      nodeId: 'test-node',
+      schema: {
+        columns: [
+          {name: 'id', type: 'TEXT', primaryKey: true},
+          {name: 'value', type: 'TEXT'},
+        ],
+      },
+      dbPath: ':memory:',
+    }));
+    await partition.initialize();
+    try {
+      const appliedBefore = durableAppliedIndex(partition);
+      const failed = await partition.applyWrite({
+        type: 'INSERT',
+        entryId: 'statement-failed-entry',
+        sql: 'INSERT INTO missing_table (id) VALUES (?)',
+        params: ['never'],
+      });
+      t.equal(failed.success, false, 'the failed statement reports failure');
+      t.match(failed.error, /missing_table/,
+        'the failure carries the statement error');
+      t.equal(failed.partitionId, partition.partitionId);
+      t.ok(Number.isSafeInteger(failed.logIndex),
+        'the failure names the committed entry that consumed it');
+      t.equal(failed.durableCommitWitness?.logIndex, failed.logIndex,
+        'the proposer carries the durable commit witness of that entry');
+
+      const succeeded = await partition.applyWrite({
+        type: 'INSERT',
+        entryId: 'statement-after-failure-entry',
+        sql: 'INSERT INTO test_table (id, value) VALUES (?, ?)',
+        params: ['row-after-failure', 'value'],
+      });
+      t.equal(succeeded.success, true, 'the next write succeeds');
+      t.equal(partition.raft.readStatus().role, RAFT_ROLE.LEADER,
+        'the group stays leader');
+      t.equal(durableAppliedIndex(partition), appliedBefore + 2,
+        'both entries were consumed by the application');
+      t.same(
+        partition.db.prepare('SELECT id FROM test_table').all()
+          .map(({id}) => id),
+        ['row-after-failure'],
+        'only the successful statement changed the state machine');
+    } finally {
+      await partition.shutdown();
+    }
+  },
+);
+
+test(
+  'PartitionService transaction outcome rolls back with the rs-raft ' +
+    'applied state',
   async (t) => {
     const partition = createPartition('commit-outcome-rollback', [
       'commit-outcome-rollback-r1',
@@ -385,7 +457,7 @@ test(
       'commit-outcome-rollback-r3',
     ]);
     await partition.initialize();
-    const commitRaft = createLiferaftCommitHarness(partition);
+    const provider = partition.controllableProvider;
     const command = {
       type: PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
       entryId: 'transaction-outcome-entry',
@@ -393,32 +465,23 @@ test(
       transactionEpoch: 7,
       operations: [],
     };
-    const entry = {
-      index: 1,
-      term: 2,
-      committed: false,
-      responses: [],
-      command,
-    };
-    commitRaft.log.saveCommands([entry]);
     const committedEvents = [];
     partition.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, (event) => {
       committedEvents.push(event.command.entryId);
     });
+    const appliedBefore = durableAppliedIndex(partition);
     const recordOutcome = partition.recordTransactionCommitOutcome;
     partition.recordTransactionCommitOutcome = () => {
       throw new Error('injected transaction outcome failure');
     };
 
-    await t.rejects(
-      commitRaft.commitEntries([entry]),
+    t.throws(
+      () => provider.commit(command),
       /injected transaction outcome failure/,
-      'a durable outcome failure rejects the Raft apply',
+      'a durable outcome failure fails the application transaction',
     );
-    t.equal(commitRaft.log.getCommittedIndex(), 0,
-      'the committed watermark rolls back with the outcome');
-    t.equal(partition.storage.lastApplied, 0,
-      'the applied watermark rolls back with the outcome');
+    t.equal(durableAppliedIndex(partition), appliedBefore,
+      'the rs-raft applied state rolls back with the outcome');
     t.equal(
       partition.db.prepare(
         'SELECT COUNT(*) AS count FROM _transaction_outcomes',
@@ -430,11 +493,9 @@ test(
       'no observable commit event escapes the failed outcome write');
 
     partition.recordTransactionCommitOutcome = recordOutcome;
-    await commitRaft.commitEntries([entry]);
-    t.equal(commitRaft.log.getCommittedIndex(), 1,
-      'retry commits the Raft entry');
-    t.equal(partition.storage.lastApplied, 1,
-      'retry advances the applied watermark');
+    provider.commit(command);
+    t.equal(durableAppliedIndex(partition), provider.committedIndex,
+      'retry advances the rs-raft applied state');
     t.same(
       partition.db.prepare(
         'SELECT outcome, transaction_epoch AS transactionEpoch ' +
@@ -446,7 +507,39 @@ test(
     t.same(committedEvents, [command.entryId],
       'observable commit publishes only after the outcome is durable');
 
-    commitRaft.end();
+    await partition.shutdown();
+  },
+);
+
+test(
+  'PartitionService fails an unrecognised committed command closed',
+  async (t) => {
+    const partition = createPartition('commit-unrecognised', [
+      'commit-unrecognised-r1',
+      'commit-unrecognised-r2',
+      'commit-unrecognised-r3',
+    ]);
+    await partition.initialize();
+    const provider = partition.controllableProvider;
+    const committedEvents = [];
+    partition.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, (event) => {
+      committedEvents.push(event.command);
+    });
+    const appliedBefore = durableAppliedIndex(partition);
+    let failure = null;
+    try {
+      provider.commit({type: 'NOT_A_PARTITION_COMMAND', entryId: 'unknown'});
+    } catch (error) {
+      failure = error;
+    }
+
+    t.equal(failure?.code, PARTITION_COMMITTED_COMMAND_ERROR_CODE.UNRECOGNISED,
+      'an unrecognised committed command is a typed application failure');
+    t.equal(durableAppliedIndex(partition), appliedBefore,
+      'the applied state does not advance past an unrecognised command');
+    t.same(committedEvents, [],
+      'no committed event is published for an unrecognised command');
+
     await partition.shutdown();
   },
 );
@@ -465,10 +558,10 @@ test(
     partition.role = 'leader';
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
-    partition.raftProvider.setRole(RAFT_ROLE.LEADER);
+    partition.controllableProvider.setRole(RAFT_ROLE.LEADER);
 
     let proposalCount = 0;
-    partition.raftProvider.setProposeHandler(async () => {
+    partition.controllableProvider.setProposeHandler(async () => {
       proposalCount += 1;
     });
     const entryId = 'overlapping-redelivery-entry';
@@ -500,7 +593,7 @@ test(
       'overlapping redelivery must not append and propose a duplicate entry',
     );
 
-    partition.raftProvider.setRole(RAFT_ROLE.FOLLOWER);
+    partition.controllableProvider.setRole(RAFT_ROLE.FOLLOWER);
     const outcomes = await Promise.race([
       Promise.all([firstResponsePromise, secondResponsePromise]),
       new Promise((resolve) => {
@@ -550,12 +643,12 @@ test(
     partition.role = 'leader';
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
-    partition.raftProvider.setRole(RAFT_ROLE.LEADER);
+    partition.controllableProvider.setRole(RAFT_ROLE.LEADER);
 
     let proposalCount = 0;
-    partition.raftProvider.setProposeHandler(async (entry) => {
+    partition.controllableProvider.setProposeHandler(async (entry) => {
       proposalCount += 1;
-      partition.applyCommittedEntry(entry);
+      partition.controllableProvider.commit(entry);
     });
     let releaseSideEffect = null;
     const sideEffectGate = new Promise((resolve) => {
@@ -639,6 +732,57 @@ test(
   },
 );
 
+// F-z: a write the port deferred (a user session held the connection, so
+// nothing entered the core) is queued again, not proposed. Released on
+// demotion in that state it was never proposed: it is answered NOT_LEADER
+// and never handed to consensus afterwards. With the production runtime a
+// role change cannot happen while a session holds the connection (nothing
+// enters the core), so the port's deferral answer is given by the
+// controllable port.
+test('PartitionService answers a queued write released on demotion ' +
+  'NOT_LEADER and never proposes it afterwards', async (t) => {
+  const replicaIds = ['queued-demotion-r1', 'queued-demotion-r2',
+    'queued-demotion-r3'];
+  const partition = createPartition('queued-demotion', replicaIds);
+  await partition.initialize();
+  partition.controllableProvider.setRole(RAFT_ROLE.LEADER);
+  const proposals = [];
+  // The port's own deferral answer while a user transaction holds the
+  // connection: a retryable host failure that leaves the group usable.
+  partition.controllableProvider.setProposeHandler(async (entry) => {
+    proposals.push(entry.entryId);
+    return {
+      outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+      reason: RAFT_RS_PERSISTENCE_ADMISSION.USER_TRANSACTION_OPEN,
+      retryable: true,
+      recoveryRequired: false,
+    };
+  });
+  const answer = partition.applyWrite({
+    type: PARTITION_SERVICE_OPERATION.INSERT,
+    sql: 'INSERT INTO test_table (id, value) VALUES (?, ?)',
+    params: ['row-queued', 'queued'],
+    entryId: 'queued-entry',
+  });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  t.ok(proposals.length >= 1, 'setup: the port deferred the proposal');
+  partition.controllableProvider.setRole(RAFT_ROLE.FOLLOWER);
+  const proposedBeforeRelease = proposals.length;
+  const result = await Promise.race([answer, new Promise((resolve) =>
+    setTimeout(() => resolve({kind: 'test-timeout'}), 500))]);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  t.ok(
+    typeof PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER === 'string' &&
+      result?.failureCode === PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
+    'a queued write released on demotion is answered NOT_LEADER ' +
+      `(${JSON.stringify(result)})`,
+  );
+  t.equal(result?.entryId, 'queued-entry', 'the answer names the entry');
+  t.equal(proposals.length, proposedBeforeRelease,
+    'a released write is never proposed afterwards');
+  await partition.shutdown();
+});
+
 test('PartitionService rejects multi-replica leader writes when Raft is not leader',
   async (t) => {
     const replicaIds = [
@@ -652,10 +796,10 @@ test('PartitionService rejects multi-replica leader writes when Raft is not lead
     partition.role = 'leader';
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
-    partition.raftProvider.setRole(RAFT_ROLE.FOLLOWER);
+    partition.controllableProvider.setRole(RAFT_ROLE.FOLLOWER);
 
     let proposeCalled = false;
-    partition.raftProvider.setProposeHandler(async () => {
+    partition.controllableProvider.setProposeHandler(async () => {
       proposeCalled = true;
     });
 

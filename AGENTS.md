@@ -59,6 +59,8 @@ amends, force-pushes, or sweeps the caller's worktree. Its one rewrite: when
 origin/main advanced only by inert data commits (the nightly formation trend),
 it rebases the local commits over them and publishes the rebased HEAD.
 
+A GitHub-merged head has no corpus proof until `npm run publish -- --post-merge <sha>` runs; prefer the publisher (runbook).
+
 ## Find The Right Surface
 
 | Need | Read / run |

@@ -154,6 +154,83 @@ dependencies differ. Then check what every machine can run:
 node scripts/lab.js fleet
 ```
 
+## Sharing the lab between agents and projects
+
+Several agents, in this repository and in other projects, use the same lab
+machines. Every lab host therefore has one machine-wide lock,
+`${LAB_LOCK_DIR:-$HOME/.lab}/machine.lock`, and one holder record beside it,
+`machine.holder.json`. Whoever runs anything heavy on a lab host - a test
+corpus, a formation, a benchmark - first takes the lock with `flock` and a
+bounded wait, writes the holder record while holding it, and removes the
+record on exit. `flock` is the lock: the kernel releases it when its holder
+exits, however it exits. The record is for people and for `lab fleet`; a
+record whose lock is free is stale evidence, never a lock. The default lives
+in the home directory of the lab user every controller connects as, so every
+agent reaching the host as that user shares it; agents that reach it as
+different users set `LAB_LOCK_DIR` to one directory all of them can write.
+
+The holder record is one JSON object:
+
+```json
+{"project":"lagrange","agent":"claude:SESSION","controller":"workstation","purpose":"test:ordinary","sha":"COMMIT","startedAt":"2026-09-23T10:00:00Z","expectedMinutes":12,"pid":4242}
+```
+
+`agent` is free text naming who placed the work (`claude:SESSION`,
+`codex:TASK`), `controller` is the machine that placed it, `purpose` says what
+runs (`test:LANES`, `formation:SCENARIO`, `bench:NAME`), and `pid` is the
+shell that holds the lock.
+
+Another project needs nothing from this repository. On the lab host, start the
+heavy work from a POSIX shell with these four lines, giving `flock -w` your
+own budget in seconds - never `-n` alone and never an unbounded wait - and
+your own values in the record (none may contain a double quote or a
+backslash):
+
+```sh
+mkdir -p "${LAB_LOCK_DIR:=$HOME/.lab}" && exec 9>"$LAB_LOCK_DIR/machine.lock"
+flock -w 600 9 || exit 98
+printf '{"project":"%s","agent":"%s","controller":"%s","purpose":"%s","sha":"%s","startedAt":"%s","expectedMinutes":%s,"pid":%s}\n' my-project codex:TASK "$CONTROLLER" test:all "$(git rev-parse HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" 30 $$ > "$LAB_LOCK_DIR/machine.holder.json"
+trap 'rm -f "$LAB_LOCK_DIR/machine.holder.json"' EXIT
+```
+
+Exit 98 means another run held the machine for your whole wait: go to another
+machine or come back later. Everything the shell starts afterwards inherits
+the lock, so a benchmark or corpus started from it is covered. A shell killed
+by a signal it does not trap leaves its record behind; that is harmless,
+because the lock is released anyway and `lab fleet` shows the record as stale.
+
+In this repository the lab CLI follows the same convention:
+
+1. Placement - a placed classified run and `lab test` - takes the lock in its
+   lab-side wrapper, waiting no longer than the shard's own estimate (at most
+   30 minutes), and keeps this checkout's own lock inside it. Its record names
+   project `lagrange`, the agent from `LAGRANGE_LAB_AGENT` (else
+   `lagrange:CONTROLLER:PID`), purpose `test:LANES` and the shard's estimate.
+   A host still held after the wait is reported as
+   `placement: host-busy NAME held-by AGENT since STARTED`; its shard goes to
+   the next ready host, then to the controller, and a held host is not tried
+   again in the same run. A host too hot to run (`host-thermal-unfit`) is
+   re-placed the same way.
+2. `lab harness run` holds every node of a formation before any node starts,
+   one at a time in name order within one 30-minute budget, with purpose
+   `formation:SCENARIO`. A held node refuses the whole formation, releasing
+   the nodes already held:
+   `harness: node NAME busy, held by AGENT (PROJECT, PURPOSE) since STARTED`.
+3. `lab fleet` shows each machine's lock: `busy: held by AGENT (PROJECT,
+   PURPOSE) since STARTED, expected N min`, `free`, or `stale record (pid
+   dead)`; `lab fleet --json` carries the record as its holder wrote it.
+   Placement reads the same facts from discovery and skips a held machine
+   before it tries it.
+
+Set `LAGRANGE_LAB_AGENT` to name yourself, for example `claude:SESSION`.
+
+The rule: agents run heavy work on lab hosts only through `lab test`,
+placement or `lab harness run` in this repository, or through the recipe above
+in another project - never a raw ssh runner invocation such as
+`ssh HOST node scripts/run-classified-test-files.js`, which takes no lock and
+which no other agent can see. A hardening contract refuses one anywhere in
+`scripts/` or `.github/`.
+
 ## Native GitHub runners
 
 Use native runners for portability and hardware-specific work. Labels are
@@ -270,6 +347,32 @@ These map to the existing change selector, smoke manifest, project-hardening
 acceptance gate, post-push gate, and classified full test suite. The lab does
 not maintain a second test list.
 
+### Measure the change cone from a named commit
+
+`lab test changed --lane LANE` runs the change selector's plan of the commit
+(`--sha`, default this checkout's clean `HEAD`). By default the selector
+measures the change from the merge base with `origin/main`, which is what a
+push would carry. A long unpublished branch - several merged quests waiting for one
+publish - then looks like the whole branch changed, and a release-surface file
+such as `Dockerfile` changed anywhere on it refuses the run with
+`RELEASE_PROOF_REQUIRED`.
+
+Name the comparison commit with `--base-sha` to verify only what changed since
+it:
+
+```bash
+node scripts/lab.js test changed --lane all --sha HEAD --base-sha <commit>
+```
+
+The lab passes the commit to the selector's own `--base`, so the one owner of
+the changed set decides it: the cone, and the release-surface check, cover
+`<commit>..<sha>` only, and a release-surface file changed before
+`<commit>` does not refuse. The flag is `--base-sha` rather than `--base`
+because `lab harness run --base CONFIG` already names a harness base
+configuration; `--base-sha` pairs with `--sha` as the other end of the range.
+It applies only to the `changed` profile. It narrows what the lab runs; the
+push gate still proves the full range against `origin/main`.
+
 ## Run the distributed matrix on local, lab, or GCP targets
 
 The canonical scenario matrix has one owner:
@@ -362,6 +465,10 @@ node scripts/lab.js harness run node-join-under-load \
   --nodes main-linux,small-linux,third-linux \
   -- --deterministic-debug
 ```
+
+Before any node starts, the adapter holds every selected node's machine-wide
+lock (see "Sharing the lab between agents and projects"); a node another run
+holds refuses the formation, naming the holder.
 
 The adapter always disables fast-local mode for a physical-host run. The source
 image is therefore the normal built harness image, rather than a bind mount from

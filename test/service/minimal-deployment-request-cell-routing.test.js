@@ -28,6 +28,7 @@ import {
   createDeploymentRows,
   createRuntime,
 } from './minimal-deployment-request-cell-routing-fixture.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const NODE_A = 'routing-node-a';
 const NODE_B = 'routing-node-b';
@@ -399,11 +400,13 @@ describe('minimal deployment request Cell routing', () => {
         rows, journal, replicaB, NODE_B,
       );
       const routerA = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         inProcess: true,
         nodeId: NODE_A,
         wsPort: PORT_A,
       });
       const routerB = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         inProcess: true,
         nodeId: NODE_B,
         wsPort: PORT_B,

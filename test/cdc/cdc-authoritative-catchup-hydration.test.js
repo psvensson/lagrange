@@ -33,9 +33,15 @@ applyCDCIntegrationServiceCacheVisibilityWait(
 function createServiceStub({readResults}) {
   const applied = [];
   const reads = [];
+  const sleeps = [];
   return {
     applied,
     reads,
+    sleeps,
+    // The owner's retry-delay primitive; the stub records each delay.
+    delayUntilShutdown: async (delayMs) => {
+      sleeps.push(delayMs);
+    },
     logger: {info: () => {}, warn: () => {}, debug: () => {}, error: () => {}},
     getPrimaryKeyField: () => 'id',
     executeAuthoritativeSystemTableRead: async (tableName) => {
@@ -235,7 +241,6 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
 
     const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
       tables: ['control_plane_publications', 'nodes'],
-      sleep: async () => {},
     });
 
     t.equal(summary.tablesAttempted, 2, 'both tables attempted');
@@ -253,7 +258,6 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
     'pressure-deferred reads retry within bounds, then record failure ' +
       'and continue to the next table',
     async (t) => {
-      const sleeps = [];
       const service = createServiceStub({
         readResults: {
           control_plane_publications: [
@@ -268,9 +272,6 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
       const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
         tables: ['control_plane_publications', 'services'],
         maxAttemptsPerTable: 3,
-        sleep: async (delayMs) => {
-          sleeps.push(delayMs);
-        },
       });
 
       t.same(
@@ -279,8 +280,9 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
         'exhausted table recorded as failed',
       );
       t.equal(summary.tablesHydrated, 1, 'later table still hydrated');
-      t.equal(sleeps.length, 2, 'bounded retries slept between attempts');
-      t.same(sleeps, [25, 25], 'honors retryAfterMs');
+      t.equal(service.sleeps.length, 2,
+        'bounded retries slept between attempts');
+      t.same(service.sleeps, [25, 25], 'honors retryAfterMs');
     },
   );
 
@@ -294,7 +296,6 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
 
     const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
       tables: ['control_plane_publications', 'services'],
-      sleep: async () => {},
     });
 
     t.same(summary.tablesFailed, ['control_plane_publications']);
@@ -309,7 +310,6 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
     });
     const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
       tables: ['services'],
-      sleep: async () => {},
     });
     t.equal(summary.rowsApplied, 1, 'keyless row skipped');
     t.equal(summary.tablesHydrated, 1, 'table still counts as hydrated');
@@ -386,7 +386,6 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
       const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
         tables: ['services', 'message_groups', 'partitions', 'tables', 'nodes'],
         maxAttemptsPerTable: 1,
-        sleep: async () => {},
         now: () => 5000,
       });
 

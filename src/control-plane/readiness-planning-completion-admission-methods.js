@@ -443,21 +443,25 @@ const readinessPlanningCompletionAdmissionMethods = {
   // retention in projection-readiness-evidence could never hit for
   // evidence-absent joiners (9x per-build cost against a same-identity
   // read). The deferred snapshot is a pure derivation of (source snapshot,
-  // token generation, ownerKey); any source change rotates the token key
-  // and rebuilds.
-  buildMemoizedDeferredSnapshot(snapshot, token, ownerKey) {
+  // token generation, ownerKey, the read's decision dimension); any source
+  // change rotates the token key and rebuilds.
+  buildMemoizedDeferredSnapshot(snapshot, token, ownerKey, options = null) {
     if (!this.deferredSnapshotMemoByOwnerKey) {
       this.deferredSnapshotMemoByOwnerKey = new Map();
     }
+    const decisionDimension = options?.decisionDimension || null;
     const entry = this.deferredSnapshotMemoByOwnerKey.get(ownerKey);
     if (entry && entry.sourceSnapshot === snapshot &&
-      entry.tokenKey === token?.tokenKey) {
+      entry.tokenKey === token?.tokenKey &&
+      entry.decisionDimension === decisionDimension) {
       return entry.deferred;
     }
-    const deferred = buildDeferredSnapshot(snapshot, token, ownerKey);
+    const deferred = buildDeferredSnapshot(
+      snapshot, token, ownerKey, decisionDimension);
     this.deferredSnapshotMemoByOwnerKey.set(ownerKey, {
       sourceSnapshot: snapshot,
       tokenKey: token?.tokenKey,
+      decisionDimension,
       deferred,
     });
     return deferred;
@@ -600,6 +604,7 @@ const readinessPlanningCompletionAdmissionMethods = {
       snapshot,
       currency.currentToken,
       ownerKey,
+      buildOptions,
     );
   },
 

@@ -1,4 +1,6 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
+import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
+import {issueAuthoritativeReadStage} from './cdc-terminal-gate.js';
 
 const {
   CDC_INTEGRATION_SERVICE_LITERAL,
@@ -253,5 +255,6 @@ export function canWriteSystemTableLocally(service, tableName) {
 }
 
 export async function executeLocalSystemTableRead(service, partitionService, sql, params = []) {
-  return executeSystemTableRead(partitionService, sql, params);
+  return issueAuthoritativeReadStage(service, CDC_TERMINAL_STAGE.LOCAL_READ,
+    () => executeSystemTableRead(partitionService, sql, params));
 }

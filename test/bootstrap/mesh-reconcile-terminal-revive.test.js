@@ -22,6 +22,11 @@ import assert from 'node:assert';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConnectWebSocketPhase} from
   '../../src/bootstrap/phases/connect-websocket-phase.js';
+import {
+  FIXTURE_ENDPOINT_INCARNATION,
+  registeredNodeRow,
+} from '../test-helpers/endpoint-incarnation-fixture.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -48,6 +53,9 @@ function makeLogger() {
 // the test can flip node-b's canonical endpoint to the NEW port mid-run.
 function makeSystemTableCache(getAddressForNodeId) {
   return {
+    // node-b is registered at the incarnation its endpoint carries.
+    get: (tableName, nodeId) =>
+      (tableName === 'nodes' ? registeredNodeRow(nodeId) : null),
     filter(tableName, predicate) {
       if (tableName !== 'node_endpoints') {
         return [];
@@ -56,6 +64,7 @@ function makeSystemTableCache(getAddressForNodeId) {
       const addrB = getAddressForNodeId('node-b');
       if (addrB) {
         rows.push({
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'ep-node-b-ws',
           node_id: 'node-b',
           transport_type: 'ws',
@@ -90,11 +99,13 @@ describe('cluster-mesh reconcile revives a terminal connection on new address',
       async () => {
         const newAddr = 'ws://127.0.0.1:19902';
         routerA = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'node-a',
           inProcess: true,
           wsPort: 19900,
         });
         routerBNew = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'node-b',
           inProcess: true,
           wsPort: 19902,
@@ -141,6 +152,7 @@ describe('cluster-mesh reconcile revives a terminal connection on new address',
         let currentBAddr = oldDeadAddr;
 
         routerA = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'node-a',
           inProcess: true,
           wsPort: 19910,
@@ -148,6 +160,7 @@ describe('cluster-mesh reconcile revives a terminal connection on new address',
         // Old node-b: bring it up so the first connect succeeds, then tear it
         // down so A's record goes terminal at the OLD (now dead) port.
         routerBOld = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'node-b',
           inProcess: true,
           wsPort: 19911,
@@ -167,6 +180,7 @@ describe('cluster-mesh reconcile revives a terminal connection on new address',
         // endpoint, flip the canonical cache address, and shut down the OLD
         // node-b so A's existing record is stale/terminal (not CONNECTED).
         routerBNew = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'node-b',
           inProcess: true,
           wsPort: 19912,

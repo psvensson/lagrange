@@ -21,32 +21,17 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createLifecycleCdcService} from
+  '../test-helpers/lifecycle-state-store.js';
+import {withRegisteredActivationHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 /**
  * Create a mock CDC integration service.
  * @return {Object} Mock CDC service.
  */
 function createMockCDCService() {
-  const operations = [];
-
-  return {
-    operations,
-    async upsertSystemTableRow(tableName, data) {
-      operations.push({type: 'upsert', tableName, data});
-      return {success: true};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      operations.push({type: 'update', tableName, whereClause, data});
-      return {success: true};
-    },
-    async deleteSystemTableRow(tableName, whereClause) {
-      operations.push({type: 'delete', tableName, whereClause});
-      return {success: true};
-    },
-    reset() {
-      operations.length = 0;
-    },
-  };
+  return createLifecycleCdcService();
 }
 
 /**
@@ -118,10 +103,10 @@ test('Property 13: Idempotent Operations', async (t) => {
           const mockCache = createMockSystemTableCache();
           const {factory} = createMockPartitionServiceFactory();
           const stateMachineCDC = createMockCDCService();
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: stateMachineCDC,
-          });
+          }));
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
@@ -213,10 +198,10 @@ test('Property 13: Idempotent Operations', async (t) => {
           const mockCache = createMockSystemTableCache();
           const {factory} = createMockPartitionServiceFactory();
           const stateMachineCDC = createMockCDCService();
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: stateMachineCDC,
-          });
+          }));
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
@@ -300,10 +285,10 @@ test('Property 13: Idempotent Operations', async (t) => {
           const mockCache = createMockSystemTableCache();
           const {factory} = createMockPartitionServiceFactory();
           const stateMachineCDC = createMockCDCService();
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: stateMachineCDC,
-          });
+          }));
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',
@@ -366,10 +351,10 @@ test('Property 13: Idempotent Operations', async (t) => {
           const mockCache = createMockSystemTableCache();
           const {factory} = createMockPartitionServiceFactory();
           const stateMachineCDC = createMockCDCService();
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: stateMachineCDC,
-          });
+          }));
 
           const manager = new ReplicaLifecycleManager({
             nodeId: 'test-node',

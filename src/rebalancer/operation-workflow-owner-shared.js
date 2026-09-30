@@ -287,6 +287,9 @@ const OPERATION_LIFECYCLE_ACTION = Object.freeze({
   EXECUTE_REMOVE_DISPATCH: 'execute_remove_dispatch',
   RECONCILE_STOPPING: 'reconcile_stopping',
   RECONCILE_REPLICA_STATUS: 'reconcile_replica_status',
+  // R-1b: the drain hands a partition REPLACE back to its owner, which
+  // decides from committed membership (never the drain).
+  HAND_BACK_REPLACE_OWNER: 'hand_back_replace_owner',
   NOOP: 'noop',
 });
 
@@ -373,11 +376,9 @@ const PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE = Object.freeze({
   NOT_APPLICABLE: 'not_applicable',
   PUBLICATION_STATUS_UNAVAILABLE: 'publication_status_unavailable',
   WAIT_PUBLICATION_PUBLISHED: 'wait_publication_published',
-  REQUEST_SOURCE_LEADER_HANDOFF: 'request_source_leader_handoff',
-  REQUEST_REPLACEMENT_LEADER_ELECTION: 'request_replacement_leader_election',
-  FAIL_REPLACEMENT_REPLICA_NOT_FOUND:
-    'fail_replacement_replica_not_found',
-  WAIT_REPLACEMENT_LEADER_OWNERSHIP: 'wait_replacement_leader_ownership',
+  // Not yet leadership-safe by the rows: a partition REPLACE's named-target
+  // handoff decides (the per-leg states are deleted, fix-f1 section 9).
+  LEADERSHIP_PENDING: 'leadership_pending',
 });
 const PRIORITY_PUBLICATION_SOURCE_ROLE_STATE = Object.freeze({
   FOLLOWER: 'follower',

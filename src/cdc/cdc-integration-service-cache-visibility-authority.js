@@ -6,6 +6,8 @@ import {
   SYSTEM_TABLE_CACHE_MUTATION_MODE,
 } from '../cache/cache-constants.js';
 import {CDC_OPERATION} from '../constants/index.js';
+import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
+import {applyAuthoritativeCacheMutation} from './cdc-terminal-gate.js';
 import {canonicalizeSystemTableRow} from
   '../control-plane/system-row-normalizers.js';
 import {buildControlPlaneReadAuthority} from
@@ -119,7 +121,83 @@ function canonicalizeCompleteAuthoritativeRows(
   return canonicalRows;
 }
 
-function applyAuthoritativeCacheSweep(
+function applyAuthoritativeCacheRepairRow(
+  service,
+  tableName,
+  operation,
+  row,
+  key,
+  options = {},
+) {
+  if (
+    !service.cacheMutationTarget ||
+    typeof service.cacheMutationTarget.applySystemTableChange !==
+      'function' ||
+    !row ||
+    typeof row !== 'object'
+  ) {
+    return false;
+  }
+  const canonicalRow = canonicalizeSystemTableRow(tableName, row);
+  const mutationMode = resolveAuthoritativeCacheRepairMutationMode(
+    operation,
+    options?.mutationMode,
+  );
+  const currentRow =
+    typeof service.cacheMutationTarget.get === 'function' ?
+      service.cacheMutationTarget.get(tableName, key) :
+      null;
+  const currentRowSatisfiesRepair =
+    doesCachedRowSatisfyAuthoritativeRepair({
+      tableName,
+      operation,
+      currentRow,
+      authoritativeRow: canonicalRow,
+      mutationMode,
+    });
+  if (currentRowSatisfiesRepair) {
+    // A complete authoritative observation is already the cache state. Keep
+    // reconciliation idempotent at the cache boundary: reapplying the row
+    // would mint a mutation generation and wake every readiness/publication
+    // consumer even though no semantic state changed.
+    return true;
+  }
+  const causeId = `authoritative-repair:${tableName}:${key}`;
+  const mutationOptions = {
+    causeId,
+    mutationMode,
+    authoritativeObservedAtMs: options?.authoritativeObservedAtMs,
+    authoritativeReadStartedAtMs:
+      options?.authoritativeReadStartedAtMs,
+  };
+  service.cacheMutationTarget.applySystemTableChange(
+    tableName,
+    operation,
+    canonicalRow,
+    mutationOptions,
+  );
+  return cacheRepairSatisfiedAfterApply({
+    cacheMutationTarget: service.cacheMutationTarget,
+    tableName,
+    operation,
+    authoritativeRow: canonicalRow,
+    mutationMode,
+    key,
+  });
+}
+
+// (b) The class's choke point: every authoritative cache repair and sweep
+// passes the owner's terminal gate; once terminal, nothing is applied.
+function applyAuthoritativeCacheRepair(service, tableName, operation, row, key,
+  options = {}) {
+  return applyAuthoritativeCacheMutation(service,
+    CDC_TERMINAL_STAGE.CACHE_REPAIR,
+    () => applyAuthoritativeCacheRepairRow(
+      service, tableName, operation, row, key, options),
+    false);
+}
+
+function applyAuthoritativeCacheSweepRows(
   service,
   tableName,
   authoritativeRows,
@@ -226,15 +304,22 @@ function doesCachedRowSatisfyAuthoritativeRepair({
   );
 }
 
+function applyAuthoritativeCacheSweep(service, tableName, authoritativeRows,
+  options) {
+  return applyAuthoritativeCacheMutation(service,
+    CDC_TERMINAL_STAGE.CACHE_SWEEP,
+    () => applyAuthoritativeCacheSweepRows(
+      service, tableName, authoritativeRows, options),
+    0);
+}
+
 export {
   CACHE_REPAIR_READ_AUTHORITY,
+  applyAuthoritativeCacheRepair,
   applyAuthoritativeCacheSweep,
   authoritativeReadRowsAreValid,
-  cacheRepairSatisfiedAfterApply,
   cacheRecordChangedDuringAuthoritativeAbsenceRead,
   captureAuthoritativeCacheSweepSnapshot,
   captureCacheRecordBeforeAbsenceRepair,
-  doesCachedRowSatisfyAuthoritativeRepair,
-  resolveAuthoritativeCacheRepairMutationMode,
   resolveCacheVisibilityRepairReadAuthority,
 };

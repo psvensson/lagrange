@@ -158,6 +158,13 @@ const CDC_ERROR_MSG = Object.freeze({
   UPSERT_VALID_COLUMNS_PREFIX: 'UPSERT requires data with valid columns for ',
   CDC_ENGINE_MISSING_PREFIX: 'CDCIntegrationService not properly initialized: ',
   CDC_ENGINE_MISSING_DETAIL: 'sqlQueryEngine not provided',
+  CDC_SHUT_DOWN:
+    'CDCIntegrationService shut down before this write was confirmed: its ' +
+    'outcome is not known here (see its cause), and no retry through the ' +
+    'service can succeed',
+  CDC_SHUT_DOWN_NOT_ROUTED:
+    'CDCIntegrationService is shut down: this write was not routed and was ' +
+    'not applied, and no retry through the service can succeed',
   INSERT_FAILED: 'Insert failed',
   UPDATE_FAILED: 'Update failed',
   DELETE_FAILED: 'Delete failed',
@@ -183,17 +190,54 @@ const CDC_ERROR_MSG = Object.freeze({
     'Cannot re-enable bootstrap mode after it has been cleared',
 });
 
+// The service's typed answers. SHUT_DOWN is the terminal lifecycle answer:
+// once the service is marked shutting down, a write it routes or waits on
+// answers SHUT_DOWN (its last failure, if any, as the cause) instead of any
+// retryable answer, since no engine will arrive. An engine missing before the
+// service is wired stays the retryable startup answer.
+const CDC_ERROR_CODE = Object.freeze({
+  SHUT_DOWN: 'CDC_INTEGRATION_SERVICE_SHUT_DOWN',
+});
+
+// What the SHUT_DOWN answer knows of its write: never routed (a write that
+// arrived after shutdown: definitely not applied), or not confirmed (in
+// flight when shutdown came: its cause says what the write last answered).
+const CDC_SHUT_DOWN_WRITE_OUTCOME = Object.freeze({
+  NOT_ROUTED: 'not_routed',
+  NOT_CONFIRMED: 'not_confirmed',
+});
+
+// The stages the owner's terminal gate (refuseIfTerminal) names: each is one
+// operation class's choke point, where CDC-owned work is issued.
+const CDC_TERMINAL_STAGE = Object.freeze({
+  // (a) issuing an authoritative read, at every stage of the read flow.
+  LOCAL_READ: 'authoritative_local_read',
+  OWNER_RPC_READ: 'authoritative_owner_rpc_read',
+  OVERLAY_RESEED: 'authoritative_read_overlay_reseed',
+  SQL_FALLBACK_READ: 'authoritative_sql_fallback_read',
+  // (b) applying an authoritative cache repair or sweep.
+  CACHE_REPAIR: 'authoritative_cache_repair',
+  CACHE_SWEEP: 'authoritative_cache_sweep',
+  // (c) submitting a routed mutation to a partition or an engine.
+  LOCAL_LEADER_WRITE: 'routed_local_leader_write',
+  ENGINE_WRITE: 'routed_engine_write',
+  BOOTSTRAP_DIRECT: 'routed_bootstrap_direct',
+});
+
 export {
   CDC_CONFIG_KEY,
+  CDC_TERMINAL_STAGE,
   CDC_DEFAULTS,
   CDC_EPOCH_CONFIG_KEY,
   CDC_EVENT,
+  CDC_ERROR_CODE,
   CDC_ERROR_MSG,
   CDC_LOG_MSG,
   CDC_OPERATION_LABEL,
   CDC_PRIMARY_KEY,
   CDC_RETRY,
   CDC_SESSION,
+  CDC_SHUT_DOWN_WRITE_OUTCOME,
   CDC_SKIP_REASON,
   CDC_SOURCE,
   CDC_SQL,

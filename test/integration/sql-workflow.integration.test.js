@@ -11,6 +11,7 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 // PartitionSplitMergeManager reserved for future split/merge integration tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 /**
  * Initialize test environment.
@@ -86,7 +87,7 @@ function createMockCDCService() {
  * @return {PartitionService} Partition service.
  */
 function createTestPartition(options = {}) {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId: options.partitionId || 'test-partition-1',
     tableId: options.tableId || 'test-table',
     tableName: options.tableName || 'users',
@@ -103,7 +104,7 @@ function createTestPartition(options = {}) {
       ],
     },
     keyRange: options.keyRange || {start: null, end: null},
-  });
+  }));
 }
 
 test('End-to-end SQL workflow integration tests', async (t) => {

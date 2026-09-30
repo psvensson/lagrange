@@ -7,9 +7,10 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   checkLearnerPromotionWithGrantedProof,
+  ControllablePartitionRaftProvider,
+  createControllablePartitionService,
   createLoopbackTransport,
   createTrafficReadinessState,
-  ControllablePartitionRaftProvider,
 } from './partition-service-test-support.js';
 import {
   PartitionService,
@@ -47,6 +48,7 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
 } from '../../src/control-plane/pressure-governor.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const TEST_OWNER_NODE_ID = 'node-owner';
 const TEST_LIVE_LEADER_NODE_ID = 'node-live-leader';
@@ -78,7 +80,7 @@ afterEach(() => {
 
 test('PartitionService - setRebalanceCoordinator replaces local coordinator',
   async (t) => {
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-24',
       tableId: 'services',
       tableName: 'services',
@@ -86,7 +88,7 @@ test('PartitionService - setRebalanceCoordinator replaces local coordinator',
       replicaIds: ['replica-1'],
       nodeId: 'test-node',
       dbPath: ':memory:',
-    });
+    }));
 
     await partition.initialize();
 
@@ -187,7 +189,7 @@ test('PartitionService - learner promotes one temporary replacement voter above 
   };
 
   // Create partition without initializing to test checkLearnerPromotion directly
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-4', // New replica joining
@@ -196,7 +198,7 @@ test('PartitionService - learner promotes one temporary replacement voter above 
     dbPath: ':memory:',
     isJoiningExistingGroup: true, // Start as learner
     systemTableCache: mockCache,
-  });
+  }));
 
   // Manually set role to learner (simulating post-initialization state)
   partition.role = RaftRole.LEARNER;
@@ -278,7 +280,7 @@ test('PartitionService - learner promotes one temporary replacement voter above 
     },
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'nodes-p1',
     tableId: 'nodes',
     replicaId: 'nodes-p1-r4',
@@ -287,7 +289,7 @@ test('PartitionService - learner promotes one temporary replacement voter above 
     dbPath: ':memory:',
     isJoiningExistingGroup: true,
     systemTableCache: mockCache,
-  });
+  }));
 
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'nodes-p1-r1';
@@ -381,7 +383,7 @@ test('PartitionService - learner promotion discounts stale local voter row',
       },
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: TEST_STALE_LOCAL_PROMOTION_PARTITION_ID,
       tableId: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
       replicaId: TEST_STALE_LOCAL_PROMOTION_LOCAL_REPLICA_ID,
@@ -390,7 +392,7 @@ test('PartitionService - learner promotion discounts stale local voter row',
       dbPath: TEST_STALE_LOCAL_PROMOTION_DB_PATH,
       isJoiningExistingGroup: true,
       systemTableCache: mockCache,
-    });
+    }));
 
     partition.role = RaftRole.LEARNER;
     partition.leaderId = TEST_STALE_LOCAL_PROMOTION_LEADER_REPLICA_ID;
@@ -449,7 +451,7 @@ test('PartitionService - learner promotes when voter count would be odd', async 
   };
 
   // Create partition without initializing to test checkLearnerPromotion directly
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-3', // New replica joining
@@ -458,7 +460,7 @@ test('PartitionService - learner promotes when voter count would be odd', async 
     dbPath: ':memory:',
     isJoiningExistingGroup: true, // Start as learner
     systemTableCache: mockCache,
-  });
+  }));
 
   // Manually set role to learner (simulating post-initialization state)
   partition.role = RaftRole.LEARNER;
@@ -515,7 +517,7 @@ test('PartitionService - learner promotion deferred until leader is known', asyn
     },
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-3',
@@ -524,7 +526,7 @@ test('PartitionService - learner promotion deferred until leader is known', asyn
     dbPath: ':memory:',
     isJoiningExistingGroup: true,
     systemTableCache: mockCache,
-  });
+  }));
 
   partition.role = RaftRole.LEARNER;
   partition.leaderId = null;
@@ -594,7 +596,7 @@ test(
       },
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'test-table',
       replicaId: 'replica-3',
@@ -604,7 +606,7 @@ test(
       isJoiningExistingGroup: true,
       systemTableCache: mockCache,
       learnerCatchUpCheckIntervalMs: 1000,
-    });
+    }));
 
     partition.role = RaftRole.LEARNER;
     partition.leaderId = null;
@@ -641,7 +643,7 @@ test(
       reasons: [LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING],
     });
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: `${SYSTEM_TABLE_NAME.SQL_TRANSACTIONS}-p1`,
       tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
       replicaId: 'replica-3',
@@ -651,7 +653,7 @@ test(
       isJoiningExistingGroup: true,
       bootstrapReadinessState: readinessState,
       learnerCatchUpCheckIntervalMs: 1000,
-    });
+    }));
 
     partition.scheduleLearnerPromotion(
       PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.INITIAL_DELAY,
@@ -736,7 +738,7 @@ test(
       },
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`,
       tableId: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
       replicaId: 'replica-5',
@@ -745,7 +747,7 @@ test(
       dbPath: ':memory:',
       bootstrapReadinessState: readinessState,
       systemTableCache: mockCache,
-    });
+    }));
 
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
@@ -853,7 +855,7 @@ test(
       },
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId,
       tableId: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
       replicaId: 'replica-6',
@@ -863,7 +865,7 @@ test(
       isJoiningExistingGroup: false,
       bootstrapReadinessState: readinessState,
       systemTableCache: mockCache,
-    });
+    }));
 
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
@@ -952,7 +954,7 @@ test(
       },
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId,
       tableId: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
       replicaId: 'replica-5',
@@ -960,7 +962,7 @@ test(
       nodeId: 'node-5',
       dbPath: ':memory:',
       systemTableCache: mockCache,
-    });
+    }));
 
     partition.rebalanceCoordinator = {
       controlPlaneReadinessService: {
@@ -1116,7 +1118,7 @@ test(
       },
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId,
       tableId: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
       replicaId: 'replica-4',
@@ -1125,7 +1127,7 @@ test(
       dbPath: ':memory:',
       bootstrapReadinessState: readinessState,
       systemTableCache: mockCache,
-    });
+    }));
 
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
@@ -1186,7 +1188,7 @@ test(
       },
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'test-table',
       replicaId: 'replica-3',
@@ -1196,7 +1198,7 @@ test(
       isJoiningExistingGroup: true,
       systemTableCache: mockCache,
       leaderAddress: 'node-1/partition/replica-1',
-    });
+    }));
 
     partition.role = RaftRole.LEARNER;
     partition.leaderId = null;
@@ -1235,7 +1237,7 @@ test(
   'PartitionService - joining learner ignores candidate and follower demotion events before promotion',
   async (t) => {
     const raftProvider = new ControllablePartitionRaftProvider();
-    const partition = new PartitionService({
+    const partition = createControllablePartitionService({
       partitionId: 'joiner-partition',
       tableId: 'joiner-table',
       replicaId: 'replica-2',
@@ -1245,8 +1247,7 @@ test(
       transport: createLoopbackTransport(),
       dbPath: ':memory:',
       isJoiningExistingGroup: true,
-      raftProvider,
-    });
+    }, raftProvider);
 
     try {
       await partition.initialize();

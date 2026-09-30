@@ -20,6 +20,8 @@ import {
   MEMBERSHIP_OWNER_REASON,
 } from '../../src/bootstrap/rejoin-hints-constants.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {TEST_BOOT_INCARNATION} from
+  '../test-helpers/boot-incarnation-fixture.js';
 
 const LOCAL_NODE_ID = 'node-local';
 const LOCAL_NODE_ADDRESS = 'seed-node:8080';
@@ -70,6 +72,7 @@ test('classifyClusterIdMatch is an explicit three-valued comparison',
 test('buildRejoinHintsSnapshot carries the CONFIG-row cluster identity',
   async (t) => {
     const snapshot = buildRejoinHintsSnapshot({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       systemTableCache: createCache({clusterId: CLUSTER_ID_A}),
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
@@ -83,6 +86,7 @@ test('buildRejoinHintsSnapshot carries the CONFIG-row cluster identity',
     );
 
     const preIdentity = buildRejoinHintsSnapshot({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       systemTableCache: createCache({clusterId: null}),
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
@@ -99,6 +103,7 @@ test('buildRejoinHintsSnapshot carries the CONFIG-row cluster identity',
 test('buildBootstrapRejoinHintsSnapshot carries an explicit cluster identity',
   async (t) => {
     const snapshot = buildBootstrapRejoinHintsSnapshot({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
       nodeRole: 'joiner',
@@ -117,6 +122,7 @@ test('persisted hints cluster identity survives a restart read', async (t) => {
   const dataDir = await mkdtemp(join(tmpdir(), 'cluster-identity-'));
   try {
     await persistBootstrapRejoinHints({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
@@ -158,6 +164,7 @@ test('auto-rejoin fails closed when the hints cluster identity mismatches',
     const dataDir = await mkdtemp(join(tmpdir(), 'cluster-identity-'));
     try {
       await persistBootstrapRejoinHints({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         dataDir,
         nodeId: LOCAL_NODE_ID,
         nodeAddress: LOCAL_NODE_ADDRESS,
@@ -197,6 +204,7 @@ test('auto-rejoin accepts matching or unknown cluster identity', async (t) => {
   const dataDir = await mkdtemp(join(tmpdir(), 'cluster-identity-'));
   try {
     await persistBootstrapRejoinHints({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,

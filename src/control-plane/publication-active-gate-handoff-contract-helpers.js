@@ -7,6 +7,10 @@ import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_STALE_MARKER,
   PUBLICATION_ACTIVE_GATE_HANDOFF_UNKNOWN_EPOCH,
 } from './publication-active-gate-handoff-contract-constants.js';
+import {
+  resolvePendingMembershipCandidate,
+  resolvePublishedActiveNodeIds,
+} from './active-node-publication-snapshots.js';
 
 function isPublicationActiveGateHandoffRecord(value) {
   return Boolean(value) &&
@@ -164,7 +168,35 @@ function resolvePublicationActiveGateHandoffQuorumCount(targetNodeIds = []) {
   return Math.floor(targetNodeIds.length / 2) + 1;
 }
 
+// The active gate's publication convergence from a planning snapshot, by the
+// snapshot owner's two reads, each under its own name: (a) published
+// membership, which the handoff treats as published and acknowledged, and (b)
+// the pending candidate, whose members are not missing (already asked) and
+// for whom a reconcile target never acknowledges (the handoff selection).
+function buildPublicationActiveGateMembershipConvergence(planningSnapshot) {
+  const publicationReads = {
+    latestPublicationRow: planningSnapshot?.latestPublicationRow,
+    latestPublishedPublicationRow:
+      planningSnapshot?.latestPublishedPublicationRow,
+  };
+  const pendingCandidate = resolvePendingMembershipCandidate(publicationReads);
+  return {
+    publicationEpoch:
+      publicationReads.latestPublishedPublicationRow?.publicationEpoch ??
+      publicationReads.latestPublicationRow?.publicationEpoch ??
+      0,
+    publishedActiveNodeIds: resolvePublishedActiveNodeIds({
+      ...publicationReads,
+      requirePublishedMembership: true,
+    }),
+    pendingCandidateNodeIds: pendingCandidate?.nodeIds ?? [],
+    pendingCandidateAcknowledgedNodeIds:
+      pendingCandidate?.publicationRow?.acknowledgedNodeIds ?? [],
+  };
+}
+
 export {
+  buildPublicationActiveGateMembershipConvergence,
   isPublicationActiveGateHandoffRecord,
   normalizePublicationActiveGateHandoffNodeId,
   coercePublicationActiveGateHandoffNodeIdValues,

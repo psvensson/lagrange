@@ -271,6 +271,15 @@ class RebalanceCoordinatorOwnerFacade {
   }
 
   /**
+   * Subscribe the REPLACE owner to the node's partition consensus relay.
+   * @param {Object|null} source - {subscribe(listener)}.
+   * @return {boolean}
+   */
+  attachReplicaConsensusEvents(source) {
+    return this.workflowOwner?.attachReplicaConsensusEvents?.(source) === true;
+  }
+
+  /**
    * Complete an operation successfully.
    * Delegates to workflow owner (D7.1).
    * @param {Object} operation

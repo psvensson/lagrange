@@ -23,7 +23,6 @@ import {
   reconcileReplicaLeaderChange,
 } from './replica-leadership-state.js';
 import {LeaderActivationGate} from './leader-activation-gate.js';
-import {LeaderActivationScheduler} from './leader-activation-scheduler.js';
 import {
   buildPeerAddressForReplica,
   createRaftInstanceForReplica,
@@ -136,14 +135,13 @@ class RaftReplicaBase extends EventEmitter {
           config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
           LOCAL_NUM_TWENTY_FIVE
         );
-    this.leaderActivationScheduler = options.leaderActivationScheduler ||
-      LeaderActivationScheduler.getShared({
-        nodeId: this.nodeId,
-        spacingMs: this.leaderActivationNodeSpacingMs,
-      });
     this.leaderActivationGate = new LeaderActivationGate({
       holdoffMs: this.leaderActivationStabilizationMs,
-      activationScheduler: this.leaderActivationScheduler,
+      activationScheduler: options.leaderActivationScheduler || null,
+      sharedActivationScheduler: {
+        nodeId: this.nodeId,
+        spacingMs: this.leaderActivationNodeSpacingMs,
+      },
     });
 
     // Deferred election support

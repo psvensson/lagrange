@@ -33,6 +33,7 @@ import {SYSTEM_TABLE_NAME} from
 import {
   createMockControlPlaneReadinessService,
   createMockControlPlaneSystemTableGateway,
+  withFixtureReplaceWitness,
 } from './test-helpers.js';
 
 const TEST_NODE_ID = 'convergence-node';
@@ -275,6 +276,10 @@ function createConvergenceCoordinator(options = {}) {
     enableTimeouts: false,
   });
   coordinator.initialize();
+  // The witness replica's answers (quest replace-source-removal-owner): the
+  // fixture world models the committed configuration from its rows.
+  withFixtureReplaceWitness(coordinator.workflowOwner.messageRouter,
+    coordinator.systemTableCache);
 
   return {
     coordinator,
@@ -522,9 +527,11 @@ test('Owner-path convergence: all progression entry points ' +
           raft_role: 'follower',
         });
 
-        await new Promise((resolve) => setImmediate(resolve));
-        await new Promise((resolve) => setImmediate(resolve));
-        await new Promise((resolve) => setImmediate(resolve));
+        // The owner reads the witness and persists the removal intent before
+        // the effect (quest replace-source-removal-owner): settle its turns.
+        for (let turn = 0; turn < 20; turn += 1) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
 
         const updated = operationMap.get(
           TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,

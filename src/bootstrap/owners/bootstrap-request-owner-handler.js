@@ -26,7 +26,6 @@ import {
 } from './bootstrap-request-owner-deadline.js';
 
 const LOCAL_STR_MOVE_REPLICA_HANDOFF_STABILIZING = 'move_replica_handoff_stabilizing';
-const LOCAL_STR_STRING = 'string';
 const BOOTSTRAP_REQUEST_DEFER_STAGE = Object.freeze({
   REQUEST_START: 'request_start',
   BOOTSTRAP_JOIN_ADMISSION: 'bootstrap_join_admission',
@@ -651,11 +650,7 @@ const bootstrapRequestOwnerHandlerMethods = {
         reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
         return this.buildBootstrapNotReadyResponse({
           error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
-          code:
-            typeof error?.errorCode === LOCAL_STR_STRING &&
-            error.errorCode.length > 0 ?
-              error.errorCode :
-              BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+          code: this.resolveBootstrapNotReadyResponseCode(error),
           reasonCode,
           retryAfterMs,
           startupAuthority,

@@ -73,6 +73,67 @@ function isStaleForExistingRecord(tableName, existing, incoming) {
     isNodeHeartbeatWatermarkRegression(existing, incoming);
 }
 
+function deletePredicateValueMatches(recordValue, predicateValue) {
+  if (predicateValue === null || typeof predicateValue === 'undefined') {
+    return recordValue === null || typeof recordValue === 'undefined';
+  }
+  return recordValue !== null && typeof recordValue !== 'undefined' &&
+    String(recordValue) === String(predicateValue);
+}
+
+// A DELETE's CDC payload is its where-clause predicate, not a row version.
+// CDC emits only applied deletes, so a cached row that satisfies the whole
+// predicate is exactly a version the durable DELETE removed.
+function recordSatisfiesDeletePredicate(record, predicate) {
+  const entries = Object.entries(predicate || {})
+    .filter(([column]) => column !== COLUMN.UPDATED_AT_HLC);
+  return entries.length > 0 && entries.every(([column, value]) =>
+    deletePredicateValueMatches(record?.[column], value));
+}
+
+/**
+ * Whether the cached row is causally newer than an applied DELETE. The
+ * origin HLC orders both when each carries one. Without that pair the
+ * predicate's columns are not a version: a row satisfying the predicate was
+ * removed by it, whatever unrelated metadata advanced its updated_at, and
+ * only a row outside the predicate falls back to row-version ordering.
+ * @param {string} tableName
+ * @param {Object} existing
+ * @param {Object} deletePredicate
+ * @return {boolean}
+ */
+function isDeleteSupersededByExistingRecord(tableName, existing, deletePredicate) {
+  const hlcOrdered = Boolean(getRecordHlc(existing) &&
+    getRecordHlc(deletePredicate));
+  if (!hlcOrdered &&
+      recordSatisfiesDeletePredicate(existing, deletePredicate)) {
+    return false;
+  }
+  return isStaleForExistingRecord(tableName, existing, deletePredicate);
+}
+
+/**
+ * The tombstone of an applied DELETE carries the deleted row's version and
+ * creation identity, not the predicate's, so a late write of the removed row
+ * cannot outrank it merely because the predicate named no updated_at.
+ * @param {Object|null} existing - Cached row the DELETE removed.
+ * @param {Object} deletePredicate
+ * @return {Object}
+ */
+function buildDeletedRowTombstoneSource(existing, deletePredicate) {
+  if (!existing) {
+    return deletePredicate;
+  }
+  const versions = [getRecordTimestamp(existing),
+    getRecordTimestamp(deletePredicate)].filter(Number.isFinite);
+  return {
+    ...deletePredicate,
+    [COLUMN.CREATED_AT]: existing[COLUMN.CREATED_AT] ??
+      deletePredicate?.[COLUMN.CREATED_AT],
+    [COLUMN.UPDATED_AT]: versions.length > 0 ? Math.max(...versions) : null,
+  };
+}
+
 function shouldUsePublicationMerge(existing, incoming) {
   return Boolean(existing?.publication_id || incoming?.publication_id);
 }
@@ -244,10 +305,12 @@ function compareSchemaVersions(incomingVersion, currentVersion) {
 
 export {
   applyStaleRowBackfill,
+  buildDeletedRowTombstoneSource,
   cloneFieldValue,
   compareSchemaVersions,
   getRecordHlc,
   getRecordTimestamp,
+  isDeleteSupersededByExistingRecord,
   isStaleForExistingRecord,
   mergeRecords,
   shouldBackfillMissingField,

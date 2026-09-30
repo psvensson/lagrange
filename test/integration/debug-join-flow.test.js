@@ -3,13 +3,13 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {URL} from 'url';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   getUniquePort,
@@ -65,7 +65,7 @@ test('Debug join flow', {timeout: DEBUG_JOIN_TEST_TIMEOUT_MS}, async (t) => {
 
   console.log('DEBUG: Starting seed node bootstrap on port', seedWsPort);
 
-  const bootstrapService = new BootstrapService({
+  const bootstrapService = await createVirginSeedBootstrapService({
     nodeId: seedNodeId,
     nodeAddress: `ws://localhost:${seedWsPort}`,
     wsPort: seedWsPort,
@@ -160,6 +160,7 @@ test('Debug join flow', {timeout: DEBUG_JOIN_TEST_TIMEOUT_MS}, async (t) => {
     console.log('DEBUG: Creating joining service on port', joiningWsPort);
 
     joiningService = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: joiningNodeId,
       nodeAddress: `ws://localhost:${joiningWsPort}`,
       seedNodeAddress: 'http://localhost:0',

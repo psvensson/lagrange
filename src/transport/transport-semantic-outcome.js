@@ -1,4 +1,11 @@
 import {ROUTER_ERROR_MSG} from '../constants/transport.js';
+import {
+  OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
+  ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+  ROUTER_NO_CONNECTION_ERROR_CODE,
+  WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
+} from './transport-error-codes.js';
 
 const TRANSPORT_SEMANTIC_OUTCOME_STATE = Object.freeze({
   READY: 'ready',
@@ -38,15 +45,17 @@ const TRANSPORT_SEMANTIC_OUTCOME_REASON_CODE = Object.freeze({
 
 const TRANSPORT_DELIVERY_OUTCOME_REASON_CODE = Object.freeze({
   ACK_REJECTED: 'ack_rejected',
+  COMPLETED_WITH_ERROR: 'completed_with_error',
   CONNECTION_CLOSED: 'connection_closed',
   MESSAGE_TIMEOUT: 'message_timeout',
   NO_HANDLER: 'no_handler',
+  NO_CONNECTION: 'no_connection',
+  OUTBOUND_QUEUE_BACKPRESSURED: 'outbound_queue_backpressured',
   QUERY_TRANSPORT_NOT_READY: 'query_transport_not_ready',
   TRANSPORT_DEFERRED: 'transport_deferred',
+  WEBSOCKET_CONNECT_TIMEOUT: 'websocket_connect_timeout',
 });
 
-const ROUTER_CONNECTION_CLOSED_ERROR_CODE = 'ROUTER_CONNECTION_CLOSED';
-const ROUTER_MESSAGE_TIMEOUT_ERROR_CODE = 'ROUTER_MESSAGE_TIMEOUT';
 const ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE =
   'ROUTER_QUERY_TRANSPORT_NOT_READY';
 
@@ -69,6 +78,50 @@ function normalizeTransportErrorCode(value) {
     null;
 }
 
+function isTransportDeliveryErrorCode(errorCode) {
+  return errorCode === OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE ||
+    errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE ||
+    errorCode === ROUTER_MESSAGE_TIMEOUT_ERROR_CODE ||
+    errorCode === ROUTER_NO_CONNECTION_ERROR_CODE ||
+    errorCode === WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE ||
+    errorCode === ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE;
+}
+
+function isDeferredTransportDeliveryErrorCode(errorCode) {
+  return errorCode === OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE ||
+    errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE ||
+    errorCode === ROUTER_NO_CONNECTION_ERROR_CODE ||
+    errorCode === ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE;
+}
+
+function classifyTransportDeliveryState(options) {
+  const deferred =
+    options.deferRetry === true ||
+    isDeferredTransportDeliveryErrorCode(options.errorCode) ||
+    options.retryAfterMs !== null ||
+    options.claimedDeliveryState ===
+      TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED;
+  const hasConflict =
+    options.noHandler ||
+    options.completedWithError ||
+    isTransportDeliveryErrorCode(options.errorCode) ||
+    (
+      options.claimedDeliveryState !== null &&
+      options.claimedDeliveryState !==
+        TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED
+    );
+  const delivered = options.acknowledged && !deferred && !hasConflict;
+  return {
+    delivered,
+    deferred,
+    deliveryState: delivered ?
+      TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED :
+      deferred ?
+        TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED :
+        TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED,
+  };
+}
+
 function resolveTransportSemanticReasonCode(errorCode, deferred) {
   if (errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE) {
     return TRANSPORT_SEMANTIC_OUTCOME_REASON_CODE.CONNECTION_CLOSED;
@@ -86,7 +139,8 @@ function resolveTransportDeliveryReasonCode(
   errorCode,
   deferred,
   noHandler,
-  acknowledged,
+  delivered,
+  completedWithError,
 ) {
   if (noHandler === true) {
     return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER;
@@ -97,13 +151,25 @@ function resolveTransportDeliveryReasonCode(
   if (errorCode === ROUTER_MESSAGE_TIMEOUT_ERROR_CODE) {
     return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT;
   }
+  if (errorCode === ROUTER_NO_CONNECTION_ERROR_CODE) {
+    return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_CONNECTION;
+  }
+  if (errorCode === OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE) {
+    return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.OUTBOUND_QUEUE_BACKPRESSURED;
+  }
+  if (errorCode === WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE) {
+    return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.WEBSOCKET_CONNECT_TIMEOUT;
+  }
   if (errorCode === ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE) {
     return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.QUERY_TRANSPORT_NOT_READY;
   }
   if (deferred) {
     return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.TRANSPORT_DEFERRED;
   }
-  if (acknowledged !== true) {
+  if (completedWithError) {
+    return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.COMPLETED_WITH_ERROR;
+  }
+  if (!delivered) {
     return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ACK_REJECTED;
   }
   return null;
@@ -157,22 +223,19 @@ function buildTransportDeliveryOutcome(options = {}) {
   );
   const noHandler = options.noHandler === true;
   const acknowledged = options.acknowledged === true;
-  const deferred =
-    acknowledged !== true &&
-    (
-      options.deferRetry === true ||
-      errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE ||
-      errorCode === ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE ||
-      retryAfterMs !== null
-    );
-  const deliveryState =
-    acknowledged === true ?
-      TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED :
-      (
-        deferred ?
-          TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED :
-          TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED
-      );
+  const claimedDeliveryState = normalizeOptionalString(options.deliveryState);
+  const completedWithError = options.status === 'completed' &&
+    normalizeOptionalString(options.error ?? options.message) !== null;
+  const {delivered, deferred, deliveryState} =
+    classifyTransportDeliveryState({
+      acknowledged,
+      claimedDeliveryState,
+      deferRetry: options.deferRetry,
+      errorCode,
+      noHandler,
+      retryAfterMs,
+      completedWithError,
+    });
 
   return Object.freeze({
     ...options,
@@ -186,7 +249,8 @@ function buildTransportDeliveryOutcome(options = {}) {
       errorCode,
       deferred,
       noHandler,
-      acknowledged,
+      delivered,
+      completedWithError,
     ),
   });
 }
@@ -290,7 +354,6 @@ function isDeferredTransportDeliveryOutcome(outcome = null) {
 }
 
 export {
-  TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD,
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
   ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,

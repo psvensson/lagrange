@@ -45,6 +45,8 @@ import {
   CONTROL_PLANE_READ_LEADER_MODE,
 } from
   './control-plane-system-table-gateway-constants.js';
+import {buildPublicationActiveGateMembershipConvergence} from
+  './publication-active-gate-handoff-contract-helpers.js';
 
 // Owner-driven membership liveness (Workstream A). A dedicated always-on interval
 // — started UNCONDITIONALLY, independent of metadata-publication readiness so it
@@ -72,6 +74,16 @@ const MEMBERSHIP_MULTI_PARTITION_MSG =
 const MEMBERSHIP_RECONCILE_DEFERRED_NOT_WRITE_LEADER_MSG =
   'Membership reconcile deferred: not the control_plane_publications write-leader';
 const NOT_PUBLICATIONS_WRITE_LEADER_REASON = 'not_publications_write_leader';
+// A membership epoch names at least one member. A candidate with no member
+// is not a valid epoch: at formation it means the seed's READY heartbeat has
+// not committed yet, after a restart that the publisher's own heartbeat has
+// not; published, it would read as "no members" to every reader until the
+// next epoch, and drop the members the latest epoch names. It defers with a
+// typed reason instead. The READY heartbeat is itself a reconcile wake (the
+// priority-recovery visibility listener enqueues on a published node ready
+// lease), so the next reconcile names the member.
+const EMPTY_PUBLICATION_CANDIDATE_REASON =
+  'publication_candidate_has_no_members';
 
 // CL-001 variant D: a non-write-leader's control_plane_publications cache is fed
 // ONLY by the leader's point-in-time CDC fan-out (leader-gated emission, no replay
@@ -163,6 +175,7 @@ const CONVERGENCE_REASON = Object.freeze({
   IN_FLIGHT: 'reconcile-in-flight',
   ERROR: 'error',
   NOT_WRITE_LEADER: 'not-publications-write-leader',
+  EMPTY_CANDIDATE: 'empty-publication-candidate',
 });
 const CONVERGENCE_OUTCOME = Object.freeze({
   RECONCILE_COMMITTED: 'reconcile-committed',
@@ -462,6 +475,20 @@ class MembershipPublicationCoordinatorReconcile extends
             latestPublicationRow,
             latestPublishedPublicationRow,
           });
+          if (
+            normalizeNodeIdList(candidate.publishedActiveNodeIds).length === 0
+          ) {
+            this._emitConvergenceDecisionTrace({
+              decision: CONVERGENCE_DECISION.DEFER,
+              reason: CONVERGENCE_REASON.EMPTY_CANDIDATE,
+              ownerKey,
+            });
+            return {
+              deferred: true,
+              reason: EMPTY_PUBLICATION_CANDIDATE_REASON,
+              ownerKey,
+            };
+          }
           const workflow = await this.ensureWorkflow(ownerKey, candidate);
           if (latestPublicationRow && candidate.changed !== true) {
             const shouldRefreshPriorityMetadata =
@@ -700,16 +727,9 @@ class MembershipPublicationCoordinatorReconcile extends
         });
         return false;
       }
-      const latestPublishedRow = planningSnapshot.latestPublishedPublicationRow;
-      const latestRow = planningSnapshot.latestPublicationRow;
-      const publicationEpoch =
-        latestPublishedRow?.publicationEpoch ??
-        latestRow?.publicationEpoch ??
-        0;
-      const publishedActiveNodeIds =
-        latestPublishedRow?.publishedActiveNodeIds ??
-        latestRow?.publishedActiveNodeIds ??
-        [];
+      const publicationConvergence =
+        buildPublicationActiveGateMembershipConvergence(planningSnapshot);
+      const publicationEpoch = publicationConvergence.publicationEpoch;
       // CL-001 variant A: surface still-pending recovery-eligible acks on an
       // OPEN publication so the contract requests a reconcile even when the
       // published set has no deficit; without this the owner skips forever and
@@ -719,7 +739,7 @@ class MembershipPublicationCoordinatorReconcile extends
       const handoffContract = buildPublicationActiveGateHandoffContract({
         nodeRows: planningSnapshot.nodeRows,
         readinessByNodeId: planningSnapshot.readinessByNodeId,
-        publicationConvergence: {publicationEpoch, publishedActiveNodeIds},
+        publicationConvergence,
         ownerAckCompletionPendingNodeIds,
       });
       const missingCount = handoffContract?.missingPublishedCount ?? 0;
@@ -926,5 +946,6 @@ export {
   ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_OUTCOME,
   MembershipPublicationCoordinatorReconcile,
   shouldDeferMembershipReconcileToWriteLeader,
+  EMPTY_PUBLICATION_CANDIDATE_REASON,
   NOT_PUBLICATIONS_WRITE_LEADER_REASON,
 };

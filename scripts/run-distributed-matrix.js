@@ -113,6 +113,41 @@ function parsePositiveInteger(value, flag) {
   return normalized;
 }
 
+// Flags that take the next argument as their value. A value flag with no
+// following value falls through to the passthrough arguments.
+const MATRIX_VALUE_FLAG_APPLIERS = Object.freeze({
+  [MATRIX_FLAG.TARGET]: (parsed, value) => {
+    parsed.target = value;
+  },
+  [MATRIX_FLAG.PROFILE]: (parsed, value) => {
+    parsed.profile = value;
+  },
+  [MATRIX_FLAG.NODES]: (parsed, value) => {
+    parsed.nodes = csv(value);
+  },
+  [MATRIX_FLAG.NODES_PER_HOST]: (parsed, value, flag) => {
+    parsed.nodesPerHost = parsePositiveInteger(value, flag);
+  },
+  [MATRIX_FLAG.GCP_TEMPLATE]: (parsed, value) => {
+    parsed.gcpTemplate = value;
+  },
+  [MATRIX_FLAG.REPORT_ROOT]: (parsed, value) => {
+    parsed.reportRoot = value;
+  },
+});
+const MATRIX_SWITCH_FLAG_APPLIERS = Object.freeze({
+  [MATRIX_FLAG.DRY_RUN]: (parsed) => {
+    parsed.dryRun = true;
+  },
+  [MATRIX_FLAG.HELP]: (parsed) => {
+    parsed.help = true;
+  },
+});
+
+function matrixFlagApplier(appliers, arg) {
+  return Object.hasOwn(appliers, arg) ? appliers[arg] : null;
+}
+
 function parseArgs(argv) {
   const parsed = {
     target: DISTRIBUTED_EXECUTION_TARGET.LOCAL,
@@ -138,31 +173,18 @@ function parseArgs(argv) {
       continue;
     }
     const next = argv[index + MATRIX_FLAG_VALUE_OFFSET];
-    if (arg === MATRIX_FLAG.TARGET && next) {
-      parsed.target = next;
+    const applyValueFlag = matrixFlagApplier(MATRIX_VALUE_FLAG_APPLIERS, arg);
+    if (applyValueFlag && next) {
+      applyValueFlag(parsed, next, arg);
       index += MATRIX_FLAG_VALUE_OFFSET;
-    } else if (arg === MATRIX_FLAG.PROFILE && next) {
-      parsed.profile = next;
-      index += MATRIX_FLAG_VALUE_OFFSET;
-    } else if (arg === MATRIX_FLAG.NODES && next) {
-      parsed.nodes = csv(next);
-      index += MATRIX_FLAG_VALUE_OFFSET;
-    } else if (arg === MATRIX_FLAG.NODES_PER_HOST && next) {
-      parsed.nodesPerHost = parsePositiveInteger(next, arg);
-      index += MATRIX_FLAG_VALUE_OFFSET;
-    } else if (arg === MATRIX_FLAG.GCP_TEMPLATE && next) {
-      parsed.gcpTemplate = next;
-      index += MATRIX_FLAG_VALUE_OFFSET;
-    } else if (arg === MATRIX_FLAG.REPORT_ROOT && next) {
-      parsed.reportRoot = next;
-      index += MATRIX_FLAG_VALUE_OFFSET;
-    } else if (arg === MATRIX_FLAG.DRY_RUN) {
-      parsed.dryRun = true;
-    } else if (arg === MATRIX_FLAG.HELP) {
-      parsed.help = true;
-    } else {
-      parsed.passthrough.push(arg);
+      continue;
     }
+    const applySwitchFlag = matrixFlagApplier(MATRIX_SWITCH_FLAG_APPLIERS, arg);
+    if (applySwitchFlag) {
+      applySwitchFlag(parsed);
+      continue;
+    }
+    parsed.passthrough.push(arg);
   }
 
   return parsed;

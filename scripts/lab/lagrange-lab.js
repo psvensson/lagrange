@@ -15,8 +15,13 @@ import {initK3sServer, joinK3sNode, k3sKubectl, syncK3sLabels} from './k3s.js';
 import {configureRunner, runnerLabels} from './runner.js';
 import {
   WORKER_SETUP_FILE, copyWorkerSetup, discoverFleet, fleetRequirement, formatFleet,
-  probeRemoteNode, recordFleet, workerCloneUrl, workerSetupScript,
+  labTestCommit, labTestDeps, labTestSelectorArgs, probeRemoteNode, recordFleet, runLabTest,
+  workerCloneUrl, workerSetupScript,
 } from './probe.js';
+import {
+  CLASSIFIED_LANES, estimateFileCosts, lastResultsRoots, planClassifiedTestFiles,
+} from '../run-classified-test-files.js';
+import {parseLaneArgs, planLane} from '../plan-test-lane.js';
 import {capture} from './process.js';
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
 import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
@@ -25,6 +30,14 @@ import {dirname, join as joinPath} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parse as parseYaml} from 'yaml';
 
+// A hand lab run: the profiles that are a plan of test files, the lanes it
+// may name (the classified runner's own, and all of them), and its flags.
+const LAB_TEST_PROFILE = Object.freeze({CHANGED: 'changed', ALL: 'all'});
+const LAB_TEST_LANE_ALL = 'all';
+const LAB_TEST_LANES = Object.freeze([...CLASSIFIED_LANES, LAB_TEST_LANE_ALL]);
+const LAB_TEST_FLAG = Object.freeze({LANE: 'lane', ON: 'on', SHA: 'sha', BASE_SHA: 'base-sha',
+  SPLIT: 'split'});
+const LAB_TEST_CHOICE = '|';
 const USAGE = [
   'Lagrange home lab\n\n',
   '  lab init\n',
@@ -47,6 +60,11 @@ const USAGE = [
   '  lab k3s cordon|uncordon NAME --server SERVER\n',
   '  lab k3s drain NAME --server SERVER\n',
   '  lab test changed|smoke|gate|postpush|all\n',
+  `  lab test ${Object.values(LAB_TEST_PROFILE).join(LAB_TEST_CHOICE)} --lane `,
+  `${LAB_TEST_LANES.join(LAB_TEST_CHOICE)} [--on NAME] [--sha COMMIT] [--split]\n`,
+  `  lab test ${LAB_TEST_PROFILE.CHANGED} --lane LANE [--sha COMMIT] --base-sha COMMIT\n`,
+  '      (--base-sha: the commit the change cone is measured from; ',
+  'default the merge base with origin/main)\n',
   '  lab fleet [--json]\n',
   '  lab provision [--output FILE] [--copy NAME]\n',
 ].join('');
@@ -116,7 +134,24 @@ const TEST_PROFILE_COMMANDS = Object.freeze({
 });
 const ERROR_TEXT = Object.freeze({
   IP_REQUIRED: 'Nodes with harness or k3s roles require --ip',
+  NOT_A_FILE_PLAN: ' profile is an acceptance manifest, not a file plan: --lane takes ',
+  NO_LANE: 'a lab test run names its lane with --lane',
+  UNKNOWN_LANE: 'unknown lane ',
+  SPLIT_NEEDS_ALL: '--split divides the whole corpus: it takes --lane all',
+  SPLIT_TAKES_NO_VALUE: '--split takes no value',
+  NO_MACHINE_NAME: '--on needs a machine name',
+  NO_COMMIT_NAME: '--sha needs a commit',
+  NO_BASE_NAME: '--base-sha needs a commit',
+  BASE_NEEDS_CHANGED: '--base-sha measures the change cone: it takes the changed profile',
+  NOT_THE_RUNNER: ' no longer runs the classified runner: ',
+  NO_LANE_FILES: ' has no files in lane ',
 });
+// How the corpus profile's npm script reads: `node <runner> <lane filters>`.
+const LAB_TEST_SCRIPT = Object.freeze({NODE: 'node',
+  RUNNER: 'scripts/run-classified-test-files.js', WORDS: /\s+/u, FILTERS_AT: 2});
+const LAB_TEST_SELECT_DEADLINE_MS = 5 * 60 * 1000;
+const LAB_TEST_LINE = /\r?\n/u;
+const LAB_TEST_SHA_DIGITS = 12;
 const POSITIONAL = Object.freeze({COMMAND: 0, ACTION: 1, NAME: 2});
 const EXIT_FAILURE = 1;
 
@@ -417,10 +452,89 @@ async function commandK3s(action, args) {
   throw new Error(`Unknown k3s action: ${action}`);
 }
 
-async function commandTest(profile) {
+async function commandTest(profile, args) {
   const selected = TEST_PROFILE_COMMANDS[profile];
   if (!selected) throw new Error(`Unknown test profile: ${profile}`);
-  await run(NPM, [...selected]);
+  if (!Object.values(LAB_TEST_FLAG).some((flag) => Object.hasOwn(args.flags, flag))) {
+    await run(NPM, [...selected]);
+    return;
+  }
+  const request = labTestRequest(profile, args.flags);
+  const commit = labTestCommit({root: FLEET_REPO_ROOT, sha: request.sha});
+  try {
+    const plan = await labTestPlan(profile, request, commit);
+    process.exitCode = await runLabTest({
+      plan,
+      costs: estimateFileCosts(plan, lastResultsRoots(FLEET_REPO_ROOT)),
+      commit,
+      on: request.on,
+      split: request.split,
+      root: FLEET_REPO_ROOT,
+    }, labTestDeps({root: FLEET_REPO_ROOT}));
+  } finally {
+    commit.release();
+  }
+}
+
+// Everything a hand lab run can refuse, refused before the inventory, the
+// tree or any machine is looked at.
+function labTestRequest(profile, flags) {
+  if (!Object.values(LAB_TEST_PROFILE).includes(profile)) {
+    throw new Error(`the ${profile}${ERROR_TEXT.NOT_A_FILE_PLAN}` +
+      `${Object.values(LAB_TEST_PROFILE).join(LAB_TEST_CHOICE)}`);
+  }
+  const lane = flags[LAB_TEST_FLAG.LANE];
+  if (typeof lane !== 'string') throw new Error(ERROR_TEXT.NO_LANE);
+  if (!LAB_TEST_LANES.includes(lane)) {
+    throw new Error(`${ERROR_TEXT.UNKNOWN_LANE}${lane}: ${LAB_TEST_LANES.join(LAB_TEST_CHOICE)}`);
+  }
+  const split = flags[LAB_TEST_FLAG.SPLIT];
+  if (split !== undefined && split !== true) throw new Error(ERROR_TEXT.SPLIT_TAKES_NO_VALUE);
+  if (split && lane !== LAB_TEST_LANE_ALL) throw new Error(ERROR_TEXT.SPLIT_NEEDS_ALL);
+  if (flags[LAB_TEST_FLAG.ON] === true) throw new Error(ERROR_TEXT.NO_MACHINE_NAME);
+  if (flags[LAB_TEST_FLAG.SHA] === true) throw new Error(ERROR_TEXT.NO_COMMIT_NAME);
+  return {lane, split: split === true, on: flags[LAB_TEST_FLAG.ON] ?? null,
+    sha: flags[LAB_TEST_FLAG.SHA] ?? null, baseSha: labTestBaseSha(profile, flags)};
+}
+
+// The commit the change cone is measured from, or null for the selector's own
+// default. Only the changed profile has a cone to measure.
+function labTestBaseSha(profile, flags) {
+  const baseSha = flags[LAB_TEST_FLAG.BASE_SHA];
+  if (baseSha === undefined) return null;
+  if (baseSha === true) throw new Error(ERROR_TEXT.NO_BASE_NAME);
+  if (profile !== LAB_TEST_PROFILE.CHANGED) throw new Error(ERROR_TEXT.BASE_NEEDS_CHANGED);
+  return baseSha;
+}
+
+// The profile's files at the commit: the corpus through its own npm script's
+// lane filters, the change cone through the selector (from --base-sha when
+// named), and the chosen lane of the classified plan of those files - planned
+// from the commit's own tree.
+async function labTestPlan(profile, {lane, baseSha}, commit) {
+  const files = profile === LAB_TEST_PROFILE.ALL ?
+    corpusFiles(commit.gitRoot, TEST_PROFILE_COMMANDS[profile].at(-1)) :
+    (await capture(process.execPath, labTestSelectorArgs({sha: commit.sha, baseSha}),
+      {cwd: FLEET_REPO_ROOT, timeoutMs: LAB_TEST_SELECT_DEADLINE_MS}))
+      .split(LAB_TEST_LINE).filter(Boolean);
+  const plan = planClassifiedTestFiles(commit.gitRoot, files, lastResultsRoots(FLEET_REPO_ROOT));
+  const chosen = lane === LAB_TEST_LANE_ALL ? plan :
+    plan.filter((entry) => entry.resourceClass === lane);
+  if (chosen.length === 0) {
+    throw new Error(`${profile} at ${commit.sha.slice(0, LAB_TEST_SHA_DIGITS)}` +
+      `${ERROR_TEXT.NO_LANE_FILES}${lane}`);
+  }
+  return chosen;
+}
+
+function corpusFiles(gitRoot, scriptName) {
+  const manifest = JSON.parse(readFileSync(joinPath(gitRoot, FLEET_PACKAGE), FLEET_TEXT));
+  const script = String(manifest.scripts?.[scriptName] || '');
+  const words = script.trim().split(LAB_TEST_SCRIPT.WORDS);
+  if (words[0] !== LAB_TEST_SCRIPT.NODE || words[1] !== LAB_TEST_SCRIPT.RUNNER) {
+    throw new Error(`${scriptName}${ERROR_TEXT.NOT_THE_RUNNER}${script}`);
+  }
+  return planLane(gitRoot, parseLaneArgs(words.slice(LAB_TEST_SCRIPT.FILTERS_AT)));
 }
 
 const COMMAND_HANDLERS = Object.freeze({
@@ -431,7 +545,7 @@ const COMMAND_HANDLERS = Object.freeze({
   [COMMAND.RUNNER]: (action, args) => commandRunner(action, args),
   [COMMAND.HARNESS]: (action, args) => commandHarness(action, args),
   [COMMAND.K3S]: (action, args) => commandK3s(action, args),
-  [COMMAND.TEST]: (action) => commandTest(action),
+  [COMMAND.TEST]: (action, args) => commandTest(action, args),
   [COMMAND.FLEET]: (action, args) => commandFleet(args),
   [COMMAND.PROVISION]: (action, args) => commandProvision(args),
 });

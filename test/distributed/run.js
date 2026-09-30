@@ -55,13 +55,15 @@ import {
   CLI,
   EXIT_CODES,
   BENCHMARK_GATE_DEFAULTS,
-  RAFT_PROVIDER_DEFAULTS,
   DETERMINISTIC_DEBUG_DEFAULTS,
   SCENARIO_ARTIFACTS,
-  DISTRIBUTED_EXECUTION_TARGET,
-  DISTRIBUTED_MATRIX_PROFILE,
-  DISTRIBUTED_EXECUTION_ENV,
 } from './harness/constants.js';
+import {
+  SCENARIO_FILTER_ALL,
+  buildDistributedExecutionMetadata,
+  buildReportMetadata,
+  resolveRunRaftProvider,
+} from './run-report-metadata.js';
 
 const LIVE_LOG_PREFIX = '[live-log] ';
 const LIVE_LOG_NODE_EXCLUDED = 'load-generator';
@@ -165,15 +167,6 @@ const SCENARIO_ASSERTION_POLICY = Object.freeze({
     }),
   }),
 });
-const SCENARIO_FILTER_ALL = 'all';
-const DISTRIBUTED_EXECUTION_TYPEOF_STRING = 'string';
-const DISTRIBUTED_EXECUTION_HOST_SEPARATOR = ',';
-const DISTRIBUTED_EXECUTION_EMPTY_LENGTH = 0;
-// Stamped on every written report so a release verification (the
-// release-0-2-verification-v3 memory-soak oracle) can bind the report to the
-// exact source bytes the run booted; empty when no fingerprinted launch
-// config reached the report (the oracle reads that as fingerprint_missing).
-const REPORT_SOURCE_FINGERPRINT_ABSENT = '';
 const BENCHMARK_GATE_STATUS = Object.freeze({
   PASSED: 'passed',
   FAILED: 'failed',
@@ -634,76 +627,6 @@ function installDeterministicRandom(seed) {
   Math.random = createSeededRandom(seed);
 }
 
-// The source-fingerprint stamp: the fingerprint the run computed for its
-// docker config (the value the nodes boot with as SRC_FINGERPRINT), or the
-// typed absent sentinel when no fingerprinted config exists.
-function buildReportSourceFingerprintMetadata(runConfig) {
-  const docker = runConfig?.docker;
-  return {
-    srcFingerprint: String(
-      docker?.srcFingerprint || REPORT_SOURCE_FINGERPRINT_ABSENT,
-    ),
-    srcFingerprintAlgo: String(
-      docker?.srcFingerprintAlgo || REPORT_SOURCE_FINGERPRINT_ABSENT,
-    ),
-  };
-}
-
-function buildDistributedExecutionMetadata(env = process.env) {
-  const metadata = {};
-  const target = env?.[DISTRIBUTED_EXECUTION_ENV.TARGET];
-  const profile = env?.[DISTRIBUTED_EXECUTION_ENV.PROFILE];
-  const hosts = env?.[DISTRIBUTED_EXECUTION_ENV.HOSTS];
-  const matrixConfig = env?.[DISTRIBUTED_EXECUTION_ENV.CONFIG];
-
-  if (typeof target === DISTRIBUTED_EXECUTION_TYPEOF_STRING &&
-      Object.values(DISTRIBUTED_EXECUTION_TARGET).includes(target)) {
-    metadata.executionTarget = target;
-  }
-  if (typeof profile === DISTRIBUTED_EXECUTION_TYPEOF_STRING &&
-      Object.values(DISTRIBUTED_MATRIX_PROFILE).includes(profile)) {
-    metadata.matrixProfile = profile;
-  }
-  if (typeof hosts === DISTRIBUTED_EXECUTION_TYPEOF_STRING &&
-      hosts.trim().length > DISTRIBUTED_EXECUTION_EMPTY_LENGTH) {
-    metadata.executionHosts = hosts
-      .split(DISTRIBUTED_EXECUTION_HOST_SEPARATOR)
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-  }
-  if (typeof matrixConfig === DISTRIBUTED_EXECUTION_TYPEOF_STRING &&
-      matrixConfig.trim().length > DISTRIBUTED_EXECUTION_EMPTY_LENGTH) {
-    metadata.matrixConfig = matrixConfig.trim();
-  }
-  return metadata;
-}
-
-function buildReportMetadata(
-  args,
-  runConfig,
-  deterministicDebug,
-  env = process.env,
-) {
-  const metadata = {
-    raftProvider: resolveRunRaftProvider(runConfig),
-    configPath: String(args?.config || CLI.DEFAULT_CONFIG),
-    scenarioFilter: String(args?.scenario || SCENARIO_FILTER_ALL),
-    ...buildReportSourceFingerprintMetadata(runConfig),
-    ...buildDistributedExecutionMetadata(env),
-  };
-  if (deterministicDebug?.enabled === true) {
-    metadata.deterministicDebug = {
-      enabled: true,
-      seed: deterministicDebug.seed,
-      convergenceSampleIntervalMs:
-        deterministicDebug.convergenceSampleIntervalMs,
-      preflightSampleIntervalMs:
-        deterministicDebug.preflightSampleIntervalMs,
-    };
-  }
-  return metadata;
-}
-
 /**
  * Build the Docker image before running scenarios.
  * @param {Object} config - Parsed cluster configuration
@@ -864,21 +787,6 @@ function normalizeFiniteNumber(value) {
   }
   const normalized = Number(value);
   return Number.isFinite(normalized) ? normalized : null;
-}
-
-function resolveRunRaftProvider(config, env = process.env) {
-  const configuredProvider = config?.raftProvider;
-  if (typeof configuredProvider === 'string' &&
-    configuredProvider.trim().length > 0) {
-    return configuredProvider.trim().toLowerCase();
-  }
-
-  const envValue = env?.[RAFT_PROVIDER_DEFAULTS.envKey];
-  if (typeof envValue === 'string' && envValue.trim().length > 0) {
-    return envValue.trim().toLowerCase();
-  }
-
-  return RAFT_PROVIDER_DEFAULTS.provider;
 }
 
 function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) {
@@ -1522,15 +1430,12 @@ export {
   evaluateBenchmarkRegressionGate,
   resolveBenchmarkGateConfig,
   resolveScenarioMemoryLeakConfig,
-  resolveRunRaftProvider,
   buildImage,
   loadScenarioModule,
   shouldPrintLiveLogEntry,
   resolveFastLocalMode,
   resolveDeterministicDebugConfig,
   applyDeterministicDebugConfig,
-  buildReportMetadata,
-  buildDistributedExecutionMetadata,
   formatScenarioPhaseEventLine,
   deriveRunOutputDir,
   deriveRunStatusPath,

@@ -24,6 +24,8 @@ import {
 import {
   registerActiveNodeProjectionMembershipPublicationTests,
 } from './active-node-projection-membership-publication-test-cases.js';
+import {FIXTURE_ENDPOINT_INCARNATION} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 test('active-node projection requires readiness health and canonical websocket endpoints when available',
   async (t) => {
@@ -31,18 +33,21 @@ test('active-node projection requires readiness health and canonical websocket e
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
         },
         {
           node_id: 'node-2',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
         },
         {
           node_id: 'node-3',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
@@ -50,6 +55,7 @@ test('active-node projection requires readiness health and canonical websocket e
       ],
       nodeEndpointRows: [
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-1-ws',
           node_id: 'node-1',
           transport_type: 'ws',
@@ -57,6 +63,7 @@ test('active-node projection requires readiness health and canonical websocket e
           address: 'ws://node-1:8082',
         },
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-2-ws',
           node_id: 'node-2',
           transport_type: 'ws',
@@ -99,18 +106,21 @@ test('active-node projection falls back to ready-lease evidence when readiness o
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
         },
         {
           node_id: 'node-2',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'connected',
           ready_lease_expires_at: 2000,
         },
         {
           node_id: 'node-3',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 900,
@@ -133,6 +143,7 @@ test('CL-001 variant C: strict-mode projection retains an already-published tran
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 200000,
@@ -261,6 +272,7 @@ test('published-baseline retention normalizes one publication census per ' +
   const projection = resolveActiveNodeViews({
     nodeRows: nodeIds.map((nodeId) => Object.freeze({
       node_id: nodeId,
+      boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       status: 'active',
       connection_state: 'ready',
       ready_lease_expires_at: 90000,
@@ -296,6 +308,7 @@ test('CL-001 variant C re-admission: a node trimmed in the LATEST published epoc
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 200000,
@@ -391,12 +404,14 @@ test('active-node projection can include recovery-eligible nodes during publicat
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
         },
         {
           node_id: 'node-2',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
@@ -408,6 +423,7 @@ test('active-node projection can include recovery-eligible nodes during publicat
       ],
       nodeEndpointRows: [
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-1-ws',
           node_id: 'node-1',
           transport_type: 'ws',
@@ -415,6 +431,7 @@ test('active-node projection can include recovery-eligible nodes during publicat
           address: 'ws://node-1:8082',
         },
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-2-ws',
           node_id: 'node-2',
           transport_type: 'ws',
@@ -508,12 +525,14 @@ test('active-node projection consumes projection readiness lane outcome',
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
         },
         {
           node_id: 'node-2',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
@@ -525,6 +544,7 @@ test('active-node projection consumes projection readiness lane outcome',
       ],
       nodeEndpointRows: [
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-1-ws',
           node_id: 'node-1',
           transport_type: 'ws',
@@ -532,6 +552,7 @@ test('active-node projection consumes projection readiness lane outcome',
           address: 'ws://node-1:8082',
         },
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-2-ws',
           node_id: 'node-2',
           transport_type: 'ws',
@@ -570,6 +591,7 @@ test('active-node projection can use runtime authority when dimensions lag',
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
@@ -580,6 +602,7 @@ test('active-node projection can use runtime authority when dimensions lag',
       ],
       nodeEndpointRows: [
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-1-ws',
           node_id: 'node-1',
           transport_type: 'ws',
@@ -623,12 +646,14 @@ test('active-node projection can retain recovery-eligible nodes when endpoint an
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
         },
         {
           node_id: 'node-2',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
@@ -639,6 +664,7 @@ test('active-node projection can retain recovery-eligible nodes when endpoint an
       ],
       nodeEndpointRows: [
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-1-ws',
           node_id: 'node-1',
           transport_type: 'ws',
@@ -697,6 +723,7 @@ test('active-node projection can fail open on fresh liveness when recovery proje
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 3000,
@@ -711,6 +738,7 @@ test('active-node projection can fail open on fresh liveness when recovery proje
       ],
       nodeEndpointRows: [
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-1-ws',
           node_id: 'node-1',
           transport_type: 'ws',
@@ -762,6 +790,7 @@ test('active-node projection can retain connected healthy nodes when discovery r
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
@@ -772,6 +801,7 @@ test('active-node projection can retain connected healthy nodes when discovery r
       ],
       nodeEndpointRows: [
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-1-ws',
           node_id: 'node-1',
           transport_type: 'ws',
@@ -815,6 +845,7 @@ test('active-node projection can retain the responsive local node when self rows
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
@@ -825,6 +856,7 @@ test('active-node projection can retain the responsive local node when self rows
       ],
       nodeEndpointRows: [
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-1-ws',
           node_id: 'node-1',
           transport_type: 'ws',
@@ -857,6 +889,7 @@ test('active-node projection can require published membership and suppress deriv
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
@@ -864,6 +897,7 @@ test('active-node projection can require published membership and suppress deriv
       ],
       nodeEndpointRows: [
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-1-ws',
           node_id: 'node-1',
           transport_type: 'ws',
@@ -895,12 +929,14 @@ test('active-node projection separates authoritative membership from projected s
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
         },
         {
           node_id: 'node-2',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
@@ -912,6 +948,7 @@ test('active-node projection separates authoritative membership from projected s
       ],
       nodeEndpointRows: [
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-1-ws',
           node_id: 'node-1',
           transport_type: 'ws',
@@ -919,6 +956,7 @@ test('active-node projection separates authoritative membership from projected s
           address: 'ws://node-1:8082',
         },
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-2-ws',
           node_id: 'node-2',
           transport_type: 'ws',
@@ -979,6 +1017,7 @@ test('active-node projection reports broad-suspicion membership freeze against t
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
@@ -989,6 +1028,7 @@ test('active-node projection reports broad-suspicion membership freeze against t
       ],
       nodeEndpointRows: [
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-1-ws',
           node_id: 'node-1',
           transport_type: 'ws',
@@ -1138,24 +1178,29 @@ test('active-node projection retains the latest published membership when a newe
       'strict mode should keep the latest published active-node set while a newer publication remains open',
     );
   });
-test('active-node projection keeps durable published membership from the latest ack-pending publication when published history is unavailable',
+// Re-expressed 2026-09-24 (cutover seed parity, the lead's owner decision):
+// an ACK_PENDING row is the pending candidate, never published membership.
+test('active-node projection reads no published membership when only the latest ack-pending publication is visible',
   async (t) => {
     const activeNodeViews = resolveActiveNodeViews({
       nodeRows: [
         {
           node_id: 'node-1',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
         },
         {
           node_id: 'node-2',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
         },
         {
           node_id: 'node-3',
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           status: 'active',
           connection_state: 'ready',
           ready_lease_expires_at: 2000,
@@ -1180,6 +1225,7 @@ test('active-node projection keeps durable published membership from the latest 
       ],
       nodeEndpointRows: [
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-1-ws',
           node_id: 'node-1',
           transport_type: 'ws',
@@ -1187,6 +1233,7 @@ test('active-node projection keeps durable published membership from the latest 
           address: 'ws://node-1:8082',
         },
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-2-ws',
           node_id: 'node-2',
           transport_type: 'ws',
@@ -1194,6 +1241,7 @@ test('active-node projection keeps durable published membership from the latest 
           address: 'ws://node-2:8082',
         },
         {
+          boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
           endpoint_id: 'node-3-ws',
           node_id: 'node-3',
           transport_type: 'ws',
@@ -1231,8 +1279,8 @@ test('active-node projection keeps durable published membership from the latest 
 
     t.same(
       activeNodeViews.authoritativeActiveNodeIds,
-      ['node-1', 'node-2'],
-      'projection should retain the durable published membership even when only the latest ack-pending row is visible',
+      [],
+      'an ack-pending row is the pending candidate, not published membership',
     );
     t.same(
       activeNodeViews.projectedActiveNodeIds,
@@ -1241,8 +1289,8 @@ test('active-node projection keeps durable published membership from the latest 
     );
     t.equal(
       activeNodeViews.publishedMembershipAvailable,
-      true,
-      'projection should continue advertising published membership availability from the durable published set',
+      false,
+      'no PUBLISHED row is visible, so no published membership is available',
     );
   });
 test('active-node projection ignores newer non-membership publications in strict mode',

@@ -16,11 +16,16 @@ import {
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {durableRowVersion} from './replica-state-machine-recovery.js';
+import {REPLICA_CLEANUP_ERROR_CODE} from
+  './replica-cleanup-tombstone-owner.js';
 import {
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_SERVICE,
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
+import {isReplicaServiceHandlerBound} from
+  './replica-transport-handler-identity.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_UPSERT = 'UPSERT';
@@ -29,21 +34,38 @@ const MISSING_TRACKED_REPLICA_OBSERVATION = Object.freeze({
   trackedState: null,
 });
 
-function registerCachedFailedCreateSnapshot(
+// D2: the handler binding this owner hands to the deferred durable write. It
+// resolves the live runtime at reconcile time, so a durable ACTIVE is written
+// only while the exact transport handler of the tracked generation is still
+// registered and retires through this lifecycle owner.
+function deferredDurableWriteActivation(handler, replicaId) {
+  return {
+    isEffectHandlerCurrent: () => isReplicaServiceHandlerBound(
+      handler.getTrackedService(replicaId),
+      handler.replicaStateMachine,
+    ),
+  };
+}
+
+function registerAuthoritativeFailedCreateSnapshot(
   handler,
   replicaId,
-  partitionId,
-  cachedService,
+  service,
 ) {
+  const durableVersion = durableRowVersion(service);
   handler.replicaStateMachine.registerReplicaSnapshot(replicaId, {
-    partitionId,
-    nodeId: cachedService.node_id || handler.nodeId,
+    partitionId: service.partition_id,
+    nodeId: service.node_id,
     state: ReplicaStatus.FAILED,
-    serviceId: cachedService.service_id || replicaId,
-    serviceType:
-      cachedService.service_type || REPLICA_HANDLER_SERVICE.TYPE,
-    serviceAddress:
-      cachedService.address || handler.buildTrackedServiceAddress(replicaId),
+    serviceId: service.service_id,
+    serviceType: service.service_type,
+    serviceAddress: service.address,
+    replicaIdentity: service.replica_id,
+    groupId: service.group_id,
+    createdAt: service.created_at,
+    durableVersionColumn: durableVersion?.column,
+    durableVersion: durableVersion?.value,
+    authoritativeSnapshot: true,
   });
 }
 
@@ -58,44 +80,40 @@ function observeTrackedReplicaState(handler, replicaId) {
   };
 }
 
-function getCachedService(handler, replicaId) {
-  if (typeof handler.systemTableCache?.get !==
-    REPLICA_HANDLER_TYPEOF.FUNCTION) {
+function isExactFailedCreateRow(handler, row, replicaId, partitionId) {
+  return row?.service_id === replicaId &&
+    row.replica_id === replicaId &&
+    row.partition_id === partitionId &&
+    row.node_id === handler.nodeId &&
+    row.service_type === REPLICA_HANDLER_SERVICE.TYPE &&
+    row.status === ReplicaStatus.FAILED &&
+    Number.isFinite(row.created_at) &&
+    Boolean(durableRowVersion(row));
+}
+
+async function resolveFailedCreateReplay(handler, replicaId, partitionId) {
+  const observation = await handler.replicaStateMachine
+    .observeAuthoritativeReplicaLifecycle(replicaId);
+  if (observation?.available !== true ||
+      !isExactFailedCreateRow(
+        handler,
+        observation.row,
+        replicaId,
+        partitionId,
+      )) {
     return null;
   }
-  return handler.systemTableCache.get(
-    SYSTEM_TABLE_NAME.SERVICES,
+  registerAuthoritativeFailedCreateSnapshot(
+    handler,
     replicaId,
+    observation.row,
   );
-}
-
-function canRestoreFailedCreateSnapshot(handler, trackedState, cachedService) {
-  return !trackedState &&
-    cachedService?.status === ReplicaStatus.FAILED &&
-    typeof handler.replicaStateMachine?.registerReplicaSnapshot ===
-      REPLICA_HANDLER_TYPEOF.FUNCTION;
-}
-
-function resolveFailedCreateReplay(handler, replicaId, partitionId) {
-  let trackedState = observeTrackedReplicaState(
+  const trackedState = observeTrackedReplicaState(
     handler,
     replicaId,
   ).trackedState;
-  const cachedService = getCachedService(handler, replicaId);
-  if (canRestoreFailedCreateSnapshot(handler, trackedState, cachedService)) {
-    registerCachedFailedCreateSnapshot(
-      handler,
-      replicaId,
-      partitionId,
-      cachedService,
-    );
-    trackedState = observeTrackedReplicaState(
-      handler,
-      replicaId,
-    ).trackedState;
-  }
   return trackedState?.state === ReplicaStatus.FAILED ?
-    {cachedService} :
+    {service: observation.row} :
     null;
 }
 
@@ -103,16 +121,16 @@ function buildFailedCreateReplayContext(
   handler,
   replicaId,
   partitionId,
-  cachedService,
+  service,
 ) {
   return {
     partitionId,
-    nodeId: cachedService?.node_id || handler.nodeId,
-    serviceId: cachedService?.service_id || replicaId,
+    nodeId: service.node_id,
+    serviceId: service.service_id,
     serviceType:
-      cachedService?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
+      service.service_type,
     serviceAddress:
-      cachedService?.address || handler.buildTrackedServiceAddress(replicaId),
+      service.address,
   };
 }
 
@@ -153,28 +171,36 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
      * @private
      */
     async persistReplicaCreateInitialStatus(options = {}) {
-      const {operationId, partitionId, replicaId} = options;
+      const {
+        operationId,
+        partitionId,
+        replicaId,
+        pendingStatusPersisted = false,
+      } = options;
       if (await this.restartFailedReplicaCreateStatus(options)) {
         return true;
       }
-      if (this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
-        await this.commitPriorityReplicaCreateStatusLocally({
-          operationId,
-          partitionId,
-          replicaId,
-        });
-        return true;
-      }
       try {
-        await this.persistReplicaStatusWithRetry(replicaId, ReplicaStatus.PENDING, {
-          partitionId,
-        });
+        if (!pendingStatusPersisted) {
+          await this.persistReplicaStatusWithRetry(
+            replicaId,
+            ReplicaStatus.PENDING,
+            {partitionId},
+          );
+        }
         this.throwIfShuttingDown();
+        if (this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
+          return this.persistPriorityReplicaCreateCreatingStatus(options);
+        }
         await this.persistReplicaStatusWithRetry(replicaId, ReplicaStatus.CREATING, {
           partitionId,
         });
         return true;
       } catch (error) {
+        if (error?.code ===
+          REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IN_PROGRESS) {
+          throw error;
+        }
         if (isRetryableControlPlaneError(error) !== true) {
           throw error;
         }
@@ -202,7 +228,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
      */
     async restartFailedReplicaCreateStatus(options = {}) {
       const {partitionId, replicaId} = options;
-      const replay = resolveFailedCreateReplay(
+      const replay = await resolveFailedCreateReplay(
         this,
         replicaId,
         partitionId,
@@ -221,8 +247,6 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
           `Cannot redrive failed replica ${replicaId} while its runtime is tracked`,
         );
       }
-      const priorityFallback =
-        this.shouldUsePriorityReplicaCreateStatusFallback(partitionId);
       const restarted = await Promise.resolve(
         this.replicaStateMachine.restartFailedCreate(
           replicaId,
@@ -230,9 +254,9 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
             this,
             replicaId,
             partitionId,
-            replay.cachedService,
+            replay.service,
           ),
-          {persist: !priorityFallback},
+          {persist: true},
         ),
       );
       if (restarted !== true) {
@@ -244,13 +268,6 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         status: ReplicaStatus.CREATING,
         service: null,
       });
-      if (priorityFallback) {
-        this.seedLocalPriorityServiceRow(
-          replicaId,
-          partitionId,
-          ReplicaStatus.CREATING,
-        );
-      }
       return true;
     }
 
@@ -282,6 +299,10 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         });
         return true;
       } catch (error) {
+        if (error?.code ===
+          REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IN_PROGRESS) {
+          throw error;
+        }
         if (isRetryableControlPlaneError(error) !== true) {
           throw error;
         }
@@ -341,7 +362,10 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       // Lifecycle persistence must UPSERT for this row until a durable
       // write confirms remote existence (the local row no longer proxies
       // it).
-      this.replicaStateMachine?.markServiceRowLocalOnly?.(replicaId);
+      this.replicaStateMachine?.markServiceRowLocalOnly?.(
+        replicaId,
+        deferredDurableWriteActivation(this, replicaId),
+      );
       return true;
     }
 
@@ -412,7 +436,10 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         },
         {causeId: `local-voter-ready:${replicaId}`},
       );
-      this.replicaStateMachine?.markServiceRowLocalOnly?.(replicaId);
+      this.replicaStateMachine?.markServiceRowLocalOnly?.(
+        replicaId,
+        deferredDurableWriteActivation(this, replicaId),
+      );
       return true;
     }
 

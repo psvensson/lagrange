@@ -21,6 +21,12 @@ import {
   STARTUP_AUTHORITY_STATE,
   buildStartupAuthoritySnapshotFromPlanningAnswer,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
+import {
+  installReplaceWitnesses,
+  recordModelledRemovalIntent,
+} from '../rebalancer/replace-witness-fixture.js';
+import {withFixtureCommittedMembership} from
+  '../rebalancer/committed-membership-fixture.js';
 import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
 import {
   initializeEnvironment,
@@ -429,6 +435,8 @@ function injectDispatchAckLatency({coordinator, timeSource, onSent, onAcked}) {
       }, DISPATCH_ACK_LATENCY_MS),
     );
   };
+  // The committed-membership read of a join is the fixture world's (O1).
+  withFixtureCommittedMembership(router, null);
 }
 
 // Real-owner observation: every serialized create-budget admission turn
@@ -650,6 +658,13 @@ async function runFormationCadenceScenario() {
       }, REPLICA_ACTIVATION_MS);
     },
   });
+  // The self-move REPLACE's target configuration, as its owner reads it
+  // (quest replace-source-removal-owner, C1): the source leaves it when the
+  // modelled self-move reaches its terminal.
+  // F1: each witness answers as its group's leader (the completion
+  // authority is the leader-answered configuration).
+  const replaceWitnesses = installReplaceWitnesses(
+    coordinator.workflowOwner.messageRouter, {addressedLeads: true});
 
   // Per-partition rebalancer loop analogue: one attempt per wake, a typed
   // retryable skip re-arms the priority retry cadence, any completion wakes
@@ -738,11 +753,15 @@ async function runFormationCadenceScenario() {
     const selfMoveRow = trackedOperations.get(selfMove.operationId);
     selfMoveRow.workflow_step = WORKFLOW_STEP.STOPPING;
     selfMoveRow.status = WORKFLOW_STEP.STOPPING.toLowerCase();
+    recordModelledRemovalIntent(selfMoveRow,
+      replaceWitnesses.witnessFor(selfMove.operationId));
     refreshStartupAuthority();
 
     timeSource.setTimeout(() => {
+      replaceWitnesses.witnessFor(selfMove.operationId).commitRemoval();
       coordinator
-        .completeOperation({...selfMove, workflowStep: WORKFLOW_STEP.STOPPING})
+        .completeOperation({...selfMove, workflowStep: WORKFLOW_STEP.STOPPING,
+          stepsHistory: JSON.parse(selfMoveRow.steps_history)})
         .then(() => {
           state.selfMoveTerminalAtMs = elapsed();
           const movedReplica = serviceRows.find(

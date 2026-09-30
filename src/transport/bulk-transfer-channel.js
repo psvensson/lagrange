@@ -20,10 +20,13 @@ import {
   ROUTER_MESSAGE_TYPE,
   TRANSPORT_EVENT,
 } from '../constants/transport.js';
+import {requireIssuedBootIncarnation} from
+  '../bootstrap/boot-incarnation-contract.js';
 
 const MS_PER_SECOND = 1000;
 const MIN_DRAIN_WAIT_MS = 1;
 const SIGNAL_ABORT_EVENT = 'abort';
+const BULK_IDENTIFY_SUBJECT = 'Bulk channel IDENTIFY';
 const BULK_CHANNEL_TYPEOF = Object.freeze({
   FUNCTION: 'function',
 });
@@ -382,6 +385,12 @@ function createBulkTransferChannelRegistry(options = {}) {
     },
     async dial(dialOptions) {
       const {nodeId, address, identify, signal} = dialOptions;
+      // The snapshot channel identifies the exact generation that dialled it,
+      // like every other IDENTIFY frame (D5): a bulk socket is never adopted
+      // under an unstamped identity, and the value is the dialler's issued
+      // incarnation — never defaulted, never 0.
+      const bootIncarnation = requireIssuedBootIncarnation(
+        identify?.bootIncarnation, BULK_IDENTIFY_SUBJECT);
       const maxPayload = Number.isFinite(dialOptions.maxPayload) &&
           dialOptions.maxPayload > 0 ?
         dialOptions.maxPayload :
@@ -407,6 +416,7 @@ function createBulkTransferChannelRegistry(options = {}) {
         nodeId: identify.nodeId,
         nodeAddress: identify.nodeAddress,
         address: identify.nodeAddress,
+        bootIncarnation,
         channel: ROUTER_IDENTIFY_CHANNEL.BULK,
         timestamp: now(),
       }));

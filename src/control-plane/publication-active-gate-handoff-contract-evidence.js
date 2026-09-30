@@ -386,12 +386,30 @@ function resolvePublicationActiveGateHandoffExplicitMissingNodeIds(
   );
 }
 
+// The pending candidate's members (the snapshot owner's read (b)) and those
+// that have acknowledged it, carried beside published membership, never
+// inside it.
+function resolvePublicationActiveGateHandoffPendingCandidateNodeIds(
+  publicationConvergence = null,
+  field = PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD.PENDING_CANDIDATE_NODE_IDS,
+) {
+  return normalizePublicationActiveGateHandoffNodeIdList(
+    publicationConvergence?.[field],
+  );
+}
+
 function resolvePublicationActiveGateHandoffMissingPublishedNodeIds({
   expectedNodeIds,
   publishedActiveNodeIds,
   publicationConvergence,
 }) {
-  const publishedActiveNodeIdSet = new Set(publishedActiveNodeIds);
+  // A member of the pending candidate is already asked to acknowledge it:
+  // not missing, and never published by the gate on its behalf.
+  const publishedActiveNodeIdSet = new Set([
+    ...publishedActiveNodeIds,
+    ...resolvePublicationActiveGateHandoffPendingCandidateNodeIds(
+      publicationConvergence),
+  ]);
   return normalizePublicationActiveGateHandoffNodeIdList([
     ...expectedNodeIds.filter(
       (nodeId) => !publishedActiveNodeIdSet.has(nodeId),
@@ -572,6 +590,7 @@ export {
   resolvePublicationActiveGateHandoffPublishedActiveNodeIds,
   resolvePublicationActiveGateHandoffExplicitMissingNodeIds,
   resolvePublicationActiveGateHandoffMissingPublishedNodeIds,
+  resolvePublicationActiveGateHandoffPendingCandidateNodeIds,
   normalizePublicationActiveGateHandoffReasonCodes,
   normalizePublicationActiveGateHandoffPriorityRecoveryEvidenceRecord,
   resolvePublicationActiveGateHandoffPriorityRecoveryState,

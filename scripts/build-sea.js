@@ -8,12 +8,15 @@
  * - better-sqlite3 and its runtime helpers
  * - piscina and its internal worker bootstrap
  * - bundled worker entrypoints for replica/service pools
+ * - the vendored raft-rs binding (its digest and wasm-pack package)
  */
 
 import * as esbuild from 'esbuild';
 import {fileURLToPath} from 'url';
 import {dirname, join} from 'path';
 import {cpSync, existsSync, mkdirSync, rmSync} from 'fs';
+
+import {RAFT_RS_BINDING_LAYOUT} from '../src/raft/raft-rs-core-constants.js';
 
 const LOCAL_STR_NODE = 'node';
 const LOCAL_STR_NODE22 = 'node22';
@@ -37,6 +40,8 @@ const STAGED_AUTHORING_DIR_NAME = 'authoring';
 const AUTHORING_SOURCE_PARENT = 'src';
 const LOCAL_STR_STAGED_AUTHORING =
   '  \u2713 staged authoring library for service init';
+const LOCAL_STR_STAGED_RAFT_RS_BINDING =
+  '  \u2713 staged vendored raft-rs binding (digest + wasm-pack package)';
 
 const BUILD_BANNER = [
   '// Single Executable Application Bundle',
@@ -166,6 +171,26 @@ function stageRuntimePackages() {
     authoringTarget,
     {recursive: true});
   console.log(LOCAL_STR_STAGED_AUTHORING);
+  stageRaftRsBinding();
+}
+
+/**
+ * Stage the vendored raft-rs binding beside the bundle at the path it has in
+ * the repository: the runtime owner resolves it through the SEA runtime-file
+ * resolver (executable sibling, then bundle sibling), and both read the
+ * layout from RAFT_RS_BINDING_LAYOUT rather than spelling it.
+ */
+function stageRaftRsBinding() {
+  const bindingTarget = join(
+    projectRoot, LOCAL_STR_DIST, ...RAFT_RS_BINDING_LAYOUT.ROOT);
+  rmSync(bindingTarget, {recursive: true, force: true});
+  for (const entry of RAFT_RS_BINDING_LAYOUT.STAGED_ENTRIES) {
+    cpSync(
+      join(projectRoot, ...RAFT_RS_BINDING_LAYOUT.ROOT, entry),
+      join(bindingTarget, entry),
+      {recursive: true});
+  }
+  console.log(LOCAL_STR_STAGED_RAFT_RS_BINDING);
 }
 
 /**

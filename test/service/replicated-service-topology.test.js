@@ -5,41 +5,41 @@ import {
 } from '../../src/service/replicated-service-topology.js';
 import {SERVICE_TYPE} from '../../src/constants/index.js';
 
-test('buildReplicatedServiceBootstrapTopology derives partition topology with exclusions',
-  async (t) => {
-    const topology = buildReplicatedServiceBootstrapTopology({
-      serviceType: SERVICE_TYPE.PARTITION,
-      serviceRows: [{
-        service_id: 'nodes-p1-r1',
-        node_id: 'seed-node',
-        address: 'seed-node/partition/nodes-p1-r1',
-      }, {
-        service_id: 'nodes-p1-r2',
-        node_id: 'seed-node',
-        address: 'seed-node/partition/nodes-p1-r2',
-      }, {
-        service_id: 'nodes-p1-r3',
-        node_id: 'seed-node',
-        address: 'seed-node/partition/nodes-p1-r3',
-      }],
-      excludeReplicaIds: ['nodes-p1-r1'],
-      targetReplicaId: 'nodes-p1-r4',
-      targetNodeId: 'node-2',
-    });
-
-    t.same(
-      topology,
-      {
-        replicaIds: ['nodes-p1-r2', 'nodes-p1-r3', 'nodes-p1-r4'],
-        peerAddresses: [
-          'seed-node/partition/nodes-p1-r2',
-          'seed-node/partition/nodes-p1-r3',
-          'node-2/partition/nodes-p1-r4',
-        ],
-      },
-      'partition topology should exclude retired replicas and append the target replica',
-    );
+test('buildReplicatedServiceBootstrapTopology keeps every observed member ' +
+  'and appends the target replica', async (t) => {
+  const topology = buildReplicatedServiceBootstrapTopology({
+    serviceType: SERVICE_TYPE.PARTITION,
+    serviceRows: [{
+      service_id: 'nodes-p1-r1',
+      node_id: 'seed-node',
+      address: 'seed-node/partition/nodes-p1-r1',
+    }, {
+      service_id: 'nodes-p1-r2',
+      node_id: 'seed-node',
+      address: 'seed-node/partition/nodes-p1-r2',
+    }, {
+      service_id: 'nodes-p1-r3',
+      node_id: 'seed-node',
+      address: 'seed-node/partition/nodes-p1-r3',
+    }],
+    targetReplicaId: 'nodes-p1-r4',
+    targetNodeId: 'node-2',
   });
+
+  t.same(
+    topology,
+    {
+      replicaIds: ['nodes-p1-r1', 'nodes-p1-r2', 'nodes-p1-r3', 'nodes-p1-r4'],
+      peerAddresses: [
+        'seed-node/partition/nodes-p1-r1',
+        'seed-node/partition/nodes-p1-r2',
+        'seed-node/partition/nodes-p1-r3',
+        'node-2/partition/nodes-p1-r4',
+      ],
+    },
+    'the bootstrap membership is every observed member, then the target',
+  );
+});
 
 test('formatReplicatedServiceAddress uses message-group addresses for message-group services',
   async (t) => {

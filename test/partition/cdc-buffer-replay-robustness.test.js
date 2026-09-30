@@ -23,6 +23,7 @@ import {
 import {
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const TEST_TABLE_NAME = SYSTEM_TABLE_NAME.NODES;
 const TEST_PARTITION_ID = 'test-partition-replay-robust';
@@ -47,7 +48,7 @@ function initializeTestConfig() {
  * Uses the nodes system table so CDC events are eligible for buffering.
  */
 function createTestPartition() {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId: TEST_PARTITION_ID,
     tableId: TEST_TABLE_ID,
     tableName: TEST_TABLE_NAME,
@@ -55,7 +56,7 @@ function createTestPartition() {
     replicaIds: [TEST_REPLICA_ID],
     nodeId: TEST_NODE_ID,
     dbPath: ':memory:',
-  });
+  }));
 }
 
 /**

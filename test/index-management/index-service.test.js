@@ -9,6 +9,7 @@ import {IndexService, IndexType} from '../../src/index-management/index-service.
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -508,7 +509,7 @@ test('IndexService - handleCDCEvent updates on DELETE', async (t) => {
 });
 
 test('IndexService - creates SQLite index on partitions', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'users-table',
     tableName: 'users',
@@ -522,7 +523,7 @@ test('IndexService - creates SQLite index on partitions', async (t) => {
         {name: 'name', type: 'TEXT'},
       ],
     },
-  });
+  }));
 
   await partition.initialize();
   partition.role = 'leader';
@@ -567,7 +568,7 @@ test('IndexService - creates indices on new partition via CDC', async (t) => {
   const cdcService = createMockCDCService();
 
   // Create a partition that will be added later
-  const newPartition = new PartitionService({
+  const newPartition = new PartitionService(withFoundingStamp({
     partitionId: 'new-partition',
     tableId: 'users-table',
     tableName: 'users',
@@ -581,7 +582,7 @@ test('IndexService - creates indices on new partition via CDC', async (t) => {
         {name: 'name', type: 'TEXT'},
       ],
     },
-  });
+  }));
 
   await newPartition.initialize();
   newPartition.role = 'leader';
@@ -633,7 +634,7 @@ test('IndexService - creates indices on new partition via CDC', async (t) => {
 test('IndexService - ensureIndicesOnPartition creates all', async (t) => {
   const cdcService = createMockCDCService();
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'users-table',
     tableName: 'users',
@@ -648,7 +649,7 @@ test('IndexService - ensureIndicesOnPartition creates all', async (t) => {
         {name: 'status', type: 'TEXT'},
       ],
     },
-  });
+  }));
 
   await partition.initialize();
   partition.role = 'leader';
@@ -707,7 +708,7 @@ test('IndexService - ensureIndicesOnPartition creates all', async (t) => {
 test('IndexService - rebuildIndex recreates on partitions', async (t) => {
   const cdcService = createMockCDCService();
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'users-table',
     tableName: 'users',
@@ -720,7 +721,7 @@ test('IndexService - rebuildIndex recreates on partitions', async (t) => {
         {name: 'email', type: 'TEXT'},
       ],
     },
-  });
+  }));
 
   await partition.initialize();
   partition.role = 'leader';

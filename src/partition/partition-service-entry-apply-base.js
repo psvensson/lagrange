@@ -5,6 +5,23 @@ import {PartitionServiceSchemaMigrationBase} from './partition-service-schema-mi
 import {
   createPartitionServiceTransactionSessionMethods,
 } from './partition-service-transaction-session-methods.js';
+import {
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
+  PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
+  PARTITION_COMMITTED_COMMAND_OUTCOME,
+} from './partition-service-constants.js';
+import {
+  isCommittedCommandType,
+  isCommittedSqlCommandType,
+} from './partition-committed-command-admission.js';
+import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
+  './partition-committed-statement-outcome-constants.js';
+import {
+  readCommittedStatementOutcome,
+  recordCommittedStatementOutcome,
+  settleFailedCommittedStatement,
+  settleRecordedCommittedStatement,
+} from './partition-committed-statement-outcome.js';
 
 const QUERY_RESULT_REQUEST_FIELD = Object.freeze({
   DEADLINE_MS: 'resultDeadlineMs',
@@ -35,6 +52,7 @@ const {
   PARTITION_SERVICE_VALUE,
   PARTITION_TRANSITION_STATE,
   TABLES,
+  buildDurableCommitWitness,
   QUERY_PAYLOAD_FIELD_ENTRY_ID,
   QUERY_PAYLOAD_FIELD_EXPECTED_PARTITION_VERSION,
   QUERY_PAYLOAD_FIELD_IDEMPOTENCY_KEY,
@@ -47,6 +65,7 @@ const {
   isRaftRsTransportEnvelope,
   resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
+
 
 class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase {
   ensureReplicaOperationsTableColumns() {
@@ -511,12 +530,14 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     if (isWriteOperation) {
       return {state: READ_AUTHORITY_WITNESS_STATE.NOT_APPLICABLE};
     }
+    // The term is the consensus core's own, read through the port.
+    const status = this.raft?.readStatus();
     return {
       state: READ_AUTHORITY_WITNESS_STATE.OBSERVED,
       partitionId: this.partitionId,
       servingNodeId: this.nodeId,
       servingReplicaId: this.replicaId,
-      term: this.storage.currentTerm,
+      term: status?.term ?? null,
       role: this.role,
       // The witness records WHEN THIS REPLICA observed its own authority, so
       // it reads this replica's clock. This is the owner decision the metered
@@ -741,6 +762,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         count: result.count,
         partitionId: this.partitionId,
         durableCommitWitness: result.durableCommitWitness,
+        originHlc: result.originHlc,
         acceptingNodeId: result.acceptingNodeId,
         acknowledgedAtMs: result.acknowledgedAtMs,
         readAuthorityWitness,
@@ -955,22 +977,85 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
   }
 
   /**
-   * Apply a committed entry to the state machine.
-   * This is called by liferaft when an entry is committed.
-   * Requirements: 10.5
-   * @param {Object} command - The committed command
+   * The proposer's commit identity for one committed write: its position in
+   * the log and, on the replica that proposed it (the only one holding the
+   * pending write), the durable commit witness built from the committed
+   * entry itself.
+   * @param {Object} command - The committed command.
+   * @param {number} index - The committed entry's index.
+   * @param {number} term - The committed entry's term.
+   * @return {Object} Fields merged into the resolved write result.
+   * @private
    */
-  applyCommittedEntry(command, effects = null) {
-    if (!command) {
-      return;
+  buildCommittedWriteIdentity(command, index, term) {
+    const originHlc =
+      typeof command?.timestamp === 'string' && command.timestamp.length > 0 ?
+        command.timestamp : null;
+    if (command.proposedBy !== this.replicaId) {
+      return {
+        partitionId: this.partitionId,
+        logIndex: index,
+        ...(originHlc ? {originHlc} : {}),
+      };
     }
-    const scheduleEffect = (phase, effect) => {
-      if (effects) {
-        effects[phase].push(effect);
-      } else {
-        effect();
-      }
+    return {
+      partitionId: this.partitionId,
+      logIndex: index,
+      ...(originHlc ? {originHlc} : {}),
+      durableCommitWitness: buildDurableCommitWitness({
+        partitionId: this.partitionId,
+        leaderNodeId: this.nodeId,
+        leaderReplicaId: command.proposedBy,
+        logEntry: {term, index, data: command},
+      }),
     };
+  }
+
+  /**
+   * Apply one committed entry to the state machine. The consensus port calls
+   * this inside the SQLite transaction that also advances its applied state;
+   * every observable effect is deferred to `effects.afterCommit` (or
+   * `effects.afterRollback`) so nothing escapes a rolled-back apply.
+   * @param {Object} committed - The frozen committed record.
+   * @param {Object} committed.command - The decoded committed command.
+   * @param {number} committed.index - The entry's log index.
+   * @param {number} committed.term - The entry's term.
+   * @param {{afterCommit: Array, afterRollback: Array}} committed.effects
+   * @return {string} A PARTITION_COMMITTED_COMMAND_OUTCOME.
+   */
+  applyCommittedEntry({command, index, term, effects}) {
+    const scheduleEffect = (phase, effect) => {
+      effects[phase].push(() => {
+        try {
+          effect();
+        } catch (error) {
+          this.logger.error(
+            PARTITION_SERVICE_ERROR_MSG.COMMITTED_ENTRY_EFFECT_FAILED,
+            {partitionId: this.partitionId, logIndex: index, phase,
+              error: error.message},
+          );
+        }
+      });
+    };
+    const commandType = command?.type;
+    // Only a bug or version skew commits one (the admission owner never
+    // proposes it); consuming it silently would let this replica skip what
+    // another applies, so the application fails closed, typed: the group's
+    // host failure names the reason, the index and the type.
+    if (!isCommittedCommandType(commandType)) {
+      const error = new Error(
+        `${PARTITION_SERVICE_ERROR_MSG.COMMITTED_COMMAND_UNRECOGNISED}: ` +
+        `${JSON.stringify(commandType)} at index ${index}`);
+      error.code = PARTITION_COMMITTED_COMMAND_ERROR_CODE.UNRECOGNISED;
+      error.outcome = PARTITION_COMMITTED_COMMAND_OUTCOME.UNRECOGNISED;
+      error.reason = PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON
+        .COMMAND_UNKNOWN;
+      error.detail = Object.freeze({index, commandType: commandType ?? null});
+      scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () =>
+        this.rejectCommittedWrite(command?.entryId, error),
+      );
+      throw error;
+    }
     // Witness the committed entry's HLC on EVERY replica (leader and follower),
     // before any branch/early-return, so this clock advances past every entry it
     // applies. Without this, a new leader whose wall clock lags the old leader
@@ -981,117 +1066,66 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     );
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY, {
       partitionId: this.partitionId,
-      commandType: command.type,
+      commandType,
     });
-    if (
-      command.type === PARTITION_SERVICE_OPERATION.WRITE ||
-      command.type === PARTITION_SERVICE_OPERATION.INSERT ||
-      command.type === PARTITION_SERVICE_OPERATION.UPDATE ||
-      command.type === PARTITION_SERVICE_OPERATION.DELETE ||
-      command.type === PARTITION_SERVICE_OPERATION.UPSERT ||
-      command.type === PARTITION_SERVICE_OPERATION.QUERY ||
-      command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE
-    ) {
+    if (isCommittedSqlCommandType(commandType)) {
       if (command.sql) {
-        if (
-          command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE
-        ) {
-          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () =>
-            this.registerMigrationDefaultFromAlterSql(command.sql),
-          );
-        }
         const entryKey = this.getCommittedEntryKey(command);
-        if (entryKey && this.recentlyAppliedEntryKeys.has(entryKey)) {
-          this.logger.debug(
-            PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY,
-            {
-              partitionId: this.partitionId,
-              commandType: command.type,
-              skippedReplay: true,
-            },
-          );
-          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () => {
-            this.resolveCommittedWrite(command.entryId);
-            this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
-              partitionId: this.partitionId,
-              command,
-            });
-          });
-          return;
+        const identity = this.buildCommittedWriteIdentity(command, index, term);
+        const afterCommit = (effect) =>
+          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect);
+        // The recorded outcome of this entry key decides whether the
+        // statement runs: a settled key is never executed again, on any
+        // replica, before or after a restart.
+        const recorded = readCommittedStatementOutcome(this, entryKey);
+        if (recorded.state ===
+            PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED) {
+          return settleRecordedCommittedStatement(this, {
+            recorded, command, afterCommit});
         }
+        let info;
         try {
-          const stmt = this.db.prepare(command.sql);
-          const info = stmt.run(...(command.params || []));
-          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () => {
-            this.trackAppliedEntryKey(entryKey);
-            this.resolveCommittedWrite(command.entryId, {
-              success: true,
-              changes: info.changes,
-              lastInsertRowid: info.lastInsertRowid,
-              partitionId: this.partitionId,
-            });
-            if (this.isLeader) {
-              this.trackPendingCDCEvent(
-                this.generateCDCEvent({
-                  ...command,
-                  changes: info.changes,
-                }).catch((err) => {
-                  if (this.isShutdown) {
-                    return;
-                  }
-                  this.logger.error(
-                    PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED,
-                    {partitionId: this.partitionId, error: err.message},
-                  );
-                }),
-              );
-            }
-          });
+          info = this.db.prepare(command.sql).run(...(command.params || []));
         } catch (error) {
-          if (this.isIdempotentInsertReplayConstraint(error, command)) {
-            scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () => {
-              this.trackAppliedEntryKey(entryKey);
-              this.logger.warn(
-                PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY,
-                {
-                  partitionId: this.partitionId,
-                  commandType: command.type,
-                  skippedReplay: true,
-                  replayConstraintSuppressed: true,
-                  error: error.message,
-                },
-              );
-              this.resolveCommittedWrite(command.entryId, {
-                success: true,
-                changes: 0,
-                partitionId: this.partitionId,
-              });
-              this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
-                partitionId: this.partitionId,
-                command,
-              });
-            });
-            return;
-          }
-          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () =>
-            this.rejectCommittedWrite(command.entryId, error),
-          );
-          this.logger.error(
-            PARTITION_SERVICE_ERROR_MSG.APPLY_COMMITTED_FAILED,
-            {
-              partitionId: this.partitionId,
-              error: error.message,
-              sql: command.sql ?
-                command.sql.substring(
-                  0,
-                  PARTITION_SERVICE_VALUE.CDC_REDACTION_LIMIT,
-                ) :
-                null,
-              params: command.params || [],
-            },
-          );
-          throw error;
+          return settleFailedCommittedStatement(this, {
+            error, command, entryKey, index, term, identity, afterCommit,
+            afterRollback: (effect) =>
+              scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect),
+          });
         }
+        recordCommittedStatementOutcome(this, {
+          entryKey,
+          outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
+          index,
+          term,
+        });
+        if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
+          afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
+        }
+        afterCommit(() => {
+          this.resolveCommittedWrite(command.entryId, {
+            success: true,
+            changes: info.changes,
+            lastInsertRowid: info.lastInsertRowid,
+            ...identity,
+          });
+          if (this.isLeader) {
+            this.trackPendingCDCEvent(
+              this.generateCDCEvent({
+                ...command,
+                changes: info.changes,
+              }).catch((err) => {
+                if (this.isShutdown) {
+                  return;
+                }
+                this.logger.error(
+                  PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED,
+                  {partitionId: this.partitionId, error: err.message},
+                );
+              }),
+            );
+          }
+        });
       }
     } else if (
       command.type === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT
@@ -1117,6 +1151,13 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         command,
       }),
     );
+    // A statement or a transaction outcome was applied; a marker (or a write
+    // type without a statement) is recorded in the log only.
+    return commandType === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT ||
+      (isCommittedSqlCommandType(commandType) &&
+        Boolean(command.sql)) ?
+      PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED :
+      PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
   }
 }
 Object.assign(

@@ -7,6 +7,7 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const HANDOFF_SOURCE = 'coordinator_created_remote_handoff';
 const DEFERRED_DELIVERY = 'deferred_delivery';
@@ -21,6 +22,7 @@ test('transport emits late-response-honored for a non-error response whose ' +
   'handoff waiter was retired, carrying the response context', async (t) => {
   let nowMs = 1000;
   const router = new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'late-honor-emit-test',
     nowFn: () => nowMs,
     unmatchedServiceResponseWarnIntervalMs: 5000,

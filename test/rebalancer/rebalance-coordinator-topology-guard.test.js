@@ -1,7 +1,16 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {
+  RebalanceCoordinator as ProductionRebalanceCoordinator,
+} from '../../src/rebalancer/rebalance-coordinator.js';
+import {fixtureCommittedReadCoordinator} from
+  './committed-membership-fixture.js';
+
+// Joins are stamped from the committed-membership read, answered here by
+// the fixture world (owner decision O1).
+const RebalanceCoordinator =
+  fixtureCommittedReadCoordinator(ProductionRebalanceCoordinator);
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';

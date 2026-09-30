@@ -27,6 +27,10 @@ import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
+  createRaftOperationPort,
+  deepFreeze,
+} from '../../src/raft/raft-operation-port.js';
+import {
 } from '../../src/raft/constants.js';
 import {
   SERVICE_TYPE,
@@ -43,6 +47,7 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
 } from '../../src/control-plane/pressure-governor.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 
 beforeEach(() => {
@@ -97,7 +102,7 @@ test(
     });
 
     const transport = createLoopbackTransport();
-    const leader = new PartitionService({
+    const leader = new PartitionService(withFoundingStamp({
       partitionId: 'stable-join-partition',
       tableId: 'stable_join_table',
       tableName: 'stable_join_table',
@@ -107,8 +112,8 @@ test(
       transport,
       systemTableCache,
       dbPath: ':memory:',
-    });
-    const joiner = new PartitionService({
+    }));
+    const joiner = new PartitionService(withFoundingStamp({
       partitionId: 'stable-join-partition',
       tableId: 'stable_join_table',
       tableName: 'stable_join_table',
@@ -125,7 +130,7 @@ test(
       isJoiningExistingGroup: true,
       leaderAddress: 'node-1/partition/replica-1',
       learnerCatchUpCheckIntervalMs: 25,
-    });
+    }));
 
     try {
       await leader.initialize();
@@ -241,7 +246,7 @@ test(
       },
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'test-table',
       replicaId: 'replica-3',
@@ -250,7 +255,7 @@ test(
       dbPath: ':memory:',
       isJoiningExistingGroup: true,
       systemTableCache: mockCache,
-    });
+    }));
 
     partition.role = RaftRole.LEARNER;
     partition.leaderId = null;
@@ -335,7 +340,7 @@ test('PartitionService - critical partition defers second learner when replaceme
     },
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: `${SYSTEM_TABLE_NAME.CONFIG}-p1`,
     tableId: SYSTEM_TABLE_NAME.CONFIG,
     replicaId: 'replica-5',
@@ -344,7 +349,7 @@ test('PartitionService - critical partition defers second learner when replaceme
     dbPath: ':memory:',
     isJoiningExistingGroup: true,
     systemTableCache: mockCache,
-  });
+  }));
 
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'replica-1';
@@ -434,7 +439,7 @@ test('PartitionService - learner promotes when multiple learners reach odd count
   };
 
   // Create partition as one of the learners
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-4',
@@ -443,7 +448,7 @@ test('PartitionService - learner promotes when multiple learners reach odd count
     dbPath: ':memory:',
     isJoiningExistingGroup: true,
     systemTableCache: mockCache,
-  });
+  }));
 
   // Manually set role to learner
   partition.role = RaftRole.LEARNER;
@@ -528,7 +533,7 @@ test('PartitionService - learner defers when multiple learners would exceed targ
     },
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-4',
@@ -537,7 +542,7 @@ test('PartitionService - learner defers when multiple learners would exceed targ
     dbPath: ':memory:',
     isJoiningExistingGroup: true,
     systemTableCache: mockCache,
-  });
+  }));
 
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'replica-1';
@@ -630,7 +635,7 @@ test('PartitionService - learner deferred when all learners would still be even'
   };
 
   // Create partition as the learner
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-4',
@@ -639,7 +644,7 @@ test('PartitionService - learner deferred when all learners would still be even'
     dbPath: ':memory:',
     isJoiningExistingGroup: true,
     systemTableCache: mockCache,
-  });
+  }));
 
   // Manually set role to learner
   partition.role = RaftRole.LEARNER;
@@ -773,7 +778,7 @@ test(
       },
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: criticalPartitionId,
       tableId: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       replicaId: currentReplicaId,
@@ -782,7 +787,7 @@ test(
       dbPath: memoryDbPath,
       isJoiningExistingGroup: false,
       systemTableCache: mockCache,
-    });
+    }));
     let electionStarted = false;
     partition.role = RaftRole.LEARNER;
     partition.leaderId = leaderReplicaId;
@@ -912,7 +917,7 @@ test(
       },
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'test-table',
       replicaId: 'replica-4',
@@ -921,7 +926,7 @@ test(
       dbPath: ':memory:',
       isJoiningExistingGroup: true,
       systemTableCache: mockCache,
-    });
+    }));
 
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
@@ -987,7 +992,7 @@ test('PartitionService - countPendingLearners counts learner replicas', async (t
     },
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-5',
@@ -995,7 +1000,7 @@ test('PartitionService - countPendingLearners counts learner replicas', async (t
     nodeId: 'node-1',
     dbPath: ':memory:',
     systemTableCache: mockCache,
-  });
+  }));
 
   // Count pending learners - should count replica-2 and replica-3 (not failed replica-4)
   const learnerCount = partition.countPendingLearners();
@@ -1058,7 +1063,7 @@ test('PartitionService - countActiveVoters excludes learners, failed replicas, '
     },
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-7',
@@ -1066,7 +1071,7 @@ test('PartitionService - countActiveVoters excludes learners, failed replicas, '
     nodeId: 'node-1',
     dbPath: ':memory:',
     systemTableCache: mockCache,
-  });
+  }));
 
   // Count active voters - should only count replica-1 and replica-2
   const voterCount = partition.countActiveVoters();
@@ -1074,14 +1079,14 @@ test('PartitionService - countActiveVoters excludes learners, failed replicas, '
 });
 
 test('PartitionService - handleRemoteQuery returns redirect for writes on follower', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 
@@ -1108,14 +1113,14 @@ test('PartitionService - handleRemoteQuery returns redirect for writes on follow
 });
 
 test('PartitionService - handleRemoteQuery executes reads on follower', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 
@@ -1143,24 +1148,33 @@ test('PartitionService - handleRemoteQuery executes reads on follower', async (t
 test(
   'PartitionService - remote read witness is captured before query execution',
   async (t) => {
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'read-witness-boundary-partition',
       tableId: 'read-witness-boundary-table',
       replicaId: 'read-witness-boundary-partition-r1',
       replicaIds: ['read-witness-boundary-partition-r1'],
       nodeId: 'node-1',
       dbPath: ':memory:',
-    });
+    }));
     await partition.initialize();
     partition.role = RaftRole.LEADER;
-    partition.storage.currentTerm = 7;
+    // The term is the consensus core's, read through the port; the witness
+    // decorates the port's status observation, never the core.
+    let observedTerm = 7;
+    const realPort = partition.raft;
+    partition.raft = createRaftOperationPort({
+      ...realPort,
+      readStatus: () => deepFreeze({
+        ...realPort.readStatus(), term: observedTerm,
+      }),
+    });
     const originalDateNow = Date.now;
     let nowMs = 100;
     Date.now = () => nowMs;
     partition.executeQuery = async () => {
       nowMs = 200;
       partition.role = RaftRole.FOLLOWER;
-      partition.storage.currentTerm = 8;
+      observedTerm = 8;
       return {success: true, rows: [], count: 0};
     };
     try {
@@ -1176,20 +1190,21 @@ test(
         'the witness reports the term that entered the local snapshot');
     } finally {
       Date.now = originalDateNow;
+      partition.raft = realPort;
       partition.shutdown();
     }
   },
 );
 
 test('PartitionService - executeQuery keeps non-transactional writes out of unrelated active transactions', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   partition.db.exec('CREATE TABLE test_data (id INTEGER PRIMARY KEY, name TEXT)');
@@ -1226,14 +1241,14 @@ test('PartitionService - executeQuery keeps non-transactional writes out of unre
 });
 
 test('PartitionService - beginTransaction is idempotent for the same active session', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 
@@ -1252,14 +1267,14 @@ test('PartitionService - beginTransaction is idempotent for the same active sess
 });
 
 test('PartitionService - beginTransaction is idempotent for the same prepared session', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   partition.db.exec('CREATE TABLE test_data (id INTEGER PRIMARY KEY, name TEXT)');
@@ -1290,14 +1305,14 @@ test('PartitionService - beginTransaction is idempotent for the same prepared se
 });
 
 test('PartitionService - replica removal fence admits no new work and drains the existing transaction owner', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   await partition.beginTransaction('tx-before-removal', 404);
@@ -1352,14 +1367,14 @@ test('PartitionService - replica removal fence admits no new work and drains the
 });
 
 test('PartitionService - removal drain waits for a query admitted before its serving fence', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  });
+  }));
   await partition.initialize();
 
   let announceStarted;
@@ -1402,14 +1417,14 @@ test('PartitionService - removal drain waits for a query admitted before its ser
 });
 
 test('PartitionService - beginTransaction rejects other sessions while a prepared transaction is open', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   partition.db.exec('CREATE TABLE test_data (id INTEGER PRIMARY KEY, name TEXT)');
@@ -1434,14 +1449,14 @@ test('PartitionService - beginTransaction rejects other sessions while a prepare
 });
 
 test('PartitionService - isWriteQuery detects write operations', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  });
+  }));
 
   t.equal(partition.isWriteQuery('INSERT INTO t VALUES (1)'), true, 'INSERT is write');
   t.equal(partition.isWriteQuery('UPDATE t SET x = 1'), true, 'UPDATE is write');

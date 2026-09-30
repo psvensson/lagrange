@@ -21,6 +21,10 @@ import {
 import {adminTestRunInventoryMethods} from './admin-test-run-inventory-methods.js';
 import {adminTestRunLifecycleMethods} from './admin-test-run-lifecycle-methods.js';
 import {buildAdminTestRunServiceHelpers} from './admin-test-run-service-helpers.js';
+import {
+  resolveModuleDirectory,
+  resolvePackagedRuntimeFile,
+} from '../sea/runtime-file-resolution.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_COMMA_SPACE = ', ';
@@ -106,14 +110,15 @@ class AdminTestRunService {
       this.outputDir,
       ADMIN_TEST_RUN_PATH.METADATA_DIR,
     );
-    this.dashboardPath = resolve(
-      import.meta.dirname,
-      ADMIN_TEST_RUN_PATH.DASHBOARD_PAGE,
-    );
-    this.playbackViewerPath = resolve(
-      import.meta.dirname,
-      ADMIN_TEST_RUN_PATH.PLAYBACK_VIEWER,
-    );
+    // Beside this module in source, beside the bundle or the SEA executable
+    // when packaged (build-sea.js stages no pages, so there a read reports
+    // the page missing). Never import.meta: the CommonJS bundle leaves it
+    // empty and every bundled node constructs this service at startup.
+    const moduleDir = resolveModuleDirectory(resolveModuleDirectory);
+    const page = (fileName) => resolvePackagedRuntimeFile(
+      {moduleDir, sourceFileName: fileName, bundledFileName: fileName});
+    this.dashboardPath = page(ADMIN_TEST_RUN_PATH.DASHBOARD_PAGE);
+    this.playbackViewerPath = page(ADMIN_TEST_RUN_PATH.PLAYBACK_VIEWER);
 
     /** @type {Map<string, Object>} */
     this.runs = new Map();

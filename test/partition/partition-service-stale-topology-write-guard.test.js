@@ -26,6 +26,7 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -42,7 +43,7 @@ afterEach(() => {
 });
 
 function createSelfOnlyPartition(id) {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId: id,
     tableId: 'test_table',
     tableName: 'test_table',
@@ -56,7 +57,7 @@ function createSelfOnlyPartition(id) {
       ],
     },
     dbPath: ':memory:',
-  });
+  }));
 }
 
 function countRaftLogRows(partition) {

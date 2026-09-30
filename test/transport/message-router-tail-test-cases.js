@@ -1,4 +1,5 @@
 import {registerMessageRouterTailMoreTests} from './message-router-tail-more-test-cases.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 export async function registerMessageRouterTailTests({
   t,
@@ -15,6 +16,7 @@ export async function registerMessageRouterTailTests({
   t.test('should replace superseded heartbeat NODE_STATE_UPDATE deliveries in the pending queue',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node',
         outboundQueueMaxConcurrent: 1,
         outboundQueueMaxPending: 3,
@@ -110,6 +112,7 @@ export async function registerMessageRouterTailTests({
   t.test('should replace superseded Raft heartbeat appends in the pending queue',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node',
         outboundQueueMaxConcurrent: 1,
         outboundQueueMaxPending: 2,
@@ -201,6 +204,7 @@ export async function registerMessageRouterTailTests({
     'pending queue for the same target replica',
   async (t) => {
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'test-node',
       outboundQueueMaxConcurrent: 1,
       outboundQueueMaxPending: 2,
@@ -297,6 +301,7 @@ export async function registerMessageRouterTailTests({
   t.test('should drain critical deliveries ahead of background backlog',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node',
         outboundQueueMaxConcurrent: 1,
         outboundQueueMaxPending: 4,
@@ -352,7 +357,7 @@ export async function registerMessageRouterTailTests({
     });
 
   t.test('should get registered addresses', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     router.register('test-node/service/service-a', () => ({}));
@@ -371,6 +376,7 @@ export async function registerMessageRouterTailTests({
 
   t.test('should get stats', async (t) => {
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'stats-test-node',
       nodeAddress: 'ws://localhost:8080',
     });
@@ -394,7 +400,7 @@ export async function registerMessageRouterTailTests({
 
   t.test('should increment message count on deliver attempt', async (t) => {
     // Message count increments even when delivery fails (no connection)
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     router.register('test-node/service/counter-service', () => ({acknowledged: true}));
@@ -428,6 +434,7 @@ export async function registerMessageRouterTailTests({
 
   t.test('connectToSelf uses bound server address', async (t) => {
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'self-bound-host-test',
       wsPort: 9882,
     });
@@ -475,7 +482,9 @@ export async function registerMessageRouterTailTests({
 
     const address = slowServer.address();
     const port = typeof address === 'object' && address ? address.port : null;
-    const router = new MessageRouter({nodeId: 'timeout-test-node'});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'timeout-test-node'});
     await router.initialize({startServer: false});
     t.teardown(async () => {
       await router.shutdown();
@@ -499,7 +508,9 @@ export async function registerMessageRouterTailTests({
 
   t.test('scheduleReconnect retries failed reconnects without unhandled rejections',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'reconnect-retry-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'reconnect-retry-node'});
       await router.initialize({startServer: false});
       t.teardown(async () => {
         await router.shutdown();
@@ -567,7 +578,9 @@ export async function registerMessageRouterTailTests({
 
   t.test('scheduleReconnect closes after max failed attempts without throwing',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'reconnect-max-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'reconnect-max-node'});
       await router.initialize({startServer: false});
       t.teardown(async () => {
         await router.shutdown();
@@ -630,7 +643,9 @@ export async function registerMessageRouterTailTests({
 
   t.test('scheduleReconnect suppresses a stale timer after the peer connection is superseded',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'reconnect-superseded-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'reconnect-superseded-node'});
       await router.initialize({startServer: false});
       t.teardown(async () => {
         await router.shutdown();
@@ -697,7 +712,9 @@ export async function registerMessageRouterTailTests({
 
   t.test('connectToNode retires a replaced reconnecting entry before dialing a new connection',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'replace-reconnecting-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'replace-reconnecting-node'});
       await router.initialize({startServer: false});
       t.teardown(async () => {
         await router.shutdown();
@@ -770,7 +787,9 @@ export async function registerMessageRouterTailTests({
     });
 
   t.test('should emit nodeConnected on identification', async (t) => {
-    const router = new MessageRouter({nodeId: 'local-node'});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'local-node'});
     await router.initialize({startServer: false});
 
     const connectionId = 'incoming-connection';
@@ -810,7 +829,9 @@ export async function registerMessageRouterTailTests({
   t.test('should normalize bare host:port to ws:// at ' +
     'identification storage time ' +
     '(uses normalizeToWebSocketAddress)', async (t) => {
-    const router = new MessageRouter({nodeId: 'local-node'});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'local-node'});
     await router.initialize({startServer: false});
     t.teardown(async () => {
       await router.shutdown().catch(() => {});
@@ -850,7 +871,9 @@ export async function registerMessageRouterTailTests({
 
   t.test('should preserve an existing preferred incoming connection on duplicate identification',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'z-local-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'z-local-node'});
       await router.initialize({startServer: false});
 
       const existingWs = {
@@ -920,7 +943,9 @@ export async function registerMessageRouterTailTests({
 
   t.test('should re-dial a rekeyed incoming connection when its socket closes',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'z-local-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'z-local-node'});
       await router.initialize({startServer: false});
 
       const ws = new EventEmitter();

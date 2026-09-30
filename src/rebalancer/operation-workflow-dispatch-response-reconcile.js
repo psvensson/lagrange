@@ -1,6 +1,18 @@
 import {REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
+  captureReplaceOwnerLevel,
+  registerReplaceOwnerWaiter,
+} from './operation-workflow-replace-owner-wake.js';
+import {
+  REPLACE_EFFECT_ADMISSION,
+  admitReplaceSourceRemovalEffect,
+  isPartitionReplace,
+  isReplaceRemovalIntentDurable,
+  recordReplaceOwnerWait,
+  recordReplaceSourceRemovalEffect,
+} from './operation-workflow-replace-owner.js';
+import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
 import {
@@ -105,6 +117,38 @@ function buildReplicaOperationDispatchTimeoutError(operation) {
   error.operationId = operation?.operationId;
   return error;
 }
+// After its durable removal intent a partition REPLACE has one owner
+// decision (R-1e/T5'/R-1f/D2); only that owner's own T5' re-send comes back
+// through the effect path.
+function isReplaceStoppingOwnerEntry(operation, options) {
+  return isReplaceRemovalIntentDurable(operation) &&
+    options?.replaceStoppingEffect !== true;
+}
+
+// The removal-effect boundary after SAFE for a partition REPLACE: null when
+// the effect is sent now; otherwise the owner's result (T5'' or a wait).
+async function holdReplaceSourceRemovalEffect(
+  owner, operation, replaceRemoveDispatchPhase, entryLevel) {
+  if (!replaceRemoveDispatchPhase || !isPartitionReplace(operation)) {
+    return null;
+  }
+  const effect = await admitReplaceSourceRemovalEffect(
+    owner, operation, entryLevel);
+  if (effect.admission === REPLACE_EFFECT_ADMISSION.SEND) {
+    return null;
+  }
+  return effect.admission === REPLACE_EFFECT_ADMISSION.STOPPING_OWNER ?
+    owner.runReplaceStoppingOwner(operation) :
+    owner.waitReplaceSourceRemovalEffect(operation, effect, entryLevel);
+}
+
+function noteReplaceSourceRemovalEffect(
+  owner, operation, response, replaceRemoveDispatchPhase) {
+  if (replaceRemoveDispatchPhase && isPartitionReplace(operation)) {
+    recordReplaceSourceRemovalEffect(owner, operation, response);
+  }
+}
+
 const DISPATCH_RESPONSE_RECONCILE_METHODS = {
   async executeOperation(operation) {
     if (this.isShuttingDown || !this.isInitialized) {
@@ -202,7 +246,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       deliveryPromise,
     );
   },
-  async executeOperationInternal(operation) {
+  async executeOperationInternal(operation, options) {
     if (!this.messageRouter) {
       throw new Error(REBALANCE_COORDINATOR_ERROR_MSG.ROUTER_MISSING);
     }
@@ -211,6 +255,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         REBALANCER_SKIP_REASON.OPERATION_OWNED_BY_ANOTHER_NODE,
         operation?.operationId,
       );
+    }
+    if (isReplaceStoppingOwnerEntry(operation, options)) {
+      return this.runReplaceStoppingOwner(operation);
     }
     const replaceRemoveDispatchPhase =
       this.repository.isReplaceRemoveDispatchPhase(operation);
@@ -258,6 +305,8 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         await this.updateStep(operation, WORKFLOW_STEP.SENDING);
       }
     }
+    // Captured before the evaluation reads readiness (R-2 lost-wakeup rule).
+    const readinessEntryLevel = captureReplaceOwnerLevel(this, operation);
     let removeSafetyEvaluation = await this.evaluateRemoveSafety(operation);
     if (removeSafetyEvaluation?.error) {
       if (
@@ -314,10 +363,20 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
             removeSafetyEvaluation.error,
             removeSafetyEvaluation.deferReason,
           );
+          if (isPartitionReplace(operation)) {
+            // S9: the REPLACE owner's ACTIVE wait is observable too.
+            recordReplaceOwnerWait(this, operation,
+              removeSafetyEvaluation.deferReason);
+          }
           this.scheduleDeferredSafetyRetry(
             operation,
             removeSafetyEvaluation.deferReason,
             removeSafetyEvaluation.error,
+          );
+          registerReplaceOwnerWaiter(
+            this,
+            operation,
+            readinessEntryLevel,
           );
           return this.buildSkippedOperationResult(
             REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
@@ -342,6 +401,11 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       }
     }
     this.clearDeferredSafetyBlockState(operation.operationId);
+    const heldEffect = await holdReplaceSourceRemovalEffect(
+      this, operation, replaceRemoveDispatchPhase, readinessEntryLevel);
+    if (heldEffect) {
+      return heldEffect;
+    }
     const {entityType, entityId} =
       assertCanonicalRebalancerEntityIdentity(operation);
     const handlerType = resolveOperationHandlerType(entityType);
@@ -444,6 +508,11 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       request[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
         operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA];
     }
+    // The committed-membership stamp crosses unchanged (owner decision O1).
+    if (operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]) {
+      request[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] =
+        operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP];
+    }
     logSendOperationAttempt(this, operation, {
       operationId: operation.operationId,
       target,
@@ -503,6 +572,8 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       await this.failOperation(operation, errorMsg);
       return this.buildFailedOperationResult(operation.operationId, errorMsg);
     }
+    noteReplaceSourceRemovalEffect(
+      this, operation, response, replaceRemoveDispatchPhase);
     this.retainDeliveredCreateProgress(
       operation,
       response,
@@ -531,6 +602,11 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         return this.buildSuccessfulOperationResult(operation.operationId, {
           status: OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
         });
+      }
+      if (isReplaceRemovalIntentDurable(operation)) {
+        // The intent is already durable; the STOPPING owner now waits on the
+        // source's lifecycle and membership (and arms its wake).
+        return this.runReplaceStoppingOwner(operation);
       }
       let nextStep = WORKFLOW_STEP.CREATING;
       if (

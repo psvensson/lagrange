@@ -16,6 +16,7 @@
 // or failure is a typed frozen outcome.
 
 import {AddressManager} from '../address/address-manager.js';
+import {durableRecordBootstrap} from './raft-committed-membership-stamp.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-key-constants.js';
 import {ENTITY_TYPE} from '../constants/addresses.js';
@@ -329,6 +330,9 @@ function buildReplacementServiceOptions(service) {
     tableName: service.tableName,
     replicaId: service.replicaId,
     replicaIds: service.replicaIds,
+    // The replacement reopens the installed replica from its durable record
+    // and nothing else (O4); without one it is refused, never founded.
+    bootstrapMembership: durableRecordBootstrap(),
     nodeId: service.nodeId,
     // The production factory derives dbPath deterministically and ignores
     // this option (recorded coupling); guard-injected factories honor it.

@@ -10,6 +10,14 @@ import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {createLifecycleCdcServiceForCache} from
+  '../test-helpers/lifecycle-state-store.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
+import {registerMessageGroupTransportHandler} from
+  '../../src/bootstrap/shared/message-group-transport-handler.js';
+import {TEST_BOOT_INCARNATION} from
+  '../test-helpers/boot-incarnation-fixture.js';
 
 function flushImmediate() {
   return new Promise((resolve) => setImmediate(resolve));
@@ -43,24 +51,7 @@ function seedReplicaOperation(
 }
 
 function createMockCdc(cache) {
-  return {
-    async upsertSystemTableRow(tableName, data) {
-      cache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      cache.applySystemTableChange(
-        tableName,
-        'UPDATE',
-        {...whereClause, ...data},
-      );
-      return {success: true};
-    },
-    async deleteSystemTableRow(tableName, whereClause) {
-      cache.applySystemTableChange(tableName, 'DELETE', whereClause);
-      return {success: true};
-    },
-  };
+  return createLifecycleCdcServiceForCache(cache);
 }
 
 function createMockExecutorOutcomeEmitter(cache) {
@@ -88,6 +79,17 @@ test('MessageGroupServiceHandler services-row integration', async (t) => {
       const nodeId = 'integration-node';
       const groupId = 'mg-1';
       const replicaId = 'mg-1-r4';
+      const address = `${nodeId}/message-group/${replicaId}`;
+      const messageRouter = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId,
+      });
+      // The replica's lifecycle owner: the lane its transport handler
+      // retires through, and the lane its activation CAS runs in.
+      const replicaStateMachine = new ReplicaStateMachine({
+        nodeId,
+        controlPlaneSystemTableGateway: {},
+      });
 
       seedReplicaOperation(
         cache,
@@ -102,17 +104,25 @@ test('MessageGroupServiceHandler services-row integration', async (t) => {
         systemTableCache: cache,
         cdcIntegrationService,
         executorOutcomeEmitter: createMockExecutorOutcomeEmitter(cache),
-        messageRouter: {
-          isRegistered: () => true,
-        },
+        messageRouter,
         createMessageGroupReplica: async (options) => {
-          localServices.set(options.replicaId, {
+          const service = {
             replicaId: options.replicaId,
             groupId: options.groupId,
+            unifiedAddress: address,
+            transport: messageRouter,
+            isLeaderReplica: () => false,
             getRole() {
               return 'follower';
             },
+            receiveMessage: () => ({acknowledged: true}),
+          };
+          registerMessageGroupTransportHandler(service, {
+            messageRouter,
+            address,
+            resolveLane: () => replicaStateMachine,
           });
+          localServices.set(options.replicaId, service);
         },
         startMessageGroupReplica: async () => {},
         stopMessageGroupReplica: async (options) => {

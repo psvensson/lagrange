@@ -37,6 +37,7 @@ import {createHash} from 'node:crypto';
 
 import {
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
+  RAFT_RS_PEER_IDENTITY_RESOLUTION,
   RAFT_RS_PEER_IDENTITY_SQL,
 } from './raft-rs-peer-identity-constants.js';
 
@@ -141,6 +142,25 @@ class RaftRsPeerIdentityRegistry {
     const reservation = this.reservationOfPeerId(raftPeerId);
     return reservation === undefined ? null : reservation.replica_identity;
   }
+
+  /**
+   * What this registry holds for a raft peer identity, as a named state: a
+   * peer the committed configuration names may have been reserved only on
+   * another replica, which is an observation, not a failure.
+   * @param {string} raftPeerId - The identity.
+   * @return {Object} Frozen {status, replicaIdentity}: RESERVED with the
+   *   replica, or UNRESERVED with replicaIdentity null.
+   */
+  resolveReplicaIdentity(raftPeerId) {
+    const reservation = this.reservationOfPeerId(raftPeerId);
+    return Object.freeze(reservation === undefined ? {
+      status: RAFT_RS_PEER_IDENTITY_RESOLUTION.UNRESERVED,
+      replicaIdentity: null,
+    } : {
+      status: RAFT_RS_PEER_IDENTITY_RESOLUTION.RESERVED,
+      replicaIdentity: reservation.replica_identity,
+    });
+  }
 }
 
-export {RaftRsPeerIdentityRegistry};
+export {RaftRsPeerIdentityRegistry, deriveRaftRsPeerId};

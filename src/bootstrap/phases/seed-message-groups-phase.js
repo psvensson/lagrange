@@ -7,6 +7,10 @@
  */
 
 import {MessageGroupService} from '../../message-group/message-group-service.js';
+import {
+  registerMessageGroupTransportHandler,
+  retireMessageGroupTransportHandler,
+} from '../shared/message-group-transport-handler.js';
 import {assertCritical} from '../../utils/assert.js';
 import {
   BOOTSTRAP_DEFAULT,
@@ -156,11 +160,17 @@ class SeedMessageGroupsPhase {
       `${d.getNodeId()}${ADDRESS.SEPARATOR}` +
       `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}` +
       `${options.replicaId}`;
-    d.getMessageRouter().register(unifiedAddress, (envelope) => {
-      return messageGroup.receiveMessage(envelope);
+    registerMessageGroupTransportHandler(messageGroup, {
+      messageRouter: d.getMessageRouter(),
+      address: unifiedAddress,
+      resolveLane: () => d.getReplicaStateMachine?.() || null,
     });
 
     await messageGroup.initialize();
+
+    if (typeof d.attachMessageGroupService === 'function') {
+      d.attachMessageGroupService(messageGroup);
+    }
 
     d.getMessageGroupServices().set(
       options.replicaId, messageGroup,
@@ -246,10 +256,12 @@ class SeedMessageGroupsPhase {
       `${d.getNodeId()}${ADDRESS.SEPARATOR}` +
       `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}` +
       `${options.replicaId}`;
-    const messageRouter = d.getMessageRouter();
-    if (messageRouter) {
-      messageRouter.unregister(unifiedAddress);
-    }
+    await retireMessageGroupTransportHandler({
+      messageGroup,
+      messageRouter: d.getMessageRouter(),
+      address: unifiedAddress,
+      replicaId: options.replicaId,
+    });
 
     d.getMessageGroupServices().delete(options.replicaId);
     d.filterMessageGroupReplicas(messageGroup);

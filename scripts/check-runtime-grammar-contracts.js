@@ -262,9 +262,12 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
+  // fix-f1 (section 9): the per-leg handoff states are deleted; a not-yet
+  // leadership-safe snapshot is LEADERSHIP_PENDING and a partition REPLACE's
+  // leadership is decided by its named-target handoff.
   'src/rebalancer/priority-publication-leader-safety.js': Object.freeze({
     requiredFragments: Object.freeze([
-      'WAIT_REPLACEMENT_LEADER_OWNERSHIP',
+      'LEADERSHIP_PENDING',
     ]),
     functionContracts: Object.freeze([
       Object.freeze({
@@ -272,22 +275,21 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
         requiredFragments: Object.freeze([
           'replacementLeaderOwnershipObserved',
           'partitionLeaderNodeId !== sourceNodeId',
-          'WAIT_REPLACEMENT_LEADER_OWNERSHIP',
+          'LEADERSHIP_PENDING',
         ]),
       }),
     ]),
   }),
   'src/rebalancer/priority-publication-handoff.js': Object.freeze({
     requiredFragments: Object.freeze([
-      'WAIT_REPLACEMENT_LEADER_OWNERSHIP',
+      'evaluateReplaceNamedHandoffSafety',
       'REPLACEMENT_LEADER_OWNERSHIP_PENDING_BEFORE_SAFE_REMOVAL',
     ]),
     functionContracts: Object.freeze([
       Object.freeze({
         functionName: 'evaluatePriorityPublicationLeaderRemoveSafety',
         requiredFragments: Object.freeze([
-          'WAIT_REPLACEMENT_LEADER_OWNERSHIP',
-          'REPLACEMENT_LEADER_OWNERSHIP_PENDING_BEFORE_SAFE_REMOVAL',
+          'evaluateReplaceNamedHandoffSafety',
         ]),
       }),
     ]),
@@ -335,8 +337,9 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       Object.freeze({
         functionName: 'reconcileRemovedReplicaCleanup',
         requiredFragments: Object.freeze([
-          'getPartitionServiceRowOwner().removeReplica',
-          'completeDurableRemoval',
+          'bindAuthoritativeRemovalAuthority',
+          'takeoverRemovingRowForCleanupOrThrow',
+          'completeCleanupTombstoneOrThrow',
         ]),
       }),
     ]),

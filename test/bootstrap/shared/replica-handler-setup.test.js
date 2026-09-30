@@ -8,6 +8,7 @@ import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert';
 import {ReplicaHandlerSetup} from '../../../src/bootstrap/shared/replica-handler-setup.js';
 import {DependencyError} from '../../../src/bootstrap/bootstrap-errors.js';
+import {TEST_BOOT_INCARNATION} from '../../test-helpers/boot-incarnation-fixture.js';
 
 const TEST_NODE_ID = 'test-node';
 const TEST_FORWARDS_EXECUTOR_OUTCOME_EMITTER =
@@ -177,6 +178,39 @@ describe('ReplicaHandlerSetup', () => {
       // ReplicaHandler should be initialized
       assert.strictEqual(result.replicaHandler.initialized, true);
     });
+
+    it('should reuse the canonical replicaStateMachine supplied by startup',
+      () => {
+        const replicaStateMachine =
+          ReplicaHandlerSetup.createReplicaStateMachine({
+            nodeId: TEST_NODE_ID,
+            cdcIntegrationService: mockCdcIntegrationService,
+            systemTableCache: mockSystemTableCache,
+            ownerIncarnation: TEST_BOOT_INCARNATION,
+          });
+        createdStateMachines.push(replicaStateMachine);
+
+        const result = ReplicaHandlerSetup.create({
+          nodeId: TEST_NODE_ID,
+          messageRouter: mockMessageRouter,
+          cdcIntegrationService: mockCdcIntegrationService,
+          systemTableCache: mockSystemTableCache,
+          createPartitionService: mockCreatePartitionService,
+          replicaStateMachine,
+          ownerIncarnation: TEST_BOOT_INCARNATION,
+        });
+
+        assert.strictEqual(
+          result.replicaStateMachine,
+          replicaStateMachine,
+          'handler setup must not replace the startup lifecycle owner',
+        );
+        assert.strictEqual(
+          result.replicaHandler.replicaStateMachine,
+          replicaStateMachine,
+          'handler should receive the startup lifecycle owner',
+        );
+      });
 
     it('should accept optional dataDir parameter', () => {
       const result = ReplicaHandlerSetup.create({

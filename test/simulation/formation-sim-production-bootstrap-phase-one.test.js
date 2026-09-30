@@ -40,6 +40,8 @@ import {
 import {
   createProductionSimNodeEnvironment, createProductionSimScenario,
 } from './formation-sim-production-node-environment.js';
+import {reserveSimulatedBootIncarnation} from
+  './formation-sim-boot-incarnation.js';
 import {
   createProductionSeedSimHost,
 } from './formation-sim-production-seed-host.js';
@@ -72,7 +74,8 @@ async function composedNodeZero() {
   const environment = createProductionSimNodeEnvironment({
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT, scenario,
   });
-  const host = createProductionSeedSimHost(environment);
+  const host = createProductionSeedSimHost(environment,
+    {bootIncarnation: await reserveSimulatedBootIncarnation()});
   const before_ = {
     messageRouter: host.bootstrap.messageRouter,
     transport: host.bootstrap.transport,
@@ -303,8 +306,10 @@ test('A2b-7. red: a second infrastructure composer for node-0 is refused',
 
     // And the reverse order refuses too: whoever is second loses.
     const second = createInfrastructureCompositionRegistry();
-    const host = createProductionSeedSimHost(environment,
-      {compositionRegistry: second});
+    const host = createProductionSeedSimHost(environment, {
+      compositionRegistry: second,
+      bootIncarnation: await reserveSimulatedBootIncarnation(),
+    });
     assert.throws(
       () => second.claim(NODE_ID, LEGACY_SIMULATED_NODE_HOST_COMPOSER),
       (error) => error.code ===

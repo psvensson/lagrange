@@ -30,6 +30,7 @@ import {
   createNodeHosts,
   initializeTestEnvironment,
 } from '../integration/membership-consistency-integration-test-helpers.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const arrayMap = Function.call.bind(Array.prototype.map);
 
@@ -56,6 +57,7 @@ const RUNAWAY_FACTOR = 4;
  */
 function createUnserviceableTransport() {
   return new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: NODE_ID, nodeAddress: ROUTER_ADDRESS, wsPort: 0,
   });
 }
@@ -175,6 +177,7 @@ function createSeedRegistrationHost(options = {}) {
   const hosts = createNodeHosts(cache, {nodeId: NODE_ID, messageRouter});
   const clock = createVirtualSleep();
   const heartbeatService = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: NODE_ID,
     nodeAddress: NODE_ADDRESS,
     cdcIntegrationService: hosts.cdcIntegrationService,

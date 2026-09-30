@@ -30,6 +30,7 @@ import {resolveTimeSource} from '../time/time-source.js';
 import {getControlPlaneRetryAfterMs} from
   '../control-plane/control-plane-error-classification.js';
 import {AUTHORITATIVE_READ_SOURCE} from './cdc-integration-service-shared-constants.js';
+import {CDC_ERROR_CODE, CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {buildControlPlaneReadAuthority} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
@@ -135,13 +136,14 @@ function authoritativeReadFailure(readResult) {
  *
  * @param {Object} service - CDCIntegrationService instance (provides
  *   executeAuthoritativeSystemTableRead, applyAuthoritativeCacheRepair,
- *   getPrimaryKeyField, logger, sleep-capable timers).
+ *   getPrimaryKeyField, logger, delayUntilShutdown, isShuttingDown).
  * @param {Object} [options]
  * @param {string[]} [options.tables] - Override the table set (tests).
  * @param {number} [options.maxAttemptsPerTable]
- * @param {Function} [options.sleep] - Injectable delay (tests).
  * @return {Promise<{tablesAttempted: number, tablesHydrated: number,
- *   rowsApplied: number, tablesFailed: string[]}>}
+ *   rowsApplied: number, tablesFailed: string[], code?: string}>} `code` is
+ *   CDC_ERROR_CODE.SHUT_DOWN when the owner was terminal: the tables not
+ *   caught up are in tablesFailed and none was read after terminal.
  */
 async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
   const tables = Array.isArray(options.tables) && options.tables.length > 0 ?
@@ -152,16 +154,22 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
     options.maxAttemptsPerTable > 0 ?
       Math.floor(options.maxAttemptsPerTable) :
       CATCHUP_DEFAULT.MAX_ATTEMPTS_PER_TABLE;
-  // The sleep between attempts is a timer and arms on the service's clock (a
-  // bare service record gets the platform clock, as every seamed owner
-  // defaults). `now` is NOT a timer: it stamps readStartedAtMs, which the
-  // sweep compares against row updated_at and tombstone times the cache
-  // stamps on the wall clock, so it stays on that clock - a virtual stamp
-  // here would leave the sweep inert and fence every tombstoned key.
+  // The retry delay is the owner's delayUntilShutdown: it arms on the
+  // service's clock and markShuttingDown (the owner's terminal boundary)
+  // releases it at once. Once terminal, the owner's gate refuses every read
+  // stage and every cache repair or sweep this catch-up would issue
+  // (cdc-terminal-gate.js), and the catch-up's own loop starts no further
+  // table or attempt. A table counts hydrated only when its rows were applied
+  // while the owner was live; every table not caught up is reported failed,
+  // and the summary carries the owner's typed SHUT_DOWN code. `now` is NOT a
+  // timer: it stamps
+  // readStartedAtMs, which the sweep compares against row updated_at and
+  // tombstone times the cache stamps on the wall clock, so it stays on that
+  // clock - a virtual stamp here would leave the sweep inert and fence every
+  // tombstoned key.
   const clock = resolveTimeSource(service);
-  const sleep = typeof options.sleep === 'function' ?
-    options.sleep :
-    (delayMs) => new Promise((resolve) => clock.setTimeout(resolve, delayMs));
+  const isTerminal = () =>
+    Boolean(service.refuseIfTerminal?.(CDC_TERMINAL_STAGE.CACHE_REPAIR));
   // readStartedAtMs is a DATA STAMP compared against row updated_at, tombstone
   // instants and the authoritative observation boundary. It moves to this
   // service's clock only because every one of those producers now reads an
@@ -196,6 +204,12 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
   };
 
   for (const tableName of tables) {
+    // The catch-up's own loop ends at terminal too: it starts no table after
+    // the mark (each table left is reported failed).
+    if (isTerminal()) {
+      summary.tablesFailed.push(tableName);
+      continue;
+    }
     summary.tablesAttempted += 1;
     let hydrated = false;
     let lastFailure = null;
@@ -283,8 +297,10 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
             },
           );
         }
-        summary.tablesHydrated += 1;
-        hydrated = true;
+        // The apply gate refused these rows if the owner turned terminal
+        // while the read was in flight: the table is not hydrated then.
+        hydrated = !isTerminal();
+        summary.tablesHydrated += hydrated ? 1 : 0;
         break;
       }
 
@@ -300,25 +316,32 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
       if (!deferred || attempt >= maxAttemptsPerTable) {
         break;
       }
-      await sleep(
+      await service.delayUntilShutdown(
         retryAfterMs > 0 ?
           retryAfterMs :
           CATCHUP_DEFAULT.RETRY_FALLBACK_DELAY_MS,
       );
+      if (isTerminal()) {
+        break;
+      }
     }
 
     if (!hydrated) {
-      const deferredEntry = `${tableName}: ${lastFailure}`;
+      const failure = isTerminal() ? CDC_ERROR_CODE.SHUT_DOWN : lastFailure;
+      const deferredEntry = `${tableName}: ${failure}`;
       summary.tablesFailed.push(tableName);
       service.logger?.warn?.(CATCHUP_LOG_MSG.TABLE_FAILED, {
         tableName,
-        error: lastFailure,
+        error: failure,
         attempts: maxAttemptsPerTable,
         detail: deferredEntry,
       });
     }
   }
 
+  if (isTerminal()) {
+    summary.code = CDC_ERROR_CODE.SHUT_DOWN;
+  }
   service.logger?.info?.(CATCHUP_LOG_MSG.SUMMARY, {
     tablesAttempted: summary.tablesAttempted,
     tablesHydrated: summary.tablesHydrated,

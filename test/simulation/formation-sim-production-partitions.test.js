@@ -25,6 +25,8 @@ import {
 import {
   createProductionSimNodeEnvironment, createProductionSimScenario,
 } from './formation-sim-production-node-environment.js';
+import {reserveSimulatedBootIncarnation} from
+  './formation-sim-boot-incarnation.js';
 import {
   createProductionSeedSimHost, runSeedPartitionsScenario,
 } from './formation-sim-production-seed-host.js';
@@ -60,7 +62,8 @@ async function seedThroughPartitions() {
   const environment = createProductionSimNodeEnvironment({
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT, scenario,
   });
-  const host = createProductionSeedSimHost(environment);
+  const host = createProductionSeedSimHost(environment,
+    {bootIncarnation: await reserveSimulatedBootIncarnation()});
   await runOnSimulationGenerationRoot(GENERATION, () =>
     runOnExecutionNode(NODE_ID, () => host.phaseInfrastructure()));
   await host.settleCausalConsequences();

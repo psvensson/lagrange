@@ -1,7 +1,13 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
+import {createConsensusHoldLog} from './partition-consensus-hold-log.js';
+import {
+  PARTITION_WRITE_RELEASE_CAUSE,
+  buildReleasedPendingWriteAnswer,
+} from './partition-write-kernel.js';
 
 const {
-  ERRORS,
+  PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_RAFT_EVIDENCE,
   PARTITION_SERVICE_REASON,
@@ -25,6 +31,20 @@ function wirePartitionRaftLifecycleEvents(
       ...fields,
     });
   };
+  // A replica that stops leading releases every pending write at once, each
+  // answered with what this replica knows of it (the write kernel's typed
+  // answer): one handed to consensus has an outcome this replica cannot know;
+  // one never handed to it was not proposed, and this replica does not lead.
+  const releasePendingWrites = () => service.releasePendingCommittedWrites(
+    (pending) => buildReleasedPendingWriteAnswer(pending, service.partitionId,
+      {cause: PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST}));
+  // Every announcement is also where the partition sees its group held (the
+  // port announces a held group without a role) and serving again.
+  const observeConsensusHold = createConsensusHoldLog(service);
+  // The term is the consensus core's own (readStatus().term); nothing here
+  // copies it. Committed entries are applied only by the port's
+  // committed-entry application, so COMMIT carries no handler; it stays in
+  // the map because the lifecycle owner subscribes to every named event.
   wireReplicaLifecycleEvents(service, {
     events: {
       LEADER: PARTITION_SERVICE_ROLE.LEADER,
@@ -40,7 +60,6 @@ function wirePartitionRaftLifecycleEvents(
       service.normalizeLeaderReplicaId(candidate),
     shouldIgnoreDemotionEvent,
     onLeader: ({term}) => {
-      service.storage.currentTerm = term;
       recordTransition({
         eventType: PARTITION_SERVICE_RAFT_EVIDENCE.EVENT_ROLE_TRANSITION,
         role: PARTITION_SERVICE_ROLE.LEADER,
@@ -48,9 +67,9 @@ function wirePartitionRaftLifecycleEvents(
         term,
       });
       service.scheduleLeaderOwnedActivation(term);
+      observeConsensusHold();
     },
     onFollower: ({term, demotedByLeaderChange}) => {
-      service.storage.currentTerm = term;
       recordTransition({
         eventType: PARTITION_SERVICE_RAFT_EVIDENCE.EVENT_ROLE_TRANSITION,
         role: PARTITION_SERVICE_ROLE.FOLLOWER,
@@ -59,36 +78,22 @@ function wirePartitionRaftLifecycleEvents(
           PARTITION_SERVICE_RAFT_EVIDENCE.TRIGGER_FOLLOWER_EVENT,
         term,
       });
-      service.clearPendingCommittedWrites(
-        ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
-      );
+      releasePendingWrites();
       service.cancelLeaderOwnedActivation();
       service.updateRebalancerLeadership();
+      observeConsensusHold();
     },
     onCandidate: ({term}) => {
-      service.storage.currentTerm = term;
       recordTransition({
         eventType: PARTITION_SERVICE_RAFT_EVIDENCE.EVENT_ROLE_TRANSITION,
         role: PARTITION_SERVICE_ROLE.CANDIDATE,
         trigger: PARTITION_SERVICE_RAFT_EVIDENCE.TRIGGER_CAMPAIGN_STARTED,
         term,
       });
-      service.clearPendingCommittedWrites(
-        ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
-      );
+      releasePendingWrites();
       service.cancelLeaderOwnedActivation();
       service.updateRebalancerLeadership();
-    },
-    onCommit: (command) => {
-      service.applyCommittedEntry(command);
-      // Applied-watermark certificate (raft-snapshot-checkpoint-format):
-      // commit events arrive once per committed entry in index order and
-      // applyCommittedEntry is synchronous, so a dense +1 advance equals the
-      // applied entry's own index. The adapter committedIndex must NOT be
-      // copied here — on a batch it already sits at the batch end before the
-      // first apply. On apply throw the advance is skipped and checkpoint
-      // creation fails closed on the divergence.
-      service.storage.recordAppliedAdvance();
+      observeConsensusHold();
     },
     onLeaderChange: ({leaderId, previousLeaderId, term, demoted}) => {
       recordTransition({
@@ -106,11 +111,33 @@ function wirePartitionRaftLifecycleEvents(
         term,
         partitionId: service.partitionId,
       });
-    },
-    onTermChange: ({term}) => {
-      service.storage.currentTerm = term;
+      observeConsensusHold();
     },
   });
 }
 
-export {wirePartitionRaftLifecycleEvents};
+/**
+ * Relay the port's consensus announcements as the partition service's own
+ * CONSENSUS_OBSERVED event, as data: the applied ConfState transition (the
+ * first observation after (re)construction included), the leader and the
+ * term. A wake-up for the REPLACE owner (design S5.2), never an authority.
+ * Called whenever the port is (re)created, so the relay follows the live
+ * port.
+ * @param {Object} service - The partition service.
+ */
+function relayPartitionConsensusObservations(service) {
+  const emit = (fields) => service.emit(
+    PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED,
+    {partitionId: service.partitionId, replicaId: service.replicaId,
+      ...fields},
+  );
+  service.raft.subscribe(RAFT_EVENT.MEMBERSHIP_CHANGED, (observation) =>
+    emit({confState: observation?.confState ?? null,
+      commitIndex: observation?.commitIndex ?? null,
+      appliedIndex: observation?.appliedIndex ?? null}));
+  service.raft.subscribe(RAFT_EVENT.LEADER_CHANGE, (leaderReplicaId) =>
+    emit({leaderReplicaId: leaderReplicaId ?? null}));
+  service.raft.subscribe(RAFT_EVENT.TERM_CHANGE, (term) => emit({term}));
+}
+
+export {relayPartitionConsensusObservations, wirePartitionRaftLifecycleEvents};

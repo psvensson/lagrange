@@ -29,6 +29,7 @@ function getUniquePort() {
   return ports.getPort();
 }
 import {ENTITY_TYPE} from '../../src/constants/index.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 /**
  * Create a test transport (MessageRouter) for testing.
@@ -45,6 +46,7 @@ async function createTestTransport(nodeId, preferredPort) {
     // ::1 for the server bind while cross-node dials go to 127.0.0.1,
     // producing ECONNREFUSED from an address-family mismatch.
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId,
       wsPort: port,
       wsHost: '127.0.0.1',

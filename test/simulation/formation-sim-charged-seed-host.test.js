@@ -9,9 +9,16 @@
 //   the charged scenario reaches the "Cluster formed" counterpart and then
 //     REST with no ambient seam reached - the seams that only a charged
 //     timeline is long enough to reach are repaired, not tolerated;
-//   the charged run is a pure function of the scenario, like the uncharged
-//     one: the same process produces the same four artifacts and the same
-//     charge ledger twice over;
+//   the charged run is a function of the scenario, like the uncharged one,
+//     in exactly what production offers: the same process produces the same
+//     strict report and provenance snapshot, the host transcript's
+//     boundaries in the same causal order, the same network transcript
+//     modulo consensus timing, the same charged owners, and a formation
+//     inside the calibrated bound, twice over. The rs-raft core randomizes
+//     its own election timeouts (owner decision O2; see
+//     networkTranscriptStructure), so the instants, the network schedule and
+//     the charge ledger's amounts are not repeatable today; when O2 is funded
+//     the exact transcript, ledger and instant assertions come back;
 //   charging changes WHEN production runs and never WHO owns it - the
 //     provenance snapshot is identical charged and uncharged;
 //   charging is off unless a calibration is supplied, and the uncharged run
@@ -20,14 +27,17 @@
 // No count, millisecond, gap or rate is a target here. The remeasured rates
 // are findings for the correspondence document, not assertions.
 //
-// One boundary, pre-existing and measured on the frozen E head too: the FIRST
-// handoff scenario a process runs fires 26 more adapter timers - a 25 ms
-// retry cadence during the partition phase - than every later one, charged
-// or not, because one host resource is warm from then on. The host transcript
-// and the provenance snapshot are identical either way. So the repeatability
-// witness below compares runs after the process's first, and the first run
-// is the strict-and-rest witness. The warm-up itself belongs to the
-// attribution-runner-isolation quest, not to charging.
+// One boundary, measured on the frozen E head too: the FIRST handoff scenario
+// a process ran used to fire 26 more adapter timers - a 25 ms cadence during
+// the partition phase - than every later one. That cadence is the node's
+// leader-activation spacing: the shared LeaderActivationScheduler outlived
+// the first run's services and kept the first run's clock, so a later run's
+// activations queued on a clock nobody advanced (measured 2026-09-23: run 2
+// reused run 1's scheduler and time source and ended with 35 activations
+// queued). Its users now lease it and the last release drops it, so every
+// run starts one on its own clock. The repeatability witness below still
+// compares runs after the process's first, and the first run is still the
+// strict-and-rest witness.
 import assert from 'node:assert/strict';
 import {after, before, test} from 'node:test';
 
@@ -35,13 +45,14 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {FORMATION_OWNER} from '../../src/diagnostics/formation-diagnostics-contract.js';
 import {loadCalibration} from './formation-sim-coefficients.js';
-import {runSeedHandoffScenario} from './formation-sim-production-seed-host.js';
+import {transcriptCausalOrder} from './formation-sim-host-transcript.js';
+import {
+  networkTranscriptStructure, runSeedHandoffScenario,
+} from './formation-sim-production-seed-host.js';
 
 const NODE_ID = 'node-0';
 const REPO_ROOT = new URL('../../', import.meta.url).pathname;
-const ARTIFACTS = Object.freeze([
-  'hostTranscript', 'networkTranscript', 'strictReport', 'provenanceSnapshot',
-]);
+const EXACT_ARTIFACTS = Object.freeze(['strictReport', 'provenanceSnapshot']);
 const CLEAN_STRICT = /violations=0 substitutions=0 eligible=true/;
 const ZERO = 0;
 
@@ -59,12 +70,11 @@ after(() => {
   LoggingService.resetInstance();
 });
 
-// The charge ledger, without the attribution snapshot's process-local ids.
-function chargeLedger(run) {
-  const {segments, chargedMs, stretches, gapMs, formationCompleteAtMs} =
-    run.charged;
-  return JSON.stringify({segments, chargedMs, stretches, gapMs,
-    formationCompleteAtMs});
+// Which owners the charge ledger priced: its structure, without the amounts
+// consensus timing moves.
+function chargedOwners(run) {
+  return Object.keys(run.charged.segments)
+    .filter((owner) => run.charged.segments[owner] > ZERO).sort();
 }
 
 test('the charged seed host reaches formation and then rest, strictly',
@@ -98,18 +108,28 @@ test('the charged seed host reaches formation and then rest, strictly',
     }
   });
 
-test('the charged run is a pure function of the scenario', async () => {
+test('the charged run is a function of the scenario', async () => {
   const charging = loadCalibration(REPO_ROOT);
   const first = await runSeedHandoffScenario({charging});
   const again = await runSeedHandoffScenario({charging});
-  for (const artifact of ARTIFACTS) {
+  for (const artifact of EXACT_ARTIFACTS) {
     assert.equal(again[artifact], first[artifact],
       `${artifact} is exact across two charged runs`);
   }
-  assert.equal(chargeLedger(again), chargeLedger(first),
-    'the charge ledger is exact across two charged runs');
-  assert.equal(again.formationCompleteAtMs, first.formationCompleteAtMs,
-    'formation is marked at the same virtual instant');
+  assert.equal(transcriptCausalOrder(again.hostTranscript),
+    transcriptCausalOrder(first.hostTranscript),
+    'hostTranscript has the same boundaries in the same causal order');
+  assert.equal(networkTranscriptStructure(again.networkTranscript),
+    networkTranscriptStructure(first.networkTranscript),
+    'networkTranscript is structurally equal modulo consensus timing');
+  assert.deepEqual(chargedOwners(again), chargedOwners(first),
+    'the same owners are charged across two charged runs');
+  for (const run of [first, again]) {
+    assert.ok(run.formationCompleteAtMs > ZERO &&
+      run.formationCompleteAtMs <= charging.formationWindowMs,
+    `formation is reached within the calibrated ${charging.formationWindowMs}` +
+      ` ms (at ${run.formationCompleteAtMs} ms)`);
+  }
 });
 
 test('charging moves the schedule, never the ownership', async () => {

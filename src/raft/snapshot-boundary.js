@@ -54,21 +54,8 @@ function isCompactedIndex(index, boundary) {
     index <= boundary.lastIncludedIndex;
 }
 
-/**
- * Read the sealed max-committed-HLC witness written by a snapshot install
- * (null when absent — virgin database or pre-install).
- * @param {Object} db open better-sqlite3 handle
- * @return {string|null} the sealed HLC string or null
- */
-function readInstalledMaxCommittedHlc(db) {
-  const row = db.prepare(SELECT_STATE_VALUE).get(
-    RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.MAX_COMMITTED_HLC);
-  return row ? row.value : null;
-}
-
 export {
   isCompactedIndex,
-  readInstalledMaxCommittedHlc,
   readSnapshotBoundary,
   VIRGIN_BOUNDARY,
 };

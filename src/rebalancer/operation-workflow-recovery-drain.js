@@ -1,9 +1,17 @@
+import {
+  admitReplaceOwnerHandBack,
+} from './operation-workflow-replace-owner-state.js';
 import {OperationWorkflowRecoveryTimeout} from './operation-workflow-recovery-timeout.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
   isTerminalTransitionOutcomeSettled,
 } from './operation-workflow-terminal-reservation-release.js';
 
+import {
+  REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED,
+  isPartitionReplace,
+  isTargetFailureDetectorDead,
+} from './operation-workflow-replace-owner.js';
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   FAILURE_LOG_LEVEL,
@@ -36,6 +44,21 @@ const {
   normalizeNodeIdList,
   resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence,
 } = SHARED;
+
+const HAND_BACK_VERDICT_SEPARATOR = '|';
+
+// The drain actions a non-owner may settle: a superseded target, and a
+// completion - except a partition REPLACE's, which its owner completes from
+// committed membership (R-1b hands it back).
+function isRemoteSettleDrainAction(operation, drainAction) {
+  if (drainAction ===
+      OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET) {
+    return true;
+  }
+  return drainAction ===
+      OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN &&
+    !isPartitionReplace(operation);
+}
 
 class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
   resolvePriorityRecoveryOperationDrainSourceObservationKey(observation) {
@@ -371,12 +394,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_LANE_PARKED :
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_OWNER;
     }
-    if (
-      drainAction ===
-        OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN ||
-      drainAction ===
-        OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET
-    ) {
+    if (isRemoteSettleDrainAction(operation, drainAction)) {
       return (
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_SETTLE_ALLOWED
       );
@@ -411,6 +429,26 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     ) {
       return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE
         .REMOTE_REARM_REQUIRED;
+    }
+    return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_OWNER_REQUIRED;
+  }
+
+  /**
+   * BR14: a remote owner is woken for a hand-back only when the drain's
+   * verdict changed since its last hand-back; otherwise it is left to its
+   * own lane.
+   * @param {Object} operation
+   * @param {string} action
+   * @param {string} ownerState
+   * @param {string} verdictKey
+   * @return {string} The owner state.
+   */
+  boundReplaceOwnerHandBack(operation, action, ownerState, verdictKey) {
+    if (action !== OPERATION_LIFECYCLE_ACTION.HAND_BACK_REPLACE_OWNER ||
+        ownerState !==
+          PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_REARM_REQUIRED ||
+        admitReplaceOwnerHandBack(this, operation.operationId, verdictKey)) {
+      return ownerState;
     }
     return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_OWNER_REQUIRED;
   }
@@ -552,12 +590,17 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     const action =
       PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE.get(state) ||
       OPERATION_LIFECYCLE_ACTION.NOOP;
-    const ownerState =
+    const ownerState = this.boundReplaceOwnerHandBack(
+      operation,
+      action,
       this.resolvePriorityRecoveryOperationDrainOwnerState(
         operation,
         action,
         state,
-      );
+      ),
+      [state, completionState, sourceSnapshot.state]
+        .join(HAND_BACK_VERDICT_SEPARATOR),
+    );
     return Object.freeze({
       state,
       action,
@@ -636,8 +679,13 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       return isTerminalTransitionOutcomeSettled(
         await this.failOperation(
           operation,
-          OPERATION_WORKFLOW_OWNER_LITERAL
-            .PRIORITY_RECOVERY_DRAIN_STALE_WITHOUT_RETIREMENT_EVIDENCE,
+          // R-1c names its own settlement; step-age staleness before the
+          // intent keeps the drain's message.
+          isPartitionReplace(operation) &&
+            isTargetFailureDetectorDead(this, operation) ?
+            REPLACE_OWNER_UNAVAILABLE_SOURCE_RETAINED :
+            OPERATION_WORKFLOW_OWNER_LITERAL
+              .PRIORITY_RECOVERY_DRAIN_STALE_WITHOUT_RETIREMENT_EVIDENCE,
           {logLevel: FAILURE_LOG_LEVEL.WARN},
         ),
       );

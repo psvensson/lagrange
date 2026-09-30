@@ -9,15 +9,22 @@ transactions, and partition-local write kernels.
 ## Primary Owners
 
 - `PartitionService` owns partition-local service behavior and consumes the
-  frozen partition Raft operation port returned by the selected provider.
-- The provider seam is `createRaftProvider(...)` /
-  `createPartitionPort(...)`. The rs-raft path keeps binding/core entry
-  private to `src/raft/raft-rs-runtime-owner.js`; local rs-raft
-  active/retired eligibility belongs to `RaftRsReplicaLifecycleOwner`.
-- `PartitionRaftStorage` and the selected backend's durable-store/application
-  transaction owners provide partition Raft durability. On rs-raft, committed
-  `ConfState` is current consensus membership; service/cache metadata is not
-  a second membership authority.
+  frozen partition Raft operation port. rs-raft is the only partition
+  consensus path: there is no backend selector and no default fallback.
+- The port comes from `createPartitionPort(...)` on the rs-raft provider. The
+  rs-raft path keeps binding/core entry private to
+  `src/raft/raft-rs-runtime-owner.js`; local rs-raft active/retired
+  eligibility belongs to `RaftRsReplicaLifecycleOwner`.
+- The rs-raft durable store (`src/raft/raft-rs-durable-store.js`) and its
+  application-transaction owner are the only partition consensus record: the
+  one durable log, hard state and applied watermark. Committed `ConfState` is
+  current consensus membership; service/cache metadata is not a second
+  membership authority. `PartitionRaftStorage` and `SQLiteLogAdapter` are not
+  constructed on the partition path.
+- `partition-legacy-consensus-state.js` owns the startup refusal of a
+  partition database that holds the retired backend's consensus state and no
+  rs-raft record (`legacy_partition_consensus_state_detected`); such state is
+  never migrated or reused.
 - `PartitionWriteKernel` owns partition write execution.
 - `PartitionTransactionHandler` owns partition-local transaction handling.
 - `ManagedSplitWorkflow` owns split lifecycle progression.

@@ -3,9 +3,10 @@
 // exactly as `PartitionService` shapes it.
 //
 // Nothing here is a raft-rs concept. The driver hands each peer the group's
-// own requirements - the thirteen names of RAFT_PARTITION_NODE_REQUEST, read
-// off the contract owner so a field added or removed breaks the driver rather
-// than being silently absent - a database file of its own, and a transport
+// own requirements - the RAFT_PARTITION_NODE_REQUEST fields PartitionService
+// hands its backend, read off the contract owner so a field renamed or removed
+// breaks the driver rather than being silently absent - a database file of
+// its own, and a transport
 // that moves envelopes between inboxes. It owns no Raft logic, no peer
 // identity, no configuration and no expectation: the peer ids the core uses
 // are the ones the backend registered, and the driver asks the backend for
@@ -18,19 +19,17 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 import {
-  RAFT_BACKEND,
-  RAFT_BACKEND_OPTION,
-} from '../../../src/raft/raft-backend-constants.js';
-import {createRaftProvider} from '../../../src/raft/raft-backend-selection.js';
-import {
   RAFT_PARTITION_NODE_REQUEST,
 } from '../../../src/raft/raft-provider-contract-constants.js';
+import {genesisStamp} from
+  '../../../src/raft/raft-committed-membership-stamp.js';
 import {raftRsLifecycleAdministration} from
   '../../../src/raft/raft-rs-lifecycle-administration.js';
 import {setActualCoreEntryObserver} from
   '../../../src/raft/raft-rs-runtime-owner.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
+import {RaftRsWasmProvider} from '../../../src/raft/raft-rs-provider.js';
 
 const TEMP_PREFIX = 'raft-rs-real-partition-';
 const DB_SUFFIX = '.sqlite';
@@ -85,7 +84,7 @@ class PartitionNodeCluster {
    */
   constructor({partitionId, replicaIds, substrateFor = null,
     sendFor = null, resolveFor = null, applyFor = null,
-    wrapDatabase = null}) {
+    wrapDatabase = null, timingFor = null}) {
     this.partitionId = partitionId;
     this.replicaIds = [...replicaIds];
     this.substrateFor = substrateFor;
@@ -93,15 +92,14 @@ class PartitionNodeCluster {
     this.resolveFor = resolveFor;
     this.applyFor = applyFor;
     this.wrapDatabase = wrapDatabase;
+    this.timingFor = timingFor;
     this.coreEntries = [];
     this.isolated = new Set();
     this.directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
     setActualCoreEntryObserver((observation) => {
       this.coreEntries.push(observation);
     });
-    this.provider = createRaftProvider({
-      [RAFT_BACKEND_OPTION]: RAFT_BACKEND.RAFT_RS_WASM,
-    });
+    this.provider = new RaftRsWasmProvider();
     this.replicas = new Map();
     for (const replicaId of this.replicaIds) {
       this.replicas.set(replicaId, this.buildReplica(replicaId, replicaIds));
@@ -150,11 +148,14 @@ class PartitionNodeCluster {
       [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: replicaId,
       [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: this.addressOf(replicaId),
       [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: bootstrapReplicaIds,
-      [RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG]: {
-        end: () => undefined,
-      },
+      // The founding members' GENESIS stamp, as the founding provisioner and
+      // the seed phase hand it (a join passes its own stamp in extraRequest;
+      // the port refuses an absent one).
+      [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+        genesisStamp(bootstrapReplicaIds),
       [RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE]: db,
-      [RAFT_PARTITION_NODE_REQUEST.TIMING]: PARTITION_TIMING,
+      [RAFT_PARTITION_NODE_REQUEST.TIMING]: this.timingFor === null ?
+        PARTITION_TIMING : this.timingFor(replicaId),
       [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]:
         this.substrateFor === null ? {} : this.substrateFor(replicaId),
       [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: true,
@@ -177,15 +178,18 @@ class PartitionNodeCluster {
         }
         return this.addressOf(peerReplicaId);
       },
-      [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]: (command) => {
+      // The port hands the application one frozen committed record; the
+      // driver keeps the decoded command, applied only once its transaction
+      // commits.
+      [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]: ({command,
+        effects}) => {
         if (this.applyFor) {
           this.applyFor(replicaId, command);
         }
-        replicaOf().appliedCommands.push(command);
+        effects.afterCommit.push(() =>
+          replicaOf().appliedCommands.push(command));
       },
       [RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
-      [RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK]: () =>
-        undefined,
     };
   }
 
@@ -196,15 +200,19 @@ class PartitionNodeCluster {
    * @return {PartitionReplica} The replica.
    * @private
    */
-  buildReplica(replicaId, bootstrapReplicaIds) {
+  buildReplica(replicaId, bootstrapReplicaIds, extraRequest = {}) {
     const dbFile = this.dbFileOf(replicaId);
     const openedDatabase = new Database(dbFile);
     const db = this.wrapDatabase ?
       this.wrapDatabase(replicaId, openedDatabase) : openedDatabase;
     db.exec(SERVICES_DDL);
-    const request = this.requestFor(replicaId, bootstrapReplicaIds, db);
+    const request = {
+      ...this.requestFor(replicaId, bootstrapReplicaIds, db),
+      ...extraRequest,
+    };
     const replica = new PartitionReplica({
       replicaId, dbFile, db, request, node: null});
+    replica.extraRequest = extraRequest;
     this.replicas.set(replicaId, replica);
     replica.node = this.provider.createPartitionPort(request);
     return replica;
@@ -249,7 +257,8 @@ class PartitionNodeCluster {
    */
   retireReplica(replicaId, reason) {
     return raftRsLifecycleAdministration.retireReplica(
-      replicaId, reason, {groupId: this.partitionId});
+      replicaId, reason, {groupId: this.partitionId,
+        runtime: this.node(replicaId)});
   }
 
   /**
@@ -397,7 +406,7 @@ class PartitionNodeCluster {
   /**
    * Propose one command through the node the backend returned.
    * @param {string} replicaId - The proposing replica.
-   * @param {Uint8Array} command - The command's bytes.
+   * @param {*} command - The command (a JSON value).
    * @return {Object} The node's named outcome.
    */
   propose(replicaId, command) {
@@ -410,9 +419,11 @@ class PartitionNodeCluster {
    * bootstrap members.
    * @param {string} replicaId - The joining replica.
    * @param {Array<string>} bootstrapReplicaIds - What it starts from.
+   * @param {Object} [extraRequest] - Further request fields in the contract
+   *   owner's names (a bootstrap membership stamp).
    * @return {PartitionReplica} The new replica.
    */
-  addReplica(replicaId, bootstrapReplicaIds) {
+  addReplica(replicaId, bootstrapReplicaIds, extraRequest = {}) {
     // Lagrange's own workflow step: every existing peer is told the joining
     // replica's logical name, so it can address the identity that name
     // derives to. Nothing discovers the joiner from a row.
@@ -422,7 +433,8 @@ class PartitionNodeCluster {
         .registerReplica(replicaId));
     }
     this.replicaIds.push(replicaId);
-    const joined = this.buildReplica(replicaId, bootstrapReplicaIds);
+    const joined = this.buildReplica(replicaId, bootstrapReplicaIds,
+      extraRequest);
     identities.add(joined.node.readStatus().peerId);
     if (identities.size !== 1) {
       throw new Error('every peer must derive the same identity for one ' +
@@ -447,7 +459,7 @@ class PartitionNodeCluster {
       replica.node.end();
     }
     replica.db.close();
-    return this.buildReplica(replicaId, bootstrap);
+    return this.buildReplica(replicaId, bootstrap, replica.extraRequest);
   }
 
   /**

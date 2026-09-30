@@ -24,6 +24,7 @@ import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 import {
   VIRTUAL_LINK_FRAME_TYPE, createVirtualConnectionEnvironment,
 } from '../distributed/harness/virtual-connection-environment.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const LINK_DELAY_MS = 5;
 const PORT_A = 19900;
@@ -82,11 +83,13 @@ async function twoRouterScenario({
       harness.handleMessage(nodeId, message, api));
   }
   const routerA = new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-a', inProcess: true, wsPort: PORT_A,
     inProcessConnectionEnvironment: environment,
     resolveNodeAddress: (id) => (id === 'node-b' ? ADDRESS_B : null),
   });
   const routerB = new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-b', inProcess: true, wsPort: PORT_B,
     externalAdmissionEnabled,
     inProcessConnectionEnvironment: environment,

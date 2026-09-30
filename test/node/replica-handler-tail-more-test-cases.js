@@ -1,3 +1,18 @@
+import {deepFreeze} from '../../src/raft/raft-operation-port.js';
+import {
+  RAFT_LEADERSHIP_TRANSFER_REASON,
+  RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
+  RAFT_OPERATION_OUTCOME,
+} from '../../src/raft/raft-operation-port-constants.js';
+import {REPLICA_HANDLER_LEADER_HANDOFF_BRANCH} from
+  '../../src/node/replica-handler-leader-handoff-methods.js';
+import {
+  createLifecycleControlPlaneGatewayForCache,
+  createReplicaLifecycleStateMachineFixture,
+} from '../test-helpers/lifecycle-state-store.js';
+import {bindRegisteredReplicaHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
+
 export async function registerReplicaHandlerTailMoreTests({
   t,
   fs,
@@ -11,14 +26,12 @@ export async function registerReplicaHandlerTailMoreTests({
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
   RAFT_ROLE,
-  LifeRaft,
   TEST_STEP_DOWN_OPERATION_ID,
   TEST_STEP_DOWN_PARTITION_ID,
   TEST_STEP_DOWN_REPLICA_ID,
   TEST_STEP_DOWN_REASON,
   TEST_STEP_DOWN_TARGET_ELECTION_REASON,
   TEST_STEP_DOWN_CORRELATION_ID,
-  TEST_STEP_DOWN_EMPTY_LEADER_ID,
   TEST_STATUS_RETRY_PARTITION_ID,
   TEST_STATUS_RETRY_REPLICA_ID,
   TEST_STATUS_RETRY_OPERATION_ID,
@@ -30,7 +43,6 @@ export async function registerReplicaHandlerTailMoreTests({
   createSeededCache,
   createMetadataOnlyCache,
   seedReplicaOperation,
-  applyGatewayMutationToCache,
   waitForReplicaEvent,
   tempDir,
 }) {
@@ -272,10 +284,12 @@ export async function registerReplicaHandlerTailMoreTests({
         partition_id: 'partition-1',
         node_id: 'test-node',
         replica_id: 'replica-1',
+        group_id: null,
         raft_role: null,
         status: ReplicaStatus.SYNCING,
         address: 'test-node/partition/replica-1',
         created_at: Date.now(),
+        state_entered_at: Date.now(),
         updated_at: Date.now(),
       });
       const mockCDC = createMockCDCService(cache);
@@ -288,14 +302,17 @@ export async function registerReplicaHandlerTailMoreTests({
         dataDir: tempDir,
       });
 
-      handler.localServices.set('replica-1', {
+      const activationService = bindRegisteredReplicaHandler({
+        replicaId: 'replica-1',
         getRole() {
           return RAFT_ROLE.LEADER;
         },
-      });
+      }, {resolveHandlerRetirementLane: () => handler.replicaStateMachine});
+      handler.localServices.set('replica-1', activationService);
 
       await handler.updateReplicaStatus('replica-1', ReplicaStatus.ACTIVE, {
         partitionId: 'partition-1',
+        activationService,
       });
 
       const activeUpdate = mockCDC.operations.find((op) =>
@@ -309,24 +326,90 @@ export async function registerReplicaHandlerTailMoreTests({
       );
     });
 
+  t.test('ordinary exact ACTIVE admission level-triggers current leader ' +
+    'and role evidence', async (t) => {
+    const cache = createMetadataOnlyCache({partitionId: 'partition-1'});
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+      service_id: 'replica-1',
+      service_type: 'partition',
+      partition_id: 'partition-1',
+      node_id: 'test-node',
+      replica_id: 'replica-1',
+      group_id: null,
+      raft_role: RAFT_ROLE.FOLLOWER,
+      status: ReplicaStatus.SYNCING,
+      address: 'test-node/partition/replica-1',
+      created_at: 100,
+      state_entered_at: 101,
+      updated_at: 101,
+    });
+    const mockCDC = createMockCDCService(cache);
+    const reasserted = {leader: 0, role: 0};
+    const trackedService = {
+      isLeader: true,
+      role: RAFT_ROLE.LEADER,
+      reassertDurableLeaderNodeId() {
+        reasserted.leader += 1;
+        return true;
+      },
+      reassertDurableRaftRole() {
+        reasserted.role += 1;
+        return true;
+      },
+      sqlQueryEngine: {
+        queryExecutor: {
+          getPartitionRoutingSnapshot() {
+            return {
+              canonicalLeaderNodeId: null,
+              canonicalLeaderRoutingGapState: 'leader_unknown',
+              deniedByNodeId: {},
+              activeAddressedServiceCount: 1,
+              routableServiceCount: 0,
+            };
+          },
+        },
+      },
+    };
+    const handler = new ReplicaHandler({
+      nodeId: 'test-node',
+      cdcIntegrationService: mockCDC,
+      systemTableCache: cache,
+      replicaStateMachine: {
+        getState() {
+          return {state: ReplicaStatus.SYNCING};
+        },
+        transition() {
+          return true;
+        },
+      },
+      createPartitionService: createMockPartitionServiceFactory(),
+      dataDir: tempDir,
+    });
+    handler.localServices.set('replica-1', trackedService);
+
+    await handler.updateReplicaStatus('replica-1', ReplicaStatus.ACTIVE, {
+      partitionId: 'partition-1',
+    });
+
+    t.same(reasserted, {leader: 1, role: 1},
+      'ordinary activation wakes the same downstream evidence owners');
+  });
+
   t.test('create replica routes lifecycle through replica state machine',
     async (t) => {
       const cache = createSeededCache();
       seedReplicaOperation(cache, 'op-1');
       const mockCDC = createMockCDCService(cache);
       const transitions = [];
-      const mockReplicaStateMachine = {
+      const mockReplicaStateMachine = createReplicaLifecycleStateMachineFixture({
         transition(replicaId, newState, context) {
           transitions.push({replicaId, newState, context});
           return true;
         },
-        getState() {
-          return null;
-        },
         registerReplicaSnapshot() {
           return true;
         },
-      };
+      });
 
       const handler = new ReplicaHandler({
         nodeId: 'test-node',
@@ -403,10 +486,12 @@ export async function registerReplicaHandlerTailMoreTests({
       partition_id: 'partition-1',
       node_id: 'test-node',
       replica_id: 'replica-1',
+      group_id: null,
       raft_role: RAFT_ROLE.FOLLOWER,
       status: ReplicaStatus.ACTIVE,
       address: 'test-node/partition/replica-1',
       created_at: Date.now(),
+      state_entered_at: Date.now(),
       updated_at: Date.now(),
     });
     const mockCDC = createMockCDCService(cache);
@@ -461,17 +546,20 @@ export async function registerReplicaHandlerTailMoreTests({
       (op) => op.type === 'delete' && op.tableName === SYSTEM_TABLE_NAME.SERVICES,
     );
     t.ok(deleteOp, 'service row deleted via CDC');
-    t.same(deleteOp.whereClause, {
+    t.match(deleteOp.whereClause, {
       service_id: 'replica-1',
-      service_type: 'partition',
+      service_type: 'partition_cleanup',
       partition_id: 'partition-1',
       node_id: 'test-node',
-    }, 'partition removal should delete through the canonical typed owner path');
+      status: 'cleanup_owned',
+      cleanup_token: String,
+      updated_at: Number,
+    }, 'partition removal releases only its exact cleanup marker');
 
     handler.shutdown();
   });
 
-  t.test('handleRemoveReplica removes failed replicas without forcing an invalid removing transition',
+  t.test('handleRemoveReplica moves failed replicas through the durable removing protocol',
     async (t) => {
       const TEST_FAILED_REMOVE_OPERATION_ID = 'op-failed-remove-1';
       const TEST_FAILED_REMOVE_PARTITION_ID = 'partition-failed-remove-1';
@@ -488,10 +576,12 @@ export async function registerReplicaHandlerTailMoreTests({
         partition_id: TEST_FAILED_REMOVE_PARTITION_ID,
         node_id: 'test-node',
         replica_id: TEST_FAILED_REMOVE_REPLICA_ID,
+        group_id: null,
         raft_role: RAFT_ROLE.FOLLOWER,
         status: ReplicaStatus.FAILED,
         address: TEST_FAILED_REMOVE_ADDRESS,
         created_at: Date.now(),
+        state_entered_at: Date.now(),
         updated_at: Date.now(),
       });
       const mockCDC = createMockCDCService(cache);
@@ -539,14 +629,14 @@ export async function registerReplicaHandlerTailMoreTests({
       );
       await removed;
 
-      t.notOk(
+      t.ok(
         mockCDC.operations.some((op) =>
           op.type === 'update' &&
           op.tableName === SYSTEM_TABLE_NAME.SERVICES &&
           op.whereClause?.service_id === TEST_FAILED_REMOVE_REPLICA_ID &&
           op.data.status === ReplicaStatus.REMOVING,
         ),
-        'failed source removal should skip the invalid failed-to-removing status write',
+        'failed source removal should publish REMOVING before cleanup',
       );
       t.notOk(
         cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_FAILED_REMOVE_REPLICA_ID),
@@ -589,31 +679,50 @@ export async function registerReplicaHandlerTailMoreTests({
         partition_id: TEST_LATE_FAILED_REMOVE_PARTITION_ID,
         node_id: 'test-node',
         replica_id: TEST_LATE_FAILED_REMOVE_REPLICA_ID,
+        group_id: null,
         raft_role: RAFT_ROLE.FOLLOWER,
         status: ReplicaStatus.ACTIVE,
         address: TEST_LATE_FAILED_REMOVE_ADDRESS,
         created_at: Date.now(),
+        state_entered_at: Date.now(),
         updated_at: Date.now(),
       });
       const mockCDC = createMockCDCService(cache);
-      let replicaState = ReplicaStatus.ACTIVE;
+      let removingAttempts = 0;
+      let durableRemovingObserved = false;
       let durableRemovalCompleted = false;
-      const raceReplicaStateMachine = {
-        getState() {
-          return replicaState;
-        },
-        transition(_replicaId, newState) {
-          if (newState === ReplicaStatus.REMOVING) {
-            replicaState = ReplicaStatus.FAILED;
-            return false;
-          }
-          replicaState = newState;
-          return true;
-        },
-        completeDurableRemoval() {
-          replicaState = ReplicaStatus.REMOVED;
-          durableRemovalCompleted = true;
-        },
+      const raceReplicaStateMachine = new ReplicaStateMachine({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+      });
+      const transition = raceReplicaStateMachine.transition.bind(
+        raceReplicaStateMachine,
+      );
+      raceReplicaStateMachine.transition = async (
+        replicaId,
+        newState,
+        context,
+      ) => {
+        if (newState !== ReplicaStatus.REMOVING) {
+          return transition(replicaId, newState, context);
+        }
+        removingAttempts += 1;
+        if (removingAttempts === 1) {
+          await transition(replicaId, ReplicaStatus.FAILED, context);
+          return false;
+        }
+        const result = await transition(replicaId, newState, context);
+        durableRemovingObserved = result === true;
+        return result;
+      };
+      const completeDurableRemovalWithAuthority = raceReplicaStateMachine
+        .completeDurableRemovalWithAuthority.bind(raceReplicaStateMachine);
+      raceReplicaStateMachine.completeDurableRemovalWithAuthority = async (
+        ...args
+      ) => {
+        const result = await completeDurableRemovalWithAuthority(...args);
+        durableRemovalCompleted = result === true;
+        return result;
       };
 
       const handler = new ReplicaHandler({
@@ -663,6 +772,11 @@ export async function registerReplicaHandlerTailMoreTests({
       );
       await removed;
 
+      t.equal(removingAttempts, 2,
+        'the status boundary retries removal after the concurrent FAILED');
+      t.equal(durableRemovingObserved, true,
+        'the race still converges through durable REMOVING before cleanup');
+
       t.notOk(
         cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_LATE_FAILED_REMOVE_REPLICA_ID),
         'late failed-state removal should still delete the authoritative service row',
@@ -673,9 +787,9 @@ export async function registerReplicaHandlerTailMoreTests({
         'late failed-state removal should still converge the local replica to removed',
       );
       t.equal(
-        replicaState,
-        ReplicaStatus.REMOVED,
-        'late failed-state removal should finish with one canonical removed lifecycle state',
+        raceReplicaStateMachine.getState(TEST_LATE_FAILED_REMOVE_REPLICA_ID),
+        null,
+        'late failed-state removal should clear completed lifecycle tracking',
       );
       t.equal(
         durableRemovalCompleted,
@@ -691,7 +805,11 @@ export async function registerReplicaHandlerTailMoreTests({
       handler.shutdown();
     });
 
-  t.test('handleRemoveReplica continues durable cleanup after retryable removing-status pressure',
+  // Lead ruling (fix-f5 follow-up): a removal effect never proceeds without
+  // a durable REMOVING row. A REMOVING write that exhausts its retry on
+  // retryable pressure defers the REMOVE typed (no outcome, no cleanup);
+  // the durable owner re-dispatches it.
+  t.test('handleRemoveReplica defers the removal when retryable pressure keeps its removing-status write from landing',
     async (t) => {
       const TEST_PRESSURED_REMOVE_OPERATION_ID = 'op-pressured-remove-1';
       const TEST_PRESSURED_REMOVE_PARTITION_ID = 'partition-pressured-remove-1';
@@ -713,10 +831,12 @@ export async function registerReplicaHandlerTailMoreTests({
         partition_id: TEST_PRESSURED_REMOVE_PARTITION_ID,
         node_id: 'test-node',
         replica_id: TEST_PRESSURED_REMOVE_REPLICA_ID,
+        group_id: null,
         raft_role: RAFT_ROLE.FOLLOWER,
         status: ReplicaStatus.ACTIVE,
         address: TEST_PRESSURED_REMOVE_ADDRESS,
         created_at: Date.now(),
+        state_entered_at: Date.now(),
         updated_at: Date.now(),
       });
       const mockCDC = createMockCDCService(cache);
@@ -763,11 +883,10 @@ export async function registerReplicaHandlerTailMoreTests({
         },
       });
 
-      const removed = waitForReplicaEvent(
-        handler,
-        'replicaRemoved',
-        'replicaRemovalFailed',
-      );
+      const events = [];
+      handler.on('replicaRemoved', () => events.push('replicaRemoved'));
+      handler.on('replicaRemovalFailed',
+        () => events.push('replicaRemovalFailed'));
 
       const response = await handler.handleRemoveReplica({
         operationId: TEST_PRESSURED_REMOVE_OPERATION_ID,
@@ -781,21 +900,30 @@ export async function registerReplicaHandlerTailMoreTests({
         ReplicaOperationResponseStatus.INITIATED,
         'pressured removing-status write should not reject remove admission',
       );
-      await removed;
+      for (let turn = 0; turn < 20 &&
+        handler.inProgressOperations.size > 0; turn += 1) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
 
       t.equal(
         removingWriteAttempts,
         1,
-        'removing status write should be attempted before durable cleanup',
+        'removing status write is attempted',
       );
-      t.notOk(
-        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_PRESSURED_REMOVE_REPLICA_ID),
-        'durable service row cleanup should still complete',
+      t.equal(handler.inProgressOperations.size, 0,
+        'the REMOVE was answered deferred, not left in progress');
+      t.same(events, [], 'no removal outcome: the operation stays ' +
+        'non-terminal for re-dispatch');
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_PRESSURED_REMOVE_REPLICA_ID)
+          ?.status,
+        ReplicaStatus.ACTIVE,
+        'no cleanup: the durable service row is untouched',
       );
       t.equal(
         handler.getLocalReplica(TEST_PRESSURED_REMOVE_REPLICA_ID)?.status,
-        ReplicaStatus.REMOVED,
-        'local replica tracking should converge to removed',
+        ReplicaStatus.ACTIVE,
+        'local tracking is the durable status again',
       );
 
       handler.shutdown();
@@ -1142,8 +1270,9 @@ export async function registerReplicaHandlerTailMoreTests({
       let activeWriteCount = 0;
       const replicaStateMachine = new ReplicaStateMachine({
         nodeId: 'test-node',
-        controlPlaneSystemTableGateway: {
-          async submitMutation(mutation) {
+        controlPlaneSystemTableGateway:
+          createLifecycleControlPlaneGatewayForCache(cache, {
+            beforeMutation(mutation) {
             if (mutation.tableName === SYSTEM_TABLE_NAME.SERVICES &&
                 mutation.operation === 'update' &&
                 mutation.data?.status === ReplicaStatus.ACTIVE) {
@@ -1156,10 +1285,8 @@ export async function registerReplicaHandlerTailMoreTests({
                 throw error;
               }
             }
-            applyGatewayMutationToCache(cache, mutation);
-            return {success: true};
-          },
-        },
+            },
+          }),
       });
       const handler = new ReplicaHandler({
         nodeId: 'test-node',
@@ -1214,217 +1341,123 @@ export async function registerReplicaHandlerTailMoreTests({
       }
     });
 
-  t.test('handleMessage routes STEP_DOWN_REPLICA through tracked leader handoff',
+  // The two STEP_DOWN_REPLICA handoffs reach the partition's one transfer
+  // issuer (requestLeadershipTransfer) and answer what its port answered:
+  // acceptance, with the branch it names and the port's record. The real
+  // core's behaviour on real partitions is witnessed in
+  // replica-handler-leadership-transfer.test.js.
+  const buildTransferTrackedService = (role, answer) => {
+    const trackedService = {
+      role,
+      transfers: [],
+      getRole() {
+        return this.role;
+      },
+      async requestLeadershipTransfer(request) {
+        trackedService.transfers.push(request);
+        return answer;
+      },
+    };
+    return trackedService;
+  };
+  const stepDownThroughHandler = async (trackedService, reason) => {
+    const cache = createSeededCache({
+      partitionId: TEST_STEP_DOWN_PARTITION_ID,
+      leaderReplicaId: TEST_STEP_DOWN_REPLICA_ID,
+    });
+    const handler = new ReplicaHandler({
+      nodeId: 'test-node',
+      dataDir: tempDir,
+      systemTableCache: cache,
+      cdcIntegrationService: createMockCDCService(cache),
+      createPartitionService: createMockPartitionServiceFactory(),
+    });
+    handler.localServices.set(TEST_STEP_DOWN_REPLICA_ID, trackedService);
+    handler.setLocalReplica(TEST_STEP_DOWN_REPLICA_ID, {
+      replicaId: TEST_STEP_DOWN_REPLICA_ID,
+      partitionId: TEST_STEP_DOWN_PARTITION_ID,
+      service: trackedService,
+    });
+    handler.initialize();
+    try {
+      return await handler.handleMessage({
+        correlationId: TEST_STEP_DOWN_CORRELATION_ID,
+        payload: {
+          type: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
+          operationId: TEST_STEP_DOWN_OPERATION_ID,
+          partitionId: TEST_STEP_DOWN_PARTITION_ID,
+          replicaId: TEST_STEP_DOWN_REPLICA_ID,
+          reason,
+        },
+      });
+    } finally {
+      await handler.shutdown();
+    }
+  };
+
+  t.test('handleMessage routes STEP_DOWN_REPLICA through the partition leadership transfer',
     async (t) => {
-      const cache = createSeededCache({
-        partitionId: TEST_STEP_DOWN_PARTITION_ID,
-        leaderReplicaId: TEST_STEP_DOWN_REPLICA_ID,
-      });
-      const mockCDC = createMockCDCService(cache);
-      const handler = new ReplicaHandler({
-        nodeId: 'test-node',
-        dataDir: tempDir,
-        systemTableCache: cache,
-        cdcIntegrationService: mockCDC,
-        createPartitionService: createMockPartitionServiceFactory(),
-      });
-
-      let cancelCount = 0;
-      let clearTimerCount = 0;
-      let electionTimerStartCount = 0;
-      let raftChangePayload = null;
-      const trackedService = {
-        role: RAFT_ROLE.LEADER,
-        getRole() {
-          return this.role;
-        },
-        cancelLeaderOwnedActivation() {
-          cancelCount += 1;
-        },
-        raft: {
-          change(payload) {
-            raftChangePayload = payload;
-            trackedService.role = RAFT_ROLE.FOLLOWER;
-          },
-        },
-        raftProvider: {
-          clearTimers(raft) {
-            clearTimerCount += 1;
-            t.equal(
-              raft,
-              trackedService.raft,
-              'timer clearing should target the demoted raft instance',
-            );
-          },
-          startElectionTimer(raft) {
-            electionTimerStartCount += 1;
-            t.equal(
-              raft,
-              trackedService.raft,
-              'election rearm should target the demoted raft instance',
-            );
-          },
-        },
-      };
-
-      handler.localServices.set(TEST_STEP_DOWN_REPLICA_ID, trackedService);
-      handler.setLocalReplica(TEST_STEP_DOWN_REPLICA_ID, {
-        replicaId: TEST_STEP_DOWN_REPLICA_ID,
-        partitionId: TEST_STEP_DOWN_PARTITION_ID,
-        service: trackedService,
-      });
-      handler.initialize();
-
-      try {
-        const response = await handler.handleMessage({
-          correlationId: TEST_STEP_DOWN_CORRELATION_ID,
-          payload: {
-            type: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
-            operationId: TEST_STEP_DOWN_OPERATION_ID,
-            partitionId: TEST_STEP_DOWN_PARTITION_ID,
-            replicaId: TEST_STEP_DOWN_REPLICA_ID,
-            reason: TEST_STEP_DOWN_REASON,
-          },
-        });
-
-        t.equal(
-          response.correlationId,
-          TEST_STEP_DOWN_CORRELATION_ID,
-          'correlationId should be preserved for step-down requests',
-        );
-        t.equal(
-          response.status,
-          ReplicaOperationResponseStatus.COMPLETED,
-          'step-down requests should complete after tracked leader demotion',
-        );
-        t.same(
-          raftChangePayload,
-          {
-            state: LifeRaft.FOLLOWER,
-            leader: TEST_STEP_DOWN_EMPTY_LEADER_ID,
-          },
-          'tracked raft should be demoted with an empty leader handoff target',
-        );
-        t.equal(
-          trackedService.role,
-          RAFT_ROLE.FOLLOWER,
-          'tracked service role should move to follower after handoff',
-        );
-        t.equal(
-          cancelCount,
-          1,
-          'leader-owned activation should be cancelled before demotion',
-        );
-        t.equal(
-          clearTimerCount,
-          0,
-          'handoff should not clear the follower election timer after demotion',
-        );
-        t.equal(
-          electionTimerStartCount,
-          1,
-          'follower election progress should be rearmed after demotion',
-        );
-      } finally {
-        await handler.shutdown();
-      }
+      const accepted = deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+        reason: RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_REQUESTED});
+      const trackedService = buildTransferTrackedService(
+        RAFT_ROLE.LEADER, accepted);
+      const response = await stepDownThroughHandler(
+        trackedService, TEST_STEP_DOWN_REASON);
+      t.equal(
+        response.correlationId,
+        TEST_STEP_DOWN_CORRELATION_ID,
+        'correlationId should be preserved for step-down requests',
+      );
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.COMPLETED,
+        'a transfer the port accepted completes the step-down request',
+      );
+      t.same(trackedService.transfers, [{
+        successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP,
+      }], 'the source leader asks exactly once for its most caught-up voter');
+      t.equal(response.handoffBranch,
+        REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REQUESTED,
+        'the response names the requested transfer');
+      t.same(response.handoffTransfer, accepted,
+        'the port record rides along');
     });
 
-  t.test('handleMessage re-arms follower election when STEP_DOWN_REPLICA carries replacement leader election intent',
+  t.test('handleMessage asks for leadership named to the replacement when STEP_DOWN_REPLICA carries replacement leader election intent',
     async (t) => {
-      const cache = createSeededCache({
-        partitionId: TEST_STEP_DOWN_PARTITION_ID,
-        leaderReplicaId: TEST_STEP_DOWN_REPLICA_ID,
-      });
-      const mockCDC = createMockCDCService(cache);
-      const handler = new ReplicaHandler({
-        nodeId: 'test-node',
-        dataDir: tempDir,
-        systemTableCache: cache,
-        cdcIntegrationService: mockCDC,
-        createPartitionService: createMockPartitionServiceFactory(),
-      });
+      const forwarded = deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+        reason: RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_FORWARDED});
+      const trackedService = buildTransferTrackedService(
+        RAFT_ROLE.FOLLOWER, forwarded);
+      const response = await stepDownThroughHandler(
+        trackedService, TEST_STEP_DOWN_TARGET_ELECTION_REASON);
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.COMPLETED,
+        'replacement leader election should complete through the tracked handoff lane',
+      );
+      t.same(trackedService.transfers, [{
+        successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+        replicaIdentity: TEST_STEP_DOWN_REPLICA_ID,
+      }], 'the follower asks exactly once for leadership named to itself');
+      t.equal(response.handoffBranch,
+        REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_FORWARDED);
+    });
 
-      let electionTimerStartCount = 0;
-      let immediateElectionRequestCount = 0;
-      let raftChangePayload = null;
-      const trackedService = {
-        role: RAFT_ROLE.FOLLOWER,
-        getRole() {
-          return this.role;
-        },
-        raft: {
-          change(payload) {
-            raftChangePayload = payload;
-          },
-        },
-        raftProvider: {
-          requestElectionNow(raft) {
-            immediateElectionRequestCount += 1;
-            t.equal(
-              raft,
-              trackedService.raft,
-              'replacement leader election should target the tracked follower raft instance',
-            );
-          },
-          startElectionTimer(raft) {
-            electionTimerStartCount += 1;
-            t.equal(
-              raft,
-              trackedService.raft,
-              'replacement leader election should rearm the tracked follower raft instance',
-            );
-          },
-        },
-      };
-
-      handler.localServices.set(TEST_STEP_DOWN_REPLICA_ID, trackedService);
-      handler.setLocalReplica(TEST_STEP_DOWN_REPLICA_ID, {
-        replicaId: TEST_STEP_DOWN_REPLICA_ID,
-        partitionId: TEST_STEP_DOWN_PARTITION_ID,
-        service: trackedService,
-      });
-      handler.initialize();
-
-      try {
-        const response = await handler.handleMessage({
-          correlationId: TEST_STEP_DOWN_CORRELATION_ID,
-          payload: {
-            type: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
-            operationId: TEST_STEP_DOWN_OPERATION_ID,
-            partitionId: TEST_STEP_DOWN_PARTITION_ID,
-            replicaId: TEST_STEP_DOWN_REPLICA_ID,
-            reason: TEST_STEP_DOWN_TARGET_ELECTION_REASON,
-          },
-        });
-
-        t.equal(
-          response.status,
-          ReplicaOperationResponseStatus.COMPLETED,
-          'replacement leader election should complete through the tracked handoff lane',
-        );
-        t.equal(
-          trackedService.role,
-          RAFT_ROLE.FOLLOWER,
-          'replacement leader election should not demote an already-follower replica again',
-        );
-        t.equal(
-          raftChangePayload,
-          null,
-          'replacement leader election should not force another raft state transition on a follower',
-        );
-        t.equal(
-          electionTimerStartCount,
-          0,
-          'replacement leader election should not wait on a normal follower election timer',
-        );
-        t.equal(
-          immediateElectionRequestCount,
-          1,
-          'replacement leader election should request immediate follower promotion',
-        );
-      } finally {
-        await handler.shutdown();
-      }
+  t.test('handleMessage answers ERROR with the typed reason when the port refuses the transfer',
+    async (t) => {
+      const refused = deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+        reason: RAFT_LEADERSHIP_TRANSFER_REASON.NO_KNOWN_LEADER,
+        retryable: true, recoveryRequired: false});
+      const trackedService = buildTransferTrackedService(
+        RAFT_ROLE.FOLLOWER, refused);
+      const response = await stepDownThroughHandler(
+        trackedService, TEST_STEP_DOWN_TARGET_ELECTION_REASON);
+      t.equal(response.status, ReplicaOperationResponseStatus.ERROR,
+        'a refused transfer changed nothing and is not reported completed');
+      t.equal(response.handoffBranch,
+        REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REFUSED);
+      t.same(response.handoffTransfer, refused,
+        'the typed refusal rides along for the caller\'s retry decision');
     });
 }

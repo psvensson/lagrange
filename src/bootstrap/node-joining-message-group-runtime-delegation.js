@@ -1,5 +1,7 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {NodeJoiningReplicaDescriptorCoordination} from './node-joining-replica-descriptor-coordination.js';
+import {isEndpointCurrentForNode} from
+  '../control-plane/owners/endpoint-incarnation-currentness.js';
 
 const {
   COLUMN,
@@ -10,19 +12,13 @@ const {
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
   SERVICE_STATUS,
-  SERVICE_TYPE,
   TABLES,
   UNIFIED_SERVICE_TYPE,
   activateMessageGroupServiceRows,
   activatePartitionServiceRows,
   assertCritical,
-  formatReplicatedServiceAddress,
   getControlPlaneMessageRequiredTables,
 } = NODE_JOINING_SERVICE_SHARED;
-
-const JOIN_MESSAGE_GROUP_SERVICE_REGISTRATION_OPTION = Object.freeze({
-  PREFER_CONTROL_PLANE_UPSERT: 'preferControlPlaneUpsert',
-});
 
 class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescriptorCoordination {
   async createJoinPartitionReplica(context) {
@@ -108,15 +104,8 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     if (typeof partition.shutdown === 'function') {
       await partition.shutdown();
     }
-    const unifiedAddress =
-      typeof partition.getUnifiedAddress === 'function' ?
-        partition.getUnifiedAddress() :
-        formatReplicatedServiceAddress(
-          SERVICE_TYPE.PARTITION,
-          this.nodeId,
-          options.replicaId,
-        );
-    this.messageRouter?.unregister?.(unifiedAddress);
+    // partition.shutdown() already retired its exact transport handler in the
+    // replica lane; a raw by-address unregister here could remove a successor's.
     this.partitionServices.delete(options.replicaId);
     this.replicaHandler?.localServices?.delete?.(options.replicaId);
     this.replicaHandler?.localReplicas?.delete?.(options.replicaId);
@@ -285,7 +274,11 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
       groupId,
       replicaId,
       service,
-      options,
+      // A join registration is a birth: absent an explicit status the row is
+      // born STOPPED and becomes ACTIVE only through the handler-bound
+      // activation; an explicit non-STOPPED status stays refused by the row
+      // owner's guard.
+      {status: SERVICE_STATUS.STOPPED, ...options},
     );
   }
   hasPublishedLocalServiceEndpoints() {
@@ -298,7 +291,10 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
       (systemTableCache?.getAll?.(TABLES.SERVICE_ENDPOINTS) || []).filter(
         (row) => row?.[COLUMN.NODE_ID] === this.nodeId,
       );
-    return localEndpointRows.length > 0;
+    // Only this node's current incarnation's endpoints count as published.
+    const nodeRow = systemTableCache?.get?.(TABLES.NODES, this.nodeId) || null;
+    return localEndpointRows.some((row) =>
+      isEndpointCurrentForNode(row, nodeRow));
   }
   getRegisteredJoinNodeId() {
     const systemTableCache = NodeService.getInstance().getSystemTableCache();
@@ -308,13 +304,10 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
   async activateMessageGroupServiceRows() {
     return activateMessageGroupServiceRows({
       nodeId: this.nodeId,
-      activateReplica: async ({groupId, replicaId, service}) => {
-        await this.registerMessageGroupService(groupId, replicaId, service, {
-          status: SERVICE_STATUS.ACTIVE,
-          [JOIN_MESSAGE_GROUP_SERVICE_REGISTRATION_OPTION
-            .PREFER_CONTROL_PLANE_UPSERT]: true,
-        });
-      },
+      systemTableWriter: this.createCdcIntegrationService(),
+      replicaStateMachine: this.replicaStateMachine,
+      registrationEvidenceByReplicaId:
+        this.createMessageGroupPhase.registrationEvidenceByReplicaId,
       messageRouter: this.messageRouter,
       deferTransientFailures: true,
       onDeferredActivation: ({groupId, replicaId, error}) => {
@@ -349,8 +342,8 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     return activatePartitionServiceRows({
       nodeId: this.nodeId,
       systemTableWriter: this.createCdcIntegrationService(),
+      replicaStateMachine: this.replicaStateMachine,
       messageRouter: this.messageRouter,
-      deferTransientFailures: true,
       onDeferredActivation: ({partitionId, replicaId, error}) => {
         this.logger.warn(
           NODE_JOINING_SERVICE_LITERAL.DEFERRING_JOIN_PARTITION_SERVICE_ROW_ACTIVATION,

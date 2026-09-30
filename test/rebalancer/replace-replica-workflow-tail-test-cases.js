@@ -2,6 +2,7 @@ import {registerReplaceReplicaWorkflowTailMoreTests} from './replace-replica-wor
 import {
   installActualReplicaObservationResolver,
 } from './test-helpers.js';
+import {createReplaceWitness} from './replace-witness-fixture.js';
 
 export async function registerReplaceReplicaWorkflowTailTests({
   t,
@@ -648,12 +649,24 @@ export async function registerReplaceReplicaWorkflowTailTests({
     },
   );
 
+  // SUPERSEDED (R09) by the owner decisions of 2026-09-25 (approved REPLACE
+  // design C1/R-1a/R-1f, S2), quest replace-source-removal-owner: this
+  // pinned "a FAILED source row completes a STOPPING REPLACE". A failed
+  // source may still be a committed voter; the REPLACE now re-drives its
+  // membership removal (REMOVE_PEER through the target) and completes only
+  // once the witness reports the removal committed.
   await t.test(
-    'REPLACE STOPPING reconciliation completes when the source replica is already failed',
+    'REPLACE STOPPING reconciliation re-drives the membership removal of a ' +
+      'failed source and completes once it is committed',
     async (t) => {
       const deliveries = [];
+      const witness = createReplaceWitness({leaderReplicaId: 'users-p1-r2'});
       const messageRouter = {
         async deliver(target, payload, options) {
+          const witnessAnswer = witness.answer(payload);
+          if (witnessAnswer) {
+            return witnessAnswer;
+          }
           deliveries.push({target, payload, options});
           return {
             acknowledged: true,
@@ -665,6 +678,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
       const coordinator = createTestCoordinator({
         nodeId: 'seed-node',
         enableTimeouts: false,
+        replaceWitness: false,
         messageRouter,
         sqlQueryResults: {
           'FROM services WHERE service_id = ?': {
@@ -690,21 +704,29 @@ export async function registerReplaceReplicaWorkflowTailTests({
         operation.sourceReplicaId = 'users-p1-r1';
         operation.workflowStep = WORKFLOW_STEP.STOPPING;
         operation.status = ReplicaStatus.ACTIVE;
+        // The durable row is STOPPING (another writer's, with no intent);
+        // the owner records its intent from a fresh witness read first.
+        operation.stepsHistory = [...operation.stepsHistory,
+          {step: WORKFLOW_STEP.STOPPING, timestamp: Date.now()}];
+        await coordinator.repository.persistOperationUpdate(operation);
 
-        const progressed =
-          await coordinator.reconcileOperationProgress(operation);
-
-        t.equal(progressed, true,
-          'STOPPING reconciliation should treat a failed source replica as terminal progress for REPLACE');
+        await coordinator.reconcileOperationProgress(operation);
         t.equal(
           deliveries.length,
           0,
           'terminal failed source state should not redispatch source removal',
         );
+        t.equal(operation.workflowStep, WORKFLOW_STEP.STOPPING,
+          'a failed source that is still a voter does not complete the REPLACE');
+        t.equal(witness.retirements.length, 1,
+          'the REPLACE re-drives REMOVE_PEER of the source through its target');
+
+        witness.commitRemoval();
+        await coordinator.reconcileOperationProgress(operation);
         t.equal(
           operation.workflowStep,
           WORKFLOW_STEP.REMOVED,
-          'REPLACE should complete once the source replica is already non-serving',
+          'REPLACE completes once the source removal is committed',
         );
         t.equal(
           operation.status,
@@ -935,8 +957,11 @@ export async function registerReplaceReplicaWorkflowTailTests({
           TEST_CACHE_UPSERT,
           sourceServiceRow,
         );
-        await new Promise((resolve) => setImmediate(resolve));
-        await new Promise((resolve) => setImmediate(resolve));
+        // The owner now reads the witness replica and persists the removal
+        // intent (quest replace-source-removal-owner): settle its turns.
+        for (let turn = 0; turn < 20; turn += 1) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
 
         const persistedOperation =
           await coordinator.queryOperationById(TEST_OPERATION_ID);
@@ -961,9 +986,20 @@ export async function registerReplaceReplicaWorkflowTailTests({
     },
   );
 
+  // SUPERSEDED (R09) by the owner decision of 2026-09-25 (the approved
+  // REPLACE design, C1/R-1a), quest replace-source-removal-owner: this test
+  // pinned "the source row's deletion completes a STOPPING REPLACE". A row is
+  // not committed membership: the REPLACE completes only when its witness
+  // (the target replica) reports the source out of the committed voters. The
+  // row deletion now re-evaluates the owner, which re-drives the membership
+  // removal and completes only once the witness shows it committed.
   await t.test(
-    'observed REPLACE source deletion completes STOPPING rows without redispatch',
+    'observed REPLACE source deletion completes STOPPING rows only once the ' +
+      'witness reports the source removal committed',
     async (t) => {
+      const witness = createReplaceWitness({
+        leaderReplicaId: 'replica_operations-p1-r4',
+      });
       const TEST_SERVICES_TABLE = 'services';
       const TEST_CACHE_DELETE = 'DELETE';
       const TEST_OBSERVATION_ABSENT = 'absent';
@@ -1017,12 +1053,17 @@ export async function registerReplaceReplicaWorkflowTailTests({
       const coordinator = createTestCoordinator({
         nodeId: TEST_TARGET_NODE_ID,
         enableTimeouts: false,
+        replaceWitness: false,
         cacheData: {
           services: [sourceServiceRow],
           replicaOperations: [operationRow],
         },
         messageRouter: {
           async deliver(target, payload, options) {
+            const witnessAnswer = witness.answer(payload);
+            if (witnessAnswer) {
+              return witnessAnswer;
+            }
             deliveries.push({target, payload, options});
             return {
               acknowledged: true,
@@ -1055,15 +1096,26 @@ export async function registerReplaceReplicaWorkflowTailTests({
         };
 
       try {
+        // F1: the completion read now takes the leader-answer path, a few
+        // more async hops; settle until the re-drive lands (bounded) rather
+        // than a fixed 20 turns that raced on a loaded lab host.
+        const settle = async () => {
+          for (
+            let turn = 0;
+            turn < 200 && witness.retirements.length === 0;
+            turn += 1
+          ) {
+            await new Promise((resolve) => setImmediate(resolve));
+          }
+        };
         coordinator.handleObservedReplicaStateChange(
           TEST_SERVICES_TABLE,
           TEST_CACHE_DELETE,
           sourceServiceRow,
         );
-        await new Promise((resolve) => setImmediate(resolve));
-        await new Promise((resolve) => setImmediate(resolve));
+        await settle();
 
-        const persistedOperation =
+        const waiting =
           await coordinator.queryOperationById(TEST_OPERATION_ID);
         t.equal(
           deliveries.length,
@@ -1071,18 +1123,37 @@ export async function registerReplaceReplicaWorkflowTailTests({
           'source-side deletion should not redispatch removal',
         );
         t.equal(
+          waiting.workflowStep,
+          WORKFLOW_STEP.STOPPING,
+          'a row deletion alone does not complete the replacement',
+        );
+        t.ok(
+          witness.retirements.length >= 1,
+          'the owner re-drives REMOVE_PEER through the witness',
+        );
+
+        witness.commitRemoval();
+        await coordinator.workflowOwner.runReplaceStoppingOwner(
+          coordinator.workflowOwner.repository.rowToOperation(
+            coordinator.systemTableCache.get(
+              'replica_operations', TEST_OPERATION_ID) || operationRow,
+          ),
+        );
+        const persistedOperation =
+          await coordinator.queryOperationById(TEST_OPERATION_ID);
+        t.equal(
           persistedOperation.workflowStep,
           WORKFLOW_STEP.REMOVED,
-          'source-side deletion should complete the replacement',
+          'the committed removal completes the replacement',
         );
         t.equal(
           persistedOperation.status,
           ReplicaStatus.REMOVED,
-          'source-side deletion should persist the removed status',
+          'the committed removal persists the removed status',
         );
         t.ok(
           persistedOperation.completedAt !== null,
-          'source-side deletion should record completion time',
+          'the committed removal records completion time',
         );
       } finally {
         await coordinator.shutdown();

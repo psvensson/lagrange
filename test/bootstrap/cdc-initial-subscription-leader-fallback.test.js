@@ -34,7 +34,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
 
     // Track propagated events
     const propagatedEvents = [];
@@ -136,7 +136,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
     let capturedCdcSubscriber = null;
 
     const mockPartition = {
@@ -218,7 +218,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
     const propagatedEvents = [];
     let capturedCdcSubscriber = null;
     let repairSelectionCalls = 0;
@@ -313,7 +313,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
     const propagatedEvents = [];
     let capturedCdcSubscriber = null;
     let repairSelectionCalls = 0;
@@ -413,7 +413,7 @@ test(
   async (t) => {
     setupEnvironment();
 
-    const service = new BootstrapService({nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
 
     let mgSubscribeCalls = 0;
     let partitionSubscriberRegistrations = 0;

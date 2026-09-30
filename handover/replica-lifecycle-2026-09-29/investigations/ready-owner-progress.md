@@ -1,0 +1,12 @@
+# ready-owner progress
+- start 2026-09-28; Qs: Q1 base mg-1 leaderless; Q2 census; Q3 design; Q4 five reds; Q5 verifier items
+- Q4 run done on clean cand-wt (d467e0563): all 5 red; q4-cand.out. heartbeat-budget: "HeartbeatService requires the canonical node-state publication owner"; registration x2: "Node registration requires a positive boot incarnation"; atomic-claim x2: "authoritative_read_owner_unavailable" at line 153
+- Q1: base-q1 worktree (6831054b1) + mg-sampler (50ms leader sampling, mg-register/unregister) applied
+- Q1 BASE RESULT (q1-base.ndjson, test green 85/85 23.5s): seed mg-1-r1 leader term1 from +0.48s until shutdown (+22.1s), never lost. r2 moved seed->joiner1 at +7.2s (joiner r2 learns leader in 0.92s; seed r2 unregistered +8.0s); r3 moved seed->joiner2 at +14.0s (learns leader in 1.46s; seed r3 unreg +15.3s). Leaderless window after initial election = 0. r1 (leader) NEVER relocates at base.
+- next: same sampler on candidate (wait: other session running preflight in mg-envelope pid 198162)
+- Q1 CAND RESULT (cand-q1 + sampler, q1-cand.ndjson, test red 85 asserts 50.5s, same 2 reds): seed r1 (leader t1) relocated to joiner1 at +7.3s w/o transfer -> leaderless 2.70s -> seed r2 elected t2 at +10.0s; seed r2 (leader) relocated to joiner2 at +14.67s -> NEVER re-elected: term 3->202 by +48.8s; joiner1 r1 CANDIDATE every term; seed r3 FOLLOWER with stale leaderId=mg-1-r1; joiner2 r2 follower no leader. Leaderless 34+ s until teardown.
+- VERDICT Q1: NOT a base fact. Base: leader r1 never relocates (joiners get r2,r3), 0s leaderless. Candidate relocates the LEADER replica twice and then livelocks elections. Candidate-introduced MG regression (separate owner), distinct from READY boundary.
+- analysis in q1-analysis.txt
+- Q1b: added nodes-p1 partition sampler to base-q1 and cand-q1; running run-q1b.sh (base then cand) -> q1b-{base,cand}.ndjson
+- Q1b (q1b-*.ndjson): base run2 green 85/85 29.7s: mg-1-r1 leader on seed whole test, 0s leaderless; nodes-p1-r1 leader on seed whole test. CAND run2 GREEN 85/85 28.1s (flaky!): r1(leader) moved to joiner1 +6.26 -> leaderless 2.67s -> r2 leader t2 +8.93; r2(leader) moved to joiner2 +13.43 -> leaderless 5.21s (terms 3..27) -> r3 leader t28 for 0.44s (+18.64..19.08) -> leaderless again 7.6s to teardown (term 46). total ~15.5s. nodes-p1 leader r1 stable on seed in both (NODES partition never relocates in this test).
+- Q2-Q5 reading done; census + design drafted in final report. Q4 all 5 red on clean cand (q4-cand.out).

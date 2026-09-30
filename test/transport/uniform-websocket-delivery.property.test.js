@@ -15,6 +15,7 @@ import fc from 'fast-check';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // Initialize configuration and logging for tests (module level)
 ConfigurationManager.resetInstance();
@@ -57,7 +58,9 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
           data: fc.string({minLength: 0, maxLength: 100}),
         }),
         async (targetAddress, message) => {
-          const router = new MessageRouter({nodeId: 'test-node'});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: 'test-node'});
           await router.initialize();
 
           // Register a handler for the address (simulating local service)
@@ -94,7 +97,7 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
           .filter((s) => s.trim().length > 0 && !s.includes('/'))
           .map((s) => `node-${s.trim()}`),
         async (nodeId) => {
-          const router = new MessageRouter({nodeId});
+          const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId});
 
           // Check that deliverLocal exists
           const hasDeliverLocal = typeof router.deliverLocal === 'function';
@@ -123,7 +126,7 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
         // Generate node ID
         fc.string({minLength: 1, maxLength: 20}).map((s) => `node-${s}`),
         async (nodeId) => {
-          const router = new MessageRouter({nodeId});
+          const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId});
 
           // Check naming
           const hasHandlers = router.handlers instanceof Map;
@@ -161,7 +164,9 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
             .filter((s) => s.trim().length > 0),
         }),
         async (nodeId, entityType, entityId, message) => {
-          const router = new MessageRouter({nodeId: 'local-node'});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: 'local-node'});
           await router.initialize();
 
           const targetAddress = `${nodeId}/${entityType}/${entityId}`;
@@ -206,7 +211,9 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
         }),
         async (localNodeId, entityType, entityId, message) => {
           // Create router with specific nodeId
-          const router = new MessageRouter({nodeId: localNodeId});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: localNodeId});
           await router.initialize();
 
           // Create address targeting self

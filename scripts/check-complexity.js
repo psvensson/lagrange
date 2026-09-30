@@ -49,7 +49,33 @@ const TARGET_THRESHOLD = 12;
 // 2026-09-19: tightened 1817 -> 1816 after the learner promotion's in-flight
 // operation read lost its over-threshold method (spread-cure authorization
 // carrier), measured with the hint.
-const BASELINE_COUNT = 1816;
+// 2026-09-23: tightened 1816 -> 1814 on the checker's hint after the rs-raft
+// single-path cutover removed the write path's direct-execution branch and the
+// runtime owner's status shaping moved beside it.
+// 2026-09-24: tightened 1814 -> 1813 on the checker's hint after the ready
+// node's publication advancement read its published set from the snapshot
+// owner instead of normalizing the row itself (cutover seed parity).
+// 2026-09-25: tightened 1813 -> 1811 on the checker's hint after the REPLACE
+// owner deleted the replacement-leader retarget resolution (H-B', quest
+// replace-source-removal-owner).
+// 2026-09-26: tightened 1811 -> 1810 on the checker's hint on the O1
+// committed-read branch (the partition row branch of the creation stamp
+// deleted; the peer-cache reconcile's expected-peer loop extracted).
+// 2026-09-26: tightened 1810 -> 1805 on the hint (fix-f1: the per-leg
+// handoff evidence and escalation deleted).
+// 2026-09-26: tightened 1810 -> 1809 on the checker's hint (fix-f4: the
+// readiness service-row readers share one authoritative-read helper,
+// readAllNodeServiceRows drops below the threshold).
+// 2026-09-26 (integration 2): the two merged at the lower (1805), then
+// tightened to 1804 on the checker's hint.
+// 2026-09-28: tightened 1804 -> 1797 on the checker's hint (node lifecycle
+// owner: the dispatch node-state queue, deferred retry and in-write
+// follow-up branches deleted).
+// 2026-09-29: tightened 1797 -> 1796 on the checker's hint (census walker
+// split into named node predicates).
+// 2026-09-30: tightened 1796 -> 1795 on the checker's hint (the boot
+// lifecycle components no longer branch on a missing incarnation).
+const BASELINE_COUNT = 1795;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

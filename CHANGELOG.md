@@ -10,6 +10,32 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.2.6] — 2026-09-30
+
+Consensus cutover to the Rust `raft-rs` core through the WASM operation
+port, with the replica-lifecycle durable-generation repair that final
+verification required (quest `replica-lifecycle-durable-generation`, epic
+`raft-rs-full-cutover`):
+
+- Every node boot reserves a durable, monotonic boot incarnation from one
+  owner per data directory before any lifecycle side effect; legacy
+  rejoin hints are a one-time migration source only, and `bootIncarnation`
+  is a required option of the public bootstrap and join services.
+- `ReplicaStateMachine` is the sole lifecycle owner per partition-replica
+  and message-group row: every transition is an exact-generation
+  conditional update, activation checks the exact transport handler inside
+  the lifecycle lane and holds it through the durable ACTIVE write, and
+  handler retirement is exact-identity only. Executor-created replicas are
+  born STOPPED and activate through the same lane.
+- Reaped node generations are terminal: liveness, endpoint refresh and
+  delayed READY work from a superseded incarnation can no longer mutate a
+  successor's rows; bootstrap-snapshot addressing only breaks the initial
+  connection circularity and never out-ranks an authoritative NODES row.
+- One replica lifecycle owner per live node incarnation across join
+  retries, with timers on the node's canonical time source.
+- The vendored `raft-rs` WASM binding ships in the Docker image and the
+  packaged runtime.
+
 ## [0.2.5] — 2026-09-13
 
 The first 0.2 release that ships. `v0.2.0`, `v0.2.1`, `v0.2.2`, `v0.2.3`
@@ -404,7 +430,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/psvensson/lagrange/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/psvensson/lagrange/compare/v0.2.3...v0.2.5
 [0.2.4-rc.2]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.1...v0.2.4-rc.2
 [0.2.4-rc.1]: https://github.com/psvensson/lagrange/compare/v0.2.4-rc.0...v0.2.4-rc.1

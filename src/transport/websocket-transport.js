@@ -589,6 +589,14 @@ class WebSocketTransport extends EventEmitter {
   unregister(address) {
     this.messageHandlers.delete(address);
   }
+  getRegisteredHandler(address) {
+    return this.messageHandlers.get(address) || null;
+  }
+  unregisterExact(address, handler) {
+    if (this.messageHandlers.get(address) !== handler) return false;
+    this.messageHandlers.delete(address);
+    return true;
+  }
   async deliver(targetAddress, message, options = {}) {
     const {targetNodeId} = options;
     const messageId = message.messageId || uuidv4();

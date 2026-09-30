@@ -18,6 +18,14 @@ const RAFT_RS_TABLE = Object.freeze({
   SNAPSHOT: '_raft_rs_snapshot',
 });
 
+// A caller that must not create the record asks the schema whether its
+// tables exist instead of opening a store (whose constructor creates them).
+const RAFT_RS_RECORD_TABLES = Object.freeze(Object.values(RAFT_RS_TABLE));
+const RAFT_RS_SCHEMA_SQL = Object.freeze({
+  SELECT_TABLE_PRESENT:
+    'SELECT 1 FROM sqlite_master WHERE type = \'table\' AND name = ?',
+});
+
 // The applied index and the configuration state are COLUMNS OF ONE ROW,
 // written by one statement. That is the whole mechanism behind "ConfState and
 // its applied progress are written atomically": there is no write that can
@@ -50,7 +58,9 @@ const RAFT_RS_SQL = Object.freeze({
       learners TEXT NOT NULL,
       voters_outgoing TEXT NOT NULL,
       learners_next TEXT NOT NULL,
-      auto_leave INTEGER NOT NULL
+      auto_leave INTEGER NOT NULL,
+      bootstrap_index INTEGER,
+      admission_index INTEGER
     )
   `,
   CREATE_SNAPSHOT_TABLE: `
@@ -80,6 +90,36 @@ const RAFT_RS_SQL = Object.freeze({
     FROM ${RAFT_RS_TABLE.LOG}
     WHERE group_id = ?
     ORDER BY log_index ASC
+  `,
+  // The applied proposals of one group: NORMAL entries that carry a
+  // payload, at or below the durable applied index, in log order. The applied
+  // index is written in the same transaction as the state machine's SQL, so
+  // this is exactly the prefix the state machine holds; an entry that is
+  // committed but not yet applied is not part of it. One statement, so the
+  // boundary and the entries are one read.
+  SELECT_APPLIED_PROPOSAL_ENTRIES: `
+    SELECT log.log_index, log.term, log.data
+    FROM ${RAFT_RS_TABLE.LOG} AS log
+    JOIN ${RAFT_RS_TABLE.APPLIED_STATE} AS applied
+      ON applied.group_id = log.group_id
+    WHERE log.group_id = ?
+      AND log.entry_type = ?
+      AND log.data IS NOT NULL
+      AND log.log_index <= applied.applied_index
+    ORDER BY log.log_index ASC
+  `,
+  // Whether the tables a read-only reader needs exist, asked of the schema
+  // rather than created: a reader never runs DDL.
+  COUNT_LOG_AND_APPLIED_STATE_TABLES: `
+    SELECT COUNT(*) AS present
+    FROM sqlite_master
+    WHERE type = 'table'
+      AND name IN ('${RAFT_RS_TABLE.LOG}', '${RAFT_RS_TABLE.APPLIED_STATE}')
+  `,
+  COUNT_APPLIED_STATE_TABLE: `
+    SELECT COUNT(*) AS present
+    FROM sqlite_master
+    WHERE type = 'table' AND name = '${RAFT_RS_TABLE.APPLIED_STATE}'
   `,
   UPSERT_HARD_STATE: `
     INSERT INTO ${RAFT_RS_TABLE.HARD_STATE}
@@ -117,8 +157,38 @@ const RAFT_RS_SQL = Object.freeze({
   `,
   SELECT_APPLIED_STATE: `
     SELECT applied_index, voters, learners, voters_outgoing, learners_next,
-           auto_leave
+           auto_leave, bootstrap_index, admission_index
     FROM ${RAFT_RS_TABLE.APPLIED_STATE}
+    WHERE group_id = ?
+  `,
+  // The participation gate's durable inputs (committed-read amendment 1,
+  // section 3.3), written with the index-0 applied state of a created group:
+  // the committed index its bootstrap configuration was read at (0 for a
+  // genesis) and the index of the applied entry that admitted this replica
+  // as a voter (null until one is applied). The per-entry upsert above never
+  // names them, so every later applied state keeps them.
+  UPSERT_BOOTSTRAP_APPLIED_STATE: `
+    INSERT INTO ${RAFT_RS_TABLE.APPLIED_STATE}
+      (group_id, applied_index, voters, learners, voters_outgoing,
+       learners_next, auto_leave, bootstrap_index, admission_index)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(group_id) DO UPDATE SET
+      applied_index = excluded.applied_index,
+      voters = excluded.voters,
+      learners = excluded.learners,
+      voters_outgoing = excluded.voters_outgoing,
+      learners_next = excluded.learners_next,
+      auto_leave = excluded.auto_leave,
+      bootstrap_index = excluded.bootstrap_index,
+      admission_index = excluded.admission_index
+  `,
+  // The applied-state table's columns, asked of the schema: a record written
+  // before the participation gate lacks the gate's columns.
+  SELECT_APPLIED_STATE_COLUMNS:
+    `SELECT name FROM pragma_table_info('${RAFT_RS_TABLE.APPLIED_STATE}')`,
+  UPDATE_ADMISSION_INDEX: `
+    UPDATE ${RAFT_RS_TABLE.APPLIED_STATE}
+    SET admission_index = ?
     WHERE group_id = ?
   `,
   UPSERT_SNAPSHOT: `
@@ -160,6 +230,32 @@ const RAFT_RS_CONF_STATE_MEMBER_FIELDS = Object.freeze([
   RAFT_RS_CONF_STATE_FIELD.LEARNERS_NEXT,
 ]);
 
+// Whether the store may write now. The record shares its connection with
+// the replica's user sessions, which hold `BEGIN` across round trips; a write
+// made while such a transaction is open would become part of it (better-sqlite3
+// nests a savepoint) and the session's ROLLBACK would erase it. The store
+// writes only when the connection is in autocommit or inside a transaction the
+// store itself opened.
+const RAFT_RS_PERSISTENCE_ADMISSION = Object.freeze({
+  ADMITTED: 'admitted',
+  USER_TRANSACTION_OPEN: 'user-transaction-open',
+});
+
+// Whether a durable record's schema carries the participation gate.
+const RAFT_RS_RECORD_COMPATIBILITY = Object.freeze({
+  COMPATIBLE: 'compatible',
+  PRE_GATE: 'pre-gate',
+  // No applied-state table at all: a lost table, which the record read
+  // itself reports (an unreadable record), not a pre-gate schema.
+  TABLE_MISSING: 'table-missing',
+});
+const RAFT_RS_PARTICIPATION_GATE_COLUMNS = Object.freeze([
+  'bootstrap_index', 'admission_index']);
+
+const RAFT_RS_STORE_ERROR_CODE = Object.freeze({
+  USER_TRANSACTION_OPEN: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN',
+});
+
 const RAFT_RS_ZERO_INDEX = '0';
 const RAFT_RS_BOOLEAN_COLUMN = Object.freeze({TRUE: 1, FALSE: 0});
 
@@ -169,13 +265,23 @@ const RAFT_RS_STORE_ERROR_MSG = Object.freeze({
     `${JSON.stringify(value)}`,
   noRecord: (groupId) =>
     `no durable raft-rs record for group ${JSON.stringify(groupId)}`,
+  USER_TRANSACTION_OPEN:
+    'the rs-raft store refuses to write while its connection is inside a ' +
+    'transaction the store did not open',
 });
 
 export {
   RAFT_RS_BOOLEAN_COLUMN,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
+  RAFT_RS_PARTICIPATION_GATE_COLUMNS,
+  RAFT_RS_PERSISTENCE_ADMISSION,
+  RAFT_RS_RECORD_COMPATIBILITY,
+  RAFT_RS_RECORD_TABLES,
+  RAFT_RS_SCHEMA_SQL,
   RAFT_RS_SQL,
+  RAFT_RS_STORE_ERROR_CODE,
   RAFT_RS_STORE_ERROR_MSG,
+  RAFT_RS_TABLE,
   RAFT_RS_ZERO_INDEX,
 };

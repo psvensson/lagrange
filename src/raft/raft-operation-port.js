@@ -1,4 +1,7 @@
-import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
+import {
+  RAFT_OPERATION,
+  RAFT_OPERATION_OUTCOME,
+} from './raft-operation-port-constants.js';
 
 const FREEZABLE_VALUE_TYPES = Object.freeze(['object', 'function']);
 const VALUE_DESCRIPTOR_KEY = 'value';
@@ -7,10 +10,12 @@ const RAFT_OPERATION_PORT_METHODS = Object.freeze([
   'step',
   'propose',
   'proposeConfChange',
+  'transferLeadership',
   'probePeerProgress',
   'tick',
   'campaign',
   'readStatus',
+  RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP,
   'configureTick',
   'startScheduling',
   'stopScheduling',

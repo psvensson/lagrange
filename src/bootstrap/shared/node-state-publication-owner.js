@@ -3,6 +3,7 @@ import {
   OWNER_CONTRACT_STATE,
 } from '../../control-plane/owner-contract-outcome.js';
 import {
+  CONTROL_PLANE_MESSAGE_COMPLETION_FIELD,
   CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT,
   CONTROL_PLANE_MESSAGE_COMPLETION_KIND,
   ControlPlaneField,
@@ -55,19 +56,20 @@ import {
   JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
 } from '../node-joining-constants.js';
+import {requireIssuedBootIncarnation} from '../boot-incarnation-contract.js';
+
+const NODE_STATE_PUBLICATION_OWNER_SUBJECT = 'NodeStatePublicationOwner';
 
 class NodeStatePublicationOwner {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
     this.nodeAddress = options.nodeAddress || null;
-    // This boot's locally minted incarnation (rejoin-hints counter): every
-    // state update the publisher emits carries it, so receivers can fence a
-    // stale-incarnation writer (a zombie from a previous boot) before its
-    // heartbeat ever reaches the watermark comparison.
-    this.bootIncarnation = Number.isSafeInteger(options.bootIncarnation) &&
-      options.bootIncarnation > 0 ?
-      options.bootIncarnation :
-      0;
+    // This boot's incarnation, reserved by the boot incarnation owner and
+    // required: every state update the publisher emits carries it, so
+    // receivers can fence a stale-incarnation writer (a zombie from a
+    // previous boot) before its heartbeat reaches the watermark comparison.
+    this.bootIncarnation = requireIssuedBootIncarnation(
+      options.bootIncarnation, NODE_STATE_PUBLICATION_OWNER_SUBJECT);
     this.config = options.config || Object.freeze({});
     this.delegates = options.delegates || Object.freeze({});
     this.controlPlaneTargetAddress = null;
@@ -129,6 +131,29 @@ class NodeStatePublicationOwner {
         ControlPlaneMessageType.NODE_STATE_UPDATE,
       ),
     });
+  }
+
+  refreshNodeStateUpdateTargetCandidates(
+    targetCandidates,
+    attempt,
+    options = {},
+  ) {
+    const refreshedCandidates = this.resolveNodeStateUpdateTargetCandidates(
+      options,
+    );
+    if (!Array.isArray(refreshedCandidates)) {
+      return targetCandidates[attempt + 1] || null;
+    }
+    const knownCandidates = new Set(targetCandidates);
+    const newlyObservedCandidates = refreshedCandidates.filter((candidate) =>
+      typeof candidate === 'string' &&
+      candidate.length > 0 &&
+      !knownCandidates.has(candidate),
+    );
+    if (newlyObservedCandidates.length > 0) {
+      targetCandidates.splice(attempt + 1, 0, ...newlyObservedCandidates);
+    }
+    return targetCandidates[attempt + 1] || null;
   }
 
   shouldRetryControlPlaneNodeStateUpdate(error, publicationMode = null) {
@@ -356,9 +381,7 @@ class NodeStatePublicationOwner {
       [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]: publicationMode,
     };
 
-    if (this.bootIncarnation > 0) {
-      message[ControlPlaneField.BOOT_INCARNATION] = this.bootIncarnation;
-    }
+    message[ControlPlaneField.BOOT_INCARNATION] = this.bootIncarnation;
     if (options.heartbeatOnly === true) {
       message[ControlPlaneField.HEARTBEAT_ONLY] = true;
     }
@@ -500,6 +523,16 @@ class NodeStatePublicationOwner {
           completionKind: rawDeliveryResult?.completionKind ||
             CONTROL_PLANE_MESSAGE_COMPLETION_KIND.NOT_OBSERVED,
           completionCompleted: durableCompletion,
+          [CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW]:
+            rawDeliveryResult?.[
+              CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW
+            ] || null,
+          [CONTROL_PLANE_MESSAGE_COMPLETION_FIELD
+            .AUTHORITATIVE_OBSERVED_AT_MS]:
+              rawDeliveryResult?.[
+                CONTROL_PLANE_MESSAGE_COMPLETION_FIELD
+                  .AUTHORITATIVE_OBSERVED_AT_MS
+              ] ?? null,
         });
       } catch (error) {
         error.publicationDiagnostics = publicationDiagnostics;
@@ -588,7 +621,6 @@ class NodeStatePublicationOwner {
 
         if (failureAction.retryTarget ===
             NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET.SAME_TARGET) {
-          sameTargetRetryCount += 1;
           if (failureAction.retryAfterMs > 0) {
             await this.sleep(failureAction.retryAfterMs);
           }
@@ -596,10 +628,21 @@ class NodeStatePublicationOwner {
               'function') {
             this.controlPlaneKernelIngress().invalidateTarget(targetAddress);
           }
+          const refreshedTargetAddress =
+            this.refreshNodeStateUpdateTargetCandidates(
+              targetCandidates,
+              attempt,
+              {state, heartbeatAt: options.heartbeatAt},
+            );
+          const retryTargetAddress = refreshedTargetAddress || targetAddress;
+          if (!refreshedTargetAddress) {
+            sameTargetRetryCount += 1;
+            targetCandidates.push(targetAddress);
+          }
           this.logger().warn(JOINING_LOG_MSG.NODE_STATE_UPDATE_RETRYING, {
             nodeId: this.nodeId,
             targetAddress,
-            nextTargetAddress: targetAddress,
+            nextTargetAddress: retryTargetAddress,
             state,
             publicationMode,
             attempt: attempt + 1,
@@ -608,7 +651,6 @@ class NodeStatePublicationOwner {
             error: error.message,
           });
           this.controlPlaneTargetAddress = null;
-          targetCandidates.push(targetAddress);
           continue;
         }
 
@@ -618,6 +660,11 @@ class NodeStatePublicationOwner {
               'function') {
             this.controlPlaneKernelIngress().invalidateTarget(targetAddress);
           }
+          this.refreshNodeStateUpdateTargetCandidates(
+            targetCandidates,
+            attempt,
+            {state, heartbeatAt: options.heartbeatAt},
+          );
           this.logger().warn(JOINING_LOG_MSG.NODE_STATE_UPDATE_RETRYING, {
             nodeId: this.nodeId,
             targetAddress,

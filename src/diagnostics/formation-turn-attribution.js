@@ -89,7 +89,11 @@ let activeExecutionGenerationId = null;
 // would otherwise be unknown. The measurement window still opens and closes
 // where it did; this map only answers "whose is this resource", so that a
 // callback dispatching inside the window is attributed correctly and a
-// foreign one is not attributed at all.
+// foreign one is not attributed at all. It holds the LIVE set only: a
+// destroyed resource can never dispatch again, so its tag is dropped with it,
+// exactly as the attribution's own asyncOwners are. Kept for the whole
+// generation, one charged seed scenario (~15.9M resources) crossed V8's Map
+// limit.
 const asyncGenerationIds = new Map();
 let generationLineageHook = null;
 
@@ -105,10 +109,13 @@ function beginGenerationLineage(createHookFn) {
         asyncGenerationIds.set(asyncId, stored.generationId);
       }
     },
+    // Destroy follows a resource's last dispatch (for a promise, its
+    // collection), so dropping the tag here changes no answer
+    // isActiveGenerationResource can give.
+    destroy: (asyncId) => {
+      mapDelete(asyncGenerationIds, asyncId);
+    },
   });
-  // No destroy callback on purpose: a tag must not be able to disappear on a
-  // garbage-collection schedule. The whole map is dropped when the generation
-  // ends, which is the only moment its answers stop being needed.
   generationLineageHook.enable();
 }
 

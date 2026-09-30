@@ -10,7 +10,7 @@
 
 Lagrange's central move is running application logic *next to* each data
 partition instead of pulling rows out to an application tier (see the
-[examples overview](../README.md)). Before the current Artifact / Binding /
+[examples overview](../../../examples/README.md)). Before the current Artifact / Binding /
 Cell deployment surface existed, Lagrange had an earlier way to do this:
 upload a JavaScript **callback module** and execute it through the
 `partition_callback` mechanism, which runs the callback against partition data
@@ -23,11 +23,11 @@ but it predates Bindings. Everything this surface rehearsed now has a
 public successor: a `call` Binding declares the statement, the WASM
 component's `run` export does the partition-local work, and its `reduce`
 export folds the partials -
-[call-binding-account-summary](../call-binding-account-summary/README.md)
+[call-binding-account-summary](../../../examples/call-binding-account-summary/README.md)
 is the runnable example. The
-[request-binding examples](../request-binding-deployment/README.md) show
+[request-binding examples](../../../examples/request-binding-deployment/README.md) show
 the same deployment surface for HTTP endpoints, and
-[Current Capabilities And Limitations](../../docs/current-capabilities-and-limitations.md)
+[Current Capabilities And Limitations](../../../docs/current-capabilities-and-limitations.md)
 is the status authority.
 
 ### Translate the old vocabulary to the current surface
@@ -137,16 +137,16 @@ flowchart LR
 ## Capability notes - read before drawing conclusions
 
 The authoritative status is
-[Current Capabilities And Limitations](../../docs/current-capabilities-and-limitations.md).
+[Current Capabilities And Limitations](../../../docs/current-capabilities-and-limitations.md).
 A few notes:
 
 - This directory demonstrates the **legacy callback path**, not the deployment
   surface. Service deployment is declared through `INSTALL SERVICE` and
   `CREATE BINDING` (see
-  [`architecture/minimal-deployment-surface.md`](../../architecture/minimal-deployment-surface.md));
+  [`architecture/minimal-deployment-surface.md`](../../../architecture/minimal-deployment-surface.md));
   the callback path here predates it. Partition-local execution with
   reduction is publicly invocable today via `CALL BINDING` (see
-  [call-binding-account-summary](../call-binding-account-summary/README.md)).
+  [call-binding-account-summary](../../../examples/call-binding-account-summary/README.md)).
 - Managed [OCI](https://opencontainers.org/) container execution is not
   implemented yet. `native_js` is kernel-internal, and OCI callback invocation
   remains unsupported.
@@ -155,7 +155,7 @@ A few notes:
   [WebAssembly](https://webassembly.org/) binary or component**. The runtime
   later evaluates the source as JavaScript. Do not use it for deployment-size
   or WASM-performance claims. For genuine WASI components, use the
-  [request-binding examples](../request-binding-deployment/README.md).
+  [request-binding examples](../../../examples/request-binding-deployment/README.md).
 
 ## Under the hood
 
@@ -181,7 +181,7 @@ Again: this construction does **not** compile JavaScript to WASM. A genuine
 component engine, component ABI, OCI installation path, and public invocation
 contract are separate cutovers - the real compile-JS-to-component path exists
 today in
-[`js-request-binding-deployment`](../js-request-binding-deployment/README.md),
+[`js-request-binding-deployment`](../../../examples/js-request-binding-deployment/README.md),
 which uses
 [ComponentizeJS](https://github.com/bytecodealliance/ComponentizeJS).
 

@@ -1,24 +1,39 @@
 import {PriorityPublicationLeaderSafety} from './priority-publication-leader-safety.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
-import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
+import {
+  REPLACE_HANDOFF_DECISION,
+  beginReplaceHandoffAttempt,
+  decideReplaceNamedHandoff,
+  recordReplaceHandoffAnswer,
+} from './operation-workflow-replace-handoff-attempt.js';
+import {isPartitionReplace} from './operation-workflow-replace-owner.js';
+import {
+  isDeferredVisibilitySnapshot,
+} from './operation-workflow-replace-owner-state.js';
+import {
+  readReplaceWitnessMembership,
+  replaceReplicaIdsOf,
+} from './operation-workflow-replace-witness.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
-  OperationType,
   PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,
-  REMOVE_SAFETY_HANDOFF_CONTINUATION_ACTION,
-  REMOVE_SAFETY_HANDOFF_CONTINUATION_ACTION_BY_STATE,
-  REMOVE_SAFETY_HANDOFF_CONTINUATION_STATE,
-  REMOVE_SAFETY_HANDOFF_FAILURE_POLICY,
   ReplicaOperationField,
   ReplicaOperationMessageType,
   ReplicaOperationReason,
-  ReplicaOperationResponseStatus,
   resolveOperationHandlerType,
 } = SHARED;
+
+// The publication waits the leader-safety snapshot still decides for a
+// REPLACE (they gate on the publication partition, not on leadership).
+const REPLACE_PUBLICATION_WAIT_STATES = Object.freeze(new Set([
+  PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE
+    .PUBLICATION_STATUS_UNAVAILABLE,
+  PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.WAIT_PUBLICATION_PUBLISHED,
+]));
 
 const PRIORITY_RECOVERY_PLANNING_REUSE_LITERAL = Object.freeze({
   OPERATION_WORKFLOW_OWNER: 'operation_workflow_owner',
@@ -89,28 +104,24 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     }
 
     if (
+      isPartitionReplace(operation) &&
+      !REPLACE_PUBLICATION_WAIT_STATES.has(safetySnapshot.state)
+    ) {
+      return this.evaluateReplaceNamedHandoffSafety(operation);
+    }
+
+    if (
       safetySnapshot.state ===
       PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.SAFE
     ) {
       return this.buildSafeRemoveSafetyEvaluation();
     }
 
-    if (
-      this.isCompletedReplacementElectionSafeForPriorityRecovery(
-        safetySnapshot,
-        replacementReplicaRow,
-        {
-          operation,
-          priorityRecoveryCompletionSafe:
-            options?.priorityRecoveryCompletionSafe,
-          replacementLeaderRetargetCandidateAvailable:
-            options?.replacementLeaderRetargetCandidateAvailable,
-        },
-      )
-    ) {
-      return this.buildSafeRemoveSafetyEvaluation();
-    }
-
+    // R09 (BR11, amendment-1 step 7): the CL-043 completed-election
+    // authorization is deleted. Every operation this gate decides is a
+    // partition REPLACE, whose leadership is decided above by a fresh read
+    // of its target (lead === t); on the publication-wait path it falls
+    // through to, only the publication waits below apply.
     if (
       safetySnapshot.state ===
       PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.PUBLICATION_STATUS_UNAVAILABLE
@@ -142,84 +153,116 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
       );
     }
 
-    if (
-      safetySnapshot.state ===
-      PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE
-        .REQUEST_REPLACEMENT_LEADER_ELECTION
-    ) {
-      return this.buildDeferredRemoveSafetyEvaluationForOperation(
-        operation,
-        OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
-          safetySnapshot.partitionId +
-          OPERATION_WORKFLOW_OWNER_LITERAL.SOURCE_LEADER +
-          safetySnapshot.sourceReplicaId +
-          OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_LEADER_OWNERSHIP_PENDING_BEFORE_SAFE_REMOVAL,
-        {
-          handoffRequest: Object.freeze({
-            dispatchNodeId: safetySnapshot.replacementNodeId,
-            messageType: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
-            requestReason:
-              ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
-            requestReplicaId: safetySnapshot.replacementReplicaId,
-          }),
-          handoffFailurePolicy:
-            safetySnapshot.replacementLeaderElectionNotFoundTerminal === true ?
-              REMOVE_SAFETY_HANDOFF_FAILURE_POLICY.FAIL_ON_NOT_FOUND :
-              REMOVE_SAFETY_HANDOFF_FAILURE_POLICY.NONE,
-          handoffFailureError:
-            OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
-            safetySnapshot.partitionId +
-            OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_REPLICA_2 +
-            safetySnapshot.replacementReplicaId +
-            OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_LEADER_ELECTION_RETURNED_NOT_FOUND,
-        },
-      );
-    }
+    // Only a partition REPLACE reaches here (every other operation is
+    // NOT_APPLICABLE above), and its leadership is decided by the named
+    // handoff; the per-leg answers are deleted (fix-f1, section 9).
+    return this.evaluateReplaceNamedHandoffSafety(operation);
+  }
 
-    if (
-      safetySnapshot.state ===
-      PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE
-        .FAIL_REPLACEMENT_REPLICA_NOT_FOUND
-    ) {
+  /**
+   * A REPLACE's leadership gate (amendment-1 step 2): the witness's fresh
+   * leader decides, and the only handoff is a named-target attempt to the
+   * REPLACE's own target. Superseded for REPLACE (R09): the completed
+   * election evidence (CL-043, BR11) and the row-observed ownership wait
+   * (BR3).
+   * @param {Object} operation
+   * @return {Promise<Object>} A remove-safety evaluation.
+   */
+  async evaluateReplaceNamedHandoffSafety(operation) {
+    const replicaIds = replaceReplicaIdsOf(this, operation);
+    const witness = await readReplaceWitnessMembership(this, operation);
+    const decision = decideReplaceNamedHandoff(
+      this, operation, witness, replicaIds);
+    if (decision.state === REPLACE_HANDOFF_DECISION.LEADERSHIP_SAFE) {
+      return this.buildSafeRemoveSafetyEvaluation();
+    }
+    if (decision.state === REPLACE_HANDOFF_DECISION.TARGET_NOT_FOUND) {
       return this.buildFailedRemoveSafetyEvaluation(
         OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
-          safetySnapshot.partitionId +
+          operation.partitionId +
           OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_REPLICA_2 +
-          safetySnapshot.replacementReplicaId +
+          replicaIds.targetReplicaId +
           OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_LEADER_ELECTION_RETURNED_NOT_FOUND,
       );
     }
-
-    if (
-      safetySnapshot.state ===
-      PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.WAIT_REPLACEMENT_LEADER_OWNERSHIP
-    ) {
+    const pendingMessage =
+      OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
+      operation.partitionId +
+      OPERATION_WORKFLOW_OWNER_LITERAL.SOURCE_LEADER +
+      replicaIds.sourceReplicaId +
+      OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_LEADER_OWNERSHIP_PENDING_BEFORE_SAFE_REMOVAL;
+    if (decision.state !== REPLACE_HANDOFF_DECISION.ISSUE) {
       return this.buildDeferredRemoveSafetyEvaluationForOperation(
-        operation,
-        OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
-          safetySnapshot.partitionId +
-          OPERATION_WORKFLOW_OWNER_LITERAL.SOURCE_LEADER +
-          safetySnapshot.sourceReplicaId +
-          OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_LEADER_OWNERSHIP_PENDING_BEFORE_SAFE_REMOVAL,
-      );
+        operation, pendingMessage);
     }
-
     return this.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,
-      OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
-        safetySnapshot.partitionId +
-        OPERATION_WORKFLOW_OWNER_LITERAL.SOURCE_LEADER +
-        safetySnapshot.sourceReplicaId +
-        OPERATION_WORKFLOW_OWNER_LITERAL.HANDOFF_PENDING_BEFORE_SAFE_REMOVAL,
+      pendingMessage,
       {
         handoffRequest: Object.freeze({
-          dispatchNodeId: safetySnapshot.sourceNodeId,
+          dispatchNodeId: operation.targetNodeId,
           messageType: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
-          requestReason: ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
-          requestReplicaId: safetySnapshot.sourceReplicaId,
+          requestReason: ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
+          requestReplicaId: replicaIds.targetReplicaId,
+          // The attempt opens when the request actually leaves (dispatch).
+          replaceAttempt: true,
         }),
       },
     );
+  }
+
+  /**
+   * F-b / TC5: a REPLACE's handoff leaves only while the operation is still
+   * the non-terminal one that decided it (live and cached), in a source
+   * removal phase. Otherwise nothing is sent and no attempt opens.
+   * @param {Object} operation
+   * @return {boolean}
+   */
+  isReplaceHandoffStillOwned(operation) {
+    if (isDeferredVisibilitySnapshot(operation)) {
+      // BR12: a deferred-visibility snapshot issues no handoff.
+      return false;
+    }
+    const cachedRow = this.repository.getReplicaOperationRowFromCache?.(
+      operation.operationId) || null;
+    const cachedTerminal = cachedRow !== null &&
+      cachedRow.completed_at !== null && cachedRow.completed_at !== undefined;
+    return !this.repository.isOperationTerminal(operation) &&
+      !cachedTerminal &&
+      this.repository.isReplaceRemoveDispatchPhase(operation);
+  }
+
+  /**
+   * A REPLACE's named-target attempt (F-b): it opens only when the request
+   * leaves under the still-owning operation, and its answer - a delivery
+   * failure is a refusal - is applied to the attempt it names.
+   * @param {Object} operation
+   * @param {Object} handoffRequest
+   * @param {string} target
+   * @param {Object} request
+   * @return {Promise<Object|null>}
+   */
+  async dispatchReplaceHandoffAttempt(
+    operation, handoffRequest, target, request) {
+    if (!this.isReplaceHandoffStillOwned(operation)) {
+      return null;
+    }
+    const attemptSeq = beginReplaceHandoffAttempt(this, operation.operationId);
+    let response = null;
+    try {
+      response = await this.messageRouter.deliver(target, {
+        ...request,
+        [ReplicaOperationField.ATTEMPT_SEQ]: attemptSeq,
+      }, {
+        targetNodeId: handoffRequest.dispatchNodeId,
+        deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
+      });
+    } catch (_error) {
+      response = null;
+    }
+    recordReplaceHandoffAnswer(this, operation.operationId, response,
+      attemptSeq);
+    return response || null;
   }
 
   async dispatchRemoveSafetyHandoffRequest(operation, handoffRequest) {
@@ -252,108 +295,24 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     if (handoffRequest.requestReason) {
       request[ReplicaOperationField.REASON] = handoffRequest.requestReason;
     }
-
-    // R3 (slow-rejoiner-progress-or-evict): anchor the first source-leader handoff ATTEMPT
-    // (independent of whether the saturated source ever responds) so the safety snapshot can
-    // detect a sustained non-progressing source handoff and escalate to driving the
-    // replacement election instead of re-asking the starved source to step down.
-    this.recordPriorityPublicationSourceLeaderHandoffRequested(
-      operation,
-      handoffRequest,
-    );
-
-    try {
-      const response = await this.messageRouter.deliver(target, request, {
-        targetNodeId: handoffRequest.dispatchNodeId,
-        deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
-      });
-      this.recordPriorityPublicationLeaderHandoffEvidence(
-        operation,
-        handoffRequest,
-        response,
-      );
-      this.recordPriorityPublicationReplacementLeaderElectionEvidence(
-        operation,
-        handoffRequest,
-        response,
-      );
-      return response || null;
-    } catch (_error) {
+    // Every remove-safety handoff is a REPLACE's named-target attempt; the
+    // non-attempt dispatch and its evidence recording are deleted (fix-f1,
+    // section 9).
+    if (handoffRequest.replaceAttempt !== true) {
       return null;
     }
+    return this.dispatchReplaceHandoffAttempt(
+      operation, handoffRequest, target, request);
   }
 
   async shouldContinueAfterRemoveSafetyHandoffResponse(
-    operation,
+    _operation,
     removeSafetyEvaluation,
-    response,
   ) {
-    const snapshot =
-      await this.buildRemoveSafetyHandoffContinuationSnapshot(
-        operation,
-        removeSafetyEvaluation,
-        response,
-      );
-    const decision =
-      this.decideRemoveSafetyHandoffContinuation(snapshot);
-    return (
-      decision.action === REMOVE_SAFETY_HANDOFF_CONTINUATION_ACTION.CONTINUE
-    );
-  }
-
-  async buildRemoveSafetyHandoffContinuationSnapshot(
-    operation,
-    removeSafetyEvaluation,
-    response,
-  ) {
-    const handoffRequest = removeSafetyEvaluation?.handoffRequest || null;
-    const priorityReplaceSourceRemoval =
-      operation?.type === OperationType.REPLACE &&
-      this.repository.isReplaceRemovePhase(operation) &&
-      classifySystemPartition({partitionId: operation.partitionId})
-        .priorityControlPlane;
-    const replacementLeaderElectionHandoff =
-      handoffRequest?.requestReason ===
-      ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION;
-    const handoffCompleted =
-      response?.status === ReplicaOperationResponseStatus.COMPLETED;
-    const dispatchNodeId =
-      typeof handoffRequest?.dispatchNodeId === 'string' ?
-        handoffRequest.dispatchNodeId.trim() :
-        OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
-    const continuationApplicable =
-      priorityReplaceSourceRemoval &&
-      replacementLeaderElectionHandoff &&
-      handoffCompleted &&
-      dispatchNodeId.length > 0;
-    return Object.freeze({
-      continuationApplicable,
-      handoffCompleted,
-      replacementLeaderElectionHandoff,
-    });
-  }
-
-  decideRemoveSafetyHandoffContinuation(snapshot) {
-    const state =
-      this.resolveRemoveSafetyHandoffContinuationState(snapshot);
-    const action =
-      REMOVE_SAFETY_HANDOFF_CONTINUATION_ACTION_BY_STATE.get(state) ||
-      REMOVE_SAFETY_HANDOFF_CONTINUATION_ACTION.WAIT;
-    return Object.freeze({action, state});
-  }
-
-  resolveRemoveSafetyHandoffContinuationState(snapshot) {
-    if (
-      snapshot?.continuationApplicable !== true ||
-      snapshot?.replacementLeaderElectionHandoff !== true ||
-      snapshot?.handoffCompleted !== true
-    ) {
-      return REMOVE_SAFETY_HANDOFF_CONTINUATION_STATE.NOT_APPLICABLE;
-    }
-    return (
-      REMOVE_SAFETY_HANDOFF_CONTINUATION_STATE
-        .EXACT_TARGET_ELECTION_EVIDENCE_RECORDED
-    );
+    // E11: a REPLACE's answered attempt is followed by one fresh decision
+    // (the leader may already be the target, e.g. ALREADY_LEADER); an
+    // unresolved attempt then waits for its resolution.
+    return removeSafetyEvaluation?.handoffRequest?.replaceAttempt === true;
   }
 
   // Priority BUDGET ADMISSION evidence, not a removal decision: AVAILABLE.

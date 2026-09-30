@@ -28,6 +28,7 @@ import {ControlPlaneSystemTableGateway} from
 import {NODE_STATE, SERVICE_STATUS, STATE} from '../../src/constants/index.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const TEST_NODE_ID = 'node-joining-fence';
 const TEST_NODE_ADDRESS = '10.0.0.98:8080';
@@ -69,6 +70,7 @@ function createHeartbeatService(options = {}) {
       messageRouter: null,
     });
   return new RawHeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     ...options,
     controlPlaneSystemTableGateway,
   });
@@ -80,6 +82,9 @@ async function captureHeartbeatReporterPayload(nodeRow, options = {}) {
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     cdcIntegrationService: {
+      // A heartbeat at a real incarnation (re)publishes its node endpoint at
+      // that incarnation: born by insert when no current row exists.
+      insertSystemTableRow: async () => ({success: true}),
       updateSystemTableRow: async () => ({success: true}),
       upsertSystemTableRow: async () => ({success: true}),
     },
@@ -107,6 +112,7 @@ async (t) => {
   try {
     const payload = await captureHeartbeatReporterPayload({
       node_id: TEST_NODE_ID,
+      boot_incarnation: TEST_BOOT_INCARNATION,
       node_address: TEST_NODE_ADDRESS,
       created_at: TEST_CREATED_AT,
       status: NODE_STATE.JOINING,
@@ -121,17 +127,17 @@ async (t) => {
       'pre-activation heartbeat must publish CONNECTED, not READY',
     );
     t.equal(
-      payload.nodeRow.status,
+      payload.telemetry.status,
       NODE_STATE.JOINING,
       'pre-activation heartbeat must preserve status=joining',
     );
-    t.equal(
-      payload.nodeRow.ready_lease_expires_at,
-      TEST_EXISTING_LEASE,
-      'pre-activation heartbeat must not extend the ready lease',
+    t.notOk(
+      'ready_lease_expires_at' in payload.telemetry,
+      'pre-activation heartbeat never computes a ready lease (the ' +
+        'lifecycle owner grants none for CONNECTED)',
     );
     t.equal(
-      payload.nodeRow.last_heartbeat,
+      payload.telemetry.last_heartbeat,
       TEST_NOW,
       'pre-activation heartbeat must still renew liveness',
     );
@@ -150,6 +156,7 @@ async (t) => {
     const payload = await captureHeartbeatReporterPayload(
       {
         node_id: TEST_NODE_ID,
+        boot_incarnation: TEST_BOOT_INCARNATION,
         node_address: TEST_NODE_ADDRESS,
         created_at: TEST_CREATED_AT,
         status: NODE_STATE.JOINING,
@@ -161,13 +168,13 @@ async (t) => {
 
     t.equal(payload.state, STATE.READY, 'lifecycle-ready publishes READY');
     t.equal(
-      payload.nodeRow.status,
+      payload.telemetry.status,
       SERVICE_STATUS.ACTIVE,
       'lifecycle-ready promotes status to active',
     );
-    t.ok(
-      payload.nodeRow.ready_lease_expires_at > TEST_NOW,
-      'lifecycle-ready grants the ready lease',
+    t.notOk(
+      'ready_lease_expires_at' in payload.telemetry,
+      'the READY lease is granted by the lifecycle owner, not the heartbeat',
     );
   } finally {
     ConfigurationManager.resetInstance();
@@ -182,6 +189,7 @@ async (t) => {
   try {
     const payload = await captureHeartbeatReporterPayload({
       node_id: TEST_NODE_ID,
+      boot_incarnation: TEST_BOOT_INCARNATION,
       node_address: TEST_NODE_ADDRESS,
       created_at: TEST_CREATED_AT,
       status: SERVICE_STATUS.ACTIVE,
@@ -196,13 +204,13 @@ async (t) => {
       'activated heartbeat publishes READY',
     );
     t.equal(
-      payload.nodeRow.status,
+      payload.telemetry.status,
       SERVICE_STATUS.ACTIVE,
       'activated heartbeat publishes status=active',
     );
-    t.ok(
-      payload.nodeRow.ready_lease_expires_at > TEST_NOW,
-      'activated heartbeat grants a fresh ready lease',
+    t.notOk(
+      'ready_lease_expires_at' in payload.telemetry,
+      'the fresh READY lease is granted by the lifecycle owner',
     );
   } finally {
     ConfigurationManager.resetInstance();

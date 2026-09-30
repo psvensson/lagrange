@@ -19,8 +19,6 @@ import {
   buildActiveMembershipSnapshot,
   resolveActiveNodeViews,
   buildReadinessByNodeId,
-  hasCanonicalWebSocketEndpoint,
-  hasCanonicalWebSocketEndpoints,
   isCanonicalWebSocketEndpointRow,
   isCanonicallyActiveNode,
 } from '../control-plane/active-node-projection.js';
@@ -605,12 +603,6 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
       nowMs: this.nowFn(),
       requireWebSocketEndpoint: options.requireWebSocketEndpoint,
     });
-  }
-  hasAnyActiveWebSocketEndpoint(nodeEndpointRows = []) {
-    return hasCanonicalWebSocketEndpoints(nodeEndpointRows);
-  }
-  hasActiveWebSocketEndpoint(nodeId, nodeEndpointRows = []) {
-    return hasCanonicalWebSocketEndpoint(nodeId, nodeEndpointRows);
   }
   isActiveWebSocketEndpoint(endpointRow) {
     return isCanonicalWebSocketEndpointRow(endpointRow);

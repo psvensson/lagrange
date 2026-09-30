@@ -44,6 +44,8 @@ import {
 import {
   initializeTestEnvironment,
 } from './node-joining-service-test-support.js';
+import {TEST_BOOT_INCARNATION} from
+  '../test-helpers/boot-incarnation-fixture.js';
 
 const LOCAL_NODE_ID = 'restarted-node';
 const LOCAL_NODE_ADDRESS = 'restarted-node:8080';
@@ -237,6 +239,7 @@ test(
     t.after(() => rm(dataDir, {recursive: true, force: true}));
 
     await persistBootstrapRejoinHints({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
@@ -522,6 +525,7 @@ test(
       DURABLE_PEER_B,
     ]);
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
       seedNodeAddress: seedContactUrls[0],

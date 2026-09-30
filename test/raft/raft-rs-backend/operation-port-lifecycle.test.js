@@ -10,8 +10,9 @@ import {createRuntimeDispatcher} from
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 
 const ACTIVE_OPERATIONS = Object.freeze([
-  'tick', 'step', 'propose', 'proposeConfChange', 'probePeerProgress',
-  'campaign', 'readStatus', 'configureTick', 'startScheduling',
+  'tick', 'step', 'propose', 'proposeConfChange', 'transferLeadership',
+  'probePeerProgress', 'campaign', 'readStatus', 'configureTick',
+  'startScheduling',
 ]);
 
 test('the core-entry instrument counts every binding call and catches an ungated mutant',
@@ -117,8 +118,9 @@ test('durable retirement refuses every active operation before core entry after 
       const calls = [
         port.tick(),
         port.step({}),
-        port.propose(new Uint8Array()),
+        port.propose('after-retirement'),
         port.proposeConfChange({}),
+        port.transferLeadership({successor: 'most-caught-up'}),
         port.probePeerProgress('retired-peer'),
         port.campaign(),
         port.readStatus(),

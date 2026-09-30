@@ -62,6 +62,7 @@ import {
   grantEpochCoordinatorStorageAdmission,
   wireEpochDispatchProbe,
 } from './epoch-fence-test-harness.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 const {SQL} = REBALANCE_COORDINATOR_SHARED;
 const {BOUND, UNBOUND, INVALID} = MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE;
@@ -175,7 +176,7 @@ async function openSharedDurableReplicaOperations() {
     return sharedDurable;
   }
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_DIR_PREFIX));
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: DURABLE_PARTITION_ID,
     tableId: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
     tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
@@ -183,7 +184,7 @@ async function openSharedDurableReplicaOperations() {
     replicaId: DURABLE_REPLICA_ID,
     nodeId: TEST_NODE_ID,
     dbPath: path.join(tempDir, DURABLE_DB_FILE),
-  });
+  }));
   await partition.initialize();
   sharedDurable = {
     partition,

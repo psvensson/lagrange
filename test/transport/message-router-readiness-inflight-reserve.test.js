@@ -2,6 +2,7 @@ import t from '../../src/test-helpers/tap.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const TEST_LOCAL_NODE_ID = 'local-node';
 const TEST_REMOTE_NODE_ID = 'remote-node';
@@ -51,6 +52,7 @@ t.test(
   async (t) => {
     initializeTestEnvironment();
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: TEST_LOCAL_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       startServer: false,
@@ -168,6 +170,7 @@ t.test(
   async (t) => {
     initializeTestEnvironment();
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: TEST_LOCAL_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       startServer: false,
@@ -235,6 +238,7 @@ t.test(
   async (t) => {
     initializeTestEnvironment();
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: TEST_LOCAL_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       startServer: false,
@@ -300,6 +304,7 @@ t.test(
   async (t) => {
     initializeTestEnvironment();
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: TEST_LOCAL_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       startServer: false,

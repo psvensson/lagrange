@@ -202,7 +202,8 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
   }
   /**
    * Determine whether join-owned runtime infrastructure is already available
-   * locally and can be reused for the current session.
+   * locally and can be reused for the current session. The replica lifecycle
+   * part is answered by its acquisition owner for THIS boot incarnation.
    * @return {boolean}
    * @private
    */
@@ -214,7 +215,7 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
       this.rpcClient &&
       this.cdcIntegrationService &&
       this.heartbeatService,
-    );
+    ) && this.replicaLifecycleOwner.isEstablished(this.bootIncarnation);
   }
   /**
    * Expose the join-local startup completion contract to BootstrapAPI.

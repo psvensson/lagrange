@@ -3,7 +3,6 @@ import {STRING} from '../constants/strings.js';
 import {TABLES} from '../constants/tables.js';
 import {TIME_MS} from '../constants/time.js';
 import {RAFT_ELECTION_TIMING} from '../raft/constants.js';
-
 const PARTITION_SERVICE_DEFAULT = Object.freeze({
   NODE_ID: STRING.UNKNOWN,
   MEMORY_DB_PATH: ':memory:',
@@ -37,11 +36,25 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   // timeout (never bounded below it); the next check is armed from
   // completion, so a timeout never stacks with the cadence.
   LEARNER_PROMOTION_WAKE_DELAY_MS: NUM.ZERO,
-  MAX_TRACKED_APPLIED_ENTRIES: NUM.THOUSAND * NUM.FIVE,
   MAX_COMMITTED_WRITE_LOG_ENTRIES: NUM.THOUSAND,
   PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS: TIME_MS.SECOND,
+  // A sessionless write the consensus port defers because a user session
+  // holds the partition's connection is proposed again (from this delay,
+  // backing off to the maximum) until the session ends, within this bound;
+  // past it the write is the typed deferral (deferRetry) and the router's
+  // retry owns it.
+  USER_TRANSACTION_WRITE_RETRY_INTERVAL_MS: NUM.TEN,
+  USER_TRANSACTION_WRITE_RETRY_MAX_DELAY_MS: NUM.HUNDRED,
+  USER_TRANSACTION_WRITE_DEFER_BUDGET_MS: TIME_MS.SECOND * NUM.TWO,
 });
-
+// Where a prepared session's state lives. No PREPARE marker is proposed while
+// a session stages on the partition's connection (consensus persistence
+// never runs inside a user transaction), so a prepared session is local to
+// this replica: its open SQLite transaction and memory, lost on restart.
+// Replicating the prepared write set is the replicated-transaction owner's.
+const PARTITION_TRANSACTION_PREPARED_STATE = Object.freeze({
+  LOCAL_STAGING: 'local-staging',
+});
 const PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON = Object.freeze({
   INITIAL_DELAY: 'initial_delay',
   DEFERRED_RECHECK: 'deferred_recheck',
@@ -143,6 +156,73 @@ const PARTITION_SERVICE_OPERATION = Object.freeze({
   TRANSACTION_OUTCOME: 'TRANSACTION_OUTCOME',
 });
 
+// The committed command types the application executes as SQL, the
+// transaction markers (session-bound: TRANSACTION_COMMIT records the session's
+// outcome, PREPARE_TRANSACTION and ROLLBACK are recorded in the log only), and
+// every type it recognises. Anything else is UNRECOGNISED. Frozen arrays:
+// membership is asked of the admission owner, which decides before consensus
+// what may be proposed (partition-committed-command-admission.js).
+const PARTITION_COMMITTED_SQL_COMMAND_TYPES = Object.freeze([
+  PARTITION_SERVICE_OPERATION.WRITE,
+  PARTITION_SERVICE_OPERATION.INSERT,
+  PARTITION_SERVICE_OPERATION.UPDATE,
+  PARTITION_SERVICE_OPERATION.DELETE,
+  PARTITION_SERVICE_OPERATION.UPSERT,
+  PARTITION_SERVICE_OPERATION.QUERY,
+  PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE,
+]);
+const PARTITION_COMMITTED_MARKER_COMMAND_TYPES = Object.freeze([
+  PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
+  PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+  PARTITION_SERVICE_OPERATION.ROLLBACK,
+]);
+const PARTITION_COMMITTED_COMMAND_TYPES = Object.freeze([
+  ...PARTITION_COMMITTED_SQL_COMMAND_TYPES,
+  ...PARTITION_COMMITTED_MARKER_COMMAND_TYPES,
+]);
+
+// The reason a group's host failure names when a committed entry carries a
+// command type the application does not recognise (a bug or version skew:
+// the admission owner never proposes one). The application fails closed.
+const PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON = Object.freeze({
+  COMMAND_UNKNOWN: 'committed-command-unknown',
+});
+
+// What the committed-entry application did with one committed command (R07):
+// a failed statement is a deterministic outcome that consumes the entry; an
+// unknown command type fails the application closed, never a silent no-op.
+const PARTITION_COMMITTED_COMMAND_OUTCOME = Object.freeze({
+  APPLIED: 'applied',
+  REPLAYED: 'replayed',
+  RECORDED_ONLY: 'recorded_only',
+  STATEMENT_FAILED: 'statement_failed',
+  STATEMENT_ENVIRONMENT_FAILED: 'statement_environment_failed',
+  UNRECOGNISED: 'unrecognised',
+});
+
+// The typed error codes of the committed-entry application and of partition
+// consensus construction.
+const PARTITION_COMMITTED_COMMAND_ERROR_CODE = Object.freeze({
+  UNRECOGNISED: 'partition_committed_command_unrecognised',
+  STATEMENT_ENVIRONMENT_FAILED:
+    'partition_committed_statement_environment_failed',
+  STATEMENT_MISSING: 'partition_write_statement_missing',
+  // The admission owner's refusals before consensus.
+  COMMAND_TYPE_UNKNOWN: 'partition_write_command_type_unknown',
+  MARKER_NOT_ADMISSIBLE: 'partition_write_marker_not_admissible',
+  SESSION_MISSING: 'partition_write_session_missing',
+  ENTRY_ID_INVALID: 'partition_write_entry_id_invalid',
+});
+
+const PARTITION_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
+  BACKEND_SELECTION_REFUSED: 'partition_consensus_backend_selection_refused',
+  // Its consensus port refused the partition at initialization - a port that
+  // opened its group held (its durable record unreadable), whatever the
+  // replica count, or a lone replica's refused campaign - so initialization
+  // fails closed with this outcome, naming the port's phase (R11).
+  CONSENSUS_INIT_REFUSED: 'partition_consensus_init_refused',
+});
+
 const PARTITION_SERVICE_ROLE = Object.freeze({
   LEADER: 'leader',
   FOLLOWER: 'follower',
@@ -169,6 +249,7 @@ const PARTITION_SERVICE_EVENT = Object.freeze({
   CDC_CATCHUP_STARTED: 'cdcCatchupStarted',
   CDC_CATCHUP_COMPLETED: 'cdcCatchupCompleted',
   SHUTDOWN: 'shutdown',
+  CONSENSUS_OBSERVED: 'consensusObserved',
 });
 
 const PARTITION_SERVICE_REASON = Object.freeze({
@@ -192,6 +273,7 @@ const PARTITION_SERVICE_DB = Object.freeze({
 });
 
 const PARTITION_SERVICE_COLUMN = Object.freeze({
+  CLEANUP_TOKEN: 'cleanup_token',
   BOOT_INCARNATION: 'boot_incarnation',
   CONNECTION_STATE: 'connection_state',
   LEGACY_WS_CONNECTION_STATE: 'ws_connection_state',
@@ -214,6 +296,7 @@ const PARTITION_SERVICE_COLUMN = Object.freeze({
 });
 
 const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
+  ADD_CLEANUP_TOKEN: 'ADD COLUMN cleanup_token TEXT',
   ADD_BOOT_INCARNATION:
     'ADD COLUMN boot_incarnation INTEGER NOT NULL DEFAULT 0',
   ADD_CONNECTION_STATE:
@@ -351,12 +434,14 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Built peer address from the current live Raft leader',
   PEER_RETIRED_FROM_AUTHORITATIVE_SERVICE_CHANGE:
     'Retired Raft peer from authoritative service change',
+  RAFT_PEER_ADMISSION: 'Raft peer admission',
   PEER_ADDRESS_FROM_NODE: 'Built peer address using local nodeId',
   SINGLE_REPLICA_LEADER: 'Single replica - becoming leader immediately',
   INITIALIZED: 'Partition service initialized',
   STARTING_ELECTION_TIMER: 'Starting Raft election timer',
   APPLIED_RUNTIME_RAFT_TIMING: 'Applied runtime raft timing configuration',
   CREATED_TABLE: 'Created table',
+  ADDED_SERVICES_CLEANUP_TOKEN: 'Added cleanup_token column to services table',
   ADDED_CONNECTION_STATE: 'Added connection_state column to nodes table',
   MIGRATED_CONNECTION_STATE_FROM_LEGACY_WS:
     'Migrated connection_state values from legacy ws_connection_state column',
@@ -519,6 +604,8 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   APPLY_COMMITTED_FAILED: 'Failed to apply committed entry',
   NOT_INITIALIZED: 'PartitionService not initialized',
   TRANSACTION_ALREADY_ACTIVE: 'Transaction already active on this partition',
+  WRITE_DEFERRED_USER_TRANSACTION_OPEN:
+    'Write deferred: a user transaction holds the partition connection',
   SERVING_ADMISSION_FENCED_FOR_REMOVAL:
     'Serving admission fenced for replica removal',
   BEGIN_TRANSACTION_FAILED: 'Failed to begin transaction',
@@ -620,6 +707,26 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   NESTED_ACK_UNSUPPORTED: 'Nested ACK responses are not supported',
   MESSAGE_DELIVERY_FAILED: 'Message delivery failed',
   MIGRATION_ALTER_MISSING_SQL: 'Migration ALTER TABLE SQL is required',
+  COMMITTED_COMMAND_UNRECOGNISED:
+    'Committed partition command type is not recognised',
+  COMMITTED_ENTRY_EFFECT_FAILED:
+    'Committed partition entry effect failed after its transaction',
+  WRITE_STATEMENT_MISSING:
+    'Partition write refused before it was proposed: a write of an SQL ' +
+    'command type carries no statement',
+  COMMITTED_STATEMENT_ENVIRONMENT_FAILED:
+    'Committed partition statement failed in the host environment; the ' +
+    'entry is not consumed and is applied again when the host recovers',
+  consensusInitRefused: (partitionId, answer) => {
+    const detail = answer?.failure?.detail ?? answer?.detail;
+    return `Partition ${partitionId} cannot initialize: its consensus port ` +
+      `refused it in phase ${answer?.phase} (${answer?.outcome}: ` +
+      `${answer?.reason}${detail ? ` ${JSON.stringify(detail)}` : ''})`;
+  },
+  backendSelectionRefused: (option, requested) =>
+    `Partition consensus backend selection refused: ${option}=` +
+    `${JSON.stringify(requested)} names a retired consensus backend; a ` +
+    'partition runs on its single consensus path and takes no selection',
 });
 
 const PARTITION_SERVICE_VALUE = Object.freeze({
@@ -655,6 +762,13 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
 });
 
 export {
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
+  PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
+  PARTITION_COMMITTED_COMMAND_OUTCOME,
+  PARTITION_COMMITTED_COMMAND_TYPES,
+  PARTITION_COMMITTED_MARKER_COMMAND_TYPES,
+  PARTITION_COMMITTED_SQL_COMMAND_TYPES,
+  PARTITION_CONSENSUS_STARTUP_OUTCOME,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
   PARTITION_SERVICE_CDC,
@@ -681,4 +795,5 @@ export {
   PARTITION_SERVICE_STATUS,
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
+  PARTITION_TRANSACTION_PREPARED_STATE,
 };

@@ -26,8 +26,10 @@ import {
   INITIAL_PARTITION_IDS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {ControllablePartitionRaftProvider} from
-  './partition-service-test-support.js';
+import {
+  ControllablePartitionRaftProvider,
+  createControllablePartitionService,
+} from './partition-service-test-support.js';
 import {
 } from '../../src/raft/constants.js';
 import {
@@ -45,6 +47,7 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
 } from '../../src/control-plane/pressure-governor.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const TEST_PARTITION_ID = 'partition-1';
 const TEST_OWNER_NODE_ID = 'node-owner';
@@ -242,30 +245,30 @@ test('PartitionService does not request managed split evaluation for ' +
 
 test('PartitionService - constructor requires partitionId', async (t) => {
   t.throws(() => {
-    new PartitionService({tableId: 'test-table', replicaId: 'r1'});
+    new PartitionService(withFoundingStamp({tableId: 'test-table', replicaId: 'r1'}));
   }, /requires partitionId/);
 });
 
 test('PartitionService - constructor requires tableId', async (t) => {
   t.throws(() => {
-    new PartitionService({partitionId: 'p1', replicaId: 'r1'});
+    new PartitionService(withFoundingStamp({partitionId: 'p1', replicaId: 'r1'}));
   }, /requires tableId/);
 });
 
 test('PartitionService - constructor requires replicaId', async (t) => {
   t.throws(() => {
-    new PartitionService({partitionId: 'p1', tableId: 'test-table'});
+    new PartitionService(withFoundingStamp({partitionId: 'p1', tableId: 'test-table'}));
   }, /requires replicaId/);
 });
 
 test('PartitionService - initializes with in-memory database', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-1',
     tableId: 'test-table',
     replicaId: 'replica-1',
     nodeId: 'node-1',
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 
@@ -311,7 +314,7 @@ test('PartitionService - repairs legacy sql_transactions replicas by adding tran
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'partition-service-sql-tx-'));
     const dbPath = path.join(tempDir, 'sql-transactions.db');
 
-    const legacyPartition = new PartitionService({
+    const legacyPartition = new PartitionService(withFoundingStamp({
       partitionId: 'sql_transactions-p1',
       tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
       tableName: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
@@ -319,12 +322,12 @@ test('PartitionService - repairs legacy sql_transactions replicas by adding tran
       replicaId: 'sql_transactions-p1-r1',
       nodeId: 'node-1',
       dbPath,
-    });
+    }));
 
     await legacyPartition.initialize();
     await legacyPartition.shutdown();
 
-    const repairedPartition = new PartitionService({
+    const repairedPartition = new PartitionService(withFoundingStamp({
       partitionId: 'sql_transactions-p1',
       tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
       tableName: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
@@ -332,7 +335,7 @@ test('PartitionService - repairs legacy sql_transactions replicas by adding tran
       replicaId: 'sql_transactions-p1-r1',
       nodeId: 'node-1',
       dbPath,
-    });
+    }));
 
     try {
       await repairedPartition.initialize();
@@ -363,7 +366,7 @@ test('PartitionService - persists one-phase commit outcome atomically across res
   async (t) => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'partition-outcome-'));
     const dbPath = path.join(tempDir, 'outcome.db');
-    const buildPartition = () => new PartitionService({
+    const buildPartition = () => new PartitionService(withFoundingStamp({
       partitionId: 'outcome-p1',
       tableId: 'outcome_rows',
       tableName: 'outcome_rows',
@@ -374,7 +377,7 @@ test('PartitionService - persists one-phase commit outcome atomically across res
       replicaId: 'outcome-p1-r1',
       nodeId: 'node-1',
       dbPath,
-    });
+    }));
     const first = buildPartition();
     await first.initialize();
     await first.beginTransaction('committed-session', 7);
@@ -416,7 +419,7 @@ test('PartitionService - persists one-phase commit outcome atomically across res
 test('PartitionService - suppresses lifecycle logs and emits stage callbacks', async (t) => {
   const stageEvents = [];
   const infoMessages = [];
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'stage-partition-1',
     tableId: 'stage_table',
     tableName: 'stage_table',
@@ -431,7 +434,7 @@ test('PartitionService - suppresses lifecycle logs and emits stage callbacks', a
     dbPath: ':memory:',
     suppressLifecycleLogs: true,
     onInitializationStage: (event) => stageEvents.push(event),
-  });
+  }));
   partition.logger = {
     info: (message) => infoMessages.push(message),
     debug: () => {},
@@ -470,7 +473,7 @@ test(
   async (t) => {
     const systemTableCache = new SystemTableCache();
     const raftProvider = new ControllablePartitionRaftProvider();
-    const partition = new PartitionService({
+    const partition = createControllablePartitionService({
       partitionId: 'leader-change-partition-1',
       tableId: 'leader_change_table',
       tableName: 'leader_change_table',
@@ -493,8 +496,7 @@ test(
       cdcIntegrationService: {
         updateSystemTableRow: async () => ({changes: 1}),
       },
-      raftProvider,
-    });
+    }, raftProvider);
 
     partition.isServicesLeaderAvailable = () => true;
 
@@ -544,7 +546,7 @@ test(
       `node-4-relocated/partition/${newLeaderReplicaId}`;
     const systemTableCache = new SystemTableCache();
     const raftProvider = new ControllablePartitionRaftProvider();
-    const partition = new PartitionService({
+    const partition = createControllablePartitionService({
       partitionId,
       tableId: 'live_leader_routing_table',
       tableName: 'live_leader_routing_table',
@@ -564,8 +566,7 @@ test(
       suppressLifecycleLogs: true,
       deferElection: true,
       systemTableCache,
-      raftProvider,
-    });
+    }, raftProvider);
 
     await partition.initialize();
 
@@ -647,7 +648,7 @@ test('PartitionService - leader mutation helper guards owner writes with observe
     });
 
     let capturedWhereClause = null;
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'guarded-partition-1',
       tableId: 'guarded_table',
       tableName: 'guarded_table',
@@ -663,7 +664,7 @@ test('PartitionService - leader mutation helper guards owner writes with observe
           return {success: true};
         },
       },
-    });
+    }));
 
     partition.isLeader = true;
     partition.isPartitionsLeaderAvailable = () => true;
@@ -683,7 +684,7 @@ test('PartitionService - leader mutation helper guards owner writes with observe
 test('PartitionService - flushes services role update when local services leader exists',
   async (t) => {
     const updates = [];
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'services-p1',
       tableId: 'services',
       tableName: 'services',
@@ -700,7 +701,7 @@ test('PartitionService - flushes services role update when local services leader
           return {success: true};
         },
       },
-    });
+    }));
 
     partition.pendingRoleUpdate = RaftRole.LEADER;
     partition.persistedRole = null;
@@ -712,7 +713,11 @@ test('PartitionService - flushes services role update when local services leader
     t.equal(updates[0].tableName, SYSTEM_TABLE_NAME.SERVICES, 'should target services');
     t.same(updates[0].whereClause, {
       service_id: 'services-p1-r1',
-    }, 'should update the local services replica row');
+      service_type: 'partition',
+      partition_id: 'services-p1',
+      replica_id: 'services-p1-r1',
+      node_id: 'node-1',
+    }, 'should fence the role write to the full replica identity');
     t.equal(
       updates[0].data?.raft_role,
       RaftRole.FOLLOWER,
@@ -727,7 +732,7 @@ test('PartitionService - flushes services role update when local services leader
 test('PartitionService - flushes partition leader update when local partitions leader exists',
   async (t) => {
     const updates = [];
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'partitions-p1',
       tableId: 'partitions',
       tableName: 'partitions',
@@ -745,7 +750,7 @@ test('PartitionService - flushes partition leader update when local partitions l
           return {success: true};
         },
       },
-    });
+    }));
 
     partition.isLeader = true;
     partition.pendingLeaderNodeUpdate = 'node-1';
@@ -796,7 +801,7 @@ test('PartitionService - creates table from schema', async (t) => {
     ],
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-2',
     tableId: 'users',
     tableName: 'users',
@@ -804,7 +809,7 @@ test('PartitionService - creates table from schema', async (t) => {
     replicaIds: ['replica-1'], // Single replica becomes leader
     schema,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 
@@ -832,7 +837,7 @@ test('PartitionService - executeQuery for SELECT', async (t) => {
     ],
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-3',
     tableId: 'items',
     tableName: 'items',
@@ -840,7 +845,7 @@ test('PartitionService - executeQuery for SELECT', async (t) => {
     replicaIds: ['replica-1'], // Single replica becomes leader
     schema,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 
@@ -912,7 +917,7 @@ test('PartitionService - updateData modifies records', async (t) => {
     ],
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-4',
     tableId: 'tasks',
     tableName: 'tasks',
@@ -920,7 +925,7 @@ test('PartitionService - updateData modifies records', async (t) => {
     replicaIds: ['replica-1'],
     schema,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   // Single replica becomes leader immediately
@@ -955,7 +960,7 @@ test('PartitionService - deleteData removes records', async (t) => {
     ],
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-5',
     tableId: 'records',
     tableName: 'records',
@@ -963,7 +968,7 @@ test('PartitionService - deleteData removes records', async (t) => {
     replicaIds: ['replica-1'],
     schema,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   // Single replica becomes leader immediately
@@ -992,7 +997,7 @@ test('PartitionService - generates CDC events on insert', async (t) => {
     ],
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-6',
     tableId: 'cdc_test',
     tableName: 'cdc_test',
@@ -1000,7 +1005,7 @@ test('PartitionService - generates CDC events on insert', async (t) => {
     replicaIds: ['replica-1'],
     schema,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   // Single replica becomes leader immediately
@@ -1030,7 +1035,7 @@ test('PartitionService - skips no-subscriber CDC buffering when user table exter
       ],
     };
     const warnings = [];
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-cdc-disabled',
       tableId: 'tbl-benchmark',
       tableName: 'benchmark_events',
@@ -1050,7 +1055,7 @@ test('PartitionService - skips no-subscriber CDC buffering when user table exter
           return null;
         },
       },
-    });
+    }));
     partition.logger = {
       info: () => {},
       debug: () => {},
@@ -1083,7 +1088,7 @@ test('PartitionService - skips no-subscriber CDC buffering for non-propagated co
       ],
     };
     const warnings = [];
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'sql-write-operations-p1',
       tableId: TABLES.SQL_WRITE_OPERATIONS,
       tableName: TABLES.SQL_WRITE_OPERATIONS,
@@ -1091,7 +1096,7 @@ test('PartitionService - skips no-subscriber CDC buffering for non-propagated co
       replicaIds: ['sql-write-operations-p1-r1'],
       schema,
       dbPath: ':memory:',
-    });
+    }));
     partition.logger = {
       info: () => {},
       debug: () => {},
@@ -1126,7 +1131,7 @@ test('PartitionService - generates CDC events on update', async (t) => {
     ],
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-7',
     tableId: 'cdc_test',
     tableName: 'cdc_test',
@@ -1134,7 +1139,7 @@ test('PartitionService - generates CDC events on update', async (t) => {
     replicaIds: ['replica-1'],
     schema,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   // Single replica becomes leader immediately
@@ -1164,7 +1169,7 @@ test('PartitionService - suppresses CDC for no-op updates', async (t) => {
     ],
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-7-noop',
     tableId: 'cdc_test',
     tableName: 'cdc_test',
@@ -1172,7 +1177,7 @@ test('PartitionService - suppresses CDC for no-op updates', async (t) => {
     replicaIds: ['replica-1'],
     schema,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   await Promise.resolve();
@@ -1203,7 +1208,7 @@ test('PartitionService - generates CDC events on delete', async (t) => {
     ],
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-8',
     tableId: 'cdc_test',
     tableName: 'cdc_test',
@@ -1211,7 +1216,7 @@ test('PartitionService - generates CDC events on delete', async (t) => {
     replicaIds: ['replica-1'],
     schema,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   // Single replica becomes leader immediately
@@ -1247,7 +1252,7 @@ test('PartitionService - generates CDC UPSERT events on upsert', async (t) => {
     ],
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-upsert-cdc',
     tableId: 'cdc_test',
     tableName: 'cdc_test',
@@ -1255,7 +1260,7 @@ test('PartitionService - generates CDC UPSERT events on upsert', async (t) => {
     replicaIds: ['replica-1'],
     schema,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   await Promise.resolve();
@@ -1294,7 +1299,7 @@ test('PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT', async 
     ],
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-sql-upsert',
     tableId: 'cdc_test',
     tableName: 'cdc_test',
@@ -1302,7 +1307,7 @@ test('PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT', async 
     replicaIds: ['replica-1'],
     schema,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   await Promise.resolve();
@@ -1346,7 +1351,7 @@ test('PartitionService - raw SQL nested parenthesized DELETE preserves composite
       ],
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-sql-delete-composite',
       tableId: 'services',
       tableName: 'services',
@@ -1354,7 +1359,7 @@ test('PartitionService - raw SQL nested parenthesized DELETE preserves composite
       replicaIds: ['replica-1'],
       schema,
       dbPath: ':memory:',
-    });
+    }));
 
     await partition.initialize();
     await Promise.resolve();
@@ -1404,7 +1409,7 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
     ],
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-follower-cdc',
     tableId: 'cdc_test',
     tableName: 'cdc_test',
@@ -1412,7 +1417,7 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
     replicaIds: ['replica-1'],
     schema,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   await Promise.resolve();
@@ -1426,8 +1431,9 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
     cdcEvents.push(event);
   });
 
-  // Directly call applyCommittedEntry as liferaft would on a follower
-  partition.applyCommittedEntry({
+  // The committed entry reaches the application through the port; the
+  // application decides CDC on this replica's own leadership state.
+  await partition.raft.propose({
     type: 'INSERT',
     sql: 'INSERT INTO cdc_test (id, value) VALUES (?, ?)',
     params: ['f1', 42],

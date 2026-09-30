@@ -19,6 +19,18 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ReplicaLifecycleManager} from '../../src/node/replica-lifecycle-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {RAFT_OPERATION} from '../../src/raft/raft-operation-port-constants.js';
+import {
+  COMMITTED_MEMBERSHIP_READ_PURPOSE,
+} from '../../src/raft/raft-committed-membership-constants.js';
+import {
+  committedStampOfAnswer,
+  validateBootstrapMembershipStamp,
+} from '../../src/raft/raft-committed-membership-stamp.js';
+import {createLifecycleCdcServiceForCache} from
+  '../test-helpers/lifecycle-state-store.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 let portCounter = 33000;
 
@@ -63,21 +75,7 @@ function schema(name) {
 }
 
 function createMockCDCService(cache) {
-  return {
-    async insertSystemTableRow(tableName, data) {
-      cache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true, operation: 'INSERT', tableName, data};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      const merged = {...whereClause, ...data};
-      cache.applySystemTableChange(tableName, 'UPDATE', merged);
-      return {success: true, operation: 'UPDATE', tableName, whereClause, data: merged};
-    },
-    async upsertSystemTableRow(tableName, data) {
-      cache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true, operation: 'UPSERT', tableName, data};
-    },
-  };
+  return createLifecycleCdcServiceForCache(cache);
 }
 
 async function wait(cond, ms = 1500) {
@@ -95,7 +93,7 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
   try {
     const nodeId = 'ack-node';
     const port = portCounter++;
-    res.router = new MessageRouter({nodeId, wsPort: port});
+    res.router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId, wsPort: port});
     await res.router.initialize({startServer: true});
 
     res.mg = new MessageGroupService({
@@ -110,7 +108,7 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
     await res.mg.initialize();
     await wait(() => res.mg.isLeaderReplica());
 
-    res.part = new PartitionService({
+    res.part = new PartitionService(withFoundingStamp({
       partitionId: 'p1',
       tableId: 't1',
       tableName: 't1',
@@ -124,12 +122,11 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
       messageGroupService: res.mg,
       messageRouter: res.router,
       systemTableCache: new SystemTableCache(),
-    });
+    }));
     await res.part.initialize();
     await wait(() => res.part.isLeader);
 
     const systemTableCache = new SystemTableCache();
-    const cdcIntegrationService = createMockCDCService(systemTableCache);
     const now = Date.now();
     systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
       table_id: 't1',
@@ -154,6 +151,7 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
       created_at: now,
       updated_at: now,
     });
+    const cdcIntegrationService = createMockCDCService(systemTableCache);
 
     const created = [];
     res.lc = new ReplicaLifecycleManager({
@@ -181,6 +179,22 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
       return {acknowledged: true};
     });
 
+    // The new replica joins the existing group {p1-r1}: its CREATE carries
+    // the COMMITTED stamp the creation owner reads from the group's leader
+    // (the leader's own committed-membership read, BOOTSTRAP purpose), never
+    // a founding (GENESIS) stamp - the group exists.
+    let stamp = null;
+    await wait(async () => {
+      const answer = await res.part.raft[
+        RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP]({
+        purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP});
+      const candidate = committedStampOfAnswer(answer);
+      if (candidate && validateBootstrapMembershipStamp(candidate).valid) {
+        stamp = candidate;
+      }
+      return stamp !== null;
+    }, 2000);
+    t.ok(stamp, 'the leader answered a valid committed-membership stamp');
     const ack = await res.part.deliverWithAck(
       res.router,
       `${nodeId}/lifecycle/manager`,
@@ -193,6 +207,7 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
         leader_address: nodeId,
         key_range: {start: null, end: null},
         schema: schema('t1'),
+        bootstrap_membership: stamp,
         timestamp: Date.now(),
       },
       2000,

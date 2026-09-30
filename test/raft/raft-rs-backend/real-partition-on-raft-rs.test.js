@@ -16,7 +16,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
-import {TextDecoder, TextEncoder} from 'node:util';
 
 import Database from 'better-sqlite3';
 
@@ -24,6 +23,10 @@ import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {
   RAFT_PARTITION_NODE_REQUEST,
 } from '../../../src/raft/raft-provider-contract-constants.js';
+import {decodeCommittedProposal} from
+  '../../../src/raft/raft-rs-proposal-codec.js';
+import {RAFT_RS_ENTRY_TYPE} from
+  '../../../src/raft/raft-rs-ready-loop-constants.js';
 
 const REPOSITORY_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -84,7 +87,8 @@ function durableRecordOf(dbFile) {
     'SELECT term, vote, commit_index FROM _raft_rs_hard_state ' +
     'WHERE group_id = ?').get(PARTITION_ID);
   const entries = independent.prepare(
-    'SELECT log_index, data FROM _raft_rs_log WHERE group_id = ? ' +
+    'SELECT log_index, entry_type, data FROM _raft_rs_log ' +
+    'WHERE group_id = ? ' +
     'ORDER BY log_index').all(PARTITION_ID);
   independent.close();
   return {
@@ -96,6 +100,7 @@ function durableRecordOf(dbFile) {
     commitIndex: hard === undefined ? null : String(hard.commit_index),
     entries: entries.map((row) => ({
       index: String(row.log_index),
+      entryType: Number(row.entry_type),
       data: row.data === null ? null : row.data,
     })),
   };
@@ -266,7 +271,7 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
     }
 
     // ---- 3. a normal proposal, committed and applied ---------------------
-    cluster.propose(leader, new TextEncoder().encode(COMMAND));
+    cluster.propose(leader, COMMAND);
     const committed = cluster.settle(() => FOUNDING.every((replicaId) =>
       cluster.replica(replicaId).appliedCommands.length > 0),
     {rounds: SETTLE_ROUNDS,
@@ -275,17 +280,19 @@ test('one real partition: elect, commit, restart, add a learner, catch up, ' +
       'every replica must apply the committed entry through the request hook');
     for (const replicaId of FOUNDING) {
       const record = durableRecordOf(cluster.dbFileOf(replicaId));
+      // The command as the port's own codec reads it back from the log.
       const carrying = record.entries.find((entry) => entry.data !== null &&
-        Buffer.from(entry.data, 'base64').toString(TEXT_ENCODING) === COMMAND);
+        entry.entryType === RAFT_RS_ENTRY_TYPE.NORMAL &&
+        decodeCommittedProposal(Buffer.from(entry.data, 'base64')) ===
+          COMMAND);
       assert.ok(carrying !== undefined,
         `${replicaId} must hold the command in its own durable log`);
       assert.ok(BigInt(record.appliedIndex) >= BigInt(carrying.index),
         `${replicaId}'s durable applied index must have reached it`);
-      // The hook the REQUEST named received the bytes the durable log holds.
-      const applied = cluster.replica(replicaId).appliedCommands
-        .map((bytes) => new TextDecoder().decode(bytes));
-      assert.ok(applied.includes(Buffer.from(carrying.data, 'base64')
-        .toString(TEXT_ENCODING)),
+      // The hook the REQUEST named received the command the durable log
+      // holds, decoded once by the port.
+      assert.ok(cluster.replica(replicaId).appliedCommands.includes(
+        decodeCommittedProposal(Buffer.from(carrying.data, 'base64'))),
       `${replicaId} applied what its own log records as committed`);
     }
 

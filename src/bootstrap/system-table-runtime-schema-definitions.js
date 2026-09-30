@@ -114,6 +114,9 @@ const NODE_ENDPOINTS_SCHEMA = {
     {name: 'priority', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
     {name: 'metadata', type: COLUMN_TYPE.TEXT},
     {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'active\''},
+    // The exact boot incarnation of the node that owns this endpoint. 0 =
+    // pre-incarnation (legacy): never current for routing (fail closed).
+    {name: 'boot_incarnation', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
     {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
@@ -261,6 +264,8 @@ const SERVICE_ENDPOINTS_SCHEMA = {
       defaultValue: '\'healthy\'',
     },
     {name: 'metadata', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'{}\''},
+    // The exact boot incarnation of the hosting node (see node_endpoints).
+    {name: 'boot_incarnation', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
     {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],

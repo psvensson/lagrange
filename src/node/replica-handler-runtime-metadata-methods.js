@@ -1,20 +1,4 @@
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
-// CL-013: explicit REPLACE joins categorically target an EXISTING raft
-// group; they must never fall back to solo bootstrap.
-const EXPLICIT_REPLACE_OPERATION_TYPE = 'REPLACE';
-// Audit finding 8: an explicit ADD join on a non-fresh partition targets an
-// existing group too; the self-only topology guard covers both.
-const EXPLICIT_ADD_OPERATION_TYPE = 'ADD';
-const REPLICA_JOIN_TOPOLOGY_MISSING_PREFIX =
-  'Replica join topology unavailable for partition ';
-
-function replicaJoinTopologyMissingError(partitionId, replicaId) {
-  return new Error(
-    `${REPLICA_JOIN_TOPOLOGY_MISSING_PREFIX}${partitionId}: explicit ` +
-    `REPLACE join for ${replicaId} resolved no sibling peers (dispatched ` +
-    'bootstrap hints absent and local cache view reduced to self-only)',
-  );
-}
 
 function assignReplicaHandlerRuntimeMetadataMethods(
   ReplicaHandler,
@@ -22,11 +6,11 @@ function assignReplicaHandlerRuntimeMetadataMethods(
 ) {
   const {
     AddressManager,
-    VOTER_RAFT_ROLES,
     METADATA_RESOLUTION_POLL_INTERVAL_MS,
     PRESSURE_WORK_CLASS,
     PARTITION_METADATA_MISSING_PREFIX,
     PartitionServiceRowOwner,
+    ReplicaCleanupTombstoneOwner,
     REPLICA_HANDLER_ERROR_MSG,
     REPLICA_HANDLER_LITERAL,
     REPLICA_HANDLER_LOG_MSG,
@@ -39,7 +23,6 @@ function assignReplicaHandlerRuntimeMetadataMethods(
     classifySystemPartition,
     createControlPlaneRuntimeBundle,
     createSystemMetadataGatewayRequiredError,
-    isFreshPartitionBootstrapWindow,
     isReplicaJoinNodeViable,
     partitionMetadataMissingError,
   } = options;
@@ -102,8 +85,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
           '';
       return (
         message.startsWith(PARTITION_METADATA_MISSING_PREFIX) ||
-        message.startsWith(TABLE_METADATA_MISSING_PREFIX) ||
-        message.startsWith(REPLICA_JOIN_TOPOLOGY_MISSING_PREFIX)
+        message.startsWith(TABLE_METADATA_MISSING_PREFIX)
       );
     }
     /**
@@ -185,13 +167,16 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         }).priorityControlPlane;
       const now = Date.now();
       const addressManager = AddressManager.getInstance();
-      const requestedReplicaIds = Array.isArray(options.bootstrapReplicaIds) ?
-        options.bootstrapReplicaIds.filter(
-          (value) =>
-            typeof value === REPLICA_HANDLER_TYPEOF.STRING &&
-              value.length > 0,
-        ) :
-        [];
+      // The new replica's membership is its validated committed-membership
+      // stamp alone (owner decision O1): the dispatched replica ids and this
+      // node's services rows are an address book, never membership, and the
+      // stamp kind - not a row count - decides the join mode.
+      const stamped = this.resolveStampedBootstrapMembership({
+        partitionId,
+        replicaId,
+        bootstrapMembership: options.bootstrapMembership,
+        observedServices,
+      });
       const requestedPeerAddresses = Array.isArray(
         options.bootstrapPeerAddresses,
       ) ?
@@ -201,46 +186,8 @@ function assignReplicaHandlerRuntimeMetadataMethods(
               value.length > 0,
         ) :
         [];
-      const isExplicitReplaceJoin =
-        typeof options.explicitOperationType ===
-          REPLICA_HANDLER_TYPEOF.STRING &&
-        options.explicitOperationType.trim().toUpperCase() ===
-          EXPLICIT_REPLACE_OPERATION_TYPE;
-      const isExplicitAddJoin =
-        typeof options.explicitOperationType ===
-          REPLICA_HANDLER_TYPEOF.STRING &&
-        options.explicitOperationType.trim().toUpperCase() ===
-          EXPLICIT_ADD_OPERATION_TYPE;
-      // A REPLACE operation's dispatched cohort is the placement owner's
-      // closed-world membership decision. Local and hydrated service rows are
-      // still useful for leader/voter readiness, but they cannot add a voter
-      // that the owner excluded (for example, a just-retired source whose CDC
-      // removal has not reached this target yet).
-      const explicitReplaceReplicaIds = isExplicitReplaceJoin ?
-        new Set(requestedReplicaIds) :
-        null;
-      const hasExplicitReplaceCohort =
-        explicitReplaceReplicaIds?.size > 0;
-      const services = hasExplicitReplaceCohort ?
-        observedServices.filter((service) =>
-          explicitReplaceReplicaIds.has(
-            service?.service_id || service?.replica_id,
-          ),
-        ) :
-        observedServices;
-      const replicaIds = hasExplicitReplaceCohort ?
-        [...requestedReplicaIds] :
-        [];
-      const peerAddresses =
-        hasExplicitReplaceCohort && requestedPeerAddresses.length > 0 ?
-          [...requestedPeerAddresses] :
-          [];
-      const seenReplicaIds = new Set(replicaIds);
-      const hasExplicitReplacePeerAddresses =
-        hasExplicitReplaceCohort && requestedPeerAddresses.length > 0;
-      // Count only established voters from sibling services. Freshly staged
-      // rows in pending/creating/syncing states do not imply an existing group.
-      const establishedExistingReplicaIds = new Set();
+      const services = observedServices;
+      const peerAddresses = [];
       const isViableJoinService = (service) => {
         if (
           !service?.node_id ||
@@ -263,27 +210,12 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         if (!serviceReplicaId) {
           continue;
         }
-        const joinServiceViable = isViableJoinService(service);
         if (
           shouldFilterUnavailablePeerTopology &&
           serviceReplicaId !== replicaId &&
-          !joinServiceViable
+          !isViableJoinService(service)
         ) {
           continue;
-        }
-        if (!seenReplicaIds.has(serviceReplicaId)) {
-          seenReplicaIds.add(serviceReplicaId);
-          replicaIds.push(serviceReplicaId);
-        }
-        const isEstablishedVoter =
-          service.status === ReplicaStatus.ACTIVE &&
-          VOTER_RAFT_ROLES.has(service.raft_role);
-        if (
-          serviceReplicaId !== replicaId &&
-          isEstablishedVoter &&
-          joinServiceViable
-        ) {
-          establishedExistingReplicaIds.add(serviceReplicaId);
         }
         const peerAddress =
           service.address ||
@@ -292,24 +224,17 @@ function assignReplicaHandlerRuntimeMetadataMethods(
             REPLICA_HANDLER_SERVICE.TYPE,
             serviceReplicaId,
           );
-        if (
-          !hasExplicitReplacePeerAddresses &&
-          !peerAddresses.includes(peerAddress)
-        ) {
+        if (!peerAddresses.includes(peerAddress)) {
           peerAddresses.push(peerAddress);
         }
       }
-      if (replicaId && !seenReplicaIds.has(replicaId)) {
-        replicaIds.push(replicaId);
-        seenReplicaIds.add(replicaId);
-        const selfAddress = addressManager.format(
-          this.nodeId,
-          REPLICA_HANDLER_SERVICE.TYPE,
-          replicaId,
-        );
-        if (!peerAddresses.includes(selfAddress)) {
-          peerAddresses.push(selfAddress);
-        }
+      const selfAddress = addressManager.format(
+        this.nodeId,
+        REPLICA_HANDLER_SERVICE.TYPE,
+        replicaId,
+      );
+      if (!peerAddresses.includes(selfAddress)) {
+        peerAddresses.push(selfAddress);
       }
       let leaderAddress = null;
       const canonicalLeaderNodeId =
@@ -325,31 +250,14 @@ function assignReplicaHandlerRuntimeMetadataMethods(
               isViableJoinService(service),
         ) :
         null;
-      const isFreshBootstrapPartition =
-        isFreshPartitionBootstrapWindow(partition);
-      // CL-013: dispatched bootstrap hints come from the placement owner
-      // (the coordinator stamped the canonical topology at create time) and
-      // are authoritative over this node's cache view — which under churn
-      // can be viability-filtered down to self-only. They were previously
-      // merged only inside the fresh-bootstrap window, so every REPLACE
-      // join into an established partition discarded them and could solo-
-      // bootstrap an isolated raft group.
-      for (const requestedReplicaId of requestedReplicaIds) {
-        if (!seenReplicaIds.has(requestedReplicaId)) {
-          seenReplicaIds.add(requestedReplicaId);
-          replicaIds.push(requestedReplicaId);
-        }
-      }
+      // The dispatched addresses come from the placement owner's address
+      // book and are kept over this node's cache view, which under churn can
+      // be viability-filtered down to self-only.
       for (const requestedPeerAddress of requestedPeerAddresses) {
         if (!peerAddresses.includes(requestedPeerAddress)) {
           peerAddresses.push(requestedPeerAddress);
         }
       }
-      // Fresh CREATE TABLE provisioning dispatches replica creation before the
-      // partition row has a persisted leader_node_id. A single sibling leader
-      // must not force later members of that first cohort into learner mode.
-      const hasViableLeader =
-        !isFreshBootstrapPartition && Boolean(leaderService);
       if (leaderService) {
         leaderAddress =
           leaderService.address ||
@@ -359,43 +267,16 @@ function assignReplicaHandlerRuntimeMetadataMethods(
             leaderService.service_id,
           );
       }
-      // CL-013: an explicit REPLACE join targets an EXISTING group by
-      // definition — it must never proceed with a SELF-ONLY topology, which
-      // fresh-bootstraps an isolated single-node raft group that elects
-      // itself and pollutes the canonical leader row. Audit finding 8
-      // extends the same guard to an explicit ADD join on a non-fresh
-      // partition: the group already exists outside the fresh-bootstrap
-      // window, so a self-only resolved cohort is stale evidence, never a
-      // new group. When neither the dispatched hints nor the local cache
-      // yield any sibling peer, the context is stale: throw retryably so
-      // the caller's hydration loop re-reads authoritative rows instead of
-      // proceeding. (Join MODE is unchanged: with peers present but no
-      // viable leader, voter-mode re-formation remains the designed
-      // dead-leader recovery behavior.)
-      const isExistingGroupJoin =
-        isExplicitReplaceJoin ||
-        (isExplicitAddJoin && !isFreshBootstrapPartition);
-      if (isExistingGroupJoin) {
-        const siblingPeerCount = replicaIds.filter(
-          (candidateReplicaId) => candidateReplicaId !== replicaId,
-        ).length;
-        if (siblingPeerCount === 0) {
-          throw replicaJoinTopologyMissingError(partitionId, replicaId);
-        }
-      }
       return {
         tableId: partition.table_id,
         tableName: table.table_name,
         schema,
         keyRange,
         leaderAddress,
-        replicaIds,
+        replicaIds: stamped.replicaIds,
         peerAddresses,
-        existingReplicaCount: isFreshBootstrapPartition ?
-          0 :
-          hasViableLeader ?
-            Math.max(1, establishedExistingReplicaIds.size) :
-            0,
+        existingReplicaCount: stamped.existingReplicaCount,
+        bootstrapMembership: stamped.bootstrapMembership,
       };
     }
     /**
@@ -605,6 +486,15 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         systemTableWriter: this.getControlPlaneSystemTableGateway(),
       });
       return this.partitionServiceRowOwner;
+    }
+    getReplicaCleanupTombstoneOwner() {
+      if (this.replicaCleanupTombstoneOwner) {
+        return this.replicaCleanupTombstoneOwner;
+      }
+      this.replicaCleanupTombstoneOwner = new ReplicaCleanupTombstoneOwner({
+        gateway: this.getControlPlaneSystemTableGateway(),
+      });
+      return this.replicaCleanupTombstoneOwner;
     }
     /**
      * @return {Object|null}

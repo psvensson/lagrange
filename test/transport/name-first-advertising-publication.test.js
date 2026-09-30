@@ -31,6 +31,7 @@ import {resolveRuntimeAddresses} from '../../src/entrypoint-runtime-options.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const ADVERTISED_NAME = 'stable-node-name.internal:9090';
 
@@ -63,6 +64,7 @@ describe('name-first advertising: publication + dial-by-name', () => {
 
   it('publishes the advertised NAME verbatim into the node_endpoints row', () => {
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'name-first-test-node',
       nodeAddress: '10.0.0.7:8080',
       advertisedNodeWsAddress: ADVERTISED_NAME,
@@ -77,6 +79,7 @@ describe('name-first advertising: publication + dial-by-name', () => {
 
   it('falls back to nodeAddress only when no name is advertised', () => {
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'name-first-test-node',
       nodeAddress: '10.0.0.7:8080',
     });
@@ -109,12 +112,14 @@ describe('name-first advertising: publication + dial-by-name', () => {
       // hand the name to the OS resolver at connect time.
       const peerByName = 'ws://localhost:19833';
       const routerA = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-a',
         inProcess: true,
         wsPort: 19832,
         resolveNodeAddress: (id) => (id === 'node-b' ? peerByName : null),
       });
       const routerB = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-b',
         inProcess: true,
         wsPort: 19833,

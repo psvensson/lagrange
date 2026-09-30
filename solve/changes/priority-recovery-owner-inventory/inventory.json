@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "9efd97b479007f63db80b2bb0ffc8a54711bd6024ff3c194f0534a35f9f04a8b"
+    "sourceSha256": "6f99341bf4b5d4a8656663a2cf8fbce0fcec5a18cdd2c4fdaddcbec312f8e65f"
   },
   "layerDirection": [
     "raw_observation",
@@ -19,7 +19,7 @@
   "metrics": {
     "moduleCount": 68,
     "publicExportCount": 755,
-    "importEdgeCount": 312,
+    "importEdgeCount": 311,
     "crossLayerEdgeCount": 93,
     "layerDirectionViolationCount": 45,
     "largestStronglyConnectedComponent": 1,
@@ -4978,28 +4978,18 @@
     },
     {
       "from": "src/rebalancer/priority-recovery-superseded-target.js",
+      "specifier": "./operation-workflow-replace-intent.js",
+      "to": "src/rebalancer/operation-workflow-replace-intent.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/rebalancer/priority-recovery-superseded-target.js",
       "specifier": "./operation-workflow-replace-replay.js",
       "to": "src/rebalancer/operation-workflow-replace-replay.js",
-      "targetModule": false,
-      "sourceLayer": "owner_decision",
-      "targetLayer": null,
-      "crossLayer": false,
-      "conformsToLayerDirection": null
-    },
-    {
-      "from": "src/rebalancer/priority-recovery-superseded-target.js",
-      "specifier": "./operation-workflow-replacement-leader-resolution.js",
-      "to": "src/rebalancer/operation-workflow-replacement-leader-resolution.js",
-      "targetModule": false,
-      "sourceLayer": "owner_decision",
-      "targetLayer": null,
-      "crossLayer": false,
-      "conformsToLayerDirection": null
-    },
-    {
-      "from": "src/rebalancer/priority-recovery-superseded-target.js",
-      "specifier": "./operation-workflow-replacement-leader-state.js",
-      "to": "src/rebalancer/operation-workflow-replacement-leader-state.js",
       "targetModule": false,
       "sourceLayer": "owner_decision",
       "targetLayer": null,

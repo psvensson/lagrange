@@ -1,7 +1,7 @@
 /**
- * Boot incarnation mint/persist/propagate (node-incarnation-fencing frontier
- * 1): the rejoin-hints file carries a node-local monotonic boot counter,
- * minted once per boot (previous + 1) and held stable across the 1s
+ * Boot incarnation projection/propagate: the rejoin-hints file projects the
+ * boot incarnation the owner reserved (boot-incarnation-owner.js; its own
+ * tests prove the monotonic reservation), held stable across the 1s
  * persistence cadence, and the publisher stamps it onto every node state
  * update message so receivers can fence stale-incarnation writers.
  */
@@ -10,12 +10,13 @@ import {mkdtemp, rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {test} from '../../src/test-helpers/tap.js';
+import {BOOT_INCARNATION_REQUIRED} from
+  '../../src/bootstrap/boot-incarnation-contract.js';
 import {
   buildBootstrapRejoinHintsSnapshot,
   buildRejoinHintsSnapshot,
-  mintBootIncarnation,
   persistBootstrapRejoinHints,
-  readPersistedBootIncarnation,
+  readRejoinHints,
   RejoinHintsPersistenceService,
 } from '../../src/bootstrap/rejoin-hints.js';
 import {
@@ -69,68 +70,53 @@ test('both hints builders carry the boot incarnation when known', async (t) => {
   );
 });
 
-test('an absent incarnation leaves the field off (pre-incarnation ' +
-  'compatibility)', async (t) => {
-  const snapshot = buildRejoinHintsSnapshot({
-    systemTableCache: createSystemTableCache(),
-    nodeId: LOCAL_NODE_ID,
-    nodeAddress: LOCAL_NODE_ADDRESS,
-    nodeRole: 'seed',
-    now: () => 1234,
-  });
-  t.equal(
-    Object.prototype.hasOwnProperty.call(snapshot, 'bootIncarnation'),
-    false,
-    'a pre-incarnation write has no bootIncarnation field',
-  );
-  const zero = buildRejoinHintsSnapshot({
-    systemTableCache: createSystemTableCache(),
-    nodeId: LOCAL_NODE_ID,
-    nodeAddress: LOCAL_NODE_ADDRESS,
-    nodeRole: 'seed',
-    bootIncarnation: 0,
-    now: () => 1234,
-  });
-  t.equal(
-    Object.prototype.hasOwnProperty.call(zero, 'bootIncarnation'),
-    false,
-    'incarnation 0 (pre-incarnation) is never written',
-  );
-});
-
-test('mintBootIncarnation increments the persisted counter exactly once ' +
-  'per boot', async (t) => {
-  const dataDir = await mkdtemp(join(tmpdir(), 'boot-incarnation-'));
-  try {
-    t.equal(
-      await readPersistedBootIncarnation(dataDir),
-      0,
-      'a fresh data directory starts at incarnation 0',
-    );
-    const first = await mintBootIncarnation(dataDir);
-    t.equal(first, 1, 'the first boot mints incarnation 1');
-    await persistBootstrapRejoinHints({
-      dataDir,
+test('every hints builder refuses a missing or invalid incarnation: the ' +
+  'field is never dropped and never written as 0', async (t) => {
+  const builders = {
+    buildRejoinHintsSnapshot: (bootIncarnation) => buildRejoinHintsSnapshot({
+      systemTableCache: createSystemTableCache(),
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
-      nodeRole: 'joiner',
-      peerAddresses: [PEER_NODE_ADDRESS],
-      bootIncarnation: first,
-    });
-    t.equal(
-      await readPersistedBootIncarnation(dataDir),
-      1,
-      'the minted incarnation is persisted with the hints',
-    );
-    const second = await mintBootIncarnation(dataDir);
-    t.equal(
-      second,
-      2,
-      'the next boot mints the next monotonic value',
-    );
-  } finally {
-    await rm(dataDir, {recursive: true, force: true});
+      nodeRole: 'seed',
+      bootIncarnation,
+      now: () => 1234,
+    }),
+    buildBootstrapRejoinHintsSnapshot: (bootIncarnation) =>
+      buildBootstrapRejoinHintsSnapshot({
+        nodeId: LOCAL_NODE_ID,
+        nodeAddress: LOCAL_NODE_ADDRESS,
+        nodeRole: 'joiner',
+        peerAddresses: [PEER_NODE_ADDRESS],
+        bootIncarnation,
+        now: () => 1234,
+      }),
+  };
+  for (const [name, build] of Object.entries(builders)) {
+    for (const bootIncarnation of [undefined, null, 0, -1, 1.5]) {
+      t.throws(() => build(bootIncarnation),
+        {code: BOOT_INCARNATION_REQUIRED},
+        `${name} refuses ${String(bootIncarnation)}`);
+    }
   }
+});
+
+test('a hints persist without an issued incarnation never erases the ' +
+  'legacy floor the owner migration reads', async (t) => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'node-incarnation-refuse-'));
+  t.after(() => rm(dataDir, {recursive: true, force: true}));
+  const legacyFloor = 4;
+  const persist = (bootIncarnation) => persistBootstrapRejoinHints({
+    dataDir,
+    nodeId: LOCAL_NODE_ID,
+    nodeAddress: LOCAL_NODE_ADDRESS,
+    nodeRole: 'joiner',
+    peerAddresses: [PEER_NODE_ADDRESS],
+    bootIncarnation,
+  });
+  await persist(legacyFloor);
+  await t.rejects(persist(undefined), {code: BOOT_INCARNATION_REQUIRED});
+  t.equal((await readRejoinHints(dataDir)).bootIncarnation, legacyFloor,
+    'the refused write replaced nothing');
 });
 
 test('the persistence cadence rewrites the hints with the SAME ' +
@@ -150,9 +136,9 @@ test('the persistence cadence rewrites the hints with the SAME ' +
     await service.persistNow();
     await service.persistNow();
     t.equal(
-      await readPersistedBootIncarnation(dataDir),
+      (await readRejoinHints(dataDir))?.bootIncarnation,
       5,
-      'repeated cadence writes never advance the counter',
+      'repeated cadence writes project the same reservation',
     );
     await service.stop();
   } finally {
@@ -196,16 +182,15 @@ test('the publication owner stamps the boot incarnation onto every node ' +
   );
 });
 
-test('a publication owner without an incarnation stamps no field',
+test('a publication owner without an issued incarnation is refused',
   async (t) => {
-    const owner = new NodeStatePublicationOwner({
-      nodeId: LOCAL_NODE_ID,
-      nodeAddress: LOCAL_NODE_ADDRESS,
-      delegates: {getNodeCapabilities: () => []},
-    });
-    t.equal(
-      owner.bootIncarnation,
-      0,
-      'pre-incarnation owners carry incarnation 0 (never stamped)',
-    );
+    for (const bootIncarnation of [undefined, 0, -1, 1.5]) {
+      t.throws(() => new NodeStatePublicationOwner({
+        nodeId: LOCAL_NODE_ID,
+        nodeAddress: LOCAL_NODE_ADDRESS,
+        bootIncarnation,
+        delegates: {getNodeCapabilities: () => []},
+      }), {code: BOOT_INCARNATION_REQUIRED},
+      `incarnation ${String(bootIncarnation)} is never defaulted`);
+    }
   });

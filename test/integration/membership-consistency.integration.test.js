@@ -38,11 +38,13 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NODE_STATUS} from '../../src/node/node-constants.js';
 import {STATE, TABLES} from '../../src/constants/index.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {NODE_LIVENESS_SEMANTIC_THRESHOLD_DEFAULT} from
+  '../../src/control-plane/node-liveness-semantic-projection.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
   getUniquePort,
   cleanupTestEnvironment,
+  createVirginSeedBootstrapService,
   initializeTestEnvironment as initTestEnv,
   TEST_CONFIG,
 } from './helpers/cluster-test-helpers.js';
@@ -57,13 +59,16 @@ import {
   createNodeHosts,
   createReplicaPropagation,
   initializeTestEnvironment,
+  readAtSettledPlacement,
   readPublishedActiveNodeIds,
+  recordPublishedMemberships,
   seedOwners,
   shutdownOrFail,
   waitForCondition,
   waitForPlacementEligible,
   waitForPublishedMembership,
 } from './membership-consistency-integration-test-helpers.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // ============================================================================
 // TEST SUITE
@@ -139,7 +144,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedWsPort = getUniquePort();
     const followerNodeId = 'follower-node';
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -211,6 +216,9 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
   // --------------------------------------------------------------------------
   // Test 3: Lease Expiration During Stabilization
   // Uses real BootstrapService to create seed node, then tests lease expiration.
+  // It makes no placement claim for the short-lease node: without transport
+  // here it is never placement-eligible, so exclusion would not discriminate
+  // the lease (the readiness owner's own test witnesses that contract).
   // --------------------------------------------------------------------------
   await t.test('lease expires during rebalancer stabilization period', async (t) => {
     // Initialize with fast Raft elections
@@ -219,7 +227,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440003';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -239,14 +247,40 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         owners.controlPlaneReadinessService, seedNodeId);
       t.equal(eligible, true, 'readiness owner should hold the seed placement-eligible');
 
-      // A node row with a short lease, present but never published: the
-      // publication owner admits only nodes it can witness.
+      // A node row READY on a live ready lease whose heartbeat is already
+      // past the liveness owner's derivation grace (the row supplies the
+      // clock, as the rest of this file does). The publication owner
+      // publishes the row it witnessed READY on a live lease. Whether it
+      // stays out of published membership once its lease passes is not a
+      // guarantee on any backend (see quest-records/cutover-seed-parity/
+      // finding-readiness-lapsed-member-and-planning-oscillation.md).
+      //
+      // No placement claim is made here: this node has no transport in this
+      // composition, so the readiness owner never holds it placement-eligible
+      // even while its lease is live, and an exclusion after expiry would not
+      // discriminate the lease. Lease expiry removing placement eligibility
+      // is the readiness owner's contract, witnessed with transport connected
+      // in test/control-plane/control-plane-readiness-service.test.js
+      // ("fails closed for stale lease rows even when transport is
+      // connected").
+      const publications = recordPublishedMemberships(owners.cache);
       const now = Date.now();
       const shortLeaseNode = createNodeEntry('short-lease-node', {
-        ready_lease_expires_at: now + 50, // Expires in 50ms
+        // Live for the whole admission wait below.
+        ready_lease_expires_at: now + TEST_TIMEOUTS.TEST_TIMEOUT,
+        last_heartbeat: now -
+          NODE_LIVENESS_SEMANTIC_THRESHOLD_DEFAULT.derivationGraceMs - 1,
       });
       await owners.cdcIntegrationService.insertSystemTableRow(
         SYSTEM_TABLE_NAME.NODES, shortLeaseNode);
+      t.equal(await waitForCondition(() =>
+        publications.hasPublished('short-lease-node')), true,
+      'the publication owner publishes the row it witnessed READY on a live ' +
+      'lease');
+      publications.stop();
+      await owners.cdcIntegrationService.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES, {node_id: 'short-lease-node'},
+        {ready_lease_expires_at: Date.now() - 1});
 
       // The real rebalancer over the seed's real owners
       const rebalancer = new UnifiedRebalancer({
@@ -269,27 +303,6 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
 
       // Record state change to start stabilization
       rebalancer.recordStateChange('test_trigger');
-
-      // Every nodes-table write returns the readiness owner's verdict to
-      // planning_snapshot_refresh_pending until the next evaluation; drive it
-      // before each read, as the owners' own consumers do.
-      await waitForPlacementEligible(owners.controlPlaneReadinessService, seedNodeId);
-      // was: 'should have nodes available initially'
-      t.same(rebalancer.getAvailableNodes().map((node) => node.node_id),
-        [seedNodeId],
-        'available nodes should be the published set (the seed) while the ' +
-        'short-lease row is present but unpublished');
-
-      // Wait for lease to expire (but less than stabilization period)
-      await new Promise((r) => setTimeout(r, 60));
-
-      await waitForPlacementEligible(owners.controlPlaneReadinessService, seedNodeId);
-      // was: 'short-lease node should not be available after lease expiry'
-      t.same(rebalancer.getAvailableNodes().map((node) => node.node_id),
-        [seedNodeId],
-        'an unpublished row stays unavailable after its lease expires: a ' +
-        'member leaving on lease expiry is a republication by the ' +
-        'publication owner, not a row read');
 
       // Stabilization timing can race with short lease windows under fast tests.
       // Verify API behavior without enforcing a brittle exact timing boundary.
@@ -315,7 +328,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440004';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -475,7 +488,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedWsPort = getUniquePort();
     const nodeId = 'expiring-node';
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -543,7 +556,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440007';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -568,7 +581,8 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       const cdcService = owners.cdcIntegrationService;
       const now = Date.now();
 
-      // Additional node rows, present but unpublished: not members.
+      // Additional node rows with live ready leases: the publication owner
+      // witnesses them READY and publishes them.
       await cdcService.insertSystemTableRow(
         SYSTEM_TABLE_NAME.NODES,
         createNodeEntry('node-2', {
@@ -581,6 +595,9 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
           ready_lease_expires_at: now + TEST_TIMEOUTS.READY_LEASE_DURATION,
         }),
       );
+      const publishedNodeIds = [seedNodeId, 'node-2', 'node-3'];
+      t.equal(await waitForPublishedMembership(systemTableCache, publishedNodeIds),
+        true, 'the publication owner publishes the node rows it witnessed READY');
 
       // Create two rebalancers simulating partition leaders on different nodes
       rebalancer1 = new UnifiedRebalancer({
@@ -614,18 +631,24 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       rebalancer1.setLeader(true);
       rebalancer2.setLeader(true);
 
-      // Both rebalancers see the same available nodes (the node-row writes
-      // above returned the readiness verdict to refresh-pending; drive it).
-      await waitForPlacementEligible(owners.controlPlaneReadinessService, seedNodeId);
-      const nodes1 = rebalancer1.getAvailableNodes();
-      const nodes2 = rebalancer2.getAvailableNodes();
+      // Both rebalancers read at one settled point: the published epoch
+      // settled and the seed placement-eligible (every publication write
+      // returns the readiness verdict to refresh-pending until re-evaluated).
+      const settled = await readAtSettledPlacement(owners, {
+        publishedNodeIds,
+        eligibleNodeId: seedNodeId,
+        readers: [rebalancer1, rebalancer2],
+      }, () => [rebalancer1.getAvailableNodes(), rebalancer2.getAvailableNodes()]);
+      t.equal(settled.settled, true,
+        'the published epoch settles with the seed eligible for both rebalancers');
+      const [nodes1, nodes2] = settled.value;
 
       t.equal(nodes1.length, nodes2.length,
         'both rebalancers should see same node count');
       // was: 'should see at least seed node'
       t.same(nodes1.map((node) => node.node_id), [seedNodeId],
-        'both rebalancers should see the published set: the seed, not the ' +
-        'unpublished node rows');
+        'both rebalancers see the published members the readiness owner ' +
+        'holds eligible: the seed');
 
       // Trigger rebalance on both (simulating concurrent decisions)
       rebalancer1.lastStateChangeTime = now - TEST_TIMEOUTS.STABILIZATION_PERIOD - 1;
@@ -685,6 +708,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       const mockCoordinator = createRebalanceCoordinatorHost(cache);
 
       const heartbeatSvc = new HeartbeatService({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'control-plane-node',
         nodeAddress: 'ws://control-plane-node:9000',
         cdcIntegrationService: cdcService,
@@ -826,7 +850,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440010';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -936,7 +960,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440011';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -1121,7 +1145,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440013';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -1251,7 +1275,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440015';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -1322,6 +1346,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       const mockCoordinator = createRebalanceCoordinatorHost(cache);
 
       const heartbeatSvc = new HeartbeatService({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'follower-node',
         nodeAddress: 'ws://follower-node:9000',
         cdcIntegrationService: cdcService,

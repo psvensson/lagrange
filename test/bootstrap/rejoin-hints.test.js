@@ -23,6 +23,7 @@ import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {
   CLUSTER_ID_CONFIG_KEY,
 } from '../../src/bootstrap/cluster-identity-constants.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const LOCAL_NODE_ID = 'node-local';
 const LOCAL_NODE_ADDRESS = 'seed-node:8080';
@@ -38,6 +39,35 @@ const CLUSTER_INCARNATION_LOCAL_IDENTITY_MISMATCHED = 'mismatched';
 const CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT = 'present';
 const CLUSTER_INCARNATION_PEER_PROOF_RECOVERED = 'recovered';
 const CLUSTER_INCARNATION_PEER_PROOF_NOT_REQUIRED = 'not_required';
+
+const JOIN_RECOVERED_PEER_DECISION_MATCH = {
+  state: 'join_recovered_peer',
+  mode: 'join',
+  peerAddressState: 'selected',
+  peerAddress: PEER_NODE_ADDRESS_A,
+  source: 'rejoin_hints',
+  startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+  durableStateDetected: true,
+  identityMismatch: false,
+  membershipOwnerOutcome: {
+    semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+    boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
+    startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    reasonCode: 'join_recovered_peer',
+    evidenceSource: 'rejoin_hints',
+    peerAddressState: 'selected',
+    durableStateDetected: true,
+    identityMismatch: false,
+  },
+  clusterIncarnationFence: {
+    state: CLUSTER_INCARNATION_FENCE_STATE_CURRENT,
+    allowed: true,
+    localIdentityState: CLUSTER_INCARNATION_LOCAL_IDENTITY_MATCHED,
+    durableMembershipState: CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT,
+    peerProofState: CLUSTER_INCARNATION_PEER_PROOF_RECOVERED,
+  },
+};
 
 function createSystemTableCache(nodeRows = [], clusterId = null) {
   return {
@@ -87,6 +117,7 @@ async function writeDurableNodesTableSnapshot(dataDir, rows = []) {
 test('buildRejoinHintsSnapshot records non-self peer addresses from nodes table',
   async (t) => {
     const snapshot = buildRejoinHintsSnapshot({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       systemTableCache: createSystemTableCache([
         {
           [COLUMN.NODE_ID]: LOCAL_NODE_ID,
@@ -119,6 +150,7 @@ test('buildRejoinHintsSnapshot records non-self peer addresses from nodes table'
       peerAddresses: [PEER_NODE_ADDRESS_A, PEER_NODE_ADDRESS_B],
       requiresPeerRejoin: true,
       updatedAt: 1234,
+      bootIncarnation: TEST_BOOT_INCARNATION,
     });
   });
 
@@ -128,6 +160,7 @@ test('persistBootstrapRejoinHints seeds durable rejoin from the chosen peer',
     t.after(() => rm(dataDir, {recursive: true, force: true}));
 
     const bootstrapSnapshot = buildBootstrapRejoinHintsSnapshot({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
       nodeRole: 'joiner',
@@ -144,9 +177,11 @@ test('persistBootstrapRejoinHints seeds durable rejoin from the chosen peer',
       peerAddresses: [PEER_NODE_ADDRESS_A],
       requiresPeerRejoin: true,
       updatedAt: 2345,
+      bootIncarnation: TEST_BOOT_INCARNATION,
     });
 
     await persistBootstrapRejoinHints({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
@@ -166,34 +201,7 @@ test('persistBootstrapRejoinHints seeds durable rejoin from the chosen peer',
       probePeerAddress: async () => false,
     });
 
-    t.match(decision, {
-      state: 'join_recovered_peer',
-      mode: 'join',
-      peerAddressState: 'selected',
-      peerAddress: PEER_NODE_ADDRESS_A,
-      source: 'rejoin_hints',
-      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-      durableStateDetected: true,
-      identityMismatch: false,
-      membershipOwnerOutcome: {
-        semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
-        boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
-        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
-        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-        reasonCode: 'join_recovered_peer',
-        evidenceSource: 'rejoin_hints',
-        peerAddressState: 'selected',
-        durableStateDetected: true,
-        identityMismatch: false,
-      },
-      clusterIncarnationFence: {
-        state: CLUSTER_INCARNATION_FENCE_STATE_CURRENT,
-        allowed: true,
-        localIdentityState: CLUSTER_INCARNATION_LOCAL_IDENTITY_MATCHED,
-        durableMembershipState: CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT,
-        peerProofState: CLUSTER_INCARNATION_PEER_PROOF_RECOVERED,
-      },
-    });
+    t.match(decision, JOIN_RECOVERED_PEER_DECISION_MATCH);
   });
 
 test('resolveAutoRejoinPeerAddress prefers a reachable persisted peer', async (t) => {
@@ -201,6 +209,7 @@ test('resolveAutoRejoinPeerAddress prefers a reachable persisted peer', async (t
   t.after(() => rm(dataDir, {recursive: true, force: true}));
 
   const persistence = new RejoinHintsPersistenceService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     dataDir,
     nodeId: LOCAL_NODE_ID,
     nodeAddress: LOCAL_NODE_ADDRESS,
@@ -244,6 +253,7 @@ test('resolveAutoRejoinPeerAddress rejects persisted hints from another node', a
   t.after(() => rm(dataDir, {recursive: true, force: true}));
 
   const persistence = new RejoinHintsPersistenceService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     dataDir,
     nodeId: 'different-node',
     nodeAddress: LOCAL_NODE_ADDRESS,
@@ -284,6 +294,7 @@ test('resolveAutoRejoinStartupDecision accepts address drift when node ID matche
     t.after(() => rm(dataDir, {recursive: true, force: true}));
 
     const persistence = new RejoinHintsPersistenceService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
@@ -310,34 +321,7 @@ test('resolveAutoRejoinStartupDecision accepts address drift when node ID matche
       probePeerAddress: async () => false,
     });
 
-    t.match(decision, {
-      state: 'join_recovered_peer',
-      mode: 'join',
-      peerAddressState: 'selected',
-      peerAddress: PEER_NODE_ADDRESS_A,
-      source: 'rejoin_hints',
-      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-      durableStateDetected: true,
-      identityMismatch: false,
-      membershipOwnerOutcome: {
-        semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
-        boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
-        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
-        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-        reasonCode: 'join_recovered_peer',
-        evidenceSource: 'rejoin_hints',
-        peerAddressState: 'selected',
-        durableStateDetected: true,
-        identityMismatch: false,
-      },
-      clusterIncarnationFence: {
-        state: CLUSTER_INCARNATION_FENCE_STATE_CURRENT,
-        allowed: true,
-        localIdentityState: CLUSTER_INCARNATION_LOCAL_IDENTITY_MATCHED,
-        durableMembershipState: CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT,
-        peerProofState: CLUSTER_INCARNATION_PEER_PROOF_RECOVERED,
-      },
-    });
+    t.match(decision, JOIN_RECOVERED_PEER_DECISION_MATCH);
   });
 
 test('resolveAutoRejoinStartupDecision keeps persisted seed role in seed mode',
@@ -350,6 +334,7 @@ test('resolveAutoRejoinStartupDecision keeps persisted seed role in seed mode',
     // match is confirmed; live peer contact (probe true) supplies the
     // recovery proof. A persisted seed role ALONE is no longer sufficient.
     const persistence = new RejoinHintsPersistenceService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
@@ -516,6 +501,7 @@ test('RejoinHintsPersistenceService writes the canonical hints file', async (t) 
   t.after(() => rm(dataDir, {recursive: true, force: true}));
 
   const persistence = new RejoinHintsPersistenceService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     dataDir,
     nodeId: LOCAL_NODE_ID,
     nodeAddress: LOCAL_NODE_ADDRESS,
@@ -545,6 +531,7 @@ test('RejoinHintsPersistenceService writes the canonical hints file', async (t) 
     peerAddresses: [PEER_NODE_ADDRESS_A],
     requiresPeerRejoin: true,
     updatedAt: 9999,
+    bootIncarnation: TEST_BOOT_INCARNATION,
   });
 
   const rawPersistedHints = JSON.parse(
@@ -561,6 +548,7 @@ test('RejoinHintsPersistenceService serializes overlapping writes without warnin
     const warnings = [];
     let nowValue = 1000;
     const persistence = new RejoinHintsPersistenceService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
@@ -726,6 +714,7 @@ test('readPersistedLocalNodeId restores the durable identity for restart reuse',
     t.after(() => rm(dataDir, {recursive: true, force: true}));
 
     await persistBootstrapRejoinHints({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,

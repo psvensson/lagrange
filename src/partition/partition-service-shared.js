@@ -29,7 +29,6 @@ import {
   buildPartitionWriteEntry,
   buildPartitionWriteFailureResult,
   buildPartitionWriteSideEffectPlan,
-  executePartitionWriteStatement,
   resolvePartitionWriteCommitMode,
 } from './partition-write-kernel.js';
 import {CDCEventBuffer} from './cdc-event-buffer.js';
@@ -59,19 +58,13 @@ import {
 } from '../raft/raft-packet-utils.js';
 import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
 import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
-import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {assertPartitionRaftProviderContract} from
   '../raft/raft-provider-contract.js';
-import {LiferaftProvider} from '../raft/liferaft-provider.js';
 import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
 import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
-import {
-  applyRuntimeRaftTiming,
-  computeReplicaElectionTimeouts,
-} from '../raft/raft-timing-utils.js';
+import {computeReplicaElectionTimeouts} from '../raft/replica-election-timeouts.js';
 import {LeaderActivationGate} from '../raft/leader-activation-gate.js';
-import {LeaderActivationScheduler} from '../raft/leader-activation-scheduler.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
@@ -153,10 +146,6 @@ import {
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
 } from './partition-service-constants.js';
-import {
-  PartitionRaftStorage,
-  PartitionRaftLogEntry,
-} from './partition-raft-storage.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../control-plane/timeout-budget.js';
 import {
   CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
@@ -194,9 +183,6 @@ const PARTITION_SERVICE_LITERAL = Object.freeze({
   SUBSCRIBER_DELIVERY_FAILED: 'subscriber_delivery_failed',
   WRITE_ACTIVITY: 'write_activity',
   VALUE: '|',
-  SQLITE_CONSTRAINT_PRIMARYKEY: 'SQLITE_CONSTRAINT_PRIMARYKEY',
-  SQLITE_CONSTRAINT: 'SQLITE_CONSTRAINT',
-  UNIQUE_CONSTRAINT_FAILED: 'UNIQUE CONSTRAINT FAILED',
   ENOENT: 'ENOENT',
   SIZEUPDATETIMER: 'sizeUpdateTimer',
   SIZE_PERSISTENCE_FAILED: 'size persistence failed',
@@ -215,7 +201,6 @@ const PARTITION_SERVICE_LITERAL = Object.freeze({
     LEARNER_PROMOTION_COUNT_CHECK_REFUSAL.WOULD_EXCEED_TARGET_REPLICA_COUNT,
   WOULD_CAUSE_EVEN_VOTER_COUNT:
     LEARNER_PROMOTION_COUNT_CHECK_REFUSAL.WOULD_CAUSE_EVEN_VOTER_COUNT,
-  PARTITION_SERVICE_SHUTDOWN: 'Partition service shutdown',
 });
 const PartitionState = PARTITION_STATE;
 const RaftRole = PARTITION_RAFT_ROLE;
@@ -281,8 +266,6 @@ export const PARTITION_SERVICE_SHARED = {
   INITIAL_PARTITION_IDS,
   LIFECYCLE_REASON,
   LeaderActivationGate,
-  LeaderActivationScheduler,
-  LiferaftProvider,
   LoggingService,
   METRICS_LOG_TAG,
   NUM,
@@ -326,8 +309,6 @@ export const PARTITION_SERVICE_SHARED = {
   PRESSURE_WORK_CLASS,
   PartitionCDCDelivery,
   PartitionCDCGenerator,
-  PartitionRaftLogEntry,
-  PartitionRaftStorage,
   PartitionState,
   PendingRequestTracker,
   ProposalQueue,
@@ -345,7 +326,6 @@ export const PARTITION_SERVICE_SHARED = {
   SPLIT_PARTICIPANT_PREFIX,
   SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
   SQL,
-  SQLiteLogAdapter,
   STRING,
   SYSTEM_TABLE_NAME,
   TABLES,
@@ -360,7 +340,6 @@ export const PARTITION_SERVICE_SHARED = {
   WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
   WRITE_PHASE_FIELD_SQLITE_RUN_MS,
   WRITE_PHASE_FIELD_TOTAL_MS,
-  applyRuntimeRaftTiming,
   assertCritical,
   assertPartitionRaftProviderContract,
   attachTrafficReadinessListener,
@@ -375,7 +354,6 @@ export const PARTITION_SERVICE_SHARED = {
   cloneSplitRoutingEntry,
   computeReplicaElectionTimeouts,
   createControlPlaneRuntimeBundle,
-  executePartitionWriteStatement,
   extractPartitionSplitRoutingKey,
   fs,
   getSystemCachePrimaryKeyFieldOrFallback,

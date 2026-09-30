@@ -9,9 +9,11 @@
  */
 
 import {PartitionService} from '../../partition/partition-service.js';
+import {genesisStamp} from '../../raft/raft-committed-membership-stamp.js';
 import {assertCritical} from '../../utils/assert.js';
 import {AssignmentEpochManager} from '../../rebalancer/assignment-epoch-manager.js';
 import {AssignmentEpoch} from '../../rebalancer/assignment-epoch.js';
+import {ReplicaStatus} from '../../rebalancer/replica-status.js';
 import {EPOCH_CONFIG_KEY} from '../../cdc/cdc-integration-service.js';
 import {StartupRecoveryCoordinator} from '../startup-recovery-coordinator.js';
 import {classifySystemPartition} from
@@ -45,11 +47,48 @@ import {
   SERVICE_TYPE,
   STRING,
   UNIFIED_SERVICE_TYPE,
+  isPartitionCleanupServiceRow,
 } from '../../constants/index.js';
 import {resolveHostedNodeClock, resolveHostedReplicaAuthorities} from
   '../shared/hosted-replica-authorities.js';
 
 const LOCAL_STR_STRING = 'string';
+const CLEANUP_IN_PROGRESS_CODE = 'CLEANUP_IN_PROGRESS';
+const CREATE_OWNER_DEFERRED_CODE = 'CREATE_OWNER_DEFERRED';
+const RESTORABLE_SEED_PARTITION_STATUSES = new Set([
+  ReplicaStatus.PENDING,
+  ReplicaStatus.CREATING,
+  ReplicaStatus.SYNCING,
+  ReplicaStatus.ACTIVE,
+]);
+
+function isRestorableSeedPartitionRow(row, options, nodeId) {
+  const expected = {
+    service_type: SERVICE_TYPE.PARTITION,
+    partition_id: options.partitionId,
+    node_id: nodeId,
+  };
+  return Object.entries(expected).every(([field, value]) =>
+    row?.[field] === value) &&
+    typeof row?.status === LOCAL_STR_STRING &&
+    RESTORABLE_SEED_PARTITION_STATUSES.has(row.status.toLowerCase());
+}
+
+function assertBootstrapPartitionStorageAdmission(options, admission, nodeId) {
+  if (admission?.empty === true) return;
+  const row = admission?.rows?.find?.(
+    (candidate) => candidate?.service_id === options.replicaId,
+  );
+  if (!isRestorableSeedPartitionRow(row, options, nodeId)) {
+    const error = new Error(
+      `Seed partition storage admission deferred for ${options.replicaId}`,
+    );
+    error.code = isPartitionCleanupServiceRow(row) ?
+      CLEANUP_IN_PROGRESS_CODE : CREATE_OWNER_DEFERRED_CODE;
+    error.deferRetry = true;
+    throw error;
+  }
+}
 
 /**
  * Handles the partitions phase of seed bootstrap.
@@ -175,6 +214,11 @@ class SeedPartitionsPhase {
       serviceId,
       UNIFIED_SERVICE_TYPE.PARTITION,
     );
+    assertBootstrapPartitionStorageAdmission(
+      options,
+      d.getStartupServicesAdmission?.(),
+      d.getNodeId(),
+    );
 
     if (d.getPartitionServices().has(options.replicaId)) {
       return {status: SERVICE_LIFECYCLE_STATE.CREATED};
@@ -202,6 +246,14 @@ class SeedPartitionsPhase {
         keyRange: {start: null, end: null},
         replicaId: options.replicaId,
         replicaIds: options.replicaIds,
+        // Handler retirement goes through the replica lifecycle owner (N2).
+        resolveHandlerRetirementLane: () =>
+          d.getReplicaStateMachine?.() || null,
+        // The seed founds each system partition from an explicit GENESIS
+        // stamp of its founding list, validated by the port like every stamp
+        // (verification V1a); a seed that holds a durable record restores
+        // from it instead.
+        bootstrapMembership: genesisStamp(options.replicaIds),
         peerAddresses: options.peerAddresses,
         nodeId: d.getNodeId(),
         transport: d.getTransport(),
@@ -301,18 +353,11 @@ class SeedPartitionsPhase {
       return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
     }
 
+    // The partition's shutdown retires its own exact transport handler
+    // through the replica lifecycle owner (owner decision N2); a raw
+    // by-address unregister here could remove a successor's handler.
     if (partition.shutdown) {
       await partition.shutdown();
-    }
-
-    const unifiedAddress = partition.getUnifiedAddress ?
-      partition.getUnifiedAddress() :
-      `${d.getNodeId()}${ADDRESS.SEPARATOR}` +
-      `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
-      `${options.replicaId}`;
-    const messageRouter = d.getMessageRouter();
-    if (messageRouter) {
-      messageRouter.unregister(unifiedAddress);
     }
 
     d.getPartitionServices().delete(options.replicaId);

@@ -166,6 +166,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
     if (!tableName) {
       throw new Error(GATEWAY_ERROR_MSG.MUTATION_TABLE_REQUIRED);
     }
+    this.assertSystemTableMutationAllowed(operation, tableName);
     const normalizedMutation = canonicalizeControlPlaneMutation(
       mutation,
       operation,
