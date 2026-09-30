@@ -420,16 +420,36 @@ const operationCreationAdmissionMethods = {
     move,
     persistenceOptions,
   ) {
-    const operationCreationAdmission = move?.operationCreationAdmission ?
-      await this.consumeOperationCreationAdmission(
-        move,
-        move.operationCreationAdmission,
-      ) : null;
+    const admittedObservation = move?.operationCreationAdmission || null;
+    let operationCreationAdmission = null;
+    const inheritedBeforeAttempt = persistenceOptions?.beforeAttempt;
+    const effectBoundaryOptions =
+      admittedObservation || typeof inheritedBeforeAttempt === 'function' ?
+        {
+          ...(persistenceOptions || {}),
+          beforeAttempt: async () => {
+            if (
+              typeof inheritedBeforeAttempt === 'function' &&
+              await inheritedBeforeAttempt() !== true
+            ) {
+              return false;
+            }
+            if (admittedObservation) {
+              operationCreationAdmission =
+                await this.consumeOperationCreationAdmission(
+                  move,
+                  admittedObservation,
+                );
+            }
+            return true;
+          },
+        } :
+        persistenceOptions;
     let persistResult;
     try {
       persistResult = await this.persistNewOperation(
         operation,
-        persistenceOptions,
+        effectBoundaryOptions,
       );
     } catch (error) {
       if (

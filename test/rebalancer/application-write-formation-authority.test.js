@@ -98,7 +98,13 @@ function createAdmissionOwner() {
   owner.operationWorkflowRunExclusive = (_key, callback) => callback();
   owner.runOperationLedgerInterlockAccountedCreate = (_move, callback) =>
     callback();
-  owner.persistNewOperation = async (operation) => {
+  owner.persistNewOperation = async (operation, options = {}) => {
+    if (
+      typeof options.beforeAttempt === 'function' &&
+      await options.beforeAttempt() !== true
+    ) {
+      return {success: false, admissionRefused: true};
+    }
     state.insertAttempts += 1;
     state.insertedMoves.push(operation.move);
     return operation;
@@ -215,6 +221,40 @@ test('F1 stable READY observation admits exactly one first operation effect',
     t.equal(state.routeObservations, 2, 'admission is revalidated before effect');
   });
 
+test('effect-boundary revalidation runs after persistence-lane wait and ' +
+  'before the INSERT attempt', async (t) => {
+  const {owner, state} = createAdmissionOwner();
+  const decision = await owner.checkProvisioningAdmission(TEST_MOVE);
+  const basePersist = owner.persistNewOperation;
+  owner.persistNewOperation = async (operation, options = {}) => {
+    // Model a serialized repository wait: authority changes after the caller
+    // enters persistence but before the repository reaches SQL submission.
+    state.identity = planningIdentity(2);
+    return basePersist(operation, options);
+  };
+
+  await t.rejects(
+    owner.createOperation({
+      ...TEST_MOVE,
+      operationCreationAdmission: decision.operationCreationAdmission,
+    }),
+    {
+      code: 'OPERATION_CREATION_ADMISSION_REENTER',
+      reasonCodes: ['readiness_planning_identity_changed'],
+    },
+  );
+  t.equal(
+    state.insertAttempts,
+    0,
+    'authority changed during the persistence wait cannot reach INSERT',
+  );
+  t.equal(
+    state.routeObservations,
+    2,
+    'the second route observation occurs at the serialized effect boundary',
+  );
+});
+
 test('F2 unavailable canonical replica_operations route prevents false READY',
   async (t) => {
     const {owner, state} = createAdmissionOwner();
@@ -319,6 +359,40 @@ test('operation creation route observation consumes canonical write candidates',
       'recovery-route observation also remains side-effect free',
     );
   });
+
+test('operation INSERT persistence forwards the final authority hook to the ' +
+  'gateway attempt', async (t) => {
+  const repository = Object.create(ReplicaOperationRepository.prototype);
+  const boundary = async () => true;
+  let observedBeforeAttempt = null;
+  repository.buildReplicaOperationRow = () => ({});
+  repository.resolveReplicaOperationMutationOwnerId = () => 'test-owner';
+  repository.executeReplicaOperationGatewayMutationWithRetry =
+    async (_mutation, options) => {
+      observedBeforeAttempt = options.beforeAttempt;
+      return {success: true, changes: 1};
+    };
+  repository.extractMutationChangeCount = () => 1;
+  repository.confirmPersistenceThroughWitness = async () => ({});
+  repository.touchOperationOwnerLease = async () => {};
+
+  await repository.persistNewOperationUnlocked(
+    {
+      operationId: 'effect-boundary-op',
+      type: 'ADD',
+      partitionId: 'application-p1',
+      replicaId: 'application-p1-r1',
+      stepsHistory: [],
+    },
+    {beforeAttempt: boundary},
+  );
+
+  t.equal(
+    observedBeforeAttempt,
+    boundary,
+    'the repository does not move admission revalidation above its serialized attempt',
+  );
+});
 
 test('route loss after final admission revalidation returns typed pre-effect ' +
   're-entry', async (t) => {
