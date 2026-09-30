@@ -3,6 +3,8 @@ import {
   PARTITION_WRITE_RELEASE_CAUSE,
   buildReleasedPendingWriteAnswer,
 } from './partition-write-kernel.js';
+import {retireReplicaTransportHandler} from
+  '../node/replica-transport-handler-identity.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -46,10 +48,20 @@ function clearPartitionLifecycleListeners(service) {
   }
 }
 
+// Retire this replica's exact transport handler through its lifecycle owner
+// (owner decision N2).
+async function retirePartitionTransportHandler(service) {
+  await retireReplicaTransportHandler({
+    transport: service.transport,
+    address: service.unifiedAddress,
+    handler: service.transportHandler,
+    replicaId: service.replicaId,
+    lane: service.resolveHandlerRetirementLane?.() ||
+      service.replicaStateMachine,
+  });
+}
+
 function closePartitionPersistenceResources(service) {
-  if (service.transport) {
-    service.transport.unregister(service.unifiedAddress);
-  }
   if (service.db) {
     service.db.close();
     service.db = null;
@@ -158,6 +170,7 @@ class PartitionServiceLifecycleMethods {
       await Promise.allSettled([...this.pendingCDCEventDeliveries]);
       this.pendingCDCEventDeliveries.clear();
     }
+    await retirePartitionTransportHandler(this);
     closePartitionPersistenceResources(this);
     this.initialized = false;
     this.cdcSubscribers.clear();

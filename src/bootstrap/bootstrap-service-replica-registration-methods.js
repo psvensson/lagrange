@@ -4,13 +4,11 @@ import {
   BOOTSTRAP_DEFAULT,
   BOOTSTRAP_ERROR,
   BOOTSTRAP_LOG_MSG,
-  BOOTSTRAP_REPLICA_REGISTRATION_REASON,
   BOOTSTRAP_REPLICA_REGISTRATION_TRACE,
 } from './bootstrap-constants.js';
 import {
   shouldAttachPartitionCdcPropagation,
 } from './shared/cdc-propagation-filter.js';
-import {ReplicaHandlerSetup} from './shared/replica-handler-setup.js';
 import {
   buildPartitionCdcPropagationSubscriber,
 } from './shared/partition-cdc-propagation-subscriber.js';
@@ -27,9 +25,7 @@ const BootstrapLog = BOOTSTRAP_LOG_MSG;
 const bootstrapError = BOOTSTRAP_ERROR;
 const DEFAULT_BOOTSTRAP_CONFIG = BOOTSTRAP_DEFAULT;
 const BOOTSTRAP_REPLICA_REGISTRATION_PROGRESS_INTERVAL = NUM.TEN;
-const BOOTSTRAP_REPLICA_STATE_TRANSITIONS_PER_REPLICA = NUM.FOUR;
 const TYPEOF_OBJECT = 'object';
-const TYPEOF_FUNCTION = 'function';
 const BOOTSTRAP_REPLICA_REGISTRATION_LOG_MSG = Object.freeze({
   REPLICA_HANDLER_PARTITION_REGISTRATION_SUMMARY:
     'Bootstrap replica-handler partition registration summary',
@@ -63,8 +59,45 @@ const OPERATIONAL_CDC_SUBSCRIPTION_NOT_READY_PREFIX =
 const OPERATIONAL_CDC_SUBSCRIPTION_NOT_READY_SUFFIX = ' CDC subscription';
 const BOOTSTRAP_CDC_SUBSCRIBER_PART_PREFIX = 'bootstrap';
 const MESSAGE_GROUP_CDC_SUBSCRIBER_FALLBACK = 'message-group';
+
+function assertBootstrapReplicaActiveState(
+  stateMachine,
+  replicaId,
+  partition,
+  nodeId,
+) {
+  const state = stateMachine.getState(replicaId);
+  assertCritical(
+    state?.state === ReplicaState.ACTIVE &&
+      state.replicaId === replicaId &&
+      state.partitionId === partition.partitionId &&
+      state.nodeId === nodeId &&
+      state.serviceId === replicaId &&
+      Number.isFinite(state.durableVersion),
+    `Bootstrap runtime attachment requires exact ACTIVE authority for ${replicaId}`,
+  );
+  return state;
+}
 function createBootstrapServiceReplicaHandlerRuntimeMethods() {
   return {
+    initializeReplicaStateMachine() {
+      const cdcIntegrationService = this.cdcIntegrationService;
+      if (!cdcIntegrationService) {
+        throw new Error(bootstrapError.CDC_REPLICA_HANDLER_MISSING);
+      }
+      // Reacquire this incarnation's one lifecycle owner, minted once on the
+      // node's canonical time source.
+      this.replicaStateMachine =
+        this.replicaLifecycleOwner.acquireStateMachine({
+          nodeId: this.nodeId,
+          cdcIntegrationService,
+          systemTableCache: this.getSystemTableCache(),
+          timeSource: this.nodeService.getTimeSource(),
+          ownerIncarnation: this.bootIncarnation,
+        });
+      return this.replicaStateMachine;
+    },
+
     /**
      * Emit best-effort bootstrap replica registration diagnostics.
      * @param {string} scope - Partition or state registration scope.
@@ -235,7 +268,7 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
         return partition;
       };
 
-      const {replicaHandler, replicaStateMachine} = ReplicaHandlerSetup.create({
+      const acquired = this.replicaLifecycleOwner.acquire({
         nodeId: this.nodeId,
         messageRouter: this.messageRouter,
         cdcIntegrationService: cdcIntegrationService,
@@ -245,10 +278,12 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
         rpcClient: this.rpcClient,
         executorOutcomeEmitter:
           this.rebalanceCoordinator?.executorOutcomeEmitter,
+        timeSource: this.nodeService.getTimeSource(),
+        ownerIncarnation: this.bootIncarnation,
       });
 
-      this.replicaHandler = replicaHandler;
-      this.replicaStateMachine = replicaStateMachine;
+      this.replicaHandler = acquired.replicaHandler;
+      this.replicaStateMachine = acquired.replicaStateMachine;
 
       const partitionRegistrationStartedAt = Date.now();
       this.writeBootstrapReplicaRegistrationTrace(
@@ -523,119 +558,15 @@ function createBootstrapServiceReplicaStateRuntimeMethods() {
 
       const startedAt = Date.now();
       const totalPartitions = partitions.size;
-      const supportsSnapshotRegistration =
-        typeof stateMachine.registerReplicaSnapshot === TYPEOF_FUNCTION;
       let registeredCount = 0;
       let attemptedCount = 0;
       let skippedCount = 0;
-      let persistErrorCount = 0;
-      const persistSettles = [];
       const writeStateTrace = (event, details = {}) => {
         this.writeBootstrapReplicaRegistrationTrace(
           BOOTSTRAP_REPLICA_REGISTRATION_TRACE.SCOPE_STATE,
           event,
           details,
         );
-      };
-
-      const trackTransitionPersistence = (result, replicaId, targetState) => {
-        if (!result || typeof result.then !== TYPEOF_FUNCTION) {
-          return;
-        }
-        const tracked = result.catch((error) => {
-          persistErrorCount++;
-          this.logger.error(
-            BOOTSTRAP_REPLICA_REGISTRATION_LOG_MSG
-              .STATE_MACHINE_REGISTRATION_PERSISTENCE_REJECTED,
-            {
-              nodeId: this.nodeId,
-              replicaId,
-              targetState,
-              error: error.message,
-            },
-          );
-          return false;
-        });
-        persistSettles.push(tracked);
-      };
-      const registerReplicaSnapshot = (
-        replicaId,
-        partitionId,
-        currentAttempt,
-      ) => {
-        writeStateTrace(
-          BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_TRANSITION_BEGIN,
-          {
-            nodeId: this.nodeId,
-            attemptedCount: currentAttempt,
-            replicaId,
-            partitionId,
-            targetState: ReplicaState.ACTIVE,
-          },
-        );
-        const registrationResult = stateMachine.registerReplicaSnapshot(
-          replicaId,
-          {
-            partitionId,
-            nodeId: this.nodeId,
-            state: ReplicaState.ACTIVE,
-            reason:
-              BOOTSTRAP_REPLICA_REGISTRATION_REASON.BOOTSTRAP_REGISTRATION,
-            serviceId: replicaId,
-          },
-        );
-        writeStateTrace(
-          BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_TRANSITION_END,
-          {
-            nodeId: this.nodeId,
-            attemptedCount: currentAttempt,
-            replicaId,
-            partitionId,
-            targetState: ReplicaState.ACTIVE,
-          },
-        );
-        if (registrationResult !== true) {
-          throw new Error('Replica snapshot registration rejected');
-        }
-      };
-      const transitionReplicaState = (
-        replicaId,
-        partitionId,
-        targetState,
-        currentAttempt,
-      ) => {
-        writeStateTrace(
-          BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_TRANSITION_BEGIN,
-          {
-            nodeId: this.nodeId,
-            attemptedCount: currentAttempt,
-            replicaId,
-            partitionId,
-            targetState,
-          },
-        );
-        const transitionResult = stateMachine.transition(
-          replicaId,
-          targetState,
-          {
-            partitionId,
-            nodeId: this.nodeId,
-            reason:
-              BOOTSTRAP_REPLICA_REGISTRATION_REASON.BOOTSTRAP_REGISTRATION,
-            serviceId: replicaId,
-          },
-        );
-        writeStateTrace(
-          BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_TRANSITION_END,
-          {
-            nodeId: this.nodeId,
-            attemptedCount: currentAttempt,
-            replicaId,
-            partitionId,
-            targetState,
-          },
-        );
-        trackTransitionPersistence(transitionResult, replicaId, targetState);
       };
 
       this.logger.info(
@@ -679,39 +610,12 @@ function createBootstrapServiceReplicaStateRuntimeMethods() {
         }
 
         try {
-          if (supportsSnapshotRegistration) {
-            registerReplicaSnapshot(
-              replicaId,
-              partition.partitionId,
-              attemptedCount,
-            );
-          } else {
-            transitionReplicaState(
-              replicaId,
-              partition.partitionId,
-              ReplicaState.PENDING,
-              attemptedCount,
-            );
-            transitionReplicaState(
-              replicaId,
-              partition.partitionId,
-              ReplicaState.CREATING,
-              attemptedCount,
-            );
-            transitionReplicaState(
-              replicaId,
-              partition.partitionId,
-              ReplicaState.SYNCING,
-              attemptedCount,
-            );
-            transitionReplicaState(
-              replicaId,
-              partition.partitionId,
-              ReplicaState.ACTIVE,
-              attemptedCount,
-            );
-          }
-
+          assertBootstrapReplicaActiveState(
+            stateMachine,
+            replicaId,
+            partition,
+            this.nodeId,
+          );
           registeredCount++;
           writeStateTrace(
             BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_SUCCESS,
@@ -738,6 +642,7 @@ function createBootstrapServiceReplicaStateRuntimeMethods() {
             partitionId: partition?.partitionId || null,
             error: error.message,
           });
+          throw error;
         }
 
         if (
@@ -750,8 +655,8 @@ function createBootstrapServiceReplicaStateRuntimeMethods() {
             attemptedCount,
             registeredCount,
             skippedCount,
-            persistErrorCount,
-            pendingPersistCount: persistSettles.length,
+            persistErrorCount: 0,
+            pendingPersistCount: 0,
             totalPartitions,
             latestReplicaId: replicaId,
             elapsedMs: Date.now() - startedAt,
@@ -759,10 +664,7 @@ function createBootstrapServiceReplicaStateRuntimeMethods() {
         }
       }
 
-      const expectedPersistCount =
-        supportsSnapshotRegistration ?
-          0 :
-          registeredCount * BOOTSTRAP_REPLICA_STATE_TRANSITIONS_PER_REPLICA;
+      const expectedPersistCount = 0;
       this.logger.debug(BootstrapLog.STATE_MACHINE_REGISTERED, {
         registeredCount,
         totalPartitions: partitions.size,
@@ -777,8 +679,8 @@ function createBootstrapServiceReplicaStateRuntimeMethods() {
           attemptedCount,
           registeredCount,
           skippedCount,
-          persistErrorCount,
-          pendingPersistCount: persistSettles.length,
+          persistErrorCount: 0,
+          pendingPersistCount: 0,
           expectedPersistCount,
           totalPartitions,
           durationMs: Date.now() - startedAt,
@@ -789,39 +691,20 @@ function createBootstrapServiceReplicaStateRuntimeMethods() {
         attemptedCount,
         registeredCount,
         skippedCount,
-        persistErrorCount,
-        pendingPersistCount: persistSettles.length,
+        persistErrorCount: 0,
+        pendingPersistCount: 0,
         expectedPersistCount,
         totalPartitions,
         durationMs: Date.now() - startedAt,
       });
 
-      if (persistSettles.length > 0) {
-        void Promise.all(persistSettles).then(() => {
-          this.logger.info(
-            BOOTSTRAP_REPLICA_REGISTRATION_LOG_MSG
-              .STATE_MACHINE_REGISTRATION_PERSISTENCE_SETTLED,
-            {
-              nodeId: this.nodeId,
-              attemptedCount,
-              registeredCount,
-              skippedCount,
-              persistErrorCount,
-              expectedPersistCount,
-              settledPersistCount: persistSettles.length,
-              elapsedMs: Date.now() - startedAt,
-            },
-          );
-        });
-      }
-
       return {
         attemptedCount,
         registeredCount,
         skippedCount,
-        pendingPersistCount: persistSettles.length,
+        pendingPersistCount: 0,
         expectedPersistCount,
-        persistErrorCount,
+        persistErrorCount: 0,
         totalPartitions,
       };
     },

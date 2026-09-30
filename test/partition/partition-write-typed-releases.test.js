@@ -63,6 +63,7 @@ import {RAFT_RS_ENTRY_TYPE} from
 import {ReplicaOperationRepository} from
   '../../src/rebalancer/replica-operation-repository.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const TEMP_PREFIX = 'partition-write-typed-releases-';
 const DB_FILE = 'partition.sqlite';
@@ -264,7 +265,7 @@ async function withSessionHeldLeader(partitionId, body) {
   quietEnvironment();
   await withDirectory(async (directory) => {
     const dbPath = path.join(directory, DB_FILE);
-    const service = new PartitionService(loneOptions(partitionId, dbPath));
+    const service = new PartitionService(withFoundingStamp(loneOptions(partitionId, dbPath)));
     try {
       await service.initialize();
       assert.equal((await insert(service, 'row-0', 'setup', 's-setup'))

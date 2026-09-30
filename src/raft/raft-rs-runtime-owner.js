@@ -17,8 +17,20 @@ import {
   RAFT_RS_WASM_FILE,
 } from './raft-rs-core-constants.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
+import {
+  RAFT_RS_RECORD_COMPATIBILITY,
+} from './raft-rs-durable-store-constants.js';
 import {admitRaftRsMessage} from './raft-rs-ingress.js';
-import {RAFT_RS_TRANSPORT_PROTOCOL} from './raft-rs-ingress-constants.js';
+import {RAFT_RS_MESSAGE_TYPE} from './raft-rs-ingress-constants.js';
+import {
+  recordInboundStepRefusal,
+  sendMessages,
+} from './raft-rs-peer-delivery.js';
+import {
+  decideLeadershipTransfer,
+  droppedByLeadershipTransfer,
+  leadershipTransferInProgress,
+} from './raft-rs-leadership-transfer.js';
 import {
   RAFT_RS_CONF_CHANGE_ENTRY_TYPES,
 } from './raft-rs-ready-loop-constants.js';
@@ -31,6 +43,7 @@ import {
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
 } from './raft-rs-peer-identity-constants.js';
 import {
+  CONF_STATE_NOT_ANNOUNCED,
   CORE_CALL_WITHOUT_HANDLE,
   CORE_OPERATION,
   CORE_REFUSAL_KIND,
@@ -39,8 +52,6 @@ import {
   HEALTHY,
   INBOUND_DRAIN_DELAY_MS,
   NO_LEADER,
-  PEER_DELIVERY_OBSERVATION_LIMIT,
-  PEER_DELIVERY_OUTCOME,
   PERSISTENCE_ADMISSION_WAIT,
   RECOVERY_REQUIRED,
   ROLE,
@@ -57,6 +68,25 @@ import {
   tuningOf,
 } from './raft-rs-runtime-tuning.js';
 import {shapeGroupObservation} from './raft-rs-status-observation.js';
+import {
+  confChangeProposalRefusal,
+  confChangeSettlement,
+} from './raft-rs-conf-change-admission.js';
+import {
+  admitsReplica,
+  createdParticipationGate,
+  recordAppliedEntry,
+  durableRecordIncompatible,
+  durableRecordMissing,
+  participationGateClosed,
+  participationGateColumns,
+  participationObservation,
+  requiresDurableRecord,
+  restoredParticipationGate,
+  settleParticipationGate,
+} from './raft-rs-participation-gate.js';
+import {answerCommittedMembership} from
+  './raft-rs-committed-membership-read.js';
 import {applyCommittedEntryTransaction} from
   './raft-rs-application-transaction-owner.js';
 import {
@@ -282,6 +312,10 @@ function durableRecordReadFailure(error) {
 // not be read, and no other group is touched.
 function readOpeningRecord(group) {
   try {
+    if (group.store.recordCompatibility() ===
+        RAFT_RS_RECORD_COMPATIBILITY.PRE_GATE) {
+      return {ok: false, result: durableRecordIncompatible()};
+    }
     const restore = group.store.hasDurableRecord(group.groupId);
     return {ok: true, restore,
       record: restore ? group.store.readDurableRecord(group.groupId) : null};
@@ -395,8 +429,8 @@ function invokeCoreAt(group, expectedGeneration, operation, ...args) {
 function createNodeArguments(group, {restore, record}) {
   const base = {
     id: group.peerId,
-    peers: restore ? [] : group.voters,
-    learners: [],
+    peers: restore ? [] : group.bootstrap.voters,
+    learners: restore ? [] : group.bootstrap.learners,
     applied: restore ? record.appliedIndex : RAFT_RS_INITIAL_APPLIED,
     ...tuningOf(group.timing),
   };
@@ -414,28 +448,53 @@ function createNodeArguments(group, {restore, record}) {
   };
 }
 
+// The participation gate an opening establishes (O1 gate): restored from the
+// durable record, or created from the bootstrap; a replica that must restore
+// and holds no record is refused before the core is entered (O4).
+function openingParticipationRefusal(group, opening) {
+  if (opening.restore) {
+    group.gate = restoredParticipationGate(opening.record);
+    group.appliedIndex = BigInt(opening.record.appliedIndex);
+    return null;
+  }
+  if (requiresDurableRecord(group.bootstrap)) {
+    return durableRecordMissing();
+  }
+  group.gate = createdParticipationGate(group.bootstrap, group.peerId);
+  group.appliedIndex = BigInt(RAFT_RS_INITIAL_APPLIED);
+  return null;
+}
+
 function openGroupInCurrentRuntime(group, opening) {
   group.handle = null;
+  const refused = openingParticipationRefusal(group, opening);
+  if (refused !== null) {
+    return refused;
+  }
   const created = invokeCore(group, 'create_node',
     createNodeArguments(group, opening));
   if (!created.ok) {
     return created.result;
   }
   group.handle = created.value;
+  // Every (re)construction and restore announces its first observed
+  // configuration again: a listener's baseline must be level-correct.
+  group.announcedConfStateKey = CONF_STATE_NOT_ANNOUNCED;
   if (!opening.restore) {
     const confState = invokeCore(group, CORE_OPERATION.CONF_STATE);
     if (!confState.ok) {
       return confState.result;
     }
     try {
-      group.store.putAppliedState(
-        group.groupId, RAFT_RS_INITIAL_APPLIED, confState.value);
+      group.store.putBootstrapAppliedState(group.groupId, confState.value,
+        participationGateColumns(group.gate));
     } catch (error) {
       return groupHostFailure(group, RUNTIME_PHASE.BOOTSTRAP_PERSISTENCE,
         error);
     }
   }
   group.health = USABLE;
+  settleParticipationGate(group);
   return outcome(CORE_OK, {
     reason: opening.restore ? RUNTIME_REASON.RESTORED : RUNTIME_REASON.CREATED,
   });
@@ -461,7 +520,10 @@ function resumeAfterReconstruction(group, expectedGeneration) {
   if (!conf.ok) {
     return conf.result;
   }
-  if (isSoleVoter(conf.value, group.peerId)) {
+  // The gate from the durable record decides before the configuration does:
+  // a reconstruction below it never campaigns, even as a transient sole
+  // voter of a replayed configuration.
+  if (group.gateOpen && isSoleVoter(conf.value, group.peerId)) {
     return campaignGroup(group, expectedGeneration);
   }
   announce(group, expectedGeneration);
@@ -660,118 +722,48 @@ function withinGroup(group, work) {
   }
 }
 
+function releaseTurn(group, turn) {
+  if (group.tail === turn) {
+    group.tail = null;
+  }
+}
+
+// One turn at a time. A turn owns the group's queue from its first instant,
+// including while it runs synchronously, so work asked for during it - a
+// role listener inside its announcement reading status, or asking for a
+// command - queues behind it and runs on the state the turn leaves; it never
+// nests inside it. Only work asked for while no turn runs starts at once.
 function enqueue(group, work) {
   const run = () => withinGroup(group, work);
-  if (group.tail === null) {
-    const result = run();
-    if (result && typeof result.then === 'function') {
-      const token = Promise.resolve(result).finally(() => {
-        if (group.tail === token) {
-          group.tail = null;
-        }
-      });
-      group.tail = token;
-      return token;
-    }
-    return result;
+  if (group.tail !== null) {
+    const queued = group.tail.then(run, run);
+    const token = queued.finally(() => releaseTurn(group, token));
+    group.tail = token;
+    return token;
   }
-  const queued = group.tail.then(run, run);
-  const token = queued.finally(() => {
-    if (group.tail === token) {
-      group.tail = null;
-    }
-  });
-  group.tail = token;
-  return token;
+  const {promise: turn, resolve: endTurn} = Promise.withResolvers();
+  const finishTurn = () => {
+    endTurn();
+    releaseTurn(group, turn);
+  };
+  group.tail = turn;
+  let result;
+  try {
+    result = run();
+  } catch (error) {
+    finishTurn();
+    throw error;
+  }
+  if (result && typeof result.then === 'function') {
+    return Promise.resolve(result).finally(finishTurn);
+  }
+  finishTurn();
+  return result;
 }
 
 function thenMaybe(value, continuation) {
   return value && typeof value.then === 'function' ?
     value.then(continuation) : continuation(value);
-}
-
-// A delivery to one peer is that peer's transport outcome. Raft re-sends
-// what a peer did not receive (the next append or heartbeat), so a failed
-// delivery drops the message, is recorded against the peer, and leaves the
-// Ready - its persistence, its application and the group's role and runtime -
-// exactly as it was. Later messages of the same batch to a peer that just
-// failed are dropped with it rather than waited on again.
-function recordPeerDelivery(group, raftPeerId, observation) {
-  const key = String(raftPeerId);
-  group.peerDelivery.delete(key);
-  group.peerDelivery.set(key, deepFreeze(observation));
-  if (group.peerDelivery.size > PEER_DELIVERY_OBSERVATION_LIMIT) {
-    group.peerDelivery.delete(group.peerDelivery.keys().next().value);
-  }
-}
-
-function peerDeliveryFailed(group, raftPeerId, phase, cause, failedPeers) {
-  const previous = group.peerDelivery.get(String(raftPeerId));
-  recordPeerDelivery(group, raftPeerId, {
-    outcome: PEER_DELIVERY_OUTCOME.FAILED,
-    phase,
-    reason: String(cause?.message || cause || RUNTIME_REASON.DELIVERY_FAILED),
-    consecutiveFailures: previous?.outcome === PEER_DELIVERY_OUTCOME.FAILED ?
-      previous.consecutiveFailures + 1 : 1,
-  });
-  failedPeers.add(String(raftPeerId));
-  return null;
-}
-
-function settlePeerDelivery(group, raftPeerId, delivery, failedPeers) {
-  if (delivery && typeof delivery === 'object' &&
-      (delivery.noHandler === true || delivery.deferRetry === true ||
-        delivery.acknowledged === false || delivery.error)) {
-    return peerDeliveryFailed(group, raftPeerId,
-      delivery.noHandler ? RUNTIME_PHASE.SEND_NO_HANDLER : RUNTIME_PHASE.SEND,
-      delivery.error || delivery.reason, failedPeers);
-  }
-  recordPeerDelivery(group, raftPeerId, {
-    outcome: PEER_DELIVERY_OUTCOME.DELIVERED, consecutiveFailures: 0,
-  });
-  return null;
-}
-
-function deliverToPeer(group, message, failedPeers) {
-  let address;
-  try {
-    address = group.resolvePeerAddress(message.to);
-  } catch (error) {
-    return peerDeliveryFailed(group, message.to,
-      RUNTIME_PHASE.ADDRESS_RESOLUTION, error, failedPeers);
-  }
-  let delivered;
-  try {
-    delivered = group.sendToPeer(address, {
-      protocol: RAFT_RS_TRANSPORT_PROTOCOL,
-      groupId: group.groupId,
-      from: message.from,
-      to: message.to,
-      message,
-    });
-  } catch (error) {
-    return peerDeliveryFailed(group, message.to, RUNTIME_PHASE.SEND, error,
-      failedPeers);
-  }
-  if (delivered && typeof delivered.then === 'function') {
-    return Promise.resolve(delivered).then(
-      (delivery) => settlePeerDelivery(group, message.to, delivery,
-        failedPeers),
-      (error) => peerDeliveryFailed(group, message.to, RUNTIME_PHASE.SEND,
-        error, failedPeers));
-  }
-  return settlePeerDelivery(group, message.to, delivered, failedPeers);
-}
-
-function sendMessages(group, messages, index = 0, failedPeers = new Set()) {
-  if (index >= messages.length) {
-    return null;
-  }
-  const message = messages[index];
-  const delivered = failedPeers.has(String(message.to)) ? null :
-    deliverToPeer(group, message, failedPeers);
-  return thenMaybe(delivered, () =>
-    sendMessages(group, messages, index + 1, failedPeers));
 }
 
 function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
@@ -792,7 +784,7 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
     if (!set.ok) {
       return set.result;
     }
-    return applied;
+    return {...applied, decoded: decoded.value};
   }
   return invokeCoreAt(
     group, expectedGeneration, CORE_OPERATION.CONF_STATE);
@@ -808,6 +800,11 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
   if (!resolvedConfState.ok) {
     return resolvedConfState.result;
   }
+  const admitted = admitsReplica(group.gate, resolvedConfState.decoded,
+    group.peerId, BigInt(entry.index));
+  if (resolvedConfState.decoded !== undefined) {
+    group.confChangeEntriesApplied = (group.confChangeEntriesApplied ?? 0) + 1;
+  }
   try {
     applyCommittedEntryTransaction({
       store: group.store,
@@ -815,12 +812,16 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
       entry,
       confState: resolvedConfState.value,
       applyCommittedEntry: group.applyCommittedEntry,
+      admitted,
     });
   } catch (error) {
     group.applyTransactionRolledBack?.();
     return groupHostFailure(group, RUNTIME_PHASE.APPLICATION,
       applicationFailureOf(error));
   }
+  // The runtime's own applied index (the entry whose configuration the core
+  // now holds, durable with it) and the participation gate it moves.
+  recordAppliedEntry(group, BigInt(entry.index), admitted);
   return applyEntries(group, expectedGeneration, entries, index + 1);
 }
 
@@ -937,7 +938,7 @@ function announce(group, expectedGeneration) {
   const now = status.value;
   const before = group.lastStatus;
   group.lastStatus = now;
-  recordStatusObservation(group, expectedGeneration, now);
+  const observed = recordStatusObservation(group, expectedGeneration, now);
   if (before && now.raftState !== before.raftState) {
     group.emit(ROLE[now.raftState] || ROLE[0]);
   }
@@ -950,6 +951,62 @@ function announce(group, expectedGeneration) {
       semanticLeaderIdentity(group, now.lead),
     );
   }
+  if (observed.ok) {
+    announceMembership(group, observed.value, now);
+  }
+  const settlement = confChangeSettlement({before, now,
+    confChangeEntries: group.confChangeEntriesApplied ?? 0,
+    appliedIndex: group.appliedIndex});
+  group.confChangeEntriesApplied = 0;
+  if (settlement !== null) {
+    group.emit(RUNTIME_EVENT.CONF_CHANGE_APPLIED, settlement);
+  }
+}
+
+// A conf-change proposal is taken only at the leader's port; one the core
+// would drop is deferred typed - read from the core's status and
+// configuration in this turn (verification V2, round 2 F-1).
+function refusedConfChange(group, expectedGeneration, change) {
+  const status = invokeCoreAt(group, expectedGeneration, 'status');
+  if (!status.ok) {
+    return status.result;
+  }
+  const conf = invokeCoreAt(group, expectedGeneration,
+    CORE_OPERATION.CONF_STATE);
+  if (!conf.ok) {
+    return conf.result;
+  }
+  return confChangeProposalRefusal({status: status.value,
+    confState: conf.value, change,
+    leaderReplicaIdOf: (lead) => semanticLeaderIdentity(group, lead)});
+}
+
+// The configuration's voter-bearing and learner parts as one comparable key.
+function confStateKeyOf(confState) {
+  const sorted = (ids) => [...(ids || [])].map(String).sort();
+  return JSON.stringify([
+    sorted(confState.voters),
+    sorted(confState.votersOutgoing),
+    sorted(confState.learners),
+    sorted(confState.learnersNext),
+    confState.autoLeave === true,
+  ]);
+}
+
+// The applied ConfState is announced when it differs from the one last
+// announced, and first after every (re)construction: the transition the core
+// itself applied, never a prediction or a row.
+function announceMembership(group, {confState, appliedIndex}, status) {
+  const key = confStateKeyOf(confState);
+  if (key === group.announcedConfStateKey) {
+    return;
+  }
+  group.announcedConfStateKey = key;
+  group.emit(RUNTIME_EVENT.MEMBERSHIP_CHANGED, {
+    confState,
+    commitIndex: Number(status.commit),
+    appliedIndex,
+  });
 }
 
 // The core's facts about a group (raw status and configuration); shaping them
@@ -966,8 +1023,20 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
   if (!conf.ok) {
     return conf;
   }
+  // The applied index is the runtime's own, read in the same turn as the
+  // configuration: the index whose apply left the core holding it (commit
+  // may run ahead of it), never the core's status.applied.
   return {ok: true, value: {status: status.value, confState: conf.value,
-    runtimeHealth, runtimeGeneration}};
+    ...observedParticipation(group), runtimeHealth, runtimeGeneration}};
+}
+
+// One applied index per observation: the participation gate's, recorded with
+// the configuration it was applied at (the REPLACE witness and the
+// MEMBERSHIP_CHANGED announcement read the same value).
+function observedParticipation(group) {
+  const participation = participationObservation(group.gate,
+    group.appliedIndex);
+  return {participation, appliedIndex: participation.appliedIndex};
 }
 
 function shapeGroupStatus(group, observation) {
@@ -1044,6 +1113,9 @@ function readStatusObserved(group) {
 }
 
 function campaignGroup(group, expectedGeneration) {
+  if (!group.gateOpen) {
+    return participationGateClosed();
+  }
   const status = invokeCoreAt(group, expectedGeneration, 'status');
   if (!status.ok) {
     return status.result;
@@ -1142,24 +1214,75 @@ function probePeerProgress(group, expectedGeneration, peerAddress) {
     }) : result);
 }
 
+// The leadership transfer: the core's status and configuration are read,
+// the request is decided against them (a request the core would ignore is a
+// typed refusal and nothing is stepped), and the accepted one is stepped as
+// the MsgTransferLeader raft-rs's own transfer_leader steps - a local message
+// whose sender is the transferee - and its Ready drained, all in this one
+// queued turn. The answer is acceptance; completion is the role and leader
+// events the drains announce.
+function transferLeadership(group, expectedGeneration, command) {
+  const observed = readGroupObservation(group, expectedGeneration);
+  if (!observed.ok) {
+    return observed.result;
+  }
+  const decision = decideLeadershipTransfer(
+    group.peerId, observed.value, command);
+  if (decision.answer !== undefined) {
+    return decision.answer;
+  }
+  const stepped = invokeCoreAt(group, expectedGeneration, 'step', {
+    msgType: RAFT_RS_MESSAGE_TYPE.TRANSFER_LEADER,
+    from: decision.transferee,
+    to: group.peerId,
+  });
+  if (!stepped.ok) {
+    return stepped.result;
+  }
+  return thenMaybe(drainReady(group, expectedGeneration), (drained) =>
+    drained.outcome === CORE_OK ? decision.accepted : drained);
+}
+
+// A proposal the core refused: dropped by a running leadership transfer (read
+// from the core in the same turn) it is the retryable transfer-in-progress
+// answer; any other refusal is answered as the core gave it.
+function answerRefusedProposal(group, expectedGeneration, refused) {
+  if (refused.outcome !== CORE_REFUSED) {
+    return refused;
+  }
+  const observed = readGroupObservation(group, expectedGeneration);
+  return observed.ok &&
+    droppedByLeadershipTransfer(refused, group.peerId, observed.value) ?
+    leadershipTransferInProgress(refused.phase) : refused;
+}
+
+const COMMAND_OPERATION = Object.freeze({
+  [RUNTIME_COMMAND.READ_STATUS]: (group, command, generation) =>
+    readGroupStatus(group, generation),
+  [RUNTIME_COMMAND.CAMPAIGN]: (group, command, generation) =>
+    campaignGroup(group, generation),
+  [RUNTIME_COMMAND.DRAIN_INBOUND]: () =>
+    outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_DRAINED}),
+  [RUNTIME_COMMAND.PROBE_PEER_PROGRESS]: (group, command, generation) =>
+    probePeerProgress(group, generation, command.peerAddress),
+  [RUNTIME_COMMAND.TRANSFER_LEADERSHIP]: (group, command, generation) =>
+    transferLeadership(group, generation, command.transfer),
+});
+const PROPOSE_CONF_CHANGE = 'propose-conf-change';
+const PROPOSAL_COMMANDS = new Set(['propose', PROPOSE_CONF_CHANGE]);
+
 function performCommand(group, command, expectedGeneration) {
-  if (command.type === RUNTIME_COMMAND.READ_STATUS) {
-    return readGroupStatus(group, expectedGeneration);
-  }
-  if (command.type === RUNTIME_COMMAND.CAMPAIGN) {
-    return campaignGroup(group, expectedGeneration);
-  }
-  if (command.type === RUNTIME_COMMAND.DRAIN_INBOUND) {
-    return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_DRAINED});
-  }
-  if (command.type === RUNTIME_COMMAND.PROBE_PEER_PROGRESS) {
-    return probePeerProgress(group, expectedGeneration, command.peerAddress);
+  if (Object.hasOwn(COMMAND_OPERATION, command.type)) {
+    return COMMAND_OPERATION[command.type](group, command, expectedGeneration);
   }
   const primitive = {
     'tick': ['tick', []],
     'propose': ['propose', [command.bytes]],
-    'propose-conf-change': ['propose_conf_change_v2', [command.change]],
+    [PROPOSE_CONF_CHANGE]: ['propose_conf_change_v2', [command.change]],
   }[command.type];
+  if (primitive && !group.gateOpen) {
+    return participationGateClosed();
+  }
   if (!primitive) {
     return outcome(CORE_REFUSED, {
       reason: RUNTIME_REASON.UNKNOWN_OPERATION,
@@ -1167,9 +1290,19 @@ function performCommand(group, command, expectedGeneration) {
       recoveryRequired: false,
     });
   }
+  const refused = command.type === PROPOSE_CONF_CHANGE ?
+    refusedConfChange(group, expectedGeneration, command.change) : null;
+  if (refused !== null) {
+    return refused;
+  }
   const invoked = invokeCoreAt(
     group, expectedGeneration, primitive[0], ...primitive[1]);
-  return invoked.ok ? drainReady(group, expectedGeneration) : invoked.result;
+  if (invoked.ok) {
+    return drainReady(group, expectedGeneration);
+  }
+  return PROPOSAL_COMMANDS.has(command.type) ?
+    answerRefusedProposal(group, expectedGeneration, invoked.result) :
+    invoked.result;
 }
 
 function drainInbound(group, expectedGeneration, continuation) {
@@ -1179,8 +1312,16 @@ function drainInbound(group, expectedGeneration, continuation) {
   const envelope = group.inbound.shift();
   const stepped = invokeCoreAt(
     group, expectedGeneration, 'step', envelope.message);
+  // The core refusing a delivered envelope is that envelope's outcome, not
+  // the turn's: it is recorded against its sender and dropped (raft re-sends
+  // what a peer still needs), and the drain goes on to the rest of the
+  // delivered envelopes and then the command, on the state they leave. A
+  // failure of the core or of the group is the turn's.
   if (!stepped.ok) {
-    return stepped.result;
+    if (stepped.result.outcome !== CORE_REFUSED) {
+      return stepped.result;
+    }
+    recordInboundStepRefusal(group, envelope, stepped.result);
   }
   return thenMaybe(drainReady(group, expectedGeneration), (result) =>
     result.outcome === CORE_OK ?
@@ -1258,6 +1399,19 @@ function runScheduledInboundDrain(group) {
   }
 }
 
+// A status read and the committed-membership read answer from the recorded
+// observation without queueing; every other command takes the group's turn.
+function executeCommand(group, command) {
+  if (command?.type === RUNTIME_COMMAND.READ_STATUS) {
+    return readStatusNow(group);
+  }
+  if (command?.type === RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP) {
+    return thenMaybe(readStatusNow(group), (status) =>
+      answerCommittedMembership(group, status, command.purpose));
+  }
+  return enqueue(group, () => perform(group, command));
+}
+
 function snapshotEnvelope(envelope) {
   return deepFreeze({
     ...envelope,
@@ -1273,7 +1427,10 @@ function createRuntimeDispatcher(request) {
     groupId: request.groupId,
     replicaIdentity: request.replicaIdentity,
     peerId: request.peerId,
-    voters: request.voters,
+    bootstrap: request.bootstrap,
+    gate: null,
+    appliedIndex: null,
+    gateOpen: false,
     timing: request.timing,
     timers: request.timers,
     store,
@@ -1287,6 +1444,7 @@ function createRuntimeDispatcher(request) {
     handle: null,
     lastStatus: null,
     statusObservation: null,
+    announcedConfStateKey: CONF_STATE_NOT_ANNOUNCED,
     health: USABLE,
     recovery: null,
     entered: 0,
@@ -1295,6 +1453,7 @@ function createRuntimeDispatcher(request) {
     inboundDrainScheduled: false,
     inboundDrainDeadline: null,
     peerDelivery: new Map(),
+    inboundStepRefusals: new Map(),
     closed: false,
   };
   groups.set(group.key, group);
@@ -1304,9 +1463,10 @@ function createRuntimeDispatcher(request) {
   const opening = readOpeningRecord(group);
   const opened = opening.ok ? openGroupInCurrentRuntime(group, opening) :
     opening.result;
-  if (opening.ok && opened.outcome !== CORE_OK) {
+  if (opened.outcome === CORE_REFUSED ||
+      (opening.ok && opened.outcome !== CORE_OK)) {
     groups.delete(group.key);
-    throw new Error(opened.reason);
+    throw Object.assign(new Error(opened.reason), {consensus: opened});
   }
   const first = opening.ok ? invokeCore(group, 'status') : {ok: false};
   if (first.ok) {
@@ -1338,9 +1498,8 @@ function createRuntimeDispatcher(request) {
       scheduleInboundDrain(group);
       return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_ENQUEUED});
     }),
-    execute: Object.freeze((command) =>
-      command?.type === RUNTIME_COMMAND.READ_STATUS ? readStatusNow(group) :
-        enqueue(group, () => perform(group, command))),
+    execute: Object.freeze((command) => executeCommand(group, command)),
+    participationGateOpen: Object.freeze(() => group.gateOpen === true),
     configureTiming: Object.freeze((timing) => {
       group.timing = deepFreeze({...group.timing, ...timing});
       return true;

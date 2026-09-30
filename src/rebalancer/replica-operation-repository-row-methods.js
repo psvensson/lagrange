@@ -151,6 +151,13 @@ function assignReplicaOperationRepositoryRowMethods(
       if (bootstrapPartitionMetadata) {
         operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] = bootstrapPartitionMetadata;
       }
+      const bootstrapMembership = getOperationMetadataObject(
+        stepsHistory,
+        OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP,
+      );
+      if (bootstrapMembership) {
+        operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] = bootstrapMembership;
+      }
       return operation;
     }
     /**

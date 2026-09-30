@@ -59,6 +59,7 @@ import {
   SeedRegistrationRuntimeOwner,
 } from '../../src/bootstrap/owners/seed-registration-runtime-owner.js';
 import {BOOTSTRAP_ERROR} from '../../src/bootstrap/bootstrap-constants.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -756,14 +757,14 @@ test('production-handoff-cannot-mutate-the-declaration', () => {
   const table = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
   const declaredLength = INITIAL_REPLICA_IDS[table].length;
 
-  const service = new PartitionService({
+  const service = new PartitionService(withFoundingStamp({
     partitionId: `${table}-p1`,
     tableId: table,
     replicaId: INITIAL_REPLICA_IDS[table][0],
     // The exact production hand-off: the declaration, by reference.
     replicaIds: INITIAL_REPLICA_IDS[table],
     nodeId: 'seed',
-  });
+  }));
 
   assert.notEqual(service.replicaIds, INITIAL_REPLICA_IDS[table],
     'the service peer list must not BE the declaration');

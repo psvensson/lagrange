@@ -12,7 +12,6 @@ import {
 import {
   UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS,
 } from './unified-rebalancer-topology-drain-methods.js';
-import {UNIFIED_REBALANCER_LEDGER_SURPLUS_DRAIN_REPLICA_STATE_METHODS} from './unified-rebalancer-ledger-surplus-drain-replica-state.js';
 import {readGlobalTopologyBlockingInFlightOperations} from './global-topology-blocking-operation-view.js';
 const {
   COLUMN,
@@ -787,7 +786,6 @@ applyUnifiedRebalancerPriorityReadinessMethods(UnifiedRebalancerReplicaState);
 Object.assign(
   UnifiedRebalancerReplicaState.prototype,
   UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS,
-  UNIFIED_REBALANCER_LEDGER_SURPLUS_DRAIN_REPLICA_STATE_METHODS,
   UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS,
 );
 

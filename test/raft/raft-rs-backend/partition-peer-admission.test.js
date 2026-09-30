@@ -42,6 +42,7 @@ import {RAFT_RS_CONF_CHANGE_ENTRY_TYPES} from
   '../../../src/raft/raft-rs-ready-loop-constants.js';
 import {RAFT_MEMBERSHIP_ADMISSION_OUTCOME} from
   '../../../src/raft/raft-operation-port-constants.js';
+import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
 
 const PARTITION_ID = 'f16-admission';
 const TABLE_NAME = 'f16_admission_table';
@@ -170,7 +171,7 @@ async () => {
   const services = [];
   const dbFileOf = ([replicaId]) => path.join(directory, `${replicaId}.db`);
   const build = (member, members, cache, extra = {}) => {
-    const service = new PartitionService({
+    const service = new PartitionService(withFoundingStamp({
       partitionId: PARTITION_ID,
       tableId: TABLE_NAME,
       tableName: TABLE_NAME,
@@ -183,7 +184,7 @@ async () => {
       schema: TABLE_SCHEMA,
       dbPath: dbFileOf(member),
       ...extra,
-    });
+    }));
     services.push(service);
     return service;
   };

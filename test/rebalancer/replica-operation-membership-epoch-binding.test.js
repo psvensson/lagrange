@@ -62,6 +62,7 @@ import {
   grantEpochCoordinatorStorageAdmission,
   wireEpochDispatchProbe,
 } from './epoch-fence-test-harness.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 const {SQL} = REBALANCE_COORDINATOR_SHARED;
 const {BOUND, UNBOUND, INVALID} = MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE;
@@ -150,13 +151,18 @@ function initializeEnvironment() {
  * A SQL engine over the real SQLite replica_operations partition so the
  * repository's INSERT encodes SQL NULL and its SELECT rehydrates a real
  * NULL, not a JavaScript stand-in. Reads against other system tables
- * (services, nodes) answer empty, as the in-memory harness engine does.
+ * (services, nodes) answer empty, as the in-memory harness engine does;
+ * writes to them are acknowledged as applied.
  */
 function createSqliteQueryEngine(db) {
   return {
     async executeQuery(sql, params = []) {
       if (!sql.includes(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS)) {
-        return {success: true, rows: [], changes: 0};
+        // Other tables are not modelled: reads answer empty, and a write
+        // (e.g. the storage-reservation INSERT OR IGNORE) is acknowledged as
+        // applied rather than reported as a zero-row conflict.
+        const isWrite = /^\s*(INSERT|UPDATE|DELETE)\b/iu.test(sql);
+        return {success: true, rows: [], changes: isWrite ? 1 : 0};
       }
       const statement = db.prepare(sql);
       if (statement.reader) {
@@ -175,7 +181,7 @@ async function openSharedDurableReplicaOperations() {
     return sharedDurable;
   }
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_DIR_PREFIX));
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: DURABLE_PARTITION_ID,
     tableId: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
     tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
@@ -183,7 +189,7 @@ async function openSharedDurableReplicaOperations() {
     replicaId: DURABLE_REPLICA_ID,
     nodeId: TEST_NODE_ID,
     dbPath: path.join(tempDir, DURABLE_DB_FILE),
-  });
+  }));
   await partition.initialize();
   sharedDurable = {
     partition,

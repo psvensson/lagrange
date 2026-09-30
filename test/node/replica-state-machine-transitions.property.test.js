@@ -18,6 +18,8 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {withRegisteredActivationHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 function createMockCDCService() {
   return {
@@ -96,10 +98,10 @@ test('Property 1: Valid Transition Enforcement', async (t) => {
         fc.uuid(),
         fc.uuid(),
         async (transition, replicaId, partitionId) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           // Set up the replica in the from state through valid transitions
           const setupPath = getPathToState(transition.from);
@@ -154,10 +156,10 @@ test('Property 1: Valid Transition Enforcement', async (t) => {
         fc.uuid(),
         fc.uuid(),
         async (transition, replicaId, partitionId) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           // Track if transitionError event was emitted
           let errorEmitted = false;
@@ -201,10 +203,10 @@ test('Property 1: Valid Transition Enforcement', async (t) => {
         fc.constantFrom(...ALL_STATES),
         fc.constantFrom(...ALL_STATES),
         (fromState, toState) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           const isValid = stateMachine.isValidTransition(fromState, toState);
 
@@ -231,10 +233,10 @@ test('Property 1: Valid Transition Enforcement', async (t) => {
       fc.asyncProperty(
         fc.array(fc.uuid(), {minLength: 1, maxLength: 5}),
         async (replicaIds) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           // Transition all replicas to pending
           for (const replicaId of replicaIds) {
@@ -266,10 +268,10 @@ test('Property 1: Valid Transition Enforcement', async (t) => {
         fc.constantFrom(...ALL_STATES),
         fc.uuid(),
         async (targetState, replicaId) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           // Get replica to REMOVED state
           const pathToRemoved = getPathToState(ReplicaState.REMOVED);

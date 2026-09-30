@@ -1,7 +1,11 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {buildNodeTrustState} from './node-trust-state.js';
+import {resolvePublishedActiveNodeIds} from
+  './active-node-publication-snapshots.js';
 import {NODE_LIVENESS_SEMANTIC_STATE} from
   './node-liveness-semantic-projection-owner.js';
+import {readCurrentEndpointRows} from
+  './owners/endpoint-incarnation-currentness.js';
 const {
   COLUMN,
   MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,
@@ -14,7 +18,6 @@ const {
 const TRUST_CACHE_STATE_KNOWN = 'known';
 const TRUST_CACHE_STATE_UNKNOWN = 'unknown';
 const TRUST_TRANSPORT_STATE_CONNECTED = 'connected';
-const TRUST_MEMBERSHIP_STATUS_PUBLISHED = 'PUBLISHED';
 const TRUST_ROW_STATUS_ACTIVE = 'active';
 const TRUST_GRACE_KEY_FIELDS = Object.freeze([
   'lastHeartbeat',
@@ -68,14 +71,12 @@ function collectProvisioningTrustNodeIds(
   service,
   nodeRows,
   serviceRows,
-  membershipPublication,
+  publishedActiveNodeIds,
 ) {
   return [...new Set([
     ...nodeRows.map((row) => row?.[COLUMN.NODE_ID]),
     ...serviceRows.map((row) => row?.[COLUMN.NODE_ID]),
-    ...(Array.isArray(membershipPublication?.publishedActiveNodeIds) ?
-      membershipPublication.publishedActiveNodeIds :
-      []),
+    ...(publishedActiveNodeIds || []),
     service.nodeId,
   ].filter(Boolean))].sort();
 }
@@ -97,11 +98,8 @@ function isProvisioningTrustHeartbeatStale(readiness) {
     NODE_LIVENESS_SEMANTIC_STATE.STALE;
 }
 
-function isNodeInInstalledMembership(nodeId, membershipPublication) {
-  return String(membershipPublication?.status || '').toUpperCase() ===
-      TRUST_MEMBERSHIP_STATUS_PUBLISHED &&
-    Array.isArray(membershipPublication?.publishedActiveNodeIds) &&
-    membershipPublication.publishedActiveNodeIds.includes(nodeId);
+function isNodeInInstalledMembership(nodeId, publishedActiveNodeIds) {
+  return publishedActiveNodeIds?.includes(nodeId) === true;
 }
 
 function normalizeOptionalTrustKeyValue(value) {
@@ -142,7 +140,7 @@ function resolveProvisioningTrustGrace(service, context) {
     context.transportState === TRUST_TRANSPORT_STATE_CONNECTED,
     isNodeInInstalledMembership(
       context.nodeId,
-      context.membershipPublication,
+      context.publishedActiveNodeIds,
     ),
     isProvisioningTrustHeartbeatStale(context.readiness) || selfRuntimeGrace,
   ].every(Boolean);
@@ -202,6 +200,7 @@ function buildProvisioningNodeTrustState(service, nodeId, context, options) {
   return buildNodeTrustState(readiness, {
     observerNodeId: service.nodeId,
     capturedAtMs: context.capturedAtMs,
+    publicationRows: context.publicationRows,
     cacheWatermark: context.cacheWatermark,
     transport: {
       state: transportState,
@@ -260,7 +259,7 @@ const controlPlaneReadinessNodeMethods = {
       typeof this.systemTableCache?.getAll === 'function'
     ) {
       const nodeEndpointRows =
-        this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [];
+        readCurrentEndpointRows(this.systemTableCache, TABLES.NODE_ENDPOINTS);
       for (const serviceRow of serviceRows) {
         const nodeId = serviceRow?.[COLUMN.NODE_ID] || null;
         if (nodeId) {
@@ -304,9 +303,7 @@ const controlPlaneReadinessNodeMethods = {
         this.systemTableCache.getAll(TABLES.SERVICES) || [] :
         [];
     const nodeEndpointRows =
-      typeof this.systemTableCache?.getAll === 'function' ?
-        this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [] :
-        [];
+      readCurrentEndpointRows(this.systemTableCache, TABLES.NODE_ENDPOINTS);
     const nodeIds = new Set();
     for (const nodeRow of nodeRows) {
       const nodeId = nodeRow?.[COLUMN.NODE_ID] || null;
@@ -369,18 +366,28 @@ const controlPlaneReadinessNodeMethods = {
     const serviceRows = readTrustCacheRows(this, TABLES.SERVICES);
     const membershipPublication =
       this.getMembershipPublicationDiagnosticsSync(this.nodeId, observedAt);
+    const publicationRows =
+      readTrustCacheRows(this, TABLES.CONTROL_PLANE_PUBLICATIONS);
+    // The published membership is the snapshot owner's read (a) over the
+    // same inputs the trust state reads (node-trust-state.js).
+    const publishedActiveNodeIds = resolvePublishedActiveNodeIds({
+      publicationRows,
+      latestPublicationRow: membershipPublication,
+    });
     const cacheWatermark = buildProvisioningCacheWatermark(this);
     const nodeIds = collectProvisioningTrustNodeIds(
       this,
       nodeRows,
       serviceRows,
-      membershipPublication,
+      publishedActiveNodeIds,
     );
     pruneProvisioningTrustGrace(this, nodeIds);
     const context = {
       capturedAtMs,
       cacheWatermark,
       membershipPublication,
+      publicationRows,
+      publishedActiveNodeIds,
       nodeRows,
       serviceRows,
     };

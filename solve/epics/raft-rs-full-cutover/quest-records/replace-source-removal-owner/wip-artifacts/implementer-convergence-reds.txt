@@ -1,0 +1,7 @@
+not ok test/convergence/dt6-operation-ledger-self-move-hold-engagement.test.js (8 assertions, 5114ms)
+not ok test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js (8 assertions, 6522ms)
+not ok test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js (8 assertions, 5300ms)
+not ok test/convergence/dt6-priority-recovery-drain-parked-self-move.test.js (8 assertions, 3679ms)
+not ok test/convergence/dt6-replacement-leader-pending-spike.test.js (21 assertions, 838ms)
+not ok test/convergence/dt-formation-barrier-spread-release-oscillation.test.js (15 assertions, 1564ms)
+not ok test/convergence/dt-formation-priority-placement-before-active.test.js (30 assertions, 1183ms)

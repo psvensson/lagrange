@@ -11,20 +11,14 @@
  */
 
 import {EventEmitter} from 'events';
-import fs from 'fs';
 import path from 'path';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {assertCritical} from '../utils/assert.js';
-import {
-  CONTROL_PLANE_MUTATION_OPERATION,
-} from '../control-plane/control-plane-system-table-gateway.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
-import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   REPLICA_LIFECYCLE_ACK_STATUS,
   REPLICA_LIFECYCLE_DEFAULT,
@@ -39,6 +33,8 @@ import {
   REPLICA_LIFECYCLE_VALID_TRANSITIONS,
 } from './replica-lifecycle-constants.js';
 import {ReplicaHandler} from './replica-handler.js';
+import {ReplicaOperationField} from
+  '../rebalancer/replica-operation-constants.js';
 import {
   runReplicaLifecycleRecovery,
 } from './replica-lifecycle-recovery.js';
@@ -259,40 +255,14 @@ class ReplicaLifecycleManager extends EventEmitter {
       nodeId: this.nodeId,
     });
 
-    // Update local tracking
-    if (replica) {
-      replica.status = newStatus;
-    }
-
-    // Update via CDC using UPDATE (not upsert/INSERT OR REPLACE)
-    // The seed node already inserted the row with all fields before sending
-    // CREATE_REPLICA. Using INSERT OR REPLACE would overwrite the entire row
-    // and lose fields like partition_id, raft_role, created_at, etc.
-    if (this.cdcIntegrationService || this.controlPlaneSystemTableGateway) {
-      const result = await this.getControlPlaneSystemTableGateway()
-        .submitMutation({
-          operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-          tableName: SYSTEM_TABLE_NAME.SERVICES,
-          whereClause: {service_id: replicaId},
-          data: {
-            status: newStatus,
-            updated_at: Date.now(),
-            ...additionalData,
-          },
-        }, {
-          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-          deliveryPriority: 'critical',
-        });
-
-      if (result && result.success === false) {
-        this.logger.error(REPLICA_LIFECYCLE_LOG_MSG.CDC_UPDATE_FAILED, {
-          replicaId,
-          newStatus,
-          error: result.error,
-        });
-        throw new Error(REPLICA_LIFECYCLE_ERROR_MSG.statusUpdateFailed(result.error));
-      }
-    }
+    // The delegated handler owns the serialized, source-state and exact
+    // durable-generation CAS. A second legacy writer here could overwrite a
+    // cleanup marker or a replacement generation under the same service id.
+    await this.replicaHandler.updateReplicaStatus(
+      replicaId,
+      newStatus,
+      additionalData,
+    );
 
     this.emit(REPLICA_LIFECYCLE_EVENT.STATUS_CHANGED, {
       replicaId,
@@ -355,10 +325,14 @@ class ReplicaLifecycleManager extends EventEmitter {
       leader_address: leaderAddress,
       replica_ids: replicaIds,
       peer_addresses: peerAddresses,
+      bootstrap_membership: bootstrapMembership,
     } = message;
 
-    // Convert message format for handler
+    // Convert message format for handler; the committed-membership stamp
+    // crosses unchanged (owner decision O1).
     const handlerRequest = {
+      ...(bootstrapMembership === undefined ? {} :
+        {[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]: bootstrapMembership}),
       operationId: requestId,
       partitionId,
       replicaId,
@@ -476,67 +450,6 @@ class ReplicaLifecycleManager extends EventEmitter {
       replicaId,
       nodeId: this.nodeId,
     });
-  }
-
-  /**
-   * Clean up local resources for a replica.
-   * @param {string} partitionId - Partition ID.
-   * @param {string} replicaId - Replica ID.
-   * @return {Promise<void>}
-   * @private
-   */
-  async cleanupReplicaResources(partitionId, replicaId) {
-    const dbPath = this.getPartitionDbPath(partitionId, replicaId);
-
-    this.logger.debug(REPLICA_LIFECYCLE_LOG_MSG.CLEANUP_RESOURCES, {
-      replicaId,
-      partitionId,
-      dbPath,
-      nodeId: this.nodeId,
-    });
-
-    try {
-      // Remove SQLite database file
-      if (fs.existsSync(dbPath)) {
-        fs.unlinkSync(dbPath);
-        this.logger.debug(REPLICA_LIFECYCLE_LOG_MSG.REMOVED_DB_FILE, {dbPath});
-      }
-
-      // Remove WAL and SHM files if they exist
-      const walPath = `${dbPath}-wal`;
-      const shmPath = `${dbPath}-shm`;
-
-      if (fs.existsSync(walPath)) {
-        fs.unlinkSync(walPath);
-      }
-      if (fs.existsSync(shmPath)) {
-        fs.unlinkSync(shmPath);
-      }
-
-      // Try to remove partition directory if empty
-      const partitionDir = path.dirname(dbPath);
-      try {
-        const files = fs.readdirSync(partitionDir);
-        if (files.length === REPLICA_LIFECYCLE_NUM.ZERO) {
-          fs.rmdirSync(partitionDir);
-          this.logger.debug(REPLICA_LIFECYCLE_LOG_MSG.REMOVED_EMPTY_DIR, {partitionDir});
-        }
-      } catch (dirError) {
-        this.logger.warn(REPLICA_LIFECYCLE_LOG_MSG.CLEANUP_FAILED, {
-          replicaId,
-          dbPath,
-          error: dirError.message,
-        });
-        throw dirError;
-      }
-    } catch (error) {
-      this.logger.warn(REPLICA_LIFECYCLE_LOG_MSG.CLEANUP_FAILED, {
-        replicaId,
-        dbPath,
-        error: error.message,
-      });
-      throw error;
-    }
   }
 
   /**

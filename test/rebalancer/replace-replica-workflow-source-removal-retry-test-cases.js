@@ -126,11 +126,15 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
       coordinator.workflowOwner.evaluateRemoveSafety.bind(
         coordinator.workflowOwner,
       );
+    // F3 (fix-f1): the post-intent re-send at STOPPING runs the same
+    // remove-safety evaluation as the first send at ACTIVE, so the stubbed
+    // SAFE answer covers both sends.
     coordinator.workflowOwner.evaluateRemoveSafety =
       async (operation) => {
         if (
           operation?.type === OperationType.REPLACE &&
-          operation?.workflowStep === WORKFLOW_STEP.ACTIVE
+          (operation?.workflowStep === WORKFLOW_STEP.ACTIVE ||
+            operation?.workflowStep === WORKFLOW_STEP.STOPPING)
         ) {
           return coordinator.workflowOwner.buildSafeRemoveSafetyEvaluation();
         }
@@ -165,10 +169,16 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
         ReplicaOperationMessageType.REMOVE_REPLICA,
         'the second dispatch should be source removal',
       );
+      // SUPERSEDED (R09) by the owner decisions of 2026-09-25 (D2 and the
+      // approved REPLACE design, amendment-1 step 3), quest
+      // replace-source-removal-owner: the removal intent (STOPPING) is now
+      // written durably BEFORE the REMOVE_REPLICA effect, so a retryable
+      // effect timeout leaves the operation at STOPPING, not ACTIVE; it is
+      // still not failed and the retry re-sends the same effect.
       t.equal(
         operation.workflowStep,
-        WORKFLOW_STEP.ACTIVE,
-        'the operation should stay at ACTIVE while retryable source removal is pending',
+        WORKFLOW_STEP.STOPPING,
+        'the durable removal intent precedes the retryable source removal',
       );
       t.equal(
         deferredTimers.length,
@@ -180,13 +190,14 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
         await coordinator.queryOperationById(operation.operationId);
       t.equal(
         persistedBeforeRetry?.workflowStep,
-        WORKFLOW_STEP.ACTIVE,
-        'the durable row should not be failed after a retryable timeout',
+        WORKFLOW_STEP.STOPPING,
+        'the durable row holds the removal intent, not a failure, after a ' +
+          'retryable timeout',
       );
       t.equal(
         persistedBeforeRetry?.status,
-        ReplicaStatus.ACTIVE,
-        'the durable row should keep the target-ready status before retry',
+        ReplicaStatus.REMOVING,
+        'the durable row records source removal in progress before retry',
       );
 
       await deferredTimers[0].fn();
@@ -413,6 +424,22 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
 
         sourceRemovalBlocked = false;
         await deferredTimers[0].fn();
+        for (let attempt = 0; attempt < 10; attempt++) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+        // SUPERSEDED (R09), quest replace-source-removal-owner, BR12: this
+        // retry used to act on its deferred-visibility snapshot and send the
+        // source removal. The deferred class now WAITS at the effect
+        // boundary; the owner's next fire, on a fresh read, sends it.
+        t.equal(
+          deliveries.length,
+          1,
+          'the retry that read deferred visibility sends no source removal',
+        );
+        const freshRetry = deferredTimers.at(-1);
+        t.not(freshRetry, deferredTimers[0],
+          'the waiting owner re-arms its fallback');
+        await freshRetry.fn();
         for (let attempt = 0; attempt < 10 && deliveries.length < 2; attempt++) {
           await new Promise((resolve) => setImmediate(resolve));
         }
@@ -422,7 +449,7 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
         t.equal(
           deliveries.length,
           2,
-          'the deferred retry should recover from deferred empty visibility and continue with source removal',
+          'the next retry, on a fresh read, continues with source removal',
         );
         t.equal(
           deliveries[1]?.payload?.type,

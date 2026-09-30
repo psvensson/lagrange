@@ -25,6 +25,9 @@ test('core and host outcomes are separated by execution provenance',
     try {
       const port = cluster.node('provenance-replica');
       assert.equal((await port.readStatus()).outcome, 'CORE_OK');
+      // Conf changes are taken only at the leader's port (round 2 F-1): the
+      // replica leads first, so the malformed change reaches the core.
+      await port.campaign();
       const refused = await port.proposeConfChange({
         transition: 999,
         changes: [],
@@ -34,7 +37,6 @@ test('core and host outcomes are separated by execution provenance',
       assert.equal((await port.readStatus()).runtimeHealth, 'healthy',
         'a tagged refusal does not poison the WASM runtime');
 
-      await port.campaign();
       hostFault.armed = true;
       const hostFailure = await port.propose('host-origin-failure');
       assert.equal(hostFailure.outcome, 'HOST_FAILURE');

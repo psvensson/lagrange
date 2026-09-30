@@ -28,6 +28,14 @@ const CDC_GROUP_PROPAGATION_REASON = Object.freeze({
   GROUPED_DELIVERY_RECOVERED: 'grouped_delivery_recovered',
 });
 
+// The service's typed per-target delivery answers. PROPAGATION_STOPPED: the
+// service stopped, the target was not delivered to and no background retry
+// will follow.
+const CDC_GROUP_PROPAGATION_DELIVERY_ERROR = Object.freeze({
+  BACKGROUND_RETRY_PENDING: 'background_retry_pending',
+  PROPAGATION_STOPPED: 'propagation_stopped',
+});
+
 const CDC_GROUP_PROPAGATION_STATUS = Object.freeze({
   GROUPED: 'grouped',
   SAFE: 'safe',
@@ -80,6 +88,7 @@ const CDC_GROUP_PROPAGATION_ERROR_MSG = Object.freeze({
 });
 
 export {
+  CDC_GROUP_PROPAGATION_DELIVERY_ERROR,
   CDC_GROUP_PROPAGATION_ERROR_MSG,
   CDC_GROUP_PROPAGATION_EVENT,
   CDC_GROUP_PROPAGATION_LOG_MSG,

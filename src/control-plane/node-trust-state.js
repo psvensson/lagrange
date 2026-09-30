@@ -1,6 +1,8 @@
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 import {NODE_LIVENESS_SEMANTIC_STATE} from
   './node-liveness-semantic-projection.js';
+import {resolvePublishedActiveNodeIds} from
+  './active-node-publication-snapshots.js';
 
 const NODE_TRUST_STATE = Object.freeze({
   SERVE: 'serve',
@@ -22,7 +24,6 @@ const NODE_TRUST_EVIDENCE_STATE = Object.freeze({
   UNPUBLISHED: 'unpublished',
 });
 
-const NODE_TRUST_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const NODE_TRUST_ACTIVE_STATUS = 'active';
 const NODE_TRUST_SEMANTIC_OWNER = 'ControlPlaneReadinessService';
 const NODE_TRUST_REASON = Object.freeze({
@@ -68,28 +69,27 @@ function firstPresentValue(...values) {
   return value === undefined ? null : value;
 }
 
-function resolveMembershipState(publication, nodeId) {
+// Membership comes from the publication snapshot owner's published read:
+// the latest PUBLISHED row among the observed publication rows and the
+// readiness publication (an OPEN row never counts; a PUBLISHED row naming
+// nobody is published, nobody).
+function resolveMembershipState(publication, nodeId, publicationRows) {
   if (!publication) {
     return NODE_TRUST_EVIDENCE_STATE.UNKNOWN;
   }
-  if (
-    String(publication.status || '').toUpperCase() !==
-      NODE_TRUST_PUBLICATION_STATUS_PUBLISHED
-  ) {
+  const publishedActiveNodeIds = resolvePublishedActiveNodeIds({
+    publicationRows,
+    latestPublicationRow: publication,
+  });
+  if (publishedActiveNodeIds === null) {
     return NODE_TRUST_EVIDENCE_STATE.UNPUBLISHED;
   }
-  if (
-    publication.publishedActiveNodeIdsPresent !== true &&
-    !Array.isArray(publication.publishedActiveNodeIds)
-  ) {
-    return NODE_TRUST_EVIDENCE_STATE.UNKNOWN;
-  }
-  return (publication.publishedActiveNodeIds || []).includes(nodeId) ?
+  return publishedActiveNodeIds.includes(nodeId) ?
     NODE_TRUST_EVIDENCE_STATE.MEMBER :
     NODE_TRUST_EVIDENCE_STATE.REMOVED;
 }
 
-function buildMembershipEvidence(readiness) {
+function buildMembershipEvidence(readiness, publicationRows = []) {
   const publication = readiness?.membershipPublication || null;
   const publicationEpoch = normalizeFiniteNumber(
     publication?.publicationEpoch,
@@ -102,7 +102,7 @@ function buildMembershipEvidence(readiness) {
     Number.isFinite(sourceSnapshotVersion);
   return Object.freeze({
     state: revisionKnown ?
-      resolveMembershipState(publication, readiness?.nodeId) :
+      resolveMembershipState(publication, readiness?.nodeId, publicationRows) :
       NODE_TRUST_EVIDENCE_STATE.UNKNOWN,
     publicationEpoch: Number.isFinite(publicationEpoch) ?
       publicationEpoch :
@@ -376,7 +376,8 @@ function buildNodeTrustState(readiness, options = {}) {
       readiness?.observedAt,
     ),
   );
-  const membership = buildMembershipEvidence(readiness);
+  const membership = buildMembershipEvidence(
+    readiness, options.publicationRows);
   const cacheWatermark = buildCacheWatermark(options.cacheWatermark);
   const transport = buildTransportEvidence(readiness, options, capturedAtMs);
   const freshness = buildFreshnessEvidence(readiness, options);

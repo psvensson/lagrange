@@ -1,0 +1,11 @@
+# mg-livelock progress
+- 2026-09-28 start; worktrees base(6831054b1) cand(d467e0563) + prior samplers
+- instrumentation: mg-assign (chooser input/output), mg-vote-in/mg-vote-reply, mg-promote (nodes, majority), mg-sample adds nodes/votesFor/lastIndex/joining/suppressed/cached row role
+- c1 (cand run1, red): chooser input all mg-1 rows raft_role=follower incl. leader r1 -> picks r1; 2nd join picks r2 (leader t2) all follower
+- c1 findings: J1 r1 voter set 4 (phantom own old addr S/mg-1-r1), J2 r2 joining=true denies all votes (ingress gate), r3 log 1196 > J1 1193 denies J1; r3 won t28 then J1 disrupted at +19.34 and r3 grants J1 forever (majority 3 unreachable). base b1 green: chooser input r1 raft_role=leader -> r2/r3 chosen; phantom self-address also present at base joiners (latent)
+- added instr2 (role helper queue/flush/submit, mg-activate) + instr3 (leader packet gaps); run c2/b2
+- c2 (cand red, different path: J1 won t3 before r2 moved; J2 joining never completes). Q1 ROOT: seed r1 role helper queues collapsed 'follower' (collapseLeaderToFollower, same at base), flush at 5.13 applies UPDATE raft_role follower WHERE raft_role=leader,updated_at=reg -> row leader->follower + updated_at bump; r1 activation 6.06 CAS on registrationEvidence.updated_at -> ACTIVATION_OWNER_DEFERRED; r1 row stays stopped/follower -> chooser sees no leader. running b2
+- b2 base green: role helper ALSO writes follower over r1 leader row at 6.02 (latent), but base activation upsert at 6.38 rewrites raft_role=leader (no CAS) -> chooser sees leader. running c3 (promote recency)
+- c3 (cand, green-flaky): timings election min100/max200 beat50, jitter 2500/index -> r1 100-200ms, r2 2.6-2.7s, r3 5.1-5.2s. After 2nd move J1(r1, log behind 1183<1190) campaigns every 100-200ms, cannot win (majority 3 of 4 incl phantom S/mg-1-r1; J2 joining denies); r3 stands only after 5.1s silence, split-votes with J1.
+- Q2: MG MOVE_REPLICA source removal = plain shutdown (move-replica-handoff-owner.js:458-496), no leader transfer at base or cand; partition REMOVE has typed leader handoff (replica-handler-leader-handoff-methods.js). Only guard = chooser raft_role read.
+- DONE; no child processes.

@@ -13,6 +13,9 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
+import {createInProcessMockTransport as createMockTransport} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -56,29 +59,6 @@ const nodeIdArbitrary = fc.string({minLength: 1, maxLength: 15})
 const oddReplicaCountArbitrary = fc.constantFrom(1, 3, 5);
 
 /**
- * Create a mock transport for testing.
- */
-function createMockTransport() {
-  const handlers = new Map();
-
-  return {
-    register: (address, handler) => {
-      handlers.set(address, handler);
-    },
-    unregister: (address) => {
-      handlers.delete(address);
-    },
-    deliver: async (address, message) => {
-      const handler = handlers.get(address);
-      if (handler) {
-        return handler({payload: message});
-      }
-      return {acknowledged: false, error: 'No handler'};
-    },
-  };
-}
-
-/**
  * Feature: single-node-replica-placement-fix
  * Property 4: Complete Peer List
  *
@@ -115,7 +95,7 @@ test('Property 4: PartitionService receives complete peer list', async (t) => {
         try {
           // Create all partitions with the complete peer list
           for (let i = 0; i < replicaCount; i++) {
-            const partition = new PartitionService({
+            const partition = new PartitionService(withFoundingStamp({
               partitionId,
               tableId,
               replicaId: expectedReplicaIds[i],
@@ -124,7 +104,7 @@ test('Property 4: PartitionService receives complete peer list', async (t) => {
               nodeId,
               transport: mockTransport,
               dbPath: ':memory:',
-            });
+            }));
             partitions.push(partition);
           }
 
@@ -199,7 +179,7 @@ test('Property 4: Peer list includes self', async (t) => {
 
         try {
           for (let i = 0; i < replicaCount; i++) {
-            const partition = new PartitionService({
+            const partition = new PartitionService(withFoundingStamp({
               partitionId,
               tableId,
               replicaId: replicaIds[i],
@@ -208,7 +188,7 @@ test('Property 4: Peer list includes self', async (t) => {
               nodeId,
               transport: mockTransport,
               dbPath: ':memory:',
-            });
+            }));
             partitions.push(partition);
           }
 
@@ -265,7 +245,7 @@ test('Property 4: Peer list enables Raft group formation', async (t) => {
 
         try {
           for (let i = 0; i < replicaCount; i++) {
-            const partition = new PartitionService({
+            const partition = new PartitionService(withFoundingStamp({
               partitionId,
               tableId,
               replicaId: replicaIds[i],
@@ -274,7 +254,7 @@ test('Property 4: Peer list enables Raft group formation', async (t) => {
               nodeId,
               transport: mockTransport,
               dbPath: ':memory:',
-            });
+            }));
             partitions.push(partition);
           }
 
@@ -342,7 +322,7 @@ test('Property 4: Incomplete peer list prevents premature leadership', async (t)
 
         const mockTransport = createMockTransport();
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           replicaId,
@@ -351,7 +331,7 @@ test('Property 4: Incomplete peer list prevents premature leadership', async (t)
           nodeId,
           transport: mockTransport,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -404,7 +384,7 @@ test('Property 4: Peer addresses use unified format', async (t) => {
 
         const mockTransport = createMockTransport();
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           replicaId,
@@ -413,7 +393,7 @@ test('Property 4: Peer addresses use unified format', async (t) => {
           nodeId,
           transport: mockTransport,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();

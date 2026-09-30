@@ -9,6 +9,8 @@
  * goes through message groups as required by 4.13.
  */
 
+import {committedStampFor} from
+  '../node/replica-handler-bootstrap-stamps.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {EventEmitter} from 'events';
 import {mkdtempSync} from 'fs';
@@ -33,6 +35,10 @@ import {
   createMockStorageAdmissionService,
   createMockStoragePressureBehavior,
 } from './rebalancer-integration-doubles.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {createLifecycleCdcServiceForCache} from
+  '../test-helpers/lifecycle-state-store.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // Port counter for unique ports per test
 let integrationPortCounter = 25000;
@@ -104,24 +110,7 @@ function createTestSchema(tableName) {
 }
 
 function createMockCDCService(systemTableCache) {
-  return {
-    async insertSystemTableRow(tableName, data) {
-      systemTableCache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      systemTableCache.applySystemTableChange(
-        tableName,
-        'UPDATE',
-        {...whereClause, ...data},
-      );
-      return {success: true};
-    },
-    async upsertSystemTableRow(tableName, data) {
-      systemTableCache.applySystemTableChange(tableName, 'UPSERT', data);
-      return {success: true};
-    },
-  };
+  return createLifecycleCdcServiceForCache(systemTableCache);
 }
 
 function createMockTablePolicyService() {
@@ -256,6 +245,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         // ========================================
         const bootstrapPort = integrationPortCounter++;
         resources.bootstrapRouter = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: seedNodeId,
           wsPort: bootstrapPort,
         });
@@ -290,6 +280,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         // ========================================
         const seedPort = integrationPortCounter++;
         resources.seedRouter = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: seedNodeId,
           wsPort: seedPort,
         });
@@ -297,6 +288,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
 
         const secondPort = integrationPortCounter++;
         resources.secondNodeRouter = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: secondNodeId,
           wsPort: secondPort,
         });
@@ -312,7 +304,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         const partitionId = 'test-partition-1';
         const schema = createTestSchema('test_table');
 
-        resources.seedPartition = new PartitionService({
+        resources.seedPartition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId: 'test_table',
           tableName: 'test_table',
@@ -333,7 +325,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           systemTableCache,
           cdcIntegrationService,
           tablePolicyService,
-        });
+        }));
 
         // Set SQL query engine to enable rebalancer initialization
         resources.seedPartition.setSqlQueryEngine(sqlQueryEngine);
@@ -539,6 +531,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
 
       const port = integrationPortCounter++;
       resources.router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId,
         wsPort: port,
       });
@@ -777,6 +770,9 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
       leader_address: 'leader-node',
       key_range: {start: null, end: null},
       schema: createTestSchema('test_table'),
+      // The committed-membership stamp its creator produced (owner decision
+      // O1): a join of the group led by test-partition-r1.
+      bootstrap_membership: committedStampFor(['test-partition-r1']),
     };
 
     const ack1 = await lifecycleManager.handleCreateReplica(message);

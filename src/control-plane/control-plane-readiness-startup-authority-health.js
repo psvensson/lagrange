@@ -634,6 +634,9 @@ class ControlPlaneReadinessStartupAuthorityHealth extends
       this.nodesOwner &&
       typeof this.nodesOwner.getNode === 'function'
     ) {
+      // The single-row owner read's unavailability outcome is its typed
+      // throw (NodesOwner.getNode), which the caller receives: the dispatch
+      // path defers on it. Its answer is a row or null, never a failure.
       const result = await this.nodesOwner.getNode(nodeId, options);
       return unwrapRowReadResult(result);
     }

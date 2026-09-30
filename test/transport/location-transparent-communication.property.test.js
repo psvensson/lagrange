@@ -13,6 +13,7 @@ import fc from 'fast-check';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // Initialize configuration and logging for tests (module level)
 ConfigurationManager.resetInstance();
@@ -65,8 +66,12 @@ test('Property 20: Location Transparent Communication', async (t) => {
           const nodeId2 = `loc-test-2-${port2}`;
 
           // Create two separate routers (simulating same vs different node)
-          const router1 = new MessageRouter({nodeId: nodeId1, wsPort: port1});
-          const router2 = new MessageRouter({nodeId: nodeId2, wsPort: port2});
+          const router1 = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: nodeId1, wsPort: port1});
+          const router2 = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: nodeId2, wsPort: port2});
 
           try {
             await router1.initialize({startServer: true});
@@ -118,7 +123,9 @@ test('Property 20: Location Transparent Communication', async (t) => {
         async (entityType, entityId, message) => {
           const port = portCounter++;
           const nodeId = `handler-test-${port}`;
-          const router = new MessageRouter({nodeId, wsPort: port});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId, wsPort: port});
 
           try {
             await router.initialize({startServer: true});
@@ -170,7 +177,9 @@ test('Property 20: Location Transparent Communication', async (t) => {
         async (entityType, entityId, message) => {
           const port = portCounter++;
           const nodeId = `local-test-${port}`;
-          const router = new MessageRouter({nodeId, wsPort: port});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId, wsPort: port});
 
           try {
             await router.initialize({startServer: true});
@@ -225,7 +234,9 @@ test('Property 20: Location Transparent Communication', async (t) => {
         async (entityType, entityId, handlerResponse, message) => {
           const port = portCounter++;
           const nodeId = `ack-test-${port}`;
-          const router = new MessageRouter({nodeId, wsPort: port});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId, wsPort: port});
 
           try {
             await router.initialize({startServer: true});
@@ -277,7 +288,9 @@ test('Property 20: Location Transparent Communication', async (t) => {
         async (targets, message) => {
           const port = portCounter++;
           const nodeId = `abstract-test-${port}`;
-          const router = new MessageRouter({nodeId, wsPort: port});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId, wsPort: port});
 
           try {
             await router.initialize({startServer: true});
@@ -334,7 +347,9 @@ test('Property 20: Location Transparent Communication', async (t) => {
         async (entityType, entityId, message) => {
           const port = portCounter++;
           const nodeId = `api-test-${port}`;
-          const router = new MessageRouter({nodeId, wsPort: port});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId, wsPort: port});
 
           try {
             await router.initialize({startServer: true});

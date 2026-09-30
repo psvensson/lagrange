@@ -52,6 +52,7 @@ import {
 import {
   PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 
 beforeEach(() => {
@@ -168,7 +169,7 @@ test('PartitionService - publishes leader state as follower metadata in services
     [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
   });
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-21',
     tableId: 'services',
     tableName: 'services',
@@ -177,7 +178,7 @@ test('PartitionService - publishes leader state as follower metadata in services
     nodeId: 'seed-node',
     dbPath: ':memory:',
     cdcIntegrationService: mockCdcIntegrationService,
-  });
+  }));
 
   await partition.initialize();
   partition.setSystemTableCache(systemTableCache);
@@ -260,7 +261,7 @@ test('PartitionService - publishes candidate role as follower metadata', async (
     [COLUMN.UPDATED_AT]: 1,
   });
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-candidate',
     tableId: 'services',
     tableName: 'services',
@@ -270,7 +271,7 @@ test('PartitionService - publishes candidate role as follower metadata', async (
     dbPath: ':memory:',
     systemTableCache,
     cdcIntegrationService: mockCdcIntegrationService,
-  });
+  }));
 
   await partition.initialize();
   updates.length = 0;
@@ -339,7 +340,7 @@ test('PartitionService - retries raft role persistence after cache visibility fa
       [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
     });
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-21-retry',
       tableId: 'services',
       tableName: 'services',
@@ -349,7 +350,7 @@ test('PartitionService - retries raft role persistence after cache visibility fa
       dbPath: ':memory:',
       systemTableCache,
       cdcIntegrationService: mockCdcIntegrationService,
-    });
+    }));
 
     await partition.initialize();
     await new Promise((resolve) => setImmediate(resolve));
@@ -461,7 +462,7 @@ test(
       },
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'stable-join-partition',
       tableId: 'stable_join_table',
       tableName: 'stable_join_table',
@@ -472,7 +473,7 @@ test(
       isJoiningExistingGroup: true,
       systemTableCache,
       cdcIntegrationService: mockCdcIntegrationService,
-    });
+    }));
 
     let electionStarted = false;
     partition.startElection = () => {
@@ -502,6 +503,10 @@ test(
       'promotion should publish through the services table');
     t.same(updates[0]?.whereClause, {
       service_id: 'replica-3',
+      service_type: SERVICE_TYPE.PARTITION,
+      partition_id: 'stable-join-partition',
+      replica_id: 'replica-3',
+      node_id: 'node-3',
       raft_role: RaftRole.LEARNER,
       updated_at: 1,
     }, 'first promotion write should target the learner row snapshot');
@@ -528,6 +533,10 @@ test(
       'retry should re-attempt follower publication after the guarded miss');
     t.same(updates[1].whereClause, {
       service_id: 'replica-3',
+      service_type: SERVICE_TYPE.PARTITION,
+      partition_id: 'stable-join-partition',
+      replica_id: 'replica-3',
+      node_id: 'node-3',
       raft_role: RaftRole.LEARNER,
       updated_at: 2,
     }, 'retry should refresh the guard from the latest observed learner row');
@@ -569,7 +578,7 @@ test('PartitionService - persists initial follower role for multi-replica startu
       [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
     });
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-multi',
       tableId: 'user-table',
       tableName: 'user_table',
@@ -584,7 +593,7 @@ test('PartitionService - persists initial follower role for multi-replica startu
       deferElection: true,
       systemTableCache,
       cdcIntegrationService: mockCdcIntegrationService,
-    });
+    }));
 
     await partition.initialize();
     await new Promise((resolve) => setImmediate(resolve));
@@ -627,7 +636,7 @@ test(
       [COLUMN.READY_LEASE_EXPIRES_AT]: null,
     });
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-ready-gate',
       tableId: 'user-table',
       tableName: 'user_table',
@@ -638,7 +647,7 @@ test(
       systemTableCache,
       cdcIntegrationService: mockCdcIntegrationService,
       bootstrapReadinessState: readinessState,
-    });
+    }));
 
     partition.pendingRoleUpdate = RaftRole.LEADER;
     partition.persistedRole = null;
@@ -681,7 +690,7 @@ test(
   'PartitionService - defers rebalancer initialization until traffic ready',
   async (t) => {
     const readinessState = createTrafficReadinessState();
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-rebalancer-ready-gate',
       tableId: 'services',
       tableName: 'services',
@@ -690,7 +699,7 @@ test(
       nodeId: 'node-2',
       dbPath: ':memory:',
       bootstrapReadinessState: readinessState,
-    });
+    }));
 
     await partition.initialize();
     partition.isLeader = true;
@@ -747,7 +756,7 @@ test(
   'PartitionService - priority control-plane rebalancer starts once lifecycle owner opens metadata publication',
   async (t) => {
     const readinessState = createTrafficReadinessState();
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId:
         INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
       tableId: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
@@ -757,7 +766,7 @@ test(
       nodeId: 'node-2',
       dbPath: ':memory:',
       bootstrapReadinessState: readinessState,
-    });
+    }));
 
     await partition.initialize();
     partition.isLeader = true;
@@ -840,7 +849,7 @@ test('PartitionService - persists leader node updates to partitions table', asyn
     [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
   });
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-23',
     tableId: 'services',
     tableName: 'services',
@@ -850,7 +859,7 @@ test('PartitionService - persists leader node updates to partitions table', asyn
     dbPath: ':memory:',
     systemTableCache,
     cdcIntegrationService: mockCdcIntegrationService,
-  });
+  }));
 
   await partition.initialize();
   partition.setCdcIntegrationService(mockCdcIntegrationService);
@@ -925,7 +934,7 @@ test('PartitionService - initial leader publication routes while partitions ' +
       [COLUMN.UPDATED_AT]: 77,
     },
   );
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'fresh-user-partition',
     tableId: 'fresh-user-table',
     tableName: 'fresh_user_table',
@@ -935,7 +944,7 @@ test('PartitionService - initial leader publication routes while partitions ' +
     dbPath: ':memory:',
     systemTableCache,
     cdcIntegrationService: mockCdcIntegrationService,
-  });
+  }));
 
   partition.isLeader = true;
   partition.isPartitionsLeaderAvailable = () => false;
@@ -988,7 +997,7 @@ test('PartitionService - post-handoff leader publication reads the remote ' +
       [COLUMN.UPDATED_AT]: 91,
     },
   );
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId,
     tableId: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
     tableName: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
@@ -998,7 +1007,7 @@ test('PartitionService - post-handoff leader publication reads the remote ' +
     dbPath: ':memory:',
     systemTableCache,
     cdcIntegrationService: mockCdcIntegrationService,
-  });
+  }));
   partition.controlPlaneSystemTableGateway.readAuthoritativeRows =
     async (tableName, sql, params, options) => {
       readCalls.push({tableName, sql, params, options});
@@ -1081,7 +1090,7 @@ test('PartitionService - keeps control-plane metadata publication critical', asy
     [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
   });
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES],
     tableId: SYSTEM_TABLE_NAME.NODES,
     tableName: SYSTEM_TABLE_NAME.NODES,
@@ -1090,7 +1099,7 @@ test('PartitionService - keeps control-plane metadata publication critical', asy
     nodeId: 'seed-node',
     dbPath: ':memory:',
     cdcIntegrationService: mockCdcIntegrationService,
-  });
+  }));
 
   await partition.initialize();
   partition.setSystemTableCache(systemTableCache);
@@ -1160,7 +1169,7 @@ test('PartitionService - retries leader node persistence after cache visibility 
       [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
     });
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-23-retry',
       tableId: 'services',
       tableName: 'services',
@@ -1170,7 +1179,7 @@ test('PartitionService - retries leader node persistence after cache visibility 
       dbPath: ':memory:',
       systemTableCache,
       cdcIntegrationService: mockCdcIntegrationService,
-    });
+    }));
 
     await partition.initialize();
     await new Promise((resolve) => setImmediate(resolve));
@@ -1204,7 +1213,7 @@ test('PartitionService - setCdcIntegrationService sets service on partition and 
       insertSystemTableRow: async () => ({success: true}),
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-22',
       tableId: 'services',
       tableName: 'services',
@@ -1212,7 +1221,7 @@ test('PartitionService - setCdcIntegrationService sets service on partition and 
       replicaIds: ['replica-1'],
       nodeId: 'test-node',
       dbPath: ':memory:',
-    });
+    }));
 
     await partition.initialize();
 
@@ -1292,7 +1301,7 @@ test('PartitionService - initializeRebalancer passes sqlQueryEngine to gateway',
       initialize: () => {},
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-gw-1',
       tableId: 'services',
       tableName: 'services',
@@ -1300,7 +1309,7 @@ test('PartitionService - initializeRebalancer passes sqlQueryEngine to gateway',
       replicaIds: ['replica-1'],
       nodeId: 'test-node',
       dbPath: ':memory:',
-    });
+    }));
 
     await partition.initialize();
 
@@ -1375,7 +1384,7 @@ async (t) => {
     initialize: () => {},
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-gw-2',
     tableId: 'services',
     tableName: 'services',
@@ -1383,7 +1392,7 @@ async (t) => {
     replicaIds: ['replica-1'],
     nodeId: 'test-node',
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 

@@ -116,6 +116,7 @@ import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
 import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
 
+import {createReplaceWitness} from './replace-witness-fixture.js';
 const TEST_NODE_ID = 'node-target-local';
 const TEST_SEED_NODE_ID = 'node-seed-remote';
 const TEST_OPERATION_ID = 'op-cl-029-replace';
@@ -438,6 +439,12 @@ function createHarness(store) {
   const scheduledTimers = [];
   const logs = {debugs: [], infos: [], warns: [], errors: []};
   const routedEvents = [];
+  // The REPLACE's witness replica (quest replace-source-removal-owner): the
+  // target's committed configuration still holds the source, and the target
+  // leads.
+  const witness = createReplaceWitness({
+    leaderReplicaId: TEST_TARGET_REPLICA_ID,
+  });
 
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
@@ -460,6 +467,10 @@ function createHarness(store) {
     },
     messageRouter: {
       async deliver(target, payload, options) {
+        const witnessAnswer = witness.answer(payload);
+        if (witnessAnswer) {
+          return witnessAnswer;
+        }
         deliveries.push({target, payload, options});
         return {acknowledged: true, status: 'initiated'};
       },
@@ -558,6 +569,7 @@ function createHarness(store) {
     routedEvents,
     calls,
     clearedRetainedPayloads,
+    witness,
   };
 }
 
@@ -1629,6 +1641,13 @@ test(
         const store = createCasBackedReplicaOperationStore(operation);
         const harness = createHarness(store);
         const {owner} = harness;
+        // Its removal intent was recorded against the witness's commit index
+        // (quest replace-source-removal-owner: R-1a completes only a REPLACE
+        // with a recorded intent, C0).
+        Object.assign(operation.stepsHistory.at(-1), {
+          replaceRemovalIntent: true,
+          replaceWitnessCommitIndex: harness.witness.commitIndex,
+        });
 
         // The armed retry owner: retained ACTIVE evidence plus its timed
         // retry, exactly what the visibility-deferral loop holds
@@ -1669,6 +1688,10 @@ test(
         };
 
         try {
+          // The source's removal is committed (quest
+          // replace-source-removal-owner, R-1a): the completion reaches the
+          // terminal persist this case refuses.
+          harness.witness.commitRemoval();
           const transitionOutcome = await owner.completeOperation(operation);
 
           t.same(

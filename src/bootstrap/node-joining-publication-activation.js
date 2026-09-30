@@ -1,4 +1,5 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {replicaConsensusEventsOf} from '../node/replica-handler-membership-relay.js';
 import {NodeJoiningCdcSubscriptionAndBackfill} from './node-joining-cdc-subscription-and-backfill.js';
 import {
   attachRuntimeServiceRebalancerOwner,
@@ -6,6 +7,29 @@ import {
 import {
   attachSnapshotCatchupDispatcher,
 } from './shared/snapshot-catchup-wiring.js';
+import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
+  '../partition/partition-service-constants.js';
+import {COMMITTED_MEMBERSHIP_REFUSAL} from
+  '../raft/raft-committed-membership-constants.js';
+import {assertDurableRejoinStorageAdmission} from
+  './durable-rejoin-storage-admission.js';
+import {nodeStateUpdateOptionsFromLifecycleRequest} from
+  '../control-plane/node-lifecycle-publication-wire.js';
+import {initializeGuardedRuntimeServiceHandler} from
+  './shared/guarded-runtime-service-handler.js';
+
+// A durable-rejoin replica that holds no durable record is refused at its
+// consensus port (owner decision O4): it is not restored, not activated and
+// not elected; it is left to the rebalancer as an ordinary ADD/REPLACE
+// target. Every other restore failure still aborts the rejoin.
+const DURABLE_REJOIN_RECORD_MISSING_MSG =
+  'Durable rejoin replica refused: no durable consensus record (O4)';
+function isDurableRecordMissingRefusal(error) {
+  return error?.code ===
+      PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED &&
+    error?.consensus?.reason ===
+      COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING;
+}
 
 const {
   CACHE_HYDRATION_TABLES,
@@ -21,11 +45,6 @@ const {
   NODE_JOINING_SERVICE_LITERAL,
   NodeService,
   PartitionService,
-  PgWireStartupSafetyGate,
-  ReplicaHandlerSetup,
-  ReplicaStatus,
-  RuntimeServiceHandlerSetup,
-  SERVICE_TYPE,
   SQLQueryEngine,
   STARTUP_JOIN_MODE,
   STRING,
@@ -34,7 +53,6 @@ const {
   assertCritical,
   buildDurableRejoinPartitionRestorePlans,
   buildPartitionCdcPropagationSubscriber,
-  formatReplicatedServiceAddress,
   shouldAttachPartitionCdcPropagation,
   wireMigrationWorkflowOwners,
 } = NODE_JOINING_SERVICE_SHARED;
@@ -79,11 +97,12 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     await this.triggerJoinReconciler(
       JOINING_UNIFIED_RECONCILE.HYDRATION_REASON,
     );
-    await this.ensureDurableRejoinPartitionRuntimes(restorePlans);
+    const restoredPlans =
+      await this.ensureDurableRejoinPartitionRuntimes(restorePlans);
     await this.activateJoinPartitionServiceRows(
-      restorePlans.map(({replicaId}) => replicaId),
+      restoredPlans.map(({replicaId}) => replicaId),
     );
-    this.startDurableRejoinLocalPartitionElections(restorePlans);
+    this.startDurableRejoinLocalPartitionElections(restoredPlans);
     this.durableRejoinRestoreState =
       JOIN_REJOIN_PROMOTION_RESTORE_STATE.RESTORED;
     this.logger.info(
@@ -102,27 +121,44 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    * Ensure the restore batch has concrete local runtimes before publication.
    * The generic reconciler records action failures without throwing; durable
    * rejoin owns this exact-runtime invariant before activating service rows.
+   * A replica refused for holding no durable record (O4) is left out.
    * @param {Object[]} restorePlans
-   * @return {Promise<void>}
+   * @return {Promise<Object[]>} The plans whose runtimes exist.
    * @private
    */
   async ensureDurableRejoinPartitionRuntimes(restorePlans = []) {
+    const restored = [];
     for (const restorePlan of restorePlans) {
       const replicaId = restorePlan?.replicaId;
       if (typeof replicaId !== 'string' || replicaId.length === 0) {
         continue;
       }
+      restored.push(restorePlan);
       const partition = this.partitionServices.get(replicaId);
       if (partition && partition.initialized !== false) {
         continue;
       }
-      await this.createJoinPartitionReplica({replicaOptions: restorePlan});
+      try {
+        await this.createJoinPartitionReplica({replicaOptions: restorePlan});
+      } catch (error) {
+        if (!isDurableRecordMissingRefusal(error)) {
+          throw error;
+        }
+        restored.pop();
+        this.logger.warn(DURABLE_REJOIN_RECORD_MISSING_MSG, {
+          nodeId: this.nodeId, replicaId,
+          partitionId: restorePlan.partitionId,
+          phase: error.consensus.phase,
+        });
+        continue;
+      }
       const readyPartition = this.partitionServices.get(replicaId);
       assertCritical(
         readyPartition && readyPartition.initialized !== false,
         `Durable rejoin restore requires initialized partition runtime for ${replicaId}`,
       );
     }
+    return restored;
   }
   /**
    * Start elections for restored durable partition replicas once the batch
@@ -166,8 +202,10 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       this.tablePolicyService.initialize();
     }
     const createPartitionService = async (options) =>
-      this.createJoinLocalPartitionService({...options, messageGroupService}); // Use shared ReplicaHandlerSetup component
-    const {replicaHandler, replicaStateMachine} = ReplicaHandlerSetup.create({
+      this.createJoinLocalPartitionService({...options, messageGroupService});
+    // Reacquire this incarnation's one lifecycle owner; mint only when none
+    // is recorded (a preserved join resume re-enters this segment).
+    const acquired = this.replicaLifecycleOwner.acquire({
       nodeId: this.nodeId,
       messageRouter: this.messageRouter,
       cdcIntegrationService: cdcIntegrationService,
@@ -177,9 +215,11 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       rpcClient: this.rpcClient,
       executorOutcomeEmitter:
         this.rebalanceCoordinator?.executorOutcomeEmitter,
+      ownerIncarnation: this.bootIncarnation,
+      timeSource: NodeService.getInstance().getTimeSource(),
     });
-    this.replicaHandler = replicaHandler;
-    this.replicaStateMachine = replicaStateMachine;
+    this.replicaHandler = acquired.replicaHandler;
+    this.replicaStateMachine = acquired.replicaStateMachine;
     this.logger.info(JOINING_LOG_MSG.REPLICA_HANDLER_READY, {
       nodeId: this.nodeId,
       hasMessageGroupService: !!messageGroupService,
@@ -193,6 +233,9 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    * @private
    */
   async createJoinLocalPartitionService(options) {
+    await assertDurableRejoinStorageAdmission(
+      this.replicaStateMachine, options,
+    );
     const cdcIntegrationService = this.createCdcIntegrationService();
     const systemTableCache = NodeService.getInstance().getSystemTableCache();
     if (!this.tablePolicyService) {
@@ -324,27 +367,8 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     this.replicaHandler.setLocalReplica?.(replicaId, {
       replicaId,
       partitionId,
-      status: ReplicaStatus.ACTIVE,
       service: partition,
     });
-    this.replicaHandler.replicaStateMachine?.registerReplicaSnapshot?.(
-      replicaId,
-      {
-        partitionId,
-        nodeId: this.nodeId,
-        state: ReplicaStatus.ACTIVE,
-        serviceId: replicaId,
-        serviceType: SERVICE_TYPE.PARTITION,
-        serviceAddress:
-          typeof partition?.getUnifiedAddress === 'function' ?
-            partition.getUnifiedAddress() :
-            formatReplicatedServiceAddress(
-              SERVICE_TYPE.PARTITION,
-              this.nodeId,
-              replicaId,
-            ),
-      },
-    );
   }
   /**
    * Initialize the control plane service for ordered registration and dispatch.
@@ -417,6 +441,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       rebalanceCoordinator: this.rebalanceCoordinator,
       bootstrapReadinessState: this.bootstrapReadinessState,
       executorOutcomeEmitter: this.replicaHandler?.executorOutcomeEmitter,
+      replicaConsensusEvents: replicaConsensusEventsOf(this.replicaHandler),
       wasmComponentDriver: this.runtimeDrivers.wasmComponentDriver,
       controlPlaneWriteRetryTimeoutMs: this.config.controlPlaneWriteRetryTimeoutMs,
       controlPlaneWriteRetryBaseDelayMs: this.config.controlPlaneWriteRetryBaseDelayMs,
@@ -429,19 +454,12 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     if (
       typeof this.heartbeatService?.setNodeStateReporter === 'function'
     ) {
-      this.heartbeatService.setNodeStateReporter(async (payload = {}) => {
-        return this.sendControlPlaneNodeStateUpdate({
-          state: payload.state,
-          capabilities: payload.capabilities,
-          heartbeatAt: payload.heartbeatAt,
-          readyLeaseExpiresAt: payload.readyLeaseExpiresAt,
-          heartbeatOnly: true,
-          nodeRow: payload.nodeRow,
-          nodeStatePublicationMode: payload.nodeStatePublicationMode,
-          requireDurableCompletion:
-            payload.requireDurableCompletion === true,
-        });
-      });
+      // Routed transport for the node lifecycle request: the receiving
+      // message-group replica publishes it through the same lifecycle owner.
+      this.heartbeatService.setNodeStateReporter(async (request = {}) =>
+        this.sendControlPlaneNodeStateUpdate(
+          nodeStateUpdateOptionsFromLifecycleRequest(request),
+        ));
     }
     this.leaseService = controlPlane.leaseService;
     this.endpointService = controlPlane.endpointService;
@@ -483,32 +501,8 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    * @private
    */
   initializeRuntimeServiceHandler() {
-    const systemTableCache = NodeService.getInstance().getSystemTableCache();
-    const gate = new PgWireStartupSafetyGate({
-      nodeId: this.nodeId,
-      serviceLifecycleManager: this.serviceLifecycleManager,
-      systemTableCache,
-      heartbeatService: this.heartbeatService,
-    });
-    const result = gate.guardedSetup(() => {
-      return RuntimeServiceHandlerSetup.create({
-        nodeId: this.nodeId,
-        messageRouter: this.messageRouter,
-        cdcIntegrationService: this.cdcIntegrationService,
-        systemTableCache,
-        serviceLifecycleManager: this.serviceLifecycleManager,
-        serviceRuntimeLifecycle: this.serviceRuntimeLifecycle,
-        serviceEndpointsOwner:
-          this.systemMetadataOwners?.serviceEndpointsOwner,
-        rpcClient: this.rpcClient,
-        executorOutcomeEmitter:
-          this.rebalanceCoordinator?.executorOutcomeEmitter,
-      });
-    });
-    if (result) {
-      this.runtimeServiceHandler = result.runtimeServiceHandler;
-    }
-    this.attachRuntimeServiceRebalancerOwner();
+    initializeGuardedRuntimeServiceHandler(this,
+      NodeService.getInstance().getSystemTableCache());
   }
 
   /**

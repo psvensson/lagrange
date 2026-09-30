@@ -17,6 +17,7 @@ import {MessageRouter} from '../../src/transport/message-router.js';
 import {
   LIFECYCLE_PHASE,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // Port counter for unique ports per test. Each suite file runs in its own
 // worker process, so a per-file base keeps the originally-monolithic suites
@@ -40,7 +41,7 @@ export function setTestPortBase(basePort) {
 export async function createTestTransport() {
   const port = testPortCounter++;
   const nodeId = `test-node-${port}`;
-  const router = new MessageRouter({nodeId, wsPort: port});
+  const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId, wsPort: port});
   await router.initialize({startServer: true});
   return {
     router,

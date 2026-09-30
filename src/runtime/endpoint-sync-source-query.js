@@ -26,6 +26,8 @@ const LOCAL_STR_COMMA_SPACE = ', ';
 
 const ENDPOINT_SOURCE_COLUMN = Object.freeze({
   UPDATED_AT: 'updated_at',
+  BOOT_INCARNATION: 'boot_incarnation',
+  NODE_ID: 'node_id',
 });
 
 const SOURCE_SELECT_COLUMNS = Object.freeze([
@@ -38,10 +40,16 @@ const SOURCE_SELECT_COLUMNS = Object.freeze([
   EP_COL.HEALTH_STATUS,
   EP_COL.METADATA,
   ENDPOINT_SOURCE_COLUMN.UPDATED_AT,
+  ENDPOINT_SOURCE_COLUMN.BOOT_INCARNATION,
 ]);
 
 const SOURCE_SELECT_SQL = `${SQL.SELECT} ${SOURCE_SELECT_COLUMNS.join(', ')} ` +
   `FROM ${TABLES.SERVICE_ENDPOINTS}`;
+
+// The NODES incarnations the endpoint authority judges currentness against.
+const SOURCE_NODE_INCARNATION_SQL = `${SQL.SELECT} ` +
+  `${ENDPOINT_SOURCE_COLUMN.NODE_ID}, ${ENDPOINT_SOURCE_COLUMN.BOOT_INCARNATION} ` +
+  `FROM ${TABLES.NODES}`;
 
 const SOURCE_ORDER_BY_SQL = `${SQL.ORDER_BY} ` +
   `${EP_COL.SERVICE_ID}, ${EP_COL.NODE_ID}, ${EP_COL.ENDPOINT_ID}`;
@@ -290,6 +298,7 @@ function filterNormalizedEndpointRows(rows, options = {}) {
 
 export {
   ENDPOINT_SOURCE_COLUMN,
+  SOURCE_NODE_INCARNATION_SQL,
   SOURCE_SELECT_COLUMNS,
   buildInFilter,
   buildEndpointSourceQuery,

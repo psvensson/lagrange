@@ -11,6 +11,8 @@ import {
   WORKFLOW_STEP,
 } from '../../constants/index.js';
 import {MessageGroupAssignment} from '../message-group-assignment.js';
+import {retireMessageGroupTransportHandler} from
+  '../shared/message-group-transport-handler.js';
 import {
   BOOTSTRAP_API_ASSIGNMENT,
   BOOTSTRAP_API_ERROR,
@@ -495,10 +497,12 @@ class MoveReplicaHandoffOwner {
       }
       messageGroupServices.delete(serviceId);
 
-      const messageRouter = this.getMessageRouter();
-      if (messageRouter && typeof messageRouter.unregister === 'function') {
-        messageRouter.unregister(localAddress);
-      }
+      await retireMessageGroupTransportHandler({
+        messageGroup: localService,
+        messageRouter: this.getMessageRouter(),
+        address: localAddress,
+        replicaId: serviceId,
+      });
 
       this.getLogger().info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_SOURCE_REMOVED, {
         serviceId,
@@ -528,10 +532,23 @@ class MoveReplicaHandoffOwner {
     }
 
     try {
+      const requestedRow = this.buildRegisteredServiceMutationRow(
+        requestedServiceData,
+      );
+      const versionColumn = Number.isFinite(requestedRow.state_entered_at) ?
+        'state_entered_at' : 'updated_at';
       const rollbackResult = await this.executeBootstrapControlPlaneMutation({
-        operation: 'upsert',
+        operation: 'update',
         tableName: TABLES.SERVICES,
-        row: this.buildRegisteredServiceMutationRow(previousServiceRow),
+        whereClause: {
+          service_id: requestedRow.service_id,
+          service_type: requestedRow.service_type,
+          partition_id: requestedRow.partition_id,
+          node_id: requestedRow.node_id,
+          status: requestedRow.status,
+          [versionColumn]: requestedRow[versionColumn],
+        },
+        data: this.buildRegisteredServiceMutationRow(previousServiceRow),
       }, {
         skipCacheWait: true,
       });

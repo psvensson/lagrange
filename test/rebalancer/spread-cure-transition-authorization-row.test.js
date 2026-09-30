@@ -56,15 +56,23 @@ const INSERT_STATEMENT_FRAGMENT = 'INSERT INTO replica_operations';
 // captured at f2fed102a before this quest edited src. Timestamps (created_at,
 // updated_at, completed_at and each steps-history entry's own timestamp) are
 // the only values normalised; every other byte is main's.
+//
+// Superseded under R09 by owner decision O1 (2026-09-26): every partition
+// ADD/REPLACE row now carries its committed-membership stamp in
+// steps_history[0] and its address hints in ascending raft peer id order, so
+// the three join digests were recaptured on the O1 branch (e1 scratch
+// capture over this file's own fixtures); the REMOVE row, which carries no
+// stamp, is main's byte for byte. The claim is unchanged: a move without an
+// authorization writes no authorization field.
 const MAIN_ROW_DIGEST = Object.freeze({
   'critical-add':
-    '40c8597b14c5bdaa99cd60e88c5a1985693d3f51c13dcaf53b0360a1ab086334',
+    '07cf06efba2b52eddd3c645ff62d6e55b39cdb9d5cef067b695211f7600f4745',
   'critical-add-no-epoch':
-    '6d274a9570c7df79fb5ee621f5ae90ff7e57c3b3095fd617507139de2c549fb5',
+    '45cbecaf6759fe38e303ea4268cc0809f245d7c00bfa5e1bd1f8f0510d67d74a',
   'ordinary-add':
-    'ebd6a7336f6520b95980d623bb3a70566e0293121371956afa4e30b95009483c',
+    '57a1d7fda54a443e6f5e968d42798b746020d9786e57f8e09f832d664a7fa7d7',
   'critical-replace':
-    '28e6ca7849148315cea3f117ccf798aa3f282706c439cdefcdd25c6ca6eb627b',
+    '0bcfe39bb458e06b25eb241c9de86106613b777ecb97e5d1863c456856eb2af1',
   'ordinary-remove':
     '722d411ac720e9d8900d17eb2a64238840150848c0e554036d25e0f3861a88fb',
 });

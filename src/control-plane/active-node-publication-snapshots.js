@@ -24,6 +24,10 @@ const LOCAL_STR_UPDATEDAT = 'updatedAt';
 const LOCAL_STR_UPDATED_AT = 'updated_at';
 
 const MEMBERSHIP_PUBLICATION_KIND = 'cluster_membership';
+const PENDING_MEMBERSHIP_PUBLICATION_STATUSES = new Set([
+  CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+  CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+]);
 const ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE = Object.freeze({
   PUBLISHED_MEMBERSHIP: 'published_membership',
   LOCALLY_ELIGIBLE_PROJECTION: 'locally_eligible_projection',
@@ -247,59 +251,57 @@ function resolveLatestPublishedPublicationRow(options = {}) {
   });
 }
 
+function normalizeMembershipNodeIds(nodeIds) {
+  return Object.freeze([...new Set((Array.isArray(nodeIds) ? nodeIds : [])
+    .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > 0),
+  )].sort());
+}
+
+// The two reads of membership publication rows. (a) The published membership:
+// the members of the latest PUBLISHED row; null when no row is PUBLISHED. An
+// OPEN or ACK_PENDING row never counts as published, and a PUBLISHED row
+// naming nobody reads as [] ("published, nobody"). A caller that requires
+// published membership reads the absent case as [] too.
 function resolvePublishedActiveNodeIds(options = {}) {
-  const latestPublicationRow = resolveLatestPublicationRow(options);
-  const publishedPublicationRow =
-    latestPublicationRow?.status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
-      latestPublicationRow :
-      resolveLatestPublishedPublicationRow(options);
-  const durablePublishedMembershipCandidate = publishedPublicationRow ||
-    buildMembershipPublicationActiveSnapshot(latestPublicationRow);
-  if (!durablePublishedMembershipCandidate) {
+  const publishedPublicationRow = resolveLatestPublishedPublicationRow(options);
+  if (!publishedPublicationRow) {
     return options.requirePublishedMembership === true ?
       Object.freeze([]) :
       null;
   }
-  const publishedActiveNodeIds = Array.isArray(
-    durablePublishedMembershipCandidate.publishedActiveNodeIds,
-  ) ?
-    durablePublishedMembershipCandidate.publishedActiveNodeIds :
-    [];
-  if (publishedActiveNodeIds.length === 0) {
-    return durablePublishedMembershipCandidate
-      .publishedActiveNodeIdsPresent === true ?
-      Object.freeze([]) :
-      (options.requirePublishedMembership === true ?
-        Object.freeze([]) :
-        null);
-  }
-  return Object.freeze([...new Set(
-    publishedActiveNodeIds.filter((nodeId) =>
-      typeof nodeId === 'string' &&
-      nodeId.length > 0,
-    ),
-  )].sort());
+  return normalizeMembershipNodeIds(
+    publishedPublicationRow.publishedActiveNodeIds);
 }
 
-// CL-001 variant C re-admission: the retention grace's "is this an already-
-// published member" test must NOT ratchet to the LATEST published row only.
-// Otherwise a single transient trim drops the node from the baseline forever (the
-// trimmed set becomes the new latest baseline) and the grace can never re-admit it
-// once its heartbeat recovers — the binding cause of the sticky variant-C trim.
-// Union the published active-node sets across the recent published epochs (a
-// bounded window of the latest published epoch) so a node trimmed in epoch N is
-// still a baseline member via epoch N-1. A node absent from ALL recent published
-// rows (a genuinely new node) is still excluded, and the grace's own liveness
-// conjuncts (status=active + transport + fresh lease/heartbeat) still gate it — so
-// this only un-ratchets re-admission, it never promotes a new or removed node.
-// Returns a SUPERSET of resolvePublishedActiveNodeIds (never a regression).
+// (b) The pending candidate: the latest membership row when it is still
+// collecting acknowledgements (OPEN or ACK_PENDING), with its members, for a
+// writer that targets the candidate; null when the latest row is not pending.
+function resolvePendingMembershipCandidate(options = {}) {
+  const latestPublicationRow = resolveLatestPublicationRow(options);
+  if (!PENDING_MEMBERSHIP_PUBLICATION_STATUSES.has(
+    latestPublicationRow?.status)) {
+    return null;
+  }
+  return Object.freeze({
+    publicationRow: latestPublicationRow,
+    nodeIds: normalizeMembershipNodeIds(
+      latestPublicationRow.publishedActiveNodeIds),
+  });
+}
+
+// CL-001 variant C re-admission: the retention grace's "already-published
+// member" test must NOT ratchet to the LATEST published row only, or one
+// transient trim drops the node from the baseline forever (the sticky
+// variant-C trim). Union the published sets across a bounded window of recent
+// published epochs, so a node trimmed in epoch N is still a baseline member via
+// epoch N-1. A node absent from ALL recent published rows stays excluded, and
+// the grace's liveness conjuncts still gate it: this only un-ratchets
+// re-admission. Returns a SUPERSET of resolvePublishedActiveNodeIds.
 const RETENTION_BASELINE_EPOCH_WINDOW = 4;
 
 function resolveRecentlyPublishedActiveNodeIds(options = {}) {
-  // Forces requirePublishedMembership:false to match the sole caller
-  // (isPublishedBaselineMember), which always asks for a presence test, not a
-  // required-membership assertion; callers needing the latter must keep using
-  // resolvePublishedActiveNodeIds directly.
+  // A presence test (the sole caller, isPublishedBaselineMember), never a
+  // required-membership assertion: those use resolvePublishedActiveNodeIds.
   const latestBaseline = resolvePublishedActiveNodeIds({
     ...options,
     requirePublishedMembership: false,
@@ -625,10 +627,21 @@ function buildMembershipPublicationActiveSnapshot(
     typeof membershipPublication.status === 'string' ?
       membershipPublication.status :
       normalizedPublication.status || null;
+  // Read (a): a list is published membership only on a PUBLISHED row that
+  // carries it (an empty one: nobody); an OPEN or ACK_PENDING list never is,
+  // it is read (b), the pending candidate, under its own name.
+  const normalizedStatus = String(publicationStatus || '').toUpperCase();
   const publishedActiveNodeIdsPresent =
-    membershipPublication.publishedActiveNodeIdsPresent === true ||
-    Array.isArray(membershipPublication.publishedActiveNodeIds) ||
-    Array.isArray(membershipPublication.published_active_node_ids);
+    normalizedStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED && (
+      membershipPublication.publishedActiveNodeIdsPresent === true ||
+      Array.isArray(membershipPublication.publishedActiveNodeIds) ||
+      Array.isArray(membershipPublication.published_active_node_ids));
+  const publishedActiveNodeIds = publishedActiveNodeIdsPresent ?
+    normalizedPublication.publishedActiveNodeIds : [];
+  const pendingCandidateNodeIds =
+    PENDING_MEMBERSHIP_PUBLICATION_STATUSES.has(normalizedStatus) ?
+      normalizeMembershipNodeIds(normalizedPublication.publishedActiveNodeIds) :
+      Object.freeze([]);
   const pendingAckEvidenceState =
     normalizePendingAckEvidenceState(
       membershipPublication.pendingAckEvidenceState ??
@@ -643,7 +656,7 @@ function buildMembershipPublicationActiveSnapshot(
       PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY);
   const priorityRecoveryPublicationContext =
     buildActiveMembershipSnapshot({
-      publishedActiveNodeIds: normalizedPublication.publishedActiveNodeIds,
+      publishedActiveNodeIds,
       membershipLifecycleSummary,
       projectionDiagnostics,
       targetNodeId:
@@ -725,9 +738,8 @@ function buildMembershipPublicationActiveSnapshot(
       } :
       {}),
     publishedActiveNodeIdsPresent,
-    publishedActiveNodeIds: Object.freeze([
-      ...normalizedPublication.publishedActiveNodeIds,
-    ]),
+    publishedActiveNodeIds: Object.freeze([...publishedActiveNodeIds]),
+    pendingCandidateNodeIds,
     requiredAckNodeIds: Object.freeze([
       ...normalizedPublication.requiredAckNodeIds,
     ]),
@@ -780,6 +792,7 @@ export {
   buildMembershipPublicationActiveSnapshot,
   resolveLatestPublicationRow,
   resolveLatestPublishedPublicationRow,
+  resolvePendingMembershipCandidate,
   resolvePriorityRecoveryActiveNodeCohort,
   resolvePublishedActiveNodeIds,
   resolveRecentlyPublishedActiveNodeIds,

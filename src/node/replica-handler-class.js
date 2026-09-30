@@ -30,6 +30,11 @@ import {PartitionServiceRowOwner} from '../partition/partition-service-row-owner
 import {createSystemMetadataGatewayRequiredError} from '../control-plane/system-metadata-access-error.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
+import {TrackedServiceRegistry} from './replica-handler-membership-relay.js';
+import {assignReplicaHandlerMembershipMethods} from
+  './replica-handler-membership-methods.js';
+import {assignReplicaHandlerCommittedMembershipMethods} from
+  './replica-handler-committed-membership-methods.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   REPLICA_HANDLER_ADDRESS,
@@ -44,7 +49,12 @@ import {
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
 import {ReplicaCreationProgressReporter} from '../utils/replica-creation-progress-reporter.js';
-import {ReplicaStateMachine} from './replica-state-machine.js';
+import {
+  ReplicaStateMachine,
+  defineReplicaLifecycleOwnerIncarnation,
+} from './replica-state-machine.js';
+import {ReplicaCleanupTombstoneOwner} from
+  './replica-cleanup-tombstone-owner.js';
 import {assignReplicaHandlerLifecycleMethods} from './replica-handler-lifecycle-methods.js';
 import {assignReplicaHandlerCreateMethods} from './replica-handler-create-methods.js';
 import {
@@ -61,14 +71,12 @@ import {assignReplicaHandlerRuntimeMethods} from './replica-handler-runtime-meth
 import {
   assignReplicaHandlerRemoveExecutionMethods,
 } from './replica-handler-remove-execution-methods.js';
-import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
 import {
   METADATA_RESOLUTION_POLL_INTERVAL_MS,
   PARTITION_METADATA_MISSING_PREFIX,
   REPLICA_HANDLER_LITERAL,
   SYSTEM_TABLE_HYDRATION_SQL,
   TABLE_METADATA_MISSING_PREFIX,
-  isFreshPartitionBootstrapWindow,
   isReplicaJoinNodeViable,
   partitionMetadataMissingError,
 } from './replica-handler-transition-policy.js';
@@ -88,15 +96,18 @@ class ReplicaHandler extends EventEmitter {
    * @param {Function} options.createPartitionService - Factory for creating partitions.
    * @param {string} options.dataDir - Base data directory for partition storage.
    * @param {Object} [options.replicaStateMachine] - Replica lifecycle state machine.
+   * @param {number} [options.ownerIncarnation] - Owning node boot incarnation.
    */
   constructor(options = {}) {
     super();
     this.nodeId = options.nodeId || REPLICA_HANDLER_DEFAULT.NODE_ID;
+    defineReplicaLifecycleOwnerIncarnation(this, options.ownerIncarnation);
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway || null;
     this.partitionServiceRowOwner = null;
+    this.replicaCleanupTombstoneOwner = null;
     this.messageRouter = options.messageRouter || null;
     this.rpcClient = options.rpcClient || null;
     this.createPartitionService = options.createPartitionService || null;
@@ -125,8 +136,15 @@ class ReplicaHandler extends EventEmitter {
         controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
         systemTableCache: this.systemTableCache,
       });
-    // Track live service references by replica_id (needed for shutdown, voter-readiness)
-    this.localServices = new Map();
+    // Track live service references by replica_id (needed for shutdown,
+    // voter-readiness); the registry also relays each tracked service's
+    // consensus observations to the REPLACE owner (design S5.2).
+    this.localServices = new TrackedServiceRegistry();
+    this.consensusEvents = Object.freeze({
+      subscribe: (listener) =>
+        this.localServices.subscribeConsensusObservations?.(listener) ||
+        (() => {}),
+    });
     // Backward-compatible replica metadata map used by lifecycle tests.
     this.localReplicas = new Map();
     // Track in-progress operations by operationId
@@ -168,16 +186,18 @@ assignReplicaHandlerCreateMethods(ReplicaHandler);
 assignReplicaHandlerRemoveRequestMethods(ReplicaHandler);
 assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler);
 assignReplicaHandlerStatusMethods(ReplicaHandler);
+assignReplicaHandlerMembershipMethods(ReplicaHandler);
+assignReplicaHandlerCommittedMembershipMethods(ReplicaHandler);
 assignReplicaHandlerVoterReadinessMethods(ReplicaHandler);
 assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler);
 assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   AddressManager,
-  VOTER_RAFT_ROLES,
   METADATA_RESOLUTION_POLL_INTERVAL_MS,
   NUM,
   PRESSURE_WORK_CLASS,
   PARTITION_METADATA_MISSING_PREFIX,
   PartitionServiceRowOwner,
+  ReplicaCleanupTombstoneOwner,
   REPLICA_HANDLER_ADDRESS,
   REPLICA_HANDLER_ERRNO,
   REPLICA_HANDLER_ERROR_MSG,
@@ -196,7 +216,6 @@ assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   createControlPlaneRuntimeBundle,
   createSystemMetadataGatewayRequiredError,
   fs,
-  isFreshPartitionBootstrapWindow,
   isReplicaJoinNodeViable,
   path,
   partitionMetadataMissingError,

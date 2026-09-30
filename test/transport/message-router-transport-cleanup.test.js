@@ -14,6 +14,7 @@ import fc from 'fast-check';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // Valid entity types for unified address format
 const VALID_ENTITY_TYPES = [
@@ -35,6 +36,7 @@ describe('MessageRouter transport cleanup verification', () => {
     logging.initialize({level: 'error'});
 
     router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'test-node',
       inProcess: true,
       wsPort: 19800,
@@ -235,6 +237,7 @@ describe('MessageRouter transport cleanup verification', () => {
             const port = portCounter++;
             const nodeId = `equiv-${port}`;
             const testRouter = new MessageRouter({
+              bootIncarnation: TEST_BOOT_INCARNATION,
               nodeId,
               wsPort: port,
               inProcess: true,
@@ -289,6 +292,7 @@ describe('MessageRouter transport cleanup verification', () => {
             const nodeId = `fail-equiv-${port}`;
             const remoteId = `remote-${port}`;
             const testRouter = new MessageRouter({
+              bootIncarnation: TEST_BOOT_INCARNATION,
               nodeId,
               wsPort: port,
               inProcess: true,

@@ -22,7 +22,11 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import {test} from '../../src/test-helpers/tap.js';
-import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {
+  ReplicaHandler as ProductionReplicaHandler,
+} from '../../src/node/replica-handler.js';
+import {scenarioStampingReplicaHandler} from
+  './replica-handler-bootstrap-stamps.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -43,10 +47,21 @@ import {
 import {
   REPLICA_HANDLER_EVENT,
 } from '../../src/node/replica-handler-constants.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {
+  createCanonicalLifecycleServiceRow,
+  createLifecycleCdcServiceForCache,
+} from '../test-helpers/lifecycle-state-store.js';
+import {bindRegisteredReplicaHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
+
+// Lifecycle scenarios: every create carries the committed-membership stamp
+// its scenario's creator would have produced (owner decision O1).
+const ReplicaHandler = scenarioStampingReplicaHandler(ProductionReplicaHandler);
 
 const TEST_NODE_ID = 'test-node';
 const TEST_PARTITION_ID = 'partition-1';
@@ -89,18 +104,19 @@ function createSeededCache({
     leader_node_id: TEST_LEADER_NODE_ID,
   });
 
-  cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
-    service_id: leaderReplicaId,
-    service_type: 'partition',
-    partition_id: partitionId,
-    node_id: TEST_LEADER_NODE_ID,
-    raft_role: 'leader',
-    status: ReplicaStatus.ACTIVE,
-    address:
-      `${TEST_LEADER_NODE_ID}/partition/${leaderReplicaId}`,
-    created_at: Date.now(),
-    updated_at: Date.now(),
-  });
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT',
+    createCanonicalLifecycleServiceRow({
+      service_id: leaderReplicaId,
+      service_type: 'partition',
+      partition_id: partitionId,
+      node_id: TEST_LEADER_NODE_ID,
+      raft_role: 'leader',
+      status: ReplicaStatus.ACTIVE,
+      address:
+        `${TEST_LEADER_NODE_ID}/partition/${leaderReplicaId}`,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    }));
 
   return cache;
 }
@@ -111,33 +127,7 @@ function createSeededCache({
  * @return {Object} Mock CDC service with operation log.
  */
 function createMockCDCService(cache) {
-  const operations = [];
-  return {
-    operations,
-    async insertSystemTableRow(tableName, data) {
-      operations.push({type: 'insert', tableName, data});
-      cache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      const merged = {...whereClause, ...data};
-      operations.push({
-        type: 'update', tableName, whereClause, data: merged,
-      });
-      cache.applySystemTableChange(tableName, 'UPDATE', merged);
-      return {success: true};
-    },
-    async upsertSystemTableRow(tableName, data) {
-      operations.push({type: 'upsert', tableName, data});
-      cache.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true};
-    },
-    async deleteSystemTableRow(tableName, whereClause) {
-      operations.push({type: 'delete', tableName, whereClause});
-      cache.applySystemTableChange(tableName, 'DELETE', whereClause);
-      return {success: true};
-    },
-  };
+  return createLifecycleCdcServiceForCache(cache);
 }
 
 /**
@@ -145,13 +135,13 @@ function createMockCDCService(cache) {
  * @return {Function} Factory that returns a minimal partition service.
  */
 function createMockPartitionServiceFactory() {
-  return async (options) => ({
+  return async (options) => bindRegisteredReplicaHandler({
     partitionId: options.partitionId,
     replicaId: options.replicaId,
     initialized: true,
     async shutdown() {},
     async syncFromLeader() {},
-  });
+  }, options);
 }
 
 /**
@@ -675,7 +665,12 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         submitMutation: async () => {
           throw new Error('simulated service row delete failure');
         },
+        async readAuthoritativeRows(tableName, _sql, params) {
+          const row = cache.get(tableName, params[0]);
+          return {success: true, rows: row ? [row] : []};
+        },
       };
+      handler.replicaCleanupTombstoneOwner = null;
 
       const removalFailed = new Promise((resolve) => {
         handler.once(REPLICA_HANDLER_EVENT.REMOVAL_FAILED, resolve);
@@ -747,7 +742,8 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         dataDir: tempDir,
         systemTableCache: cache,
         cdcIntegrationService: cdcService,
-        createPartitionService: async () => partitionService,
+        createPartitionService: async (options) =>
+          bindRegisteredReplicaHandler(partitionService, options),
       });
       handler.initialize();
 
@@ -769,21 +765,66 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         tempDir, 'partitions', TEST_PARTITION_ID,
       );
       fs.mkdirSync(partitionDir, {recursive: true});
+      const artifactPaths = ['', '-wal', '-shm'].map((suffix) =>
+        path.join(partitionDir, `${TEST_REPLICA_ID}.db${suffix}`));
+      for (const artifactPath of artifactPaths) {
+        fs.writeFileSync(artifactPath, 'replica-storage');
+      }
       cdcService.operations.length = 0;
-      cache.applySystemTableChange(
-        SYSTEM_TABLE_NAME.SERVICES,
-        'INSERT',
-        {
-          service_id: TEST_REPLICA_ID,
-          service_type: 'partition',
-          partition_id: TEST_PARTITION_ID,
-          node_id: TEST_NODE_ID,
-          status: ReplicaStatus.ACTIVE,
-          address: `${TEST_NODE_ID}/partition/${TEST_REPLICA_ID}`,
-          created_at: Date.now(),
-          updated_at: Date.now(),
+      let authoritativeServiceRow = {
+        ...cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID),
+      };
+      const serviceMutations = [];
+      const markerArtifactCounts = [];
+      const matches = (row, whereClause = {}) => row &&
+        Object.entries(whereClause).every(([field, value]) =>
+          row[field] === value);
+      const gateway = {
+        async readAuthoritativeRows(tableName, _sql, params) {
+          if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+            if (authoritativeServiceRow?.service_type ===
+                'partition_cleanup') {
+              markerArtifactCounts.push(
+                artifactPaths.filter((entry) => fs.existsSync(entry)).length,
+              );
+            }
+            const row = authoritativeServiceRow?.service_id === params[0] ?
+              authoritativeServiceRow : null;
+            return {success: true, rows: row ? [{...row}] : []};
+          }
+          const row = cache.get(tableName, params[0]);
+          return {success: true, rows: row ? [row] : []};
         },
-      );
+        async submitMutation(mutation) {
+          const {operation, tableName, whereClause = {}, data = {}} = mutation;
+          if (tableName !== SYSTEM_TABLE_NAME.SERVICES) {
+            cdcService.operations.push({type: operation, tableName,
+              whereClause, data});
+            return {success: true, partitionResult: {affectedRows: 0}};
+          }
+          const before = authoritativeServiceRow &&
+            {...authoritativeServiceRow};
+          const applied = ['update', 'delete'].includes(operation) &&
+            matches(before, whereClause);
+          if (applied && operation === 'update') {
+            authoritativeServiceRow = {...before, ...data};
+          } else if (applied && operation === 'delete') {
+            authoritativeServiceRow = null;
+          }
+          const entry = {type: operation, tableName, whereClause, data,
+            before, after: authoritativeServiceRow &&
+              {...authoritativeServiceRow},
+            artifactsAbsent: artifactPaths.every((artifactPath) =>
+              !fs.existsSync(artifactPath))};
+          cdcService.operations.push(entry);
+          serviceMutations.push(entry);
+          return {success: true,
+            partitionResult: {affectedRows: applied ? 1 : 0}};
+        },
+      };
+      handler.controlPlaneSystemTableGateway = gateway;
+      handler.replicaStateMachine.controlPlaneSystemTableGateway = gateway;
+      handler.replicaCleanupTombstoneOwner = null;
 
       const removed = waitForReplicaEvent(
         handler,
@@ -812,15 +853,59 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         false,
         'the routable service row remains until existing transactions drain',
       );
+      t.equal(
+        serviceMutations.some((mutation) =>
+          mutation.data.service_type === 'partition_cleanup'),
+        false,
+        'cleanup ownership is not taken before the partition drain completes',
+      );
 
       releaseDrain();
       await removed;
+      const takeover = serviceMutations.find((mutation) =>
+        mutation.type === 'update' &&
+        mutation.data.service_type === 'partition_cleanup');
+      const release = serviceMutations.find((mutation) =>
+        mutation.type === 'delete');
+      t.match(takeover, {
+        whereClause: {service_id: TEST_REPLICA_ID,
+          service_type: 'partition', partition_id: TEST_PARTITION_ID,
+          node_id: TEST_NODE_ID, status: ReplicaStatus.REMOVING},
+        before: {status: ReplicaStatus.REMOVING},
+        after: {service_type: 'partition_cleanup', status: 'cleanup_owned'},
+      }, 'REMOVING changes in place to cleanup ownership without row absence');
+      t.equal(takeover.whereClause.state_entered_at,
+        takeover.before.state_entered_at,
+        'cleanup takeover compares the exact durable REMOVING generation');
+      t.notOk(
+        serviceMutations.some((mutation) =>
+          mutation.type === 'delete' &&
+          mutation.before?.status === ReplicaStatus.REMOVING),
+        'the invalid delete-row-then-clean gap is never created',
+      );
+      t.same(
+        [...new Set(markerArtifactCounts)],
+        [3, 2, 1, 0],
+        'the exact cleanup token is reread between artifacts and before release',
+      );
+      t.match(release, {
+        whereClause: {
+          service_id: TEST_REPLICA_ID,
+          service_type: 'partition_cleanup',
+          partition_id: TEST_PARTITION_ID,
+          node_id: TEST_NODE_ID,
+          status: 'cleanup_owned',
+          cleanup_token: takeover.after.cleanup_token,
+          updated_at: takeover.after.updated_at,
+        },
+        before: {cleanup_token: takeover.after.cleanup_token},
+        after: null,
+        artifactsAbsent: true,
+      }, 'only the exact cleanup token releases the absent artifact set');
       t.equal(
-        cdcService.operations.some((operation) =>
-          operation.type === 'delete' &&
-          operation.tableName === SYSTEM_TABLE_NAME.SERVICES),
-        true,
-        'the same removal owner deletes the service row after drain',
+        authoritativeServiceRow,
+        null,
+        'authoritative absence is observed only after exact-token release',
       );
 
       await handler.shutdown();
@@ -961,7 +1046,12 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         );
 
         if (failureCase.deferRetry) {
-          handler.replicaStateMachine.clear();
+          await handler.replicaStateMachine.clear();
+          handler.replicaStateMachine = new ReplicaStateMachine({
+            nodeId: TEST_NODE_ID,
+            cdcIntegrationService: cdcService,
+            systemTableCache: cache,
+          });
           handler.localReplicas.clear();
           t.equal(
             handler.replicaStateMachine.getState(replicaId),
@@ -1150,7 +1240,12 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         'first attempt leaves durable participant failure evidence',
       );
 
-      handler.replicaStateMachine.clear();
+      await handler.replicaStateMachine.clear();
+      handler.replicaStateMachine = new ReplicaStateMachine({
+        nodeId: TEST_NODE_ID,
+        cdcIntegrationService: cdcService,
+        systemTableCache: cache,
+      });
       handler.localReplicas.clear();
       const staleRuntime = {
         async shutdown() {

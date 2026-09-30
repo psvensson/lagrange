@@ -12,6 +12,7 @@ import {
   buildControlPlaneWorkloadProfile,
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 function initializeMessageRouterTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -293,6 +294,7 @@ test('PressureGovernor consumes live router stats without treating target ' +
   const remoteNodeId = 'node-b';
   const criticalReserve = 16;
   const router = new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-a',
     nodeAddress: 'ws://node-a:7000',
     outboundQueueMaxConcurrent: 1,

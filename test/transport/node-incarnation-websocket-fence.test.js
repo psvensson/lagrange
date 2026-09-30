@@ -17,6 +17,9 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TRANSPORT_EVENT} from '../../src/constants/transport.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {BOOT_INCARNATION_REQUIRED} from
+  '../../src/bootstrap/boot-incarnation-contract.js';
 
 const LOCAL_NODE_ID = 'z-local-node';
 const REMOTE_NODE_ID = 'a-remote-node';
@@ -100,7 +103,9 @@ t.test(
     initializeTestEnvironment();
     t.teardown(cleanupTestEnvironment);
 
-    const router = new MessageRouter({nodeId: LOCAL_NODE_ID});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: LOCAL_NODE_ID});
     await router.initialize({startServer: false});
     t.teardown(async () => {
       await router.shutdown().catch(() => {});
@@ -161,7 +166,9 @@ t.test(
     initializeTestEnvironment();
     t.teardown(cleanupTestEnvironment);
 
-    const router = new MessageRouter({nodeId: LOCAL_NODE_ID});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: LOCAL_NODE_ID});
     await router.initialize({startServer: false});
     t.teardown(async () => {
       await router.shutdown().catch(() => {});
@@ -234,7 +241,9 @@ t.test(
     initializeTestEnvironment();
     t.teardown(cleanupTestEnvironment);
 
-    const router = new MessageRouter({nodeId: LOCAL_NODE_ID});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: LOCAL_NODE_ID});
     await router.initialize({startServer: false});
     t.teardown(async () => {
       await router.shutdown().catch(() => {});
@@ -285,7 +294,9 @@ t.test(
     initializeTestEnvironment();
     t.teardown(cleanupTestEnvironment);
 
-    const router = new MessageRouter({nodeId: LOCAL_NODE_ID});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: LOCAL_NODE_ID});
     await router.initialize({startServer: false});
     t.teardown(async () => {
       await router.shutdown().catch(() => {});
@@ -330,7 +341,9 @@ t.test(
     initializeTestEnvironment();
     t.teardown(cleanupTestEnvironment);
 
-    const router = new MessageRouter({nodeId: LOCAL_NODE_ID});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: LOCAL_NODE_ID});
     await router.initialize({startServer: false});
     t.teardown(async () => {
       await router.shutdown().catch(() => {});
@@ -407,28 +420,13 @@ t.test(
       'the local process exposes the same minted identity to interaction owners',
     );
 
-    // A pre-incarnation router (0) leaves the field OFF the frame.
-    const legacyRouter = new MessageRouter({nodeId: LOCAL_NODE_ID});
-    await legacyRouter.initialize({startServer: false});
-    t.teardown(async () => {
-      await legacyRouter.shutdown().catch(() => {});
-    });
-    const legacySent = [];
-    legacyRouter.sendRaw = (ws, message) => {
-      legacySent.push(message);
-      return true;
-    };
-    legacyRouter.sendIdentification({ws: {}, isSelfConnection: false});
-    t.equal(
-      Object.prototype.hasOwnProperty.call(legacySent[0], 'bootIncarnation'),
-      false,
-      'incarnation 0 (pre-incarnation) is never stamped',
-    );
-    t.equal(
-      legacyRouter.getLocalBootIncarnationIdentity(),
-      null,
-      'UNKNOWN local identity cannot authorize a formation generation',
-    );
+    // A router outside a boot lifecycle does not exist: absence (or 0) is
+    // refused at construction, so no IDENTIFY can ever omit the field.
+    for (const bootIncarnation of [undefined, 0]) {
+      t.throws(() => new MessageRouter({nodeId: LOCAL_NODE_ID, bootIncarnation}),
+        {code: BOOT_INCARNATION_REQUIRED},
+        `a router with incarnation ${String(bootIncarnation)} is refused`);
+    }
 
     t.end();
   },

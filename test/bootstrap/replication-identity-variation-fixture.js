@@ -18,6 +18,7 @@ import {
   SYSTEM_TABLE_NAME,
   getInitialReplicaIds,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 // ---------------------------------------------------------------------------
 // The metamorphic fixture for CLAUSE 4.
@@ -53,13 +54,13 @@ function restoreIdentityDeclarations(snapshot) {
 
 function buildIdentityFixture() {
   const table = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
-  const partitionService = new PartitionService({
+  const partitionService = new PartitionService(withFoundingStamp({
     partitionId: `${table}-p1`,
     tableId: table,
     replicaId: INITIAL_REPLICA_IDS[table][0],
     replicaIds: INITIAL_REPLICA_IDS[table],
     nodeId: 'seed',
-  });
+  }));
   const messageGroupService = new MessageGroupService({
     transport: {
       deliver: () => {},

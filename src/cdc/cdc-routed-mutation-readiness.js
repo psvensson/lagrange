@@ -1,4 +1,7 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
+import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
+import {submitRoutedMutationHop} from './cdc-terminal-gate.js';
+import {executeBootstrapDirectSql} from './cdc-bootstrap-direct-sql.js';
 import {
   isPartitionWriteFailureCode,
   isReroutableWriteFailureCode,
@@ -29,10 +32,8 @@ const {
   CONTROL_PLANE_MUTATION_READINESS_ERROR,
   CONTROL_PLANE_READINESS_DIMENSION,
   ERRORS,
-  INITIAL_PARTITION_IDS,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
   METRICS_LOG_TAG,
-  NUM,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
   PressureGovernor,
@@ -42,11 +43,11 @@ const {
   annotateSystemTableMutationError,
   buildPressureAdmissionFailure,
   buildSystemTableMutationError,
-  delayOn,
   getControlPlaneRetryAfterMs,
   hasControlPlaneMutationRoutingGapFailureSignature,
   hasSystemTableOwnerHandoffFailureSignature,
   isRetryableControlPlaneError,
+  isTerminalTypedDistributedFailure,
   normalizeDeliveryPriority,
   resolveSystemTableMutationDeliveryPriority,
   shouldEmitTableWriteMetric,
@@ -59,28 +60,6 @@ const CDC_ROUTED_MUTATION_MIN_ATTEMPT_TIMEOUT_MS = 1000;
 const CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX = 'control-plane:table:';
 const CDC_UNKNOWN_TABLE_RESOURCE_KEY = 'unknown';
 const CDC_ROUTED_MUTATION_READINESS_CONSTRUCTOR = 'constructor';
-
-// Candidates for direct bootstrap-mode SQL: when the table maps to an initial
-// partition id, only that partition qualifies; otherwise any service declaring
-// the table by name or id.
-function selectDirectSqlCandidates(services, tableName, targetPartitionId) {
-  const candidates = [];
-  for (const service of services.values()) {
-    if (!service) {
-      continue;
-    }
-    if (targetPartitionId) {
-      if (service.partitionId === targetPartitionId) {
-        candidates.push(service);
-      }
-      continue;
-    }
-    if (service.tableName === tableName || service.tableId === tableName) {
-      candidates.push(service);
-    }
-  }
-  return candidates;
-}
 
 class CDCRoutedMutationReadiness {
   hasActiveSystemTableWriteMirror(tableName) {
@@ -136,14 +115,20 @@ class CDCRoutedMutationReadiness {
         handled: false,
       };
     }
+    // The answer of the last leg issued: a later hop of this write carries it
+    // to the terminal gate, since that leg's outcome is not known here.
+    const issued = {};
     for (const partitionService of localServices) {
       if (typeof partitionService?.executeQuery !== 'function') {
         continue;
       }
       try {
-        const localResult = await partitionService.executeQuery(sql, params);
+        const localResult = await submitRoutedMutationHop(this,
+          CDC_TERMINAL_STAGE.LOCAL_LEADER_WRITE,
+          () => partitionService.executeQuery(sql, params), issued.answer);
         const result = this.normalizeLocalSystemTableWriteResult(localResult);
         if (this.isLocalSystemTableWriteRoutedOn(result)) {
+          issued.answer = result;
           continue;
         }
         return {
@@ -152,10 +137,9 @@ class CDCRoutedMutationReadiness {
         };
       } catch (error) {
         if (
-          this.isTransientCdcError(
-            error?.message || CDC_INTEGRATION_SERVICE_LITERAL.EMPTY,
-          )
+          this.isTransientCdcError(error)
         ) {
+          issued.answer = error;
           continue;
         }
         throw error;
@@ -163,6 +147,7 @@ class CDCRoutedMutationReadiness {
     }
     return {
       handled: false,
+      priorAnswer: issued.answer,
     };
   }
 
@@ -180,7 +165,7 @@ class CDCRoutedMutationReadiness {
     }
     return isPartitionWriteFailureCode(result?.failureCode) ?
       isReroutableWriteFailureCode(result.failureCode) :
-      this.isTransientCdcError(result?.error || '');
+      this.isTransientCdcError(result);
   }
 
   validateTableName(tableName) {
@@ -200,118 +185,7 @@ class CDCRoutedMutationReadiness {
   }
 
   async executeSQLDirectToLocalPartition(sql, params = [], _options = {}) {
-    if (!this.bootstrapMode || !this.localPartitionServices) {
-      throw new Error(CDC_LOG_MSG.BOOTSTRAP_MODE_REQUIRED_FOR_DIRECT_SQL);
-    }
-
-    const tableNameResult = this.extractTableNameFromSQL(sql);
-    if (
-      tableNameResult.state !==
-      CDC_INTEGRATION_SERVICE_LITERAL.TABLE_NAME_EXTRACTION_STATE_FOUND
-    ) {
-      throw new Error(`Could not extract table name from SQL: ${sql}`);
-    }
-    const tableName = tableNameResult.tableName;
-    const targetPartitionId = INITIAL_PARTITION_IDS[tableName] || null;
-    const candidates = selectDirectSqlCandidates(
-      this.localPartitionServices, tableName, targetPartitionId);
-
-    const initializedCandidates =
-      candidates.length > 0 ? candidates : [];
-    if (initializedCandidates.length === 0) {
-      const partitionIds = candidates
-        .map((service) => service?.partitionId)
-        .filter(Boolean)
-        .join(', ');
-      throw new Error(
-        `Partition services not initialized for table: ${tableName}. ` +
-          `Partitions: ${partitionIds}`,
-      );
-    }
-    const leaderService = initializedCandidates.find(
-      (service) => service.isLeader,
-    );
-    const partitionService =
-      leaderService || initializedCandidates[0] || null;
-    if (!partitionService) {
-      const availablePartitions = Array.from(
-        this.localPartitionServices.values(),
-      )
-        .map((service) => service?.partitionId)
-        .filter(Boolean);
-      throw new Error(
-        `No local partition service found for table: ${tableName}. ` +
-          `Available partitions: ${availablePartitions.join(CDC_INTEGRATION_SERVICE_LITERAL.EMPTY_2)}`,
-      );
-    }
-    this.logger.debug(
-      CDC_INTEGRATION_SERVICE_LITERAL.EXECUTING_SQL_DIRECTLY_ON_LOCAL_PARTITION_BOOTSTRAP_MODE,
-      {
-        nodeId: this.nodeId,
-        tableName,
-        partitionId: partitionService.partitionId,
-        sql: sql.substring(0, Math.min(sql.length, NUM.HUNDRED)),
-      },
-    );
-    const isSelect = sql.trim().toUpperCase().startsWith('SELECT');
-
-    if (isSelect) {
-      const result = await partitionService.executeLocalQuery(sql, params);
-      if (!result || result.success === false) {
-        throw new Error(
-          result?.error ||
-            `Direct partition query failed for table: ${tableName}`,
-        );
-      }
-      return result;
-    }
-    // Writes ride raft whenever any candidate can carry the append: the
-    // per-replica direct loop lands only on the replica instances present
-    // in this map at this instant (ONE per partition), OUTSIDE the raft
-    // log, so every replica absent from the map diverges durably and
-    // nothing ever heals it (round-11: the registration-era services rows
-    // missing from the raft leader's db wedged serve-eligibility
-    // permanently). proposeWrite on a follower forwards to the known
-    // leader, and registration waits for partition leadership before
-    // writing, so the raft lane is the normal path; the direct fan-out
-    // remains only for the genuinely leaderless earliest-bootstrap window
-    // where the raft lane itself fails.
-    const raftLaneService =
-      leaderService || initializedCandidates.find(
-        (service) => typeof service.executeQuery === 'function',
-      ) || null;
-    if (raftLaneService && typeof raftLaneService.executeQuery === 'function') {
-      try {
-        const result = await raftLaneService.executeQuery(sql, params);
-        if (result && result.success !== false) {
-          return result;
-        }
-        this.logger.warn(CDC_LOG_MSG.BOOTSTRAP_RAFT_WRITE_LANE_FELL_BACK, {
-          tableName,
-          partitionId: raftLaneService.partitionId,
-          error: result?.error || null,
-        });
-      } catch (error) {
-        this.logger.warn(CDC_LOG_MSG.BOOTSTRAP_RAFT_WRITE_LANE_FELL_BACK, {
-          tableName,
-          partitionId: raftLaneService.partitionId,
-          error: error?.message || String(error),
-        });
-      }
-    }
-    const targets = initializedCandidates;
-    const results = [];
-    for (const service of targets) {
-      const result = await service.executeLocalQuery(sql, params);
-      results.push(result);
-      if (!result || result.success === false) {
-        throw new Error(
-          result?.error ||
-            `Direct partition write failed for table: ${tableName}`,
-        );
-      }
-    }
-    return results[0];
+    return executeBootstrapDirectSql(this, sql, params);
   }
 
   extractTableNameFromSQL(sql) {
@@ -471,9 +345,9 @@ class CDCRoutedMutationReadiness {
       const remainingBudgetMs = getRemainingQueryExecutionBudgetMs();
       if (remainingBudgetMs === null) {
         if (normalizedDelayMs > 0) {
-          await delayOn(this.timeSource, normalizedDelayMs);
+          await this.delayUntilShutdown(normalizedDelayMs);
         }
-        return true;
+        return this.isShuttingDown !== true;
       }
       if (remainingBudgetMs <= 0) {
         return false;
@@ -482,7 +356,11 @@ class CDCRoutedMutationReadiness {
         return false;
       }
       if (normalizedDelayMs > 0) {
-        await delayOn(this.timeSource, normalizedDelayMs);
+        // Held by the lifecycle owner: shutdown ends the delay at once.
+        await this.delayUntilShutdown(normalizedDelayMs);
+      }
+      if (this.isShuttingDown === true) {
+        return false;
       }
       const nextRemainingBudgetMs = getRemainingQueryExecutionBudgetMs();
       return nextRemainingBudgetMs === null || nextRemainingBudgetMs > 0;
@@ -537,6 +415,8 @@ class CDCRoutedMutationReadiness {
     if (options?.cancellationToken) {
       baseQueryOptions.cancellationToken = options.cancellationToken;
     }
+    // The answer of the last hop issued (a local leg or an engine attempt).
+    const issuedHop = {};
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         const remainingBudgetMs = getRemainingQueryExecutionBudgetMs();
@@ -583,16 +463,17 @@ class CDCRoutedMutationReadiness {
           if (localWriteResult.handled) {
             return localWriteResult.result;
           }
+          issuedHop.answer = localWriteResult.priorAnswer ?? issuedHop.answer;
         }
         const sqlQueryEngine = this.sqlQueryEngine;
         if (typeof sqlQueryEngine?.executeQuery !== 'function') {
           throw buildMissingSqlQueryEngineError();
         }
-        const result = await sqlQueryEngine.executeQuery(
-          sql,
-          params,
-          queryOptions,
-        );
+        const result = await submitRoutedMutationHop(this,
+          CDC_TERMINAL_STAGE.ENGINE_WRITE,
+          () => sqlQueryEngine.executeQuery(sql, params, queryOptions),
+          issuedHop.answer);
+        issuedHop.answer = result;
         if (result && result.success === false) {
           const message = result.error || ERRORS.QUERY_FAILED;
           if (
@@ -682,18 +563,6 @@ class CDCRoutedMutationReadiness {
     throw new Error(ERRORS.QUERY_FAILED);
   }
 
-  async executeSQL(sql, params = [], options = {}) {
-    if (
-      !this.writeRouter ||
-      typeof this.writeRouter.execute !== 'function'
-    ) {
-      throw new Error(
-        CDC_INTEGRATION_SERVICE_LITERAL.CDC_WRITE_ROUTER_IS_NOT_CONFIGURED,
-      );
-    }
-    return this.writeRouter.execute(sql, params, options);
-  }
-
   isTransientCdcError(errorLike) {
     const message =
       typeof errorLike === 'string' ?
@@ -701,7 +570,7 @@ class CDCRoutedMutationReadiness {
         errorLike?.message || errorLike?.error || '';
     // A partition write answer: by the control plane's one classifier (its
     // code when the caller holds it, else its text).
-    return (
+    return !isTerminalTypedDistributedFailure(errorLike) && (
       isRetryableControlPlaneError(errorLike) ||
       message.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
       message === ERRORS.QUERY_FAILED ||

@@ -13,6 +13,7 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -69,14 +70,14 @@ test('Property 5: Default replica count is 3', async (t) => {
           addressManager.format('test-node', 'partition', replicaId),
         );
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           replicaId: replicaIds[0],
           replicaIds,
           peerAddresses,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -130,14 +131,14 @@ test('Property 5: Partition reports correct replica count', async (t) => {
           addressManager.format('test-node', 'partition', replicaId),
         );
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           replicaId: replicaIds[0],
           replicaIds,
           peerAddresses,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -196,14 +197,14 @@ test('Property 5: Replica count is odd for Raft quorum', async (t) => {
           addressManager.format('test-node', 'partition', replicaId),
         );
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           replicaId: replicaIds[0],
           replicaIds,
           peerAddresses,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();

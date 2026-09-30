@@ -8,6 +8,7 @@ import {
   registerControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-gateway-registry.js';
 import {AdminServiceDiscovery} from '../../src/admin/admin-service-discovery.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 beforeEach(() => {
   clearRegisteredControlPlaneSystemTableGateway();
@@ -23,6 +24,7 @@ test('runtime services require explicit gateway wiring while admin consumers ' +
   registerControlPlaneSystemTableGateway(sentinelGateway);
 
   const heartbeatService = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-a',
   });
   const leaseService = new LeaseService({

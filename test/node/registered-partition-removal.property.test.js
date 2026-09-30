@@ -16,6 +16,8 @@ import {
 } from '../../src/node/replica-lifecycle-manager.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createLifecycleCdcService} from
+  '../test-helpers/lifecycle-state-store.js';
 
 /**
  * Create a mock system table cache.
@@ -34,20 +36,7 @@ function createMockSystemTableCache() {
  * @return {Object} Mock CDC service.
  */
 function createMockCDCService() {
-  return {
-    async insertSystemTableRow() {
-      return {success: true};
-    },
-    async updateSystemTableRow() {
-      return {success: true};
-    },
-    async deleteSystemTableRow() {
-      return {success: true};
-    },
-    async upsertSystemTableRow() {
-      return {success: true};
-    },
-  };
+  return createLifecycleCdcService();
 }
 
 /**

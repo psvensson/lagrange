@@ -92,6 +92,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
      * @return {Promise<Object>} Response.
      */
     async handleRemoveReplica(request) {
+      await this.awaitRemovedReplicaCleanupAdmissionBarrier();
       const operationId = request?.[ReplicaOperationField.OPERATION_ID];
       const partitionId = request?.[ReplicaOperationField.PARTITION_ID];
       const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
@@ -121,25 +122,6 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       // Check if replica exists
       const replica = this.getLocalReplica(replicaId);
       if (!replica) {
-        try {
-          await this.reconcileRemovedReplicaCleanup(replicaId, partitionId);
-        } catch (error) {
-          this.logger.error(REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED, {
-            operationId,
-            replicaId,
-            partitionId,
-            error: error.message,
-            stack: error.stack,
-          });
-          return this.buildReplicaOperationResponse(
-            ReplicaOperationResponseStatus.ERROR,
-            {
-              error: error.message,
-              replicaId,
-              nodeId: this.nodeId,
-            },
-          );
-        }
         this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_NOT_FOUND, {
           replicaId,
           nodeId: this.nodeId,
@@ -260,14 +242,10 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       this.fenceReplicaServingAdmissionForRemoval(replicaId, replica);
       // Track in-progress operation
       this.trackReplicaRemovalOperation(operationId, partitionId, replicaId);
-      const removalIngressStatus =
-        replica.status === ReplicaStatus.FAILED ?
-          ReplicaStatus.FAILED :
-          ReplicaStatus.REMOVING;
       this.setLocalReplica(replicaId, {
         replicaId,
         partitionId,
-        status: removalIngressStatus,
+        status: ReplicaStatus.REMOVING,
         service: replica.service || this.getTrackedService(replicaId),
       });
       // Start async removal after ACK has returned.
@@ -282,8 +260,57 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       );
     }
     /**
+     * The STEP_DOWN_REPLICA answer of one typed leader handoff: an untracked
+     * replica is NOT_FOUND; a tracked service with no transfer authority, or
+     * a transfer the port refused (nothing changed; its typed reason rides
+     * along), is ERROR; a transfer accepted or a named role no-op is
+     * COMPLETED with the branch taken.
+     * @param {Object} handoffResult - The typed leader-handoff result.
+     * @param {Object} request - {operationId, partitionId, replicaId}.
+     * @return {Object} Response.
+     * @private
+     */
+    answerStepDownHandoff(handoffResult, {operationId, partitionId,
+      replicaId}) {
+      const fields = {operationId, partitionId, replicaId, nodeId: this.nodeId};
+      const answer = {operationId, replicaId, nodeId: this.nodeId};
+      if (handoffResult.state ===
+          REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_APPLICABLE) {
+        this.logger.warn(REPLICA_HANDLER_LOG_MSG.STEP_DOWN_NOT_FOUND, fields);
+        return this.buildReplicaOperationResponse(
+          ReplicaOperationResponseStatus.NOT_FOUND, answer);
+      }
+      if (handoffResult.state ===
+          REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED) {
+        this.logger.error(REPLICA_HANDLER_LOG_MSG.STEP_DOWN_FAILED, {...fields,
+          error: REPLICA_HANDLER_ERROR_MSG.STEP_DOWN_NOT_SUPPORTED});
+        return this.buildReplicaOperationResponse(
+          ReplicaOperationResponseStatus.ERROR,
+          {error: REPLICA_HANDLER_ERROR_MSG.STEP_DOWN_NOT_SUPPORTED, ...answer});
+      }
+      const handoff = {
+        handoffBranch: handoffResult.branch,
+        handoffTrackedRole: handoffResult.trackedRole,
+        handoffTransfer: handoffResult.transfer ?? null,
+      };
+      if (handoffResult.state ===
+          REPLICA_HANDLER_LEADER_HANDOFF_STATE.REFUSED) {
+        const error = REPLICA_HANDLER_ERROR_MSG.stepDownTransferRefused(
+          handoffResult.transfer?.reason);
+        this.logger.warn(REPLICA_HANDLER_LOG_MSG.STEP_DOWN_REFUSED,
+          {...fields, ...handoff, error});
+        return this.buildReplicaOperationResponse(
+          ReplicaOperationResponseStatus.ERROR, {error, ...answer, ...handoff});
+      }
+      this.logger.info(REPLICA_HANDLER_LOG_MSG.STEP_DOWN_COMPLETED,
+        {...fields, ...handoff});
+      return this.buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.COMPLETED, {...answer, ...handoff});
+    }
+    /**
      * Handle STEP_DOWN_REPLICA request.
-     * Returns immediately with a synchronous leader-handoff result.
+     * Answers once the partition's port answered the leadership transfer
+     * (acceptance, never completion).
      * @param {Object} request - STEP_DOWN_REPLICA request.
      * @return {Promise<Object>} Response.
      */
@@ -315,68 +342,12 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         );
       }
       try {
-        const handoffResult = this.requestTrackedPartitionLeaderHandoff(
+        const handoffResult = await this.requestTrackedPartitionLeaderHandoff(
           replicaId,
           reason,
         );
-        if (
-          handoffResult.state ===
-            REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_APPLICABLE
-        ) {
-          this.logger.warn(REPLICA_HANDLER_LOG_MSG.STEP_DOWN_NOT_FOUND, {
-            operationId,
-            partitionId,
-            replicaId,
-            nodeId: this.nodeId,
-          });
-          return this.buildReplicaOperationResponse(
-            ReplicaOperationResponseStatus.NOT_FOUND,
-            {
-              operationId,
-              replicaId,
-              nodeId: this.nodeId,
-            },
-          );
-        }
-        if (
-          handoffResult.state ===
-            REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED
-        ) {
-          this.logger.error(REPLICA_HANDLER_LOG_MSG.STEP_DOWN_FAILED, {
-            operationId,
-            partitionId,
-            replicaId,
-            nodeId: this.nodeId,
-            error: REPLICA_HANDLER_ERROR_MSG.STEP_DOWN_NOT_SUPPORTED,
-          });
-          return this.buildReplicaOperationResponse(
-            ReplicaOperationResponseStatus.ERROR,
-            {
-              error: REPLICA_HANDLER_ERROR_MSG.STEP_DOWN_NOT_SUPPORTED,
-              operationId,
-              replicaId,
-              nodeId: this.nodeId,
-            },
-          );
-        }
-        this.logger.info(REPLICA_HANDLER_LOG_MSG.STEP_DOWN_COMPLETED, {
-          operationId,
-          partitionId,
-          replicaId,
-          handoffBranch: handoffResult.branch,
-          handoffTrackedRole: handoffResult.trackedRole,
-          nodeId: this.nodeId,
-        });
-        return this.buildReplicaOperationResponse(
-          ReplicaOperationResponseStatus.COMPLETED,
-          {
-            operationId,
-            replicaId,
-            handoffBranch: handoffResult.branch,
-            handoffTrackedRole: handoffResult.trackedRole,
-            nodeId: this.nodeId,
-          },
-        );
+        return this.answerStepDownHandoff(handoffResult,
+          {operationId, partitionId, replicaId});
       } catch (error) {
         this.logger.error(REPLICA_HANDLER_LOG_MSG.STEP_DOWN_FAILED, {
           operationId,

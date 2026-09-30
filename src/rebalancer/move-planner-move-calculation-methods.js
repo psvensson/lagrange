@@ -2,7 +2,8 @@ import {NUM} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {isExplicitNonLeaderRaftRole} from
   '../raft/replica-voter-readiness.js';
-import {ReplicaStatus} from './replica-status.js';
+import {OperationType, ReplicaStatus} from './replica-status.js';
+import {normalizeReplicaOperationRecord} from './replica-operation-liveness.js';
 import {
   REPLICA_INVENTORY_EFFECTIVE_VIEW,
   effectiveReplicaCountAfterOperations,
@@ -61,6 +62,27 @@ function createEntityPartitionRowResolver(systemTableCache, entityId) {
     }
     return partitionRow;
   };
+}
+
+// Checklist (iv) of the REPLACE owner directive (amendment-1 step 4): a
+// non-terminal REPLACE owns the removal of its source, so the replicas the
+// per-node excess counts leave every such source out. Set exclusion over the
+// in-flight set (every non-terminal operation on the entity, drain phase
+// included) is idempotent against row state: a source whose row already
+// reads REMOVING or is gone is not in the placement set to begin with.
+function excludeNonTerminalReplaceSources(replicas, inFlightOperations, nowMs) {
+  const sourceReplicaIds = new Set();
+  for (const operation of inFlightOperations) {
+    const record = normalizeReplicaOperationRecord(operation, {nowMs});
+    if (record.type === OperationType.REPLACE && record.sourceReplicaId) {
+      sourceReplicaIds.add(record.sourceReplicaId);
+    }
+  }
+  if (sourceReplicaIds.size === 0) {
+    return replicas;
+  }
+  return replicas.filter((replica) =>
+    !sourceReplicaIds.has(replica.replica_id || replica.service_id));
 }
 
 function countDistinctActiveReplicaNodes(replicas) {
@@ -122,12 +144,23 @@ class MovePlannerMoveCalculationMethods {
       targetState.topologyTransitionSnapshot ||
       this.buildTopologyTransitionSnapshot(currentReplicas);
     const inventory = transitionSnapshot.inventory;
+    // The entity's in-flight operations: the plan's own reads keep their
+    // cadence (readEntityInFlightOperations); the REPLACE-source exclusion
+    // reuses the latest of them, and reads only when none happened
+    // (entityInFlightOperations).
+    let entityInFlightOperationsRead = null;
+    const readEntityInFlightOperations = () => {
+      entityInFlightOperationsRead = this.getEntityInFlightOperations();
+      return entityInFlightOperationsRead;
+    };
+    const entityInFlightOperations = () =>
+      entityInFlightOperationsRead || readEntityInFlightOperations();
     const serialGoalStatePartition = this.usesSerialGoalStatePlanner();
     const effectivePlacement = serialGoalStatePartition ?
       buildEffectivePlacement({
         inventory,
         targetState,
-        unresolvedOperations: this.getEntityInFlightOperations(),
+        unresolvedOperations: readEntityInFlightOperations(),
       }) :
       null;
     const finalizeMoves = (candidates) => {
@@ -164,6 +197,18 @@ class MovePlannerMoveCalculationMethods {
       const status = replica?.status || ReplicaStatus.ACTIVE;
       return status === ReplicaStatus.ACTIVE && !!replica?.node_id;
     });
+    // Read only when a REMOVE is contemplated: a plan that removes nothing
+    // costs exactly the reads it cost before the exclusion existed.
+    let countedPlacementReplicasRead = null;
+    const countedPlacementReplicas = () => {
+      countedPlacementReplicasRead = countedPlacementReplicasRead ||
+        excludeNonTerminalReplaceSources(
+          activePlacementReplicas,
+          entityInFlightOperations(),
+          this.resolveMovePlannerNowMs(),
+        );
+      return countedPlacementReplicasRead;
+    };
     const targetNodeIds = targetState.targetNodes;
     const isDegradedPlacement = !!targetState?.degraded;
     const nodesWithAddTransitional =
@@ -198,6 +243,15 @@ class MovePlannerMoveCalculationMethods {
     const cleanupOnlyWhilePending =
       pendingCount > 0 && !this.isControlPlanePriorityPartition() ||
       inventory.provenance.topologyIncreaseUsable !== true;
+    // A non-terminal REPLACE's drain phase is not a pending (topology
+    // blocking) operation, so cleanupOnlyWhilePending alone would let a
+    // topology cleanup REMOVE take a bystander for the surplus the REPLACE
+    // itself owns. While a source is excluded, a cleanup REMOVE is admitted
+    // only above target in the counted replicas.
+    const replaceSourceExcludedCount = () =>
+      activePlacementReplicas.length - countedPlacementReplicas().length;
+    const cleanupCountGuarded = () =>
+      cleanupOnlyWhilePending || replaceSourceExcludedCount() > 0;
 
     // Count target replicas per node
     const targetCounts = new Map();
@@ -431,7 +485,7 @@ class MovePlannerMoveCalculationMethods {
     // consults the SAME serialized-REPLACE state the pairing block enforces.
     const serializeCriticalReplace = this.isControlPlanePriorityPartition();
     const inFlightReplaceCount = serializeCriticalReplace ?
-      this.getEntityInFlightOperations().filter(
+      readEntityInFlightOperations().filter(
         (operation) =>
           String(
             operation?.type ||
@@ -498,13 +552,19 @@ class MovePlannerMoveCalculationMethods {
       isDegradedPlacement &&
       activePlacementReplicas.length >= targetReplicaCount &&
       addMoves.length > 0;
-    const totalHealthyAfterAdds =
-      activePlacementReplicas.length + addMoves.length;
+    const totalHealthyAfterAdds = () =>
+      countedPlacementReplicas().length + addMoves.length;
     const candidateRemoves = [];
 
     // Generate REMOVE moves for over-represented nodes
-    for (const [nodeId, replicas] of replicasByNode) {
+    for (const [nodeId, nodeReplicas] of replicasByNode) {
       const targetCount = targetCounts.get(nodeId) || 0;
+      if (nodeReplicas.length <= targetCount) {
+        continue;
+      }
+      const countedOnNode = new Set(countedPlacementReplicas());
+      const replicas = nodeReplicas.filter((replica) =>
+        countedOnNode.has(replica));
       const currentCount = replicas.length;
       const excess = currentCount - targetCount;
       for (let i = 0; i < excess; i++) {
@@ -530,12 +590,12 @@ class MovePlannerMoveCalculationMethods {
             PLACEMENT_CURE_CONDITION.OVER_REPRESENTATION,
         );
         const reason = surplusCure.moveReason;
-        if (cleanupOnlyWhilePending && isTopologyCleanupReason(reason)) {
+        if (cleanupCountGuarded() && isTopologyCleanupReason(reason)) {
           const existingCleanupRemoves = candidateRemoves.filter((move) =>
             isTopologyCleanupReason(move.reason),
           ).length;
           if (
-            activePlacementReplicas.length - existingCleanupRemoves <=
+            countedPlacementReplicas().length - existingCleanupRemoves <=
             targetReplicaCount
           ) {
             this.logger.debug(REBALANCER_LOG_MSG.DEFER_REMOVE_DETAIL, {
@@ -543,8 +603,9 @@ class MovePlannerMoveCalculationMethods {
               replicaId,
               nodeId,
               reason,
-              cleanupOnlyWhilePending: true,
-              activePlacementReplicaCount: activePlacementReplicas.length,
+              cleanupOnlyWhilePending,
+              replaceSourceExcludedCount: replaceSourceExcludedCount(),
+              activePlacementReplicaCount: countedPlacementReplicas().length,
               existingCleanupRemoves,
               targetReplicaCount,
             });
@@ -591,12 +652,12 @@ class MovePlannerMoveCalculationMethods {
           const existingRemoves = candidateRemoves.filter(
             (m) => m.reason === MOVE_REASON.SPREAD_REPLICAS,
           ).length;
-          if (totalHealthyAfterAdds - existingRemoves <= targetReplicaCount) {
+          if (totalHealthyAfterAdds() - existingRemoves <= targetReplicaCount) {
             this.logger.debug(REBALANCER_LOG_MSG.DEFER_REMOVE_DETAIL, {
               entityId: this.entityId,
               replicaId,
               nodeId,
-              totalHealthyAfterAdds,
+              totalHealthyAfterAdds: totalHealthyAfterAdds(),
               existingRemoves,
               targetReplicaCount,
             });
@@ -613,7 +674,7 @@ class MovePlannerMoveCalculationMethods {
           prioritySpreadMonotonicSafe:
             priorityRemoveSafety.monotonicSafe === true,
           standaloneSafe:
-            activePlacementReplicas.length - candidateRemoves.length >
+            countedPlacementReplicas().length - candidateRemoves.length >
             targetReplicaCount,
         });
         scheduledRemoveReplicaIds.add(replicaId);

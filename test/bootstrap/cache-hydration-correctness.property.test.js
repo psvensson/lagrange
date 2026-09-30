@@ -110,6 +110,7 @@ test('Property 2: All records from snapshots are in cache after hydration', asyn
         cache.clear();
 
         const joiningService = new NodeJoiningService({
+          bootIncarnation: 1,
           nodeId: 'test-joining-node',
           nodeAddress: 'ws://localhost:9090',
           seedNodeAddress: 'http://localhost:8080',
@@ -196,6 +197,7 @@ test('Property 2: Cache can be queried after hydration', async (t) => {
         cache.clear();
 
         const joiningService = new NodeJoiningService({
+          bootIncarnation: 1,
           nodeId: 'test-joining-node',
           nodeAddress: 'ws://localhost:9090',
           seedNodeAddress: 'http://localhost:8080',
@@ -273,6 +275,7 @@ test('Property 2: SQLQueryEngine uses only system cache after hydration', async 
         });
 
         const joiningService = new NodeJoiningService({
+          bootIncarnation: 1,
           nodeId: 'test-joining-node',
           nodeAddress: 'ws://localhost:9090',
           seedNodeAddress: 'http://localhost:8080',
@@ -329,6 +332,7 @@ test('Property 2: Empty snapshots produce empty cache tables', async (t) => {
         });
 
         const joiningService = new NodeJoiningService({
+          bootIncarnation: 1,
           nodeId: 'test-joining-node',
           nodeAddress: 'ws://localhost:9090',
           seedNodeAddress: 'http://localhost:8080',
@@ -389,6 +393,7 @@ test('Property 2: Missing snapshots handled gracefully', async (t) => {
         });
 
         const joiningService = new NodeJoiningService({
+          bootIncarnation: 1,
           nodeId: 'test-joining-node',
           nodeAddress: 'ws://localhost:9090',
           seedNodeAddress: 'http://localhost:8080',

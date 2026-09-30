@@ -20,6 +20,7 @@ import {
 } from '../../src/message-group/constants.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {registerCdcNonLeaderPropagationTailMoreTests} from './cdc-non-leader-propagation-tail-more-test-cases.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 let testPortCounter = 27200;
 const NON_SYSTEM_CDC_TABLE = 'runtime_forward_events';
@@ -42,7 +43,9 @@ export function registerCdcNonLeaderPropagationTailTests({
     async (t) => {
       const port = testPortCounter++;
       const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({nodeId, wsPort: port});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
       let shutdownCalled = false;
@@ -173,7 +176,9 @@ export function registerCdcNonLeaderPropagationTailTests({
     async (t) => {
       const port = testPortCounter++;
       const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({nodeId, wsPort: port});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
       let shutdownCalled = false;
@@ -239,7 +244,9 @@ export function registerCdcNonLeaderPropagationTailTests({
     async (t) => {
       const port = testPortCounter++;
       const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({nodeId, wsPort: port});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
       let shutdownCalled = false;
@@ -313,7 +320,9 @@ export function registerCdcNonLeaderPropagationTailTests({
     async (t) => {
       const port = testPortCounter++;
       const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({nodeId, wsPort: port});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
       let shutdownCalled = false;
@@ -377,7 +386,9 @@ export function registerCdcNonLeaderPropagationTailTests({
     async (t) => {
       const port = testPortCounter++;
       const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({nodeId, wsPort: port});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
       let shutdownCalled = false;
@@ -445,7 +456,9 @@ export function registerCdcNonLeaderPropagationTailTests({
     async (t) => {
       const port = testPortCounter++;
       const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({nodeId, wsPort: port});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
       let shutdownCalled = false;
@@ -670,7 +683,9 @@ export function registerCdcNonLeaderPropagationTailTests({
     async (t) => {
       const port = testPortCounter++;
       const nodeId = `test-node-${port}`;
-      const router = new MessageRouter({nodeId, wsPort: port});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
       let shutdownCalled = false;
@@ -752,7 +767,9 @@ export function registerCdcNonLeaderPropagationTailTests({
       const port = testPortCounter++;
       const nodeId = `test-node-${port}`;
       let nowMs = 0;
-      const router = new MessageRouter({nodeId, wsPort: port});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
       let shutdownCalled = false;
@@ -870,7 +887,9 @@ export function registerCdcNonLeaderPropagationTailTests({
       const port = testPortCounter++;
       const nodeId = `test-node-${port}`;
       let nowMs = 0;
-      const router = new MessageRouter({nodeId, wsPort: port});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
       let shutdownCalled = false;

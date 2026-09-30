@@ -32,6 +32,7 @@ import {AddressManager} from '../../src/address/address-manager.js';
 import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
 import {WORKER_ENTITY_TYPE} from '../../src/worker/worker-constants.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -182,6 +183,7 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
 
     // Create MessageRouter for inter-worker communication
     const messageRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId,
       wsPort,
       logger: {
@@ -341,6 +343,7 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
 
     // Create MessageRouter
     const messageRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId,
       wsPort,
       logger: {
@@ -471,6 +474,7 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
     const wsPort = ports.getPort();
 
     const messageRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId,
       wsPort,
       logger: {
@@ -611,6 +615,7 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
     const wsPort = ports.getPort();
 
     const messageRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId,
       wsPort,
       logger: {

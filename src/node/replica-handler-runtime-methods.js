@@ -4,8 +4,13 @@ import {
 import {
   sweepRemovedReplicaCleanupDebt,
 } from './replica-handler-removed-cleanup-sweep.js';
+import {removeReplicaStorageArtifacts} from
+  './replica-storage-artifacts.js';
+import {isCleanupTombstoneRow} from
+  './replica-cleanup-tombstone-owner.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const CLEANUP_STORAGE_AUTHORITY_KIND = 'cleanup_owned';
 
 function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
   assignReplicaHandlerRuntimeMetadataMethods(ReplicaHandler, options);
@@ -25,6 +30,32 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
     fs,
     path,
   } = options;
+
+  async function removeEmptyPartitionDirectory(handler, partitionDir,
+    replicaId, dbPath, storageAuthority) {
+    try {
+      if (!fs.existsSync(partitionDir)) return;
+      const files = fs.readdirSync(partitionDir);
+      if (files.length !== REPLICA_HANDLER_NUM.ZERO) return;
+      if (!await handler.getReplicaCleanupTombstoneOwner()
+        .requireCurrent(storageAuthority)) {
+        throw new Error(`Replica cleanup ownership changed for ${replicaId}`);
+      }
+      fs.rmdirSync(partitionDir);
+      handler.logger.debug(REPLICA_HANDLER_LOG_MSG.REMOVED_EMPTY_DIR, {
+        partitionDir,
+      });
+    } catch (error) {
+      if (error?.code === REPLICA_HANDLER_ERRNO.ENOENT) return;
+      handler.logger.warn(REPLICA_HANDLER_LOG_MSG.CLEANUP_FAILED, {
+        replicaId,
+        dbPath,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
   class ReplicaHandlerRuntimeMethods {
     /**
      * Fence a PartitionService created by a failed CREATE before the failure
@@ -86,17 +117,25 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
     /**
      * Durable owner for removal-cleanup debt (audit finding 12): sweep the
      * partitions directory at startup for replica files whose cleanup was
-     * stranded (failed cleanup before termination, or a crash between
-     * the services-row DELETE and the file unlink) and delete them via the
-     * canonical reconcile cleanup path. Runs once at startup; a failed
-     * deletion stays on disk and is retried on the next startup, so orphan
-     * files are eventually deletable and reconcileRemovedReplicaCleanup
-     * stays reachable.
+     * stranded behind durable cleanup ownership (failed cleanup before
+     * termination, or a crash during artifact removal) and resume them via
+     * the canonical token-fenced cleanup path. Runs once at startup; partial
+     * cleanup retains its marker and is retried on the next startup, so the
+     * exact owner remains authoritative until every artifact is absent.
      * @return {Promise<Object>} Sweep report.
      * @private
      */
-    async sweepRemovedReplicaCleanupDebt() {
-      return sweepRemovedReplicaCleanupDebt(this, options);
+    async sweepRemovedReplicaCleanupDebt(startupAuthorities = new Map()) {
+      return sweepRemovedReplicaCleanupDebt(this, options, startupAuthorities);
+    }
+    async captureRemovedReplicaCleanupStartupAuthorities() {
+      return this.getReplicaCleanupTombstoneOwner()
+        .snapshotPersistedAtStartup(this.nodeId);
+    }
+    async awaitRemovedReplicaCleanupAdmissionBarrier() {
+      if (this.removedReplicaCleanupAdmissionBarrier) {
+        await this.removedReplicaCleanupAdmissionBarrier;
+      }
     }
     /**
      * Clean up local resources for a replica.
@@ -109,6 +148,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
       replicaId,
       partitionId,
       service = null,
+      storageAuthority = null,
     ) {
       if (
         service &&
@@ -120,7 +160,18 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         });
         await service.shutdown();
       }
-      await this.cleanupReplicaResources(partitionId, replicaId);
+      if (storageAuthority?.kind === CLEANUP_STORAGE_AUTHORITY_KIND &&
+          !await this.getReplicaCleanupTombstoneOwner()
+            .requireCurrent(storageAuthority)) {
+        throw new Error(
+          `Replica cleanup ownership changed for ${replicaId}`,
+        );
+      }
+      await this.cleanupReplicaResources(
+        partitionId,
+        replicaId,
+        storageAuthority,
+      );
     }
     /**
      * Clean up local resources for a replica.
@@ -129,7 +180,12 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      * @return {Promise<void>}
      * @private
      */
-    async cleanupReplicaResources(partitionId, replicaId) {
+    async cleanupReplicaResources(partitionId, replicaId, storageAuthority) {
+      if (storageAuthority?.kind !== CLEANUP_STORAGE_AUTHORITY_KIND) {
+        throw new Error(
+          `Replica storage cleanup lacks authority for ${replicaId}`,
+        );
+      }
       const dbPath = this.getPartitionDbPath(partitionId, replicaId);
       this.logger.debug(REPLICA_HANDLER_LOG_MSG.CLEANUP_RESOURCES, {
         replicaId,
@@ -138,46 +194,39 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         nodeId: this.nodeId,
       });
       try {
-        // Remove SQLite database file
-        if (fs.existsSync(dbPath)) {
-          fs.unlinkSync(dbPath);
-          this.logger.debug(REPLICA_HANDLER_LOG_MSG.REMOVED_DB_FILE, {
-            dbPath,
-          });
+        if (!await this.getReplicaCleanupTombstoneOwner()
+          .requireCurrent(storageAuthority)) {
+          throw new Error(
+            `Replica cleanup ownership changed for ${replicaId}`,
+          );
         }
-        // Remove WAL and SHM files if they exist
-        const walPath = `${dbPath}-wal`;
-        const shmPath = `${dbPath}-shm`;
-        if (fs.existsSync(walPath)) {
-          fs.unlinkSync(walPath);
+        const removal = await removeReplicaStorageArtifacts(
+          fs,
+          dbPath,
+          async () => {
+            if (!await this.getReplicaCleanupTombstoneOwner()
+              .requireCurrent(storageAuthority)) {
+              throw new Error(
+                `Replica cleanup ownership changed for ${replicaId}`,
+              );
+            }
+          },
+        );
+        if (!removal.allAbsent) {
+          const error = new Error(
+            `Replica storage cleanup incomplete for ${replicaId}`,
+          );
+          error.artifactOutcomes = removal.outcomes;
+          throw error;
         }
-        if (fs.existsSync(shmPath)) {
-          fs.unlinkSync(shmPath);
-        }
-        // Try to remove partition directory if empty
         const partitionDir = path.dirname(dbPath);
-        try {
-          if (!fs.existsSync(partitionDir)) {
-            return;
-          }
-          const files = fs.readdirSync(partitionDir);
-          if (files.length === REPLICA_HANDLER_NUM.ZERO) {
-            fs.rmdirSync(partitionDir);
-            this.logger.debug(REPLICA_HANDLER_LOG_MSG.REMOVED_EMPTY_DIR, {
-              partitionDir,
-            });
-          }
-        } catch (dirError) {
-          if (dirError?.code === REPLICA_HANDLER_ERRNO.ENOENT) {
-            return;
-          }
-          this.logger.warn(REPLICA_HANDLER_LOG_MSG.CLEANUP_FAILED, {
-            replicaId,
-            dbPath,
-            error: dirError.message,
-          });
-          throw dirError;
-        }
+        await removeEmptyPartitionDirectory(
+          this,
+          partitionDir,
+          replicaId,
+          dbPath,
+          storageAuthority,
+        );
       } catch (error) {
         if (error?.code === REPLICA_HANDLER_ERRNO.ENOENT) {
           return;
@@ -235,7 +284,8 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
       );
       const service = this.getTrackedService(replicaId);
       // Check if this replica belongs to this node
-      if (!cacheEntry || cacheEntry.node_id !== this.nodeId) {
+      if (!cacheEntry || cacheEntry.node_id !== this.nodeId ||
+          isCleanupTombstoneRow(cacheEntry)) {
         // Compatibility fallback for legacy tests that seed in-memory local replicas
         // directly on the lifecycle manager.
         if (
@@ -278,7 +328,8 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
       const replicasById = new Map();
       const localServices = this.systemTableCache.filter(
         SYSTEM_TABLE_NAME.SERVICES,
-        (row) => row.node_id === this.nodeId,
+        (row) => row.node_id === this.nodeId &&
+          !isCleanupTombstoneRow(row),
       );
       for (const cacheEntry of localServices) {
         const replicaId = cacheEntry.service_id || cacheEntry.replica_id;
@@ -549,6 +600,8 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
           nodeId: this.nodeId,
         });
         this.shuttingDown = true;
+        // A removal waiting for its replica to leave consensus stops waiting.
+        this.removalConsensusExitRelease?.abort();
         for (const progress of this.creationProgressByReplica.values()) {
           this.creationProgressReporter.fail(
             progress,

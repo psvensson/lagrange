@@ -10,6 +10,7 @@ import {METRICS_LOG_TAG} from '../../src/constants/index.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TRANSPORT_METRIC} from '../../src/constants/transport.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -37,7 +38,7 @@ function collectInfoCalls(router) {
 
 test('deliver emits metrics.transport.deliver with expected fields',
   async (t) => {
-    const router = new MessageRouter({nodeId: 'node-1'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'node-1'});
     await router.initialize({startServer: false});
 
     const infoCalls = collectInfoCalls(router);
@@ -73,7 +74,9 @@ test('deliver emits metrics.transport.deliver with expected fields',
 
 test('deliver metric does not treat queueDepth=1 as backpressure',
   async (t) => {
-    const router = new MessageRouter({nodeId: 'node-threshold'});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'node-threshold'});
     await router.initialize({startServer: false});
 
     const trigger = router.getDeliverMetricTrigger(
@@ -94,7 +97,9 @@ test('deliver metric does not treat queueDepth=1 as backpressure',
 
 test('deliver samples successful metrics instead of logging every success',
   async (t) => {
-    const router = new MessageRouter({nodeId: 'node-sampled'});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'node-sampled'});
     await router.initialize({startServer: false});
 
     const infoCalls = collectInfoCalls(router);
@@ -123,7 +128,7 @@ test('deliver samples successful metrics instead of logging every success',
   });
 
 test('deliver metric uses info level, not debug', async (t) => {
-  const router = new MessageRouter({nodeId: 'node-2'});
+  const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'node-2'});
   await router.initialize({startServer: false});
 
   const debugCalls = [];
@@ -145,7 +150,7 @@ test('deliver metric uses info level, not debug', async (t) => {
 
 test('deliver metric does not break delivery on logger failure',
   async (t) => {
-    const router = new MessageRouter({nodeId: 'node-3'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'node-3'});
     await router.initialize({startServer: false});
 
     const originalInfo = router.logger.info.bind(router.logger);
@@ -168,7 +173,9 @@ test('deliver metric does not break delivery on logger failure',
 
 test('deliver samples repeated fault metrics per target',
   async (t) => {
-    const router = new MessageRouter({nodeId: 'node-faults'});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'node-faults'});
     await router.initialize({startServer: false});
 
     const infoCalls = collectInfoCalls(router);
@@ -200,7 +207,7 @@ test('deliver samples repeated fault metrics per target',
 
 test('deliver metric has structured fields with correct types',
   async (t) => {
-    const router = new MessageRouter({nodeId: 'node-4'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'node-4'});
     await router.initialize({startServer: false});
 
     const infoCalls = collectInfoCalls(router);
@@ -230,7 +237,7 @@ test('deliver metric has structured fields with correct types',
 
 test('deliver metric includes request and operation correlation fields',
   async (t) => {
-    const router = new MessageRouter({nodeId: 'node-6'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'node-6'});
     await router.initialize({startServer: false});
 
     const infoCalls = collectInfoCalls(router);
@@ -253,7 +260,9 @@ test('deliver metric includes request and operation correlation fields',
 
 test('deliver metric extracts targetNodeId from address',
   async (t) => {
-    const router = new MessageRouter({nodeId: 'sender-node'});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'sender-node'});
     await router.initialize({startServer: false});
 
     const infoCalls = collectInfoCalls(router);

@@ -294,19 +294,35 @@ test('REPLACE replica workflow', async (t) => {
           OperationType.REPLACE,
           'first REPLACE phase should carry the enclosing operation type explicitly',
         );
+        // Supersedes (R09) the pre-D1 expectation that the REPLACE creation
+        // stamp excluded the retiring source. Owner decision D1 (2026-09-25):
+        // a new replica bootstraps from the group's current committed
+        // membership, so while the source nodes-p1-r1 is still a voter the
+        // target's bootstrap stamp includes it; the source leaves only through
+        // the real, committed REMOVE_PEER ConfChange afterwards.
+        // O1 (2026-09-26): the stamp is the leader's committed answer and
+        // the address hints are in ascending raft peer id order, so the
+        // members are compared as a set.
         t.same(
-          deliveries[0]?.payload?.[ReplicaOperationField.REPLICA_IDS],
-          ['nodes-p1-r2', 'nodes-p1-r3', replacementReplicaId],
-          'REPLACE create phase should exclude the retiring source replica from bootstrap replica ids',
+          [...(deliveries[0]?.payload?.[ReplicaOperationField.REPLICA_IDS] ||
+            [])].sort(),
+          ['nodes-p1-r1', 'nodes-p1-r2', 'nodes-p1-r3', replacementReplicaId]
+            .sort(),
+          'REPLACE create phase should bootstrap the target from the current ' +
+          'committed membership, including the still-voting source replica ' +
+          '(owner decision D1)',
         );
         t.same(
-          deliveries[0]?.payload?.[ReplicaOperationField.PEER_ADDRESSES],
+          [...(deliveries[0]?.payload?.[
+            ReplicaOperationField.PEER_ADDRESSES] || [])].sort(),
           [
+            'seed-node/partition/nodes-p1-r1',
             'seed-node/partition/nodes-p1-r2',
             'seed-node/partition/nodes-p1-r3',
             'node-2/partition/' + replacementReplicaId,
-          ],
-          'REPLACE create phase should exclude the retiring source replica from bootstrap peer addresses',
+          ].sort(),
+          'REPLACE create phase should carry the still-voting source replica ' +
+          'in the bootstrap peer addresses (owner decision D1)',
         );
         t.equal(
           deliveries[0]?.options?.deliveryPriority,

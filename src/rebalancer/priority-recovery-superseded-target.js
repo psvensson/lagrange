@@ -1,19 +1,11 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+import {isReplaceRemovalIntentDurable} from './operation-workflow-replace-intent.js';
 import {PriorityRecoveryObservation} from './priority-recovery-observation.js';
 import {
   buildPriorityRemoveSafetyRecoveryProjectionNodeIds,
   resolvePriorityRemoveSafetyMembershipSnapshot,
 } from './operation-workflow-remove-safety-membership.js';
-import {
-  resolvePriorityPublicationReplacementLeaderCandidateState,
-  resolvePriorityPublicationReplacementLeaderCandidateAction,
-  resolvePriorityPublicationCompletedWithoutOwnershipReplicaIds,
-} from './operation-workflow-replacement-leader-state.js';
-import {
-  hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound,
-  resolvePriorityPublicationReplacementLeaderCandidateRow,
-} from './operation-workflow-replacement-leader-resolution.js';
 import {
   applyObservedOperationState,
   adoptMostAdvancedObservedReplaceState,
@@ -366,7 +358,7 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
     errorMessage,
     options = {},
   ) {
-    const replaceRemovePhase = this.repository.isReplaceRemovePhase(operation);
+    const replaceRemovePhase = this.repository.isReplaceRemoveDispatchPhase(operation);
     const deferReason = await this.resolveRemoveSafetyDeferredReason(
       operation,
       replaceRemovePhase,
@@ -394,81 +386,33 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
   }
 
   /**
-   * @param {Object} options
-   * @return {string}
-   * @private
-   */
-  resolvePriorityPublicationReplacementLeaderCandidateState(options = {}) {
-    return resolvePriorityPublicationReplacementLeaderCandidateState(options);
-  }
-
-  /**
-   * @param {string} state
-   * @return {string}
-   * @private
-   */
-  resolvePriorityPublicationReplacementLeaderCandidateAction(state) {
-    return resolvePriorityPublicationReplacementLeaderCandidateAction(state);
-  }
-
-  resolvePriorityPublicationCompletedWithoutOwnershipReplicaIds(
-    electionEvidence,
-    candidateRows,
-    hasReplacementLeaderOwnership,
-  ) {
-    return resolvePriorityPublicationCompletedWithoutOwnershipReplicaIds(
-      electionEvidence,
-      candidateRows,
-      hasReplacementLeaderOwnership,
-      (row) => this.getReplicaRowIdentity(row),
-    );
-  }
-
-  hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound(
-    operation,
-    currentVoterReadyRows,
-    operationReplicaId,
-    replacementReplicaRow,
-  ) {
-    return hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound(
-      this,
-      operation,
-      currentVoterReadyRows,
-      operationReplicaId,
-      replacementReplicaRow,
-    );
-  }
-
-  /**
-   * @param {Object} operation
-   * @param {Object|null} replacementReplicaRow
-   * @param {Object[]} currentVoterReadyRows
-   * @param {string|null} operationReplicaId
-   * @return {Promise<Object|null>}
-   * @private
-   */
-  async resolvePriorityPublicationReplacementLeaderCandidateRow(
-    operation,
-    replacementReplicaRow,
-    currentVoterReadyRows,
-    operationReplicaId,
-  ) {
-    return resolvePriorityPublicationReplacementLeaderCandidateRow(
-      this,
-      operation,
-      replacementReplicaRow,
-      currentVoterReadyRows,
-      operationReplicaId,
-    );
-  }
-
-  /**
    * Evaluate safety validation for REMOVE operations.
    * @param {Object} operation
    * @return {Promise<Object>}
    */
   async evaluateRemoveSafety(operation) {
-    return evaluateRemoveSafety(this, operation);
+    const evaluation = await evaluateRemoveSafety(this, operation);
+    // F3 with P1': the evaluator now runs at every post-intent send (the T5'
+    // re-send, the post-WAIT redrive). Past its durable removal intent a
+    // partition REPLACE is failed only by D2, never by a safety answer: a
+    // FAIL (or a fail-on-handoff policy) there withholds the effect and
+    // waits, as a DEFER does.
+    if (
+      evaluation?.error &&
+      isReplaceRemovalIntentDurable(operation) &&
+      (evaluation.classification !==
+        REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER ||
+        evaluation.handoffFailurePolicy !==
+          REMOVE_SAFETY_HANDOFF_FAILURE_POLICY.NONE)
+    ) {
+      return this.buildDeferredRemoveSafetyEvaluation(
+        evaluation.error,
+        evaluation.deferReason ||
+          REBALANCE_COORDINATOR_DEFER_REASON.REPLACE_REMOVE_SAFETY_BLOCKED,
+        {handoffRequest: evaluation.handoffRequest},
+      );
+    }
+    return evaluation;
   }
 
   /**

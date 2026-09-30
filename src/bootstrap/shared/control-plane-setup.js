@@ -20,6 +20,10 @@
 import {assembleHeartbeatService} from '../../control-plane/heartbeat-service.js';
 import {join} from 'node:path';
 import {LeaseService} from '../../control-plane/lease-service.js';
+import {NodeLifecyclePublication} from
+  '../../control-plane/node-lifecycle-publication.js';
+import {NodeReadyLeaseAuthority} from
+  '../../control-plane/node-ready-lease-authority.js';
 import {EndpointService} from '../../control-plane/endpoint-service.js';
 import {
   registerControlPlaneSystemTableGateway,
@@ -167,6 +171,8 @@ class ControlPlaneSetup {
    *   rebalance coordinator.
    * @param {Object} options.executorOutcomeEmitter - Optional executor
    *   outcome emitter shared with executor handlers.
+   * @param {Object} [options.replicaConsensusEvents] - The replica handler's
+   *   partition consensus relay ({subscribe}); the REPLACE owner's wake.
    * @return {Promise<Object>} Object containing heartbeatService,
    *   leaseService, endpointService, dispatchService, and
    *   rebalanceCoordinator.
@@ -194,6 +200,7 @@ class ControlPlaneSetup {
       bootstrapReadinessState,
       getLocalClusterIncarnationFence,
       executorOutcomeEmitter,
+      replicaConsensusEvents,
       controlPlaneWriteRetryTimeoutMs,
       controlPlaneWriteRetryBaseDelayMs,
       controlPlaneWriteRetryMaxDelayMs,
@@ -370,6 +377,10 @@ class ControlPlaneSetup {
       rebalanceCoordinator.controlPlaneSystemTableGateway =
         controlPlaneSystemTableGateway;
     }
+    // The REPLACE owner subscribes to the node's partition consensus relay
+    // (quest replace-source-removal-owner, design S5.2).
+    rebalanceCoordinator.attachReplicaConsensusEvents?.(
+      replicaConsensusEvents || null);
     if (!rebalanceCoordinator.bootstrapReadinessState &&
         bootstrapReadinessState) {
       rebalanceCoordinator.bootstrapReadinessState = bootstrapReadinessState;
@@ -478,6 +489,14 @@ class ControlPlaneSetup {
       });
     }
 
+    // One durable node lifecycle owner per node: Heartbeat (local ingress)
+    // and ReplicaDispatch (routed NODE_STATE_UPDATE ingress) both call it.
+    const readyLeaseAuthority = NodeReadyLeaseAuthority.fromConfiguration();
+    const nodeLifecyclePublication = new NodeLifecyclePublication({
+      gateway: controlPlaneSystemTableGateway,
+      leaseAuthority: readyLeaseAuthority,
+    });
+
     // Create decomposed control plane services
     const heartbeatService = assembleHeartbeatService({
       nodeId,
@@ -488,6 +507,7 @@ class ControlPlaneSetup {
       systemTableCache,
       controlPlaneSystemTableGateway,
       controlPlaneReadinessService,
+      nodeLifecyclePublication,
       verifyReporterVisibilityOnSuccess: true,
       membershipPublicationService: membershipPublicationService || null,
       isNodeLifecycleReady: () => {
@@ -506,6 +526,7 @@ class ControlPlaneSetup {
       sqlQueryEngine: controlPlaneRuntimeBundle.sqlQueryEngine,
       messageRouter,
       controlPlaneSystemTableGateway,
+      readyLeaseAuthority,
     });
     leaseService.initialize();
 
@@ -530,6 +551,7 @@ class ControlPlaneSetup {
       nodesOwner: systemMetadataOwners.nodesOwner,
       servicesOwner: systemMetadataOwners.servicesOwner,
       replicaOperationsOwner: systemMetadataOwners.replicaOperationsOwner,
+      nodeLifecyclePublication,
     });
     dispatchService.initialize();
 

@@ -17,6 +17,7 @@ import {ReplicaStateMachine} from '../../node/replica-state-machine.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {SUBSYSTEM} from '../../constants/index.js';
+import {requireIssuedBootIncarnation} from '../boot-incarnation-contract.js';
 import {
   armSnapshotOfferRouting,
   wrapPartitionServiceFactoryWithSnapshotCatchup,
@@ -49,11 +50,97 @@ const ERROR_MSG = Object.freeze({
 });
 
 /**
+ * Typed refusals of the replica lifecycle acquisition owner (R07/R11): an
+ * owner of one node boot incarnation offered to another, or an acquisition
+ * without an issued incarnation. Never a silent default or re-mint.
+ */
+const REPLICA_LIFECYCLE_OWNER_INCARNATION_MISMATCH =
+  'REPLICA_LIFECYCLE_OWNER_INCARNATION_MISMATCH';
+const REPLICA_LIFECYCLE_OWNER_INCARNATION_REQUIRED =
+  'REPLICA_LIFECYCLE_OWNER_INCARNATION_REQUIRED';
+const REPLICA_LIFECYCLE_OWNER_SUBJECT = 'ReplicaLifecycleOwner';
+
+/**
+ * Refuse an acquisition without an issued boot incarnation.
+ * @param {*} ownerIncarnation
+ * @return {number} The incarnation.
+ */
+function requireOwnerIncarnation(ownerIncarnation) {
+  return requireIssuedBootIncarnation(
+    ownerIncarnation,
+    REPLICA_LIFECYCLE_OWNER_SUBJECT,
+    REPLICA_LIFECYCLE_OWNER_INCARNATION_REQUIRED,
+  );
+}
+
+/**
+ * Refuse an owner of another node incarnation.
+ * @param {Object} owner - ReplicaStateMachine, ReplicaHandler or record.
+ * @param {number} ownerIncarnation - The acquiring incarnation.
+ * @return {Object} The owner, when it belongs to that incarnation.
+ */
+function assertReplicaLifecycleOwnerIncarnation(owner, ownerIncarnation) {
+  const requestedIncarnation = requireOwnerIncarnation(ownerIncarnation);
+  if (owner.ownerIncarnation === requestedIncarnation) {
+    return owner;
+  }
+  const error = new Error(
+    `replica lifecycle owner of node incarnation ${owner.ownerIncarnation} ` +
+    `refused for incarnation ${requestedIncarnation}`,
+  );
+  error.code = REPLICA_LIFECYCLE_OWNER_INCARNATION_MISMATCH;
+  error.ownerIncarnation = owner.ownerIncarnation;
+  error.requestedIncarnation = requestedIncarnation;
+  throw error;
+}
+
+/**
  * Shared replica handler setup used by both bootstrap paths.
  * Provides a static factory method to create and configure ReplicaHandler
  * and ReplicaStateMachine.
  */
 class ReplicaHandlerSetup {
+  static createReplicaStateMachine(options = {}) {
+    const {
+      nodeId,
+      cdcIntegrationService,
+      systemTableCache,
+      timeSource,
+      ownerIncarnation,
+    } = options;
+    if (!nodeId) {
+      throw new DependencyError(
+        REPLICA_HANDLER_SETUP_NAME,
+        ERROR_MSG.NODE_ID_REQUIRED,
+      );
+    }
+    if (!cdcIntegrationService) {
+      throw new DependencyError(
+        REPLICA_HANDLER_SETUP_NAME,
+        ERROR_MSG.CDC_INTEGRATION_SERVICE_REQUIRED,
+      );
+    }
+    if (!systemTableCache) {
+      throw new DependencyError(
+        REPLICA_HANDLER_SETUP_NAME,
+        ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+      );
+    }
+    const replicaStateMachine = new ReplicaStateMachine({
+      nodeId,
+      cdcIntegrationService,
+      systemTableCache,
+      timeSource,
+      ownerIncarnation,
+    });
+    replicaStateMachine.startTimeoutChecker();
+    const loggingService = LoggingService.getInstance();
+    const logger = loggingService.isInitialized() ?
+      loggingService.forSubsystem(REPLICA_HANDLER_SETUP_SUBSYSTEM) : console;
+    logger.debug(LOG_MSG.STATE_MACHINE_STARTED, {nodeId});
+    return replicaStateMachine;
+  }
+
   /**
    * Create and configure replica handler and state machine.
    *
@@ -74,6 +161,10 @@ class ReplicaHandlerSetup {
    * @param {Object} options.rpcClient - Optional RPC client for responses.
    * @param {Object} options.executorOutcomeEmitter - Optional executor
    *   outcome emitter shared with the rebalance coordinator.
+   * @param {Object} [options.replicaStateMachine] - The acquired state
+   *   machine; refused when stamped for another incarnation.
+   * @param {number} [options.ownerIncarnation] - Owning node boot incarnation.
+   * @param {Object} [options.timeSource] - The node's canonical time source.
    * @return {Object} Object containing replicaHandler and replicaStateMachine.
    * @throws {DependencyError} If required dependencies are not provided.
    */
@@ -87,6 +178,9 @@ class ReplicaHandlerSetup {
       dataDir,
       rpcClient,
       executorOutcomeEmitter,
+      replicaStateMachine: existingReplicaStateMachine,
+      timeSource,
+      ownerIncarnation,
     } = options;
 
     // Validate required dependencies
@@ -131,22 +225,18 @@ class ReplicaHandlerSetup {
       hasRpcClient: !!rpcClient,
     });
 
-    // Create ReplicaStateMachine for tracking replica lifecycle states.
-    // systemTableCache wired so lifecycle persistence can consult the local
-    // row view (UPSERT-vs-UPDATE choice, canonical-leader retention check) —
-    // previously absent, which forced worst-case fallbacks (CL-021 review).
-    const replicaStateMachine = new ReplicaStateMachine({
-      nodeId,
-      cdcIntegrationService,
-      systemTableCache,
-    });
-
-    // Start the timeout checker for transitional state monitoring
-    replicaStateMachine.startTimeoutChecker();
-
-    logger.debug(LOG_MSG.STATE_MACHINE_STARTED, {
-      nodeId,
-    });
+    const replicaStateMachine = existingReplicaStateMachine ?
+      assertReplicaLifecycleOwnerIncarnation(
+        existingReplicaStateMachine,
+        ownerIncarnation,
+      ) :
+      ReplicaHandlerSetup.createReplicaStateMachine({
+        nodeId,
+        cdcIntegrationService,
+        systemTableCache,
+        timeSource,
+        ownerIncarnation,
+      });
 
     // S6 snapshot catch-up wiring: BOTH production factories (bootstrap and
     // join/durable-rejoin) flow through this shared setup, so wrapping HERE
@@ -170,6 +260,7 @@ class ReplicaHandlerSetup {
       createPartitionService: snapshotWiredCreatePartitionService,
       dataDir,
       executorOutcomeEmitter,
+      ownerIncarnation,
     });
 
     // Initialize the handler
@@ -204,4 +295,119 @@ class ReplicaHandlerSetup {
   }
 }
 
-export {ReplicaHandlerSetup};
+/**
+ * The one acquisition owner of a node's replica lifecycle authority (one
+ * ReplicaHandler + one ReplicaStateMachine and its timeout checker) for one
+ * live node boot incarnation. Retries and re-entry REACQUIRE the recorded
+ * owner; they never mint a second state machine or a second timer
+ * authority. The record is fenced by incarnation: an owner of G is refused
+ * for G+1. Service fields (replicaHandler, replicaStateMachine) are
+ * projections of this record, so a temporarily absent field never re-mints.
+ */
+class ReplicaLifecycleOwner {
+  constructor() {
+    this.record = null;
+  }
+
+  /**
+   * Reacquire the recorded owner of this incarnation, re-arming its timeout
+   * checker (idempotent), or return null when nothing is recorded.
+   * @param {number} ownerIncarnation
+   * @return {Object|null} {ownerIncarnation, replicaStateMachine,
+   *   replicaHandler}.
+   */
+  reacquire(ownerIncarnation) {
+    requireOwnerIncarnation(ownerIncarnation);
+    const record = this.record;
+    if (record === null) {
+      return null;
+    }
+    assertReplicaLifecycleOwnerIncarnation(record, ownerIncarnation);
+    record.replicaStateMachine.startTimeoutChecker();
+    return record;
+  }
+
+  /**
+   * Acquire the incarnation's ReplicaStateMachine (seed registration needs it
+   * before the handler exists).
+   * @param {Object} options - createReplicaStateMachine options, including
+   *   ownerIncarnation and the node's canonical timeSource.
+   * @return {ReplicaStateMachine}
+   */
+  acquireStateMachine(options) {
+    const record = this.reacquire(options.ownerIncarnation);
+    if (record !== null) {
+      return record.replicaStateMachine;
+    }
+    const replicaStateMachine =
+      ReplicaHandlerSetup.createReplicaStateMachine(options);
+    this.record = {
+      ownerIncarnation: options.ownerIncarnation,
+      replicaStateMachine,
+      replicaHandler: null,
+    };
+    return replicaStateMachine;
+  }
+
+  /**
+   * Acquire the incarnation's ReplicaHandler and ReplicaStateMachine.
+   * @param {Object} options - ReplicaHandlerSetup.create options, including
+   *   ownerIncarnation and the node's canonical timeSource.
+   * @return {{replicaHandler: Object, replicaStateMachine: Object}}
+   */
+  acquire(options) {
+    const record = this.reacquire(options.ownerIncarnation);
+    if (record !== null && record.replicaHandler !== null) {
+      return {
+        replicaHandler: record.replicaHandler,
+        replicaStateMachine: record.replicaStateMachine,
+      };
+    }
+    const acquired = ReplicaHandlerSetup.create({
+      ...options,
+      replicaStateMachine: record === null ? null : record.replicaStateMachine,
+    });
+    this.record = {
+      ownerIncarnation: options.ownerIncarnation,
+      replicaStateMachine: acquired.replicaStateMachine,
+      replicaHandler: acquired.replicaHandler,
+    };
+    return acquired;
+  }
+
+  /**
+   * Whether this incarnation's owner is established: acquired for exactly
+   * this incarnation, handler present and its timeout checker live.
+   * @param {number} ownerIncarnation
+   * @return {boolean}
+   */
+  isEstablished(ownerIncarnation) {
+    const requestedIncarnation = requireOwnerIncarnation(ownerIncarnation);
+    const record = this.record;
+    return record !== null &&
+      record.ownerIncarnation === requestedIncarnation &&
+      record.replicaHandler !== null &&
+      record.replicaStateMachine.isTimeoutCheckerArmed() === true;
+  }
+
+  /**
+   * Release the recorded owner, stopping its timer authority, so teardown
+   * can never orphan it. The next acquisition mints afresh.
+   * @return {Object|null} The released record.
+   */
+  release() {
+    const record = this.record;
+    this.record = null;
+    if (record !== null) {
+      record.replicaStateMachine.stopTimeoutChecker();
+    }
+    return record;
+  }
+}
+
+export {
+  REPLICA_LIFECYCLE_OWNER_INCARNATION_MISMATCH,
+  REPLICA_LIFECYCLE_OWNER_INCARNATION_REQUIRED,
+  ReplicaHandlerSetup,
+  ReplicaLifecycleOwner,
+};

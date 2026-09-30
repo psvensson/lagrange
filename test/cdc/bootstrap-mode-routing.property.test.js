@@ -42,6 +42,22 @@ const WRITABLE_TABLES = Object.values(SYSTEM_TABLE_NAME);
 const WRITE_OPERATIONS = ['insert', 'update', 'delete', 'upsert'];
 
 /**
+ * The routing properties quantify over VALID system-table writes only.
+ * SERVICES rows admit INSERT-only or identity-fenced UPDATE; the real CDC
+ * policy owner refuses a SERVICES UPSERT before any routing decision (I3,
+ * SERVICES_UPSERT_FORBIDDEN). That write is outside the valid-operation domain,
+ * so the routing properties exclude it and the separate property
+ * 'SERVICES upsert is refused before routing in every mode' proves it fails
+ * closed (red if the prohibition is removed).
+ * @param {string} tableName - System table name.
+ * @param {string} operation - One of WRITE_OPERATIONS.
+ * @return {boolean} True when the CDC boundary refuses the write.
+ */
+function isRefusedWrite(tableName, operation) {
+  return tableName === SYSTEM_TABLE_NAME.SERVICES && operation === 'upsert';
+}
+
+/**
  * Create a mock SQL query engine that tracks all queries routed
  * through it. Returns success for table existence checks and writes.
  * @return {Object} Mock SQL query engine with executedQueries array.
@@ -284,6 +300,7 @@ test('Property 6: Bootstrap mode routing enforcement',
             fc.constantFrom(...WRITE_OPERATIONS),
             fc.uuid(),
             async (tableName, operation, primaryKey) => {
+              fc.pre(!isRefusedWrite(tableName, operation));
               const sqlEngine = createTrackingSqlEngine();
               const {partitionMap: _partitionMap, partitionServices} =
                 buildPartitionServicesMap();
@@ -336,6 +353,7 @@ test('Property 6: Bootstrap mode routing enforcement',
               .filter((op) => op !== 'update' && op !== 'delete'),
             fc.uuid(),
             async (tableName, operation, primaryKey) => {
+              fc.pre(!isRefusedWrite(tableName, operation));
               const sqlEngine = createTrackingSqlEngine();
               const {partitionMap: pMap, partitionServices} =
                 buildPartitionServicesMap();
@@ -389,6 +407,7 @@ test('Property 6: Bootstrap mode routing enforcement',
             fc.constantFrom(...WRITE_OPERATIONS),
             fc.uuid(),
             async (tableName, operation, primaryKey) => {
+              fc.pre(!isRefusedWrite(tableName, operation));
               const sqlEngine = createTrackingSqlEngine();
               const {partitionMap, partitionServices} =
                 buildPartitionServicesMap();
@@ -426,6 +445,52 @@ test('Property 6: Bootstrap mode routing enforcement',
           'writes route through SQL engine after ' +
           'clearBootstrapMode is called',
         );
+      },
+    );
+
+    /**
+     * Property: a SERVICES UPSERT is refused in every bootstrap mode, and
+     * the refusal reaches neither the SQL engine nor a local partition.
+     */
+    t.test(
+      'SERVICES upsert is refused before routing in every mode',
+      async (t) => {
+        await fc.assert(
+          fc.asyncProperty(
+            fc.constantFrom('disabled', 'enabled', 'cleared'),
+            fc.uuid(),
+            async (mode, primaryKey) => {
+              const sqlEngine = createTrackingSqlEngine();
+              const {partitionMap, partitionServices} =
+                buildPartitionServicesMap();
+              const cdc = new CDCIntegrationService({
+                nodeId: 'prop-test',
+                sqlQueryEngine: sqlEngine,
+              });
+              cdc.initialize();
+              if (mode !== 'disabled') {
+                cdc.setBootstrapMode(true, partitionMap);
+              }
+              if (mode === 'cleared') cdc.clearBootstrapMode();
+
+              let code = null;
+              try {
+                await executeWrite(
+                  cdc, 'upsert', SYSTEM_TABLE_NAME.SERVICES, primaryKey,
+                );
+              } catch (err) {
+                code = err.code;
+              }
+              return code === 'SERVICES_UPSERT_FORBIDDEN' &&
+                sqlEngine.executedQueries.length === 0 &&
+                Object.values(partitionServices)
+                  .every((svc) => svc.directWrites.length === 0);
+            },
+          ),
+          {numRuns: 10},
+        );
+
+        t.pass('SERVICES upsert is refused before any routing');
       },
     );
 

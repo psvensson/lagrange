@@ -15,11 +15,15 @@ const SCENARIOS = {
     'test/node/replica-local-only-row-convergence.test.js',
     // CL-035: voter-ready role publication.
     'test/control-plane/cl-035-voter-ready-row-seed.test.js',
-    // CL-038: removed-source handoff termination.
-    'test/rebalancer/cl-038-source-removed-handoff-terminates.test.js',
-    // CL-043: stale-operation and completed-election escape shapes.
+    // CL-038: removed-source handoff termination. Its per-leg handoff
+    // witness is deleted with the evidence maps (fix-f1, section 9); a
+    // REPLACE whose source is already absent completes through the REPLACE
+    // owner (R-1a), witnessed by its owner test (W6).
+    'test/rebalancer/replace-source-removal-owner.test.js',
+    // CL-043: the stale-operation escape shape. The completed-election
+    // escape is superseded (R09, quest replace-source-removal-owner, BR11):
+    // its guard is now that it authorizes nothing for a REPLACE.
     'test/rebalancer/operation-workflow-remove-safety-concurrent-stale-phantom.test.js',
-    'test/rebalancer/cl-043-surplus-drain-completed-election-terminates.test.js',
     // 814f547e0: over-target hold and spread-cure admission premise.
     'test/rebalancer/rebalance-coordinator-topology-guard.test.js',
     'test/rebalancer/replica-placement-cure-policy.test.js',

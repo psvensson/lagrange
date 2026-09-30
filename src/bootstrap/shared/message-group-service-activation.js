@@ -1,6 +1,8 @@
 import {AddressManager} from '../../address/address-manager.js';
 import {MessageGroupServiceRowOwner} from
   '../../message-group/message-group-service-row-owner.js';
+import {isExactReplicaHandlerRegistered} from
+  '../../node/replica-transport-handler-identity.js';
 import {
   isRetryableControlPlaneError,
 } from '../../control-plane/control-plane-error-classification.js';
@@ -14,8 +16,8 @@ const MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR = Object.freeze({
     'Message-group service activation requires nodeId',
   WRITER_REQUIRED:
     'Message-group service activation requires system table writer',
-  ACTIVATOR_REQUIRED:
-    'Message-group service activation requires a replica activator',
+  LIFECYCLE_OWNER_REQUIRED:
+    'Message-group service activation requires the replica lifecycle owner',
   ROUTER_REQUIRED:
     'Message-group service activation requires router registration lookup',
   HANDLER_REQUIRED:
@@ -50,13 +52,14 @@ async function activateMessageGroupServiceRows(options = {}) {
   if (typeof options.nodeId !== 'string' || options.nodeId.length === 0) {
     throw new Error(MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR.NODE_ID_REQUIRED);
   }
-  const activateReplica =
-    typeof options.activateReplica === 'function' ?
-      options.activateReplica :
-      null;
   const systemTableWriter = options.systemTableWriter || null;
-  if (!activateReplica && !systemTableWriter) {
-    throw new Error(MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR.ACTIVATOR_REQUIRED);
+  if (!systemTableWriter) {
+    throw new Error(MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR.WRITER_REQUIRED);
+  }
+  if (!options.replicaStateMachine) {
+    throw new Error(
+      MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR.LIFECYCLE_OWNER_REQUIRED,
+    );
   }
   const handlerReady = options.messageGroupServiceHandler != null ||
     options.handlerRegistered === true;
@@ -71,11 +74,11 @@ async function activateMessageGroupServiceRows(options = {}) {
       options.isReplicaHandlerRegistered :
       options.messageRouter &&
         typeof options.messageRouter.isRegistered === 'function' ?
-        (replicaId, service) => {
-          return options.messageRouter.isRegistered(
-            resolveReplicaUnifiedAddress(options.nodeId, replicaId, service),
-          );
-        } :
+        (replicaId, service) => isExactReplicaHandlerRegistered(
+          options.messageRouter,
+          resolveReplicaUnifiedAddress(options.nodeId, replicaId, service),
+          service?.transportHandler,
+        ) :
         null;
   if (!isReplicaHandlerRegistered) {
     throw new Error(MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR.ROUTER_REQUIRED);
@@ -84,8 +87,9 @@ async function activateMessageGroupServiceRows(options = {}) {
   const messageGroupServices = options.messageGroupServices instanceof Map ?
     options.messageGroupServices :
     new Map();
-  const owner = activateReplica ? null : new MessageGroupServiceRowOwner({
+  const owner = new MessageGroupServiceRowOwner({
     systemTableWriter,
+    replicaStateMachine: options.replicaStateMachine,
     now: typeof options.now === 'function' ?
       options.now :
       () => Date.now(),
@@ -94,6 +98,7 @@ async function activateMessageGroupServiceRows(options = {}) {
     typeof options.resolveExtraFields === 'function' ?
       options.resolveExtraFields :
       () => null;
+  const activationEntries = [];
   let activatedCount = 0;
 
   for (const [replicaId, service] of messageGroupServices.entries()) {
@@ -111,20 +116,24 @@ async function activateMessageGroupServiceRows(options = {}) {
         ),
       );
     }
+    activationEntries.push({groupId, replicaId, service});
+  }
 
+  for (const {groupId, replicaId, service} of activationEntries) {
     try {
-      const activationContext = {
+      await owner.activateReplica({
         groupId,
         replicaId,
         nodeId: options.nodeId,
         service,
         extraFields: resolveExtraFields(replicaId, service),
-      };
-      if (activateReplica) {
-        await activateReplica(activationContext);
-      } else {
-        await owner.activateReplica(activationContext);
-      }
+        registrationEvidence:
+          options.registrationEvidenceByReplicaId?.get?.(replicaId),
+        // Checked inside the replica's lifecycle lane immediately before the
+        // ACTIVE CAS (the preflight above is only an early refusal).
+        isEffectHandlerCurrent: () =>
+          isReplicaHandlerRegistered(replicaId, service) === true,
+      });
       activatedCount += 1;
     } catch (error) {
       if (options.deferTransientFailures === true &&

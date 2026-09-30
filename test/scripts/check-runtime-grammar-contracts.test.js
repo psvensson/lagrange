@@ -67,8 +67,7 @@ const BUILD_PRIORITY_CLOSURE_WITNESS_COMPARISON_FRAGMENT =
   'buildPriorityClosureWitnessComparison';
 const COMPLETED_LEADER_HANDOFF_EVIDENCE_FRAGMENT =
   'completedLeaderHandoffEvidence';
-const WAIT_REPLACEMENT_LEADER_OWNERSHIP_FRAGMENT =
-  'WAIT_REPLACEMENT_LEADER_OWNERSHIP';
+const LEADERSHIP_PENDING_FRAGMENT = 'LEADERSHIP_PENDING';
 const STATE_MACHINE_PRESSURE_PREFLIGHT_GRAMMAR_FRAGMENT =
   'STATE_MACHINE_PRESSURE_POINT_GRAMMAR';
 const STATE_MACHINE_PRESSURE_PREFLIGHT_METADATA_FRAGMENT =
@@ -404,7 +403,7 @@ test('detects priority source removal code that collapses handoff evidence into 
       '  }',
       '  buildPriorityPublicationLeaderRemoveSafetySnapshot() {',
       '    return {',
-      '      state: PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_SOURCE_LEADER_HANDOFF,',
+      '      state: PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.SAFE,',
       '    };',
       '  }',
       '  evaluatePriorityPublicationLeaderRemoveSafety() {',
@@ -433,7 +432,7 @@ test('detects priority source removal code that collapses handoff evidence into 
       leaderSafetyViolations.some((violation) =>
         violation.functionName ===
           BUILD_PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_SNAPSHOT_FUNCTION &&
-        violation.target === WAIT_REPLACEMENT_LEADER_OWNERSHIP_FRAGMENT,
+        violation.target === LEADERSHIP_PENDING_FRAGMENT,
       ),
     );
   });

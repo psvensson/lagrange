@@ -15,9 +15,11 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
+  establishJoinReplicaLifecycleOwner,
   initializeTestEnvironment,
 } from './node-joining-service-test-support.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {ControlPlaneSetup} from '../../src/bootstrap/shared/control-plane-setup.js';
 import {
 } from '../../src/bootstrap/shared/partition-service-activation.js';
@@ -55,12 +57,17 @@ import {
 } from '../../src/constants/index.js';
 import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 import {URL} from 'url';
+import {
+  insertViaUpsert,
+  publishRegisteredEndpoint,
+} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const REPORTER_FORWARD_NODE_ID = 'joiner-reporter-publication-mode';
 const REPORTER_FORWARD_NODE_ADDRESS = 'ws://localhost:19103';
 const REPORTER_FORWARD_SEED_ADDRESS = 'http://localhost:8080';
 const REPORTER_FORWARD_HEARTBEAT_AT = 4242;
-const REPORTER_FORWARD_READY_LEASE_AT = 8484;
 const REPORTER_FORWARD_TARGET_ADDRESS = 'seed-node-1/message-group/mg-1-r3';
 const LATE_PHASE_RESUME_NODE_ID = 'joining-node-late-phase-resume-1';
 const LATE_PHASE_RESUME_NODE_ADDRESS = 'ws://localhost:9199';
@@ -113,6 +120,7 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
 
     // Create joining service with wsPort for WebSocket server
     service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: '550e8400-e29b-41d4-a716-446655440010',
       nodeAddress: `ws://localhost:${joiningNodeWsPort}`,
       seedNodeAddress: 'http://localhost:0',
@@ -131,6 +139,7 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
       // Initialize MessageRouter for local communication only
       const {MessageRouter} = await import('../../src/transport/message-router.js');
       this.messageRouter = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: this.nodeId,
         nodeAddress: this.nodeAddress,
         wsPort: this.wsPort,
@@ -150,33 +159,44 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
     service.phaseCreateSelfHostedMessageGroup = async function() {
       const replicaId = 'mg-join-r1';
       const unifiedAddress = `${this.nodeId}/message-group/${replicaId}`;
+      // The replica's exact handler identity (activation checks identity).
+      const transportHandler = async () => ({acknowledged: true});
       this.messageGroupServices.set(replicaId, {
         groupId: 'mg-1',
         unifiedAddress,
+        transportHandler,
         isLeaderReplica: () => true,
         getLeaderId: () => replicaId,
       });
-      this.messageRouter.register(unifiedAddress, async () => ({acknowledged: true}));
+      this.messageRouter.register(unifiedAddress, transportHandler);
     };
 
     // Mock phases that require system tables (not available in this unit test)
     service.phaseQuerySystemState = async function() {
-      NodeService.getInstance().getSystemTableCache()
-        .applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-          endpoint_id: `postgres-wire-endpoint-${this.nodeId}`,
-          service_id: META_SERVICE_ID.POSTGRES_WIRE,
-          node_id: this.nodeId,
-          protocol: 'tcp',
-          address: this.nodeId,
-          port: 5432,
-          metadata: '{}',
-        });
+      // Registration: this boot's NODES row and its endpoint, both at the
+      // boot incarnation.
+      publishRegisteredEndpoint(NodeService.getInstance().getSystemTableCache(), {
+        endpoint_id: `postgres-wire-endpoint-${this.nodeId}`,
+        service_id: META_SERVICE_ID.POSTGRES_WIRE,
+        node_id: this.nodeId,
+        protocol: 'tcp',
+        address: this.nodeId,
+        port: 5432,
+        metadata: '{}',
+        boot_incarnation: this.bootIncarnation,
+      }, TABLES.SERVICE_ENDPOINTS);
     };
     service.initializeReplicaHandler = function() {
-      // Skip replica handler initialization
+      // Skip replica handler initialization; keep the replica lifecycle owner
+      // that message-group activation runs through.
+      this.replicaStateMachine = new ReplicaStateMachine({nodeId: this.nodeId,
+        controlPlaneSystemTableGateway: {}});
     };
     service.createCdcIntegrationService = function() {
       this.cdcIntegrationService = {
+        insertSystemTableRow(...args) {
+          return insertViaUpsert(this, args);
+        },
         upsertSystemTableRow: async () => ({success: true}),
         updateSystemTableRow: async () => ({success: true}),
         deleteSystemTableRow: async () => ({success: true}),
@@ -237,6 +257,7 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: '550e8400-e29b-41d4-a716-446655440013',
     nodeAddress: 'ws://localhost:19100',
     seedNodeAddress: 'http://localhost:0',
@@ -329,6 +350,7 @@ test('NodeJoiningService disables the join-time reporter during steady-state hea
     const reporterAssignments = [];
     const heartbeatStartOptions = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joiner-heartbeat-owner-cutover',
       nodeAddress: 'ws://localhost:19101',
       seedNodeAddress: 'http://localhost:0',
@@ -373,6 +395,7 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
     const systemMetadataOwners = {ownerId: 'join-metadata-owners'};
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: REPORTER_FORWARD_NODE_ID,
       nodeAddress: REPORTER_FORWARD_NODE_ADDRESS,
       seedNodeAddress: REPORTER_FORWARD_SEED_ADDRESS,
@@ -424,11 +447,11 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
         state: STATE.READY,
         capabilities: ['partition_replica'],
         heartbeatAt: REPORTER_FORWARD_HEARTBEAT_AT,
-        readyLeaseExpiresAt: REPORTER_FORWARD_READY_LEASE_AT,
-        nodeRow: {
+        heartbeatOnly: true,
+        telemetry: {
           [COLUMN.NODE_ID]: REPORTER_FORWARD_NODE_ID,
         },
-        nodeStatePublicationMode:
+        publicationMode:
           CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
       });
 
@@ -436,11 +459,12 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
         state: STATE.READY,
         capabilities: ['partition_replica'],
         heartbeatAt: REPORTER_FORWARD_HEARTBEAT_AT,
-        readyLeaseExpiresAt: REPORTER_FORWARD_READY_LEASE_AT,
         heartbeatOnly: true,
         nodeStatePublicationMode:
           CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
       }, 'steady-state reporter should preserve the canonical publication mode');
+      t.notOk('readyLeaseExpiresAt' in capturedUpdateOptions,
+        'the routed request never carries a sender-minted READY lease');
       t.same(
         capturedUpdateOptions?.nodeRow,
         {
@@ -460,6 +484,7 @@ async (t) => {
 
   const cache = new SystemTableCache();
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-recovery-gate',
     nodeAddress: 'ws://localhost:19102',
     seedNodeAddress: 'http://localhost:8080',
@@ -521,6 +546,7 @@ test('NodeJoiningService - activates message-group rows after membership write',
 
     const order = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-activate-1',
       nodeAddress: 'ws://localhost:9098',
       seedNodeAddress: 'http://localhost:8080',
@@ -621,6 +647,7 @@ test('NodeJoiningService - resumes same join session without replaying ' +
   const phaseCalls = [];
   let queryAttempts = 0;
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-resume-1',
     nodeAddress: 'ws://localhost:9097',
     seedNodeAddress: 'http://localhost:8080',
@@ -690,6 +717,7 @@ test('NodeJoiningService - resumes same join session without replaying ' +
   };
   service.initializeReplicaHandler = () => {
     phaseCalls.push('replica-handler');
+    establishJoinReplicaLifecycleOwner(service);
   };
   service.initializeMessageGroupServiceHandler = () => {
     phaseCalls.push('message-group-handler');
@@ -771,6 +799,7 @@ test('NodeJoiningService - auto-resumes retryable join failures in the same proc
     let queryAttempts = 0;
     const phaseCalls = [];
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-auto-resume-1',
       nodeAddress: 'ws://localhost:9098',
       seedNodeAddress: 'http://localhost:8080',
@@ -926,6 +955,7 @@ test('NodeJoiningService - readiness retry resumes skipped checkpoints with ' +
     sharedLifecycleOwners: [],
   };
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-readiness-resume-1',
     nodeAddress: 'ws://localhost:9198',
     seedNodeAddress: 'http://localhost:8080',
@@ -969,6 +999,7 @@ test('NodeJoiningService - readiness retry resumes skipped checkpoints with ' +
   service.phaseWaitForLeadership = async () => {};
   service.initializeJoinInfrastructure = async () => {
     calls.infrastructure += 1;
+    establishJoinReplicaLifecycleOwner(service);
     service.rpcClient = {};
     service.cdcIntegrationService = {};
     service.heartbeatService = {
@@ -1055,6 +1086,7 @@ test('NodeJoiningService - resets STOPPED lifecycle before retryable resume atte
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-lifecycle-reset-1',
       nodeAddress: 'ws://localhost:9001',
       seedNodeAddress: 'http://localhost:8080',
@@ -1094,6 +1126,7 @@ test('NodeJoiningService - retryable auto-resume budget covers one full ' +
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
+    bootIncarnation: 1,
     nodeId: 'joining-node-auto-resume-budget-1',
     nodeAddress: 'ws://localhost:9099',
     seedNodeAddress: 'http://localhost:8080',
@@ -1139,6 +1172,7 @@ test('NodeJoiningService - retryable auto-resume budget covers late membership p
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: LATE_PHASE_RESUME_NODE_ID,
       nodeAddress: LATE_PHASE_RESUME_NODE_ADDRESS,
       seedNodeAddress: LATE_PHASE_RESUME_SEED_ADDRESS,
@@ -1186,6 +1220,7 @@ test(
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-join-gate-1',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1242,6 +1277,9 @@ test(
     service.initializeControlPlaneService = async () => {};
     service.createCdcIntegrationService = () => {
       service.cdcIntegrationService = {
+        insertSystemTableRow(...args) {
+          return insertViaUpsert(this, args);
+        },
         upsertSystemTableRow: async () => ({success: true}),
         updateSystemTableRow: async () => ({success: true}),
       };
@@ -1295,6 +1333,7 @@ test('NodeJoiningService - canonical join readiness reason classification is det
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-join-gate-2',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1320,6 +1359,7 @@ test('NodeJoiningService - canonical join readiness exposes promotable state onc
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-promotion-ready',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1351,6 +1391,7 @@ test('NodeJoiningService - durable rejoin readiness remains restoring until loca
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-promotion-rejoin',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
@@ -1390,6 +1431,7 @@ test('NodeJoiningService - canonical join readiness stays catching_up while sche
     initializeTestEnvironment();
 
     const service = new NodeJoiningService({
+      bootIncarnation: 1,
       nodeId: 'joining-node-catching-up',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',

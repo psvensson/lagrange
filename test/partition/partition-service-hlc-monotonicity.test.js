@@ -33,11 +33,12 @@ import {RAFT_RS_ENTRY_TYPE} from
   '../../src/raft/raft-rs-ready-loop-constants.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const SCHEMA = {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]};
 
 function buildPartition(overrides = {}) {
-  return new PartitionService({
+  return new PartitionService(withFoundingStamp({
     partitionId: 'hlc-mono-partition',
     tableId: 't',
     tableName: 't',
@@ -47,7 +48,7 @@ function buildPartition(overrides = {}) {
     deferElection: true,
     dbPath: ':memory:',
     ...overrides,
-  });
+  }));
 }
 
 test('Fix 1: applyCommittedEntry witnesses a remote HLC so the next local ' +

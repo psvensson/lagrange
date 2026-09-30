@@ -609,6 +609,7 @@ class ReadinessPlanningSnapshotOwner {
           completed.snapshot,
           currentToken,
           ownerKey,
+          options,
         ));
   }
 
@@ -644,6 +645,7 @@ class ReadinessPlanningSnapshotOwner {
       completed?.snapshot || null,
       currentToken,
       ownerKey,
+      options,
     );
   }
 

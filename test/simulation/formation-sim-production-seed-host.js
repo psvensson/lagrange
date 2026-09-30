@@ -14,7 +14,11 @@
 // production does depends on whether anyone is watching.
 import {TRANSPORT_EVENT} from '../../src/constants/transport.js';
 import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
+import {reserveSimulatedBootIncarnation} from
+  './formation-sim-boot-incarnation.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {DURABLE_EVIDENCE_STATE} from
+  '../../src/bootstrap/rejoin-hints-constants.js';
 import {
   BOOTSTRAP_PHASE,
 } from '../../src/bootstrap/bootstrap-constants.js';
@@ -306,7 +310,8 @@ function leaderActivationSchedulers(bootstrap) {
  * Mount the real seed bootstrap on a node environment.
  *
  * @param {Object} environment - from createProductionSimNodeEnvironment.
- * @param {Object} [options] - {compositionRegistry}; precomposed
+ * @param {Object} options - {bootIncarnation (required; reserved through
+ *   the boot incarnation owner), compositionRegistry}; precomposed
  *   infrastructure is refused.
  * @return {Object} the seed host.
  */
@@ -322,7 +327,16 @@ function createProductionSeedSimHost(environment, options = {}) {
 
   const bootstrap = new BootstrapService({
     nodeId, nodeAddress, wsPort,
+    // Acquired by the caller through the boot incarnation owner
+    // (reserveSimulatedBootIncarnation), exactly as production startup does.
+    bootIncarnation: options.bootIncarnation,
     nodeService: environment.nodeService, routerFactory, randomSource,
+    // The simulated seed is virgin: no data directory, so no durable SERVICES
+    // identity. Production reads this at startup (readSeedStartupStorageAdmission).
+    startupServicesAdmission: Object.freeze({
+      state: DURABLE_EVIDENCE_STATE.MISSING, rows: [], conflicting: false,
+      empty: true,
+    }),
   });
   // A seed phase is production's work, and production already owns the
   // boundary it is entered through: StartupPipelineRunner.run() is where
@@ -571,8 +585,16 @@ function createProductionSeedSimHost(environment, options = {}) {
       transcript.record('PHASE_REGISTRATION_STARTED', {
         nodeId, phase: PHASE_REGISTRATION,
       });
-      await runSeedPhase(PHASE_REGISTRATION,
-        () => bootstrap.seedRegistrationPhase.phaseRegistration());
+      await runSeedPhase(PHASE_REGISTRATION, () => {
+        // Production's REGISTRATION checkpoint creates the replica lifecycle
+        // owner before the phase (bootstrap-service-seed-workflow.js).
+        if (!bootstrap.replicaStateMachine) {
+          bootstrap.seedRuntimeBridgeOwner
+            .ensureBootstrapCdcIntegrationService();
+          bootstrap.initializeReplicaStateMachine();
+        }
+        return bootstrap.seedRegistrationPhase.phaseRegistration();
+      });
       transcript.record('PHASE_REGISTRATION_COMPLETED', {
         nodeId, phase: PHASE_REGISTRATION,
       });
@@ -695,6 +717,7 @@ function scenarioPhases(host, reach) {
 // contract the closure authority will be given.
 function beginSeedScenario({
   nodeId, nodeAddress, wsPort, hostLoad, observer, charging = null, generation,
+  bootIncarnation,
 }) {
   installDeterministicOwnerGuard();
   resetNondeterministicOwnerSeamLedger();
@@ -715,7 +738,7 @@ function beginSeedScenario({
     generation,
     scenario,
     environment,
-    host: createProductionSeedSimHost(environment),
+    host: createProductionSeedSimHost(environment, {bootIncarnation}),
     owners: hostLoadOwners(hostLoad),
   };
 }
@@ -805,6 +828,11 @@ async function runSeedScenario({
   throughMessageGroups = false,
   throughPartitions = false,
   throughHandoff = false,
+  // The node's boot incarnation, reserved through the boot incarnation owner.
+  // A caller that measures the formation window reserves it before opening
+  // the window (the boot lifecycle begins before formation); otherwise the
+  // scenario reserves it here, before its generation root and owner guard.
+  bootIncarnation,
 } = {}) {
   // ONE generation root around the whole scenario - scenario construction,
   // every phase, every settle and drive loop, teardown and the seal - not one
@@ -813,20 +841,25 @@ async function runSeedScenario({
   // another generation's ambient ancestry: correct for a leftover from a
   // finished simulation, wrong for this one's own work between its phases.
   const generation = `${nodeId}-seed-phase-one`;
+  // The caller's, when it reserved one before opening a measured window;
+  // else reserved here, through the owner, before the generation root.
+  const nodeBootIncarnation =
+    bootIncarnation ?? await reserveSimulatedBootIncarnation();
   return runOnSimulationGenerationRoot(generation, () => runSeedScenarioInRoot({
     nodeId, nodeAddress, wsPort, hostLoad, observer, onFormationComplete,
     charging, throughMessageGroups, throughPartitions, throughHandoff,
-    generation,
+    generation, bootIncarnation: nodeBootIncarnation,
   }));
 }
 
 async function runSeedScenarioInRoot({
   nodeId, nodeAddress, wsPort, hostLoad, observer, onFormationComplete,
   charging, throughMessageGroups, throughPartitions, throughHandoff,
-  generation,
+  generation, bootIncarnation,
 }) {
   const {scenario, host, owners, environment} = beginSeedScenario({
     nodeId, nodeAddress, wsPort, hostLoad, observer, charging, generation,
+    bootIncarnation,
   });
   await runOnExecutionNode(nodeId, () => host.phaseInfrastructure());
   const afterPhaseReturned = host.transcript().serialize();

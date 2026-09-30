@@ -1,4 +1,5 @@
 import {NodeService} from '../node/node-service.js';
+import {replicaConsensusEventsOf} from '../node/replica-handler-membership-relay.js';
 import {
   BOOTSTRAP_ERROR,
   BOOTSTRAP_LOG_MSG,
@@ -8,12 +9,8 @@ import {ControlPlaneSetup} from './shared/control-plane-setup.js';
 import {
   waitForLocalQueryTransportReadiness,
 } from './shared/local-query-transport-readiness.js';
-import {
-  PgWireStartupSafetyGate,
-} from './pgwire-startup-safety-gate.js';
-import {
-  RuntimeServiceHandlerSetup,
-} from './shared/runtime-service-handler-setup.js';
+import {initializeGuardedRuntimeServiceHandler} from
+  './shared/guarded-runtime-service-handler.js';
 import {
   attachRuntimeServiceRebalancerOwner,
 } from './shared/runtime-service-rebalancer-setup.js';
@@ -22,10 +19,13 @@ import {
 } from './shared/message-group-service-handler-setup.js';
 import {
   COLUMN,
+  NODE_STATE,
   NUM,
-  SERVICE_STATUS,
   STATE,
 } from '../constants/index.js';
+import {raiseBootIncarnationFloor} from './boot-incarnation-owner.js';
+import {STALE_NODE_INCARNATION_CODE} from
+  '../control-plane/control-plane-error-classification.js';
 
 const BootstrapLog = BOOTSTRAP_LOG_MSG;
 const bootstrapError = BOOTSTRAP_ERROR;
@@ -72,6 +72,7 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
         rebalanceCoordinator: this.rebalanceCoordinator,
         bootstrapReadinessState: this.bootstrapReadinessState,
         executorOutcomeEmitter: this.replicaHandler?.executorOutcomeEmitter,
+        replicaConsensusEvents: replicaConsensusEventsOf(this.replicaHandler),
         wasmComponentDriver: this.runtimeDrivers.wasmComponentDriver,
         controlPlaneWriteRetryTimeoutMs: this.config.controlPlaneWriteRetryTimeoutMs,
         controlPlaneWriteRetryBaseDelayMs: this.config.controlPlaneWriteRetryBaseDelayMs,
@@ -131,35 +132,7 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
      * @private
      */
     initializeRuntimeServiceHandler() {
-      const systemTableCache = this.getSystemTableCache();
-      const gate = new PgWireStartupSafetyGate({
-        nodeId: this.nodeId,
-        serviceLifecycleManager: this.serviceLifecycleManager,
-        systemTableCache,
-        heartbeatService: this.heartbeatService,
-      });
-
-      const result = gate.guardedSetup(() => {
-        return RuntimeServiceHandlerSetup.create({
-          nodeId: this.nodeId,
-          messageRouter: this.messageRouter,
-          cdcIntegrationService: this.cdcIntegrationService,
-          systemTableCache,
-          serviceLifecycleManager: this.serviceLifecycleManager,
-          serviceRuntimeLifecycle: this.serviceRuntimeLifecycle,
-          serviceEndpointsOwner:
-            this.systemMetadataOwners?.serviceEndpointsOwner,
-          rpcClient: this.rpcClient,
-          executorOutcomeEmitter:
-            this.rebalanceCoordinator?.executorOutcomeEmitter,
-        });
-      });
-
-      if (result) {
-        this.runtimeServiceHandler = result.runtimeServiceHandler;
-      }
-
-      this.attachRuntimeServiceRebalancerOwner();
+      initializeGuardedRuntimeServiceHandler(this, this.getSystemTableCache());
     },
 
     /**
@@ -309,10 +282,11 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
           [COLUMN.DISK_USAGE_PERCENT]:
             Number.isFinite(stats?.diskUsagePercent) ?
               stats.diskUsagePercent : 0,
-          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.STATUS]: NODE_STATE.JOINING,
           [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
           [COLUMN.CAPABILITIES]: JSON.stringify([]),
           [COLUMN.LAST_HEARTBEAT]: now,
+          [COLUMN.BOOT_INCARNATION]: this.bootIncarnation,
           [COLUMN.CREATED_AT]: now,
         };
 
@@ -341,6 +315,13 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
           },
         );
       } catch (error) {
+        // A newer incarnation owns this node's row: the next boot lifecycle
+        // must reserve above it (boot-incarnation-owner.js).
+        if (error?.code === STALE_NODE_INCARNATION_CODE &&
+            this.dataDirectoryManager?.isInitialized?.()) {
+          await raiseBootIncarnationFloor(
+            this.dataDirectoryManager.getDataDir(), error.knownIncarnation);
+        }
         this.logger.error(BootstrapLog.CONTROL_PLANE_REGISTER_FAILED, {
           nodeId: this.nodeId,
           error: error.message,

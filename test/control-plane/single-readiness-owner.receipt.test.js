@@ -36,6 +36,7 @@ import {
   createMessageGroupService,
   createPublicationService,
 } from './control-plane-readiness-service-test-support.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const SEED = 'node-0';
 const JOINER = 'node-1';
@@ -153,6 +154,7 @@ function seedCache(nowMs) {
 // readiness service and hands it to the RebalanceCoordinator container.
 async function composeNode(cache, stubs) {
   const setup = await ControlPlaneSetup.create({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: SEED,
     nodeAddress: NODE_ADDRESS,
     messageRouter: stubs.messageRouter,

@@ -13,6 +13,10 @@ import {createSqlEngineSeam} from '../distributed/harness/sql-engine-seam.js';
 import {NODE_STATUS} from '../../src/node/node-constants.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {STATE, TABLES} from '../../src/constants/index.js';
+import {
+  MEMBERSHIP_PUBLICATION_KIND,
+  MEMBERSHIP_PUBLICATION_STATUS,
+} from '../../src/control-plane/membership-publication-row-contract.js';
 import {resolvePublishedActiveNodeIds} from
   '../../src/control-plane/active-node-publication-snapshots.js';
 import {getRegisteredControlPlaneSystemTableGateway} from
@@ -27,6 +31,7 @@ import {
   initializeTestEnvironment as initTestEnv,
 } from './helpers/cluster-test-helpers.js';
 import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 async function shutdownOrFail(t, promise, label) {
   try {
@@ -230,6 +235,7 @@ function createSqlEngineSeamFor(cache) {
  */
 function createMessageRouterHost(options = {}) {
   return new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: options.nodeId || HOST_NODE_ID,
     nodeAddress: HOST_ROUTER_ADDRESS,
     wsPort: 0,
@@ -491,6 +497,100 @@ async function waitForPlacementEligible(readinessService, nodeId) {
   });
 }
 
+// Whether the cache holds a settled publication of exactly these members:
+// the latest membership epoch is PUBLISHED (not still collecting its acks)
+// and names them.
+function isPublishedMembershipSettled(cache, expectedNodeIds) {
+  const latestRow = (cache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [])
+    .filter((row) => row.publication_kind === MEMBERSHIP_PUBLICATION_KIND)
+    .reduce((latest, row) =>
+      (!latest || row.publication_epoch > latest.publication_epoch ?
+        row : latest), null);
+  return latestRow?.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED &&
+    (readPublishedActiveNodeIds(cache) || []).slice().sort().join(',') ===
+      expectedNodeIds;
+}
+
+/**
+ * Record every PUBLISHED membership epoch the publication owner commits into
+ * the cache, from the cache's own change events (no epoch is missed between
+ * polls): epoch -> its members.
+ * @param {SystemTableCache} cache
+ * @return {object} {hasPublished(nodeId), stop()}
+ */
+function recordPublishedMemberships(cache) {
+  const membersByEpoch = new Map();
+  const listener = (tableName, _operation, row) => {
+    if (
+      tableName === TABLES.CONTROL_PLANE_PUBLICATIONS &&
+      row?.publication_kind === MEMBERSHIP_PUBLICATION_KIND &&
+      row?.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED
+    ) {
+      membersByEpoch.set(row.publication_epoch,
+        [...(row.published_active_node_ids || [])]);
+    }
+  };
+  cache.onCacheChange(listener);
+  return {
+    hasPublished(nodeId) {
+      return [...membersByEpoch.values()].some((members) =>
+        members.includes(nodeId));
+    },
+    stop() {
+      cache.offCacheChange(listener);
+    },
+  };
+}
+
+// Whether a rebalancer's own readiness read holds the node eligible: the
+// verdict for the decision dimension it reads, judged by its own rule.
+function isEligibleForReader(readinessService, reader, nodeId) {
+  const decisionDimension = reader.resolveNodeReadinessDecisionDimension();
+  return reader.isReadinessDimensionSatisfied(
+    readinessService.getNodeReadinessSync(nodeId, {decisionDimension}),
+    decisionDimension,
+  );
+}
+
+/**
+ * Take a synchronous placement read only at a settled point: the published
+ * epoch names exactly `publishedNodeIds` and is PUBLISHED, and every reader
+ * (a rebalancer) holds `eligibleNodeId` eligible through its own readiness
+ * read. Every publication write returns the readiness verdict to
+ * planning_snapshot_refresh_pending until its next evaluation, so the settled
+ * point is re-checked after that evaluation and `read` runs in the same
+ * synchronous step: no publication can land between the check and the read.
+ * @param {object} owners - seedOwners(bootstrapService).
+ * @param {object} settledPoint - {publishedNodeIds, eligibleNodeId, readers}.
+ * @param {Function} read - The synchronous read.
+ * @return {Promise<{settled: boolean, value: *}>}
+ */
+async function readAtSettledPlacement(owners, settledPoint, read) {
+  const expected = [...settledPoint.publishedNodeIds].sort().join(',');
+  const readinessService = owners.controlPlaneReadinessService;
+  const {eligibleNodeId, readers} = settledPoint;
+  let value = null;
+  const settled = await waitForCondition(async () => {
+    if (!isPublishedMembershipSettled(owners.cache, expected)) {
+      return false;
+    }
+    // The owner's asynchronous evaluation schedules the planning-snapshot
+    // refresh (as waitForPlacementEligible drives it); each reader's own
+    // synchronous read is then checked below.
+    await readinessService.getNodeReadiness(eligibleNodeId);
+    if (
+      !isPublishedMembershipSettled(owners.cache, expected) ||
+      !readers.every((reader) =>
+        isEligibleForReader(readinessService, reader, eligibleNodeId))
+    ) {
+      return false;
+    }
+    value = read();
+    return true;
+  });
+  return {settled, value};
+}
+
 /**
  * The booted seed's REAL owners, reached the way its own runtime reaches
  * them: the readiness owner through the rebalance coordinator, the
@@ -527,7 +627,9 @@ export {
   createRebalanceCoordinatorHost,
   createSqlEngineSeamFor,
   initializeTestEnvironment,
+  readAtSettledPlacement,
   readPublishedActiveNodeIds,
+  recordPublishedMemberships,
   seedOwners,
   shutdownOrFail,
   waitForCondition,

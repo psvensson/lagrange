@@ -8,7 +8,11 @@ import {test} from '../../src/test-helpers/tap.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {
+  ReplicaHandler as ProductionReplicaHandler,
+} from '../../src/node/replica-handler.js';
+import {scenarioStampingReplicaHandler} from
+  './replica-handler-bootstrap-stamps.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -17,6 +21,12 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {createLifecycleStateStore} from
+  '../test-helpers/lifecycle-state-store.js';
+
+// Lifecycle scenarios: every create carries the committed-membership stamp
+// its scenario's creator would have produced (owner decision O1).
+const ReplicaHandler = scenarioStampingReplicaHandler(ProductionReplicaHandler);
 
 const TEST_ACTIVE_CACHE_OPERATION_ID = 'active-cache-op';
 const TEST_ACTIVE_CACHE_PARTITION_ID = 'partition-1';
@@ -28,23 +38,28 @@ const TEST_ACTIVE_CACHE_REPLICA_ID = 'replica-1';
  * @return {Object} Mock CDC service.
  */
 function createMockCDCService(cache) {
+  const store = createLifecycleStateStore({
+    services: cache?.filter?.('services', () => true) || [],
+    partitions: cache?.filter?.('partitions', () => true) || [],
+  });
   return {
+    executeAuthoritativeSystemTableRead:
+      store.adapters.executeAuthoritativeSystemTableRead,
     async insertSystemTableRow(tableName, data) {
       cache?.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true, operation: 'INSERT', tableName, data};
+      return store.adapters.insertSystemTableRow(tableName, data);
     },
     async updateSystemTableRow(tableName, whereClause, data) {
       const merged = {...whereClause, ...data};
       cache?.applySystemTableChange(tableName, 'UPDATE', merged);
-      return {success: true, operation: 'UPDATE', tableName, whereClause, data: merged};
+      return store.adapters.updateSystemTableRow(tableName, whereClause, data);
     },
-    async upsertSystemTableRow(tableName, data) {
-      cache?.applySystemTableChange(tableName, 'INSERT', data);
-      return {success: true, operation: 'UPSERT', tableName, data};
+    async upsertSystemTableRow(tableName, _data) {
+      throw new Error(`Fixture forbids generic ${tableName} upsert`);
     },
     async deleteSystemTableRow(tableName, whereClause) {
       cache?.applySystemTableChange(tableName, 'DELETE', whereClause);
-      return {success: true, operation: 'DELETE', tableName, whereClause};
+      return store.adapters.deleteSystemTableRow(tableName, whereClause);
     },
   };
 }
@@ -282,7 +297,6 @@ test('ReplicaHandler cache-based state access', async (t) => {
 
   t.test('handleCreateReplica idempotency with cache state - ACTIVE', async (t) => {
     const cache = createSeededCache();
-    const mockCDC = createMockCDCService(cache);
     const nodeId = 'test-node';
     const createCalls = [];
 
@@ -298,6 +312,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
       created_at: Date.now(),
       updated_at: Date.now(),
     });
+    const mockCDC = createMockCDCService(cache);
 
     const handler = new ReplicaHandler({
       nodeId: nodeId,

@@ -163,4 +163,4 @@ class RaftRsPeerIdentityRegistry {
   }
 }
 
-export {RaftRsPeerIdentityRegistry};
+export {RaftRsPeerIdentityRegistry, deriveRaftRsPeerId};

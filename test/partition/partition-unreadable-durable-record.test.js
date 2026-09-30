@@ -59,6 +59,7 @@ import {
 import * as runtimeConstants from
   '../../src/raft/raft-rs-runtime-owner-constants.js';
 import * as runtimeTuning from '../../src/raft/raft-rs-runtime-tuning.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const TEMP_PREFIX = 'unreadable-durable-record-';
 const DB_FILE = 'partition.sqlite';
@@ -138,6 +139,18 @@ function sleep(ms) {
 
 // The whole durable record of a group, through the store owner's own reader
 // on a read view of an independent connection (no DDL, nothing written).
+// A lost applied-state row restored whole through the store owner's own
+// writers: its participation gate (bootstrap and admission index, written
+// with the index-0 applied state) and then its applied progress. A row
+// restored without its gate restores closed (owner decision O1).
+function restoreAppliedRecord(store, groupId, saved) {
+  store.putBootstrapAppliedState(groupId, saved.confState, {
+    bootstrapIndex: saved.bootstrapIndex,
+    admissionIndex: saved.admissionIndex,
+  });
+  store.putAppliedState(groupId, saved.appliedIndex, saved.confState);
+}
+
 function durableRecordOf(dbPath, groupId) {
   const independent = new Database(dbPath, {readonly: true});
   try {
@@ -244,8 +257,8 @@ async function withLonePartitions(body) {
   const services = [];
   const open = async (partitionId, extra = {}) => {
     const dbPath = path.join(directory, `${partitionId}-${DB_FILE}`);
-    const partition = new PartitionService({
-      ...loneOptions(partitionId, dbPath), ...extra});
+    const partition = new PartitionService(withFoundingStamp({
+      ...loneOptions(partitionId, dbPath), ...extra}));
     services.push(partition);
     await partition.initialize();
     partition.startElection();
@@ -328,8 +341,8 @@ async function loneLeaderUnreadableCase(escapes) {
     // The table restored from the store owner's own DDL, its row through
     // the store owner's own writer.
     partition.db.exec(RAFT_RS_SQL.CREATE_APPLIED_STATE_TABLE);
-    new RaftRsDurableStore(partition.db).putAppliedState(
-      partition.partitionId, saved.appliedIndex, saved.confState);
+    restoreAppliedRecord(new RaftRsDurableStore(partition.db),
+      partition.partitionId, saved);
     await sleep(window + WINDOW_MARGIN_MS);
     const healed = await insert(partition, 'row-2', 'healed', 'e-healed');
     assert.equal(healed.success, true, 'the restored group serves a ' +
@@ -359,7 +372,7 @@ test('F-ah: a lone partition restarted while its record table is still ' +
       damage.close();
     }
     const restarted = new PartitionService(
-      loneOptions(partition.partitionId, dbPath));
+      withFoundingStamp(loneOptions(partition.partitionId, dbPath)));
     const escapes = countEscapes();
     let error = null;
     try {
@@ -495,7 +508,7 @@ test('F-ap: a follower restarted while its record table is missing is ' +
       damage.close();
     }
 
-    const refused = new PartitionService(restartOptions);
+    const refused = new PartitionService(withFoundingStamp(restartOptions));
     restarts.push(refused);
     let error = null;
     try {
@@ -517,12 +530,12 @@ test('F-ap: a follower restarted while its record table is missing is ' +
     const repair = new Database(dbPath);
     try {
       repair.exec(RAFT_RS_SQL.CREATE_APPLIED_STATE_TABLE);
-      new RaftRsDurableStore(repair).putAppliedState(partitionId,
-        saved.appliedIndex, saved.confState);
+      restoreAppliedRecord(new RaftRsDurableStore(repair), partitionId,
+        saved);
     } finally {
       repair.close();
     }
-    const restored = new PartitionService(restartOptions);
+    const restored = new PartitionService(withFoundingStamp(restartOptions));
     restarts.push(restored);
     await restored.initialize();
     restored.startElection();
@@ -680,7 +693,7 @@ test('F-ao: the durable record\'s tables are created whole or not at all, ' +
     }
     const partialTables = recordTablesOf(partialPath);
     const partial = new PartitionService(
-      loneOptions('fao-partial', partialPath));
+      withFoundingStamp(loneOptions('fao-partial', partialPath)));
     let error = null;
     try {
       await partial.initialize();

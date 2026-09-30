@@ -12,6 +12,7 @@ import {MessageGroupService, MessageStatus} from '../../src/message-group/messag
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // Port counter for unique ports per test
 let testPortCounter = 28000;
@@ -40,7 +41,7 @@ beforeEach(async () => {
   // Create real WebSocket transport
   const port = testPortCounter++;
   const nodeId = `test-node-${port}`;
-  router = new MessageRouter({nodeId, wsPort: port});
+  router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId, wsPort: port});
   await router.initialize({startServer: true});
 
   messageGroup = new MessageGroupService({

@@ -58,7 +58,9 @@ const RAFT_RS_SQL = Object.freeze({
       learners TEXT NOT NULL,
       voters_outgoing TEXT NOT NULL,
       learners_next TEXT NOT NULL,
-      auto_leave INTEGER NOT NULL
+      auto_leave INTEGER NOT NULL,
+      bootstrap_index INTEGER,
+      admission_index INTEGER
     )
   `,
   CREATE_SNAPSHOT_TABLE: `
@@ -155,8 +157,38 @@ const RAFT_RS_SQL = Object.freeze({
   `,
   SELECT_APPLIED_STATE: `
     SELECT applied_index, voters, learners, voters_outgoing, learners_next,
-           auto_leave
+           auto_leave, bootstrap_index, admission_index
     FROM ${RAFT_RS_TABLE.APPLIED_STATE}
+    WHERE group_id = ?
+  `,
+  // The participation gate's durable inputs (committed-read amendment 1,
+  // section 3.3), written with the index-0 applied state of a created group:
+  // the committed index its bootstrap configuration was read at (0 for a
+  // genesis) and the index of the applied entry that admitted this replica
+  // as a voter (null until one is applied). The per-entry upsert above never
+  // names them, so every later applied state keeps them.
+  UPSERT_BOOTSTRAP_APPLIED_STATE: `
+    INSERT INTO ${RAFT_RS_TABLE.APPLIED_STATE}
+      (group_id, applied_index, voters, learners, voters_outgoing,
+       learners_next, auto_leave, bootstrap_index, admission_index)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(group_id) DO UPDATE SET
+      applied_index = excluded.applied_index,
+      voters = excluded.voters,
+      learners = excluded.learners,
+      voters_outgoing = excluded.voters_outgoing,
+      learners_next = excluded.learners_next,
+      auto_leave = excluded.auto_leave,
+      bootstrap_index = excluded.bootstrap_index,
+      admission_index = excluded.admission_index
+  `,
+  // The applied-state table's columns, asked of the schema: a record written
+  // before the participation gate lacks the gate's columns.
+  SELECT_APPLIED_STATE_COLUMNS:
+    `SELECT name FROM pragma_table_info('${RAFT_RS_TABLE.APPLIED_STATE}')`,
+  UPDATE_ADMISSION_INDEX: `
+    UPDATE ${RAFT_RS_TABLE.APPLIED_STATE}
+    SET admission_index = ?
     WHERE group_id = ?
   `,
   UPSERT_SNAPSHOT: `
@@ -209,6 +241,17 @@ const RAFT_RS_PERSISTENCE_ADMISSION = Object.freeze({
   USER_TRANSACTION_OPEN: 'user-transaction-open',
 });
 
+// Whether a durable record's schema carries the participation gate.
+const RAFT_RS_RECORD_COMPATIBILITY = Object.freeze({
+  COMPATIBLE: 'compatible',
+  PRE_GATE: 'pre-gate',
+  // No applied-state table at all: a lost table, which the record read
+  // itself reports (an unreadable record), not a pre-gate schema.
+  TABLE_MISSING: 'table-missing',
+});
+const RAFT_RS_PARTICIPATION_GATE_COLUMNS = Object.freeze([
+  'bootstrap_index', 'admission_index']);
+
 const RAFT_RS_STORE_ERROR_CODE = Object.freeze({
   USER_TRANSACTION_OPEN: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN',
 });
@@ -231,7 +274,9 @@ export {
   RAFT_RS_BOOLEAN_COLUMN,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
+  RAFT_RS_PARTICIPATION_GATE_COLUMNS,
   RAFT_RS_PERSISTENCE_ADMISSION,
+  RAFT_RS_RECORD_COMPATIBILITY,
   RAFT_RS_RECORD_TABLES,
   RAFT_RS_SCHEMA_SQL,
   RAFT_RS_SQL,

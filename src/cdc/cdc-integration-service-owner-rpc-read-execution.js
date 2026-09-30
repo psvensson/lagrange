@@ -6,6 +6,8 @@ import {isValidLeaderReadAuthorityWitness} from
   '../control-plane/control-plane-authoritative-read-witness.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
+import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
+import {issueAuthoritativeReadStage} from './cdc-terminal-gate.js';
 
 const {
   ADDRESS,
@@ -206,14 +208,16 @@ async function executeAuthoritativeSqlFallbackRead(
     return null;
   }
 
-  const queryResult = await service.sqlQueryEngine.executeQuery(
-    statement,
-    params,
-    buildOwnerRpcSqlFallbackQueryOptions(
-      options?.queryOptions,
-      baseDiagnostics,
-    ),
-  );
+  const queryResult = await issueAuthoritativeReadStage(service,
+    CDC_TERMINAL_STAGE.SQL_FALLBACK_READ,
+    () => service.sqlQueryEngine.executeQuery(
+      statement,
+      params,
+      buildOwnerRpcSqlFallbackQueryOptions(
+        options?.queryOptions,
+        baseDiagnostics,
+      ),
+    ));
 
   return {
     ...normalizeAuthoritativeQueryRowSet(queryResult),
@@ -306,14 +310,17 @@ function maybeReseedBootstrapOverlay(service, tableName, queryResult) {
       `${partitionId}`,
   }));
 
-  const installed = service.sqlQueryEngine.installRecoveryRoutingOverlayEntry(
-    partitionId,
-    tableName,
-    serviceRows,
-  );
+  // The reseed is the owner-RPC read's retry stage: it passes the gate too.
+  const installed = issueAuthoritativeReadStage(service,
+    CDC_TERMINAL_STAGE.OVERLAY_RESEED,
+    () => service.sqlQueryEngine.installRecoveryRoutingOverlayEntry(
+      partitionId,
+      tableName,
+      serviceRows,
+    ));
 
   return {
-    reseeded: installed,
+    reseeded: installed === true,
   };
 }
 
@@ -411,15 +418,18 @@ async function executeAuthoritativeOwnerRpcRead(
     readAuthority.leaderMode !== CONTROL_PLANE_READ_LEADER_MODE.ANY ?
       true : AUTHORITATIVE_OWNER_RPC_READ_PREFER_LEADER;
 
-  const queryResult = await queryExecutor.executeOnPartition(
-    partitionId,
-    statement,
-    params,
-    true,
-    preferLeader,
-    false,
-    executionOptions,
-  );
+  const issueOwnerRpcRead = () => issueAuthoritativeReadStage(service,
+    CDC_TERMINAL_STAGE.OWNER_RPC_READ,
+    () => queryExecutor.executeOnPartition(
+      partitionId,
+      statement,
+      params,
+      true,
+      preferLeader,
+      false,
+      executionOptions,
+    ));
+  const queryResult = await issueOwnerRpcRead();
 
   if (!queryResult?.success) {
     const reseedResult = maybeReseedBootstrapOverlay(
@@ -429,15 +439,7 @@ async function executeAuthoritativeOwnerRpcRead(
     );
 
     if (reseedResult.reseeded) {
-      const retryResult = await queryExecutor.executeOnPartition(
-        partitionId,
-        statement,
-        params,
-        true,
-        preferLeader,
-        false,
-        executionOptions,
-      );
+      const retryResult = await issueOwnerRpcRead();
 
       service.logger.info(CDC_LOG_MSG.OVERLAY_RESEED_RETRY_RESULT, {
         nodeId: service.nodeId,

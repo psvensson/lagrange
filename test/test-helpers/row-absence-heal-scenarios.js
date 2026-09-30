@@ -1,69 +1,66 @@
 /**
- * Shared absence-proven services-row heal scenarios.
+ * Shared SERVICES activation-absence scenario.
  *
- * Both the partition owner and the message-group owner hold the same
- * contract: a zero affected-row count on the primary-key-pinned status
- * UPDATE proves durable absence of the services row and re-issues the
- * canonical registration upsert; matched or unwitnessed counts keep the
- * update-only contract. The two test files bind this scenario to their
- * respective owner classes and row-shape assertions.
+ * Activation never owns creation. When the authoritative row cannot be
+ * observed it must defer without mutating identity; only the owner's explicit
+ * registration entry point may contend through canonical INSERT admission.
  */
 import {test} from '../../src/test-helpers/tap.js';
 
-function buildOwner({OwnerClass, affectedRows}) {
-  const calls = {updates: [], upserts: []};
+function buildOwner(OwnerClass, ownerOptions) {
+  const calls = {updates: [], inserts: [], upserts: []};
   const owner = new OwnerClass({
+    ...ownerOptions,
     now: () => 1234,
     systemTableWriter: {
       async updateSystemTableRow(tableName, whereClause, updateData, options) {
         calls.updates.push({tableName, whereClause, updateData, options});
-        return {
-          success: true,
-          partitionResult: affectedRows === undefined ?
-            {} :
-            {affectedRows},
-        };
+        return {success: true, partitionResult: {affectedRows: 0}};
       },
-      async upsertSystemTableRow(tableName, row, options) {
-        calls.upserts.push({tableName, row, options});
-        return {success: true};
+      async insertSystemTableRow(tableName, row, options) {
+        calls.inserts.push({tableName, row, options});
+        return {success: true, partitionResult: {affectedRows: 1}};
+      },
+      async upsertSystemTableRow(...args) {
+        calls.upserts.push(args);
+        throw new Error('SERVICES identity must never be acquired by UPSERT');
+      },
+      async readAuthoritativeRows() {
+        throw new Error('authoritative SERVICES owner unavailable');
       },
     },
   });
   return {owner, calls};
 }
 
-export function runRowAbsenceHealScenarios({
+export function runRowAbsenceActivationDeferredScenario({
   OwnerClass,
   replicaOptions,
   ownerLabel,
-  assertHealedRow,
+  deferredCode,
+  assertRegisteredRow,
+  ownerOptions = {},
 }) {
-  test(`a zero-row ${ownerLabel} status update proves durable absence and ` +
-    're-issues the canonical registration upsert', async (t) => {
-    const {owner, calls} = buildOwner({OwnerClass, affectedRows: 0});
-    const row = await owner.activateReplica(replicaOptions);
-    t.equal(calls.upserts.length, 1,
-      'the absent services row is healed with the canonical upsert');
-    assertHealedRow(t, calls.upserts[0], row);
-    t.end();
-  });
-
-  test(`a matched ${ownerLabel} status update never escalates to upsert`,
-    async (t) => {
-      const {owner, calls} = buildOwner({OwnerClass, affectedRows: 1});
-      await owner.activateReplica(replicaOptions);
-      t.equal(calls.upserts.length, 0,
-        'a matched update keeps the update-only contract');
-      t.end();
-    });
-
-  test(`an unwitnessed ${ownerLabel} affected-row count never escalates ` +
-    'to upsert', async (t) => {
-    const {owner, calls} = buildOwner({OwnerClass, affectedRows: undefined});
-    await owner.activateReplica(replicaOptions);
+  test(`${ownerLabel} activation defers when canonical identity is ` +
+      'unobservable and only registration may create it', async (t) => {
+    const {owner, calls} = buildOwner(OwnerClass, ownerOptions);
+    await t.rejects(
+      owner.activateReplica(replicaOptions),
+      {code: deferredCode, deferRetry: true},
+      'unavailable authority remains typed retry debt',
+    );
+    t.equal(calls.updates.length, 0,
+      'activation does not mutate without an authoritative source row');
+    t.equal(calls.inserts.length, 0,
+      'activation never converts absence into creation');
     t.equal(calls.upserts.length, 0,
-      'absence must be proven by an explicit zero count, not assumed');
-    t.end();
+      'activation has no UPSERT compatibility escape hatch');
+
+    const row = await owner.registerReplica(replicaOptions);
+    t.equal(calls.inserts.length, 1,
+      'canonical registration alone owns INSERT acquisition');
+    t.equal(calls.upserts.length, 0,
+      'registration still contends through INSERT rather than UPSERT');
+    assertRegisteredRow(t, calls.inserts[0], row);
   });
 }

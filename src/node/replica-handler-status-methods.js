@@ -16,7 +16,10 @@ import {
   REPLICA_HANDLER_SERVICE,
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
-import {resolveSnapshotStateForTransition} from './replica-handler-transition-policy.js';
+import {settlePartitionServiceActiveAdmission} from
+  '../bootstrap/shared/partition-service-activation.js';
+import {isReplicaServiceHandlerBound} from
+  './replica-transport-handler-identity.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -93,8 +96,6 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
             additionalData.partitionId :
             existing?.partition_id || null;
         const localService = this.getTrackedService(replicaId);
-        const localReplica = previousLocalReplica;
-        const previousLocalStatus = localReplica?.status || null;
         this.setLocalReplica(replicaId, {
           replicaId,
           partitionId,
@@ -103,44 +104,80 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
         });
         const trackedState =
           this.replicaStateMachine?.getState?.(replicaId) || null;
-        if (
-          !trackedState &&
-          newStatus !== ReplicaStatus.PENDING &&
-          typeof this.replicaStateMachine?.registerReplicaSnapshot ===
-            REPLICA_HANDLER_TYPEOF.FUNCTION &&
-          (existing || localReplica)
-        ) {
-          this.replicaStateMachine.registerReplicaSnapshot(replicaId, {
-            partitionId,
-            nodeId: existing?.node_id || this.nodeId,
-            state: resolveSnapshotStateForTransition(
-              existing?.status,
-              previousLocalStatus,
+        const transitionContext = {
+          partitionId,
+          nodeId: existing?.node_id || this.nodeId,
+          errorMessage: additionalData.errorMessage,
+          serviceId: existing?.service_id || replicaId,
+          serviceType:
+            existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
+          serviceAddress:
+            existing?.address || this.buildTrackedServiceAddress(replicaId),
+          // A durable ACTIVE is bound to the exact runtime this activation
+          // created (additionalData.activationService): its transport handler
+          // stays registered through the activation effect boundary, and the
+          // runtime retires it through this lifecycle owner (the create path
+          // passes resolveHandlerRetirementLane) (owner decision N2, S-F2).
+          isEffectHandlerCurrent: () => isReplicaServiceHandlerBound(
+            additionalData.activationService, this.replicaStateMachine),
+        };
+        const requiresAuthoritativeAdmission = !trackedState &&
+          newStatus !== ReplicaStatus.PENDING && existing &&
+          typeof this.replicaStateMachine
+            ?.transitionAuthoritativeReplicaGeneration ===
+              REPLICA_HANDLER_TYPEOF.FUNCTION;
+        let transitionResult = await Promise.resolve(
+          requiresAuthoritativeAdmission ?
+            this.replicaStateMachine.transitionAuthoritativeReplicaGeneration(
+              existing,
               newStatus,
+              transitionContext,
+            ) :
+            this.replicaStateMachine.transition(
+              replicaId,
+              newStatus,
+              transitionContext,
             ),
-            serviceId: existing?.service_id || replicaId,
-            serviceType:
-              existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
-            serviceAddress:
-              existing?.address || this.buildTrackedServiceAddress(replicaId),
-          });
-        }
-        const transitionResult = await Promise.resolve(
-          this.replicaStateMachine.transition(replicaId, newStatus, {
-            partitionId,
-            nodeId: existing?.node_id || this.nodeId,
-            errorMessage: additionalData.errorMessage,
-            serviceId: existing?.service_id || replicaId,
-            serviceType:
-              existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
-            serviceAddress:
-              existing?.address || this.buildTrackedServiceAddress(replicaId),
-          }),
         );
+        // REMOVING is the one convergent cleanup intent. A concurrent
+        // failure observation may win between the snapshot above and the
+        // transition attempt; FAILED is not deletion authority, so retry the
+        // newly-valid FAILED -> REMOVING edge at this same persistence
+        // boundary instead of abandoning the durable removal protocol.
+        if (transitionResult === false &&
+            newStatus === ReplicaStatus.REMOVING) {
+          const latest = this.replicaStateMachine?.getState?.(replicaId);
+          const latestState = typeof latest === REPLICA_HANDLER_TYPEOF.STRING ?
+            latest : latest?.state;
+          if (latestState === ReplicaStatus.REMOVING) {
+            transitionResult = true;
+          } else if (latestState === ReplicaStatus.FAILED) {
+            transitionResult = await Promise.resolve(
+              this.replicaStateMachine.transition(replicaId, newStatus, {
+                partitionId,
+                nodeId: existing?.node_id || this.nodeId,
+                errorMessage: additionalData.errorMessage,
+                serviceId: existing?.service_id || replicaId,
+                serviceType:
+                  existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
+                serviceAddress:
+                  existing?.address ||
+                  this.buildTrackedServiceAddress(replicaId),
+              }),
+            );
+          }
+        }
         if (transitionResult === false) {
           throw new Error(
             `Replica state transition rejected for ${replicaId}: ${newStatus}`,
           );
+        }
+        if (newStatus === ReplicaStatus.ACTIVE) {
+          await settlePartitionServiceActiveAdmission({
+            partitionId,
+            replicaId,
+            service: localService,
+          });
         }
       } catch (error) {
         if (previousLocalReplica) {

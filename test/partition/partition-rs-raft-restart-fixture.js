@@ -25,6 +25,7 @@ import {assertRaftOperationSucceeded} from
   '../../src/raft/raft-operation-port.js';
 import {RAFT_RS_SQL} from '../../src/raft/raft-rs-durable-store-constants.js';
 import {RAFT_RS_ENTRY_TYPE} from '../../src/raft/raft-rs-ready-loop-constants.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 
 const TEMP_PREFIX = 'partition-rs-raft-restart-';
@@ -112,7 +113,7 @@ async function restartOverCommittedCommands(options, commands) {
     }
   };
   try {
-    const first = new PartitionService(partitionOptions);
+    const first = new PartitionService(withFoundingStamp(partitionOptions));
     try {
       await first.initialize();
       await leadAlone(first);
@@ -127,7 +128,7 @@ async function restartOverCommittedCommands(options, commands) {
     assert.equal(before.committed.length, commands.length,
       'precondition: every proposed command is committed and applied in the ' +
       `rs-raft store (${JSON.stringify(before)})`);
-    restarted = new PartitionService(partitionOptions);
+    restarted = new PartitionService(withFoundingStamp(partitionOptions));
     await restarted.initialize();
     return {
       restarted,

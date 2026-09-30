@@ -20,6 +20,8 @@ import {
 import {
   NodeStorageBudgetService,
 } from '../../src/rebalancer/node-storage-budget-service.js';
+import {insertViaUpsert} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 const TEST_NODE_ID = 'test-node-1';
 const TEST_DISK_GB = 100;
@@ -33,12 +35,20 @@ function buildNodeRow(overrides = {}) {
     [COLUMN.STATUS]: NODE_STATE.ACTIVE,
     [COLUMN.LAST_HEARTBEAT]: Date.now(),
     [COLUMN.CREATED_AT]: Date.now(),
+    // Every production registration row carries its reserved boot
+    // incarnation (boot-incarnation-owner.js).
+    [COLUMN.BOOT_INCARNATION]: 1,
     ...overrides,
   };
 }
 
 function createMockCdc(result = {success: true}) {
-  return {upsertSystemTableRow: async () => result};
+  return {
+    upsertSystemTableRow: async () => result,
+    insertSystemTableRow(...args) {
+      return insertViaUpsert(this, args);
+    },
+  };
 }
 
 function setup(configOverrides = {}) {
@@ -306,19 +316,26 @@ test('registerNodeBudget - persists valid budget', async (t) => {
   t.end();
 });
 
-test('registerNodeBudget - forwards upsert options to CDC writes', async (t) => {
+test('registerNodeBudget - forwards write options to the registration ' +
+  'write', async (t) => {
   setup({node: {storageBudgetBytes: 50 * NUM.BYTES_PER_GIB}});
   const mutationCalls = [];
   const mockCdc = {
+    insertSystemTableRow(...args) {
+      return insertViaUpsert(this, args);
+    },
     upsertSystemTableRow: async () => ({success: true}),
   };
   const service = new NodeStorageBudgetService({
     nodeId: TEST_NODE_ID,
     cdcIntegrationService: mockCdc,
+    // The seed registration is a monotonic INSERT birth (D-7), not an
+    // UPSERT; the authoritative read is unavailable on this gateway, so
+    // only the birth is attempted.
     controlPlaneSystemTableGateway: {
-      async submitMutation(mutation, options) {
-        mutationCalls.push({mutation, options});
-        return {success: true};
+      async insertSystemTableRow(tableName, row, options) {
+        mutationCalls.push({mutation: {tableName, row}, options});
+        return {success: true, partitionResult: {affectedRows: 1}};
       },
     },
   });

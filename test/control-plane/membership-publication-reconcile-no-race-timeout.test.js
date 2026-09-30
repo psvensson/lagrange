@@ -12,6 +12,7 @@ import {
 import {
   initEnv,
 } from './heartbeat-memory-trend-test-helpers.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const RECONCILE_WORK_DURATION_MS = 1200;
 const POLL_INTERVAL_MS = 25;
@@ -100,6 +101,7 @@ test('the scheduled membership-publication reconcile tick single-flights ' +
   });
 
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: OWNER_NODE_ID,
     nodeAddress: '10.0.0.1:8080',
     cdcIntegrationService: {

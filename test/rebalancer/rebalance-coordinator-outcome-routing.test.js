@@ -45,7 +45,10 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
-import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
+import {
+  createMockControlPlaneSystemTableGateway,
+  withFixtureReplaceWitness,
+} from './test-helpers.js';
 
 const TEST_NODE_ID = 'node-local';
 const TEST_OPERATION_ID = 'op-outcome-1';
@@ -77,6 +80,7 @@ const TEST_DEFERRED_OUTCOME_COMPLETION_STATE =
   'authoritative_operation_read_deferred';
 const TEST_REPLICA_OPERATION_UPDATE_SQL_PREFIX =
   'UPDATE replica_operations';
+const TEST_REPLICA_OPERATION_LEASE_SQL = /SET\s+lease_expires_at\s*=/u;
 const TEST_RETRY_PAYLOAD_WAIT_INITIAL_ATTEMPT = 0;
 const TEST_RETRY_PAYLOAD_WAIT_ATTEMPT_INCREMENT = 1;
 const TEST_RETRY_PAYLOAD_WAIT_ATTEMPT_COUNT = 4;
@@ -155,8 +159,11 @@ function createTestCoordinator(options = {}) {
         };
       }
     }
+    // The owner-lease stamp (SET lease_expires_at) carries no workflow
+    // columns; only the workflow-step UPDATE statements are modelled here.
     if (
       sql.includes(TEST_REPLICA_OPERATION_UPDATE_SQL_PREFIX) &&
+      !TEST_REPLICA_OPERATION_LEASE_SQL.test(sql) &&
       operation
     ) {
       operation.status = params?.[0];
@@ -468,7 +475,10 @@ test('Executor outcome routing through owner-key reconcile path',
             };
           },
         };
-        coordinator.workflowOwner.messageRouter = coordinator.messageRouter;
+        // The witness replica's answers (quest replace-source-removal-owner): the
+        // fixture world models the committed configuration from its rows.
+        coordinator.workflowOwner.messageRouter = withFixtureReplaceWitness(
+          coordinator.messageRouter, coordinator.systemTableCache);
         coordinator.workflowOwner.getReconciledReplicaStatus = async () =>
           ReplicaStatus.ACTIVE;
 
@@ -554,7 +564,10 @@ test('Executor outcome routing through owner-key reconcile path',
             };
           },
         };
-        coordinator.workflowOwner.messageRouter = coordinator.messageRouter;
+        // The witness replica's answers (quest replace-source-removal-owner): the
+        // fixture world models the committed configuration from its rows.
+        coordinator.workflowOwner.messageRouter = withFixtureReplaceWitness(
+          coordinator.messageRouter, coordinator.systemTableCache);
         coordinator.workflowOwner.getReconciledReplicaStatus = async () =>
           ReplicaStatus.ACTIVE;
 
@@ -968,7 +981,10 @@ test('Executor outcome routing through owner-key reconcile path',
             return {acknowledged: true, status: 'initiated'};
           },
         };
-        coordinator.workflowOwner.messageRouter = coordinator.messageRouter;
+        // The witness replica's answers (quest replace-source-removal-owner): the
+        // fixture world models the committed configuration from its rows.
+        coordinator.workflowOwner.messageRouter = withFixtureReplaceWitness(
+          coordinator.messageRouter, coordinator.systemTableCache);
 
         try {
           emitter.emitOutcome(
@@ -1379,7 +1395,10 @@ test('Executor outcome routing through owner-key reconcile path',
             };
           },
         };
-        coordinator.workflowOwner.messageRouter = coordinator.messageRouter;
+        // The witness replica's answers (quest replace-source-removal-owner): the
+        // fixture world models the committed configuration from its rows.
+        coordinator.workflowOwner.messageRouter = withFixtureReplaceWitness(
+          coordinator.messageRouter, coordinator.systemTableCache);
 
         try {
           const woken = await coordinator.workflowOwner.reconcileExecutorOutcome(
@@ -1516,7 +1535,10 @@ async (t) => {
       };
     },
   };
-  coordinator.workflowOwner.messageRouter = coordinator.messageRouter;
+  // The witness replica's answers (quest replace-source-removal-owner): the
+  // fixture world models the committed configuration from its rows.
+  coordinator.workflowOwner.messageRouter = withFixtureReplaceWitness(
+    coordinator.messageRouter, coordinator.systemTableCache);
   coordinator.workflowOwner.repository.getObservedReplicaStatusFromCache =
     () => ReplicaStatus.SYNCING;
 
@@ -1579,7 +1601,10 @@ async (t) => {
       };
     },
   };
-  coordinator.workflowOwner.messageRouter = coordinator.messageRouter;
+  // The witness replica's answers (quest replace-source-removal-owner): the
+  // fixture world models the committed configuration from its rows.
+  coordinator.workflowOwner.messageRouter = withFixtureReplaceWitness(
+    coordinator.messageRouter, coordinator.systemTableCache);
   coordinator.workflowOwner.repository.getObservedReplicaStatusFromCache =
     () => null;
 
@@ -1642,7 +1667,10 @@ async (t) => {
       };
     },
   };
-  coordinator.workflowOwner.messageRouter = coordinator.messageRouter;
+  // The witness replica's answers (quest replace-source-removal-owner): the
+  // fixture world models the committed configuration from its rows.
+  coordinator.workflowOwner.messageRouter = withFixtureReplaceWitness(
+    coordinator.messageRouter, coordinator.systemTableCache);
   coordinator.workflowOwner.evaluateRemoveSafety = async () => ({});
   coordinator.workflowOwner.repository.getObservedReplicaStatusFromCache =
     () => ReplicaStatus.ACTIVE;

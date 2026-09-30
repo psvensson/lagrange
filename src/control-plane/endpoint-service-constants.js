@@ -12,8 +12,6 @@ const ENDPOINT_SVC_STATE = Object.freeze({
 
 const ENDPOINT_SVC_LOG_MSG = Object.freeze({
   INITIALIZED: 'EndpointService initialized',
-  REGISTERED: 'Endpoint registered',
-  REMOVED: 'Endpoint removed',
   STOPPED: 'EndpointService stopped',
 });
 
@@ -21,12 +19,6 @@ const ENDPOINT_SVC_ERROR_MSG = Object.freeze({
   MISSING_NODE_ID: 'EndpointService requires nodeId',
   MISSING_OWNER: 'EndpointService requires serviceEndpointsOwner',
   NOT_INITIALIZED: 'EndpointService must be initialized first',
-  MISSING_ENDPOINT_ID: 'Endpoint ID is required',
-});
-
-const ENDPOINT_SVC_EVENT = Object.freeze({
-  REGISTERED: 'endpointRegistered',
-  REMOVED: 'endpointRemoved',
 });
 
 export {
@@ -34,5 +26,4 @@ export {
   ENDPOINT_SVC_STATE,
   ENDPOINT_SVC_LOG_MSG,
   ENDPOINT_SVC_ERROR_MSG,
-  ENDPOINT_SVC_EVENT,
 };

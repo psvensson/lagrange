@@ -11,6 +11,7 @@ import {
   ControllablePartitionRaftProvider,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -117,7 +118,9 @@ test('raft-rs runtime emits a semantic envelope instead of a Liferaft packet',
 
 test('MessageRouter direct Raft delivery accepts the semantic raft-rs envelope',
   async (t) => {
-    const router = new MessageRouter({nodeId: 'node-r1', inProcess: true});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'node-r1', inProcess: true});
     let transmitted = null;
     const ws = {
       readyState: 1,

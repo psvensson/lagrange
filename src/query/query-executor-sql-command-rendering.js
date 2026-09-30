@@ -14,6 +14,63 @@ const {
   buildDistributedFailureSummary,
 } = QUERY_EXECUTOR_SHARED;
 
+function copyParticipantDisposition(error, result) {
+  Object.assign(error, {
+    failureCode: typeof result?.failureCode === LOCAL_STR_STRING ?
+      result.failureCode : null,
+    committed: result?.committed === true,
+    outcome: typeof result?.outcome === LOCAL_STR_STRING ?
+      result.outcome : null,
+    disposition: typeof result?.disposition === LOCAL_STR_STRING ?
+      result.disposition : null,
+    logIndex: Number.isSafeInteger(result?.logIndex) ? result.logIndex : null,
+    entryId: typeof result?.entryId === LOCAL_STR_STRING ?
+      result.entryId : null,
+  });
+}
+
+function buildDistributedMutationResult(
+  results,
+  partitionIds,
+  operation,
+  fanoutMetrics,
+) {
+  const failedResults = results.filter((result) => !result.success);
+  const affectedRows = results.reduce(
+    (sum, result) => sum + (result.success ? result.changes || 0 : 0),
+    0,
+  );
+  const rows = results.flatMap((result) =>
+    result.success && Array.isArray(result.rows) ? result.rows : [],
+  );
+  const originHlc = results[0]?.originHlc;
+  const hasSharedOriginHlc =
+    typeof originHlc === LOCAL_STR_STRING &&
+    originHlc.length > 0 &&
+    results.every((result) => result.originHlc === originHlc);
+  const commonResult = {
+    operation,
+    affectedRows,
+    partitions: partitionIds,
+    rows,
+    ...(hasSharedOriginHlc ? {originHlc} : {}),
+    distributedMetrics: {
+      fanout: fanoutMetrics,
+      failedPartitionCount: failedResults.length,
+    },
+  };
+  if (failedResults.length === 0) {
+    return {success: true, ...commonResult};
+  }
+  return {
+    success: false,
+    ...commonResult,
+    ...buildDistributedFailureSummary(failedResults),
+    errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+    error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+  };
+}
+
 const queryExecutorSqlCommandMethods = {
   /**
    * Build SQL string from SELECT AST.
@@ -294,6 +351,7 @@ const queryExecutorSqlCommandMethods = {
       if (result?.deferRetry === true) {
         error.deferRetry = true;
       }
+      copyParticipantDisposition(error, result);
       if (Array.isArray(result?.participantFailures)) {
         error.participantFailures = result.participantFailures
           .filter((entry) => entry && typeof entry === LOCAL_STR_OBJECT)
@@ -357,6 +415,7 @@ const queryExecutorSqlCommandMethods = {
       rows: Array.isArray(result.rows) ? result.rows : [],
       partitions: [partitionId],
       durableCommitWitness: result.durableCommitWitness,
+      originHlc: result.originHlc,
       acceptingNodeId: result.acceptingNodeId,
       acknowledgedAtMs: result.acknowledgedAtMs,
     };
@@ -414,7 +473,39 @@ const queryExecutorSqlCommandMethods = {
    */
   async executeUpdate(ast, partitionIds, params = [], executionOptions = {}) {
     const sql = this.buildUpdateSQL(ast);
-    this.logger.debug(QUERY_EXECUTOR_LITERAL.STRING_EXECUTING_UPDATE, {
+    return this.executeDistributedMutation(
+      ast,
+      partitionIds,
+      params,
+      executionOptions,
+      sql,
+      QUERY_AST_TYPE.UPDATE,
+      QUERY_EXECUTOR_LITERAL.STRING_EXECUTING_UPDATE,
+    );
+  },
+
+  /**
+   * Execute a distributed UPDATE or DELETE through one result contract.
+   * @param {Object} ast - Parsed mutation AST.
+   * @param {Array} partitionIds - Target partition IDs.
+   * @param {Array} params - Query parameters.
+   * @param {Object} executionOptions - Distributed execution options.
+   * @param {string} sql - Operation-specific SQL.
+   * @param {string} operation - Operation AST type.
+   * @param {string} logMessage - Operation-specific log message.
+   * @return {Promise<Object>} Distributed mutation result.
+   * @private
+   */
+  async executeDistributedMutation(
+    ast,
+    partitionIds,
+    params,
+    executionOptions,
+    sql,
+    operation,
+    logMessage,
+  ) {
+    this.logger.debug(logMessage, {
       table: ast.table,
       partitionCount: partitionIds.length,
     });
@@ -431,50 +522,12 @@ const queryExecutorSqlCommandMethods = {
         tableName: ast.table,
       },
     );
-    const fanoutMetrics = this.getLastCoordinatorMetrics();
-    const failedResults = results.filter((result) => !result.success);
-    const totalChanges = results.reduce(
-      (sum, result) => sum + (result.success ? result.changes || 0 : 0),
-      0,
+    return buildDistributedMutationResult(
+      results,
+      partitionIds,
+      operation,
+      this.getLastCoordinatorMetrics(),
     );
-    const returningRows = [];
-    for (const result of results) {
-      if (
-        result.success &&
-        Array.isArray(result.rows) &&
-        result.rows.length > 0
-      ) {
-        returningRows.push(...result.rows);
-      }
-    }
-    if (failedResults.length > 0) {
-      const failureSummary = buildDistributedFailureSummary(failedResults);
-      return {
-        success: false,
-        operation: QUERY_AST_TYPE.UPDATE,
-        affectedRows: totalChanges,
-        partitions: partitionIds,
-        ...failureSummary,
-        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        rows: returningRows,
-        distributedMetrics: {
-          fanout: fanoutMetrics,
-          failedPartitionCount: failedResults.length,
-        },
-      };
-    }
-    return {
-      success: true,
-      operation: QUERY_AST_TYPE.UPDATE,
-      affectedRows: totalChanges,
-      partitions: partitionIds,
-      rows: returningRows,
-      distributedMetrics: {
-        fanout: fanoutMetrics,
-        failedPartitionCount: 0,
-      },
-    };
   },
 
   /**
@@ -505,67 +558,15 @@ const queryExecutorSqlCommandMethods = {
    */
   async executeDelete(ast, partitionIds, params = [], executionOptions = {}) {
     const sql = this.buildDeleteSQL(ast);
-    this.logger.debug(QUERY_EXECUTOR_LITERAL.STRING_EXECUTING_DELETE, {
-      table: ast.table,
-      partitionCount: partitionIds.length,
-    });
-    const results = await this.executeOnPartitions(
+    return this.executeDistributedMutation(
+      ast,
       partitionIds,
-      sql,
       params,
-      this.hlcClock.now(),
-      false,
-      false,
-      false,
-      {
-        ...executionOptions,
-        tableName: ast.table,
-      },
+      executionOptions,
+      sql,
+      QUERY_AST_TYPE.DELETE,
+      QUERY_EXECUTOR_LITERAL.STRING_EXECUTING_DELETE,
     );
-    const fanoutMetrics = this.getLastCoordinatorMetrics();
-    const failedResults = results.filter((result) => !result.success);
-    const totalChanges = results.reduce(
-      (sum, result) => sum + (result.success ? result.changes || 0 : 0),
-      0,
-    );
-    const returningRows = [];
-    for (const result of results) {
-      if (
-        result.success &&
-        Array.isArray(result.rows) &&
-        result.rows.length > 0
-      ) {
-        returningRows.push(...result.rows);
-      }
-    }
-    if (failedResults.length > 0) {
-      const failureSummary = buildDistributedFailureSummary(failedResults);
-      return {
-        success: false,
-        operation: QUERY_AST_TYPE.DELETE,
-        affectedRows: totalChanges,
-        partitions: partitionIds,
-        ...failureSummary,
-        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        rows: returningRows,
-        distributedMetrics: {
-          fanout: fanoutMetrics,
-          failedPartitionCount: failedResults.length,
-        },
-      };
-    }
-    return {
-      success: true,
-      operation: QUERY_AST_TYPE.DELETE,
-      affectedRows: totalChanges,
-      partitions: partitionIds,
-      rows: returningRows,
-      distributedMetrics: {
-        fanout: fanoutMetrics,
-        failedPartitionCount: 0,
-      },
-    };
   },
 
   /**

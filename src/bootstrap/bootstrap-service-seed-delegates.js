@@ -89,6 +89,7 @@ function buildPhaseExecutionDelegates(service) {
     getTransport: () => self.transport,
     getMessageGroupServices: () => self.messageGroupServices,
     getPartitionServices: () => self.partitionServices,
+    getReplicaStateMachine: () => self.replicaStateMachine,
     getMessageGroupReplicas: () => self.messageGroupReplicas,
     getPartitionReplicas: () => self.partitionReplicas,
 
@@ -131,6 +132,8 @@ function buildPhaseExecutionDelegates(service) {
       null,
     getBootstrapReadinessState: () =>
       self.bootstrapReadinessState,
+    getStartupServicesAdmission: () =>
+      self.startupServicesAdmission,
     getPartitionReplicaProgressReporter: () =>
       self.partitionReplicaProgressReporter,
     getInitialMessageGroupId: () =>
@@ -205,6 +208,10 @@ function buildPhaseExecutionDelegates(service) {
     },
     pushMessageGroupReplica: (v) => {
       self.messageGroupReplicas.push(v);
+    },
+    attachMessageGroupService: (service) => {
+      self.dispatchService?.attachMessageGroupService(service);
+      self.leaseService?.messageGroupServices?.add(service);
     },
     filterMessageGroupReplicas: (exclude) => {
       self.messageGroupReplicas =
@@ -471,10 +478,15 @@ function buildCleanupDelegates(service) {
         self.runtimeServiceHandler = null;
       }
     },
-    clearReplicaStateMachine: () => {
-      if (self.replicaStateMachine) {
-        self.replicaStateMachine.stopTimeoutChecker();
-        self.replicaStateMachine.clear();
+    clearReplicaStateMachine: async () => {
+      // Release the incarnation's one recorded lifecycle owner first: its
+      // timer stops even when the field projection is absent.
+      const released = self.replicaLifecycleOwner.release();
+      const replicaStateMachine =
+        released?.replicaStateMachine || self.replicaStateMachine;
+      if (replicaStateMachine) {
+        replicaStateMachine.stopTimeoutChecker();
+        await replicaStateMachine.clear();
         self.replicaStateMachine = null;
       }
     },

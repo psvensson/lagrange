@@ -634,10 +634,27 @@ function resolvePublicationActiveGateHandoffReconcileTargetNodeIds(
     expectedReconcileTargetNodeIds.length > 0 ?
       expectedReconcileTargetNodeIds :
       selectedPendingReconcileNodeIds;
+  // The pending candidate's members stay in the target (a reconcile for a
+  // missing node never retracts them); the target never acknowledges for one
+  // that has not acknowledged the candidate itself.
   return normalizePublicationActiveGateHandoffNodeIdList([
     ...handoffContract.publishedActiveNodeIds,
+    ...(Array.isArray(handoffContract.pendingCandidateNodeIds) ?
+      handoffContract.pendingCandidateNodeIds : []),
     ...selectedReconcileTargetNodeIds,
   ]);
+}
+
+// A pending candidate member that is neither published nor has acknowledged
+// the candidate: the target leaves its acknowledgement to the member.
+function withholdUnacknowledgedCandidateNodeIds(nodeIds, handoffContract) {
+  const settled = new Set([
+    ...handoffContract.publishedActiveNodeIds,
+    ...(handoffContract.pendingCandidateAcknowledgedNodeIds || []),
+  ]);
+  const withheld = new Set((handoffContract.pendingCandidateNodeIds || [])
+    .filter((nodeId) => !settled.has(nodeId)));
+  return nodeIds.filter((nodeId) => !withheld.has(nodeId));
 }
 
 function buildPublicationActiveGateHandoffReconcileTarget(
@@ -661,7 +678,8 @@ function buildPublicationActiveGateHandoffReconcileTarget(
     handoffContract,
     publishedActiveNodeIds,
     requiredAckNodeIds: publishedActiveNodeIds,
-    acknowledgedNodeIds: publishedActiveNodeIds,
+    acknowledgedNodeIds: withholdUnacknowledgedCandidateNodeIds(
+      publishedActiveNodeIds, handoffContract),
     pendingReconcileNodeIds: handoffContract.pendingReconcileNodeIds,
     pendingRecoveryNodeIds: handoffContract.pendingRecoveryNodeIds,
     pendingRecoveryCount: handoffContract.pendingRecoveryCount,

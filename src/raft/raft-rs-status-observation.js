@@ -92,8 +92,8 @@ function followerProgressSnapshot(group, status) {
 /**
  * The status one observation of the core describes.
  * @param {Object} group - The runtime group.
- * @param {Object} observation - {status, confState, runtimeHealth,
- *   runtimeGeneration} as the runtime owner recorded them.
+ * @param {Object} observation - {status, confState, appliedIndex,
+ *   runtimeHealth, runtimeGeneration} as the runtime owner recorded them.
  * @param {Function} leaderIdentityUnresolved - The owner's outcome when the
  *   leader's identity cannot be resolved.
  * @return {Object} The frozen status, or the owner's outcome.
@@ -117,13 +117,22 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     peerId: group.peerId,
     term: Number(status.term),
     commitIndex: Number(status.commit),
+    // The runtime's applied index of this same observation (the one its
+    // confState came from).
+    appliedIndex: observation.appliedIndex,
     role: ROLE[status.raftState] || RUNTIME_REASON.UNKNOWN,
     ...leader,
     peerCount: Math.max(0,
       confState.voters.length + confState.learners.length - 1),
     peers,
     followerProgress: followerProgressSnapshot(group, status),
+    // Delivered envelopes the core refused to step, per sender (the runtime
+    // owner's observation; each was dropped and answered nothing).
+    inboundStepRefusals: [...group.inboundStepRefusals.values()],
     confState,
+    // The participation gate recorded with this observation, and the applied
+    // index the configuration above was applied at (O1 gate).
+    ...observation.participation,
     runtimeHealth: observation.runtimeHealth,
     groupHealth: group.health,
     runtimeGeneration: observation.runtimeGeneration,

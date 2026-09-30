@@ -19,6 +19,9 @@ import {
 import {
   runSeedHandoffScenario,
 } from './formation-sim-production-seed-host.js';
+import {
+  reserveSimulatedBootIncarnation,
+} from './formation-sim-boot-incarnation.js';
 
 const ZERO = 0;
 const ENTRY = 'entry';
@@ -41,12 +44,16 @@ async function runFormationAttributionCensus() {
   let mark = null;
   let snapshot = null;
   let run = null;
+  // The node's boot lifecycle begins before formation: its incarnation is
+  // reserved through the boot incarnation owner outside the measured window.
+  const bootIncarnation = await reserveSimulatedBootIncarnation();
   // Let everything the process arranged before this point dispatch, so the
   // window opens on a quiet loop rather than on the tail of module loading.
   await new Promise((resolve) => setImmediate(resolve));
   attribution.start();
   try {
     run = await runSeedHandoffScenario({
+      bootIncarnation,
       onFormationComplete: (formationMark) => {
         snapshot = attribution.snapshot();
         mark = formationMark;

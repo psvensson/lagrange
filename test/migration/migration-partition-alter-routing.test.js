@@ -12,6 +12,7 @@ import {
   PARTITION_SERVICE_ROLE,
 } from '../../src/partition/partition-service-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 const PARTITION_ID = 'test-partition';
 
@@ -36,7 +37,7 @@ test('migration ALTER is routed through dedicated partition Raft operation',
       path.join(os.tmpdir(), 'migration-partition-alter-routing-'));
     t.teardown(() => fs.rmSync(directory, {recursive: true, force: true}));
     const dbPath = path.join(directory, 'partition.sqlite');
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: PARTITION_ID,
       tableId: 'users-table',
       tableName: 'users',
@@ -44,7 +45,7 @@ test('migration ALTER is routed through dedicated partition Raft operation',
       replicaIds: ['replica-1'],
       nodeId: 'node-1',
       dbPath,
-    });
+    }));
 
     try {
       await partition.initialize();

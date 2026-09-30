@@ -1,10 +1,10 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {requireIssuedBootIncarnation} from './boot-incarnation-contract.js';
 import {
   createNodeJoiningRuntimeDependencyOwner,
   defineNodeJoiningRuntimeDependencyProperties,
   assignNodeJoiningDelegateBundleMethods,
   installNodeJoiningStatePublicationOwner,
-  normalizeBootIncarnationOption,
   normalizeSeedNodeAddresses,
 } from './node-joining-delegate-bundles.js';
 
@@ -39,6 +39,7 @@ const {
   NodeService,
   NodeState,
   QuerySystemStatePhase,
+  ReplicaLifecycleOwner,
   STARTUP_JOIN_MODE,
   STORAGE_DEFAULT,
   StartupRuntimeHandoffOwner,
@@ -62,6 +63,11 @@ const {
 
 class NodeJoiningOwnerConstruction extends EventEmitter {
   constructor(options = {}) {
+    // A node lifecycle owner is valid only for one explicitly established
+    // node incarnation, reserved by the boot incarnation owner: refuse its
+    // absence before any state machine, timer, handler or row exists.
+    const bootIncarnation = requireIssuedBootIncarnation(
+      options.bootIncarnation, NODE_JOINING_SERVICE_LITERAL.NODEJOININGSERVICE);
     super();
     const explicitDataDirProvided = Object.prototype.hasOwnProperty.call(
       options,
@@ -87,9 +93,9 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       options.expectedClusterId.length > 0 ?
       options.expectedClusterId :
       null;
-    // This boot's locally minted incarnation (rejoin-hints counter): every
-    // node state update carries it so receivers fence stale writers.
-    this.bootIncarnation = normalizeBootIncarnationOption(options);
+    // This boot's incarnation (boot incarnation owner): every node state
+    // update carries it so receivers fence stale writers.
+    this.bootIncarnation = bootIncarnation;
     this.wsPort = options.wsPort ?? null;
     this.dataDir = options.dataDir || STORAGE_DEFAULT.DATA_DIR;
     this.config = {...JOINING_DEFAULT, ...options.config};
@@ -194,7 +200,10 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     this.serviceInstallationReconcilerOwnerHandle = null;
     this.systemMetadataOwners = null;
     this.serviceReconciler = null; // Replica handler for CREATE_REPLICA/REMOVE_REPLICA execution
-    this.replicaHandler = null; // Replica state machine for tracking replica lifecycle states
+    // The one replica lifecycle owner of this incarnation; the two fields
+    // below are its projections.
+    this.replicaLifecycleOwner = new ReplicaLifecycleOwner();
+    this.replicaHandler = null;
     this.replicaStateMachine = null; // Decomposed control plane services
     this.heartbeatService = null;
     this.leaseService = null;
@@ -537,6 +546,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         getPartitionServices: () => this.partitionServices,
         getMessageGroupServices: () => this.messageGroupServices,
         getNodeStorageBudgetService: () => this.getNodeStorageBudgetService(),
+        getBootIncarnation: () => this.bootIncarnation,
         getSystemTableCache: () =>
           NodeService.getInstance().getSystemTableCache(),
         ensureLatencyTopologyOwners: () => this.ensureLatencyTopologyOwners(),
@@ -603,6 +613,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       nodeId: this.nodeId,
       delegates: {
         getLogger: () => this.logger,
+        getReplicaStateMachine: () => this.replicaStateMachine,
         getConfig: () => this.config,
         getNow: () => this.now,
         getSleep: () => this.sleep,
@@ -631,6 +642,10 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         triggerJoinReconciler: (reason) => this.triggerJoinReconciler(reason),
         getBootstrapResponse: () => this.bootstrapResponse,
         getBootstrapReadinessState: () => this.bootstrapReadinessState,
+        attachMessageGroupService: (service) => {
+          this.dispatchService?.attachMessageGroupService(service);
+          this.leaseService?.messageGroupServices?.add(service);
+        },
         getSeedNodeId: () => this.seedNodeId,
         getSeedNodeAddress: () => this.seedNodeAddress,
         getHttpPostImpl: () => this.httpPostImpl,

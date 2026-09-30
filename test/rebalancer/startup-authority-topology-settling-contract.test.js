@@ -8,6 +8,8 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {withRegisteredIncarnations} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 const TEST_SEED_NODE_ID = 'seed-node';
 const TEST_COHORT_NODE_ID_B = 'node-2';
@@ -59,7 +61,7 @@ function createServiceEndpoint(nodeId) {
 }
 
 function createCache() {
-  const rows = {
+  const rows = withRegisteredIncarnations({
     nodes: [
       createNodeRow(TEST_SEED_NODE_ID, TEST_READY_LEASE_OFFSET_MS),
       createNodeRow(TEST_COHORT_NODE_ID_B, TEST_READY_LEASE_OFFSET_MS),
@@ -83,7 +85,7 @@ function createCache() {
     services: [],
     tables: [],
     replica_operations: [],
-  };
+  });
   return {
     get(tableName, key) {
       const values = rows[tableName] || [];

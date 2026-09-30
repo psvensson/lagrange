@@ -1,5 +1,6 @@
 import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
+  isControlPlaneWriterShutDown,
 } from './control-plane-error-classification.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {publicationRowSatisfiesDesiredState} from './control-plane-publication-merge.js';
@@ -28,6 +29,27 @@ import {
   CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION,
   buildCriticalControlPlaneConvergenceOptions,
 } from './membership-publication-control-plane-convergence.js';
+
+// What a failed publication write leaves to do. A failed answer does not
+// prove the row is absent (a committed write can answer failed), so while
+// attempts remain the durable row is read back and the write re-attempted.
+// The one exception is the CDC service's terminal shut-down answer: nothing
+// can be read back or re-attempted through a torn-down writer.
+const PUBLICATION_WRITE_FAILURE_NEXT_STEP = Object.freeze({
+  VERIFY_AND_REATTEMPT: 'verify_and_reattempt',
+  FAIL: 'fail',
+});
+
+function resolvePublicationWriteFailureNextStep(
+  error,
+  canVerifyPersistedRow,
+  attemptsLeft,
+) {
+  return canVerifyPersistedRow && attemptsLeft > 0 &&
+    !isControlPlaneWriterShutDown(error) ?
+    PUBLICATION_WRITE_FAILURE_NEXT_STEP.VERIFY_AND_REATTEMPT :
+    PUBLICATION_WRITE_FAILURE_NEXT_STEP.FAIL;
+}
 
 class MembershipPublicationCoordinatorPersist extends
   MembershipPublicationCoordinatorPlanning {
@@ -91,7 +113,13 @@ class MembershipPublicationCoordinatorPersist extends
             publicationOptions,
           );
         } catch (error) {
-          if (!canVerifyPersistedRow || attempt + 1 >= maxAttempts) {
+          if (
+            resolvePublicationWriteFailureNextStep(
+              error,
+              canVerifyPersistedRow,
+              maxAttempts - attempt - 1,
+            ) === PUBLICATION_WRITE_FAILURE_NEXT_STEP.FAIL
+          ) {
             throw error;
           }
           const durableRow = await this.controlPlanePublicationsOwner.getPublication(

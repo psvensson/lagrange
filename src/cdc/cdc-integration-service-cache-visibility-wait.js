@@ -11,14 +11,12 @@ import {
 } from './cdc-integration-service-cache-divergence.js';
 import {
   CACHE_REPAIR_READ_AUTHORITY,
+  applyAuthoritativeCacheRepair,
   applyAuthoritativeCacheSweep,
   authoritativeReadRowsAreValid,
-  cacheRepairSatisfiedAfterApply,
   cacheRecordChangedDuringAuthoritativeAbsenceRead,
   captureAuthoritativeCacheSweepSnapshot,
   captureCacheRecordBeforeAbsenceRepair,
-  doesCachedRowSatisfyAuthoritativeRepair,
-  resolveAuthoritativeCacheRepairMutationMode,
   resolveCacheVisibilityRepairReadAuthority,
 } from './cdc-integration-service-cache-visibility-authority.js';
 
@@ -37,7 +35,6 @@ const {
   canonicalizeSystemTableRow,
   createTimeoutBudget,
   createTimeoutBudgetError,
-  delayOn,
   getControlPlaneRetryAfterMs,
   getRemainingBudgetMs,
   isRetryableControlPlaneError,
@@ -48,6 +45,7 @@ const {
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
 const CDC_INTEGRATION_SERVICE_CACHE_VISIBILITY_CONSTRUCTOR = 'constructor';
+const buildCacheWaitTimeoutMessage = CDC_ERROR_MSG.CACHE_WAIT_TIMEOUT;
 
 /**
  * Post-write cache visibility methods for the CDC integration service. Owns
@@ -85,9 +83,8 @@ class CDCIntegrationServiceCacheVisibilityWait {
    * @private
    */
   async waitForCacheUpdate(tableName, key, expectPresent, options = {}) {
-    // During seed bootstrap registration, writes intentionally happen before
-    // cache hydration. Waiting for cache visibility in this mode causes
-    // per-write timeout delays and can stall bootstrap readiness.
+    // Seed bootstrap registration writes before cache hydration: waiting for
+    // visibility here adds per-write timeouts and can stall readiness.
     if (this.bootstrapMode) {
       return buildSystemTableVisibilityResult();
     }
@@ -142,6 +139,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
     const timeSource = this.timeSource;
     return new Promise((resolve, reject) => {
       let settled = false;
+      let stopHoldingUntilShutdown = null; // shutdown ends the wait at once
       const timeoutBudget = createTimeoutBudget({
         configuredBudgetMs: timeoutMs,
         now: () => timeSource.now(),
@@ -237,12 +235,8 @@ class CDCIntegrationServiceCacheVisibilityWait {
             );
             return;
           }
-          const buildCacheWaitTimeoutMessage = CDC_ERROR_MSG.CACHE_WAIT_TIMEOUT;
-          const timeoutMessage = buildCacheWaitTimeoutMessage(
-            tableName,
-            key,
-            timeoutMs,
-          );
+          const timeoutMessage =
+            buildCacheWaitTimeoutMessage(tableName, key, timeoutMs);
           const timeoutError = createTimeoutBudgetError({
             message: timeoutMessage,
             budget: timeoutBudget,
@@ -286,6 +280,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
           return;
         }
         settled = true;
+        stopHoldingUntilShutdown?.();
         if (typeof cache.offCacheChange === 'function') {
           cache.offCacheChange(listener);
         }
@@ -299,6 +294,8 @@ class CDCIntegrationServiceCacheVisibilityWait {
         resolve(result);
       }
       cache.onCacheChange(listener);
+      stopHoldingUntilShutdown = this.holdUntilShutdown(() =>
+        cleanup(this.buildUnconfirmedWriteShutDownAnswer()));
     });
   }
   async confirmCacheVisibilityHoleWithinBudget(
@@ -313,7 +310,9 @@ class CDCIntegrationServiceCacheVisibilityWait {
       visibilityState: null,
     });
     const maxAttempts = 2;
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    // Held until shutdown: shutdown ends the retry delay and the repair.
+    for (let attempt = 1; attempt <= maxAttempts &&
+      this.isShuttingDown !== true; attempt += 1) {
       lastResult = normalizeSystemTableVisibilityResult(
         await this.repairCacheVisibilityHole(
           tableName,
@@ -338,7 +337,7 @@ class CDCIntegrationServiceCacheVisibilityWait {
       if (attempt >= maxAttempts || remainingBudgetMs <= 0) {
         break;
       }
-      await delayOn(this.timeSource,
+      await this.delayUntilShutdown(
         Math.min(this.authoritativeFallbackRetryDelayMs, remainingBudgetMs));
     }
     return lastResult;
@@ -690,68 +689,9 @@ class CDCIntegrationServiceCacheVisibilityWait {
    * @return {boolean}
    * @private
    */
-  applyAuthoritativeCacheRepair(
-    tableName,
-    operation,
-    row,
-    key,
-    options = {},
-  ) {
-    if (
-      !this.cacheMutationTarget ||
-      typeof this.cacheMutationTarget.applySystemTableChange !==
-        'function' ||
-      !row ||
-      typeof row !== 'object'
-    ) {
-      return false;
-    }
-    const canonicalRow = canonicalizeSystemTableRow(tableName, row);
-    const mutationMode = resolveAuthoritativeCacheRepairMutationMode(
-      operation,
-      options?.mutationMode,
-    );
-    const currentRow =
-      typeof this.cacheMutationTarget.get === 'function' ?
-        this.cacheMutationTarget.get(tableName, key) :
-        null;
-    const currentRowSatisfiesRepair =
-      doesCachedRowSatisfyAuthoritativeRepair({
-        tableName,
-        operation,
-        currentRow,
-        authoritativeRow: canonicalRow,
-        mutationMode,
-      });
-    if (currentRowSatisfiesRepair) {
-      // A complete authoritative observation is already the cache state. Keep
-      // reconciliation idempotent at the cache boundary: reapplying the row
-      // would mint a mutation generation and wake every readiness/publication
-      // consumer even though no semantic state changed.
-      return true;
-    }
-    const causeId = `authoritative-repair:${tableName}:${key}`;
-    const mutationOptions = {
-      causeId,
-      mutationMode,
-      authoritativeObservedAtMs: options?.authoritativeObservedAtMs,
-      authoritativeReadStartedAtMs:
-        options?.authoritativeReadStartedAtMs,
-    };
-    this.cacheMutationTarget.applySystemTableChange(
-      tableName,
-      operation,
-      canonicalRow,
-      mutationOptions,
-    );
-    return cacheRepairSatisfiedAfterApply({
-      cacheMutationTarget: this.cacheMutationTarget,
-      tableName,
-      operation,
-      authoritativeRow: canonicalRow,
-      mutationMode,
-      key,
-    });
+  applyAuthoritativeCacheRepair(tableName, operation, row, key, options = {}) {
+    return applyAuthoritativeCacheRepair(
+      this, tableName, operation, row, key, options);
   }
 
   /** Apply a leader-observed absence sweep through the cache owner. */

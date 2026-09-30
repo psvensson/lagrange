@@ -16,6 +16,7 @@ import {LEASE_STATE} from
   '../../../src/control-plane/lease-service-constants.js';
 import {ExecutorOutcomeEmitter} from
   '../../../src/rebalancer/executor-outcome-emitter.js';
+import {TEST_BOOT_INCARNATION} from '../../test-helpers/boot-incarnation-fixture.js';
 
 const TEST_NODE_ID = 'test-node';
 const TEST_NODE_ADDRESS = 'localhost:8080';
@@ -107,6 +108,7 @@ describe('ControlPlaneSetup', () => {
       async () => {
         await assert.rejects(
           async () => ControlPlaneSetup.create({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeAddress: 'localhost:8080',
             messageRouter: mockMessageRouter,
             cdcIntegrationService: mockCdcIntegrationService,
@@ -130,6 +132,7 @@ describe('ControlPlaneSetup', () => {
       async () => {
         await assert.rejects(
           async () => ControlPlaneSetup.create({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId: 'test-node',
             messageRouter: mockMessageRouter,
             cdcIntegrationService: mockCdcIntegrationService,
@@ -155,6 +158,7 @@ describe('ControlPlaneSetup', () => {
       async () => {
         await assert.rejects(
           async () => ControlPlaneSetup.create({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId: 'test-node',
             nodeAddress: 'localhost:8080',
             cdcIntegrationService: mockCdcIntegrationService,
@@ -180,6 +184,7 @@ describe('ControlPlaneSetup', () => {
       async () => {
         await assert.rejects(
           async () => ControlPlaneSetup.create({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId: 'test-node',
             nodeAddress: 'localhost:8080',
             messageRouter: mockMessageRouter,
@@ -205,6 +210,7 @@ describe('ControlPlaneSetup', () => {
       async () => {
         await assert.rejects(
           async () => ControlPlaneSetup.create({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId: 'test-node',
             nodeAddress: 'localhost:8080',
             messageRouter: mockMessageRouter,
@@ -230,6 +236,7 @@ describe('ControlPlaneSetup', () => {
       async () => {
         await assert.rejects(
           async () => ControlPlaneSetup.create({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId: 'test-node',
             nodeAddress: 'localhost:8080',
             messageRouter: mockMessageRouter,
@@ -255,6 +262,7 @@ describe('ControlPlaneSetup', () => {
       async () => {
         await assert.rejects(
           async () => ControlPlaneSetup.create({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId: 'test-node',
             nodeAddress: 'localhost:8080',
             messageRouter: mockMessageRouter,
@@ -287,6 +295,7 @@ describe('ControlPlaneSetup', () => {
         const executorOutcomeEmitter = new ExecutorOutcomeEmitter();
 
         const result = await ControlPlaneSetup.create({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: TEST_NODE_ID,
           nodeAddress: TEST_NODE_ADDRESS,
           messageRouter: mockMessageRouter,
@@ -308,6 +317,7 @@ describe('ControlPlaneSetup', () => {
       async () => {
         let componentArtifactLoader = null;
         const result = await ControlPlaneSetup.create({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'test-node',
           nodeAddress: 'localhost:8080',
           messageRouter: mockMessageRouter,
@@ -356,6 +366,7 @@ describe('ControlPlaneSetup', () => {
     it('should keep lease sweep frozen until activation barrier',
       async () => {
         const result = await ControlPlaneSetup.create({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'test-node',
           nodeAddress: 'localhost:8080',
           messageRouter: mockMessageRouter,
@@ -381,6 +392,7 @@ describe('ControlPlaneSetup', () => {
         };
 
         const result = await ControlPlaneSetup.create({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'test-node',
           nodeAddress: 'localhost:8080',
           messageRouter: mockMessageRouter,
@@ -418,6 +430,7 @@ describe('ControlPlaneSetup', () => {
         };
 
         const result = await ControlPlaneSetup.create({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'test-node',
           nodeAddress: 'localhost:8080',
           messageRouter: mockMessageRouter,
@@ -459,6 +472,7 @@ describe('ControlPlaneSetup', () => {
     it('should pass the local cluster-incarnation fence into readiness planning',
       async () => {
         const result = await ControlPlaneSetup.create({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'test-node',
           nodeAddress: 'localhost:8080',
           messageRouter: mockMessageRouter,
@@ -502,6 +516,7 @@ describe('ControlPlaneSetup', () => {
       'using the control-plane reporter path',
     async () => {
       const result = await ControlPlaneSetup.create({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node',
         nodeAddress: 'localhost:8080',
         messageRouter: mockMessageRouter,
@@ -532,6 +547,7 @@ describe('ControlPlaneSetup', () => {
         mockMessageGroupServices.set('mg-2', mockMg2);
 
         const result = await ControlPlaneSetup.create({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'test-node',
           nodeAddress: 'localhost:8080',
           messageRouter: mockMessageRouter,
@@ -551,6 +567,7 @@ describe('ControlPlaneSetup', () => {
     it('should work with empty message group services map',
       async () => {
         const result = await ControlPlaneSetup.create({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'test-node',
           nodeAddress: 'localhost:8080',
           messageRouter: mockMessageRouter,
@@ -569,6 +586,7 @@ describe('ControlPlaneSetup', () => {
     it('should work without message group services parameter',
       async () => {
         const result = await ControlPlaneSetup.create({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'test-node',
           nodeAddress: 'localhost:8080',
           messageRouter: mockMessageRouter,

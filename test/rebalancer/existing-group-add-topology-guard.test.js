@@ -2,6 +2,15 @@
  * Existing-group ADD topology-guard regression tests (rebalancer safety-audit
  * finding 8, quest existing-group-add-topology-guard).
  *
+ * Superseded under R09 by owner decision O1 (2026-09-26): a join's
+ * membership is its COMMITTED stamp (the leader's committed configuration)
+ * and a founder's is its GENESIS stamp; services rows are the address book
+ * only. The receipts below keep their names; their expectations are the O1
+ * ones - a create without a stamp is refused STAMP_INVALID (never a
+ * self-only group, never a row-derived cohort), the stamp kind decides the
+ * join mode (no row-derived dead-leader re-formation), and the coordinator
+ * stamps the leader's answer, not a merge of cached and authoritative rows.
+ *
  * Receipts:
  * - self-only-cohort-add-deferred: an explicit ADD join into a NON-fresh
  *   partition that resolves to a self-only cohort (no dispatched hints, cache
@@ -50,6 +59,15 @@ import {
   STORAGE_ADMISSION_DECISION_TYPE,
 } from '../../src/rebalancer/storage-admission-constants.js';
 import {
+  committedStampFor,
+  genesisStampFor,
+  withBootstrapStamp,
+} from '../node/replica-handler-bootstrap-stamps.js';
+import {withFixtureCommittedMembership} from
+  './committed-membership-fixture.js';
+import {createLifecycleCdcServiceForCache} from
+  '../test-helpers/lifecycle-state-store.js';
+import {
   createMockCache,
   createMockCdcService,
   createMockMessageRouter,
@@ -57,6 +75,8 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {bindRegisteredReplicaHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 const TEST_SCHEMA = Object.freeze({
   columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
@@ -134,33 +154,20 @@ function seedSiblingServiceRow(cache, {partitionId, replicaId, nodeId}) {
 function createCapturingPartitionServiceFactory(captured) {
   return async (options) => {
     captured.options = options;
-    return {
+    return bindRegisteredReplicaHandler({
       partitionId: options.partitionId,
       replicaId: options.replicaId,
       initialized: true,
       async shutdown() {},
       async syncFromLeader() {},
-    };
+    }, options);
   };
 }
 
 function createJoinHandler({cache, captured}) {
   const handler = new ReplicaHandler({
     nodeId: JOIN_NODE_ID,
-    cdcIntegrationService: {
-      async insertSystemTableRow() {
-        return {success: true};
-      },
-      async updateSystemTableRow() {
-        return {success: true};
-      },
-      async upsertSystemTableRow() {
-        return {success: true};
-      },
-      async deleteSystemTableRow() {
-        return {success: true};
-      },
-    },
+    cdcIntegrationService: createLifecycleCdcServiceForCache(cache),
     systemTableCache: cache,
     dataDir: getTempDir(),
     createPartitionService: createCapturingPartitionServiceFactory(captured),
@@ -237,9 +244,9 @@ async (t) => {
     );
     t.match(
       String(failure?.error || ''),
-      /join topology unavailable/,
-      'failure carries the retryable topology-missing class that routes ' +
-        'into the authoritative hydration retry loop',
+      /membership-stamp-invalid/,
+      'a create without a committed-membership stamp is refused ' +
+        'STAMP_INVALID (O1)',
     );
   } finally {
     handler.shutdown();
@@ -275,12 +282,12 @@ async (t) => {
       'replicaCreated',
       'replicaCreationFailed',
     );
-    await handler.handleCreateReplica({
+    await handler.handleCreateReplica(withBootstrapStamp({
       operationId: 'op-add-fresh',
       operationType: OperationType.ADD,
       partitionId: ADD_PARTITION_ID,
       replicaId: ADD_REPLICA_ID,
-    });
+    }, genesisStampFor([ADD_REPLICA_ID])));
     await outcome;
 
     t.ok(
@@ -324,13 +331,15 @@ async (t) => {
       const context = handler.resolveReplicaContext(
         ADD_PARTITION_ID,
         ADD_REPLICA_ID,
-        {explicitOperationType: operationType},
+        {
+          explicitOperationType: operationType,
+          bootstrapMembership: committedStampFor([`${ADD_PARTITION_ID}-r1`]),
+        },
       );
-      t.equal(
-        context.existingReplicaCount,
-        0,
-        `${operationType}: no viable leader resolves to the dead-leader ` +
-          're-formation branch (0), not a leader-join count',
+      t.ok(
+        context.existingReplicaCount > 0,
+        `${operationType}: the COMMITTED stamp is a join; an unreachable ` +
+          'leader row no longer re-forms the group from rows (O1)',
       );
       t.ok(
         context.replicaIds.length > 1,
@@ -433,7 +442,10 @@ async (t) => {
         sqlEngine.executeQuery(sql, params),
     },
     tablePolicyService: createMockPolicyService(),
-    messageRouter: createMockMessageRouter(),
+    // The group's leader answers the committed-membership read with the
+    // committed configuration: the services owner's authoritative members.
+    messageRouter: withFixtureCommittedMembership(createMockMessageRouter(),
+      createMockCache({services: authoritativeServices})),
     sqlQueryEngine: sqlEngine,
     transactionCoordinator: createMockTransactionCoordinator(),
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
@@ -480,10 +492,10 @@ async (t) => {
         'authoritative cohort (a cache-only read would allocate -r1)',
     );
     t.same(
-      operation[ReplicaOperationField.REPLICA_IDS],
+      [...operation[ReplicaOperationField.REPLICA_IDS]].sort(),
       [COHORT_REPLICA_ONE_ID, COHORT_REPLICA_TWO_ID, COHORT_TARGET_REPLICA_ID],
-      'the stamped cohort includes the authoritative sibling rows the ' +
-        'lagging cache could not see',
+      'the stamp names the leader\'s committed members, which the lagging ' +
+        'cache could not see, plus the target',
     );
     t.equal(
       createdEvents.length,

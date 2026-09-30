@@ -120,11 +120,19 @@ const RAFT_RS_CORE_ERROR_MSG = Object.freeze({
     `found ${actual}`,
 });
 
+// The core's own Display text of a refusal the host decides on: raft-rs's
+// Error::ProposalDropped, which the binding carries as the message of its
+// typed refusal (prefixed with the primitive that refused).
+const RAFT_RS_CORE_REFUSAL_TEXT = Object.freeze({
+  PROPOSAL_DROPPED: 'raft: proposal dropped',
+});
+
 export {
   RAFT_RS_BINDING_LAYOUT,
   RAFT_RS_BINDING_STATE,
   RAFT_RS_CORE_ERROR_MSG,
   RAFT_RS_CORE_PRIMITIVES,
+  RAFT_RS_CORE_REFUSAL_TEXT,
   RAFT_RS_DIGEST_ALGORITHM,
   RAFT_RS_DIGEST_ENCODING,
   RAFT_RS_DIGEST_KEY,

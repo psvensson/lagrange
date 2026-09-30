@@ -13,6 +13,7 @@ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {DurableWorkflowCoordinator} from '../../src/workflow/durable-workflow-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 // Quest ledger-participant-transaction-zombie-lifecycle (P1, companion to the
 // landed leader-durability-fitness) — the transaction-lifecycle HEAL for the
@@ -91,7 +92,7 @@ function readDurableRecordIndependently(partition) {
 // replicaIds field after init — the exact input of the solo-group predicate.
 async function createPartition(t, {groupReplicaIds = ['replica-1']} = {}) {
   const warnings = [];
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: `replica_operations-p8-${tmpDirCounter}`,
     tableId: 'replica_operations',
     tableName: 'replica_operations',
@@ -105,7 +106,7 @@ async function createPartition(t, {groupReplicaIds = ['replica-1']} = {}) {
       ],
     },
     dbPath: makeTmpDbPath(t),
-  });
+  }));
   await partition.initialize();
   partition.replicaIds = groupReplicaIds;
   const originalWarn = partition.logger.warn.bind(partition.logger);

@@ -14,6 +14,10 @@ import {
 } from '../../src/raft/raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
+import {
+  COMMITTED_MEMBERSHIP_ANSWER_KIND,
+  COMMITTED_MEMBERSHIP_REFUSAL,
+} from '../../src/raft/raft-committed-membership-constants.js';
 import {RAFT_PARTITION_NODE_REQUEST} from
   '../../src/raft/raft-provider-contract-constants.js';
 import {applyCommittedEntryTransaction} from
@@ -30,6 +34,8 @@ import {
   evaluateLearnerPromotionProof,
 } from '../../src/raft/learner-promotion-progress.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {handlerIdentityApi} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 const PROOF_STUB_TERM = 1;
 const PROOF_STUB_COMMITTED_INDEX = 0;
@@ -93,6 +99,8 @@ export class ControllablePartitionRaftProvider {
     this.campaignHandler = null;
     this.confChangeHandler = null;
     this.confChangeOutcomes = [];
+    this.transferRequests = [];
+    this.transferHandler = null;
     this.listeners = new Map();
     this.steps = [];
     this.committedIndex = 0;
@@ -180,6 +188,12 @@ export class ControllablePartitionRaftProvider {
         this.confChangeOutcomes.push(proposed);
         return proposed;
       },
+      transferLeadership: (request) => {
+        this.transferRequests.push(request);
+        const answered = this.transferHandler ?
+          this.transferHandler(request) : null;
+        return answered?.outcome ? answered : testCoreOk();
+      },
       probePeerProgress: () => testCoreOk(),
       tick: () => testCoreOk(),
       campaign: () => {
@@ -199,6 +213,12 @@ export class ControllablePartitionRaftProvider {
         peerCount: this.peers.length,
         peers: this.peers.map((peer) => deepFreeze({...peer})),
       }),
+      // The fake holds no committed configuration; a test that needs one
+      // answers through committedMembershipHandler.
+      readCommittedMembership: (request) => this.committedMembershipHandler ?
+        this.committedMembershipHandler(request) : deepFreeze({
+          kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED,
+          reason: COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE}),
       configureTick: () => testCoreOk(),
       startScheduling: () => testCoreOk(),
       stopScheduling: () => testCoreOk(),
@@ -318,6 +338,7 @@ export function createLoopbackTransport() {
     unregister(address) {
       handlers.delete(address);
     },
+    ...handlerIdentityApi(handlers),
     async deliver(address, payload) {
       const handler = handlers.get(address);
       if (!handler) {

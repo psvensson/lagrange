@@ -125,8 +125,7 @@ const CATCHUP_BATCH_INFLIGHT_TTL_MS = 400;
 // window, so a live caught-up peer always draws a shorter delay and wins
 // first. Liveness is unconditional (finite inflation: with no viable peer the
 // reluctant node still campaigns), safety untouched (no vote/term/log logic),
-// and the deliberate replacement-election path is unaffected —
-// requestElectionNow passes an explicit 1ms duration that never consults
+// and an explicit-duration election is unaffected - it never consults
 // timeout().
 const RAFT_STATE_CHANGE_EVENT = 'state change';
 

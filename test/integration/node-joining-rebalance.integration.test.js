@@ -4,7 +4,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {HeartbeatService} from '../../src/control-plane/heartbeat-service.js';
@@ -35,6 +34,7 @@ import {
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
+  createVirginSeedBootstrapService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
   getUniquePort,
@@ -42,6 +42,7 @@ import {
 } from './helpers/cluster-test-helpers.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../../src/control-plane/control-plane-readiness-constants.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 async function shutdownOrFail(t, promise, label) {
   try {
@@ -196,7 +197,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440001';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -349,7 +350,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440010';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -451,7 +452,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440020';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -622,7 +623,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440030';
     const seedWsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
@@ -681,6 +682,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
 
       // Create decomposed control-plane services
       const heartbeatSvc = new HeartbeatService({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         cdcIntegrationService,

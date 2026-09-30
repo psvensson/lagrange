@@ -333,9 +333,30 @@ function buildDeferredNodeEvidence() {
   });
 }
 
-function collectDeferredReasonCodeSet(snapshot) {
+// Whether the completed snapshot a deferral stands in for was a denial on the
+// read's own decision dimension (the variant's dimension; the service's
+// stable serve default when none is named).
+function isDeferredVerdictDenial(snapshot, decisionDimension) {
+  const dimension = typeof decisionDimension === 'string' &&
+    decisionDimension.length > 0 ?
+    decisionDimension :
+    CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
+  return snapshot?.dimensions?.[dimension] !== true;
+}
+
+// The deferred denial means "no current verdict yet", so it is
+// evidence-absent (planning_snapshot_refresh_pending alone) unless the
+// completed snapshot it defers was itself a denial on the read's dimension,
+// whose reasons it keeps: a stale denial never becomes "no verdict". The
+// reasons of an ELIGIBLE completed snapshot are informational (a lifecycle
+// DEGRADED reason such as PRIORITY_CONTROL_PLANE_RECOVERY_PENDING on an
+// eligible snapshot) and are never copied: copied, they made the deferral a
+// substantive denial and closed every evidence-absent carve-out (fix-f4).
+function collectDeferredReasonCodeSet(snapshot, decisionDimension) {
   const reasons = new SetConstructor();
-  const snapshotReasons = copyDenseOwnDataArray(snapshot?.reasons);
+  const snapshotReasons = isDeferredVerdictDenial(snapshot, decisionDimension) ?
+    copyDenseOwnDataArray(snapshot?.reasons) :
+    null;
   if (snapshotReasons !== null) {
     for (let index = 0; index < snapshotReasons.length; index++) {
       const reason = snapshotReasons[index];
@@ -351,13 +372,18 @@ function collectDeferredReasonCodeSet(snapshot) {
   return reasons;
 }
 
-function buildDeferredSnapshot(snapshot, token, ownerKey = null) {
+function buildDeferredSnapshot(
+  snapshot,
+  token,
+  ownerKey = null,
+  decisionDimension = null,
+) {
   const dimensions = objectCreate(null);
   const dimensionNames = resolveDeferredDimensionNames(snapshot);
   for (let index = 0; index < dimensionNames.length; index++) {
     defineRecordValue(dimensions, dimensionNames[index], false);
   }
-  const reasons = collectDeferredReasonCodeSet(snapshot);
+  const reasons = collectDeferredReasonCodeSet(snapshot, decisionDimension);
   const deferredReasonCodes = new ArrayConstructor();
   // Canonical reason shape: consumers (collectReasonCodes, routing denial
   // summaries) read reason.code records; bare strings silently vanished from

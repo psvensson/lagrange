@@ -150,6 +150,20 @@ function readFirstOwnValue(record, fieldNames) {
   return undefined;
 }
 
+// The node-row facts the projection reads, in its own field vocabulary: the
+// content two rows at one heartbeat watermark must share to be one view.
+function readNodeLivenessRowFacts(nodeRow) {
+  const times = readNodeTimes(nodeRow);
+  return objectFreeze({
+    lastHeartbeatMs: times.lastHeartbeatMs,
+    readyLeaseExpiresAtMs: times.readyLeaseExpiresAtMs,
+    hasReadyLeaseField: hasOwnReadyLeaseField(nodeRow),
+    status: normalizeState(readFirstOwnValue(nodeRow, STATUS_FIELD_NAMES)),
+    connectionState: normalizeState(
+      readFirstOwnValue(nodeRow, CONNECTION_STATE_FIELD_NAMES)),
+  });
+}
+
 function readNodeTimes(nodeRow) {
   return objectFreeze({
     lastHeartbeatMs: normalizeFiniteNumber(
@@ -594,4 +608,5 @@ export {
   normalizeThresholds,
   normalizeSemanticNowMs,
   projectNodeLivenessSemantics,
+  readNodeLivenessRowFacts,
 };

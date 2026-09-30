@@ -435,6 +435,10 @@ test('MessageGroupService - flushes services role update when local services lea
       t.equal(updates[0].tableName, SYSTEM_TABLE_NAME.SERVICES, 'should target services');
       t.same(updates[0].whereClause, {
         [COLUMN.SERVICE_ID]: 'mg-1-r1',
+        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+        [COLUMN.GROUP_ID]: 'mg-1',
+        [COLUMN.REPLICA_ID]: 'mg-1-r1',
+        [COLUMN.NODE_ID]: service.nodeId,
       }, 'should update the local message-group service row');
       t.equal(
         updates[0].data?.raft_role,

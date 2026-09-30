@@ -47,6 +47,7 @@ import {
   ServiceLifecycleManager,
   ServiceReconciler,
 } from '../../src/service/index.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 // The host primitives, captured before any recorder replaces them, so a
 // supplied clock's own delegation is never counted as production reaching
@@ -201,6 +202,7 @@ const settle = (delayMs) =>
  */
 function productionBootstrapService() {
   return new BootstrapService({
+    bootIncarnation: 1,
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT,
     nodeService: new NodeService(),
   });
@@ -214,6 +216,7 @@ function productionBootstrapService() {
  */
 function suppliedClockBootstrapService(clock) {
   return new BootstrapService({
+    bootIncarnation: 1,
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT,
     nodeService: new NodeService({timeSource: clock}),
   });
@@ -228,14 +231,14 @@ function suppliedClockBootstrapService(clock) {
  * @return {Promise<PartitionService>}
  */
 async function startPartitionReplica(open, label, authorities) {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: `${TABLE_ID}-${label}`,
     tableId: TABLE_ID,
     replicaId: `${TABLE_ID}-${label}-r1`,
     nodeId: NODE_ID,
     dbPath: IN_MEMORY_DB,
     ...authorities,
-  });
+  }));
   open.push(partition);
   await partition.initialize();
   await settle(CONSTRUCTOR_HOP_SETTLE_MS);

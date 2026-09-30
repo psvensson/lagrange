@@ -1,3 +1,4 @@
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 export async function registerMessageRouterTailFinalTests({
   t,
   MessageRouter,
@@ -20,7 +21,7 @@ export async function registerMessageRouterTailFinalTests({
     const logging = LoggingService.getInstance();
     logging.initialize({level: 'error'});
 
-    const router = new MessageRouter({nodeId: 'node-a'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'node-a'});
     await router.initialize({startServer: false});
     t.teardown(async () => {
       await router.shutdown().catch(() => {});
@@ -79,6 +80,7 @@ export async function registerMessageRouterTailFinalTests({
       logging.initialize({level: 'error'});
 
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-a',
       });
       await router.initialize({startServer: false});
@@ -229,6 +231,7 @@ export async function registerMessageRouterTailFinalTests({
   t.test('should fall back from observed reconnect address to configured resolver address',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-a',
       });
       await router.initialize({startServer: false});
@@ -329,6 +332,7 @@ export async function registerMessageRouterTailFinalTests({
   t.test('should keep the preserved observed reconnect address as bounded fallback behind canonical authority',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-a',
       });
       await router.initialize({startServer: false});
@@ -424,6 +428,7 @@ export async function registerMessageRouterTailFinalTests({
   t.test('should suppress a stale reconnect address across deliveries after ENOTFOUND',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-a',
       });
       await router.initialize({startServer: false});
@@ -542,7 +547,9 @@ export async function registerMessageRouterTailFinalTests({
 
       for (const testCase of cases) {
         await t.test(testCase.name, async (t) => {
-          const router = new MessageRouter({nodeId: 'node-a'});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: 'node-a'});
           await router.initialize({startServer: false});
           t.teardown(async () => {
             await router.shutdown().catch(() => {});
@@ -665,6 +672,7 @@ export async function registerMessageRouterTailFinalTests({
   t.test('should replace a stale configured reconnect address with the current authoritative resolver address',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-a',
       });
       await router.initialize({startServer: false});
@@ -754,7 +762,7 @@ export async function registerMessageRouterTailFinalTests({
 
   t.test('scheduled reconnect should refresh to the current authoritative resolver address before redialing',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'node-a'});
+      const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'node-a'});
       await router.initialize({startServer: false});
       t.teardown(async () => {
         await router.shutdown().catch(() => {});
@@ -816,6 +824,7 @@ export async function registerMessageRouterTailFinalTests({
     'reconnect candidates (uses normalizeToWebSocketAddress)',
   async (t) => {
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-a',
     });
     await router.initialize({startServer: false});

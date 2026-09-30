@@ -14,7 +14,9 @@ import {
   RAFT_RS_BOOLEAN_COLUMN,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
+  RAFT_RS_PARTICIPATION_GATE_COLUMNS,
   RAFT_RS_PERSISTENCE_ADMISSION,
+  RAFT_RS_RECORD_COMPATIBILITY,
   RAFT_RS_RECORD_TABLES,
   RAFT_RS_SCHEMA_SQL,
   RAFT_RS_SQL,
@@ -51,6 +53,16 @@ function toExactInteger(value) {
  */
 function fromExactInteger(value) {
   return String(value);
+}
+
+/**
+ * A nullable column read with safe integers, as a decimal string or null.
+ * @param {bigint|number|null|undefined} value - The column value.
+ * @return {string|null} The decimal string, or null.
+ */
+function nullableExactInteger(value) {
+  return value === null || value === undefined ? null :
+    fromExactInteger(value);
 }
 
 /**
@@ -312,6 +324,44 @@ class RaftRsDurableStore {
   }
 
   /**
+   * Durably record a created group's first applied state (index 0, its
+   * bootstrap configuration) together with its participation gate: the
+   * committed index its bootstrap configuration was read at and, when that
+   * configuration already names this replica a voter, its admission index.
+   * One statement, like every applied-state write.
+   * @param {string} groupId - The group.
+   * @param {Object} confState - The bootstrap ConfState the core reported.
+   * @param {Object} gate - {bootstrapIndex, admissionIndex} as decimal
+   *   strings; admissionIndex null while this replica is not admitted.
+   */
+  putBootstrapAppliedState(groupId, confState, {bootstrapIndex,
+    admissionIndex}) {
+    this.admitWrite();
+    this.db.prepare(RAFT_RS_SQL.UPSERT_BOOTSTRAP_APPLIED_STATE).run(
+      groupId,
+      toExactInteger(RAFT_RS_ZERO_INDEX),
+      ...confStateColumns(confState),
+      toExactInteger(bootstrapIndex),
+      admissionIndex === null ? null : toExactInteger(admissionIndex),
+    );
+    this.record(RAFT_RS_HOST_WRITE.CONF_STATE_AND_APPLIED, {groupId,
+      appliedIndex: RAFT_RS_ZERO_INDEX, confState, bootstrapIndex,
+      admissionIndex});
+  }
+
+  /**
+   * Durably record the index of the applied entry that admitted this replica
+   * as a voter. Called inside the application transaction of that entry.
+   * @param {string} groupId - The group.
+   * @param {string} admissionIndex - The entry's index as a decimal string.
+   */
+  putAdmissionIndex(groupId, admissionIndex) {
+    this.admitWrite();
+    this.db.prepare(RAFT_RS_SQL.UPDATE_ADMISSION_INDEX)
+      .run(toExactInteger(admissionIndex), groupId);
+  }
+
+  /**
    * Durably store a snapshot and the configuration it carries.
    * @param {string} groupId - The group.
    * @param {Object} snapshot - A Ready snapshot from the core.
@@ -336,7 +386,9 @@ class RaftRsDurableStore {
    * Read one group's whole durable Raft record. A table it cannot read is
    * named on the error it throws (readRecordTable).
    * @param {string} groupId - The group.
-   * @return {Object} {hardState, confState, appliedIndex, entries, snapshot}.
+   * @return {Object} {hardState, confState, appliedIndex, bootstrapIndex,
+   *   admissionIndex, entries, snapshot}; the two gate indices are decimal
+   *   strings, or null when the record holds none.
    */
   readDurableRecord(groupId) {
     const {hardStateRow, appliedRow} = this.readProgressRows(groupId);
@@ -356,6 +408,8 @@ class RaftRsDurableStore {
         fromExactInteger(appliedRow.applied_index) :
         RAFT_RS_ZERO_INDEX,
       confState: appliedRow ? confStateFromRow(appliedRow) : emptyConfState(),
+      bootstrapIndex: nullableExactInteger(appliedRow?.bootstrap_index),
+      admissionIndex: nullableExactInteger(appliedRow?.admission_index),
       entries: entryRows.map((row) => ({
         index: fromExactInteger(row.log_index),
         term: fromExactInteger(row.term),
@@ -453,6 +507,24 @@ class RaftRsDurableStore {
     const row = db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE)
       .safeIntegers(true).get(groupId);
     return row ? fromExactInteger(row.applied_index) : null;
+  }
+
+  /**
+   * Whether the record's schema carries the participation gate: a table
+   * created before the gate existed lacks its columns, and such a record
+   * cannot prove this replica's role (owner decisions O1, O3).
+   * @return {string} A RAFT_RS_RECORD_COMPATIBILITY state.
+   */
+  recordCompatibility() {
+    const columns = new Set(readRecordTable(RAFT_RS_TABLE.APPLIED_STATE, () =>
+      this.db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE_COLUMNS).all())
+      .map((row) => row.name));
+    if (columns.size === 0) {
+      return RAFT_RS_RECORD_COMPATIBILITY.TABLE_MISSING;
+    }
+    return RAFT_RS_PARTICIPATION_GATE_COLUMNS.every((column) =>
+      columns.has(column)) ? RAFT_RS_RECORD_COMPATIBILITY.COMPATIBLE :
+      RAFT_RS_RECORD_COMPATIBILITY.PRE_GATE;
   }
 
   /**

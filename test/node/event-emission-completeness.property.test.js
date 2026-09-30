@@ -17,12 +17,13 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createLifecycleCdcService} from
+  '../test-helpers/lifecycle-state-store.js';
+import {withRegisteredActivationHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 function createMockCDCService() {
-  return {
-    updateSystemTableRow: async () => ({success: true}),
-    upsertSystemTableRow: async () => ({success: true}),
-  };
+  return createLifecycleCdcService();
 }
 
 // All possible states
@@ -65,10 +66,10 @@ test('Property 8: Event Emission Completeness', async (t) => {
         fc.uuid(),
         fc.string({minLength: 1, maxLength: 50}),
         async (replicaId, partitionId, reason) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           let emittedEvent = null;
           stateMachine.on('stateTransition', (event) => {
@@ -113,10 +114,10 @@ test('Property 8: Event Emission Completeness', async (t) => {
         fc.uuid(),
         fc.uuid(),
         async (replicaId, partitionId) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           let eventEmittedBeforeResolution = false;
           let transitionResolved = false;
@@ -159,10 +160,10 @@ test('Property 8: Event Emission Completeness', async (t) => {
         fc.uuid(),
         fc.string({minLength: 1, maxLength: 100}),
         async (replicaId, partitionId, errorMessage) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           let emittedEvent = null;
           stateMachine.on('stateTransition', (event) => {
@@ -208,10 +209,10 @@ test('Property 8: Event Emission Completeness', async (t) => {
         fc.uuid(),
         fc.integer({min: 2, max: 5}),
         async (replicaId, partitionId, observerCount) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           const receivedEvents = [];
           for (let i = 0; i < observerCount; i++) {
@@ -252,10 +253,10 @@ test('Property 8: Event Emission Completeness', async (t) => {
         fc.uuid(),
         fc.uuid(),
         async (replicaId, partitionId) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           const events = [];
           stateMachine.on('stateTransition', (event) => {
@@ -298,10 +299,10 @@ test('Property 8: Event Emission Completeness', async (t) => {
         fc.uuid(),
         fc.uuid(),
         async (replicaId, partitionId) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
-          });
+          }));
 
           const events = [];
           stateMachine.on('stateTransition', (event) => {

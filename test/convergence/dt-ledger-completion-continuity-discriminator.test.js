@@ -39,6 +39,7 @@
  *   Physical-leadership witness — only recorded exact-target election
  *                           evidence CONTINUEs a remove-safety handoff.
  */
+import {createReplaceWitness} from '../rebalancer/replace-witness-fixture.js';
 import t from 'tap';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -72,9 +73,6 @@ import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
 
 const {
   PRIORITY_PUBLICATION_FOLLOWER_SOURCE_REMOVAL_SAFETY_STATE,
-  REMOVE_SAFETY_HANDOFF_CONTINUATION_ACTION,
-  REMOVE_SAFETY_HANDOFF_CONTINUATION_ACTION_BY_STATE,
-  REMOVE_SAFETY_HANDOFF_CONTINUATION_STATE,
   decidePriorityPublicationFollowerSourceRemovalSafety,
 } = SAFETY_SHARED;
 
@@ -251,28 +249,6 @@ t.test(
       inFlightWith(row, [demotedTargetRow]),
       true,
       'the exact target replica present but not ACTIVE is not completion evidence',
-    );
-  },
-);
-
-t.test(
-  'physical-leadership witness: only recorded exact-target election evidence ' +
-    'continues a remove-safety handoff',
-  async (t) => {
-    t.equal(
-      REMOVE_SAFETY_HANDOFF_CONTINUATION_ACTION_BY_STATE.get(
-        REMOVE_SAFETY_HANDOFF_CONTINUATION_STATE
-          .EXACT_TARGET_ELECTION_EVIDENCE_RECORDED,
-      ),
-      REMOVE_SAFETY_HANDOFF_CONTINUATION_ACTION.CONTINUE,
-      'recorded exact-target election evidence is the only CONTINUE state',
-    );
-    t.equal(
-      REMOVE_SAFETY_HANDOFF_CONTINUATION_ACTION_BY_STATE.get(
-        REMOVE_SAFETY_HANDOFF_CONTINUATION_STATE.NOT_APPLICABLE,
-      ),
-      REMOVE_SAFETY_HANDOFF_CONTINUATION_ACTION.WAIT,
-      'anything short of recorded election evidence WAITs',
     );
   },
 );
@@ -576,12 +552,32 @@ t.test(
     owner.repository.replicaOperationAuthoritativeVisibilityTimeoutMs = 5;
     try {
       const durable = await coordinator.queryOperationById('op-terminal-1');
+      // Quest replace-source-removal-owner (R11/A11.1): the repair re-runs
+      // R-1a before it re-asserts a REPLACE's REMOVED, so this REMOVED is one
+      // R-1a admitted: its intent (C0) is recorded and the witness (the
+      // target's own port) reads the source absent. F1 (owner ruling): the
+      // answer is the leader's - the target leads - since a leaderless
+      // answer is WAIT.
+      const witness = createReplaceWitness({
+        sourceVoter: false,
+        leaderReplicaId: syncingRow.replica_id,
+      });
+      const baseDeliver = owner.messageRouter.deliver.bind(owner.messageRouter);
+      owner.messageRouter.deliver = async (target, payload, options) =>
+        witness.answer(payload) ?? baseDeliver(target, payload, options);
       const projectedTerminal = {
         ...durable,
         status: 'removed',
         workflowStep: 'REMOVED',
         updatedAt: now + 10,
         completedAt: now + 10,
+        stepsHistory: [...durable.stepsHistory, {
+          step: 'STOPPING',
+          timestamp: now + 5,
+          sourceReplicaId: syncingRow.source_replica_id,
+          replaceRemovalIntent: true,
+          replaceWitnessCommitIndex: witness.commitIndex,
+        }],
       };
 
       // The terminal write never landed durably (failed authoritative

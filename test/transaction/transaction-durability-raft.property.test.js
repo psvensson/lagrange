@@ -46,6 +46,7 @@ function committedLogIndex(partition) {
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -84,7 +85,7 @@ test('Property 48: Committed transactions are replicated to Raft log', async (t)
     fc.asyncProperty(
       operationsArb,
       async (ops) => {
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId: `test-partition-${Date.now()}-${Math.random()}`,
           tableId: 'test_table',
           tableName: 'test_table',
@@ -96,7 +97,7 @@ test('Property 48: Committed transactions are replicated to Raft log', async (t)
             ],
           },
           dbPath: fileDbPath(),
-        });
+        }));
 
         await partition.initialize();
 
@@ -149,7 +150,7 @@ test('Property 48: Commit is committed through consensus', async (t) => {
       fc.integer({min: 1, max: 100}),
       valueArb,
       async (id, value) => {
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId: `test-partition-${Date.now()}-${Math.random()}`,
           tableId: 'test_table',
           tableName: 'test_table',
@@ -161,7 +162,7 @@ test('Property 48: Commit is committed through consensus', async (t) => {
             ],
           },
           dbPath: fileDbPath(),
-        });
+        }));
 
         await partition.initialize();
 
@@ -206,7 +207,7 @@ test('Property 48: Data persists after commit', async (t) => {
       fc.integer({min: 1, max: 100}),
       valueArb,
       async (id, value) => {
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId: `test-partition-${Date.now()}-${Math.random()}`,
           tableId: 'test_table',
           tableName: 'test_table',
@@ -218,7 +219,7 @@ test('Property 48: Data persists after commit', async (t) => {
             ],
           },
           dbPath: fileDbPath(),
-        });
+        }));
 
         await partition.initialize();
 
@@ -261,7 +262,7 @@ test('Property 48: Rolled back transactions are not in Raft log', async (t) => {
     fc.asyncProperty(
       operationsArb,
       async (ops) => {
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId: `test-partition-${Date.now()}-${Math.random()}`,
           tableId: 'test_table',
           tableName: 'test_table',
@@ -273,7 +274,7 @@ test('Property 48: Rolled back transactions are not in Raft log', async (t) => {
             ],
           },
           dbPath: fileDbPath(),
-        });
+        }));
 
         await partition.initialize();
 
@@ -334,7 +335,7 @@ test('Property 48: Multiple commits create multiple Raft entries', async (t) => 
     fc.asyncProperty(
       fc.integer({min: 2, max: 5}),
       async (numTransactions) => {
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId: `test-partition-${Date.now()}-${Math.random()}`,
           tableId: 'test_table',
           tableName: 'test_table',
@@ -346,7 +347,7 @@ test('Property 48: Multiple commits create multiple Raft entries', async (t) => 
             ],
           },
           dbPath: fileDbPath(),
-        });
+        }));
 
         await partition.initialize();
 

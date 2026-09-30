@@ -8,8 +8,6 @@ import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
-import {ControlPlaneField} from
-  '../../src/control-plane/control-plane-constants.js';
 import {
   COLUMN,
   SERVICE_TYPE,
@@ -18,6 +16,7 @@ import {
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {
+  applyDurableReadyNodeRow,
   claimPendingOperation,
   createCanonicalPartitionOperationRow,
   initializeAtomicClaimTestEnvironment as initEnv,
@@ -169,13 +168,8 @@ test(
     };
 
     try {
-      await service.handleNodeStateUpdate({
-        [ControlPlaneField.NODE_ID]: 'node-2',
-        [ControlPlaneField.NODE_ADDRESS]: 'localhost:8082',
-        [ControlPlaneField.STATE]: STATE.READY,
-        [ControlPlaneField.HEARTBEAT_AT]: now,
-        [ControlPlaneField.READY_LEASE_EXPIRES_AT]: now + 30000,
-      });
+      applyDurableReadyNodeRow(readyNodeRow, now, now + 30000);
+      service.handleCacheNodeChange(SYSTEM_TABLE_NAME.NODES, readyNodeRow);
       await service.handleCdcApplied(leaderMessageGroup, {
         tableName: SYSTEM_TABLE_NAME.NODES,
         data: readyNodeRow,
@@ -337,13 +331,8 @@ test(
     exposeOperationRows = true;
 
     try {
-      await service.handleNodeStateUpdate({
-        [ControlPlaneField.NODE_ID]: 'node-2',
-        [ControlPlaneField.NODE_ADDRESS]: 'localhost:8082',
-        [ControlPlaneField.STATE]: STATE.READY,
-        [ControlPlaneField.HEARTBEAT_AT]: now,
-        [ControlPlaneField.READY_LEASE_EXPIRES_AT]: now + 30000,
-      });
+      applyDurableReadyNodeRow(readyNodeRow, now, now + 30000);
+      service.handleCacheNodeChange(SYSTEM_TABLE_NAME.NODES, readyNodeRow);
       await waitForRetryDrain(service);
 
       t.equal(
@@ -360,13 +349,8 @@ test(
       readyNodeRow.last_heartbeat = now + 1000;
       readyNodeRow.ready_lease_expires_at = now + 31000;
 
-      await service.handleNodeStateUpdate({
-        [ControlPlaneField.NODE_ID]: 'node-2',
-        [ControlPlaneField.NODE_ADDRESS]: 'localhost:8082',
-        [ControlPlaneField.STATE]: STATE.READY,
-        [ControlPlaneField.HEARTBEAT_AT]: now + 1000,
-        [ControlPlaneField.READY_LEASE_EXPIRES_AT]: now + 31000,
-      });
+      applyDurableReadyNodeRow(readyNodeRow, now + 1000, now + 31000);
+      service.handleCacheNodeChange(SYSTEM_TABLE_NAME.NODES, readyNodeRow);
       await waitForRetryDrain(service);
 
       t.equal(
@@ -526,12 +510,13 @@ test(
     };
 
     try {
-      await service.handleNodeStateUpdate({
-        [ControlPlaneField.NODE_ID]: 'node-2',
-        [ControlPlaneField.NODE_ADDRESS]: 'localhost:8082',
-        [ControlPlaneField.STATE]: STATE.READY,
-        [ControlPlaneField.HEARTBEAT_AT]: now + 1000,
-      });
+      const durableReadyRow = applyDurableReadyNodeRow(
+        {...nodeStore.get('node-2')},
+        now + 1000,
+        now + 31000,
+      );
+      nodeStore.set('node-2', durableReadyRow);
+      service.handleCacheNodeChange(SYSTEM_TABLE_NAME.NODES, durableReadyRow);
       await waitForRetryDrain(service);
 
       const cdcReadyRow = {

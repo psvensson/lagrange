@@ -18,6 +18,8 @@ import {
   createCanonicalReadinessService,
   initializeTestEnvironment,
 } from './bootstrap-api-test-fixtures.js';
+import {withRegisteredIncarnations} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 
 test('BootstrapAPI - getReadyNodes does not duplicate seed node', async (t) => {
@@ -308,42 +310,42 @@ test('BootstrapAPI - getReadyNodes requires canonical websocket endpoint visibil
 
     const now = Date.now();
     const validLease = now + 10000;
+    // Registered nodes and their endpoints share one boot incarnation, as
+    // production writes them; only node-3 publishes a websocket endpoint.
+    const rows = withRegisteredIncarnations({
+      [TABLES.NODES]: [
+        {
+          node_id: 'seed-node-1',
+          status: 'active',
+          connection_state: STATE.READY,
+          ready_lease_expires_at: validLease,
+        },
+        {
+          node_id: 'node-2',
+          status: 'active',
+          connection_state: STATE.READY,
+          ready_lease_expires_at: validLease,
+        },
+        {
+          node_id: 'node-3',
+          status: 'active',
+          connection_state: STATE.READY,
+          ready_lease_expires_at: validLease,
+        },
+      ],
+      [TABLES.NODE_ENDPOINTS]: [{
+        endpoint_id: 'node-3-ws',
+        node_id: 'node-3',
+        transport_type: TRANSPORT_TYPE.WEBSOCKET,
+        status: ENDPOINT_STATUS.ACTIVE,
+        address: 'ws://node-3:8082',
+      }],
+    });
     const mockCache = {
-      get: () => null,
-      getAll: (tableName) => {
-        if (tableName === TABLES.NODES) {
-          return [
-            {
-              node_id: 'seed-node-1',
-              status: 'active',
-              connection_state: STATE.READY,
-              ready_lease_expires_at: validLease,
-            },
-            {
-              node_id: 'node-2',
-              status: 'active',
-              connection_state: STATE.READY,
-              ready_lease_expires_at: validLease,
-            },
-            {
-              node_id: 'node-3',
-              status: 'active',
-              connection_state: STATE.READY,
-              ready_lease_expires_at: validLease,
-            },
-          ];
-        }
-        if (tableName === TABLES.NODE_ENDPOINTS) {
-          return [{
-            endpoint_id: 'node-3-ws',
-            node_id: 'node-3',
-            transport_type: TRANSPORT_TYPE.WEBSOCKET,
-            status: ENDPOINT_STATUS.ACTIVE,
-            address: 'ws://node-3:8082',
-          }];
-        }
-        return [];
-      },
+      get: (tableName, key) => tableName === TABLES.NODES ?
+        rows[TABLES.NODES].find((row) => row.node_id === key) || null :
+        null,
+      getAll: (tableName) => rows[tableName] || [],
       filter: (tableName, predicate) => {
         const all = mockCache.getAll(tableName);
         return all.filter(predicate);

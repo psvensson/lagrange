@@ -636,6 +636,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
       publishedActiveNodeIdsPresent:
         protocolSnapshot.publishedActiveNodeIdsPresent,
       publishedActiveNodeIds: protocolSnapshot.publishedActiveNodeIds,
+      pendingCandidateNodeIds: protocolSnapshot.pendingCandidateNodeIds,
       requiredAckNodeIds: protocolSnapshot.requiredAckNodeIds,
       acknowledgedNodeIds: protocolSnapshot.acknowledgedNodeIds,
       priorityPartitionSummary: protocolSnapshot.priorityPartitionSummary,

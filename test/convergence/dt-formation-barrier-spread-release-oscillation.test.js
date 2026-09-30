@@ -12,6 +12,7 @@ import {
   isTerminalStep,
 } from '../../src/rebalancer/replica-operation-progress.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {installReplaceWitnesses} from '../rebalancer/replace-witness-fixture.js';
 import {
   createTimeoutTestCoordinator,
 } from '../rebalancer/timeout-test-coordinator.js';
@@ -173,6 +174,13 @@ function buildScenario(options = {}) {
   });
   const {coordinator, trackedOperations} = fixture;
   coordinator.systemTableCache = cache;
+  // Each REPLACE target's own configuration, as the REPLACE owner reads it
+  // (quest replace-source-removal-owner, C1): the source stays a voter until
+  // the simulated STOPPING effect removes it.
+  // F1: each witness answers as its group's leader (the completion
+  // authority is the leader-answered configuration).
+  const replaceWitnesses = installReplaceWitnesses(coordinator.messageRouter,
+    {addressedLeads: true});
   coordinator.repository.systemTableCache = cache;
   const clock = clockAtBuild;
   const stormStartAt = BARRIER_START_MS + STORM_START_OFFSET_MS;
@@ -314,6 +322,10 @@ function buildScenario(options = {}) {
         cache.applySystemTableChange('services', 'DELETE', {
           service_id: removingReplicaId,
         });
+        if (isReplace) {
+          // The removal the effect performs commits in the configuration.
+          replaceWitnesses.witnessFor(operation.operationId).commitRemoval();
+        }
       }
     }
   };
@@ -501,17 +513,33 @@ t.test(
         'at least one spread-op admission INSERT executed session-less ' +
           'through the concentrated window (link A relief engaged)',
       );
+      // SUPERSEDED (R09) by owner decision D2 (2026-09-25), quest
+      // replace-source-removal-owner: a REPLACE past its removal intent is
+      // never failed by a deferral count or a timer, so link B's relief for
+      // the spread REPLACE is no longer the starvation FAILED. Its owner
+      // completes it from the target's committed configuration, which the
+      // shed services lane does not gate - link B cannot pin it.
       const failedOperations = [...trackedOperations.values()].filter(
         (operation) => operation.workflow_step === WORKFLOW_STEP.FAILED,
       );
+      const replaceOperations = [...trackedOperations.values()].filter(
+        (operation) => operation.type === OperationType.REPLACE,
+      );
       t.ok(
-        failedOperations.length >= 1 &&
-          failedOperations.every((operation) =>
-            String(operation.error_message || '').includes(
-              STOPPING_STARVATION_MESSAGE_FRAGMENT,
-            )),
-        'starved STOPPING observation escalates to a VISIBLE typed failure ' +
-          'instead of deferring forever (link B relief engaged)',
+        replaceOperations.length >= 1 &&
+          replaceOperations.every((operation) =>
+            operation.workflow_step === WORKFLOW_STEP.REMOVED),
+        'the STOPPING REPLACE completes from its committed membership while ' +
+          'the services observation lane is shed (link B relief, D2)',
+      );
+      t.same(
+        failedOperations.filter((operation) =>
+          operation.type === OperationType.REPLACE ||
+          !String(operation.error_message || '').includes(
+            STOPPING_STARVATION_MESSAGE_FRAGMENT)),
+        [],
+        'no REPLACE is failed after its intent; any other failure is the ' +
+          'typed starvation escalation',
       );
       t.ok(
         [...trackedOperations.values()].some(

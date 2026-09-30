@@ -1,6 +1,10 @@
 import {assertCritical} from '../../utils/assert.js';
 import {MessageGroupService} from '../../message-group/message-group-service.js';
 import {
+  registerMessageGroupTransportHandler,
+  retireMessageGroupTransportHandler,
+} from '../shared/message-group-transport-handler.js';
+import {
   JOINING_LOG_MSG,
 } from '../node-joining-constants.js';
 import {
@@ -13,6 +17,12 @@ import {
 
 const LOCAL_STR_FUNCTION = 'function';
 
+function attachMessageGroupServiceBeforePublish(delegates, messageGroup) {
+  if (typeof delegates.attachMessageGroupService === LOCAL_STR_FUNCTION) {
+    delegates.attachMessageGroupService(messageGroup);
+  }
+}
+
 /**
  * Format missing-replica assertion message for join lifecycle.
  * @param {string} replicaId
@@ -20,6 +30,24 @@ const LOCAL_STR_FUNCTION = 'function';
  */
 const formatJoinReplicaMissingAtStart = (replicaId) =>
   `Join message-group replica ${replicaId} missing at start`;
+
+/**
+ * Build the debug envelope logger for a join message-group handler.
+ * @param {Object} options - Join replica options (logEnvelope).
+ * @param {Object} logger - Join logger.
+ * @param {string} address - Handler address.
+ * @return {Function|null} Envelope observer, or null when not logging.
+ */
+function buildJoinEnvelopeLogger(options, logger, address) {
+  if (!options.logEnvelope) return null;
+  return (envelope) => {
+    logger.debug(JOINING_LOG_MSG.JOIN_MESSAGE_RECEIVED, {
+      address,
+      envelopeType: envelope?.type || envelope?.payload?.type,
+      from: envelope?.from || envelope?.payload?.address,
+    });
+  };
+}
 
 const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
   /**
@@ -76,20 +104,11 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
       `${ENTITY_TYPE.MESSAGE_GROUP}` +
       `${ADDRESS.SEPARATOR}${options.replicaId}`;
     const logger = this.delegates.getLogger();
-    messageRouter.register(unifiedAddress, (envelope) => {
-      if (options.logEnvelope) {
-        logger.debug(
-          JOINING_LOG_MSG.JOIN_MESSAGE_RECEIVED,
-          {
-            address: unifiedAddress,
-            envelopeType:
-              envelope?.type || envelope?.payload?.type,
-            from:
-              envelope?.from || envelope?.payload?.address,
-          },
-        );
-      }
-      return messageGroup.receiveMessage(envelope);
+    registerMessageGroupTransportHandler(messageGroup, {
+      messageRouter,
+      address: unifiedAddress,
+      resolveLane: () => this.delegates.getReplicaStateMachine?.() || null,
+      onEnvelope: buildJoinEnvelopeLogger(options, logger, unifiedAddress),
     });
 
     if (options.logRegistration) {
@@ -103,6 +122,7 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
     }
 
     await messageGroup.initialize();
+    attachMessageGroupServiceBeforePublish(this.delegates, messageGroup);
     messageGroupServices.set(options.replicaId, messageGroup);
     this.delegates.pushJoinMessageGroupReplica(messageGroup);
 
@@ -189,10 +209,12 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
       `${this.nodeId}${ADDRESS.SEPARATOR}` +
       `${ENTITY_TYPE.MESSAGE_GROUP}` +
       `${ADDRESS.SEPARATOR}${options.replicaId}`;
-    const messageRouter = this.delegates.getMessageRouter();
-    if (messageRouter) {
-      messageRouter.unregister(unifiedAddress);
-    }
+    await retireMessageGroupTransportHandler({
+      messageGroup,
+      messageRouter: this.delegates.getMessageRouter(),
+      address: unifiedAddress,
+      replicaId: options.replicaId,
+    });
 
     messageGroupServices.delete(options.replicaId);
     this.delegates.removeJoinMessageGroupReplica(messageGroup);

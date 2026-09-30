@@ -1,6 +1,5 @@
 import {OperationWorkflowDispatchExecution} from './operation-workflow-dispatch-execution.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
-import {TIME_MS} from '../constants/time.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   isEvidenceAbsentReadinessDenialSnapshot,
@@ -9,17 +8,15 @@ import {classifySystemPartition} from '../bootstrap/system-partition-classificat
 import {UNIFIED_SERVICE_TYPE} from
   '../constants/unified-service-lifecycle.js';
 
+import {isReplaceRemovalIntentDurable} from './operation-workflow-replace-owner.js';
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
-  PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE,
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
   PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS,
   RAFT_ROLE,
   REBALANCER_SKIP_REASON,
-  ReplicaOperationMessageType,
-  ReplicaOperationReason,
   ReplicaOperationResponseStatus,
   SERVICE_TYPE,
   STOP_PHASE_SOURCE_ABSENT_RESPONSE_STATUSES,
@@ -28,11 +25,6 @@ const {
   WORKFLOW_STEP,
   normalizePriorityRecoveryOperationPartitionId,
 } = SHARED;
-
-// R3: TTL for the source-leader-handoff stall anchor (2 min) — above the escalation floor
-// and the evidence STALE_AFTER_MS so the anchor doesn't race the escalation window.
-const PRIORITY_PUBLICATION_SOURCE_LEADER_HANDOFF_STALL_TTL_MS =
-  TIME_MS.MINUTE * 2;
 
 class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecution {
   buildPriorityRecoveryWorkflowStepTimeoutMap(operation = null) {
@@ -48,6 +40,13 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
   }
 
   async handleStopPhaseSatisfiedResponse(operation, responseStatus) {
+    // A partition REPLACE's stop-phase answer (the source's lifecycle
+    // retired) is not its completion: the STOPPING owner decides from the
+    // witness's committed configuration (R-1a) and re-drives the membership
+    // removal (R-1f) (quest replace-source-removal-owner).
+    if (isReplaceRemovalIntentDurable(operation)) {
+      return this.runReplaceStoppingOwner(operation);
+    }
     try {
       if (operation?.workflowStep !== WORKFLOW_STEP.STOPPING) {
         await this.updateStep(operation, WORKFLOW_STEP.STOPPING);
@@ -268,332 +267,6 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
         partitionRow.leader_node_id.trim() :
         null;
     return leaderNodeId && leaderNodeId.length > 0 ? leaderNodeId : null;
-  }
-
-  getPriorityPublicationLeaderHandoffEvidenceMap() {
-    if (
-      !(
-        this.priorityPublicationLeaderHandoffEvidenceByOperationId instanceof
-        Map
-      )
-    ) {
-      this.priorityPublicationLeaderHandoffEvidenceByOperationId = new Map();
-    }
-    return this.priorityPublicationLeaderHandoffEvidenceByOperationId;
-  }
-
-  getPriorityPublicationLeaderHandoffEvidence(operation, sourceReplicaId) {
-    const operationId =
-      typeof operation?.operationId === 'string' ?
-        operation.operationId.trim() :
-        null;
-    if (!operationId) {
-      return null;
-    }
-    const evidence =
-      this.getPriorityPublicationLeaderHandoffEvidenceMap().get(operationId) ||
-      null;
-    if (!evidence) {
-      return null;
-    }
-    const evidenceExpired =
-      !Number.isFinite(evidence.observedAt) ||
-      Date.now() - evidence.observedAt >
-        PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.STALE_AFTER_MS;
-    const evidenceMismatch =
-      typeof sourceReplicaId === 'string' &&
-      sourceReplicaId.length > 0 &&
-      evidence.sourceReplicaId !== sourceReplicaId;
-    if (evidenceExpired || evidenceMismatch) {
-      this.getPriorityPublicationLeaderHandoffEvidenceMap().delete(operationId);
-      return null;
-    }
-    return evidence;
-  }
-
-  getPriorityPublicationReplacementLeaderElectionEvidenceMap() {
-    if (
-      !(
-        this.priorityPublicationReplacementLeaderElectionEvidenceByOperationId instanceof
-        Map
-      )
-    ) {
-      this.priorityPublicationReplacementLeaderElectionEvidenceByOperationId =
-        new Map();
-    }
-    return this.priorityPublicationReplacementLeaderElectionEvidenceByOperationId;
-  }
-
-  getPriorityPublicationReplacementLeaderElectionEvidence(
-    operation,
-    replacementReplicaId,
-  ) {
-    const operationId =
-      typeof operation?.operationId === 'string' ?
-        operation.operationId.trim() :
-        null;
-    if (!operationId) {
-      return null;
-    }
-    const evidence =
-      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().get(
-        operationId,
-      ) || null;
-    if (!evidence) {
-      return null;
-    }
-    const evidenceExpired =
-      !Number.isFinite(evidence.observedAt) ||
-      Date.now() - evidence.observedAt >
-        PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.STALE_AFTER_MS;
-    const notFoundReplicaIds = Array.isArray(evidence.notFoundReplicaIds) ?
-      evidence.notFoundReplicaIds :
-      [];
-    const completedReplicaIds = Array.isArray(evidence.completedReplicaIds) ?
-      evidence.completedReplicaIds :
-      [];
-    const evidenceReferencesReplacementReplica =
-      typeof replacementReplicaId === 'string' &&
-      replacementReplicaId.length > 0 &&
-      (
-        (typeof evidence.replacementReplicaId === 'string' &&
-          evidence.replacementReplicaId === replacementReplicaId) ||
-        notFoundReplicaIds.includes(replacementReplicaId) ||
-        completedReplicaIds.includes(replacementReplicaId)
-      );
-    const evidenceMismatch =
-      typeof replacementReplicaId === 'string' &&
-      replacementReplicaId.length > 0 &&
-      !evidenceReferencesReplacementReplica;
-    if (evidenceExpired) {
-      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().delete(
-        operationId,
-      );
-      return null;
-    }
-    if (evidenceMismatch) {
-      return null;
-    }
-    return evidence;
-  }
-
-  getFreshPriorityPublicationReplacementLeaderElectionEvidence(operation) {
-    const operationId =
-      typeof operation?.operationId === 'string' ?
-        operation.operationId.trim() :
-        null;
-    if (!operationId) {
-      return null;
-    }
-    const evidence =
-      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().get(
-        operationId,
-      ) || null;
-    if (!evidence) {
-      return null;
-    }
-    const evidenceExpired =
-      !Number.isFinite(evidence.observedAt) ||
-      Date.now() - evidence.observedAt >
-        PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.STALE_AFTER_MS;
-    if (evidenceExpired) {
-      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().delete(
-        operationId,
-      );
-      return null;
-    }
-    return evidence;
-  }
-
-  // R3 (epic slow-rejoiner-progress-or-evict): tracks when the FIRST source-leader
-  // handoff (REPLACE_SOURCE_LEADER_HANDOFF STEP_DOWN) was dispatched for an operation, so
-  // the safety snapshot can detect a source-leader handoff that has been re-asked for a
-  // sustained window without progressing (the starved-rejoiner regime: the saturated source
-  // never runs its cooperative local-timer step-down, so completedLeaderHandoffEvidence is
-  // never recorded and the gate re-dispatches the same STEP_DOWN to the source forever). The
-  // anchor is the FIRST attempt (set-if-absent) so the stall age is honest. Self-cleans on
-  // read past the evidence STALE_AFTER_MS TTL, mirroring the evidence maps.
-  getPriorityPublicationSourceLeaderHandoffRequestedAtMap() {
-    if (
-      !(
-        this.priorityPublicationSourceLeaderHandoffRequestedAtByOperationId instanceof
-        Map
-      )
-    ) {
-      this.priorityPublicationSourceLeaderHandoffRequestedAtByOperationId =
-        new Map();
-    }
-    return this.priorityPublicationSourceLeaderHandoffRequestedAtByOperationId;
-  }
-
-  recordPriorityPublicationSourceLeaderHandoffRequested(operation, handoffRequest) {
-    // R3 is now unconditional: always anchor the first source-leader handoff so the snapshot can
-    // detect a sustained-non-progressing handoff. The reader (getPriorityPublicationSourceLeader
-    // HandoffStallMs) self-cleans the map entry on read past the TTL.
-    if (
-      !operation ||
-      !handoffRequest ||
-      handoffRequest.messageType !==
-        ReplicaOperationMessageType.STEP_DOWN_REPLICA ||
-      handoffRequest.requestReason !==
-        ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF
-    ) {
-      return;
-    }
-    const operationId =
-      typeof operation.operationId === 'string' ?
-        operation.operationId.trim() :
-        null;
-    if (!operationId) {
-      return;
-    }
-    const map = this.getPriorityPublicationSourceLeaderHandoffRequestedAtMap();
-    const existing = map.get(operationId);
-    if (Number.isFinite(existing)) {
-      return;
-    }
-    map.set(operationId, Date.now());
-  }
-
-  // Returns the elapsed ms since the first source-leader handoff for this operation, or null
-  // if none recorded / it has aged out. Used by the snapshot to decide R3 escalation.
-  getPriorityPublicationSourceLeaderHandoffStallMs(operation) {
-    const operationId =
-      typeof operation?.operationId === 'string' ?
-        operation.operationId.trim() :
-        null;
-    if (!operationId) {
-      return null;
-    }
-    const map = this.getPriorityPublicationSourceLeaderHandoffRequestedAtMap();
-    const requestedAt = map.get(operationId);
-    if (!Number.isFinite(requestedAt)) {
-      return null;
-    }
-    const stallMs = Date.now() - requestedAt;
-    // Dedicated TTL well above the escalation floor (and the evidence STALE_AFTER_MS) so the
-    // stall anchor survives across the escalation window instead of racing it; past the TTL
-    // the operation has long since hit recovery timeout, so drop the anchor.
-    if (
-      stallMs < 0 ||
-      stallMs > PRIORITY_PUBLICATION_SOURCE_LEADER_HANDOFF_STALL_TTL_MS
-    ) {
-      map.delete(operationId);
-      return null;
-    }
-    return stallMs;
-  }
-
-  recordPriorityPublicationLeaderHandoffEvidence(
-    operation,
-    handoffRequest,
-    response,
-  ) {
-    if (
-      !operation ||
-      !handoffRequest ||
-      handoffRequest.messageType !==
-        ReplicaOperationMessageType.STEP_DOWN_REPLICA ||
-      handoffRequest.requestReason !==
-        ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF ||
-      (response?.status !== ReplicaOperationResponseStatus.COMPLETED &&
-        response?.status !== ReplicaOperationResponseStatus.NOT_FOUND)
-    ) {
-      return;
-    }
-    const operationId =
-      typeof operation.operationId === 'string' ?
-        operation.operationId.trim() :
-        null;
-    const sourceReplicaId =
-      typeof handoffRequest.requestReplicaId === 'string' ?
-        handoffRequest.requestReplicaId.trim() :
-        null;
-    if (!operationId || !sourceReplicaId) {
-      return;
-    }
-    this.getPriorityPublicationLeaderHandoffEvidenceMap().set(
-      operationId,
-      Object.freeze({
-        observedAt: Date.now(),
-        sourceReplicaId,
-      }),
-    );
-  }
-
-  recordPriorityPublicationReplacementLeaderElectionEvidence(
-    operation,
-    handoffRequest,
-    response,
-  ) {
-    if (
-      !operation ||
-      !handoffRequest ||
-      handoffRequest.messageType !==
-        ReplicaOperationMessageType.STEP_DOWN_REPLICA ||
-      handoffRequest.requestReason !==
-        ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION ||
-      (response?.status !== ReplicaOperationResponseStatus.COMPLETED &&
-        response?.status !== ReplicaOperationResponseStatus.NOT_FOUND)
-    ) {
-      return;
-    }
-    const operationId =
-      typeof operation.operationId === 'string' ?
-        operation.operationId.trim() :
-        null;
-    const replacementReplicaId =
-      typeof handoffRequest.requestReplicaId === 'string' ?
-        handoffRequest.requestReplicaId.trim() :
-        null;
-    if (!operationId || !replacementReplicaId) {
-      return;
-    }
-    const previousEvidence =
-      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().get(
-        operationId,
-      ) || null;
-    const previousNotFoundReplicaIds = Array.isArray(
-      previousEvidence?.notFoundReplicaIds,
-    ) ?
-      previousEvidence.notFoundReplicaIds :
-      [];
-    const previousCompletedReplicaIds = Array.isArray(
-      previousEvidence?.completedReplicaIds,
-    ) ?
-      previousEvidence.completedReplicaIds :
-      [];
-    const nextNotFoundReplicaIds = new Set(
-      previousNotFoundReplicaIds.filter(
-        (replicaId) => replicaId !== replacementReplicaId,
-      ),
-    );
-    const nextCompletedReplicaIds = new Set(previousCompletedReplicaIds);
-    if (response.status === ReplicaOperationResponseStatus.NOT_FOUND) {
-      nextNotFoundReplicaIds.add(replacementReplicaId);
-    }
-    if (response.status === ReplicaOperationResponseStatus.COMPLETED) {
-      nextCompletedReplicaIds.add(replacementReplicaId);
-    }
-    this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().set(
-      operationId,
-      Object.freeze({
-        completedReplicaIds: Object.freeze([...nextCompletedReplicaIds]),
-        notFoundReplicaIds: Object.freeze([...nextNotFoundReplicaIds]),
-        observedAt: Date.now(),
-        replacementReplicaId,
-        responseStatus: response.status,
-      }),
-    );
-  }
-
-  isPriorityPublicationLeaderHandoffRetrySuppressed(evidence) {
-    return (
-      !!evidence &&
-      Number.isFinite(evidence.observedAt) &&
-      Date.now() - evidence.observedAt <=
-        PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.REQUEST_RETRY_AFTER_MS
-    );
   }
 
   resolvePriorityPublicationSourceRoleState(

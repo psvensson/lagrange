@@ -35,6 +35,7 @@ import {
   MESSAGE_GROUP_CDC_ERROR_MSG,
 } from '../../src/message-group/constants.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 let testPortCounter = 27200;
 const NON_SYSTEM_CDC_TABLE = 'runtime_forward_events';
@@ -80,7 +81,9 @@ test(
   async (_t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
     let mg;
@@ -203,7 +206,9 @@ test(
   async (t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
     let mg;
@@ -287,7 +292,9 @@ test(
   async (_t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
     let mg;
@@ -376,7 +383,9 @@ test(
   async (_t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
     let mg;
@@ -467,7 +476,9 @@ test(
   async (_t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
     let mg;
@@ -563,7 +574,9 @@ test(
   async (t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
     let mg;
@@ -654,7 +667,9 @@ test(
   async (t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
     let mg;
@@ -729,7 +744,9 @@ test(
   async (t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
     let mg;
@@ -811,7 +828,9 @@ test(
   async (t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
     let mg;
@@ -916,7 +935,9 @@ test(
   async (t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
     let mg;
@@ -1013,7 +1034,9 @@ test(
   async (t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
     let mg;
@@ -1113,7 +1136,9 @@ test(
   async (t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
     let mg;
@@ -1216,7 +1241,9 @@ test(
   async (t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
     let mg;
@@ -1297,7 +1324,9 @@ test(
   async (t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     await router.initialize({startServer: true});
 
     let mg;

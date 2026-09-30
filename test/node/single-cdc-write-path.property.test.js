@@ -23,6 +23,8 @@ import {
 import {TABLES} from '../../src/constants/tables.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createLifecycleCdcService, createPartitionRow} from
+  '../test-helpers/lifecycle-state-store.js';
 import {
   buildReplicaStatePropertyContext,
   CANONICAL_PARTITION_LEADER_CLEAR_STATES,
@@ -31,6 +33,8 @@ import {
   getServiceMutationCalls,
   PROPERTY_TEST_NODE_ID,
 } from './replica-state-machine-property-helpers.js';
+import {withRegisteredActivationHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 /**
  * All valid transition sequences through the replica lifecycle.
@@ -64,28 +68,13 @@ buildPaths(null, []);
  * Records table name, operation type, and data for each call.
  * @return {Object} Mock service with calls array.
  */
-function createTrackingCdcService() {
-  const calls = [];
-  return {
-    calls,
-    updateSystemTableRow: async (tableName, whereClause, data) => {
-      calls.push({
-        operation: 'update',
-        tableName,
-        whereClause,
-        data,
-      });
-      return {success: true};
-    },
-    upsertSystemTableRow: async (tableName, data) => {
-      calls.push({
-        operation: 'upsert',
-        tableName,
-        data,
-      });
-      return {success: true};
-    },
-  };
+function createTrackingCdcService(partitionId = 'partition-1') {
+  return createLifecycleCdcService({
+    partitions: [createPartitionRow({
+      partitionId,
+      leaderNodeId: PROPERTY_TEST_NODE_ID,
+    })],
+  });
 }
 
 beforeEach(() => {
@@ -119,11 +108,11 @@ test('Property 10: Single CDC write path for replica state changes',
             fc.uuid(),
             fc.uuid(),
             async (sequence, replicaId, partitionId) => {
-              const mockCdc = createTrackingCdcService();
-              const sm = new ReplicaStateMachine({
+              const mockCdc = createTrackingCdcService(partitionId);
+              const sm = withRegisteredActivationHandler(new ReplicaStateMachine({
                 nodeId: 'test-node',
                 cdcIntegrationService: mockCdc,
-              });
+              }));
 
               for (const state of sequence) {
                 const result = await sm.transition(
@@ -170,11 +159,11 @@ test('Property 10: Single CDC write path for replica state changes',
             fc.uuid(),
             fc.uuid(),
             async (sequence, replicaId, partitionId) => {
-              const mockCdc = createTrackingCdcService();
-              const sm = new ReplicaStateMachine({
+              const mockCdc = createTrackingCdcService(partitionId);
+              const sm = withRegisteredActivationHandler(new ReplicaStateMachine({
                 nodeId: 'test-node',
                 cdcIntegrationService: mockCdc,
-              });
+              }));
 
               for (const state of sequence) {
                 await sm.transition(
@@ -239,11 +228,11 @@ test('Property 10: Single CDC write path for replica state changes',
             fc.uuid(),
             fc.uuid(),
             async (sequence, replicaId, partitionId) => {
-              const mockCdc = createTrackingCdcService();
-              const sm = new ReplicaStateMachine({
+              const mockCdc = createTrackingCdcService(partitionId);
+              const sm = withRegisteredActivationHandler(new ReplicaStateMachine({
                 nodeId: 'test-node',
                 cdcIntegrationService: mockCdc,
-              });
+              }));
 
               for (const state of sequence) {
                 await sm.transition(
@@ -301,11 +290,11 @@ test('Property 10: Single CDC write path for replica state changes',
               // Ensure distinct replica IDs
               if (replicaA === replicaB) return true;
 
-              const mockCdc = createTrackingCdcService();
-              const sm = new ReplicaStateMachine({
+              const mockCdc = createTrackingCdcService(partitionId);
+              const sm = withRegisteredActivationHandler(new ReplicaStateMachine({
                 nodeId: 'test-node',
                 cdcIntegrationService: mockCdc,
-              });
+              }));
 
               // Transition both replicas through PENDING
               await sm.transition(
@@ -350,13 +339,13 @@ test('Property 10: Single CDC write path for replica state changes',
             fc.uuid(),
             fc.uuid(),
             async (sequence, replicaId, partitionId) => {
-              const smCdc = createTrackingCdcService();
+              const smCdc = createTrackingCdcService(partitionId);
               const externalCdc = createTrackingCdcService();
 
-              const sm = new ReplicaStateMachine({
+              const sm = withRegisteredActivationHandler(new ReplicaStateMachine({
                 nodeId: 'test-node',
                 cdcIntegrationService: smCdc,
-              });
+              }));
 
               for (const state of sequence) {
                 await sm.transition(

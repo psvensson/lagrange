@@ -52,6 +52,8 @@ import {
 } from '../../src/raft/remote-peer-representation.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {waitForCondition} from '../partition/partition-service-test-support.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -149,7 +151,7 @@ function recordingTransport(sent) {
 // it campaigns when the witness says so), with the authoritative cache naming
 // its peer; the peer is admitted once the partition leads.
 function buildPartition({cache, peerAddresses, sent}) {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: PARTITION_ID,
     tableId: PARTITION_TABLE,
     tableName: PARTITION_TABLE,
@@ -161,7 +163,7 @@ function buildPartition({cache, peerAddresses, sent}) {
     schema: PARTITION_SCHEMA,
     dbPath: ':memory:',
     deferElection: true,
-  });
+  }));
   partition.systemTableCache = cache;
   return partition;
 }
@@ -272,7 +274,7 @@ test('one node mutating the shared registry cannot move another node destination
       ['node-b', `${PARTITION_ID}-r3`, `${PARTITION_ID}-r4`],
     ]) {
       const peerAddress = `${nodeId}/${ENTITY_TYPE.PARTITION}/${peerId}`;
-      const partition = new PartitionService({
+      const partition = new PartitionService(withFoundingStamp({
         partitionId: PARTITION_ID,
         tableId: PARTITION_TABLE,
         tableName: PARTITION_TABLE,
@@ -284,7 +286,7 @@ test('one node mutating the shared registry cannot move another node destination
         schema: PARTITION_SCHEMA,
         dbPath: ':memory:',
         deferElection: true,
-      });
+      }));
       const peerRow = serviceRow(peerId, peerAddress, SERVICE_TYPE.PARTITION);
       partition.systemTableCache = cacheSaying([
         serviceRow(selfId, `${nodeId}/${ENTITY_TYPE.PARTITION}/${selfId}`,
@@ -340,7 +342,9 @@ test('a poisoned process registry cannot move a message-group peer destination',
       MessageRouter.prototype.deliver = realDeliver;
     });
 
-    const router = new MessageRouter({nodeId: NODE_ID, wsPort: nextPort++});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: NODE_ID, wsPort: nextPort++});
     await router.initialize({startServer: false});
     const group = new MessageGroupService({
       groupId: GROUP_ID,
@@ -382,7 +386,9 @@ test('a poisoned process registry cannot move a message-group peer destination',
 test('with no authoritative location a message group refuses rather than using the registry',
   async (t) => {
     initializeProcess();
-    const router = new MessageRouter({nodeId: NODE_ID, wsPort: nextPort++});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: NODE_ID, wsPort: nextPort++});
     await router.initialize({startServer: false});
     const group = new MessageGroupService({
       groupId: GROUP_ID,

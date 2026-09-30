@@ -57,6 +57,7 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
 } from '../../src/control-plane/pressure-governor.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 
 beforeEach(() => {
@@ -113,7 +114,7 @@ test('PartitionService - leader applyCommittedEntry must not raise unhandled rej
       ],
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-leader-committed-cdc-failure',
       tableId: 'cdc_test',
       tableName: 'cdc_test',
@@ -121,7 +122,7 @@ test('PartitionService - leader applyCommittedEntry must not raise unhandled rej
       replicaIds: ['replica-1'],
       schema,
       dbPath: ':memory:',
-    });
+    }));
 
     await partition.initialize();
     await Promise.resolve();
@@ -169,7 +170,7 @@ test('PartitionService - buffers CDC event on subscriber failure and replays aft
       ],
     };
 
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-cdc-retry-buffer',
       tableId: 'cdc_test',
       tableName: 'cdc_test',
@@ -177,7 +178,7 @@ test('PartitionService - buffers CDC event on subscriber failure and replays aft
       replicaIds: ['replica-1'],
       schema,
       dbPath: ':memory:',
-    });
+    }));
 
     await partition.initialize();
     await Promise.resolve();
@@ -237,7 +238,7 @@ test('PartitionService - calculates partition size', async (t) => {
     ],
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-9',
     tableId: 'size_test',
     tableName: 'size_test',
@@ -245,7 +246,7 @@ test('PartitionService - calculates partition size', async (t) => {
     replicaIds: ['replica-1'],
     schema,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   // Single replica becomes leader immediately
@@ -295,7 +296,7 @@ test('PartitionService - persists partition size_bytes for leader-owned partitio
       [COLUMN.TABLE_ID]: 'size_persist_test',
       size_bytes: 0,
     });
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-size-persist',
       tableId: 'size_persist_test',
       tableName: 'size_persist_test',
@@ -315,7 +316,7 @@ test('PartitionService - persists partition size_bytes for leader-owned partitio
         },
       },
       systemTableCache,
-    });
+    }));
 
     await partition.initialize();
 
@@ -345,7 +346,7 @@ test('PartitionService - includes WAL bytes in file-backed partition size',
       path.join(os.tmpdir(), 'partition-size-wal-'),
     );
     const dbPath = path.join(tmpDir, 'partition.db');
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-size-wal',
       tableId: 'size_wal_test',
       tableName: 'size_wal_test',
@@ -358,7 +359,7 @@ test('PartitionService - includes WAL bytes in file-backed partition size',
         ],
       },
       dbPath,
-    });
+    }));
 
     try {
       await partition.initialize();
@@ -409,7 +410,7 @@ test('PartitionService - retries retryable partition size persistence pressure',
       [COLUMN.TABLE_ID]: 'size_retry_test',
       size_bytes: 0,
     });
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition-size-retry',
       tableId: 'size_retry_test',
       tableName: 'size_retry_test',
@@ -424,7 +425,7 @@ test('PartitionService - retries retryable partition size persistence pressure',
       dbPath: ':memory:',
       cdcIntegrationService: {},
       systemTableCache,
-    });
+    }));
 
     await partition.initialize();
     partition.controlPlaneSystemTableGateway = {
@@ -465,14 +466,14 @@ test('PartitionService - retries retryable partition size persistence pressure',
 test('PartitionService - queues source writes during split backfill and suppresses target echoes',
   async (t) => {
     const mirroredWrites = [];
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'users-source',
       tableId: 'tbl-users',
       tableName: 'users',
       replicaId: 'users-source-r1',
       replicaIds: ['users-source-r1'],
       dbPath: ':memory:',
-    });
+    }));
 
     partition.splitReplication = {
       metadata: {
@@ -517,14 +518,14 @@ test('PartitionService - queues source writes during split backfill and suppress
 test('PartitionService - starts split replication workflow and marks cutover active',
   async (t) => {
     const advanceCalls = [];
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'users-source',
       tableId: 'tbl-users',
       tableName: 'users',
       replicaId: 'users-source-r1',
       replicaIds: ['users-source-r1'],
       dbPath: ':memory:',
-    });
+    }));
 
     partition.sqlQueryEngine = {
       managedSplitWorkflow: {
@@ -598,14 +599,14 @@ test('PartitionService - starts split replication workflow and marks cutover act
 
 test('PartitionService - backfillSplitSnapshot streams rows and yields between batches',
   async (t) => {
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'users-source',
       tableId: 'tbl-users',
       tableName: 'users',
       replicaId: 'users-source-r1',
       replicaIds: ['users-source-r1'],
       dbPath: ':memory:',
-    });
+    }));
 
     const appliedBatches = [];
     const yieldedAfterCounts = [];
@@ -670,13 +671,13 @@ test('PartitionService - backfillSplitSnapshot streams rows and yields between b
   });
 
 test('PartitionService - key range management', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-10',
     tableId: 'range_test',
     replicaId: 'replica-1',
     keyRange: {start: 'a', end: 'm'},
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 
@@ -694,13 +695,13 @@ test('PartitionService - key range management', async (t) => {
 });
 
 test('PartitionService - full key range (null, null)', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-11',
     tableId: 'full_range_test',
     replicaId: 'replica-1',
     keyRange: {start: null, end: null},
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 
@@ -718,7 +719,7 @@ test('PartitionService - getStatus returns complete status', async (t) => {
     'node-2/partition/replica-2',
     'node-3/partition/replica-3',
   ];
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-12',
     tableId: 'status_test',
     tableName: 'status_test',
@@ -727,7 +728,7 @@ test('PartitionService - getStatus returns complete status', async (t) => {
     replicaIds: ['replica-1', 'replica-2', 'replica-3'],
     peerAddresses: peerAddresses,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 
@@ -746,13 +747,13 @@ test('PartitionService - getStatus returns complete status', async (t) => {
 });
 
 test('PartitionService - single replica becomes leader', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-13',
     tableId: 'leader_test',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 
@@ -774,7 +775,7 @@ test('PartitionService - unsubscribe from CDC', async (t) => {
     ],
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-14',
     tableId: 'unsub_test',
     tableName: 'unsub_test',
@@ -782,7 +783,7 @@ test('PartitionService - unsubscribe from CDC', async (t) => {
     replicaIds: ['replica-1'],
     schema,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   // Single replica should become leader immediately
@@ -1022,7 +1023,7 @@ test('PartitionService - handleTransportMessage handles application messages', a
     ],
   };
 
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-16',
     tableId: 'app_msg_test',
     tableName: 'app_msg_test',
@@ -1030,7 +1031,7 @@ test('PartitionService - handleTransportMessage handles application messages', a
     replicaIds: ['replica-1'],
     schema,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
   // Single replica becomes leader immediately
@@ -1042,6 +1043,7 @@ test('PartitionService - handleTransportMessage handles application messages', a
       type: 'FORWARD_WRITE',
       operation: {
         type: 'INSERT',
+        timestamp: partition.hlcClock.now().toString(),
         tableName: 'app_msg_test',
         data: {id: 'item-1', value: 42},
         sql: 'INSERT INTO app_msg_test (id, value) VALUES (?, ?)',
@@ -1054,6 +1056,8 @@ test('PartitionService - handleTransportMessage handles application messages', a
 
   t.equal(result.success, true, 'FORWARD_WRITE should succeed');
   t.equal(result.changes, 1, 'One row should be inserted');
+  t.type(result.originHlc, 'string',
+    'FORWARD_WRITE should preserve the exact committed CDC version');
 
   // Verify data was inserted
   const queryResult = await partition.executeQuery(
@@ -1067,13 +1071,13 @@ test('PartitionService - handleTransportMessage handles application messages', a
 });
 
 test('PartitionService - handleTransportMessage unwraps message-group query envelopes', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-query-envelope',
     tableId: 'query_envelope_test',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 
@@ -1100,13 +1104,13 @@ test('PartitionService - handleTransportMessage unwraps message-group query enve
 });
 
 test('PartitionService - handleTransportMessage rejects unknown message types', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-17',
     tableId: 'unknown_msg_test',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 
@@ -1128,14 +1132,14 @@ test('PartitionService - handleTransportMessage rejects unknown message types', 
 });
 
 test('PartitionService - liferaft instance is created with correct configuration', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-18',
     tableId: 'liferaft_config_test',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 
@@ -1154,7 +1158,7 @@ test('PartitionService - buildPeerAddress returns correct format', async (t) => 
     'node-2/partition/replica-2',
     'node-3/partition/replica-3',
   ];
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-19',
     tableId: 'peer_addr_test',
     replicaId: 'replica-1',
@@ -1162,7 +1166,7 @@ test('PartitionService - buildPeerAddress returns correct format', async (t) => 
     nodeId: 'node-1',
     peerAddresses: peerAddresses,
     dbPath: ':memory:',
-  });
+  }));
 
   await partition.initialize();
 
@@ -1268,14 +1272,14 @@ test('PartitionService - cache reconciliation refreshes moved peers and joins ne
   });
 
 test('PartitionService - emits leaderElected event for single replica', async (t) => {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-20',
     tableId: 'leader_event_test',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  });
+  }));
 
   let leaderEvent = null;
   partition.on('leaderElected', (event) => {

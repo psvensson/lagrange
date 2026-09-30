@@ -127,6 +127,28 @@ class MessageRouterHandlerRegistry {
   hasWorkerHandler(address) {
     return this.handlers.has(address);
   }
+  /**
+   * The exact handler registered at an address (identity, not presence), so
+   * an owner can prove its own handler is the one registered.
+   * @param {string} address - Service address.
+   * @return {Function|null}
+   */
+  getRegisteredHandler(address) {
+    return this.handlers.get(address) || null;
+  }
+  /**
+   * Remove the handler at an address only when it is exactly `handler`: a
+   * retiring owner never removes a successor's handler under the same
+   * address.
+   * @param {string} address - Service address.
+   * @param {Function} handler - The handler the caller registered.
+   * @return {boolean} True when that exact handler was removed.
+   */
+  unregisterExact(address, handler) {
+    if (this.handlers.get(address) !== handler) return false;
+    this.unregister(address);
+    return true;
+  }
 }
 
 function defineMessageRouterHandlerRegistry(serviceClass) {

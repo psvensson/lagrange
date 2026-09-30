@@ -13,6 +13,9 @@ import {PartitionService, RaftRole} from '../../src/partition/partition-service.
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
+import {createInProcessMockTransport as createMockTransport} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -82,7 +85,7 @@ test('Property 1: Single replica elects exactly one leader', async (t) => {
           addressManager.format(nodeId, 'partition', rid),
         );
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           replicaId,
@@ -90,7 +93,7 @@ test('Property 1: Single replica elects exactly one leader', async (t) => {
           peerAddresses,
           nodeId,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -164,7 +167,7 @@ test('Property 1: At most one leader exists (no split-brain)', async (t) => {
 
         try {
           for (let i = 0; i < replicaCount; i++) {
-            const partition = new PartitionService({
+            const partition = new PartitionService(withFoundingStamp({
               partitionId,
               tableId,
               replicaId: replicaIds[i],
@@ -173,7 +176,7 @@ test('Property 1: At most one leader exists (no split-brain)', async (t) => {
               nodeId,
               transport: mockTransport,
               dbPath: ':memory:',
-            });
+            }));
             partitions.push(partition);
           }
 
@@ -245,7 +248,7 @@ test('Property 1: Partition status reflects correct leader state', async (t) => 
           addressManager.format(nodeId, 'partition', rid),
         );
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           replicaId,
@@ -253,7 +256,7 @@ test('Property 1: Partition status reflects correct leader state', async (t) => 
           peerAddresses,
           nodeId,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -288,30 +291,6 @@ test('Property 1: Partition status reflects correct leader state', async (t) => 
 });
 
 /**
- * Create a mock transport for testing.
- * Routes messages between registered handlers.
- */
-function createMockTransport() {
-  const handlers = new Map();
-
-  return {
-    register: (address, handler) => {
-      handlers.set(address, handler);
-    },
-    unregister: (address) => {
-      handlers.delete(address);
-    },
-    deliver: async (address, message) => {
-      const handler = handlers.get(address);
-      if (handler) {
-        return handler({payload: message});
-      }
-      return {acknowledged: false, error: 'No handler'};
-    },
-  };
-}
-
-/**
  * Feature: single-node-replica-placement-fix
  * Property 2: Leadership Stability
  *
@@ -343,7 +322,7 @@ test('Property 2: Leadership remains stable without topology changes', async (t)
           addressManager.format(nodeId, 'partition', rid),
         );
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           replicaId,
@@ -351,7 +330,7 @@ test('Property 2: Leadership remains stable without topology changes', async (t)
           peerAddresses,
           nodeId,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -428,7 +407,7 @@ test('Property 2: Term numbers stabilize after election', async (t) => {
           addressManager.format(nodeId, 'partition', rid),
         );
 
-        const partition = new PartitionService({
+        const partition = new PartitionService(withFoundingStamp({
           partitionId,
           tableId,
           replicaId,
@@ -436,7 +415,7 @@ test('Property 2: Term numbers stabilize after election', async (t) => {
           peerAddresses,
           nodeId,
           dbPath: ':memory:',
-        });
+        }));
 
         try {
           await partition.initialize();
@@ -501,7 +480,7 @@ test('Property 2: Multi-replica leadership stability', async (t) => {
 
         try {
           for (let i = 0; i < replicaCount; i++) {
-            const partition = new PartitionService({
+            const partition = new PartitionService(withFoundingStamp({
               partitionId,
               tableId,
               replicaId: replicaIds[i],
@@ -510,7 +489,7 @@ test('Property 2: Multi-replica leadership stability', async (t) => {
               nodeId,
               transport: mockTransport,
               dbPath: ':memory:',
-            });
+            }));
             partitions.push(partition);
           }
 

@@ -73,10 +73,12 @@ test(
       true,
       'join-time message-group replicas should be marked as joining existing groups',
     );
-    t.equal(
-      registerCalls.length,
-      0,
-      'phase should not publish a service row before canonical membership is written',
-    );
+    t.equal(registerCalls.length, 1,
+      'initialized MOVE runtime should transfer canonical row ownership once');
+    t.match(registerCalls[0], {
+      groupId: 'mg-1',
+      replicaId: 'mg-1-r2',
+      options: {status: 'stopped'},
+    }, 'handoff stages STOPPED before the separate exact activation CAS');
   },
 );

@@ -56,6 +56,7 @@ import {
 import {
   REQUEST_CELL_PLACEMENT_SCENARIO,
 } from './minimal-deployment-request-cell-placement-scenario.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const FIXED_NOW_MS = 1_900_000_000_000;
 const NODE_ID = 'node-runtime-create-lane';
@@ -333,7 +334,9 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
       },
     };
 
-    messageRouter = new MessageRouter({nodeId: NODE_ID, inProcess: true});
+    messageRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: NODE_ID, inProcess: true});
     await messageRouter.initialize({startServer: false});
     messageRouter.logger = QUIET_LOGGER;
 

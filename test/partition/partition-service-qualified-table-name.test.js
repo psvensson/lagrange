@@ -4,11 +4,12 @@ import {describe, test} from 'node:test';
 import Database from 'better-sqlite3';
 
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 describe('partition service qualified table names', () => {
   test('creates the global access-policy identity as one SQLite identifier',
     () => {
-      const partition = new PartitionService({
+      const partition = new PartitionService(withFoundingStamp({
         partitionId: 'qualified-table-p1',
         replicaId: 'qualified-table-p1-r1',
         replicaIds: ['qualified-table-p1-r1'],
@@ -21,7 +22,7 @@ describe('partition service qualified table names', () => {
         },
         tableId: 'qualified-table',
         tableName: 'global.request_binding_audit',
-      });
+      }));
       partition.db = new Database(':memory:');
 
       try {

@@ -16,6 +16,7 @@ import fc from 'fast-check';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 ConfigurationManager.resetInstance();
 LoggingService.resetInstance();
@@ -82,7 +83,9 @@ test('Property 7: Local delivery produces equivalent results ' +
           ),
           async (responseFields, handlerType) => {
             const nodeId = 'local-equiv-node';
-            const router = new MessageRouter({nodeId, inProcess: true});
+            const router = new MessageRouter({
+              bootIncarnation: TEST_BOOT_INCARNATION,
+              nodeId, inProcess: true});
             const address = `${nodeId}/partition/test-p1`;
 
             const handlerResult = {...responseFields};
@@ -138,7 +141,9 @@ test('Property 7: Local delivery produces equivalent results ' +
           }),
           async (errorMsg, payload) => {
             const nodeId = 'local-err-node';
-            const router = new MessageRouter({nodeId, inProcess: true});
+            const router = new MessageRouter({
+              bootIncarnation: TEST_BOOT_INCARNATION,
+              nodeId, inProcess: true});
             const address = `${nodeId}/partition/test-p2`;
 
             router.register(address, () => {
@@ -180,7 +185,9 @@ test('Property 7: Local delivery produces equivalent results ' +
           ),
           async (handlerReturn) => {
             const nodeId = 'local-nonobj-node';
-            const router = new MessageRouter({nodeId, inProcess: true});
+            const router = new MessageRouter({
+              bootIncarnation: TEST_BOOT_INCARNATION,
+              nodeId, inProcess: true});
             const address = `${nodeId}/partition/test-p3`;
 
             router.register(address, () => handlerReturn);

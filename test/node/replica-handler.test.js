@@ -8,7 +8,11 @@ import {test} from '../../src/test-helpers/tap.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import {ReplicaHandler} from '../../src/node/replica-handler.js';
+import {
+  ReplicaHandler as ProductionReplicaHandler,
+} from '../../src/node/replica-handler.js';
+import {scenarioStampingReplicaHandler} from
+  './replica-handler-bootstrap-stamps.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -28,7 +32,6 @@ import {
   EXECUTOR_OUTCOME_TYPE,
 } from '../../src/rebalancer/executor-outcome-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import LifeRaft from '../../src/raft/liferaft.js';
 import {
   registerReplicaHandlerCreateAdmissionTests,
 } from './replica-handler-create-admission-test-cases.js';
@@ -36,6 +39,14 @@ import {
   registerReplicaHandlerCreateTopologyTests,
 } from './replica-handler-create-topology-test-cases.js';
 import {registerReplicaHandlerTailTests} from './replica-handler-tail-test-cases.js';
+import {createReplicaLifecycleStateMachineFixture} from
+  '../test-helpers/lifecycle-state-store.js';
+import {bindRegisteredReplicaHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
+
+// Lifecycle scenarios: every create carries the committed-membership stamp
+// its scenario's creator would have produced (owner decision O1).
+const ReplicaHandler = scenarioStampingReplicaHandler(ProductionReplicaHandler);
 
 const TEST_STEP_DOWN_OPERATION_ID = 'step-down-op';
 const TEST_STEP_DOWN_PARTITION_ID = 'partition-1';
@@ -43,7 +54,6 @@ const TEST_STEP_DOWN_REPLICA_ID = 'leader-replica';
 const TEST_STEP_DOWN_REASON = 'replace_source_leader_handoff';
 const TEST_STEP_DOWN_TARGET_ELECTION_REASON = 'replace_target_leader_election';
 const TEST_STEP_DOWN_CORRELATION_ID = 'corr-step-down';
-const TEST_STEP_DOWN_EMPTY_LEADER_ID = '';
 const TEST_STATUS_RETRY_PARTITION_ID = 'partition-status-retry';
 const TEST_STATUS_RETRY_REPLICA_ID = 'partition-status-retry-r2';
 const TEST_STATUS_RETRY_OPERATION_ID = 'partition-status-retry-op';
@@ -91,6 +101,8 @@ const TEST_RETRYABLE_CREATE_STATUS_RETRY_AFTER_MS = 1;
  * @param {SystemTableCache} [cache] - Optional cache to update.
  * @param {Object} [options] - Optional behavior overrides.
  * @param {Function} [options.executeSQL] - SQL execution callback.
+ * @param {Function} [options.executeAuthoritativeSystemTableRead] - Owner
+ *   read callback.
  * @return {Object} Mock CDC service.
  */
 function createMockCDCService(cache, options = {}) {
@@ -98,15 +110,67 @@ function createMockCDCService(cache, options = {}) {
   const executeSQL = typeof options.executeSQL === 'function' ?
     options.executeSQL :
     null;
+  const executeAuthoritativeSystemTableRead =
+    typeof options.executeAuthoritativeSystemTableRead === 'function' ?
+      options.executeAuthoritativeSystemTableRead :
+      (tableName, sql, params) => {
+        let row = cache?.get?.(tableName, params[0]) || null;
+        const matchingOperations = operations.filter((operation) => {
+          const serviceId = operation.data?.service_id ||
+            operation.whereClause?.service_id;
+          return operation.tableName === tableName &&
+            serviceId === params[0];
+        });
+        const appliedDelete = row === null && matchingOperations.some(
+          (operation) => operation.type === 'delete',
+        );
+        if (!appliedDelete) {
+          for (const operation of matchingOperations) {
+            if (operation.type !== 'delete') {
+              row = {...(row || operation.whereClause), ...operation.data};
+            }
+          }
+        }
+        if (row) return {success: true, rows: [row]};
+        if (!executeSQL) return {success: true, rows: []};
+        operations.push({type: 'executeSQL', sql, params});
+        return executeSQL(sql, params);
+      };
 
   const service = {
     operations,
+    async executeAuthoritativeSystemTableRead(
+      tableName,
+      sql,
+      params,
+      requestOptions,
+    ) {
+      operations.push({
+        type: 'authoritativeRead',
+        tableName,
+        sql,
+        params,
+        requestOptions,
+      });
+      return executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        requestOptions,
+      );
+    },
     async insertSystemTableRow(tableName, data) {
       operations.push({type: 'insert', tableName, data});
       cache?.applySystemTableChange(tableName, 'INSERT', data);
       return {success: true, operation: 'INSERT', tableName, data};
     },
     async updateSystemTableRow(tableName, whereClause, data) {
+      const current = cache?.get?.(tableName, whereClause.service_id);
+      if (data.status === 'cleanup_owned' &&
+          Number.isFinite(current?.updated_at) &&
+          current.updated_at >= data.updated_at) {
+        data = {...data, updated_at: current.updated_at + 1};
+      }
       const merged = {...whereClause, ...data};
       operations.push({type: 'update', tableName, whereClause, data: merged});
       cache?.applySystemTableChange(tableName, 'UPDATE', merged);
@@ -142,15 +206,13 @@ function createMockCDCService(cache, options = {}) {
  * @return {Function} Factory function.
  */
 function createMockPartitionServiceFactory() {
-  return async (options) => {
-    return {
-      partitionId: options.partitionId,
-      replicaId: options.replicaId,
-      initialized: true,
-      async shutdown() {},
-      async syncFromLeader() {},
-    };
-  };
+  return async (options) => bindRegisteredReplicaHandler({
+    partitionId: options.partitionId,
+    replicaId: options.replicaId,
+    initialized: true,
+    async shutdown() {},
+    async syncFromLeader() {},
+  }, options);
 }
 
 /**
@@ -188,10 +250,13 @@ function createSeededCache(options = {}) {
     service_type: 'partition',
     partition_id: partitionId,
     node_id: leaderNodeId,
+    replica_id: leaderReplicaId,
+    group_id: null,
     raft_role: 'leader',
     status: ReplicaStatus.ACTIVE,
     address: `${leaderNodeId}/partition/${leaderReplicaId}`,
     created_at: Date.now(),
+    state_entered_at: Date.now(),
     updated_at: Date.now(),
   });
 
@@ -286,7 +351,7 @@ function applyGatewayMutationToCache(cache, mutation) {
   if (mutation.tableName !== SYSTEM_TABLE_NAME.SERVICES) {
     return;
   }
-  if (mutation.operation === 'upsert') {
+  if (mutation.operation === 'upsert' || mutation.operation === 'insert') {
     cache.applySystemTableChange(mutation.tableName, 'INSERT', mutation.row);
     return;
   }
@@ -605,7 +670,8 @@ test('ReplicaHandler', async (t) => {
 
   await registerReplicaHandlerCreateTopologyTests({
     t,
-    ReplicaHandler,
+    // Membership cases hand their stamps (or none) explicitly.
+    ReplicaHandler: ProductionReplicaHandler,
     ReplicaStatus,
     SYSTEM_TABLE_NAME,
     SERVICE_STATUS,
@@ -712,13 +778,13 @@ test('ReplicaHandler', async (t) => {
         cdcIntegrationService: mockCDC,
         createPartitionService: async (options) => {
           createCalls.push(options);
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
       });
 
@@ -978,10 +1044,7 @@ test('ReplicaHandler', async (t) => {
           createCallCount += 1;
           return createMockPartitionServiceFactory()(options);
         },
-        replicaStateMachine: {
-          getState() {
-            return null;
-          },
+        replicaStateMachine: createReplicaLifecycleStateMachineFixture({
           async transition(replicaId, newStatus) {
             if (
               replicaId === TEST_RETRYABLE_CREATE_STATUS_REPLICA_ID &&
@@ -1000,7 +1063,7 @@ test('ReplicaHandler', async (t) => {
             }
             return true;
           },
-        },
+        }),
       });
 
       handler.initialize();
@@ -1133,14 +1196,12 @@ test('ReplicaHandler', async (t) => {
     ReplicaOperationMessageType,
     ReplicaOperationResponseStatus,
     RAFT_ROLE,
-    LifeRaft,
     TEST_STEP_DOWN_OPERATION_ID,
     TEST_STEP_DOWN_PARTITION_ID,
     TEST_STEP_DOWN_REPLICA_ID,
     TEST_STEP_DOWN_REASON,
     TEST_STEP_DOWN_TARGET_ELECTION_REASON,
     TEST_STEP_DOWN_CORRELATION_ID,
-    TEST_STEP_DOWN_EMPTY_LEADER_ID,
     TEST_STATUS_RETRY_PARTITION_ID,
     TEST_STATUS_RETRY_REPLICA_ID,
     TEST_STATUS_RETRY_OPERATION_ID,

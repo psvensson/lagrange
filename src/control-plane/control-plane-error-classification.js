@@ -6,6 +6,7 @@ import {
   PRESSURE_GOVERNOR_ERROR_CODE,
 } from './pressure-governor.js';
 import {ROUTER_ERROR_MSG} from '../constants/transport.js';
+import {CDC_ERROR_CODE} from '../cdc/cdc-constants.js';
 import {
   isPartitionWriteFailureCode,
   isRetryableWriteFailureCode,
@@ -13,6 +14,12 @@ import {
 
 
 const numberIsSafeInteger = Number.isSafeInteger;
+const COMMITTED_STATEMENT_FAILURE_OUTCOME = 'statement_failed';
+const TYPED_DISTRIBUTED_FAILURE_DECISION = Object.freeze({
+  RETRYABLE: 'retryable',
+  TERMINAL: 'terminal',
+  UNCLASSIFIED: 'unclassified',
+});
 
 const RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
   'Distributed operation failed due to participant failures',
@@ -186,6 +193,11 @@ function enqueueLinkedFailureSources(queue, candidate) {
       queue.push(participantFailure);
     }
   }
+  if (Array.isArray(candidate.partitionErrors)) {
+    for (const partitionError of candidate.partitionErrors) {
+      queue.push(partitionError);
+    }
+  }
 }
 
 function collectLinkedControlPlaneFailures(value) {
@@ -248,12 +260,72 @@ function isRetryableControlPlaneCandidate(candidate) {
       message.includes(fragment));
 }
 
-function isRetryableControlPlaneError(value) {
+// The CDC integration service's terminal lifecycle answer: its writer is shut
+// down, so no retry through it can succeed. It decides whatever else is linked
+// to it (its cause may be a retryable answer, e.g. a released write whose
+// outcome is unknown).
+function isControlPlaneWriterShutDownCandidate(candidate) {
+  return getDirectControlPlaneErrorCode(candidate) === CDC_ERROR_CODE.SHUT_DOWN;
+}
+
+/**
+ * Whether a failure is (or links) the CDC integration service's terminal
+ * shut-down answer: the writer on this node is torn down.
+ * @param {*} value - The failed result or error.
+ * @return {boolean}
+ */
+function isControlPlaneWriterShutDown(value) {
   if (!value) {
     return false;
   }
   return collectLinkedControlPlaneFailures(value).some(
-    isRetryableControlPlaneCandidate);
+    isControlPlaneWriterShutDownCandidate);
+}
+
+function isTypedCommittedStatementFailure(candidate) {
+  return candidate?.committed === true &&
+    candidate?.outcome === COMMITTED_STATEMENT_FAILURE_OUTCOME &&
+    typeof candidate?.failureCode === 'string' &&
+    candidate.failureCode.length > 0;
+}
+
+function classifyTypedDistributedFailure(value) {
+  const failures = Array.isArray(value?.participantFailures) ?
+    value.participantFailures :
+    (Array.isArray(value?.partitionErrors) ? value.partitionErrors : null);
+  if (!failures || failures.length === 0) {
+    return TYPED_DISTRIBUTED_FAILURE_DECISION.UNCLASSIFIED;
+  }
+  if (failures.some(isRetryableControlPlaneCandidate)) {
+    return TYPED_DISTRIBUTED_FAILURE_DECISION.RETRYABLE;
+  }
+  if (failures.every(isTypedCommittedStatementFailure)) {
+    return TYPED_DISTRIBUTED_FAILURE_DECISION.TERMINAL;
+  }
+  return TYPED_DISTRIBUTED_FAILURE_DECISION.UNCLASSIFIED;
+}
+
+function isTerminalTypedDistributedFailure(value) {
+  return classifyTypedDistributedFailure(value) ===
+    TYPED_DISTRIBUTED_FAILURE_DECISION.TERMINAL;
+}
+
+function isRetryableControlPlaneError(value) {
+  if (!value) {
+    return false;
+  }
+  const linkedFailures = collectLinkedControlPlaneFailures(value);
+  if (linkedFailures.some(isControlPlaneWriterShutDownCandidate)) {
+    return false;
+  }
+  const distributedDecision = classifyTypedDistributedFailure(value);
+  if (distributedDecision === TYPED_DISTRIBUTED_FAILURE_DECISION.RETRYABLE) {
+    return true;
+  }
+  if (distributedDecision === TYPED_DISTRIBUTED_FAILURE_DECISION.TERMINAL) {
+    return false;
+  }
+  return linkedFailures.some(isRetryableControlPlaneCandidate);
 }
 
 function resolveControlPlanePrimaryFailureReason(summary) {
@@ -338,7 +410,9 @@ export {
   getControlPlaneFailureSummary,
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
+  isControlPlaneWriterShutDown,
   isRetryableControlPlaneError,
+  isTerminalTypedDistributedFailure,
   normalizeKnownNodeBootIncarnation,
   RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS,
 };

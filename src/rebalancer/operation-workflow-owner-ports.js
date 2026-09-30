@@ -639,6 +639,7 @@ function mergeCoordinatorCreatedBootstrapMetadata(
   for (const fieldName of [
     ReplicaOperationField.BOOTSTRAP_TABLE_METADATA,
     ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA,
+    ReplicaOperationField.BOOTSTRAP_MEMBERSHIP,
   ]) {
     if (
       (!mergedOperation[fieldName] ||

@@ -13,6 +13,7 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {IndexService} from '../../src/index-management/index-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -78,7 +79,7 @@ const dataArbitrary = fc.record({
  * Create a partition with a schema that includes indexable columns.
  */
 async function createTestPartition(partitionId, tableName) {
-  const partition = new PartitionService({
+  const partition = new PartitionService(withFoundingStamp({
     partitionId,
     tableId: tableName,
     tableName,
@@ -92,7 +93,7 @@ async function createTestPartition(partitionId, tableName) {
         {name: 'col_num', type: 'INTEGER'},
       ],
     },
-  });
+  }));
 
   await partition.initialize();
 

@@ -21,6 +21,9 @@ import {
   defineCDCGroupPropagationDeliveryMethods,
 } from './cdc-group-propagation-delivery-methods.js';
 import {
+  defineCDCGroupPropagationLifecycleMethods,
+} from './cdc-group-propagation-lifecycle-methods.js';
+import {
   CDC_GROUP_PUBLICATION_MODE,
   CDC_GROUP_PROPAGATION_ERROR_MSG,
   CDC_GROUP_PROPAGATION_EVENT,
@@ -99,6 +102,7 @@ class CDCGroupPropagationService extends EventEmitter {
     this.backgroundRetryEntriesByKey = new Map();
     this.immediateBatchTimers = new Set();
     this.immediateBatchEntriesByKey = new Map();
+    this.retrySleepReleases = new Set();
     this.immediateBatchDelayMs = this.resolvePositiveInteger(
       options.immediateBatchDelayMs,
       IMMEDIATE_BATCH_DELAY_MS,
@@ -172,6 +176,9 @@ class CDCGroupPropagationService extends EventEmitter {
     this.state = CDC_GROUP_PROPAGATION_STATE.STOPPED;
     this.clearBackgroundRetryTimers();
     this.clearImmediateBatchTimers();
+    for (const releaseSleep of [...this.retrySleepReleases]) {
+      releaseSleep();
+    }
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.STOPPED, {nodeId: this.nodeId});
   }
   /**
@@ -188,15 +195,12 @@ class CDCGroupPropagationService extends EventEmitter {
     const operation = options.operation;
     const data = options.data;
     const sourceMessageGroupService = options.sourceMessageGroupService;
-    assertCritical(
-      sourceMessageGroupService &&
-        typeof sourceMessageGroupService.applyCDCEvent === 'function',
-      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_MESSAGE_GROUP_SERVICE,
-    );
-    assertCritical(
-      tableName && operation && data,
-      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CDC_PAYLOAD,
-    );
+    this.assertPropagationRequest(options);
+    // A stopped service proposes nothing on the source group and delivers
+    // nothing: it answers every target stopped.
+    if (this.isPropagationStopped()) {
+      return this.buildStoppedPropagationResult(sourceMessageGroupService);
+    }
     this.refreshConfig();
     if (this.propagationMode !== LATENCY_PROPAGATION_MODE.GROUPED) {
       this.setPublicationMode(
@@ -349,6 +353,50 @@ class CDCGroupPropagationService extends EventEmitter {
     );
   }
 
+  /**
+   * The caller's contract: a source message group and a complete payload.
+   * @param {Object} options
+   * @private
+   */
+  assertPropagationRequest(options) {
+    const sourceMessageGroupService = options.sourceMessageGroupService;
+    assertCritical(
+      sourceMessageGroupService &&
+        typeof sourceMessageGroupService.applyCDCEvent === 'function',
+      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_MESSAGE_GROUP_SERVICE,
+    );
+    assertCritical(
+      options.tableName && options.operation && options.data,
+      CDC_GROUP_PROPAGATION_ERROR_MSG.MISSING_CDC_PAYLOAD,
+    );
+  }
+  /**
+   * The stopped answer of propagateCDCEvent: nothing was applied or
+   * delivered, and every safe-fanout target is answered stopped.
+   * @param {Object} sourceMessageGroupService
+   * @return {Object}
+   * @private
+   */
+  buildStoppedPropagationResult(sourceMessageGroupService) {
+    const sourceGroupId = resolveSourceMessageGroupId(sourceMessageGroupService);
+    const targets = buildSafeTargets({
+      sourceGroupId,
+      systemTableCache: this.systemTableCache,
+      messageGroupReplicaSuffix: MESSAGE_GROUP_REPLICA_SUFFIX,
+    });
+    return {
+      success: false,
+      strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
+      mode: CDC_GROUP_PROPAGATION_STATUS.SAFE,
+      // The owner's one result status, carried by its failure results too;
+      // "stopped" is said per target (PROPAGATION_STOPPED), nowhere else.
+      status: CDC_GROUP_PROPAGATION_MESSAGE.STATUS_DELIVERED,
+      sourceGroupId,
+      targetGroupCount: targets.length,
+      deliveryFailures: this.buildStoppedFailures(targets),
+      timestamp: this.now(),
+    };
+  }
   /**
    * Apply canonical safe propagation path.
    * @param {Object} options
@@ -708,5 +756,6 @@ class CDCGroupPropagationService extends EventEmitter {
 }
 
 defineCDCGroupPropagationDeliveryMethods(CDCGroupPropagationService.prototype);
+defineCDCGroupPropagationLifecycleMethods(CDCGroupPropagationService.prototype);
 
 export {CDCGroupPropagationService};

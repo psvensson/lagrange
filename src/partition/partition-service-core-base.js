@@ -15,6 +15,7 @@ import {
 } from './partition-service-constants.js';
 import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
+import {isLivePartitionServiceRow} from '../constants/service.js';
 const {
   AddressManager,
   CDCEventBuffer,
@@ -40,7 +41,6 @@ const {
   PendingRequestTracker,
   ProposalQueue,
   RaftRole,
-  SERVICE_TYPE,
   SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
   TABLES,
   TIMEOUT_BUDGET_DEFAULT,
@@ -288,6 +288,8 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.messageGroupService = options.messageGroupService || null;
     this.messageRouter = options.messageRouter || null;
     this.isJoiningExistingGroup = options.isJoiningExistingGroup || false;
+    // The O1 committed-membership stamp (absent: the replicas are founders).
+    this.bootstrapMembership = options.bootstrapMembership ?? null;
     this.roleMutationHelper = this.createRoleMutationHelper();
     this.pendingRoleUpdate = this.role;
     this.persistedRole = null;
@@ -307,6 +309,8 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.electionStarted = false;
     this.raftTimingConfig = null;
     this.replicaStateMachine = options.replicaStateMachine || null;
+    this.resolveHandlerRetirementLane =
+      options.resolveHandlerRetirementLane || null;
     this.peerAddresses = options.peerAddresses || [];
     this.learnerCatchUpCheckIntervalMs =
       options.learnerCatchUpCheckIntervalMs ||
@@ -679,6 +683,19 @@ class PartitionServiceCoreBase extends EventEmitter {
    * @return {string} Unified address for the peer.
    */
   buildPeerAddress(peerId) {
+    const address = this.resolveKnownPeerAddress(peerId);
+    if (address === null) {
+      throw new Error(`Unable to resolve unified peer address for ${peerId}`);
+    }
+    return address;
+  }
+  /**
+   * The unified address the address book (dispatched hints, the services
+   * cache) holds for a peer, or null while discovery cannot place it.
+   * @param {string} peerId - Peer replica ID.
+   * @return {string|null} Unified address, or null.
+   */
+  resolveKnownPeerAddress(peerId) {
     const addressManager = AddressManager.getInstance();
     const cacheAddress = this.resolvePeerAddressFromCache(peerId);
     if (peerId.includes(PARTITION_SERVICE_ADDRESS.SEPARATOR)) {
@@ -726,10 +743,7 @@ class PartitionServiceCoreBase extends EventEmitter {
         }
       }
     }
-    if (cacheAddress) {
-      return cacheAddress;
-    }
-    throw new Error(`Unable to resolve unified peer address for ${peerId}`);
+    return cacheAddress || null;
   }
   /**
    * Resolve the leader's unified address for write forwarding.
@@ -798,7 +812,7 @@ class PartitionServiceCoreBase extends EventEmitter {
       return null;
     }
     const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
-    if (!service || !service.node_id) {
+    if (!isLivePartitionServiceRow(service) || !service.node_id) {
       return null;
     }
     const address = AddressManager.getInstance().format(
@@ -833,7 +847,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     }
     if (
       record.partition_id !== this.partitionId ||
-      record.service_type !== SERVICE_TYPE.PARTITION
+      !isLivePartitionServiceRow(record)
     ) {
       return;
     }

@@ -30,6 +30,12 @@ import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {PRESSURE_WORK_CLASS} from
   '../../src/control-plane/pressure-governor.js';
+import {NodeLifecyclePublication} from
+  '../../src/control-plane/node-lifecycle-publication.js';
+import {NodeReadyLeaseAuthority} from
+  '../../src/control-plane/node-ready-lease-authority.js';
+import {insertViaUpsert} from
+  './heartbeat-memory-trend-test-helpers.js';
 
 const TEST_NODE_ID = 'node-budget-preserve';
 const TEST_NODE_ADDRESS = '10.0.0.99:8080';
@@ -38,6 +44,28 @@ const TEST_BUDGET_SOURCE = 'absolute';
 const TEST_BUDGET_UPDATED_AT = 50000;
 const TEST_CREATED_AT = 40000;
 const TEST_NOW = 60000;
+const TEST_BOOT_INCARNATION = 2;
+
+// The durable NODES row the lifecycle owner reads before its CAS.
+function createAuthoritativeNodeRow() {
+  return {
+    node_id: TEST_NODE_ID,
+    node_address: TEST_NODE_ADDRESS,
+    status: 'active',
+    connection_state: 'connected',
+    last_heartbeat: TEST_CREATED_AT,
+    ready_lease_expires_at: null,
+    boot_incarnation: TEST_BOOT_INCARNATION,
+    created_at: TEST_CREATED_AT,
+  };
+}
+
+function authoritativeRowsResult(options) {
+  const row = Object.hasOwn(options, 'authoritativeNodeRow') ?
+    options.authoritativeNodeRow :
+    createAuthoritativeNodeRow();
+  return {success: true, rows: row ? [row] : []};
+}
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -72,18 +100,33 @@ function createCacheWithBudget() {
 }
 
 function createHeartbeatService(options = {}) {
+  const cdcIntegrationService = options.cdcIntegrationService ? {
+    executeAuthoritativeSystemTableRead: async () =>
+      authoritativeRowsResult(options),
+    ...options.cdcIntegrationService,
+  } : null;
   const controlPlaneSystemTableGateway =
-    options.controlPlaneSystemTableGateway ||
-    new ControlPlaneSystemTableGateway({
-      nodeId: options.nodeId || null,
-      cdcIntegrationService: options.cdcIntegrationService || null,
-      sqlQueryEngine: options.cdcIntegrationService?.sqlQueryEngine || null,
-      systemTableCache: options.systemTableCache || null,
-      messageRouter: options.messageRouter || null,
-    });
+    options.controlPlaneSystemTableGateway ? {
+      readAuthoritativeRows: async () => authoritativeRowsResult(options),
+      ...options.controlPlaneSystemTableGateway,
+    } :
+      new ControlPlaneSystemTableGateway({
+        nodeId: options.nodeId || null,
+        cdcIntegrationService,
+        sqlQueryEngine: null,
+        systemTableCache: options.systemTableCache || null,
+        messageRouter: options.messageRouter || null,
+      });
   return new RawHeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     ...options,
+    cdcIntegrationService,
     controlPlaneSystemTableGateway,
+    nodeLifecyclePublication: new NodeLifecyclePublication({
+      gateway: controlPlaneSystemTableGateway,
+      leaseAuthority: NodeReadyLeaseAuthority.fromConfiguration(),
+      now: options.now,
+    }),
   });
 }
 
@@ -101,6 +144,7 @@ test('writeNodeHeartbeat fails loudly when the authoritative nodes row is missin
     const updates = [];
     const upserts = [];
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       cdcIntegrationService: {
@@ -111,12 +155,16 @@ test('writeNodeHeartbeat fails loudly when the authoritative nodes row is missin
             partitionResult: {affectedRows: 0},
           };
         },
+        insertSystemTableRow(...args) {
+          return insertViaUpsert(this, args);
+        },
         upsertSystemTableRow: async (_table, row) => {
           upserts.push(row);
           return {success: true};
         },
       },
       systemTableCache: createCacheWithBudget(),
+      authoritativeNodeRow: null,
       now: () => TEST_NOW,
     });
 
@@ -126,7 +174,8 @@ test('writeNodeHeartbeat fails loudly when the authoritative nodes row is missin
         /node row .*missing/i,
         'missing authoritative rows should fail instead of being recreated',
       );
-      t.equal(updates.length, 1, 'should still attempt one heartbeat update');
+      t.equal(updates.length, 0,
+        'the lifecycle owner refuses a missing row before any write');
       t.equal(upserts.length, 0, 'steady-state heartbeat should not recreate rows');
     } finally {
       ConfigurationManager.resetInstance();
@@ -135,16 +184,20 @@ test('writeNodeHeartbeat fails loudly when the authoritative nodes row is missin
   });
 
 test('reporter payload includes storage budget fields from cache ' +
-  'so dispatch-side resolveNodeStateUpdateBudgetFields can extract them',
+  'so the lifecycle owner carries them on the routed request',
 async (t) => {
   initEnv();
 
   let reportedPayload = null;
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     cdcIntegrationService: {
       updateSystemTableRow: async () => ({success: true}),
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
+      },
       upsertSystemTableRow: async () => ({success: true}),
     },
     systemTableCache: createCacheWithBudget(),
@@ -164,10 +217,10 @@ async (t) => {
     await service.sendHeartbeat(null, null);
 
     t.ok(reportedPayload, 'reporter should receive heartbeat payload');
-    const nodeRow = reportedPayload.nodeRow;
-    t.ok(nodeRow, 'reporter payload should include nodeRow');
+    const nodeRow = reportedPayload.telemetry;
+    t.ok(nodeRow, 'reporter payload should include the telemetry row');
     t.equal(
-      reportedPayload.nodeStatePublicationMode,
+      reportedPayload.publicationMode,
       CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
       'initial heartbeat reporter payload should enter freshness-recovery mode',
     );
@@ -199,6 +252,7 @@ async (t) => {
 
   let capturedUpdateRow = null;
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     cdcIntegrationService: {
@@ -208,6 +262,9 @@ async (t) => {
           success: true,
           partitionResult: {affectedRows: 1},
         };
+      },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
       },
       upsertSystemTableRow: async () => ({success: true}),
     },
@@ -248,6 +305,7 @@ async (t) => {
   const nodeWrites = [];
   const endpointWrites = [];
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     controlPlaneSystemTableGateway: {
@@ -257,6 +315,9 @@ async (t) => {
           success: true,
           partitionResult: {affectedRows: 1},
         };
+      },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
       },
       async upsertSystemTableRow(tableName, row, options) {
         endpointWrites.push({tableName, row, options});
@@ -280,17 +341,17 @@ async (t) => {
       nodeWrites[0].options,
       {
         allowCoalescing: true,
-        deferOnPressure: false,
-        coalescingKey: `heartbeat:nodes:${TEST_NODE_ID}`,
+        coalescingKey: `node-state:${TEST_NODE_ID}`,
         deliveryPriority: 'critical',
-        mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
-        pressureRetryAfterMs: service.heartbeatIntervalMs,
-        queryTimeoutMs: service.resolveHeartbeatWriteQueryTimeoutMs(),
+        pressureRetryAfterMs: 250,
+        queryTimeoutMs: Math.floor(
+          NodeReadyLeaseAuthority.fromConfiguration().readyLeaseMs / 3,
+        ),
         skipCacheWait: true,
         workloadClass: 'node_state_publication_critical',
         workClass: PRESSURE_WORK_CLASS.CRITICAL,
       },
-      'initial node heartbeat writes should use the non-deferrable recovery write contract',
+      'initial node heartbeat writes use the lifecycle owner critical write contract',
     );
 
     t.equal(endpointWrites.length, 1, 'heartbeat should issue one endpoint upsert');
@@ -328,6 +389,7 @@ async (t) => {
   const nodeWrites = [];
   const endpointWrites = [];
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     controlPlaneSystemTableGateway: {
@@ -337,6 +399,9 @@ async (t) => {
           success: true,
           partitionResult: {affectedRows: 1},
         };
+      },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
       },
       async upsertSystemTableRow(tableName, row, options) {
         endpointWrites.push({tableName, row, options});
@@ -390,6 +455,7 @@ async (t) => {
   const nodeWrites = [];
   const endpointWrites = [];
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     controlPlaneSystemTableGateway: {
@@ -399,6 +465,9 @@ async (t) => {
           success: true,
           partitionResult: {affectedRows: 1},
         };
+      },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
       },
       async upsertSystemTableRow(tableName, row, options) {
         endpointWrites.push({tableName, row, options});
@@ -449,6 +518,7 @@ async (t) => {
     get: () => null,
   };
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     cdcIntegrationService: {
@@ -458,6 +528,9 @@ async (t) => {
           success: true,
           partitionResult: {affectedRows: 1},
         };
+      },
+      insertSystemTableRow(...args) {
+        return insertViaUpsert(this, args);
       },
       upsertSystemTableRow: async () => ({success: true}),
     },

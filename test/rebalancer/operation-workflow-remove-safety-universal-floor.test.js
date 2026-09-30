@@ -52,6 +52,7 @@ function buildContext({rows, minReplicaCount}) {
     nodeId: 'owner-node',
     repository: {
       isReplaceRemovePhase: () => false,
+      isReplaceRemoveDispatchPhase: () => false,
       getOperationsByEntity: async () => [],
       isOperationTerminal: () => false,
       getReplaceSourceReplicaId: () => null,
@@ -68,7 +69,6 @@ function buildContext({rows, minReplicaCount}) {
       row.replica_id === op.replicaId || row.service_id === op.replicaId,
     isReplaceSourceLeaderHandoffRequiredPartition: () => false,
     getCriticalMinReplicaCount: async () => minReplicaCount,
-    resolvePriorityPublicationReplacementLeaderCandidateRow: async () => null,
     evaluatePriorityRecoveryCompletionRemoveSafety: async () => null,
     // Priority-tier methods throw if reached: the universal tier must not
     // invoke them for a user partition.

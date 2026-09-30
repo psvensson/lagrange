@@ -124,6 +124,19 @@ t.test('row-owner leader publication rides the critical lane for ordinary ' +
   const updates = [];
   const owner = new PartitionServiceRowOwner({
     now: () => 1234,
+    replicaStateMachine: {
+      async activateRegisteredReplica(options) {
+        return {
+          service_id: options.replicaId,
+          service_type: 'partition',
+          partition_id: options.partitionId,
+          node_id: options.nodeId,
+          status: 'active',
+          raft_role: 'leader',
+          updated_at: options.timestamp,
+        };
+      },
+    },
     systemTableWriter: {
       async upsertSystemTableRow() {},
       async updateSystemTableRow(tableName, whereClause, updateData, options) {

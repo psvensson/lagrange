@@ -160,6 +160,11 @@
       "summary": "Learner promotion waits for a time threshold and safety arithmetic; it does not compare follower and leader progress."
     },
     {
+      "id": "single-process-data-directory",
+      "area": "Storage lifecycle",
+      "summary": "Replica cleanup and recreation are durably serialized by services.service_id. A directory-local SQLite ownership lock rejects a second live OS process before provenance, rejoin, or replica storage activity."
+    },
+    {
       "id": "binding-invocation",
       "area": "Service execution",
       "summary": "Request and call Bindings are publicly invocable. Change, time, once, boot, and pushdown Bindings may be declared but have no public invocation adapter."

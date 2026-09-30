@@ -18,6 +18,8 @@ import {
 } from '../../admin/admin-meta-endpoint-builder.js';
 import {resolveAdvertisedEndpointHost} from
   '../../transport/node-address-resolution.js';
+import {stampEndpointIncarnation} from
+  '../../control-plane/owners/endpoint-incarnation-authority.js';
 
 const LOCAL_STR_COLON_SLASH_SLASH = '://';
 const LOCAL_STR_LBRACKET = '[';
@@ -109,18 +111,24 @@ async function registerBuiltInMetaServiceDefinitions(options = {}) {
  * @param {string} options.nodeId - Hosting node identifier.
  * @param {string} [options.nodeAddress] - Host or URL string used to derive endpoint address/port.
  * @param {number} [options.wsPort] - Explicit endpoint port.
+ * @param {number} options.bootIncarnation - Required: this boot's issued
+ *   incarnation (boot-incarnation-contract.js); absence is refused before
+ *   any row is written.
  * @return {Promise<string[]>} Registered endpoint IDs.
  */
 async function registerBuiltInMetaServiceEndpoints(options = {}) {
   assertEndpointRegistrationOptions(options);
   const {upsertRow, nodeId, nowMs} = options;
   const {endpointAddress, endpointPort} = resolveValidatedEndpointBinding(options);
+  // Each endpoint row belongs to this boot's exact incarnation.
+  const stampThisBoot = (endpoint) =>
+    stampEndpointIncarnation(endpoint, options.bootIncarnation);
   const endpoints = buildBuiltInMetaEndpoints({
     endpointAddress,
     endpointPort,
     nodeId,
     nowMs,
-  });
+  }).map(stampThisBoot);
   for (const endpoint of endpoints) {
     await upsertRow(SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS, endpoint);
   }

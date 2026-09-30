@@ -7,6 +7,8 @@
  */
 
 import {LatencyTopologySetup} from '../shared/latency-topology-setup.js';
+import {retireMessageGroupTransportHandlers} from
+  '../shared/message-group-transport-handler.js';
 import {
   BOOTSTRAP_CLEANUP_STEP,
   BOOTSTRAP_EVENT,
@@ -17,10 +19,6 @@ import {
 import {
   NodeState,
 } from '../../node/node-lifecycle-state-machine.js';
-import {
-  ADDRESS,
-  ENTITY_TYPE,
-} from '../../constants/index.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
@@ -273,7 +271,7 @@ class SeedCleanupHandler {
       await d.clearRuntimeServiceHandler();
       d.stopAndClearControlPlaneServices();
       await d.clearRpcClient();
-      d.clearReplicaStateMachine();
+      await d.clearReplicaStateMachine();
       d.clearEpochManager();
       await d.clearReplicaHandler();
       d.clearTablePolicyService();
@@ -328,18 +326,10 @@ class SeedCleanupHandler {
         }
       }
 
-      const messageRouter = d.getMessageRouter();
-      if (messageRouter) {
-        for (const [replicaId, partition] of
-          d.getPartitionServices()) {
-          const address = partition?.getUnifiedAddress ?
-            partition.getUnifiedAddress() :
-            `${d.getNodeId()}${ADDRESS.SEPARATOR}` +
-            `${ENTITY_TYPE.PARTITION}` +
-            `${ADDRESS.SEPARATOR}${replicaId}`;
-          messageRouter.unregister(address);
-        }
-      }
+      // partition.shutdown() retired its exact handler through the replica
+      // lifecycle owner, and no successor can occupy the address before this
+      // point; a by-address removal here could only remove a successor's
+      // handler. Router shutdown is the node-lifetime backstop.
       d.getPartitionServices().clear();
       d.resetPartitionReplicas();
 
@@ -392,17 +382,11 @@ class SeedCleanupHandler {
         }
       }
 
-      const messageRouter = d.getMessageRouter();
-      if (messageRouter) {
-        for (const [replicaId] of
-          d.getMessageGroupServices()) {
-          const address =
-            `${d.getNodeId()}${ADDRESS.SEPARATOR}` +
-            `${ENTITY_TYPE.MESSAGE_GROUP}` +
-            `${ADDRESS.SEPARATOR}${replicaId}`;
-          messageRouter.unregister(address);
-        }
-      }
+      await retireMessageGroupTransportHandlers({
+        messageGroupServices: d.getMessageGroupServices(),
+        messageRouter: d.getMessageRouter(),
+        nodeId: d.getNodeId(),
+      });
       d.getMessageGroupServices().clear();
       d.resetMessageGroupReplicas();
 
@@ -562,7 +546,7 @@ class SeedCleanupHandler {
     await LatencyTopologySetup.stop(d.getLatencyTopology());
     d.setLatencyTopology(null);
     await this.shutdownSharedRuntimeDependencies(d);
-    d.clearReplicaStateMachine();
+    await d.clearReplicaStateMachine();
     this.disableSystemTableWriter(d);
     d.clearEpochManager();
     await d.clearReplicaHandler();
@@ -573,18 +557,13 @@ class SeedCleanupHandler {
       successLogMessage: BOOTSTRAP_LOG_MSG.PARTITION_CLEANED,
       failureLogMessage: BOOTSTRAP_LOG_MSG.PARTITION_CLEANUP_FAILED,
     });
+    // Each partition.shutdown() above retired its exact handler through the
+    // replica lifecycle owner, after the replica state machine closed and the
+    // executor stopped, so no successor can occupy the address before this
+    // point: cleanup is never a second handler-removal authority (a
+    // by-address removal could only remove a successor's handler). Router
+    // shutdown below is the node-lifetime backstop.
     const messageRouter = d.getMessageRouter();
-    if (messageRouter) {
-      for (const [replicaId, partition] of
-        d.getPartitionServices()) {
-        const address = partition?.getUnifiedAddress ?
-          partition.getUnifiedAddress() :
-          `${d.getNodeId()}${ADDRESS.SEPARATOR}` +
-          `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
-          `${replicaId}`;
-        messageRouter.unregister(address);
-      }
-    }
     d.getPartitionServices().clear();
     d.resetPartitionReplicas();
 
@@ -594,16 +573,11 @@ class SeedCleanupHandler {
       successLogMessage: BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANED,
       failureLogMessage: BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANUP_FAILED,
     });
-    if (messageRouter) {
-      for (const [replicaId] of
-        d.getMessageGroupServices()) {
-        const address =
-          `${d.getNodeId()}${ADDRESS.SEPARATOR}` +
-          `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}` +
-          `${replicaId}`;
-        messageRouter.unregister(address);
-      }
-    }
+    await retireMessageGroupTransportHandlers({
+      messageGroupServices: d.getMessageGroupServices(),
+      messageRouter,
+      nodeId: d.getNodeId(),
+    });
     d.getMessageGroupServices().clear();
     d.resetMessageGroupReplicas();
 

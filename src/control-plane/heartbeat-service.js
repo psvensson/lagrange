@@ -7,6 +7,8 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {requireIssuedBootIncarnation} from
+  '../bootstrap/boot-incarnation-contract.js';
 import {createControlPlaneRuntimeBundle} from './control-plane-runtime-bundle.js';
 import {
   HEARTBEAT_CONFIG_KEY,
@@ -28,6 +30,8 @@ import {
   ZERO,
 } from './heartbeat-service-runtime-state.js';
 
+const HEARTBEAT_SERVICE_SUBJECT = 'HeartbeatService';
+
 class HeartbeatService extends EventEmitter {
   /**
    * @param {Object} options - Configuration options.
@@ -43,15 +47,16 @@ class HeartbeatService extends EventEmitter {
     // This boot's locally minted incarnation: the durable nodes row carries
     // it so receivers fence stale-incarnation (zombie) writers before the
     // heartbeat watermark comparison.
-    this.bootIncarnation = Number.isSafeInteger(options.bootIncarnation) &&
-      options.bootIncarnation > 0 ?
-      options.bootIncarnation :
-      0;
+    this.bootIncarnation = requireIssuedBootIncarnation(
+      options.bootIncarnation, HEARTBEAT_SERVICE_SUBJECT);
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
     this.quietMode = options.quietMode || null;
     this.nodeStateReporter =
       typeof options.nodeStateReporter === 'function' ? options.nodeStateReporter : null;
+    // The one durable node lifecycle owner; this service is its local
+    // ingress adapter and never writes lifecycle columns itself.
+    this.nodeLifecyclePublication = options.nodeLifecyclePublication || null;
     this.isNodeLifecycleReady =
       typeof options.isNodeLifecycleReady === 'function' ?
         options.isNodeLifecycleReady :
@@ -216,6 +221,7 @@ function assembleHeartbeatService(options = {}) {
       options.verifyReporterVisibilityOnSuccess !== false,
     membershipPublicationService: options.membershipPublicationService || null,
     isNodeLifecycleReady: options.isNodeLifecycleReady,
+    nodeLifecyclePublication: options.nodeLifecyclePublication,
     now: options.now,
     setIntervalFn: options.setIntervalFn,
     clearIntervalFn: options.clearIntervalFn,

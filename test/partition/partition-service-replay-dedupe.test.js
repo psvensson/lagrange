@@ -6,6 +6,7 @@ import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
 
 // A committed entry reaches the application through the partition's own
 // port: a lone rs-raft leader commits and applies its proposal before
@@ -16,7 +17,7 @@ async function commitThroughPort(partition, command) {
 
 test('PartitionService skips replayed committed entries when entryId is stable',
   async (t) => {
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'dedupe_table',
       tableName: 'dedupe_table',
@@ -28,7 +29,7 @@ test('PartitionService skips replayed committed entries when entryId is stable',
         ],
       },
       dbPath: ':memory:',
-    });
+    }));
 
     await partition.initialize();
 
@@ -63,7 +64,7 @@ test('PartitionService skips replayed committed entries when entryId is stable',
 test(
   'PartitionService proposeWrite stamps stable entryId for replay dedupe',
   async (t) => {
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'dedupe_table',
       tableName: 'dedupe_table',
@@ -75,7 +76,7 @@ test(
         ],
       },
       dbPath: ':memory:',
-    });
+    }));
 
     await partition.initialize();
 
@@ -123,7 +124,7 @@ test(
 test(
   'PartitionService consumes a duplicate-key INSERT with no applied instance of its entry identity as a failed statement, not a replay',
   async (t) => {
-    const partition = new PartitionService({
+    const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-partition',
       tableId: 'dedupe_table',
       tableName: 'dedupe_table',
@@ -135,7 +136,7 @@ test(
         ],
       },
       dbPath: ':memory:',
-    });
+    }));
 
     await partition.initialize();
 
