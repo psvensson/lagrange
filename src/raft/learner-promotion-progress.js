@@ -59,6 +59,20 @@ const LEARNER_PROMOTION_PROOF_REASON = Object.freeze({
   PROOF_ACCEPTED: 'proof_accepted',
 });
 
+// Typed cause carried by every channel-level refusal (quest
+// learner-promotion-proof-channel-wake): the leader's and the learner's
+// mints of one reason are distinguishable, so the learner can react to
+// the cause (re-assert its services row) instead of blind re-polling.
+const LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE = Object.freeze({
+  // REQUEST_INVALID
+  LEARNER_ADDRESS_UNRESOLVABLE: 'learner_address_unresolvable',
+  REQUEST_SHAPE: 'request_shape',
+  RESPONSE_BINDING_MISMATCH: 'response_binding_mismatch',
+  // TRANSPORT_FAILED
+  LEADER_UNREACHABLE: 'leader_unreachable',
+  DELIVERY_FAILED: 'delivery_failed',
+});
+
 function isNonNegativeInteger(value) {
   return Number.isInteger(value) && value >= PROGRESS_PROOF_NUMERIC_ZERO;
 }
@@ -82,13 +96,15 @@ function refusedProof(reason, facts = {}) {
 
 /**
  * Mint a typed refused proof outside the fact-evaluation table (malformed
- * request, transport failure). Same frozen shape as an evaluated refusal so
- * every consumer sees one proof grammar.
+ * request, transport failure). Same frozen shape as an evaluated refusal
+ * plus the typed channel cause, so every consumer sees one proof grammar
+ * and can tell WHICH side refused and why.
  * @param {string} reason LEARNER_PROMOTION_PROOF_REASON member
+ * @param {string} cause LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE member
  * @return {Object} frozen refused proof
  */
-function refuseLearnerPromotionProof(reason) {
-  return refusedProof(reason);
+function refuseLearnerPromotionProof(reason, cause) {
+  return Object.freeze({...refusedProof(reason), cause});
 }
 
 /**
@@ -159,6 +175,9 @@ function validationOutcome(accepted, reason, proof) {
     proofReason: proof && typeof proof.reason === 'string' ?
       proof.reason :
       null,
+    proofCause: proof && typeof proof.cause === 'string' ?
+      proof.cause :
+      null,
   });
 }
 
@@ -225,7 +244,7 @@ const PROOF_RESPONSE_VALIDATION_RULES = Object.freeze([
  *   receipt
  * @param {number} observation.localTerm learner's current raft term (0 when
  *   unavailable)
- * @return {Object} frozen {accepted, reason, proofReason}
+ * @return {Object} frozen {accepted, reason, proofReason, proofCause}
  */
 function validateLearnerPromotionProofResponse(observation = {}) {
   const violatedRule = PROOF_RESPONSE_VALIDATION_RULES.find((rule) =>
@@ -243,6 +262,7 @@ function validateLearnerPromotionProofResponse(observation = {}) {
 export {
   LEARNER_PROMOTION_PROOF_DECISION,
   LEARNER_PROMOTION_PROOF_REASON,
+  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
   evaluateLearnerPromotionProof,
   refuseLearnerPromotionProof,
   validateLearnerPromotionProofResponse,

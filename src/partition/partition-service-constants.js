@@ -31,6 +31,12 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   // learner-promotion-progress-proof); elapsed time is ONLY the retry
   // cadence below for re-requesting the proof, never a promotion condition.
   LEARNER_CATCH_UP_CHECK_INTERVAL_MS: TIME_MS.SECOND, // Proof retry cadence
+  // An event wake (own services row visible, published epoch changed)
+  // re-arms the single-flight check now; the cadence above stays the floor.
+  LEARNER_PROMOTION_WAKE_DELAY_MS: NUM.ZERO,
+  // Proof delivery bound: min(MESSAGE_TIMEOUT_MS, this multiple of the retry
+  // cadence) so one timed-out round trip never stacks beyond the cadence.
+  LEARNER_PROMOTION_PROOF_TIMEOUT_INTERVAL_MULTIPLE: NUM.TWO,
   MAX_TRACKED_APPLIED_ENTRIES: NUM.THOUSAND * NUM.FIVE,
   MAX_COMMITTED_WRITE_LOG_ENTRIES: NUM.THOUSAND,
   PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS: TIME_MS.SECOND,
@@ -39,7 +45,18 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
 const PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON = Object.freeze({
   INITIAL_DELAY: 'initial_delay',
   DEFERRED_RECHECK: 'deferred_recheck',
+  SERVICES_ROW_VISIBLE: 'services_row_visible',
+  PUBLISHED_EPOCH_CHANGED: 'published_epoch_changed',
 });
+
+// Schedule reasons that re-arm the proof check immediately (event wakes).
+const PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS = Object.freeze(
+  new Set([
+    PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.SERVICES_ROW_VISIBLE,
+    PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON
+      .PUBLISHED_EPOCH_CHANGED,
+  ]),
+);
 
 const PARTITION_SERVICE_SQL = Object.freeze({
   CREATE_RAFT_STATE_TABLE: `
@@ -295,6 +312,14 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Learner promotion proof granted by leader',
   LEARNER_PROMOTION_PROGRESS_PROBE_FAILED:
     'Learner promotion progress probe failed',
+  LEARNER_PROMOTION_PROOF_REQUEST_REFUSED:
+    'Learner promotion proof request refused by leader',
+  LEARNER_PROMOTION_PROOF_RESPONSE_REFUSED:
+    'Learner promotion proof response refused by learner',
+  LEARNER_PROMOTION_WAKE_COALESCED:
+    'Learner promotion wake coalesced into the in-flight check',
+  LEARNER_PROMOTION_ROW_REASSERTED:
+    'Learner promotion re-asserted the durable services row',
   LEADER_DURABILITY_UNFIT:
     'Replica local durability is unfit for leadership: writes are not ' +
     'reaching durable storage (stuck transaction or commit/durable ' +
@@ -629,6 +654,7 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
 
 export {
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
+  PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
   PARTITION_SERVICE_CDC,
   PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_COLUMN,

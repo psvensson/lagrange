@@ -3,13 +3,17 @@
  * learner-promotion-progress-proof): decision-table tests for the two pure
  * halves of the proof — the leader-side evaluator and the learner-side
  * response validator. Every refusal is typed; the proof is bound to
- * (leader, term, membership epoch) and any drift fails closed.
+ * (leader, term, membership epoch) and any drift fails closed. Channel-level
+ * refusals additionally carry a typed cause (quest
+ * learner-promotion-proof-channel-wake); the evaluated proof shape is
+ * frozen and unchanged.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
   LEARNER_PROMOTION_PROOF_DECISION,
   LEARNER_PROMOTION_PROOF_REASON,
+  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
   evaluateLearnerPromotionProof,
   refuseLearnerPromotionProof,
   validateLearnerPromotionProofResponse,
@@ -22,6 +26,22 @@ const CAUGHT_UP_MATCH = 10;
 const LAGGING_MATCH = 9;
 const LEADER_ID = 'replica-1';
 const OTHER_LEADER_ID = 'replica-9';
+// The frozen evaluated-proof shape (no cause key) and the channel-refusal
+// shape (the same keys plus the typed cause).
+const EVALUATED_PROOF_KEYS = [
+  'decision', 'reason', 'term', 'membershipEpoch', 'safePromotionIndex',
+  'learnerMatchIndex',
+];
+const CHANNEL_REFUSAL_KEYS = [...EVALUATED_PROOF_KEYS, 'cause'];
+const REQUEST_INVALID_CAUSES = [
+  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE,
+  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.REQUEST_SHAPE,
+  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.RESPONSE_BINDING_MISMATCH,
+];
+const TRANSPORT_FAILED_CAUSES = [
+  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEADER_UNREACHABLE,
+  LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.DELIVERY_FAILED,
+];
 
 function leaderFacts(overrides = {}) {
   return {
@@ -87,7 +107,44 @@ test('leader refusals are typed and fail-closed', async (t) => {
     const proof = grantedProof(overrides);
     t.equal(proof.decision, LEARNER_PROMOTION_PROOF_DECISION.REFUSED, message);
     t.equal(proof.reason, reason, `${message} (typed reason)`);
+    t.same(Object.keys(proof), EVALUATED_PROOF_KEYS,
+      `${message} (frozen evaluated shape, no channel cause)`);
   }
+  t.same(Object.keys(grantedProof()), EVALUATED_PROOF_KEYS,
+    'a granted proof keeps the frozen evaluated shape');
+});
+
+test('channel-level refusals carry a typed cause in the frozen shape', async (t) => {
+  for (const cause of REQUEST_INVALID_CAUSES) {
+    const proof = refuseLearnerPromotionProof(
+      LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID, cause);
+    t.equal(proof.decision, LEARNER_PROMOTION_PROOF_DECISION.REFUSED,
+      `request_invalid/${cause} is a refusal`);
+    t.equal(proof.cause, cause, `request_invalid carries cause ${cause}`);
+    t.same(Object.keys(proof), CHANNEL_REFUSAL_KEYS,
+      `request_invalid/${cause} has the channel-refusal shape`);
+    t.ok(Object.isFrozen(proof), 'the channel refusal is frozen');
+  }
+  for (const cause of TRANSPORT_FAILED_CAUSES) {
+    const proof = refuseLearnerPromotionProof(
+      LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED, cause);
+    t.equal(proof.reason, LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
+      `proof_transport_failed/${cause} keeps its reason`);
+    t.equal(proof.cause, cause, `proof_transport_failed carries cause ${cause}`);
+  }
+  const validation = validateLearnerPromotionProofResponse(
+    learnerObservation({
+      proof: refuseLearnerPromotionProof(
+        LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
+        LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE),
+    }),
+  );
+  t.equal(validation.accepted, false, 'a channel refusal never promotes');
+  t.equal(validation.proofCause,
+    LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.LEARNER_ADDRESS_UNRESOLVABLE,
+    'the learner-side validation surfaces the typed cause');
+  t.equal(validateLearnerPromotionProofResponse(learnerObservation()).proofCause,
+    null, 'an evaluated proof has no channel cause to surface');
 });
 
 test('empty committed prefix grants trivially without ack evidence', async (t) => {
@@ -122,10 +179,14 @@ test('learner-side validation refusals are typed and fail-closed', async (t) => 
     [{isPromotableLearner: false},
       LEARNER_PROMOTION_PROOF_REASON.ROLE_NOT_LEARNER,
       'a replica that is no longer a learner (or shut down) never promotes'],
+    [{proof: grantedProof({learnerMatchIndex: LAGGING_MATCH})},
+      LEARNER_PROMOTION_PROOF_REASON.PROOF_NOT_GRANTED,
+      'a refused proof never promotes'],
     [{proof: refuseLearnerPromotionProof(
-      LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND)},
+      LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
+      LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.DELIVERY_FAILED)},
     LEARNER_PROMOTION_PROOF_REASON.PROOF_NOT_GRANTED,
-    'a refused proof never promotes'],
+    'a channel refusal never promotes'],
     [{proof: null}, LEARNER_PROMOTION_PROOF_REASON.PROOF_NOT_GRANTED,
       'a missing response never promotes'],
     [{currentLeaderId: OTHER_LEADER_ID},
