@@ -20,8 +20,14 @@ import {
 import {
   applyRebalanceCoordinatorOperationCreationMethods,
 } from '../../src/rebalancer/rebalance-coordinator-operation-creation.js';
+import {
+  applyRebalanceCoordinatorOperationCreationAdmissionMethods,
+} from '../../src/rebalancer/rebalance-coordinator-operation-creation-admission.js';
 
 class OperationCreationHost {}
+applyRebalanceCoordinatorOperationCreationAdmissionMethods(
+  OperationCreationHost,
+);
 applyRebalanceCoordinatorOperationCreationMethods(OperationCreationHost);
 
 const NOT_CONFIRMED_MESSAGE =
@@ -41,7 +47,7 @@ test('the authoritative-not-confirmed collision outcome is transient for ' +
 test('deterministic-intent operation creation requests the idempotent ' +
   'collision disposition', async (t) => {
   const persistCalls = [];
-  const self = {
+  const self = Object.assign(new OperationCreationHost(), {
     logger: {info() {}, warn() {}, error() {}},
     nodeId: 'n0',
     now: () => 1000,
@@ -56,7 +62,7 @@ test('deterministic-intent operation creation requests the idempotent ' +
       persistCalls.push({operation, resultOptions});
       return true;
     },
-  };
+  });
   const prototype = OperationCreationHost.prototype;
   await prototype.createOperationRecordInternal.call(self, {
     move: {

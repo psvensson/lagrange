@@ -1169,3 +1169,205 @@ test('SQLQueryEngine - provisionInitialTablePartition aborts provisional ' +
     'newly created provisional operation should be failed before returning error',
   );
 });
+
+test('SQLQueryEngine - retryable durable schema shortfall retains and reuses ' +
+  'deterministic bootstrap-held operations', async (t) => {
+  const partitionId = 'tbl-durable-reentry-p1';
+  const schemaJobId = 'schema-job-durable-reentry';
+  const localNodeId = 'node-a';
+  const targetNodeIds = [localNodeId, 'node-b', 'node-c'];
+  const nodes = targetNodeIds.map((nodeId) => ({
+    node_id: nodeId,
+    status: 'active',
+  }));
+  const services = [];
+  const operationsById = new Map();
+  const insertCountById = new Map();
+  const failedOperationIds = [];
+  const admissionReentries = [];
+  const dispatchedOperationIds = [];
+  const persistedHoldStates = [];
+  let refuseRemainingTargets = true;
+
+  const cache = {
+    filter(type, predicate) {
+      if (type === TABLES.NODES) return nodes.filter(predicate);
+      if (type === TABLES.SERVICES) return services.filter(predicate);
+      return [];
+    },
+    getAll(type) {
+      if (type === TABLES.NODES) return nodes;
+      if (type === TABLES.SERVICES) return services;
+      return [];
+    },
+  };
+
+  const rebalanceCoordinator = {
+    async checkProvisioningAdmission(move) {
+      return {
+        allowed: true,
+        operationCreationAdmission: Object.freeze({
+          allowed: true,
+          targetNodeId: move.nodeId,
+        }),
+      };
+    },
+    async createOperation(move) {
+      if (move.nodeId !== localNodeId && refuseRemainingTargets) {
+        const error = new Error(
+          'Operation creation admission changed before persistence',
+        );
+        error.code = 'OPERATION_CREATION_ADMISSION_REENTER';
+        error.admissionResult = {
+          allowed: false,
+          decisionType: 'deferred',
+          blockingReasons: ['readiness_planning_identity_unavailable'],
+        };
+        admissionReentries.push({
+          targetNodeId: move.nodeId,
+          code: error.code,
+        });
+        throw error;
+      }
+      const existing = operationsById.get(move.operationIntentId);
+      if (existing?.status === 'failed') {
+        throw new Error(
+          'Operation persistence collision winner is durably terminal for ' +
+          `deterministic intent ${move.operationIntentId}: failed`,
+        );
+      }
+      if (existing) return existing;
+      const operation = {
+        ...move,
+        operationId: move.operationIntentId,
+        replicaId: move.replicaIntentId,
+        targetNodeId: move.nodeId,
+        status: 'pending',
+        workflowStep: 'PENDING',
+        createdAt: Date.now(),
+        stepsHistory: [{
+          [OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED]:
+            true,
+        }],
+      };
+      operationsById.set(operation.operationId, operation);
+      insertCountById.set(
+        operation.operationId,
+        (insertCountById.get(operation.operationId) || 0) + 1,
+      );
+      return operation;
+    },
+    async failOperation(operation) {
+      failedOperationIds.push(operation.operationId);
+      operation.status = 'failed';
+      operation.workflowStep = 'FAILED';
+    },
+    async persistOperationUpdate(operation) {
+      persistedHoldStates.push(
+        operation.stepsHistory[0][
+          OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED
+        ] === true,
+      );
+    },
+    async executeOperation(operation) {
+      dispatchedOperationIds.push(operation.operationId);
+      services.push({
+        partition_id: partitionId,
+        service_type: 'partition',
+        status: 'active',
+        node_id: operation.targetNodeId,
+        replica_id: operation.replicaId,
+        raft_role: operation.targetNodeId === localNodeId ?
+          'leader' : 'follower',
+      });
+      return {success: true};
+    },
+    async dispatchOperation() {
+      throw new Error('inline provisioning must own dispatch');
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator,
+  });
+  engine.waitForPartitionServiceMetadata = async () => {};
+  engine.waitForRoutablePartitionServiceCount = async () => {};
+  engine.waitForPartitionLeaderService = async () => {};
+
+  const firstError = await t.rejects(
+    engine.provisionInitialTablePartition({
+      partitionId,
+      replicaCount: 3,
+      minimumRoutableReplicaCount: 2,
+      minimumRoutableReplicaCountWasDefaulted: true,
+      schemaJobId,
+    }),
+    /Unable to satisfy minimum routable provisioning cohort/,
+  );
+  t.equal(
+    firstError.code,
+    'TABLE_PARTITION_PROVISIONING_RETRYABLE',
+    'the implicit durable-job shortfall requests owner continuation',
+  );
+  t.same(
+    admissionReentries,
+    [
+      {
+        targetNodeId: 'node-b',
+        code: 'OPERATION_CREATION_ADMISSION_REENTER',
+      },
+      {
+        targetNodeId: 'node-c',
+        code: 'OPERATION_CREATION_ADMISSION_REENTER',
+      },
+    ],
+    'remaining targets receive typed effect-boundary admission re-entry',
+  );
+  const firstOperationId = `${schemaJobId}:operation:${localNodeId}`;
+  t.equal(
+    failedOperationIds.length,
+    0,
+    'retryable continuation retains the deterministic child as PENDING',
+  );
+  t.equal(operationsById.get(firstOperationId)?.status, 'pending');
+  t.equal(
+    insertCountById.get(firstOperationId),
+    1,
+    'the first attempt inserts its deterministic child exactly once',
+  );
+  t.equal(
+    operationsById.size,
+    1,
+    'the short attempt leaves only its admitted deterministic child',
+  );
+
+  refuseRemainingTargets = false;
+  await engine.provisionInitialTablePartition({
+    partitionId,
+    replicaCount: 3,
+    minimumRoutableReplicaCount: 2,
+    minimumRoutableReplicaCountWasDefaulted: true,
+    schemaJobId,
+  });
+
+  t.equal(
+    insertCountById.get(firstOperationId),
+    1,
+    'continuation reuses the same deterministic row without another insert',
+  );
+  t.equal(operationsById.size, 3, 'the completed cohort has one row per child');
+  t.same(
+    persistedHoldStates,
+    [false, false, false],
+    'the completed cohort clears each durable bootstrap hold before dispatch',
+  );
+  t.same(
+    dispatchedOperationIds.sort(),
+    [...operationsById.keys()].sort(),
+    'the retained child dispatches only with the completed cohort',
+  );
+});

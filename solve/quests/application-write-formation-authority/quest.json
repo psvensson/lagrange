@@ -1,0 +1,61 @@
+{
+  "schema": "solve-quest/2",
+  "id": "application-write-formation-authority",
+  "class": "fix",
+  "epic": "topology-convergence-hardening",
+  "statement": "Once the authoritative application-write formation owner declares the required cohort ready, the first application mutation admitted under that same authoritative generation is not rejected because of an older or contradictory replica-operation or placement condition. If that authority changes before admission, the mutation is either valid under still-current authority or receives a typed pre-effect refusal that requires re-entry through the same readiness owner; no possibly-applied mutation is blindly retried.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/application-write-formation-authority/evidence/receipt.json",
+      "requiredReceipts": [
+        "stable-ready-first-write-admitted",
+        "pending-operation-prevents-false-readiness",
+        "post-ready-transition-safe",
+        "stale-generation-cannot-win",
+        "transaction-active-end-to-end-confirmation"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, obtain a fresh independent verifier on the exact candidate before audit and landing, then record an approving Solver verification with evidence subagent:<id>."
+    },
+    {
+      "id": "trace-before-repair",
+      "statement": "Before changing production source, capture one controlled formation-release to first-write-admission trace and an owner-difference table naming every admission predicate, source of truth, owner, and generation."
+    },
+    {
+      "id": "single-authority-contract",
+      "statement": "Formation readiness and first-write admission must use one authoritative semantic owner and a coherent generation or existing authority identity; do not duplicate predicates across modules or invent a token namespace while an existing identity suffices."
+    },
+    {
+      "id": "no-mutation-retry",
+      "statement": "The reproducer and repair submit each application mutation exactly once. Observation may repeat, but no test-only readiness condition, generic retry, sleep, timeout expansion, or second CREATE is permitted."
+    },
+    {
+      "id": "typed-pre-effect-refusal",
+      "statement": "If authoritative state changes after readiness, admission either remains valid under current authority or refuses before possible application with a typed result directing the caller back through the canonical readiness owner."
+    },
+    {
+      "id": "synthesis-first",
+      "statement": "After the first mechanism is traced and before implementation, merge independent authority/state and interleaving challenges across publication, readiness, replica-operation, placement, leader, holder, recomputation, and pending-event dimensions."
+    },
+    {
+      "id": "direct-property-primary-proof",
+      "statement": "Deterministic direct witnesses F1 through F4 are the primary proof and must include a red-on-revert treatment of the identified missing predicate or generation fence; transaction-active-owns-connection is only end-to-end confirmation."
+    },
+    {
+      "id": "stop-branch-frozen",
+      "statement": "Do not modify or rewrite the distributed-transaction STOP heads 292b7204334cf47617e675dd9b12bc708b682886 or f673538bbeaa30738d688fb226dbcd90f94014d9 while this independent product repair is active."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "formation-circularity",
+    "owner-interaction",
+    "harness-fidelity"
+  ],
+  "sealedAt": "75147d7439de82d72de857aadd48c6b0eccf3059"
+}

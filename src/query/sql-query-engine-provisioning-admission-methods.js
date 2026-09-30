@@ -1,4 +1,7 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {
+  buildSchemaProvisioningChildIntent,
+} from './schema-provisioning-child-intent.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -27,6 +30,7 @@ const AGGREGATE_TRANSIENT_PROVISIONING_SHORTFALL_REASONS = new Set([
 ]);
 
 const {
+  CONTROL_PLANE_MUTATION_WORK_CLASS,
   OperationType,
   PROVISIONING_REJECTION_DETAIL_LIMIT,
   PROVISIONING_REJECTION_REASON_UNKNOWN,
@@ -412,9 +416,14 @@ class SQLQueryEngineProvisioningAdmissionMethods {
     }
 
     const admittedTargetNodeIds = [];
+    const acceptedTargetPlans = [];
     const rejectedTargetNodePlans = [];
     for (const targetNodeId of candidateTargetNodeIds) {
       let admissionDecision = null;
+      const childIntent = buildSchemaProvisioningChildIntent(
+        options.schemaJobId,
+        targetNodeId,
+      );
       try {
         admissionDecision =
           await this.rebalanceCoordinator.checkProvisioningAdmission({
@@ -423,6 +432,9 @@ class SQLQueryEngineProvisioningAdmissionMethods {
             entityType: SERVICE_TYPE.PARTITION,
             entityId: partitionId,
             nodeId: targetNodeId,
+            controlPlaneMutationWorkClass:
+              CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
+            ...childIntent,
           });
       } catch (error) {
         if (!this.isProvisioningAdmissionDeniedError(error)) {
@@ -437,6 +449,11 @@ class SQLQueryEngineProvisioningAdmissionMethods {
 
       if (admissionDecision?.allowed === true) {
         admittedTargetNodeIds.push(targetNodeId);
+        acceptedTargetPlans.push(Object.freeze({
+          targetNodeId,
+          operationCreationAdmission:
+            admissionDecision.operationCreationAdmission,
+        }));
         continue;
       }
 
@@ -460,6 +477,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
       existingRoutableNodeIds,
       candidateTargetNodeIds,
       admittedTargetNodeIds,
+      admittedTargetPlans: Object.freeze(acceptedTargetPlans),
       rejectedTargetNodePlans,
       maximumProvisionableReplicaCount:
         existingRoutableNodeIds.length + admittedTargetNodeIds.length,
