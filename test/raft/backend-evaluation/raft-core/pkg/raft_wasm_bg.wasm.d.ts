@@ -1,0 +1,33 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const advance: (a: number, b: number) => void;
+export const advance_append: (a: number, b: number) => void;
+export const apply_conf_change: (a: number, b: number, c: number) => void;
+export const campaign: (a: number, b: number) => void;
+export const conf_state: (a: number, b: number) => void;
+export const create_node: (a: number, b: number) => void;
+export const decode_conf_change_entry: (a: number, b: number, c: number, d: number) => void;
+export const export_persisted_state: (a: number, b: number) => void;
+export const free: (a: number) => void;
+export const handle_count: () => number;
+export const has_ready: (a: number, b: number) => void;
+export const persist_commit_index: (a: number, b: number, c: number, d: number) => void;
+export const persist_ready: (a: number, b: number) => void;
+export const propose: (a: number, b: number, c: number) => void;
+export const propose_conf_change_v2: (a: number, b: number, c: number) => void;
+export const seed_storage: (a: number, b: number, c: number) => void;
+export const set_conf_state: (a: number, b: number, c: number) => void;
+export const status: (a: number, b: number) => void;
+export const step: (a: number, b: number, c: number) => void;
+export const take_ready: (a: number, b: number) => void;
+export const tick: (a: number, b: number) => void;
+export const wasm_start: () => void;
+export const wasm_memory_bytes: () => number;
+export const advance_apply: (a: number, b: number) => void;
+export const __wbindgen_export_0: (a: number, b: number) => number;
+export const __wbindgen_export_1: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_export_2: (a: number) => void;
+export const __wbindgen_export_3: (a: number, b: number, c: number) => void;
+export const __wbindgen_add_to_stack_pointer: (a: number) => number;
+export const __wbindgen_start: () => void;

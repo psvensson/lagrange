@@ -1,0 +1,99 @@
+{
+  "schema": "solve-quest/2",
+  "id": "raft-backend-evaluation",
+  "class": "process",
+  "epic": "formation-seed-decoupling",
+  "statement": "Reading has shown that Lagrange has no committed Raft membership: the liferaft library's join and leave edit a local in-memory peer array, quorum is computed from that local array, and each node reconciles its own array from cached service rows, so safe dynamic membership - the part of Raft that is hardest to get right - is being attempted outside Raft. The owner has decided that no Lagrange-owned committed-membership protocol is built on liferaft, and that it is first to be proved whether the TiKV raft-rs core, reached through the existing raft-logic WASM work, provides the missing primitive cleanly; the core is the asset under evaluation, not raft-logic's high-level JavaScript API. The question this quest answers is the owner's: can raft-rs through WASM make Raft membership a replicated fact which remains correct despite divergent Lagrange metadata caches, crash and restart, and concurrent configuration-change attempts, at an acceptable Multi-Raft cost. It changes nothing in production and switches nothing. First it turns the reading about liferaft into measurement on the real provider and the real peer reconciliation: for the same partition and the same underlying state, one node whose cache says the peers are A, B and C and another whose cache says A, B and D each report what their Raft instance believes its voting configuration and quorum to be, with no consensus operation having occurred; nothing replicated or generational records the configuration; and term and vote are read before a crash and after a restart through the actual production persistence path. Second it states the minimum backend contract Lagrange needs, derived mechanically from what the partition service and the provider seam call today plus the configuration operations they lack. Third, because the published raft-logic binding exposes a RawNode-shaped surface but no proposal or application of configuration changes at all, it extends a fork of that binding, kept on the test side of this repository and not upstreamed, to expose the raft-rs primitives themselves - proposing a version-two configuration change, applying a committed one, identifying committed configuration entries, and observing the resulting configuration state - and no convenience membership methods, so that the policy of adding a learner, waiting for it to catch up, promoting it and removing the old voter stays in Lagrange. It drives the core directly and deterministically, with manual ticks and in-process message passing: a stable three-voter group; a sequential replacement in Lagrange's style, voters A B C gaining learner D, D catching up, D promoted, B removed; separately a joint replacement by one version-two change from A B C to A C D, entering the joint configuration, committing it and leaving it; and for each what it costs and what semantics it provides, without deciding which Lagrange should use. It does not require byte-identical configuration on every peer at every instant: it requires that after the relevant configuration entry has been committed and applied on each surviving peer their configuration state converges to the same configuration without consulting Lagrange service rows, and that in the intermediate period quorum and membership decisions come from the core's own configuration state. It restarts a peer at each of nine boundaries - proposed but not persisted, persisted but not committed, committed but not applied by the application, configuration change applied but the returned configuration state not durably recorded, configuration state recorded but Ready not advanced, Ready advanced, joint configuration entered, joint configuration committed, joint configuration left - under the invariant that restart must reconstruct the same Raft membership from durable Raft state alone and no service-row cache may repair it, with the Ready and persistence ordering of the raft-rs model, in which the configuration state returned by applying a change becomes the durable configuration used on restore, treated as the highest-risk part of the wrapper. It shows that disagreeing service caches leave Raft membership identical. It observes, and does not prescribe, what happens when a second version-two configuration change is proposed before the first is applied: the return value, the emitted log entry, the committed entry type, the resulting configuration state, and whether the second requested change ever takes effect. It holds peer identity to a hard invariant - a stable mapping from Lagrange replica identity to a Raft peer id that survives restart and address change, distinguishes distinct replicas on one physical node, is never reassigned after deletion, reconstructs deterministically, and crosses the JavaScript boundary without the loss an ordinary number inflicts on a sixty-four-bit value. It measures Multi-Raft cost for one, one hundred and one thousand groups in the intended hosting shape, separating one-time WASM module and runtime memory from incremental bytes per RawNode and the costs of an idle tick, a step, a has-ready scan, Ready processing and a configuration change. It pins the toolchain of the checked-in fork and keeps two things apart: that the artifact tested is the artifact recorded, and whether that artifact can be reproduced. In every scenario membership is whatever the core itself reports, never something the test declares, and a scenario not driven is recorded as undriven and unanswered. It accounts for what the earlier raft-logic spike in the tree already found. Its output is one generated evaluation document with three independent conclusions derived from the results - whether the consensus core can provide correct replicated membership semantics, whether the WASM boundary can expose them safely and cheaply, and whether the existing provider and partition architecture can adopt them without pathological cost - so that a failure says whether the problem is raft-rs, WASM, the current binding or the hosting model, together with a forecast of what production could delete, labelled as a forecast. Integrating a backend into the partition service and running the formation case against it are the next stage and are not part of this quest.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/raft-backend-evaluation/evidence/receipt.json",
+      "requiredReceipts": [
+        "liferaft-same-partition-two-caches-yield-two-voting-configurations-without-consensus",
+        "liferaft-configuration-is-local-unreplicated-and-without-generation",
+        "liferaft-term-and-vote-across-restart-on-the-production-persistence-path",
+        "minimum-backend-contract-derived-from-production-call-sites",
+        "binding-exposes-raft-primitives-not-convenience-membership",
+        "three-voter-group-elects-and-commits-deterministically",
+        "sequential-replacement-learner-catch-up-promote-remove-measured",
+        "joint-replacement-by-conf-change-v2-enter-commit-leave-measured",
+        "conf-state-converges-after-apply-and-membership-decisions-come-from-the-core",
+        "restart-at-each-of-nine-boundaries-reconstructs-membership-from-durable-raft-state-alone",
+        "ready-persistence-ordering-holds-and-returned-conf-state-is-the-durable-one",
+        "disagreeing-service-caches-leave-raft-membership-identical",
+        "second-conf-change-while-one-is-pending-observed-not-prescribed",
+        "peer-identity-is-stable-unreused-and-safe-across-the-js-boundary",
+        "membership-in-every-scenario-is-reported-by-the-core-not-declared",
+        "multi-raft-cost-separates-runtime-from-rawnode-in-the-intended-hosting-shape",
+        "artifact-integrity-digest-matches",
+        "build-is-pinned-and-reproducibility-is-reported-honestly",
+        "earlier-spike-findings-are-accounted-for",
+        "three-verdicts-and-deletion-forecast-follow-by-derivation-and-document-is-in-sync",
+        "no-production-file-changed"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "read-only-production",
+      "statement": "No file under src (the earlier spike under src/raft/spike included), examples, .github or .githooks changes; no behaviour changes; main is not switched to another Raft backend."
+    },
+    {
+      "id": "primitives-not-convenience",
+      "statement": "The fork exposes raft-rs semantics - propose a ConfChangeV2, apply a committed configuration change, identify committed EntryConfChange and EntryConfChangeV2 entries, observe ConfState - and implements no addNode, removeNode, addLearner or promote convenience. Membership policy stays in Lagrange."
+    },
+    {
+      "id": "core-not-shell",
+      "statement": "The scenarios drive the raft-rs core through the WASM binding directly. raft-logic's RaftNode, ThreadedRaftNode, workers, timers and convenience membership helpers are not the thing evaluated and are not used to reach a verdict."
+    },
+    {
+      "id": "deterministic-drives",
+      "statement": "Manual ticks, in-process message passing, no wall-clock timers, no workers, no network, no cluster; every scenario is re-runnable by its receipt and bounded in time."
+    },
+    {
+      "id": "membership-from-the-core",
+      "statement": "Whatever a scenario asserts about membership, leadership, commit or configuration is read from the core's own reported state on each peer; the test never declares the membership it then checks. This is the architectural result of the stopped overflow-budget audit and binds here."
+    },
+    {
+      "id": "undriven-is-unanswered",
+      "statement": "A scenario or risk not driven is recorded as undriven with its reason and leaves the verdict open on that point; it never counts as passed."
+    },
+    {
+      "id": "fork-stays-here",
+      "statement": "The binding extension is a fork kept on the test side of this repository with its source, its build recipe and the digest of the built artifact. The owner's raft-logic repository, its remote and the npm registry are not modified, pushed to or published to; no dependency version in package.json changes. The extension is not upstreamed during this quest: the contract Lagrange needs is established first."
+    },
+    {
+      "id": "no-design-of-the-migration",
+      "statement": "The quest states a contract and measures scenarios. It does not implement a provider interface, a backend, a Multi-Raft host or a storage adapter for production, and proposes no Lagrange-owned membership protocol."
+    },
+    {
+      "id": "complexity-direction-binds",
+      "statement": "The binding direction on model reduction holds: the deletion forecast is labelled a forecast, no new durable Lagrange concept is proposed except as the smallest one attached to a measured gap, and ADD/REPLACE, ceilings and authorization objects gain nothing here."
+    },
+    {
+      "id": "no-new-apparatus",
+      "statement": "One quest-evidence script for the probe and test-side files only; no new npm script, workflow or standalone checker."
+    },
+    {
+      "id": "observe-do-not-prescribe",
+      "statement": "Where the core's behaviour is the question - a second configuration change while one is pending, simple against joint changes, automatic leaving of a joint configuration - the test records what observably happens and asserts only that record's internal consistency; it never encodes the behaviour that was hoped for."
+    },
+    {
+      "id": "durable-raft-state-alone",
+      "statement": "A restarted peer is rebuilt only from what was durably persisted before the corresponding advance; no test double of a service-row cache, no other peer's memory and no declared membership may repair it. If the binding's storage model makes an honest restart at some boundary impossible, that is a named gap, never a faked pass."
+    },
+    {
+      "id": "three-verdicts",
+      "statement": "The document derives three independent conclusions - consensus core, WASM boundary, Lagrange migration - each from its own receipts; there is no single pass, and a failure is attributed to raft-rs, WASM, the current binding or the hosting model."
+    },
+    {
+      "id": "honest-build",
+      "statement": "The fork carries Cargo.lock, the exact rustc (rust-toolchain.toml), wasm-pack and wasm-bindgen versions, crate source and version, the build command and the WASM SHA-256. Artifact integrity and build reproducibility are separate receipts; byte-for-byte reproducibility is reported as measured and is not required to be true."
+    },
+    {
+      "id": "intended-hosting-shape",
+      "statement": "Multi-Raft cost is measured in the shape production would use - state which (one WASM runtime holding many handles, or otherwise) and why - never an accidental layout such as a thousand heavyweight runtimes; one-time runtime cost and per-RawNode cost are reported separately."
+    }
+  ],
+  "sealedAt": "7e63c93630798a7e8810d14513c3016c6d21d6d8"
+}

@@ -77,3 +77,8 @@ city.toml
 
 # solve-v2: the v1 archive bundle lives in the evidence store, never in git
 solve/epics/solve-v2/solve-v1-archive.tar.gz
+
+# raft-backend-evaluation: the forked binding's cargo build tree. Its SOURCE,
+# its pinned toolchain, its recipe, the built wasm-pack output under pkg/ and
+# the artifact digest are all committed; the intermediate build tree is not.
+test/raft/backend-evaluation/raft-core/target/
