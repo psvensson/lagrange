@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1991,
+    "unit": 1994,
     "integration": 75,
     "bootstrap": 191,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2264,
-  "digest": "fnv1a32-27516ba7",
+  "censusSize": 2267,
+  "digest": "fnv1a32-abe5c77e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1085,6 +1085,9 @@
     "test/node/fault-recovery-behavior.property.test.js": "unit",
     "test/node/idempotent-operations.property.test.js": "unit",
     "test/node/lifecycle-readiness.test.js": "unit",
+    "test/node/local-only-reconcile-activation-boundary.test.js": "unit",
+    "test/node/message-group-executor-activation-handler-boundary.test.js": "unit",
+    "test/node/message-group-registration-redrive-owner.test.js": "unit",
     "test/node/message-group-service-handler.test.js": "unit",
     "test/node/metrics-accuracy.property.test.js": "unit",
     "test/node/node-lifecycle-service.test.js": "unit",
