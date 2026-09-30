@@ -74,6 +74,12 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
         engine.controlPlaneReadinessService,
     }).controlPlaneSystemTableGateway;
   engine.rebalanceCoordinator = options.rebalanceCoordinator || null;
+  // Lifecycle readiness STATE (not a snapshot): the user-plane admission owner
+  // projects it. Absent means this composition has no lifecycle authority at
+  // all — an embedded engine with no cluster to form — which is a typed
+  // admit, distinct from an authority present but unreadable.
+  engine.lifecycleReadinessProvider =
+    options.lifecycleReadinessProvider || null;
   engine.controlPlaneReadinessService =
     options.controlPlaneReadinessService ||
     engine.rebalanceCoordinator?.controlPlaneReadinessService ||

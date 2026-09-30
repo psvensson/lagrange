@@ -1,3 +1,8 @@
+import {
+  buildUserPlaneAdmissionError,
+  isUserPlaneAdmitted,
+  resolveUserPlaneAdmission,
+} from '../bootstrap/user-plane-admission-owner.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   SQLQueryEngineServiceLifecycleExecution,
@@ -6,6 +11,54 @@ import {RUNTIME_ACCESS_POLICY_DECISION} from
   '../control-plane/owners/runtime-access-policy-owner.js';
 import {enforceApplicationDatabaseStatementPolicy} from
   './application-database-statement-policy.js';
+
+// Admission outcomes are typed rather than null-encoded: a bare null return
+// cannot say whether the statement was admitted or the gate never ran.
+const USER_PLANE_ADMISSION_PASS = Object.freeze({held: false});
+// Shapes taken from the repo's own parser, not assumed: SELECT emits `from`
+// as a single OBJECT keyed `name` (with `joins` alongside);
+// INSERT/UPDATE/DELETE emit `table` as a STRING; CREATE/DROP/INDEX emit
+// `tableName`; a derived table emits {name:null, subquery}. A reader that
+// handled only `table` arrays harvested nothing from any SELECT or DDL.
+function collectTableNameInto(names, entry) {
+  if (typeof entry === 'string') {
+    names.push(entry);
+    return;
+  }
+  if (!entry || typeof entry !== 'object') {
+    return;
+  }
+  const name = typeof entry.name === 'string' ?
+    entry.name :
+    (typeof entry.table === 'string' ? entry.table : null);
+  if (name !== null) {
+    names.push(name);
+  }
+  if (entry.table && typeof entry.table === 'object') {
+    collectTableNameInto(names, entry.table);
+  }
+  if (entry.subquery) {
+    collectStatementTableNames(entry.subquery).forEach(
+      (subqueryName) => names.push(subqueryName));
+  }
+}
+
+function collectStatementTableNames(ast) {
+  const names = [];
+  const collect = (entry) => collectTableNameInto(names, entry);
+  collect(ast?.table);
+  collect(ast?.tableName);
+  collect(ast?.from);
+  (Array.isArray(ast?.table) ? ast.table : []).forEach(collect);
+  (Array.isArray(ast?.from) ? ast.from : []).forEach(collect);
+  (Array.isArray(ast?.joins) ? ast.joins : []).forEach(collect);
+  return names;
+}
+
+const TRANSACTION_CONTROL_STATEMENT_TYPES = new Set([
+  'BEGIN_TRANSACTION', 'COMMIT', 'ROLLBACK', 'SAVEPOINT',
+  'RELEASE_SAVEPOINT', 'ROLLBACK_TO_SAVEPOINT',
+]);
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
@@ -345,6 +398,70 @@ class SQLQueryEngineStatementExecution extends
    * @param {string} options.sessionId - Session ID for transaction tracking.
    * @return {Promise<Object>} Query result.
    */
+  /**
+   * Classify one statement as control-plane capability. The admission owner
+   * knows nothing about tables; the SQL layer is where "which capability is
+   * this?" can be answered, so the classification lives at the boundary and
+   * the lifecycle decision stays with its owner.
+   *
+   * @param {Object} ast
+   * @return {boolean}
+   * @private
+   */
+  isControlPlaneCapabilityStatement(ast) {
+    // Transaction control is never new user work: BEGIN opens a unit that
+    // COMMIT or ROLLBACK must be able to close. Refusing ROLLBACK strands the
+    // transaction open with the record stuck mid-unwind, so a node that was
+    // ready at BEGIN and demotes before COMMIT could neither finish nor undo.
+    if (TRANSACTION_CONTROL_STATEMENT_TYPES.has(ast?.type)) {
+      return true;
+    }
+    const names = collectStatementTableNames(ast);
+    // Fail closed: a statement whose tables cannot be identified is treated as
+    // user work and waits. Admitting the unclassifiable is how every SELECT
+    // slipped through.
+    return names.length > 0 &&
+      names.every((name) => this.isSystemTable(name));
+  }
+
+  /**
+   * The single user-plane admission point. Returns a typed retryable failure
+   * when ordinary user work reaches a cluster that has not opened its user
+   * plane, and null when the statement is admitted.
+   *
+   * @param {Object} ast
+   * @param {Object} options
+   * @return {Object} frozen outcome: {held} or {held, failure}
+   * @private
+   */
+  enforceUserPlaneAdmission(ast, options = {}) {
+    const decision = resolveUserPlaneAdmission({
+      controlPlaneCapability: this.isControlPlaneCapabilityStatement(ast),
+      lifecycleReadinessProvider: this.lifecycleReadinessProvider,
+    });
+    if (isUserPlaneAdmitted(decision)) {
+      return USER_PLANE_ADMISSION_PASS;
+    }
+    const error = buildUserPlaneAdmissionError(decision);
+    this.logger.warn(QUERY_LOG_MSG.QUERY_ADMISSION_DEFERRED, {
+      statementType: ast?.type || null,
+      admissionReason: decision.reasonCode,
+      retryAfterMs: error.retryAfterMs,
+      sessionId: options?.sessionId || null,
+    });
+    return Object.freeze({
+      held: true,
+      failure: {
+        success: false,
+        error: error.message,
+        errorCode: error.code,
+        retryAfterMs: error.retryAfterMs,
+        admissionReason: decision.reasonCode,
+        progressContract: error.progressContract,
+      },
+    });
+  }
+
   async executeQuery(sql, params = [], options = {}) {
     const sessionId = options.sessionId || QUERY_SESSION.DEFAULT;
     const cancellationToken = options?.cancellationToken || null;

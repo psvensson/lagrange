@@ -1,0 +1,106 @@
+{
+  "id": "user-plane-admission-owner",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Establish the single owner of user-plane admission AND wire it at the statement-execution entry: before TRAFFIC_READY, control-plane capability is admitted and ordinary user work is refused with a typed retryable answer carrying the existing lifecycle progress contract, decided in one place rather than inferred from table identity. A composition with no lifecycle authority admits, typed and explicitly, because there is no formation to wait for. Replacing the routing layer's systemTable fail-open with this owner remains a later slice.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "src/bootstrap/traffic-readiness-utils.js",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/cluster-formation-topology-admission-closure.md",
+    "draftedAtCommit": "3cddfcf65971a3cc131e54483fe433c7bf5a50f7"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/user-plane-admission-owner.receipt.json",
+      "requiredReceipts": [
+        "traffic-ready-admits-user-work",
+        "forming-cluster-refuses-user-work",
+        "forming-cluster-admits-control-plane-work",
+        "unreadable-authority-refuses-user-work",
+        "unreadable-authority-admits-control-plane-work",
+        "absent-authority-admits-typed",
+        "refusal-is-typed-and-retryable",
+        "production-owner-shapes-resolve-the-provider",
+        "hostile-provider-shapes-fail-closed",
+        "statement-classification-holds-only-user-work",
+        "owner-mints-no-lifecycle-state",
+        "existing-readiness-predicates-unchanged",
+        "witness-deterministic",
+        "execute-query-refuses-user-work-through-the-real-path",
+        "transaction-control-is-always-admitted",
+        "undriven-lifecycle-admits-typed",
+        "derived-table-subquery-tables-are-classified"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "user-plane-admission-owner-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/user-plane-admission-owner.receipt.json",
+          "requiredReceipts": [
+            "traffic-ready-admits-user-work",
+            "forming-cluster-refuses-user-work",
+            "forming-cluster-admits-control-plane-work",
+            "unreadable-authority-refuses-user-work",
+            "unreadable-authority-admits-control-plane-work",
+            "absent-authority-admits-typed",
+            "refusal-is-typed-and-retryable",
+            "production-owner-shapes-resolve-the-provider",
+            "hostile-provider-shapes-fail-closed",
+            "statement-classification-holds-only-user-work",
+            "owner-mints-no-lifecycle-state",
+            "existing-readiness-predicates-unchanged",
+            "witness-deterministic",
+            "execute-query-refuses-user-work-through-the-real-path",
+            "transaction-control-is-always-admitted",
+            "undriven-lifecycle-admits-typed",
+            "derived-table-subquery-tables-are-classified"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-admission-owner",
+      "statement": "One owner decides user-plane admission. The lifecycle predicate is the exported isTrafficReadySnapshot and the refusal is the exported buildLifecycleReadinessNotReadyError; neither is re-derived here, so no second readiness authority is created. Table identity classifies WHICH capability a statement is, at the boundary; it never decides whether the user plane is open."
+    },
+    {
+      "id": "causes-not-collapsed",
+      "statement": "No lifecycle authority present (an embedded engine with no cluster to form) admits; an authority present but yielding no readable snapshot REFUSES user work. These are distinct typed outcomes, because collapsing them would let a wiring regression read as \"no cluster\" and silently admit everything."
+    },
+    {
+      "id": "formation-not-deadlocked",
+      "statement": "Control-plane capability is admitted before TRAFFIC_READY whether readiness is not-yet-ready or unreadable, because refusing the work that produces readiness would deadlock formation."
+    },
+    {
+      "id": "typed-retryable-refusal",
+      "statement": "A refusal carries the readiness owner’s own retryAfterMs, progress contract, wake source and blocking dependency; this Quest invents no retry budget and no new error taxonomy."
+    },
+    {
+      "id": "gate-must-be-able-to-refuse",
+      "statement": "The composition resolver must read a key the real seed and joiner runtime owners actually expose, and the provider must be lazy because readiness is wired after the engine is built. A gate that runs but can never refuse is not a gate; this is pinned by a receipt because it is invisible to a passing suite."
+    },
+    {
+      "id": "projection-only",
+      "statement": "The admission owner mints no lifecycle phase, publishes nothing, and derives nothing from nodes.status, publication counts, or coverage; its decision is frozen and carries exactly admitted, reasonCode and lifecycleReadiness."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic node:test witness, with existing-readiness-predicates-unchanged as the control that must stay green; every guard is mutation-verified and no cloud run is part of the proof."
+    }
+  ]
+}

@@ -1,0 +1,1222 @@
+diff --git a/scripts/quest-evidence-user-plane-admission-owner.js b/scripts/quest-evidence-user-plane-admission-owner.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a53b070746e753d198ceb3fe9e91b1606d6efd4e
+--- /dev/null
++++ b/scripts/quest-evidence-user-plane-admission-owner.js
+@@ -0,0 +1,235 @@
++// Deterministic evidence harness for the user-plane-admission-owner quest:
++// receipt declarations only. The shared runtime re-runs each recorded proof
++// command and writes the test-receipt probe artifact.
++//
++// Receipt honesty: the witness uses raw node:test (not the repo tap shim), so
++// --test-name-pattern selects exactly one anchored scenario per receipt.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const WITNESS_TEST = 'test/bootstrap/user-plane-admission-owner.test.js';
++const NODE_TEST_COMMAND_PREFIX = 'node --test ';
++const TEST_NAME_PATTERN_FLAG_PREFIX = '--test-name-pattern="';
++const DOUBLE_QUOTE = '"';
++const SPACE = ' ';
++
++function scenarioCommand(scenarioPattern) {
++  return NODE_TEST_COMMAND_PREFIX +
++    TEST_NAME_PATTERN_FLAG_PREFIX + scenarioPattern + DOUBLE_QUOTE +
++    SPACE + WITNESS_TEST;
++}
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'traffic-ready-admits-user-work',
++    command: scenarioCommand('^traffic-ready-admits-user-work'),
++    detail: 'once the cluster has opened its user plane, ordinary user work ' +
++      'is admitted with the typed traffic-ready reason and the snapshot it ' +
++      'was decided from, so the gate is satisfiable and not vacuously closed',
++  }),
++  Object.freeze({
++    id: 'forming-cluster-refuses-user-work',
++    command: scenarioCommand('^forming-cluster-refuses-user-work'),
++    detail: 'the whole point of the slice: while the cluster is still ' +
++      'forming, ordinary user work is REFUSED rather than admitted to race ' +
++      'the control plane. Mutation-verified: removing the refusal reds this ' +
++      'scenario',
++  }),
++  Object.freeze({
++    id: 'forming-cluster-admits-control-plane-work',
++    command: scenarioCommand('^forming-cluster-admits-control-plane-work'),
++    detail: 'control-plane capability is admitted before TRAFFIC_READY, ' +
++      'because refusing the work that BUILDS the cluster would deadlock the ' +
++      'formation that produces readiness. Mutation-verified: holding ' +
++      'control-plane work too reds this scenario',
++  }),
++  Object.freeze({
++    id: 'unreadable-authority-refuses-user-work',
++    command: scenarioCommand('^unreadable-authority-refuses-user-work'),
++    detail: 'an authority PRESENT but yielding no readable snapshot is a ' +
++      'wiring or evaluation fault, and unreadable evidence fails closed for ' +
++      'user work across three shapes (no projection method, a projection ' +
++      'answering null, a bare object). Collapsing this with "no authority" ' +
++      'would let a wiring regression read as "no cluster" and silently admit ' +
++      'everything; mutation-verified, that collapse reds three scenarios',
++  }),
++  Object.freeze({
++    id: 'unreadable-authority-admits-control-plane-work',
++    command: scenarioCommand(
++      '^unreadable-authority-admits-control-plane-work'),
++    detail: 'the SECOND cause reaching admitted_control_plane_capability: ' +
++      'control-plane work rides whether readiness is merely not-yet-ready or ' +
++      'unreadable, and the decision reports a null snapshot rather than ' +
++      'implying it read one. One outcome, two causes, each exercised',
++  }),
++  Object.freeze({
++    id: 'absent-authority-admits-typed',
++    command: scenarioCommand('^absent-authority-admits-typed'),
++    detail: 'no lifecycle authority at all is an embedded engine with no ' +
++      'cluster to form, so there is nothing to wait for and the admit is ' +
++      'TYPED rather than a silent default — across six provider shapes ' +
++      '(absent, null, functions answering null or undefined, and falsy ' +
++      'non-objects). This is what keeps the blast radius at zero for the ' +
++      '4666 query-lane tests that build an engine directly',
++  }),
++  Object.freeze({
++    id: 'refusal-is-typed-and-retryable',
++    command: scenarioCommand('^refusal-is-typed-and-retryable'),
++    detail: 'the refusal carries the readiness owner\'s own retryAfterMs ' +
++      '(250, not a number invented here), its progress contract, wake source ' +
++      'and blocking dependency, so a caller is told when to retry and what ' +
++      'it is waiting for. This slice invents no retry budget and no new ' +
++      'error taxonomy',
++  }),
++  Object.freeze({
++    id: 'production-owner-shapes-resolve-the-provider',
++    command: scenarioCommand('^production-owner-shapes-resolve-the-provider'),
++    detail: 'THE ANTI-INERTNESS RECEIPT, rebuilt on the REAL owner. An instrumented live three-node run ' +
++      'showed the gate executing 42 times and admitting every time with ' +
++      'no_lifecycle_authority, because that test builds its engine directly ' +
++      'and bypasses the composition — a gate that runs but can never refuse, ' +
++      'invisible to a fully green suite. This pins that the resolver reads a ' +
++      'key BOTH real runtime owners expose (seed via bootstrap-service, ' +
++      'joiner via node-joining-delegate-bundles), that the provider is LAZY ' +
++      'because readiness is wired after the engine is built, and that all ' +
++      'three owner shapes actually produce a REFUSAL. The first version of ' +
++      'this receipt was itself inert: it readFileSync-ed the source and ' +
++      'regexed for "get bootstrapReadinessState()", which EXISTED while ' +
++      'returning undefined, because the getter read service.joinReadinessState ' +
++      '— a property no service assigns anywhere in src. The gate was therefore ' +
++      'permanently inert on every joining node. It now builds the real owner ' +
++      'through createNodeJoiningRuntimeDependencyOwner and asserts it yields a ' +
++      'state that REFUSES. Mutation-verified: reverting the getter to the ' +
++      'never-assigned property reds this scenario, as does unwiring the ' +
++      'composition provider',
++  }),
++  Object.freeze({
++    id: 'hostile-provider-shapes-fail-closed',
++    command: scenarioCommand('^hostile-provider-shapes-fail-closed'),
++    detail: 'a provider answering with a primitive, or with a projection ' +
++      'returning a primitive, is unreadable evidence and refuses — reported ' +
++      'as unreadable rather than as not-yet-ready, so a broken provider names ' +
++      'itself instead of hiding behind the normal formation reason. A ' +
++      'throwing or revoked provider surfaces rather than being swallowed into ' +
++      'a silent admit. A Proxy over a genuine state is deliberately ADMITTED ' +
++      'and asserted so: unlike row data from a cache, this provider is ' +
++      'injected by our own composition, and refusing it would describe a ' +
++      'threat model this boundary does not have',
++  }),
++  Object.freeze({
++    id: 'statement-classification-holds-only-user-work',
++    command: scenarioCommand(
++      '^statement-classification-holds-only-user-work'),
++    detail: 'every case is a REAL statement parsed by the repo\'s own ' +
++      'SQLParser. The previous synthetic fixtures used shapes the parser never ' +
++      'emits: SELECT puts its target in from.name (an OBJECT, not an array of ' +
++      '{table}), and DDL uses tableName — so EVERY SELECT and every ' +
++      'CREATE/DROP/INDEX was classified control-plane and admitted, leaving ' +
++      'the entire read path ungated while 13 receipts stayed green. Now user ' +
++      'SELECT, user JOIN, INSERT/UPDATE/DELETE, CREATE TABLE and CREATE INDEX ' +
++      'are all held, while system-table statements ride. A join mixing a ' +
++      'system table with a user table is USER work (every, not some), so one ' +
++      'system table cannot carry user data through formation, and an ' +
++      'unclassifiable statement fails CLOSED. Mutation-verified: ignoring ' +
++      'ast.from reds this scenario',
++  }),
++  Object.freeze({
++    id: 'execute-query-refuses-user-work-through-the-real-path',
++    command: scenarioCommand(
++      '^execute-query-refuses-user-work-through-the-real-path'),
++    detail: 'drives the REAL executeQuery on the real prototype with a ' +
++      'receiver built via Object.create, so the gate is exercised where a ' +
++      'query actually arrives: a user INSERT and a user SELECT on a forming ' +
++      'cluster both come back with USER_PLANE_TRAFFIC_NOT_READY and ' +
++      'retryAfterMs 250, while a system-table write and a traffic-ready ' +
++      'cluster both get PAST the gate. Needed because deleting the single ' +
++      'wiring line — if (admission.held) return admission.failure — left every ' +
++      'owner-level scenario green: the owner can be perfect and the slice ' +
++      'still do nothing. Mutation-verified: deleting that line reds this ' +
++      'scenario',
++  }),
++  Object.freeze({
++    id: 'transaction-control-is-always-admitted',
++    command: scenarioCommand('^transaction-control-is-always-admitted'),
++    detail: 'BEGIN, COMMIT and ROLLBACK pass the gate on a forming AND on a ' +
++      'degraded cluster. Refusing ROLLBACK is never right: it is the RELEASE ' +
++      'path, not new work. The fail-closed rule introduced in the previous ' +
++      'round refused all three, which strands application-database.js and the ' +
++      'migration coordinator with an open engine transaction and a record ' +
++      'stuck in ROLLING_BACK — a node ready at BEGIN that demotes before ' +
++      'COMMIT could neither finish nor undo. Mutation-verified: removing the ' +
++      'exemption reds this scenario',
++  }),
++  Object.freeze({
++    id: 'undriven-lifecycle-admits-typed',
++    command: scenarioCommand('^undriven-lifecycle-admits-typed'),
++    detail: 'THE SAFETY RECEIPT. Measured on the real controller: every ' +
++      'setDependency path is reachable only through the external probe entry ' +
++      'points, and nothing in src/ drives evaluation on a cadence, so a ' +
++      'production lifecycle sits at INIT/ready:false indefinitely. A ' +
++      'never-evaluated controller is the ABSENCE of a decision, not a ' +
++      'decision to hold traffic, and treating it as not-ready would refuse ' +
++      'EVERY query forever — a far worse failure than an inert gate. It ' +
++      'therefore admits, typed, on lastEvaluatedAt === null; once something ' +
++      'drives the controller and it is genuinely not ready, the same input ' +
++      'refuses. Mutation-verified both directions: removing the check reds ' +
++      'this scenario, and widening it to always-un-driven reds seven',
++  }),
++  Object.freeze({
++    id: 'derived-table-subquery-tables-are-classified',
++    command: scenarioCommand('^derived-table-subquery-tables-are-classified'),
++    detail: 'the parser emits {name:null, subquery:{...}} for a derived ' +
++      'table, so a classifier that does not recurse harvests no names at all: ' +
++      'a derived table over a system table would be held and one over a user ' +
++      'table admitted. Both directions asserted. Mutation-verified: dropping ' +
++      'the subquery recursion reds this scenario, which it did not before',
++  }),
++  Object.freeze({
++    id: 'owner-mints-no-lifecycle-state',
++    command: scenarioCommand('^owner-mints-no-lifecycle-state'),
++    detail: 'the decision is frozen, carries exactly admitted, reasonCode and ' +
++      'lifecycleReadiness, and mints no phase, ready, active, verdict, ' +
++      'status, trafficReady or publish key: the owner is a projection and ' +
++      'creates no second cluster-ACTIVE or READY authority, reporting the ' +
++      'readiness owner\'s snapshot unchanged rather than a view of it',
++  }),
++  Object.freeze({
++    id: 'existing-readiness-predicates-unchanged',
++    command: scenarioCommand('^existing-readiness-predicates-unchanged'),
++    detail: 'CONTROL — the predicates this owner consumes still behave as ' +
++      'before, and isTrafficReadySnapshot is EXPORTED alongside its two ' +
++      'already-exported siblings rather than re-derived here, which would ' +
++      'have created exactly the second readiness authority this epic exists ' +
++      'to remove. Also pins the read-only contract: isTrafficReady still ' +
++      'drives evaluate() as it always has, while ' +
++      'getTrafficReadinessSnapshotReadOnly returns null for an evaluate-only ' +
++      'state and never falls back. That separation matters because ' +
++      'LifecycleController.evaluate() ADVANCES the state machine — writing ' +
++      '_phase and _consecutiveFailureCount and emitting transitions — so a ' +
++      'gate consulting it on every query would demote the node under user ' +
++      'traffic and then refuse the traffic it demoted for. Mutation-verified: ' +
++      'adding an evaluate fallback reds this scenario. Must stay green',
++  }),
++  Object.freeze({
++    id: 'witness-deterministic',
++    command: scenarioCommand('^witness-deterministic'),
++    detail: 'three evaluations of the full decision matrix produce one ' +
++      'identical projection, so no receipt can pass by evaluation order or ' +
++      'retained state',
++  }),
++]);
++
++const QUEST_ID = 'user-plane-admission-owner';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME = 'user-plane-admission-owner.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/src/bootstrap/lifecycle-controller.js b/src/bootstrap/lifecycle-controller.js
+index aae8065c83abcc060477507ed5b861205113dd4f..197b692f3c22ddbec6ce8672a9d3ada6652b63c5 100644
+--- a/src/bootstrap/lifecycle-controller.js
++++ b/src/bootstrap/lifecycle-controller.js
+@@ -462,6 +462,10 @@ class LifecycleController extends EventEmitter {
+         Math.max(ZERO_COUNT, now - this._stableWindowStartedAt),
+       stableSinceMs,
+       consecutiveFailureCount: this._consecutiveFailureCount,
++      // Null until the first evaluate(). A consumer cannot otherwise tell an
++      // un-driven controller (INIT, ready:false because nothing has run) from
++      // one that evaluated and found the node genuinely not ready.
++      lastEvaluatedAt: this._lastEvaluatedAt,
+       timestamp: now,
+     };
+   }
+diff --git a/src/bootstrap/node-joining-delegate-bundles.js b/src/bootstrap/node-joining-delegate-bundles.js
+index edbbb25b3454447d72877c15d3b00de68e2bdba6..ba3a3c0fc104890a3847aff634f4942912ca5f78 100644
+--- a/src/bootstrap/node-joining-delegate-bundles.js
++++ b/src/bootstrap/node-joining-delegate-bundles.js
+@@ -71,7 +71,11 @@ function createNodeJoiningRuntimeDependencyOwner({service, runtimeWiring}) {
+       return service.rebalanceCoordinator?.controlPlaneReadinessService || null;
+     },
+     get bootstrapReadinessState() {
+-      return service.joinReadinessState;
++      // NodeJoiningService stores the injected readinessState as
++      // bootstrapReadinessState (node-joining-owner-construction.js). There is
++      // no `joinReadinessState` property on the service, so the previous read
++      // returned undefined and every consumer saw "no readiness authority".
++      return service.bootstrapReadinessState;
+     },
+     get serviceLifecycleManager() {
+       return service.serviceLifecycleManager;
+diff --git a/src/bootstrap/traffic-readiness-utils.js b/src/bootstrap/traffic-readiness-utils.js
+index e953e9466408f8ed8ff81f2594e42060da7edf5f..f58b5c4256acdfc3a993f8db755660e26bd01602 100644
+--- a/src/bootstrap/traffic-readiness-utils.js
++++ b/src/bootstrap/traffic-readiness-utils.js
+@@ -59,6 +59,27 @@ function getTrafficReadinessSnapshot(readinessState) {
+   return null;
+ }
+ 
++/**
++ * Read-only lifecycle projection. Deliberately does NOT fall back to
++ * evaluate(): LifecycleController.evaluate() ADVANCES the state machine — it
++ * writes _phase, _ready and _consecutiveFailureCount, pushes transition
++ * history and emits events. A gate that consults readiness on every query must
++ * observe it, never drive it, or user traffic itself demotes the node it is
++ * asking about.
++ *
++ * @param {Object|null} readinessState
++ * @return {Object|null}
++ */
++function getTrafficReadinessSnapshotReadOnly(readinessState) {
++  if (!readinessState || typeof readinessState !== LOCAL_STR_OBJECT) {
++    return null;
++  }
++  if (typeof readinessState.getSnapshot === LOCAL_STR_FUNCTION) {
++    return readinessState.getSnapshot();
++  }
++  return null;
++}
++
+ function isTrafficReadySnapshot(snapshot) {
+   return Boolean(
+     snapshot &&
+@@ -176,7 +197,10 @@ function buildLifecycleReadinessNotReadyError(snapshot, options = {}) {
+     blockingDependency: label.toLowerCase().includes('metadata') ? 'metadata_publication' : 'traffic_readiness',
+   };
+   error.progressContract = progressContract;
+-  if (snapshot) {
++  // Back-fill the contract onto the snapshot for callers that read it there,
++  // but never require the snapshot to be mutable: a frozen readiness snapshot
++  // is legitimate, and assigning to one throws in a module's strict mode.
++  if (snapshot && Object.isExtensible(snapshot)) {
+     snapshot.progressContract = progressContract;
+   }
+ 
+@@ -337,9 +361,11 @@ export {
+   isBackgroundWorkReady,
+   isBackgroundWorkReadySnapshot,
+   getTrafficReadinessSnapshot,
++  getTrafficReadinessSnapshotReadOnly,
+   isMetadataPublicationReady,
+   isMetadataPublicationReadySnapshot,
+   isTrafficReady,
++  isTrafficReadySnapshot,
+   TRAFFIC_READINESS_WAIT_DEFAULT,
+   waitForMetadataPublicationReadiness,
+   waitForTrafficReadiness,
+diff --git a/src/bootstrap/user-plane-admission-owner.js b/src/bootstrap/user-plane-admission-owner.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..0aa2955046bedd94a3c21ee142ceee4029339bd8
+--- /dev/null
++++ b/src/bootstrap/user-plane-admission-owner.js
+@@ -0,0 +1,165 @@
++import {
++  buildLifecycleReadinessNotReadyError,
++  getTrafficReadinessSnapshotReadOnly,
++  isTrafficReadySnapshot,
++} from './traffic-readiness-utils.js';
++
++const LOCAL_STR_OBJECT = 'object';
++const LOCAL_STR_FUNCTION = 'function';
++const USER_PLANE_NOT_READY_CODE = 'USER_PLANE_TRAFFIC_NOT_READY';
++const USER_PLANE_NOT_READY_LABEL = 'User-plane traffic readiness';
++
++// Why this owner exists: the refusal machinery was already complete — a
++// TRAFFIC_READY predicate, a typed retryable error, and a progress contract —
++// and had ZERO production callers, so nothing held ordinary user work outside
++// a forming cluster. The decision is placed here rather than at the routing
++// layer because "may this work run yet?" is a lifecycle question; routing
++// answers "where does it go?". Table identity is not a lifecycle authority.
++const USER_PLANE_ADMISSION_REASON = Object.freeze({
++  ADMITTED_TRAFFIC_READY: 'admitted_traffic_ready',
++  ADMITTED_CONTROL_PLANE: 'admitted_control_plane_capability',
++  ADMITTED_NO_LIFECYCLE_AUTHORITY: 'admitted_no_lifecycle_authority',
++  REFUSED_TRAFFIC_NOT_READY: 'refused_user_plane_traffic_not_ready',
++  REFUSED_LIFECYCLE_UNREADABLE: 'refused_lifecycle_readiness_unreadable',
++  ADMITTED_LIFECYCLE_NOT_DRIVEN: 'admitted_lifecycle_never_evaluated',
++});
++
++const ADMITTED_REASONS = Object.freeze([
++  USER_PLANE_ADMISSION_REASON.ADMITTED_TRAFFIC_READY,
++  USER_PLANE_ADMISSION_REASON.ADMITTED_CONTROL_PLANE,
++  USER_PLANE_ADMISSION_REASON.ADMITTED_NO_LIFECYCLE_AUTHORITY,
++  USER_PLANE_ADMISSION_REASON.ADMITTED_LIFECYCLE_NOT_DRIVEN,
++]);
++
++/**
++ * Resolve the lifecycle snapshot from an injected provider. A provider that is
++ * absent, not callable, or answers with no snapshot means this composition has
++ * no lifecycle authority at all — an embedded single-node engine, not a node
++ * mid-formation. That is a distinct, typed outcome rather than a silent
++ * default, so a wiring regression is nameable instead of invisible.
++ *
++ * @param {Function|Object|null} provider
++ * @return {Object|null}
++ */
++function resolveLifecycleAuthority(provider) {
++  const state = typeof provider === LOCAL_STR_FUNCTION ?
++    provider() :
++    provider;
++  if (!state || typeof state !== LOCAL_STR_OBJECT) {
++    return {present: false, snapshot: null};
++  }
++  // The provider supplies the readiness STATE, the same shape isTrafficReady
++  // consumes; the snapshot is projected from it by its own owner.
++  const snapshot = getTrafficReadinessSnapshotReadOnly(state);
++  // A projection that answers with a primitive is unreadable evidence, not a
++  // not-yet-ready cluster; reporting it as the latter would name the wrong
++  // cause and hide a broken provider.
++  return {
++    present: true,
++    snapshot: snapshot && typeof snapshot === LOCAL_STR_OBJECT ?
++      snapshot :
++      null,
++  };
++}
++
++/**
++ * The single admission decision for one unit of work. Projection only: it mints
++ * no lifecycle phase, publishes nothing, and derives nothing from nodes.status,
++ * publication counts, or coverage.
++ *
++ * @param {Object} options
++ * @param {boolean} [options.controlPlaneCapability] work the cluster needs in
++ *   order to become safe (membership, placement, system-table replication).
++ * @param {Function|Object|null} [options.lifecycleReadinessProvider]
++ * @return {Object} frozen decision
++ */
++function resolveUserPlaneAdmission(options = {}) {
++  const controlPlaneCapability = options.controlPlaneCapability === true;
++  const authority = resolveLifecycleAuthority(
++    options.lifecycleReadinessProvider,
++  );
++  const snapshot = authority.snapshot;
++
++  // No authority at all is an embedded engine with no cluster to form, so
++  // there is nothing to wait for. An authority that is PRESENT but yields no
++  // readable snapshot is a wiring or evaluation fault, and unreadable evidence
++  // must fail closed — collapsing the two would let a wiring regression read
++  // as "no cluster" and silently admit everything.
++  if (!authority.present) {
++    return Object.freeze({
++      admitted: true,
++      reasonCode: USER_PLANE_ADMISSION_REASON.ADMITTED_NO_LIFECYCLE_AUTHORITY,
++      lifecycleReadiness: null,
++    });
++  }
++  if (snapshot === null) {
++    return Object.freeze({
++      admitted: controlPlaneCapability,
++      reasonCode: controlPlaneCapability ?
++        USER_PLANE_ADMISSION_REASON.ADMITTED_CONTROL_PLANE :
++        USER_PLANE_ADMISSION_REASON.REFUSED_LIFECYCLE_UNREADABLE,
++      lifecycleReadiness: null,
++    });
++  }
++  // A lifecycle nobody has evaluated yet reports INIT/ready:false, which is
++  // the ABSENCE of a decision, not a decision to hold traffic. Treating it as
++  // not-ready would refuse every query forever wherever no component drives
++  // evaluation on a cadence — measured to be the case today.
++  if (snapshot.lastEvaluatedAt === null ||
++    snapshot.lastEvaluatedAt === undefined) {
++    return Object.freeze({
++      admitted: true,
++      reasonCode: USER_PLANE_ADMISSION_REASON.ADMITTED_LIFECYCLE_NOT_DRIVEN,
++      lifecycleReadiness: snapshot,
++    });
++  }
++  if (isTrafficReadySnapshot(snapshot)) {
++    return Object.freeze({
++      admitted: true,
++      reasonCode: USER_PLANE_ADMISSION_REASON.ADMITTED_TRAFFIC_READY,
++      lifecycleReadiness: snapshot,
++    });
++  }
++  // Before TRAFFIC_READY the control plane must still be able to build the
++  // cluster; only ordinary user work waits.
++  if (controlPlaneCapability) {
++    return Object.freeze({
++      admitted: true,
++      reasonCode: USER_PLANE_ADMISSION_REASON.ADMITTED_CONTROL_PLANE,
++      lifecycleReadiness: snapshot,
++    });
++  }
++  return Object.freeze({
++    admitted: false,
++    reasonCode: USER_PLANE_ADMISSION_REASON.REFUSED_TRAFFIC_NOT_READY,
++    lifecycleReadiness: snapshot,
++  });
++}
++
++/**
++ * The typed retryable refusal for a decision that was not admitted. Reuses the
++ * existing lifecycle error builder so the progress contract, retryAfterMs and
++ * wake source are the ones the readiness owner already publishes.
++ *
++ * @param {Object} decision
++ * @return {Error}
++ */
++function buildUserPlaneAdmissionError(decision) {
++  return buildLifecycleReadinessNotReadyError(
++    decision?.lifecycleReadiness || null,
++    {code: USER_PLANE_NOT_READY_CODE, label: USER_PLANE_NOT_READY_LABEL},
++  );
++}
++
++function isUserPlaneAdmitted(decision) {
++  return decision?.admitted === true &&
++    ADMITTED_REASONS.includes(decision.reasonCode);
++}
++
++export {
++  USER_PLANE_ADMISSION_REASON,
++  USER_PLANE_NOT_READY_CODE,
++  buildUserPlaneAdmissionError,
++  isUserPlaneAdmitted,
++  resolveUserPlaneAdmission,
++};
+diff --git a/src/entrypoint-runtime-admin-composition.js b/src/entrypoint-runtime-admin-composition.js
+index ff370805cb4f3f69de4a0c86870d45224fb70f33..0631f5b99e96cb7e66af58026a501d67fbdb3f0a 100644
+--- a/src/entrypoint-runtime-admin-composition.js
++++ b/src/entrypoint-runtime-admin-composition.js
+@@ -62,6 +62,23 @@ const SQL_RUNTIME_CLEANUP_FAILURE =
+  * @param {Object|null} owner
+  * @return {Object|null}
+  */
++/**
++ * Resolve the live lifecycle readiness STATE for user-plane admission. Mirrors
++ * resolveOwnerControlPlaneReadinessService: a lazy lookup, because the owner
++ * wires its readiness state after the provisional engine is constructed. A
++ * null result means no lifecycle authority is present in this composition,
++ * which the admission owner treats as a typed admit rather than a refusal.
++ *
++ * @param {Object|null} owner
++ * @return {Object|null}
++ */
++function resolveOwnerLifecycleReadinessState(owner) {
++  return owner?.bootstrapReadinessOwner?.getReadinessState?.() ||
++    owner?.readinessState ||
++    owner?.bootstrapReadinessState ||
++    null;
++}
++
+ function resolveOwnerControlPlaneReadinessService(owner) {
+   return owner?.controlPlaneReadinessService ||
+     owner?.rebalanceCoordinator?.controlPlaneReadinessService ||
+@@ -363,6 +380,10 @@ async function createSqlRuntimeComposition(options) {
+       rebalanceCoordinator: options.owner.rebalanceCoordinator,
+       controlPlaneReadinessService:
+       resolveOwnerControlPlaneReadinessService(options.owner),
++      // Lazy: the owner wires readiness after this engine is built, so a
++      // snapshot captured here would be permanently stale.
++      lifecycleReadinessProvider: () =>
++        resolveOwnerLifecycleReadinessState(options.owner),
+       partitionServicesProvider: () => options.partitionServices,
+       runtimeDriverRegistry: options.owner.runtimeDriverRegistry,
+       serviceRuntimeLifecycle: options.owner.serviceRuntimeLifecycle,
+diff --git a/src/query/sql-query-engine-instance-initializer.js b/src/query/sql-query-engine-instance-initializer.js
+index 5965f2a4fe8026ac37fb56b2c738051614f928d9..f939aa965fc2f00f72f5b110a414f67b724a6339 100644
+--- a/src/query/sql-query-engine-instance-initializer.js
++++ b/src/query/sql-query-engine-instance-initializer.js
+@@ -74,6 +74,12 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
+         engine.controlPlaneReadinessService,
+     }).controlPlaneSystemTableGateway;
+   engine.rebalanceCoordinator = options.rebalanceCoordinator || null;
++  // Lifecycle readiness STATE (not a snapshot): the user-plane admission owner
++  // projects it. Absent means this composition has no lifecycle authority at
++  // all — an embedded engine with no cluster to form — which is a typed
++  // admit, distinct from an authority present but unreadable.
++  engine.lifecycleReadinessProvider =
++    options.lifecycleReadinessProvider || null;
+   engine.controlPlaneReadinessService =
+     options.controlPlaneReadinessService ||
+     engine.rebalanceCoordinator?.controlPlaneReadinessService ||
+diff --git a/src/query/sql-query-engine-statement-execution.js b/src/query/sql-query-engine-statement-execution.js
+index be62bc94b1e8e03c782048977dd03f382f694560..d94e1baf8b39f557683f447d876b9cb005dc4e98 100644
+--- a/src/query/sql-query-engine-statement-execution.js
++++ b/src/query/sql-query-engine-statement-execution.js
+@@ -1,3 +1,8 @@
++import {
++  buildUserPlaneAdmissionError,
++  isUserPlaneAdmitted,
++  resolveUserPlaneAdmission,
++} from '../bootstrap/user-plane-admission-owner.js';
+ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+ import {
+   SQLQueryEngineServiceLifecycleExecution,
+@@ -7,6 +12,54 @@ import {RUNTIME_ACCESS_POLICY_DECISION} from
+ import {enforceApplicationDatabaseStatementPolicy} from
+   './application-database-statement-policy.js';
+ 
++// Admission outcomes are typed rather than null-encoded: a bare null return
++// cannot say whether the statement was admitted or the gate never ran.
++const USER_PLANE_ADMISSION_PASS = Object.freeze({held: false});
++// Shapes taken from the repo's own parser, not assumed: SELECT emits `from`
++// as a single OBJECT keyed `name` (with `joins` alongside);
++// INSERT/UPDATE/DELETE emit `table` as a STRING; CREATE/DROP/INDEX emit
++// `tableName`; a derived table emits {name:null, subquery}. A reader that
++// handled only `table` arrays harvested nothing from any SELECT or DDL.
++function collectTableNameInto(names, entry) {
++  if (typeof entry === 'string') {
++    names.push(entry);
++    return;
++  }
++  if (!entry || typeof entry !== 'object') {
++    return;
++  }
++  const name = typeof entry.name === 'string' ?
++    entry.name :
++    (typeof entry.table === 'string' ? entry.table : null);
++  if (name !== null) {
++    names.push(name);
++  }
++  if (entry.table && typeof entry.table === 'object') {
++    collectTableNameInto(names, entry.table);
++  }
++  if (entry.subquery) {
++    collectStatementTableNames(entry.subquery).forEach(
++      (subqueryName) => names.push(subqueryName));
++  }
++}
++
++function collectStatementTableNames(ast) {
++  const names = [];
++  const collect = (entry) => collectTableNameInto(names, entry);
++  collect(ast?.table);
++  collect(ast?.tableName);
++  collect(ast?.from);
++  (Array.isArray(ast?.table) ? ast.table : []).forEach(collect);
++  (Array.isArray(ast?.from) ? ast.from : []).forEach(collect);
++  (Array.isArray(ast?.joins) ? ast.joins : []).forEach(collect);
++  return names;
++}
++
++const TRANSACTION_CONTROL_STATEMENT_TYPES = new Set([
++  'BEGIN_TRANSACTION', 'COMMIT', 'ROLLBACK', 'SAVEPOINT',
++  'RELEASE_SAVEPOINT', 'ROLLBACK_TO_SAVEPOINT',
++]);
++
+ const LOCAL_STR_FUNCTION = 'function';
+ const LOCAL_STR_STRING = 'string';
+ const LOCAL_STR_OBJECT = 'object';
+@@ -345,6 +398,70 @@ class SQLQueryEngineStatementExecution extends
+    * @param {string} options.sessionId - Session ID for transaction tracking.
+    * @return {Promise<Object>} Query result.
+    */
++  /**
++   * Classify one statement as control-plane capability. The admission owner
++   * knows nothing about tables; the SQL layer is where "which capability is
++   * this?" can be answered, so the classification lives at the boundary and
++   * the lifecycle decision stays with its owner.
++   *
++   * @param {Object} ast
++   * @return {boolean}
++   * @private
++   */
++  isControlPlaneCapabilityStatement(ast) {
++    // Transaction control is never new user work: BEGIN opens a unit that
++    // COMMIT or ROLLBACK must be able to close. Refusing ROLLBACK strands the
++    // transaction open with the record stuck mid-unwind, so a node that was
++    // ready at BEGIN and demotes before COMMIT could neither finish nor undo.
++    if (TRANSACTION_CONTROL_STATEMENT_TYPES.has(ast?.type)) {
++      return true;
++    }
++    const names = collectStatementTableNames(ast);
++    // Fail closed: a statement whose tables cannot be identified is treated as
++    // user work and waits. Admitting the unclassifiable is how every SELECT
++    // slipped through.
++    return names.length > 0 &&
++      names.every((name) => this.isSystemTable(name));
++  }
++
++  /**
++   * The single user-plane admission point. Returns a typed retryable failure
++   * when ordinary user work reaches a cluster that has not opened its user
++   * plane, and null when the statement is admitted.
++   *
++   * @param {Object} ast
++   * @param {Object} options
++   * @return {Object} frozen outcome: {held} or {held, failure}
++   * @private
++   */
++  enforceUserPlaneAdmission(ast, options = {}) {
++    const decision = resolveUserPlaneAdmission({
++      controlPlaneCapability: this.isControlPlaneCapabilityStatement(ast),
++      lifecycleReadinessProvider: this.lifecycleReadinessProvider,
++    });
++    if (isUserPlaneAdmitted(decision)) {
++      return USER_PLANE_ADMISSION_PASS;
++    }
++    const error = buildUserPlaneAdmissionError(decision);
++    this.logger.warn(QUERY_LOG_MSG.QUERY_ADMISSION_DEFERRED, {
++      statementType: ast?.type || null,
++      admissionReason: decision.reasonCode,
++      retryAfterMs: error.retryAfterMs,
++      sessionId: options?.sessionId || null,
++    });
++    return Object.freeze({
++      held: true,
++      failure: {
++        success: false,
++        error: error.message,
++        errorCode: error.code,
++        retryAfterMs: error.retryAfterMs,
++        admissionReason: decision.reasonCode,
++        progressContract: error.progressContract,
++      },
++    });
++  }
++
+   async executeQuery(sql, params = [], options = {}) {
+     const sessionId = options.sessionId || QUERY_SESSION.DEFAULT;
+     const cancellationToken = options?.cancellationToken || null;
+@@ -407,6 +524,10 @@ class SQLQueryEngineStatementExecution extends
+         options,
+       );
+       if (accessFailure) return accessFailure;
++      // Lifecycle admission precedes load admission: if the cluster has not
++      // opened its user plane, how loaded it is does not matter yet.
++      const admission = this.enforceUserPlaneAdmission(ast, options);
++      if (admission.held) return admission.failure;
+       const ingressPressureDecision = this.evaluateQueryIngressPressure(
+         ast,
+         options,
+diff --git a/test/bootstrap/user-plane-admission-owner.test.js b/test/bootstrap/user-plane-admission-owner.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..901ec40add055b66d503b2af935f239441cdc18f
+--- /dev/null
++++ b/test/bootstrap/user-plane-admission-owner.test.js
+@@ -0,0 +1,421 @@
++// Witness for the user-plane-admission-owner quest.
++// Raw node:test (not the tap shim) so --test-name-pattern selects exactly one
++// scenario and each receipt is independently honest.
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import path from 'node:path';
++import {fileURLToPath} from 'node:url';
++
++import {
++  USER_PLANE_ADMISSION_REASON,
++  USER_PLANE_NOT_READY_CODE,
++  buildUserPlaneAdmissionError,
++  isUserPlaneAdmitted,
++  resolveUserPlaneAdmission,
++} from '../../src/bootstrap/user-plane-admission-owner.js';
++import {
++  getTrafficReadinessSnapshotReadOnly,
++  isTrafficReady,
++  isTrafficReadySnapshot,
++} from '../../src/bootstrap/traffic-readiness-utils.js';
++import {
++  SQLQueryEngineStatementExecution,
++} from '../../src/query/sql-query-engine-statement-execution.js';
++import {SQLParser} from '../../src/query/sql-parser.js';
++import {
++  BootstrapReadinessState,
++} from '../../src/bootstrap/bootstrap-readiness-state.js';
++import {
++  createNodeJoiningRuntimeDependencyOwner,
++} from '../../src/bootstrap/node-joining-delegate-bundles.js';
++
++const REPO_ROOT = path.resolve(
++  path.dirname(fileURLToPath(import.meta.url)), '../..');
++
++// lastEvaluatedAt is non-null on both: these are snapshots of a lifecycle
++// something has actually DRIVEN. An un-driven controller reports null and is
++// a separate, admitted case with its own scenario.
++const FORMING = Object.freeze({
++  ready: false, phase: 'JOIN_READY', retryAfterMs: 250,
++  reasons: ['formation_pending'], lastEvaluatedAt: 1000,
++});
++const READY = Object.freeze({
++  ready: true, phase: 'TRAFFIC_READY', lastEvaluatedAt: 1000,
++});
++
++// A readiness state as the gate must consume it: getSnapshot only. evaluate()
++// ADVANCES the lifecycle state machine, so the gate must never reach for it.
++function state(snapshot) {
++  return {getSnapshot: () => snapshot, evaluate: () => {
++    throw new Error('the admission gate must not advance the lifecycle');
++  }};
++}
++
++function decide(provider, controlPlaneCapability = false) {
++  return resolveUserPlaneAdmission({
++    controlPlaneCapability,
++    lifecycleReadinessProvider: provider,
++  });
++}
++
++// Classification is a boundary concern: exercise the real method with a
++// minimal receiver rather than standing up a whole engine.
++function classify(sql, systemTables = ['services', 'nodes']) {
++  // Parse with the REPO'S OWN parser: synthetic ASTs let a classifier pass
++  // while reading shapes the parser never emits. SELECT puts its target in
++  // `from.name` (an object, not an array), DDL in `tableName`.
++  const ast = new SQLParser(sql).parse();
++  return SQLQueryEngineStatementExecution.prototype
++    .isControlPlaneCapabilityStatement.call(
++      {isSystemTable: (name) => systemTables.includes(name)}, ast);
++}
++
++// A receiver on the real prototype, so executeQuery reaches the real gate.
++function engineWith(snapshot, systemTables = ['services']) {
++  return Object.assign(Object.create(SQLQueryEngineStatementExecution.prototype), {
++    isSystemTable: (name) => systemTables.includes(name),
++    lifecycleReadinessProvider: () => ({getSnapshot: () => snapshot}),
++    logger: {debug() {}, warn() {}, error() {}},
++    parseCache: {get: () => null, set() {}, cloneAst: (ast) => ast},
++    recoverDistributedTransactionStateFromCache() {},
++    async authorizeRuntimeServiceStatement() {
++      return null;
++    },
++    evaluateQueryIngressPressure() {
++      return null;
++    },
++    buildCaughtQueryExecutionFailure(error) {
++      return {success: false, error: error.message, errorCode: 'PAST_GATE'};
++    },
++    async executeInsert() {
++      return {success: true, errorCode: 'PAST_GATE'};
++    },
++    async executeSelect() {
++      return {success: true, errorCode: 'PAST_GATE'};
++    },
++  });
++}
++
++async function runQuery(snapshot, sql) {
++  return SQLQueryEngineStatementExecution.prototype.executeQuery.call(
++    engineWith(snapshot), sql);
++}
++
++test('traffic-ready-admits-user-work', () => {
++  const decision = decide(state(READY));
++  assert.equal(decision.admitted, true);
++  assert.equal(decision.reasonCode,
++    USER_PLANE_ADMISSION_REASON.ADMITTED_TRAFFIC_READY);
++  assert.equal(isUserPlaneAdmitted(decision), true);
++  assert.equal(decision.lifecycleReadiness.phase, 'TRAFFIC_READY');
++});
++
++test('forming-cluster-refuses-user-work', () => {
++  const decision = decide(state(FORMING));
++  assert.equal(decision.admitted, false,
++    'ordinary user work waits while the cluster is still forming');
++  assert.equal(decision.reasonCode,
++    USER_PLANE_ADMISSION_REASON.REFUSED_TRAFFIC_NOT_READY);
++  assert.equal(isUserPlaneAdmitted(decision), false);
++});
++
++test('forming-cluster-admits-control-plane-work', () => {
++  const decision = decide(state(FORMING), true);
++  assert.equal(decision.admitted, true,
++    'the control plane must still be able to build the cluster');
++  assert.equal(decision.reasonCode,
++    USER_PLANE_ADMISSION_REASON.ADMITTED_CONTROL_PLANE);
++});
++
++test('unreadable-authority-refuses-user-work', () => {
++  // An authority PRESENT but yielding no readable snapshot is a wiring or
++  // evaluation fault. Unreadable evidence fails closed; collapsing this with
++  // "no authority" would let a wiring regression silently admit everything.
++  for (const provider of [() => ({}), () => ({evaluate: () => null}), {}]) {
++    const decision = resolveUserPlaneAdmission({
++      lifecycleReadinessProvider: provider,
++    });
++    assert.equal(decision.admitted, false);
++    assert.equal(decision.reasonCode,
++      USER_PLANE_ADMISSION_REASON.REFUSED_LIFECYCLE_UNREADABLE);
++    assert.equal(decision.lifecycleReadiness, null);
++  }
++});
++
++test('unreadable-authority-admits-control-plane-work', () => {
++  // The second cause reaching ADMITTED_CONTROL_PLANE: control-plane work is
++  // admitted whether readiness is merely not-yet-ready OR unreadable, because
++  // refusing it would deadlock the formation that produces readiness.
++  const decision = resolveUserPlaneAdmission({
++    controlPlaneCapability: true,
++    lifecycleReadinessProvider: () => ({}),
++  });
++  assert.equal(decision.admitted, true);
++  assert.equal(decision.reasonCode,
++    USER_PLANE_ADMISSION_REASON.ADMITTED_CONTROL_PLANE);
++  assert.equal(decision.lifecycleReadiness, null,
++    'admitted without a readable snapshot, and says so');
++});
++
++test('absent-authority-admits-typed', () => {
++  // No authority at all is an embedded engine with no cluster to form: there
++  // is nothing to wait for. Typed, so a wiring regression is nameable.
++  for (const provider of [undefined, null, () => null, () => undefined, 0, '']) {
++    const decision = resolveUserPlaneAdmission({
++      lifecycleReadinessProvider: provider,
++    });
++    assert.equal(decision.admitted, true);
++    assert.equal(decision.reasonCode,
++      USER_PLANE_ADMISSION_REASON.ADMITTED_NO_LIFECYCLE_AUTHORITY);
++  }
++});
++
++test('refusal-is-typed-and-retryable', () => {
++  const error = buildUserPlaneAdmissionError(decide(state(FORMING)));
++  assert.equal(error.code, USER_PLANE_NOT_READY_CODE);
++  assert.equal(error.retryAfterMs, 250,
++    'the retry budget comes from the readiness owner, not from this module');
++  assert.equal(error.progressContract.nextAction, 'wait_for_traffic_readiness');
++  assert.equal(error.progressContract.blockingDependency, 'traffic_readiness');
++  assert.equal(error.progressContract.terminalState, 'satisfied');
++  assert.match(error.message, /not satisfied/u);
++});
++
++test('production-owner-shapes-resolve-the-provider', () => {
++  // The gate ran 42 times in a live three-node run and admitted every time,
++  // because that test builds its engine directly. A gate that cannot refuse is
++  // not a gate. A source regex is NOT enough: the joiner getter previously
++  // returned service.joinReadinessState, a property no service ever assigns,
++  // so the string existed and the value was undefined.
++  const resolve = (owner) =>
++    owner?.bootstrapReadinessOwner?.getReadinessState?.() ||
++    owner?.readinessState ||
++    owner?.bootstrapReadinessState ||
++    null;
++
++  // Build the REAL joiner runtime owner over a service carrying readiness.
++  const joinerOwner = createNodeJoiningRuntimeDependencyOwner({
++    service: {bootstrapReadinessState: state(FORMING)},
++    runtimeWiring: {},
++  });
++  assert.notEqual(resolve(joinerOwner), null,
++    'the joiner runtime owner must actually yield a readiness state');
++  assert.equal(
++    decide(() => resolve(joinerOwner)).reasonCode,
++    USER_PLANE_ADMISSION_REASON.REFUSED_TRAFFIC_NOT_READY,
++    'a real joiner owner must be able to REFUSE, not admit');
++
++  // The seed shape and the explicit-owner shape must refuse too.
++  for (const owner of [
++    {bootstrapReadinessState: state(FORMING)},
++    {readinessState: state(FORMING)},
++    {bootstrapReadinessOwner: {getReadinessState: () => state(FORMING)}},
++  ]) {
++    const decision = decide(() => resolve(owner));
++    assert.equal(decision.admitted, false);
++    assert.equal(decision.reasonCode,
++      USER_PLANE_ADMISSION_REASON.REFUSED_TRAFFIC_NOT_READY);
++  }
++
++  // And the composition must pass a LAZY provider: readiness is wired after
++  // the engine is built, so a value captured at construction is always null.
++  const composition = fs.readFileSync(path.join(REPO_ROOT,
++    'src/entrypoint-runtime-admin-composition.js'), 'utf8');
++  assert.match(composition, /lifecycleReadinessProvider:\s*\(\)\s*=>/u);
++});
++
++test('hostile-provider-shapes-fail-closed', () => {
++  // The provider crosses a module boundary, so its return is untrusted input.
++  const revoked = Proxy.revocable({getSnapshot: () => READY}, {});
++  revoked.revoke();
++  // A Proxy over a genuine readiness state is NOT hostile here and is
++  // deliberately admitted: unlike row data, which arrives from a cache, this
++  // provider is injected by our own composition. Refusing it would describe a
++  // threat model this boundary does not have.
++  const proxiedState = new Proxy({getSnapshot: () => READY}, {});
++  assert.equal(
++    resolveUserPlaneAdmission({lifecycleReadinessProvider: () => proxiedState})
++      .reasonCode,
++    USER_PLANE_ADMISSION_REASON.ADMITTED_TRAFFIC_READY,
++    'a proxied state behaves as the state it wraps');
++
++  const hostile = [
++    ['throwing getSnapshot', {getSnapshot: () => {
++      throw new Error('boom');
++    }}],
++    ['getSnapshot returning a primitive', {getSnapshot: () => 'ready'}],
++    ['getSnapshot returning a number', {getSnapshot: () => 7}],
++    ['no projection method', {ready: true, phase: 'TRAFFIC_READY'}],
++    // evaluate-only is UNREADABLE by design: reaching for it would advance
++    // the state machine, so a state offering only evaluate is refused.
++    ['evaluate-only state', {evaluate: () => READY}],
++    ['revoked proxy state', revoked.proxy],
++  ];
++  for (const [label, provided] of hostile) {
++    let decision = null;
++    const call = () => {
++      decision = resolveUserPlaneAdmission({
++        lifecycleReadinessProvider: () => provided,
++      });
++    };
++    if (label === 'throwing getSnapshot' || label === 'revoked proxy state') {
++      // A provider that throws must not be swallowed into a silent admit.
++      assert.throws(call, `${label} must surface, not admit`);
++      continue;
++    }
++    call();
++    assert.equal(decision.admitted, false, `${label} must not admit`);
++    assert.equal(decision.reasonCode,
++      USER_PLANE_ADMISSION_REASON.REFUSED_LIFECYCLE_UNREADABLE, label);
++  }
++});
++
++test('statement-classification-holds-only-user-work', () => {
++  // Every case is a REAL parsed statement. The previous synthetic fixtures
++  // ({type:'SELECT', from:[{table:'ratings'}]}) matched no parser output, so
++  // every SELECT and every DDL statement was silently classified
++  // control-plane and admitted.
++  assert.equal(classify('SELECT * FROM users'), false, 'user SELECT is held');
++  assert.equal(classify('SELECT * FROM services'), true);
++  assert.equal(classify('SELECT a FROM users u JOIN orders o ON u.id = o.uid'),
++    false, 'a user JOIN is held');
++  assert.equal(classify('SELECT a FROM services s JOIN nodes n ON 1 = 1'), true);
++  // A join mixing a system table with a user table is USER work: one system
++  // table must not let user data ride through formation.
++  assert.equal(classify('SELECT a FROM services s JOIN users u ON 1 = 1'),
++    false);
++  assert.equal(classify('INSERT INTO ratings VALUES (1)'), false);
++  assert.equal(classify('INSERT INTO services VALUES (1)'), true);
++  assert.equal(classify('UPDATE ratings SET a = 1'), false);
++  assert.equal(classify('DELETE FROM ratings'), false);
++  // DDL carries its target in tableName, a key an ast.table reader never sees.
++  assert.equal(classify('CREATE TABLE t (id INT)'), false);
++  assert.equal(classify('DROP TABLE services'), true);
++  assert.equal(classify('CREATE INDEX i ON ratings (a)'), false);
++  // Fail closed: a statement whose tables cannot be identified waits.
++  assert.equal(classify('SELECT 1'), false,
++    'an unclassifiable statement is treated as user work');
++});
++
++test('execute-query-refuses-user-work-through-the-real-path', async () => {
++  // Drives the REAL executeQuery on the real prototype. Deleting the single
++  // wiring line (`if (admission.held) return admission.failure;`) leaves every
++  // owner-level scenario green, so the wiring needs its own behavioural proof.
++  const refusedInsert = await runQuery(FORMING, 'INSERT INTO ratings VALUES (1)');
++  assert.equal(refusedInsert.success, false);
++  assert.equal(refusedInsert.errorCode, USER_PLANE_NOT_READY_CODE);
++  assert.equal(refusedInsert.retryAfterMs, 250);
++  assert.equal(refusedInsert.admissionReason,
++    USER_PLANE_ADMISSION_REASON.REFUSED_TRAFFIC_NOT_READY);
++
++  const refusedSelect = await runQuery(FORMING, 'SELECT * FROM ratings');
++  assert.equal(refusedSelect.errorCode, USER_PLANE_NOT_READY_CODE,
++    'the read path is gated too');
++
++  // Control-plane work and a ready cluster both get PAST the gate.
++  const systemWrite = await runQuery(FORMING, 'INSERT INTO services VALUES (1)');
++  assert.notEqual(systemWrite.errorCode, USER_PLANE_NOT_READY_CODE);
++  const whenReady = await runQuery(READY, 'INSERT INTO ratings VALUES (1)');
++  assert.notEqual(whenReady.errorCode, USER_PLANE_NOT_READY_CODE);
++});
++
++test('owner-mints-no-lifecycle-state', () => {
++  const decision = decide(state(FORMING));
++  const forbidden = ['phase', 'ready', 'active', 'verdict', 'status',
++    'trafficReady', 'publish'];
++  for (const key of forbidden) {
++    assert.equal(Object.hasOwn(decision, key), false,
++      `the admission owner must not mint ${key}`);
++  }
++  assert.equal(Object.isFrozen(decision), true);
++  assert.deepEqual(Object.keys(decision).sort(),
++    ['admitted', 'lifecycleReadiness', 'reasonCode']);
++  // It reports the readiness owner's snapshot unchanged rather than a view.
++  assert.equal(decision.lifecycleReadiness.phase, FORMING.phase);
++});
++
++test('existing-readiness-predicates-unchanged', () => {
++  // CONTROL: the predicates this owner consumes still behave as before, and
++  // isTrafficReadySnapshot is exported alongside its two siblings rather than
++  // re-derived here.
++  assert.equal(typeof isTrafficReadySnapshot, 'function');
++  assert.equal(isTrafficReadySnapshot(READY), true);
++  assert.equal(isTrafficReadySnapshot(FORMING), false);
++  assert.equal(isTrafficReadySnapshot(null), false);
++  // isTrafficReady legitimately drives evaluate(); that is the pre-existing
++  // contract this control guards, so it gets a state that permits it. The
++  // admission gate is the one that must not, which its own state helper traps.
++  const drivable = (snapshot) => ({evaluate: () => snapshot});
++  assert.equal(isTrafficReady(drivable(READY)), true);
++  assert.equal(isTrafficReady(drivable(FORMING)), false);
++  assert.equal(getTrafficReadinessSnapshotReadOnly(drivable(READY)), null,
++    'the read-only projection never falls back to evaluate');
++  assert.equal(getTrafficReadinessSnapshotReadOnly(state(READY)).phase,
++    'TRAFFIC_READY');
++});
++
++test('witness-deterministic', () => {
++  const shape = () => JSON.stringify([
++    decide(state(READY)), decide(state(FORMING)), decide(state(FORMING), true),
++    resolveUserPlaneAdmission({lifecycleReadinessProvider: () => ({})}),
++    resolveUserPlaneAdmission({}),
++  ]);
++  const first = shape();
++  assert.equal(shape(), first);
++  assert.equal(shape(), first);
++});
++
++test('transaction-control-is-always-admitted', async () => {
++  // BEGIN opens a unit that COMMIT or ROLLBACK must be able to close.
++  // Refusing ROLLBACK strands the transaction open with the record stuck
++  // mid-unwind: a node ready at BEGIN that demotes before COMMIT could
++  // neither finish nor undo. Transaction control is the RELEASE path, never
++  // new user work.
++  for (const sql of ['BEGIN', 'COMMIT', 'ROLLBACK']) {
++    assert.equal(classify(sql), true, `${sql} must never be held`);
++    const result = await runQuery(FORMING, sql);
++    assert.notEqual(result.errorCode, USER_PLANE_NOT_READY_CODE,
++      `${sql} must pass the gate on a forming cluster`);
++  }
++  // The same holds while degraded, which is where an open unit most needs
++  // to be able to unwind.
++  const degraded = {ready: false, phase: 'DEGRADED', retryAfterMs: 500,
++    reasons: ['priority_control_plane_recovery_pending'],
++    lastEvaluatedAt: 1};
++  const rollback = await runQuery(degraded, 'ROLLBACK');
++  assert.notEqual(rollback.errorCode, USER_PLANE_NOT_READY_CODE);
++});
++
++test('undriven-lifecycle-admits-typed', () => {
++  // Measured on the real controller: nothing in src/ drives evaluation on a
++  // cadence, so a production lifecycle sits at INIT/ready:false forever. That
++  // is the ABSENCE of a decision, not a decision to hold traffic — treating it
++  // as not-ready would refuse every query permanently.
++  const undriven = new BootstrapReadinessState();
++  assert.equal(undriven.getSnapshot().lastEvaluatedAt, null,
++    'a controller nobody evaluated reports no evaluation');
++  const decision = decide(() => undriven);
++  assert.equal(decision.admitted, true);
++  assert.equal(decision.reasonCode,
++    USER_PLANE_ADMISSION_REASON.ADMITTED_LIFECYCLE_NOT_DRIVEN);
++
++  // But once something DOES drive it and finds the node not ready, it holds.
++  undriven.evaluate();
++  const afterDrive = decide(() => undriven);
++  assert.notEqual(undriven.getSnapshot().lastEvaluatedAt, null);
++  assert.equal(afterDrive.admitted, false,
++    'a driven lifecycle that is not ready still holds user work');
++  assert.equal(afterDrive.reasonCode,
++    USER_PLANE_ADMISSION_REASON.REFUSED_TRAFFIC_NOT_READY);
++});
++
++test('derived-table-subquery-tables-are-classified', () => {
++  // The parser emits {name:null, subquery:{...}} for a derived table, so a
++  // classifier that does not recurse sees no names at all and (fail-closed)
++  // holds a system-table statement, or (fail-open) admits a user one.
++  assert.equal(classify('SELECT * FROM (SELECT * FROM services) s'), true,
++    'a derived table over a system table is control-plane');
++  assert.equal(classify('SELECT * FROM (SELECT * FROM users) s'), false,
++    'a derived table over a user table is user work');
++});
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index 2cd5e60d4abf21cd068be75fe5330419e85ba6b0..a43c1a474c9561baee89cbee9a68c1a729ca490b 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -4,12 +4,12 @@
+   "counts": {
+     "unit": 1859,
+     "integration": 73,
+-    "bootstrap": 175,
++    "bootstrap": 176,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2114,
+-  "digest": "fnv1a32-823e8338",
++  "censusSize": 2115,
++  "digest": "fnv1a32-f751b163",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+@@ -250,6 +250,7 @@
+     "test/bootstrap/transaction-recovery-handoff-outcome.test.js": "bootstrap",
+     "test/bootstrap/unified-service-lifecycle-cutover-guards.test.js": "bootstrap",
+     "test/bootstrap/universal-partition-implementation.property.test.js": "bootstrap",
++    "test/bootstrap/user-plane-admission-owner.test.js": "bootstrap",
+     "test/bootstrap/wasm-meta-table-schemas.test.js": "bootstrap",
+     "test/cache/cache-epoch-rejection.property.test.js": "unit",
+     "test/cache/cache-hydration-completeness.property.test.js": "unit",
+diff --git a/test/shards/resource-classes.json b/test/shards/resource-classes.json
+index e0be725ea790bab3a84e497e446d5b839456b5d6..6ea6a68943009d15ec44fd2c0b085a7d2c66ae68 100644
+--- a/test/shards/resource-classes.json
++++ b/test/shards/resource-classes.json
+@@ -2,13 +2,13 @@
+   "schemaVersion": 1,
+   "id": "test-resource-classification",
+   "counts": {
+-    "ordinary": 2097,
++    "ordinary": 2098,
+     "cpu-heavy": 0,
+     "external-toolchain": 14,
+     "exclusive": 3
+   },
+-  "censusSize": 2114,
+-  "digest": "fnv1a32-b74ea154",
++  "censusSize": 2115,
++  "digest": "fnv1a32-2e64f429",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
+     "test/address/address-malformed-rejection.property.test.js": "ordinary",
+@@ -249,6 +249,7 @@
+     "test/bootstrap/transaction-recovery-handoff-outcome.test.js": "ordinary",
+     "test/bootstrap/unified-service-lifecycle-cutover-guards.test.js": "ordinary",
+     "test/bootstrap/universal-partition-implementation.property.test.js": "ordinary",
++    "test/bootstrap/user-plane-admission-owner.test.js": "ordinary",
+     "test/bootstrap/wasm-meta-table-schemas.test.js": "ordinary",
+     "test/cache/cache-epoch-rejection.property.test.js": "ordinary",
+     "test/cache/cache-hydration-completeness.property.test.js": "ordinary",
+diff --git a/test/shards/subsystem-classes.json b/test/shards/subsystem-classes.json
+index 093a6a95237c29dd8c05fb9a91c2eb69b65949b7..1e7c1f703276b1e8e2e8aec98f0aa5a6b414c856 100644
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -4,7 +4,7 @@
+   "counts": {
+     "admin-diagnostics": 106,
+     "architecture-governance": 19,
+-    "bootstrap-membership": 244,
++    "bootstrap-membership": 245,
+     "cdc-metadata": 54,
+     "cli-tooling": 96,
+     "control-plane": 172,
+@@ -25,8 +25,8 @@
+     "transport-messaging": 89,
+     "wasm-toolchain": 57
+   },
+-  "censusSize": 2114,
+-  "digest": "fnv1a32-d09151b0",
++  "censusSize": 2115,
++  "digest": "fnv1a32-3e04c0f0",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
+     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+@@ -267,6 +267,7 @@
+     "test/bootstrap/transaction-recovery-handoff-outcome.test.js": "bootstrap-membership",
+     "test/bootstrap/unified-service-lifecycle-cutover-guards.test.js": "bootstrap-membership",
+     "test/bootstrap/universal-partition-implementation.property.test.js": "bootstrap-membership",
++    "test/bootstrap/user-plane-admission-owner.test.js": "bootstrap-membership",
+     "test/bootstrap/wasm-meta-table-schemas.test.js": "bootstrap-membership",
+     "test/cache/cache-epoch-rejection.property.test.js": "storage-partition",
+     "test/cache/cache-hydration-completeness.property.test.js": "storage-partition",

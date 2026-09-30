@@ -71,7 +71,11 @@ function createNodeJoiningRuntimeDependencyOwner({service, runtimeWiring}) {
       return service.rebalanceCoordinator?.controlPlaneReadinessService || null;
     },
     get bootstrapReadinessState() {
-      return service.joinReadinessState;
+      // NodeJoiningService stores the injected readinessState as
+      // bootstrapReadinessState (node-joining-owner-construction.js). There is
+      // no `joinReadinessState` property on the service, so the previous read
+      // returned undefined and every consumer saw "no readiness authority".
+      return service.bootstrapReadinessState;
     },
     get serviceLifecycleManager() {
       return service.serviceLifecycleManager;

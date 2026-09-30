@@ -59,6 +59,27 @@ function getTrafficReadinessSnapshot(readinessState) {
   return null;
 }
 
+/**
+ * Read-only lifecycle projection. Deliberately does NOT fall back to
+ * evaluate(): LifecycleController.evaluate() ADVANCES the state machine — it
+ * writes _phase, _ready and _consecutiveFailureCount, pushes transition
+ * history and emits events. A gate that consults readiness on every query must
+ * observe it, never drive it, or user traffic itself demotes the node it is
+ * asking about.
+ *
+ * @param {Object|null} readinessState
+ * @return {Object|null}
+ */
+function getTrafficReadinessSnapshotReadOnly(readinessState) {
+  if (!readinessState || typeof readinessState !== LOCAL_STR_OBJECT) {
+    return null;
+  }
+  if (typeof readinessState.getSnapshot === LOCAL_STR_FUNCTION) {
+    return readinessState.getSnapshot();
+  }
+  return null;
+}
+
 function isTrafficReadySnapshot(snapshot) {
   return Boolean(
     snapshot &&
@@ -176,7 +197,10 @@ function buildLifecycleReadinessNotReadyError(snapshot, options = {}) {
     blockingDependency: label.toLowerCase().includes('metadata') ? 'metadata_publication' : 'traffic_readiness',
   };
   error.progressContract = progressContract;
-  if (snapshot) {
+  // Back-fill the contract onto the snapshot for callers that read it there,
+  // but never require the snapshot to be mutable: a frozen readiness snapshot
+  // is legitimate, and assigning to one throws in a module's strict mode.
+  if (snapshot && Object.isExtensible(snapshot)) {
     snapshot.progressContract = progressContract;
   }
 
@@ -337,9 +361,11 @@ export {
   isBackgroundWorkReady,
   isBackgroundWorkReadySnapshot,
   getTrafficReadinessSnapshot,
+  getTrafficReadinessSnapshotReadOnly,
   isMetadataPublicationReady,
   isMetadataPublicationReadySnapshot,
   isTrafficReady,
+  isTrafficReadySnapshot,
   TRAFFIC_READINESS_WAIT_DEFAULT,
   waitForMetadataPublicationReadiness,
   waitForTrafficReadiness,

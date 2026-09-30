@@ -62,6 +62,23 @@ const SQL_RUNTIME_CLEANUP_FAILURE =
  * @param {Object|null} owner
  * @return {Object|null}
  */
+/**
+ * Resolve the live lifecycle readiness STATE for user-plane admission. Mirrors
+ * resolveOwnerControlPlaneReadinessService: a lazy lookup, because the owner
+ * wires its readiness state after the provisional engine is constructed. A
+ * null result means no lifecycle authority is present in this composition,
+ * which the admission owner treats as a typed admit rather than a refusal.
+ *
+ * @param {Object|null} owner
+ * @return {Object|null}
+ */
+function resolveOwnerLifecycleReadinessState(owner) {
+  return owner?.bootstrapReadinessOwner?.getReadinessState?.() ||
+    owner?.readinessState ||
+    owner?.bootstrapReadinessState ||
+    null;
+}
+
 function resolveOwnerControlPlaneReadinessService(owner) {
   return owner?.controlPlaneReadinessService ||
     owner?.rebalanceCoordinator?.controlPlaneReadinessService ||
@@ -363,6 +380,10 @@ async function createSqlRuntimeComposition(options) {
       rebalanceCoordinator: options.owner.rebalanceCoordinator,
       controlPlaneReadinessService:
       resolveOwnerControlPlaneReadinessService(options.owner),
+      // Lazy: the owner wires readiness after this engine is built, so a
+      // snapshot captured here would be permanently stale.
+      lifecycleReadinessProvider: () =>
+        resolveOwnerLifecycleReadinessState(options.owner),
       partitionServicesProvider: () => options.partitionServices,
       runtimeDriverRegistry: options.owner.runtimeDriverRegistry,
       serviceRuntimeLifecycle: options.owner.serviceRuntimeLifecycle,

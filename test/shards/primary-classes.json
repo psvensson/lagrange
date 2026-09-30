@@ -4,12 +4,12 @@
   "counts": {
     "unit": 1859,
     "integration": 73,
-    "bootstrap": 175,
+    "bootstrap": 176,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2114,
-  "digest": "fnv1a32-823e8338",
+  "censusSize": 2115,
+  "digest": "fnv1a32-f751b163",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -250,6 +250,7 @@
     "test/bootstrap/transaction-recovery-handoff-outcome.test.js": "bootstrap",
     "test/bootstrap/unified-service-lifecycle-cutover-guards.test.js": "bootstrap",
     "test/bootstrap/universal-partition-implementation.property.test.js": "bootstrap",
+    "test/bootstrap/user-plane-admission-owner.test.js": "bootstrap",
     "test/bootstrap/wasm-meta-table-schemas.test.js": "bootstrap",
     "test/cache/cache-epoch-rejection.property.test.js": "unit",
     "test/cache/cache-hydration-completeness.property.test.js": "unit",
