@@ -23,8 +23,8 @@ import {
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {isCleanupTombstoneRow} from
   '../node/replica-cleanup-tombstone-owner.js';
-import {mintPartitionServiceCreatedAt} from
-  './partition-service-incarnation.js';
+import {mintServiceRowCreatedAt} from
+  '../node/service-row-incarnation.js';
 
 
 const PARTITION_SERVICE_ROW_OWNER_ERROR = Object.freeze({
@@ -201,7 +201,7 @@ class PartitionServiceRowOwner {
       replicaId,
     );
 
-    const createdAt = mintPartitionServiceCreatedAt(timestamp);
+    const createdAt = mintServiceRowCreatedAt(timestamp);
     return {
       service_id: replicaId,
       service_type: SERVICE_TYPE.PARTITION,
