@@ -7,16 +7,12 @@ COPY package.json package-lock.json ./
 
 RUN apt-get update && \
   apt-get install -y --no-install-recommends python3 make g++ && \
-  rm -rf /var/lib/apt/lists/* && \
-  npm ci --omit=dev --no-audit --no-fund && \
-  rm -rf node_modules/node-sql-parser/umd \
-         node_modules/node-sql-parser/build \
-         node_modules/node-sql-parser/*.map && \
-  find node_modules/leveldown/prebuilds -mindepth 1 -maxdepth 1 \
-         ! -name 'linux-x64' -exec rm -rf {} + && \
-  rm -rf node_modules/better-sqlite3/deps \
-         node_modules/better-sqlite3/src \
-         node_modules/better-sqlite3/binding.gyp
+  rm -rf /var/lib/apt/lists/*
+
+# npm owns the production dependency closure, including deep imports and native
+# package assets. Copy its output intact; package-internal pruning can delete
+# runtime code (v0.2.2 removed the SQL dialect parsers this way).
+RUN npm ci --omit=dev --no-audit --no-fund
 
 # ---- runtime: distroless (no shell/apt/npm), node is the entrypoint ----
 FROM gcr.io/distroless/nodejs22-debian12 AS runtime

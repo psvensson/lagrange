@@ -1,0 +1,10 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "tagged-failure-and-red-regression", "passed": false},
+    {"id": "intact-dependency-owner-and-dialect-witnesses", "passed": false},
+    {"id": "independent-packaging-boundary-review", "passed": false},
+    {"id": "static-and-required-change-proof", "passed": false}
+  ]
+}

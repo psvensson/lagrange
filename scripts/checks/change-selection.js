@@ -423,7 +423,7 @@ function admitChangedSource(evidence, changedPath, classes, contracts) {
 
 // package.json is not one semantic subsystem, so its OWNER depends on which
 // fields moved. The runtime surface and the dependency set are broader than any
-// subsystem and have already refused above; a dev-tooling-only edit is the
+// subsystem and require the full proof; a dev-tooling-only edit is the
 // development loop and belongs to test-infrastructure; anything else stays
 // packaging metadata.
 //
@@ -488,11 +488,6 @@ export function selectChangedTests({
 }) {
   const releaseProblem = packageChangeRequiresRelease(
     changedPaths, changedPackageFields, lockfileGraphChanged);
-  if (releaseProblem) {
-    return refusedSelection(
-      REFUSAL_RELEASE_PROOF_REQUIRED, [releaseProblem], []);
-  }
-
   const manifest = readJson(root, SUBSYSTEM_MANIFEST_PATH);
   const classes = manifest?.classes || {};
   const evidence = collectChangeEvidence({
@@ -505,6 +500,12 @@ export function selectChangedTests({
   if (evidence.refusals.length > 0) {
     return refusedSelection(REFUSAL_UNKNOWN_SCOPE, evidence.refusals,
       orderedStringSetValues(evidence.subsystems));
+  }
+  // A known release requirement must not conceal an unclassifiable path:
+  // explicit full-proof execution is not permission to bypass taxonomy repair.
+  if (releaseProblem) {
+    return refusedSelection(
+      REFUSAL_RELEASE_PROOF_REQUIRED, [releaseProblem], []);
   }
 
   const subsystems = orderedStringSetValues(evidence.subsystems);

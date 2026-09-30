@@ -55,6 +55,7 @@ import {
   vanishedPaths,
 } from './checks/changed-paths.js';
 import {
+  ALLOW_RELEASE_PROOF_FLAG,
   JSON_DIGIT_MAX,
   JSON_DIGIT_MIN,
   JSON_NUMBER_DECIMAL,
@@ -88,6 +89,13 @@ const BASE_FLAG = '--base';
 const HEAD_FLAG = '--head';
 const EXPLAIN_FLAG = '--explain';
 const LIST_FLAG = '--list';
+const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const RUNNER_ENVIRONMENT = 'RUNNER_ENVIRONMENT';
+const GITHUB_ACTIONS_ENVIRONMENT = 'GITHUB_ACTIONS';
+const SELF_HOSTED_RUNNER = 'self-hosted';
+const RELEASE_RUNNER_UNAVAILABLE =
+  'RELEASE_PROOF_RUNNER_UNAVAILABLE: full proof requires a controlled runner; ' +
+  'publish with the reviewed [ci:self-hosted] marker and --runner self-hosted';
 const DEFAULT_HEAD = 'HEAD';
 const NEWLINE = '\n';
 const INDENT = '  ';
@@ -103,7 +111,7 @@ const TESTS_SUFFIX = ' test(s)';
 const UNIQUE_TESTS_SUFFIX = ' unique test(s)';
 const USAGE =
   'usage: node scripts/select-change-tests.js [--base <sha>] [--head <sha>] ' +
-  '[--explain] [--list]\n';
+  '[--explain] [--list] [--allow-release-proof]\n';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -539,7 +547,30 @@ function parseInvocation(argv) {
     headRevision: head.value || DEFAULT_HEAD,
     explain: arrayIncludes(argv, EXPLAIN_FLAG),
     list: arrayIncludes(argv, LIST_FLAG),
+    allowReleaseProof: arrayIncludes(argv, ALLOW_RELEASE_PROOF_FLAG),
   };
+}
+
+function executeRequiredProof(plan, invocation) {
+  process.stderr.write(renderRefusal(plan));
+  if (!invocation.allowReleaseProof || invocation.list ||
+      plan.refusalCode !== REFUSAL_RELEASE_PROOF_REQUIRED) {
+    return 1;
+  }
+  const runner = process.env[RUNNER_ENVIRONMENT];
+  const isActions = process.env[GITHUB_ACTIONS_ENVIRONMENT] === 'true';
+  if ((isActions || runner !== undefined) && runner !== SELF_HOSTED_RUNNER) {
+    process.stderr.write(`${RELEASE_RUNNER_UNAVAILABLE}${NEWLINE}`);
+    return 1;
+  }
+  // Execute the named owner command, never the rendered diagnostic/hint.
+  // A full proof includes the safety spine; do not half-run a modular cone.
+  const result = spawnSync(NPM_COMMAND, ['run', 'check:release'], {
+    cwd: root,
+    stdio: 'inherit',
+  });
+  if (result.error) process.stderr.write(`${result.error.message}${NEWLINE}`);
+  return result.status ?? 1;
 }
 
 function main() {
@@ -571,8 +602,7 @@ function main() {
     return;
   }
   if (plan.kind === SELECTION_REFUSED) {
-    process.stderr.write(renderRefusal(plan));
-    process.exitCode = 1;
+    process.exitCode = executeRequiredProof(plan, invocation);
     return;
   }
   if (invocation.list) {

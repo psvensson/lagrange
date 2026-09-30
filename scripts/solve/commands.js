@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
+import {ALLOW_RELEASE_PROOF_FLAG} from '../checks/change-selection-constants.js';
 
 import {
   CERTIFICATION_ONLY_PROBES, CLASS_FIX, ENTRY_TYPE, EPIC_PROOF, EPIC_STATUS,
@@ -33,7 +34,7 @@ const RECENT_ENTRIES = 3;
 const LANDING_MARKER_ENV = 'LAGRANGE_SOLVER_LANDING';
 const LANDING_MARKER_VALUE = '1';
 const NPM = 'npm';
-const NPM_TEST_ARGUMENTS = Object.freeze(['test']);
+const NPM_TEST_ARGUMENTS = Object.freeze(['test', '--', ALLOW_RELEASE_PROOF_FLAG]);
 const INVENTORY_PRODUCER = 'scripts/generate-global-owner-debt-inventory.js';
 const INVENTORY_REFRESH_ARGUMENT = '--refresh';
 const PRIORITY_INVENTORY_PRODUCER = 'scripts/generate-priority-recovery-owner-inventory.js';

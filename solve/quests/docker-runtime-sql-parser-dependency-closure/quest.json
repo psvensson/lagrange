@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "docker-runtime-sql-parser-dependency-closure",
+  "class": "fix",
+  "epic": "release-process-simplification",
+  "statement": "The Docker runtime consumes the complete npm-installed production dependency tree without a competing package-internal pruning policy, and the ordinary release-contract tests reject post-install mutations before tagging; the existing SQLite and PostgreSQL production parser witnesses and release proof remain green.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/docker-runtime-sql-parser-dependency-closure/evidence/receipt.json",
+      "requiredReceipts": [
+        "tagged-failure-and-red-regression",
+        "intact-dependency-owner-and-dialect-witnesses",
+        "independent-packaging-boundary-review",
+        "static-and-required-change-proof"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-dependency-owner",
+      "statement": "Use npm production installation as the dependency closure owner; do not maintain a Docker-local list of dialects or native package internals to retain."
+    },
+    {
+      "id": "bounded-packaging-repair",
+      "statement": "Limit implementation to Docker packaging, its existing release-contract witnesses, release notes and generated proof metadata; do not alter SQL semantics, release gates or publication credentials."
+    },
+    {
+      "id": "pre-tag-regression",
+      "statement": "Demonstrate a failing ordinary test against the old Dockerfile before repairing it, and retain behavioral proof for both production SQL dialect imports."
+    },
+    {
+      "id": "forward-only-release",
+      "statement": "Never move or delete existing release tags; any changed bytes ship through publish, exact-SHA CI and release preflight as the next 0.2 patch."
+    }
+  ],
+  "sealedAt": "59f3427c1557618c65f8dcd36d506826e8ffcbcf"
+}

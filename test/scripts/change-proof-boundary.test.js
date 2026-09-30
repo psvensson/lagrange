@@ -28,6 +28,7 @@ import path from 'node:path';
 import {test} from 'node:test';
 
 import {
+  ALLOW_RELEASE_PROOF_FLAG,
   CHECK_BASE_ENV,
   WORKSPACE_INJECTION_ENV,
 } from '../../scripts/checks/change-selection-constants.js';
@@ -39,10 +40,13 @@ const root = process.cwd();
 const UTF8 = 'utf8';
 const BANNER = 'MODULAR PROOF NOT SAFE';
 const RELEASE_COMMAND = 'npm run check:release';
+const FULL_PROOF_OPTION = ALLOW_RELEASE_PROOF_FLAG;
+const FULL_PROOF_MARKER = /^FULL_PROOF_EXECUTED$/gm;
+const FULL_PROOF_FAILURE = 7;
 // Any word a reader could mistake for a behavioural result.
 const SUCCESS_WORDS = /\b(pass|passed|passing|ok \d+|# pass)\b/i;
 
-const {proofFor, repo} = createChangeProofFixture({
+const {fixtureEnv, proofFor, repo} = createChangeProofFixture({
   root,
   checkBaseEnvironment: CHECK_BASE_ENV,
   workspaceInjectionEnvironment: WORKSPACE_INJECTION_ENV,
@@ -56,6 +60,92 @@ function withDependency(name) {
 }
 
 const spine = loadSafetySpine(root);
+
+function releaseProofChanges(exitCode = 0) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), UTF8));
+  // The actual npm command resolves this script in the disposable repository.
+  // The tripwire replaces only the expensive corpus, not selection/dispatch.
+  manifest.scripts['check:release'] =
+    `node -e "console.log('FULL_PROOF_EXECUTED'); process.exit(${exitCode})"`;
+  return {'Dockerfile': 'FROM scratch\n', 'package.json': JSON.stringify(manifest)};
+}
+
+test('explicit full-proof execution runs the canonical release command exactly once', () => {
+  for (const env of [fixtureEnv(), {...fixtureEnv(), RUNNER_ENVIRONMENT: 'self-hosted'}]) {
+    const proof = proofFor(releaseProofChanges(), {args: [FULL_PROOF_OPTION], env});
+    assert.equal(proof.status, 0, proof.output);
+    assert.equal(proof.invocation, null, 'no partial modular proof before the full proof');
+    assert.equal([...proof.output.matchAll(FULL_PROOF_MARKER)].length, 1);
+  }
+});
+
+test('full-proof child failure remains a failing gate with its exit status', () => {
+  const proof = proofFor(releaseProofChanges(FULL_PROOF_FAILURE), {args: [FULL_PROOF_OPTION]});
+  assert.equal(proof.status, FULL_PROOF_FAILURE, proof.output);
+  assert.equal([...proof.output.matchAll(FULL_PROOF_MARKER)].length, 1);
+  assert.equal(proof.invocation, null);
+});
+
+test('full-proof permission cannot hide unknown scope mixed with a release change', () => {
+  const proof = proofFor({
+    ...releaseProofChanges(),
+    'src/brand-new-unmapped-area/thing.js': 'export {};\n',
+  }, {args: [FULL_PROOF_OPTION]});
+  assert.notEqual(proof.status, 0);
+  assert.match(proof.output, /UNKNOWN_SCOPE/u);
+  assert.equal([...proof.output.matchAll(FULL_PROOF_MARKER)].length, 0);
+  assert.equal(proof.invocation, null);
+});
+
+test('full-proof permission cannot bypass invalid safety-spine authority', () => {
+  const proof = proofFor({
+    ...releaseProofChanges(),
+    'test/shards/safety-spine.json': '{"tests":[]}',
+  }, {args: [FULL_PROOF_OPTION]});
+  assert.notEqual(proof.status, 0);
+  assert.equal([...proof.output.matchAll(FULL_PROOF_MARKER)].length, 0);
+  assert.equal(proof.invocation, null);
+});
+
+test('a hosted CI runner refuses the full corpus before spawning it', () => {
+  const proof = proofFor(releaseProofChanges(), {
+    args: [FULL_PROOF_OPTION],
+    env: {...fixtureEnv(), RUNNER_ENVIRONMENT: 'github-hosted'},
+  });
+  assert.notEqual(proof.status, 0);
+  assert.match(proof.output, /RELEASE_PROOF_RUNNER_UNAVAILABLE/u);
+  assert.equal([...proof.output.matchAll(FULL_PROOF_MARKER)].length, 0);
+  assert.equal(proof.invocation, null);
+});
+
+test('GitHub Actions cannot infer a supported runner from missing or unknown identity', () => {
+  for (const runner of [undefined, 'unknown']) {
+    const env = {...fixtureEnv(), GITHUB_ACTIONS: 'true'};
+    if (runner !== undefined) env.RUNNER_ENVIRONMENT = runner;
+    const proof = proofFor(releaseProofChanges(), {args: [FULL_PROOF_OPTION], env});
+    assert.notEqual(proof.status, 0);
+    assert.match(proof.output, /RELEASE_PROOF_REQUIRED/u);
+    assert.match(proof.output, /RELEASE_PROOF_RUNNER_UNAVAILABLE/u);
+    assert.equal([...proof.output.matchAll(FULL_PROOF_MARKER)].length, 0);
+    assert.equal(proof.invocation, null);
+  }
+});
+
+test('explain and list never execute a full proof even with permission', () => {
+  for (const mode of ['--explain', '--list']) {
+    const proof = proofFor(releaseProofChanges(), {args: [FULL_PROOF_OPTION, mode]});
+    assert.notEqual(proof.status, 0);
+    assert.equal([...proof.output.matchAll(FULL_PROOF_MARKER)].length, 0);
+    assert.equal(proof.invocation, null);
+  }
+});
+
+test('full-proof permission leaves ordinary changes on the selected modular path', () => {
+  const proof = proofFor({'docs/development/note.md': '# note\n'}, {args: [FULL_PROOF_OPTION]});
+  assert.equal(proof.status, 0);
+  assert.deepEqual([...proof.invocation].sort(), [...spine].sort());
+  assert.equal([...proof.output.matchAll(FULL_PROOF_MARKER)].length, 0);
+});
 
 test('the npm vocabulary is wired to the change proof', () => {
   // The single biggest behavioural lever in this workflow is that `npm test` is
@@ -72,6 +162,11 @@ test('the npm vocabulary is wired to the change proof', () => {
     'npm run check must run the fast static layer');
   assert.match(scripts.check, /npm test/,
     'npm run check must then run the change proof');
+  assert.match(scripts.check, /npm test -- --allow-release-proof/u,
+    'CI must execute the stronger proof when the selector requires it');
+  assert.match(fs.readFileSync(path.join(root, 'scripts/solve/commands.js'), UTF8),
+    /NPM_TEST_ARGUMENTS = Object.freeze\(\['test', '--', ALLOW_RELEASE_PROOF_FLAG\]\)/u,
+    'Solver must use the same explicit full-proof handoff as CI');
 });
 
 test('an unclassifiable path refuses at the command boundary', () => {
