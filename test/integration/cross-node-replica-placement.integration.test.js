@@ -39,6 +39,8 @@ import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {createLifecycleCdcServiceForCache} from
   '../test-helpers/lifecycle-state-store.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {bindRegisteredReplicaHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 // Port counter for unique ports per test
 let integrationPortCounter = 25000;
@@ -410,7 +412,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
             mockPartition.initialize = async () => {};
             mockPartition.shutdown = async () => {};
 
-            return mockPartition;
+            return bindRegisteredReplicaHandler(mockPartition, options);
           },
           dataDir: mkdtempSync(joinPath(tmpdir(), 'lagrange-itest-data-')),
         });
@@ -752,9 +754,10 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
       createPartitionService: async (options) => {
         createdReplicas.push(options.replicaId);
         const mock = new EventEmitter();
+        mock.replicaId = options.replicaId;
         mock.initialize = async () => {};
         mock.shutdown = async () => {};
-        return mock;
+        return bindRegisteredReplicaHandler(mock, options);
       },
       dataDir: mkdtempSync(joinPath(tmpdir(), 'lagrange-itest-data-')),
     });
