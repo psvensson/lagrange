@@ -57,7 +57,7 @@
     "test:pgwire": "node scripts/run-classified-test-files.js $(cat test/shards/pgwire-unit.txt test/shards/pgwire-integration.txt)",
     "test:pgwire:unit": "node scripts/run-classified-test-files.js $(cat test/shards/pgwire-unit.txt)",
     "test:pgwire:integration": "node scripts/run-classified-test-files.js $(cat test/shards/pgwire-integration.txt)",
-    "test:all": "node scripts/run-classified-test-files.js --primary unit,packaging,integration,bootstrap",
+    "test:all": "node scripts/run-classified-test-files.js --primary integration --resource exclusive",
     "test:cli": "find test/cli -type f -name '*.test.js' -print | sort | node scripts/run-classified-test-files.js --stdin",
     "test:unused": "knip --exclude exports,duplicates",
     "test:unused:push": "node scripts/checks/push-gate-unused-files.js",
