@@ -23,8 +23,16 @@ import {isIssuedBootIncarnation} from './boot-incarnation-contract.js';
  * burns N+1; a crash can never cause reuse.
  *
  * One reservation per boot lifecycle (process start, or a new join attempt
- * after the previous one was abandoned), never per RPC retry. The data
- * directory process owner guarantees a single writer.
+ * after the previous one was abandoned), never per RPC retry.
+ *
+ * Single writer: every issuance (reservation and floor raise) of one data
+ * directory runs through one in-process queue keyed by the canonical
+ * identity of its state file, so concurrent in-process callers (an embedder
+ * of the public export included) never read the same reservation and never
+ * lose a raise. Across processes the runtime holds the data directory
+ * process owner (storage/data-directory-process-owner.js) for its whole
+ * life; this owner does not acquire it, so two processes that both bypass
+ * the runtime and reserve on one data directory are not excluded here.
  *
  * The rejoin hints document is only a projection of the reservation. The
  * counter it carried before this owner existed is read as a floor only while
@@ -59,6 +67,45 @@ function resolveBootIncarnationPath(dataDir) {
     throw bootIncarnationError(BOOT_INCARNATION_ERROR_CODE.DATA_DIR_REQUIRED);
   }
   return path.join(dataDir.trim(), BOOT_INCARNATION_FILENAME);
+}
+
+// The canonical identity of a data directory's state file: symlinked or
+// relative spellings of one directory share one issuance queue. A directory
+// that does not exist yet has no aliases; its lexical absolute path is its
+// identity (the durable write then fails on it).
+function canonicalStateFileIdentity(file) {
+  const directory = path.resolve(path.dirname(file));
+  try {
+    return path.join(fs.realpathSync.native(directory),
+      BOOT_INCARNATION_FILENAME);
+  } catch (error) {
+    if (error?.code === FILE_NOT_FOUND_ERROR) {
+      return path.join(directory, BOOT_INCARNATION_FILENAME);
+    }
+    throw bootIncarnationError(
+      BOOT_INCARNATION_ERROR_CODE.STATE_UNREADABLE, error);
+  }
+}
+
+// One issuance queue per canonical state file. The read-derive-write of a
+// reservation or a floor raise awaits between its read and its write, so
+// every issuance path runs strictly after the previous one of the same data
+// directory settled (fulfilled or refused). The entry is dropped when its
+// tail settles, so the map holds only data directories with work in flight.
+const issuanceQueues = new Map();
+
+function settleQuietly() {}
+
+function serializeIssuance(file, issue) {
+  const identity = canonicalStateFileIdentity(file);
+  const previous = issuanceQueues.get(identity) ?? Promise.resolve();
+  const issued = previous.then(issue);
+  const tail = issued.then(settleQuietly, settleQuietly);
+  issuanceQueues.set(identity, tail);
+  tail.then(() => {
+    if (issuanceQueues.get(identity) === tail) issuanceQueues.delete(identity);
+  });
+  return issued;
 }
 
 function stateFileExists(file) {
@@ -148,13 +195,15 @@ async function readIssuedBootIncarnation(dataDir) {
  */
 async function reserveBootIncarnation(dataDir, hooks = {}) {
   const file = resolveBootIncarnationPath(dataDir);
-  const reserved = await readIssuedBootIncarnation(dataDir) +
-    BOOT_INCARNATION_INCREMENT;
-  writeAtomicDurable(file, {
-    reserved,
-    version: BOOT_INCARNATION_STATE_VERSION,
-  }, hooks);
-  return reserved;
+  return serializeIssuance(file, async () => {
+    const reserved = await readIssuedBootIncarnation(dataDir) +
+      BOOT_INCARNATION_INCREMENT;
+    writeAtomicDurable(file, {
+      reserved,
+      version: BOOT_INCARNATION_STATE_VERSION,
+    }, hooks);
+    return reserved;
+  });
 }
 
 /**
@@ -168,13 +217,15 @@ async function reserveBootIncarnation(dataDir, hooks = {}) {
  */
 async function raiseBootIncarnationFloor(dataDir, floor) {
   const file = resolveBootIncarnationPath(dataDir);
-  const issued = await readIssuedBootIncarnation(dataDir);
-  if (!isIssuedBootIncarnation(floor) || floor <= issued) return issued;
-  writeAtomicDurable(file, {
-    reserved: floor,
-    version: BOOT_INCARNATION_STATE_VERSION,
+  return serializeIssuance(file, async () => {
+    const issued = await readIssuedBootIncarnation(dataDir);
+    if (!isIssuedBootIncarnation(floor) || floor <= issued) return issued;
+    writeAtomicDurable(file, {
+      reserved: floor,
+      version: BOOT_INCARNATION_STATE_VERSION,
+    });
+    return floor;
   });
-  return floor;
 }
 
 export {

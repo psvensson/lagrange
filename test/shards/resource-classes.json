@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2247,
+    "ordinary": 2249,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2264,
-  "digest": "fnv1a32-1c07c985",
+  "censusSize": 2266,
+  "digest": "fnv1a32-189c5143",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -82,8 +82,10 @@
     "test/bootstrap/address-takeover-workflow.test.js": "ordinary",
     "test/bootstrap/artifact-payload-table-schemas.test.js": "ordinary",
     "test/bootstrap/behaviour-changing-consumer-convergence.test.js": "ordinary",
+    "test/bootstrap/boot-incarnation-owner-concurrency.test.js": "ordinary",
     "test/bootstrap/boot-incarnation-owner.test.js": "ordinary",
     "test/bootstrap/boot-incarnation-reservation-census.test.js": "ordinary",
+    "test/bootstrap/boot-incarnation-superseded-floor.test.js": "ordinary",
     "test/bootstrap/bootstrap-api-admission-snapshots.test.js": "ordinary",
     "test/bootstrap/bootstrap-api-readiness-gating.test.js": "ordinary",
     "test/bootstrap/bootstrap-api-readiness-publication.test.js": "ordinary",

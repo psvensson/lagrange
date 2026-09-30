@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 275,
+    "bootstrap-membership": 277,
     "cdc-metadata": 59,
     "cli-tooling": 96,
     "control-plane": 203,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2264,
-  "digest": "fnv1a32-437d0afa",
+  "censusSize": 2266,
+  "digest": "fnv1a32-5248436c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6d719fa8",
+  "observationDigest": "fnv1a32-72f4b835",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -102,8 +102,10 @@
     "test/bootstrap/address-takeover-workflow.test.js": "bootstrap-membership",
     "test/bootstrap/artifact-payload-table-schemas.test.js": "bootstrap-membership",
     "test/bootstrap/behaviour-changing-consumer-convergence.test.js": "bootstrap-membership",
+    "test/bootstrap/boot-incarnation-owner-concurrency.test.js": "bootstrap-membership",
     "test/bootstrap/boot-incarnation-owner.test.js": "bootstrap-membership",
     "test/bootstrap/boot-incarnation-reservation-census.test.js": "bootstrap-membership",
+    "test/bootstrap/boot-incarnation-superseded-floor.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-api-admission-snapshots.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-api-readiness-gating.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-api-readiness-publication.test.js": "bootstrap-membership",
@@ -2543,6 +2545,11 @@
         "test/bootstrap/run-anchored-scenario-helper.js"
       ]
     },
+    "test/bootstrap/boot-incarnation-owner-concurrency.test.js": {
+      "directories": [
+        "data"
+      ]
+    },
     "test/bootstrap/boot-incarnation-owner.test.js": {
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
@@ -2577,6 +2584,15 @@
         "src",
         "test",
         "test/simulation"
+      ]
+    },
+    "test/bootstrap/boot-incarnation-superseded-floor.test.js": {
+      "files": [
+        "src/bootstrap/boot-incarnation-owner.js",
+        "src/bootstrap/shared/node-storage-budget-setup.js",
+        "src/control-plane/control-plane-error-classification.js",
+        "src/entrypoint-runtime-join-startup-policy.js",
+        "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
     "test/bootstrap/bootstrap-api-ready-nodes.test.js": {

@@ -4,12 +4,12 @@
   "counts": {
     "unit": 1991,
     "integration": 75,
-    "bootstrap": 191,
+    "bootstrap": 193,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2264,
-  "digest": "fnv1a32-27516ba7",
+  "censusSize": 2266,
+  "digest": "fnv1a32-4e449c6f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -83,8 +83,10 @@
     "test/bootstrap/address-takeover-workflow.test.js": "bootstrap",
     "test/bootstrap/artifact-payload-table-schemas.test.js": "bootstrap",
     "test/bootstrap/behaviour-changing-consumer-convergence.test.js": "bootstrap",
+    "test/bootstrap/boot-incarnation-owner-concurrency.test.js": "bootstrap",
     "test/bootstrap/boot-incarnation-owner.test.js": "bootstrap",
     "test/bootstrap/boot-incarnation-reservation-census.test.js": "bootstrap",
+    "test/bootstrap/boot-incarnation-superseded-floor.test.js": "bootstrap",
     "test/bootstrap/bootstrap-api-admission-snapshots.test.js": "bootstrap",
     "test/bootstrap/bootstrap-api-readiness-gating.test.js": "bootstrap",
     "test/bootstrap/bootstrap-api-readiness-publication.test.js": "bootstrap",
