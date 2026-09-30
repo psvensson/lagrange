@@ -16,7 +16,7 @@
     "query-sql": 157,
     "release-packaging": 10,
     "runtime-primitives": 22,
-    "services-runtime": 169,
+    "services-runtime": 170,
     "solver-tooling": 7,
     "storage-partition": 141,
     "storage-raft": 76,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2068,
-  "digest": "fnv1a32-d947c88f",
+  "censusSize": 2069,
+  "digest": "fnv1a32-e2caa3d0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1666,6 +1666,7 @@
     "test/runtime/endpoint-sync-planner.test.js": "services-runtime",
     "test/runtime/endpoint-sync-source-client.test.js": "services-runtime",
     "test/runtime/endpoint-sync-source-query.test.js": "services-runtime",
+    "test/runtime/formation-probe-cleanup.test.js": "services-runtime",
     "test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js": "services-runtime",
     "test/runtime/movielens-affinity-demo-wiring.test.js": "services-runtime",
     "test/runtime/movielens-failure-report-participant-failures.test.js": "services-runtime",

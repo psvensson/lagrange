@@ -1,0 +1,303 @@
+TAP version 14
+# Subtest: MovieLens snapshot admission preserves incomplete client cleanup as terminal
+    ok 1 - the original failure escapes instead of denial/empty rows
+    ok 2 - no additional poll follows incomplete cleanup
+    ok 3 - should be equal
+    1..3
+ok 1 - MovieLens snapshot admission preserves incomplete client cleanup as terminal # time=5.296ms
+
+# Subtest: MovieLens repair admission preserves incomplete client cleanup as terminal
+    ok 1 - the original failure escapes instead of denial/empty rows
+    not ok 2 - no additional poll follows incomplete cleanup
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-preload-admission-gate.test.js
+        lineNumber: 143
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/runtime/movielens-preload-admission-gate.test.js:143:7)
+      source: >2
+            }).catch((error) => error);
+            t.equal(result, primary, 'the original failure escapes instead of denial/empty rows');
+            t.equal(sleeps, 0, 'no additional poll follows incomplete cleanup');
+        ------^
+            t.equal(queries, seam === 'snapshot' ? 1 : 2);
+            if (seam === 'repair') {
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 3 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-preload-admission-gate.test.js
+        lineNumber: 144
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/runtime/movielens-preload-admission-gate.test.js:144:7)
+      source: >2
+            t.equal(result, primary, 'the original failure escapes instead of denial/empty rows');
+            t.equal(sleeps, 0, 'no additional poll follows incomplete cleanup');
+            t.equal(queries, seam === 'snapshot' ? 1 : 2);
+        ------^
+            if (seam === 'repair') {
+              t.equal(statements[1], FORCE_REPAIR_SNAPSHOT_SQL, 'the actual force-repair boundary is engaged');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -2
+        +3
+      ...
+    
+    ok 4 - the actual force-repair boundary is engaged
+    1..4
+not ok 2 - MovieLens repair admission preserves incomplete client cleanup as terminal # time=11.27ms
+  ---
+  at:
+    fileName: test/runtime/movielens-preload-admission-gate.test.js
+    lineNumber: 115
+    columnNumber: 3
+    isToplevel: true
+  source: >
+  
+    for (const seam of ['snapshot', 'repair', 'load']) {
+      test(`MovieLens ${seam} admission preserves incomplete client cleanup as terminal`, async (t) => {
+    --^
+        const primary = Object.freeze(Object.assign(new Error('response incomplete'), {deferRetry: true}));
+        const cleanup = Object.assign(new Error('close incomplete'), {code: 'ADMIN_CLOSE_TIMEOUT'});
+  ...
+
+# Subtest: MovieLens load admission preserves incomplete client cleanup as terminal
+    ok 1 - the original failure escapes instead of denial/empty rows
+    ok 2 - no additional poll follows incomplete cleanup
+    ok 3 - should be equal
+    1..3
+ok 3 - MovieLens load admission preserves incomplete client cleanup as terminal # time=0.71ms
+
+# Subtest: pre-schema admission requires two quiet snapshots without ratings SQL
+    ok 1 - should be equal
+    ok 2 - one transient quiet observation cannot release schema mutation
+    ok 3 - schema admission only observes the authoritative snapshot lane
+    ok 4 - schema admission cannot depend on the not-yet-created table
+    1..4
+ok 4 - pre-schema admission requires two quiet snapshots without ratings SQL # time=2.19ms
+
+# Subtest: pre-schema admission requires current priority leader coverage
+    ok 1 - expected to reject
+    ok 2 - should be equal
+    ok 3 - a sticky closed spread summary cannot hide missing current leadership
+    1..3
+ok 5 - pre-schema admission requires current priority leader coverage # time=1.212ms
+
+# Subtest: sticky priority recovery closure cannot replace the current witness
+    ok 1 - expected to reject
+    ok 2 - should be equal
+    1..2
+ok 6 - sticky priority recovery closure cannot replace the current witness # time=0.708ms
+
+# Subtest: pre-schema pressure resets stable confirmation and fails closed
+    ok 1 - a non-quiet observation invalidates the earlier confirmation
+    ok 2 - should be equal
+    ok 3 - expected to reject
+    ok 4 - should be equal
+    ok 5 - should be equal
+    1..5
+ok 7 - pre-schema pressure resets stable confirmation and fails closed # time=1.659ms
+
+# Subtest: pre-schema admission consumes authoritative numeric priority spread data
+    ok 1 - an open numeric gap resets rather than contributing confirmation
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - expected to reject
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - the gate retains the owner-published numeric deficit
+    ok 10 - expected to reject
+    ok 11 - missing priority owner data cannot look like zero spread demand
+    1..11
+ok 8 - pre-schema admission consumes authoritative numeric priority spread data # time=1.42ms
+
+# Subtest: stale schema observations use canonical repair inside the outer budget
+    ok 1 - should be equal
+    ok 2 - only fresh post-repair observations count as confirmations
+    ok 3 - stale local evidence traverses the existing snapshot owner command
+    1..3
+ok 9 - stale schema observations use canonical repair inside the outer budget # time=0.838ms
+
+# Subtest: stale schema denial retains the bounded ready-lease witness unchanged
+    ok 1 - expected to reject
+    ok 2 - the lossy quiescence projection retains only the bounded witness
+    ok 3 - diagnostic retention does not rewrite the owner observation
+    ok 4 - time-varying witness fields do not enter the stable error vocabulary
+    1..4
+ok 10 - stale schema denial retains the bounded ready-lease witness unchanged # time=0.803ms
+
+# Subtest: authoritative snapshot repair cannot reset or outlive schema budget
+    ok 1 - expected to reject
+    ok 2 - should be equivalent
+    ok 3 - a failed authoritative repair remains a typed denial
+    ok 4 - a thrown forced repair retains the last bounded chronology witness
+    1..4
+ok 11 - authoritative snapshot repair cannot reset or outlive schema budget # time=0.88ms
+
+# Subtest: schema admission survives a full partition evaluation interval
+    ok 1 - scheduled work resets the candidate before one full quiet interval
+    ok 2 - two confirmations occur only after the full interval closes
+    ok 3 - should be equal
+    ok 4 - the admitted evidence retains the uninterrupted quiet duration
+    1..4
+ok 12 - schema admission survives a full partition evaluation interval # time=0.762ms
+
+# Subtest: schema admission shares an operation-only drain anchor with background release
+    ok 1 - two mature observations complete before ordinary release at drain+70000ms
+    ok 2 - should be equal
+    ok 3 - the schema clock starts at the retained coordinator-owned drain
+    ok 4 - should be equal
+    1..4
+ok 13 - schema admission shares an operation-only drain anchor with background release # time=0.976ms
+
+# Subtest: schema admission does not backdate across a priority-spread blocker
+    ok 1 - the independent spread blocker keeps the clock on the fresh ready observation
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 14 - schema admission does not backdate across a priority-spread blocker # time=0.834ms
+
+# Subtest: fresh but incomplete snapshots cannot admit schema mutation
+    ok 1 - expected to reject
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - expected to reject
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - expected to reject
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - expected to reject
+    ok 11 - should be equal
+    ok 12 - should be equal
+    ok 13 - expected to reject
+    ok 14 - should be equal
+    ok 15 - should be equal
+    1..15
+ok 15 - fresh but incomplete snapshots cannot admit schema mutation # time=2.959ms
+
+# Subtest: absent optional in-flight discount is conservative zero
+    ok 1 - the authoritative snapshot shape does not produce the optional field
+    ok 2 - expected to reject
+    ok 3 - absence cannot discount the observed operation
+    ok 4 - should be equal
+    1..4
+ok 16 - absent optional in-flight discount is conservative zero # time=0.548ms
+
+# Subtest: production ratings admission overrides unrelated global operation churn
+    ok 1 - an admitted ratings probe is final even while unrelated work exists
+    ok 2 - typed snapshot preserves the global-operation observation
+    ok 3 - should be equal
+    ok 4 - the absent optional discount does not hide unrelated work
+    ok 5 - snapshot and ratings admission use their production lanes
+    1..5
+ok 17 - production ratings admission overrides unrelated global operation churn # time=0.499ms
+
+# Subtest: typed quiet snapshot cannot bypass ratings-specific admission
+    ok 1 - expected to reject
+    ok 2 - should be equal
+    ok 3 - the quiet observation is retained but never becomes admission
+    1..3
+ok 18 - typed quiet snapshot cannot bypass ratings-specific admission # time=0.52ms
+
+# Subtest: snapshot blindness and pressure fail closed before ratings admission
+    ok 1 - snapshot rows unavailable
+    ok 2 - should be equal
+    ok 3 - blindness cannot fall through to the ratings probe
+    ok 4 - Admin API query timed out under pressure
+    ok 5 - should be equal
+    ok 6 - pressure cannot fall through to the ratings probe
+    1..6
+ok 19 - snapshot blindness and pressure fail closed before ratings admission # time=0.709ms
+
+# Subtest: missing, stale, deferred, and failed snapshot observations fail closed
+    ok 1 - expected to reject
+    ok 2 - should be equal
+    ok 3 - missing cannot reach ratings admission
+    ok 4 - expected to reject
+    ok 5 - should be equal
+    ok 6 - stale_usable cannot reach ratings admission
+    ok 7 - expected to reject
+    ok 8 - should be equal
+    ok 9 - deferred_refresh cannot reach ratings admission
+    ok 10 - expected to reject
+    ok 11 - should be equal
+    ok 12 - failed cannot reach ratings admission
+    1..12
+ok 20 - missing, stale, deferred, and failed snapshot observations fail closed # time=1.017ms
+
+# Subtest: snapshot and load queries share one non-resetting outer budget
+    ok 1 - expected to reject
+    ok 2 - load receives only the budget remaining after snapshot observation
+    ok 3 - should be equal
+    1..3
+ok 21 - snapshot and load queries share one non-resetting outer budget # time=0.643ms
+
+# Subtest: MovieLens demo retires the raw global-operation gate and test imports
+    ok 1 - should not match pattern
+    ok 2 - should not match pattern
+    ok 3 - should not match pattern
+    ok 4 - the cutover cannot reinterpret the retired formation-quest metric
+    ok 5 - should match pattern
+    ok 6 - the loader lane is derived from the same production admin target
+    ok 7 - the actual ratings loader uses the production load lane
+    ok 8 - examples consume production owners and never test-only machinery
+    1..8
+ok 22 - MovieLens demo retires the raw global-operation gate and test imports # time=19.755ms
+
+# Subtest: pre-schema admission holds accumulated stability through a transient observer failure
+    ok 1 - admission should complete without restarting the stable window
+    ok 2 - one real quiet poll after the observer failure should confirm
+    ok 3 - transition evidence distinguishes observer blindness from real churn
+    ok 4 - the held transition retains its observer-error classification
+    ok 5 - should be equal
+    ok 6 - the held transition retains accumulated confirmation evidence
+    1..6
+ok 23 - pre-schema admission holds accumulated stability through a transient observer failure # time=0.941ms
+
+# Subtest: pre-schema admission still resets accumulated stability on real churn
+    ok 1 - should be equal
+    ok 2 - a regressing poll must forfeit the window and restart the sequence, got 12 polls
+    ok 3 - should be equal
+    ok 4 - transition evidence names the real blocker that reset the window
+    ok 5 - should be equal
+    ok 6 - should be equal
+    1..6
+ok 24 - pre-schema admission still resets accumulated stability on real churn # time=0.771ms
+
+# Subtest: schema admission transition evidence is change-only and bounded
+    ok 1 - expected to reject
+    ok 2 - the live report cannot grow with an unbounded polling history
+    ok 3 - truncation remains explicit evidence rather than silent loss
+    ok 4 - unchanged consecutive observations collapse into one counted entry
+    ok 5 - the bounded tail retains the most recent transition
+    ok 6 - should be equal
+    1..6
+ok 25 - schema admission transition evidence is change-only and bounded # time=2.483ms
+
+# Subtest: schema admission grants drain-aware grace extension when control plane quiesces late in budget
+    ok 1 - schema admission should succeed with drain grace extension
+    ok 2 - polling was extended beyond initial wall clock budget to confirm quiescence
+    1..2
+ok 26 - schema admission grants drain-aware grace extension when control plane quiesces late in budget # time=1.419ms
+
+1..26
+# { total: 133, pass: 131, fail: 2 }
+# time=69.247ms

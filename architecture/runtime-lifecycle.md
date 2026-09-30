@@ -151,6 +151,56 @@ and control-plane workflows.
 5. Bootstrap and joining flows instantiate/start/stop topology owners through
    `LatencyTopologySetup`; they do not construct topology owners directly.
 
+## Admin Example Client Lifetime
+
+`scripts/examples/admin-ws-client.js` is the sole owner of example/admin
+client sockets, request correlation, retirement and cleanup evidence. Its
+generations progress from opening to open, retired and finally closed.
+Retirement rejects further work synchronously; only an observed WebSocket
+`CLOSE` releases a socket. Failed openings may be retried immediately, but
+their retired sockets remain owned until close. Pending requests and their
+completion callbacks are private, generation-bound state. The public pending
+view is a copied diagnostic snapshot. `connect()` and `socket` retain the legacy
+mutable WebSocket handle for compatibility, never as lifecycle authority.
+External physical closure is observed; removing an owner listener can cause
+fail-closed observation timeout, not successful release. Caller serialization
+finishes before final request admission and pending-timer allocation.
+
+Concurrent or reentrant `close()` calls share one promise and one captured
+absolute budget for all owned generations. The client uses `ws`'s public
+`closeTimeout` for graceful-handshake/TCP disposal within that budget, and
+independently bounds completion observation. Successful cleanup returns a
+frozen `closed` outcome with observed generation/code/reason records; abnormal
+code 1006 does not identify who forced closure. Missing completion is typed
+`ADMIN_CLOSE_TIMEOUT` with unresolved generation diagnostics. A later actual
+close releases that generation without rewriting the expired attempt's result.
+Fresh connect is permitted after completed retirement. The lifetime budget is
+captured at construction; changing a request budget cannot alter it.
+Construction rejects non-integral, non-positive or out-of-platform-range timer
+durations before socket allocation; omitted, null and zero retain the default.
+Each later opening or request budget capture reuses that validation before
+allocation or caller serialization; valid request-budget shrink remains supported.
+
+`withAdminWsClient` composes operation and cleanup for owning consumers.
+It preserves the exact primary error, including a frozen error and its typed
+participant/timeout fields. Cleanup details have one weak-keyed owner and are
+read via `getAdminCleanupFailure`; `getAdminCleanupFailureReport` projects all
+aggregate leaves without a second reporting authority. A primitive primary is
+rethrown exactly after successful cleanup; when cleanup also fails, an aggregate
+retains both causes and the same cleanup veto. Reporting consumes this evidence, and
+catch-and-retry/degrade consumers call `rethrowIfAdminCleanupIncomplete`
+before their existing classification: incomplete cleanup cannot become empty
+rows, a pending observation, or another session. Completed cleanup leaves the
+existing query retry policy unchanged. Injected catalog clients remain owned
+by their caller.
+
+Diagnostic projection reads only own data, never accessors or proxy traps.
+Arrays must be dense own-data arrays and generation rows plain own-data records;
+numeric fields must be safe integers. Arrays and aggregate traversal have a
+256-record projection budget. Unsupported or excessive evidence produces
+`ADMIN_CLEANUP_EVIDENCE_UNAVAILABLE`, without replacing the primary failure,
+discarding raw cleanup evidence or relaxing its retry veto.
+
 ## Unified Service Runtime
 
 ### Current Owner Contract

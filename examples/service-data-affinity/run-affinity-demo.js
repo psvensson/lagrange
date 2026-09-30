@@ -56,7 +56,9 @@ import {promisify} from 'node:util';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as sleep} from 'node:timers/promises';
-import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
+import {
+  AdminWsClient, withAdminWsClient, rethrowIfAdminCleanupIncomplete,
+} from '../../scripts/examples/admin-ws-client.js';
 import {
   createRatingsTableWithRetry,
   loadRatingsIntoLagrange,
@@ -276,11 +278,7 @@ async function queryAdmin(
     Math.min(DEMO_CONSTANTS.ADMIN_QUERY_TIMEOUT_MS, Math.floor(timeoutMs)),
   );
   const client = new AdminWsClient({target, timeoutMs: boundedTimeoutMs});
-  try {
-    return await client.query(sql);
-  } finally {
-    await client.close();
-  }
+  return withAdminWsClient(client, () => client.query(sql));
 }
 
 async function queryRows(sql, target = TARGET) {
@@ -336,6 +334,7 @@ async function runBootstrapDdl(sql, target = TARGET) {
       const result = await queryAdmin(sql, target);
       return isRetryableBootstrapDdlOutcome(result) ? null : {result};
     } catch (error) {
+      rethrowIfAdminCleanupIncomplete(error);
       const message = String(error?.message || '');
       if (!message.includes(ADMIN_RESPONSE_TIMEOUT_FRAGMENT)) {
         semanticError = error;
@@ -356,7 +355,8 @@ async function waitFor(label, predicate, timeoutMs) {
     let value = null;
     try {
       value = await predicate();
-    } catch {
+    } catch (error) {
+      rethrowIfAdminCleanupIncomplete(error);
       value = null;
     }
     if (value) {
@@ -564,7 +564,8 @@ async function describeReduceSlots() {
       DEMO_CONSTANTS.REDUCE_SLOT_QUERY +
       `computed_at FROM ${COORDINATION_TABLE}`,
     );
-  } catch {
+  } catch (error) {
+    rethrowIfAdminCleanupIncomplete(error);
     return [];
   }
 }
@@ -584,7 +585,8 @@ async function describeTopN() {
       computed_at: rows[0]?.computed_at,
       [RESULT_SNAPSHOT_COLUMN]: rows[0]?.[RESULT_SNAPSHOT_COLUMN],
     }));
-  } catch {
+  } catch (error) {
+    rethrowIfAdminCleanupIncomplete(error);
     return [];
   }
 }

@@ -1,5 +1,8 @@
 import {readFile} from 'node:fs/promises';
 import {test} from '../../src/test-helpers/tap.js';
+import {withAdminWsClient} from '../../scripts/examples/admin-ws-client.js';
+import {CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE} from
+  '../../src/control-plane/control-plane-snapshot-owner.js';
 import {
   waitForAffinityDemoSchemaAdmission,
   waitForAffinityDemoPreloadAdmission,
@@ -106,6 +109,43 @@ function buildOpenPrioritySpreadDiagnostics(totalSpreadGap = 2) {
       },
     },
   };
+}
+
+for (const seam of ['snapshot', 'repair', 'load']) {
+  test(`MovieLens ${seam} admission preserves incomplete client cleanup as terminal`, async (t) => {
+    const primary = Object.freeze(Object.assign(new Error('response incomplete'), {deferRetry: true}));
+    const cleanup = Object.assign(new Error('close incomplete'), {code: 'ADMIN_CLOSE_TIMEOUT'});
+    await withAdminWsClient({close: async () => {
+      throw cleanup;
+    }}, async () => {
+      throw primary;
+    }).catch(() => undefined);
+    let now = NOW_MS;
+    let queries = 0;
+    const statements = [];
+    let sleeps = 0;
+    const result = await waitForAffinityDemoPreloadAdmission({
+      target: BASE_TARGET, timeoutMs: 2, pollIntervalMs: 1,
+      now: () => now,
+      sleep: async (delay) => {
+        sleeps += 1; now += delay;
+      },
+      query: async ({sql}) => {
+        queries += 1;
+        statements.push(sql);
+        if (seam === 'snapshot' || queries > 1) throw primary;
+        return {rows: [buildControlSnapshot(seam === 'repair' ? {
+          snapshotObservation: {state: CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.STALE_BUT_USABLE},
+        } : {})]};
+      },
+    }).catch((error) => error);
+    t.equal(result, primary, 'the original failure escapes instead of denial/empty rows');
+    t.equal(sleeps, 0, 'no additional poll follows incomplete cleanup');
+    t.equal(queries, seam === 'snapshot' ? 1 : 2);
+    if (seam === 'repair') {
+      t.equal(statements[1], FORCE_REPAIR_SNAPSHOT_SQL, 'the actual force-repair boundary is engaged');
+    }
+  });
 }
 
 function oneAttemptOptions(query) {
@@ -1083,4 +1123,3 @@ test('schema admission grants drain-aware grace extension when control plane qui
     );
     t.end();
   });
-

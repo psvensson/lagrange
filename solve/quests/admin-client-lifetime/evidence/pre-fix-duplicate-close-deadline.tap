@@ -1,0 +1,315 @@
+TAP version 14
+# Subtest: confidence-adjusted ranking rewards supported quality rather than a single five-star vote
+    ok 1 - Bayesian support and confidence penalty defeat the one-vote winner
+    ok 2 - the shared PostgreSQL/Lagrange SQL projection uses the richer score
+    1..2
+ok 1 - confidence-adjusted ranking rewards supported quality rather than a single five-star vote # time=2.026ms
+
+# Subtest: replica reduction implements the exact shared ranking formula
+    ok 1 - service replicas and grouped-SQL paths produce the same order
+    ok 2 - rank 1 score is identical
+    ok 3 - rank 2 score is identical
+    ok 4 - rank 3 score is identical
+    1..4
+ok 2 - replica reduction implements the exact shared ranking formula # time=1.326ms
+
+# Subtest: service and grouped-SQL ranking share the movie-id tie-break
+    ok 1 - fixture reaches the exact-score tie
+    ok 2 - should be equivalent
+    ok 3 - shared movie-id order cannot diverge at the top-N boundary
+    1..3
+ok 3 - service and grouped-SQL ranking share the movie-id tie-break # time=4.934ms
+
+# Subtest: confidence-adjusted runtime config is explicit and validated
+    ok 1 - implicit ranking priors are rejected
+    ok 2 - the documented ranking policy is accepted
+    1..2
+ok 4 - confidence-adjusted runtime config is explicit and validated # time=3.162ms
+
+# Subtest: three-way report compares correctness and transfer shape without a misleading speedup
+    ok 1 - should be equal
+    ok 2 - the report refuses an apples-to-oranges speedup ratio
+    ok 3 - bounded service exchange is explicit
+    ok 4 - should be equal
+    1..4
+ok 5 - three-way report compares correctness and transfer shape without a misleading speedup # time=0.538ms
+
+# Subtest: PostgreSQL baseline fails closed on replica readiness and emits machine-parseable status SQL
+    ok 1 - a claimed three-node baseline cannot silently run primary-only
+    ok 2 - tuples-only unaligned output makes replica counts parseable
+    1..2
+ok 6 - PostgreSQL baseline fails closed on replica readiness and emits machine-parseable status SQL # time=0.459ms
+
+# Subtest: Lagrange loader confirms one atomic ratings policy through durable CREATE
+    ok 1 - should be equivalent
+    ok 2 - should be equal
+    ok 3 - each durable confirmation uses and closes a fresh admin session
+    ok 4 - should be equivalent
+    ok 5 - should be equivalent
+    ok 6 - the split-capable Lagrange table has one deterministic partition key
+    ok 7 - the sparse teaching policy is part of the durable CREATE intent
+    ok 8 - the loader cannot race CREATE with cache-backed policy SQL
+    1..8
+ok 7 - Lagrange loader confirms one atomic ratings policy through durable CREATE # time=2.482ms
+
+# Subtest: MovieLens durable CREATE confirmation resets after a transport failure
+    ok 1 - should be equivalent
+    ok 2 - should be equal
+    ok 3 - the failed durable replay also closes its client
+    ok 4 - a failure between successes resets stable confirmation
+    1..4
+ok 8 - MovieLens durable CREATE confirmation resets after a transport failure # time=0.738ms
+
+# Subtest: MovieLens durable CREATE retries a typed ambiguous admin timeout on fresh bounded sessions
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - the caller response deadline crosses the websocket owner boundary
+    ok 6 - the real timer removes the expired request before rejecting
+    ok 7 - the canonical retry owner receives the real typed timeout
+    ok 8 - a late result cannot resurrect or satisfy the expired attempt
+    ok 9 - the retry witness comes from the AdminWsClient timer seam
+    ok 10 - should be equal
+    ok 11 - should be equivalent
+    ok 12 - should be equal
+    ok 13 - every ambiguous or confirming attempt closes its fresh session
+    ok 14 - each attempt deadline is shorter than the non-resetting outer budget
+    ok 15 - the timeout resets the first confirmation before two new READY results
+    ok 16 - typed timeout replay and confirmations remain inside the outer budget
+    1..16
+ok 9 - MovieLens durable CREATE retries a typed ambiguous admin timeout on fresh bounded sessions # time=32.954ms
+
+# Subtest: AdminWsClient bounds a stalled websocket opening and releases it
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - the canonical retry owner accepts the typed opening timeout
+    ok 6 - the stalled opening rejects inside a bounded real deadline
+    ok 7 - no opened socket is retained
+    ok 8 - the opening socket is released
+    ok 9 - the opening promise is released
+    ok 10 - should be equal
+    ok 11 - a later attempt owns a fresh timeout
+    ok 12 - a later attempt opens a fresh TCP session
+    ok 13 - the repeated timeout also releases socket ownership
+    1..13
+ok 10 - AdminWsClient bounds a stalled websocket opening and releases it # time=208.001ms
+
+# Subtest: MovieLens durable CREATE does not replay a hard validation error
+    ok 1 - expected to reject
+    ok 2 - a non-retryable failure stops at the existing owner boundary
+    ok 3 - the terminal attempt still closes its admin session
+    1..3
+ok 11 - MovieLens durable CREATE does not replay a hard validation error # time=4.045ms
+
+# Subtest: MovieLens durable CREATE confirmation resets after typed pending
+    ok 1 - should be equivalent
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - pending resets the streak before two new ready outcomes
+    1..4
+ok 12 - MovieLens durable CREATE confirmation resets after typed pending # time=2.407ms
+
+# Subtest: MovieLens durable CREATE confirmation exhausts at its time bound
+    ok 1 - the terminal incomplete confirmation is surfaced loudly
+    ok 2 - the canonical owner creates no fresh client at its virtual deadline
+    ok 3 - should be equal
+    ok 4 - each fresh session is capped by the canonical remaining budget
+    1..4
+ok 13 - MovieLens durable CREATE confirmation exhausts at its time bound # time=3.22ms
+
+# Subtest: MovieLens durable CREATE confirmation never counts typed pending
+    ok 1 - expected to reject
+    ok 2 - pending-only replay creates no client after deadline exhaustion
+    ok 3 - should be equal
+    1..3
+ok 14 - MovieLens durable CREATE confirmation never counts typed pending # time=1.875ms
+
+# Subtest: MovieLens durable CREATE confirmation fails closed without metadata
+    ok 1 - expected to reject
+    ok 2 - an untyped response closes its session and cannot be retried as ready
+    1..2
+ok 15 - MovieLens durable CREATE confirmation fails closed without metadata # time=1.231ms
+
+# Subtest: AdminWsClient close is single-flight and observes actual socket close
+    ok 1 - concurrent close calls share the exact retirement promise
+    ok 2 - successful cleanup certifies the owned socket is CLOSED, not merely CLOSING
+    ok 3 - should be equal
+    1..3
+ok 16 - AdminWsClient close is single-flight and observes actual socket close # time=4.545ms
+
+# Subtest: AdminWsClient close owns a connecting socket through actual close
+    ok 1 - CONNECTING termination also waits for the close event
+    ok 2 - opening is rejected by retirement authority
+    ok 3 - should be equal
+    1..3
+ok 17 - AdminWsClient close owns a connecting socket through actual close # time=1.459ms
+
+# Subtest: AdminWsClient retired callbacks cannot reset or complete a fresh session
+    ok 1 - stale frames and CLOSE cannot settle fresh pending work
+    ok 2 - fresh connection remains authoritative
+    ok 3 - only the current socket completes its request
+    1..3
+ok 18 - AdminWsClient retired callbacks cannot reset or complete a fresh session # time=3.851ms
+
+# Subtest: AdminWsClient retires a physically closing socket without losing its close observation
+    ok 1 - physical CLOSING is not reusable OPEN admission
+    ok 2 - old and new real connections stay owned through close
+    1..2
+ok 19 - AdminWsClient retires a physically closing socket without losing its close observation # time=3.526ms
+
+# Subtest: AdminWsClient retirement fences the post-connect request admission gap
+    ok 1 - resumed admitted caller cannot send on the retired socket
+    ok 2 - should be equal
+    ok 3 - no response timer survives retirement
+    1..3
+ok 20 - AdminWsClient retirement fences the post-connect request admission gap # time=1.693ms
+
+# Subtest: AdminWsClient publishes retirement before synchronous socket callbacks
+    ok 1 - synchronous reentry observes the published owner promise
+    ok 2 - should be equal
+    1..2
+ok 21 - AdminWsClient publishes retirement before synchronous socket callbacks # time=1.378ms
+
+# Subtest: MovieLens client cleanup preserves an exact frozen primary query failure
+    ok 1 - cleanup must not replace the query owner error or its classification
+    ok 2 - the failed operation still closes exactly once
+    1..2
+ok 22 - MovieLens client cleanup preserves an exact frozen primary query failure # time=0.43ms
+
+# Subtest: MovieLens incomplete cleanup vetoes retry before sleep or fresh client creation
+    ok 1 - should be equal
+    ok 2 - query classification is preserved, not mutated into a veto
+    ok 3 - should be equal
+    ok 4 - cleanup authority is checked before the injected retry observer
+    ok 5 - should be equal
+    1..5
+ok 23 - MovieLens incomplete cleanup vetoes retry before sleep or fresh client creation # time=0.398ms
+
+# Subtest: AdminWsClient observes unresponsive peer disposal inside one close budget
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - observed abnormal code is retained without a force claim
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    1..6
+ok 24 - AdminWsClient observes unresponsive peer disposal inside one close budget # time=54.801ms
+
+# Subtest: AdminWsClient explicit retirement has one hard-deadline timer owner
+    not ok 1 - global close owns the deadline; joined generations do not separately fire it
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 889
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:889:5)
+      source: >2
+            mock.timers.reset();
+          }
+          t.equal(scheduled.filter((delay) => delay === 100).length, 1,
+        ----^
+            'global close owns the deadline; joined generations do not separately fire it');
+        });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +2
+      ...
+    
+    1..1
+not ok 25 - AdminWsClient explicit retirement has one hard-deadline timer owner # time=21.658ms
+  ---
+  at:
+    fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+    lineNumber: 873
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('AdminWsClient explicit retirement has one hard-deadline timer owner',
+    async (t) => {
+  
+    ^
+      const fixture = await createAdminLifetimeFixture(t);
+      await fixture.connect();
+  ...
+
+# Subtest: AdminWsClient close timeout cannot veto later authoritative CLOSE
+    ok 1 - observed completion, not physical socket state, owns release
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - unresolved old generation is retained and fences new admission
+    ok 6 - late CLOSE permits a fresh cleanup attempt
+    ok 7 - the expired attempt stays rejected with its exact error
+    ok 8 - fresh connection becomes legal after observed old CLOSE
+    1..8
+ok 26 - AdminWsClient close timeout cannot veto later authoritative CLOSE # time=3.4ms
+
+# Subtest: AdminWsClient private pending ownership survives snapshot mutation and settles once
+    ok 1 - snapshot mutation cannot erase pending authority
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - one retirement reason settles both requests
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    1..7
+ok 27 - AdminWsClient private pending ownership survives snapshot mutation and settles once # time=1.916ms
+
+# Subtest: AdminWsClient repeated sessions retire listeners, requests and callback frames
+    ok 1 - should be equal
+    ok 2 - only this generation remains in the owned set
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - only this generation remains in the owned set
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - only this generation remains in the owned set
+    ok 11 - should be equal
+    ok 12 - should be equal
+    ok 13 - should be equal
+    ok 14 - only this generation remains in the owned set
+    ok 15 - should be equal
+    ok 16 - should be equal
+    ok 17 - should be equal
+    ok 18 - only this generation remains in the owned set
+    ok 19 - should be equal
+    ok 20 - should be equal
+    ok 21 - should be equal
+    ok 22 - only this generation remains in the owned set
+    ok 23 - should be equal
+    ok 24 - should be equal
+    ok 25 - should be equal
+    ok 26 - only this generation remains in the owned set
+    ok 27 - should be equal
+    ok 28 - should be equal
+    ok 29 - should be equal
+    ok 30 - only this generation remains in the owned set
+    ok 31 - should be equal
+    ok 32 - should be equal
+    1..32
+ok 28 - AdminWsClient repeated sessions retire listeners, requests and callback frames # time=9.597ms
+
+# Subtest: obsolete callback demo and orchestration are absent
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - one surviving comparison entry point replaces both demos
+    1..3
+ok 29 - obsolete callback demo and orchestration are absent # time=0.202ms
+
+1..29
+# { total: 154, pass: 153, fail: 1 }
+# time=391.124ms

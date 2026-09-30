@@ -1,0 +1,290 @@
+TAP version 14
+# Subtest: admin cleanup evidence preserves and reports an exact frozen primary error
+    ok 1 - should be equal
+    ok 2 - one owner retains the secondary failure
+    ok 3 - should be equal
+    ok 4 - no second mutable-property authority exists
+    ok 5 - should be equal
+    ok 6 - should match pattern
+    1..6
+ok 1 - admin cleanup evidence preserves and reports an exact frozen primary error # time=4.765ms
+
+# Subtest: admin cleanup failure is terminal even when the operation succeeded
+    ok 1 - successful body cannot hide failed cleanup
+    ok 2 - should be equal
+    ok 3 - the same canonical signal guards standalone failure
+    1..3
+ok 2 - admin cleanup failure is terminal even when the operation succeeded # time=0.53ms
+
+# Subtest: primitive admin failures retain cleanup authority without a WeakMap TypeError
+    ok 1 - should be equal
+    ok 2 - should be equivalent
+    not ok 3 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+        lineNumber: 155
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/runtime/movielens-failure-report-participant-failures.test.js:155:5)
+      source: |2
+          t.ok(combined instanceof AggregateError);
+          t.same(combined.errors, ['primitive-primary', cleanup]);
+          t.equal(getAdminCleanupFailure(combined), cleanup);
+        ----^
+          let degraded = 0;
+          try {
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Error: close incomplete {
+        -  "code": "ADMIN_CLOSE_TIMEOUT",
+        -}
+        +null
+      ...
+    
+    not ok 4 - combined failure vetoes degradation before any redrive
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+        lineNumber: 163
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/runtime/movielens-failure-report-participant-failures.test.js:163:5)
+      source: >2
+            t.equal(error, combined);
+          }
+          t.equal(degraded, 0, 'combined failure vetoes degradation before any redrive');
+        ----^
+          const standalone = await withAdminWsClient({close: async () => {
+            throw 'primitive-cleanup';
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 5 - normalization retains the exact thrown cause
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+        lineNumber: 167
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/runtime/movielens-failure-report-participant-failures.test.js:167:5)
+      source: >2
+            throw 'primitive-cleanup';
+          }}, async () => 'ready').catch((error) => error);
+          t.equal(standalone.cause, 'primitive-cleanup', 'normalization retains the exact thrown cause');
+        ----^
+          t.equal(getAdminCleanupFailure(standalone), standalone);
+          t.not(standalone.name, 'TypeError', 'WeakMap admission never replaces the cleanup cause');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -primitive-cleanup
+        +undefined
+      ...
+    
+    not ok 6 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+        lineNumber: 168
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/runtime/movielens-failure-report-participant-failures.test.js:168:5)
+      source: >2
+          }}, async () => 'ready').catch((error) => error);
+          t.equal(standalone.cause, 'primitive-cleanup', 'normalization retains the exact thrown cause');
+          t.equal(getAdminCleanupFailure(standalone), standalone);
+        ----^
+          t.not(standalone.name, 'TypeError', 'WeakMap admission never replaces the cleanup cause');
+        });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -TypeError: Invalid value used as weak map key
+        +null
+      ...
+    
+    not ok 7 - WeakMap admission never replaces the cleanup cause
+      ---
+      found: TypeError
+      doNotWant: TypeError
+      compare: "!=="
+      at:
+        fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+        lineNumber: 169
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/runtime/movielens-failure-report-participant-failures.test.js:169:5)
+      source: >2
+          t.equal(standalone.cause, 'primitive-cleanup', 'normalization retains the
+        exact thrown cause');
+          t.equal(getAdminCleanupFailure(standalone), standalone);
+          t.not(standalone.name, 'TypeError', 'WeakMap admission never replaces the cleanup cause');
+        ----^
+      
+        });
+      ...
+    
+    1..7
+not ok 3 - primitive admin failures retain cleanup authority without a WeakMap TypeError # time=17.164ms
+  ---
+  at:
+    fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+    lineNumber: 146
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('primitive admin failures retain cleanup authority without a WeakMap
+    TypeError', async (t) => {
+  
+    ^
+      const cleanup = Object.assign(new Error('close incomplete'), {code: 'ADMIN_CLOSE_TIMEOUT'});
+      const combined = await withAdminWsClient({close: async () => {
+  ...
+
+# Subtest: nested admin cleanup reports retain every typed generation failure
+    ok 1 - should be equal
+    ok 2 - should be equivalent
+    not ok 3 - serialization preserves both owned-generation failure leaves
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,30 +1,1 @@
+        -Array [
+        -  Object {
+        -    "message": "close-1",
+        -    "code": "ADMIN_CLOSE_TIMEOUT",
+        -    "target": "ws://node-1",
+        -    "timeoutMs": 100,
+        -    "deadlineMs": 1234,
+        -    "generations": Array [
+        -      Object {
+        -        "generation": 1,
+        -        "target": "ws://node-1",
+        -        "readyState": 3,
+        -      },
+        -    ],
+        -  },
+        -  Object {
+        -    "message": "close-2",
+        -    "code": "ADMIN_CLOSE_TIMEOUT",
+        -    "target": "ws://node-2",
+        -    "timeoutMs": 100,
+        -    "deadlineMs": 1234,
+        -    "generations": Array [
+        -      Object {
+        -        "generation": 2,
+        -        "target": "ws://node-2",
+        -        "readyState": 3,
+        -      },
+        -    ],
+        -  },
+        -]
+        +undefined
+      at:
+        fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+        lineNumber: 189
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/runtime/movielens-failure-report-participant-failures.test.js:189:5)
+      source: >2
+          t.same(getAdminCleanupFailure(primary).errors, cleanups);
+          const report = JSON.parse(JSON.stringify(buildAffinityDemoReportError(primary)));
+          t.same(report.errorDetail.cleanupFailure.failures, cleanups.map((error) => ({
+        ----^
+            message: error.message, code: error.code, target: error.target,
+            timeoutMs: error.timeoutMs, deadlineMs: error.deadlineMs, generations: error.generations,
+      ...
+    
+    1..3
+not ok 4 - nested admin cleanup reports retain every typed generation failure # time=2.284ms
+  ---
+  at:
+    fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+    lineNumber: 172
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('nested admin cleanup reports retain every typed generation failure',
+    async (t) => {
+  
+    ^
+      const primary = Object.freeze(new Error('query failed'));
+      const cleanups = [1, 2].map((generation) => Object.assign(new Error(`close-${generation}`), {
+  ...
+
+# Subtest: AdminWsClient attaches the typed error-envelope fields to the rejected query Error
+    ok 1 - the client still rejects with an Error
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equivalent
+    ok 5 - the rejected Error names every forwarded participant failure
+    ok 6 - should be equivalent
+    ok 7 - should be equal
+    1..7
+ok 5 - AdminWsClient attaches the typed error-envelope fields to the rejected query Error # time=10.775ms
+
+# Subtest: AdminWsClient rejects a plain error frame with only the message
+    ok 1 - should be equal
+    ok 2 - no field is fabricated when the frame does not carry it
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    1..5
+ok 6 - AdminWsClient rejects a plain error frame with only the message # time=3.086ms
+
+# Subtest: MovieLens comparison and live failure reports serialise the participant failures beside the error message
+    ok 1 - should be equal
+    ok 2 - the comparison report keeps the error string every reader consumes
+    ok 3 - the comparison failure report names partitions and participant errors
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - the live failure report names partitions and participant errors
+    ok 7 - the report survives JSON serialisation with the error codes intact
+    1..7
+ok 7 - MovieLens comparison and live failure reports serialise the participant failures beside the error message # time=2.7ms
+
+# Subtest: demo report error owner writes a plain error and a passing run unchanged
+    ok 1 - should be equal
+    ok 2 - a plain error carries only its message
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - a passing run carries no error detail
+    1..5
+ok 8 - demo report error owner writes a plain error and a passing run unchanged # time=0.351ms
+
+1..8
+# { total: 43, pass: 37, fail: 6 }
+# time=47.055ms

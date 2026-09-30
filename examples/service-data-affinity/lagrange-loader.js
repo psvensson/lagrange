@@ -1,7 +1,9 @@
 import {createReadStream} from 'node:fs';
 import {stat} from 'node:fs/promises';
 import {createInterface} from 'node:readline';
-import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
+import {
+  AdminWsClient, withAdminWsClient, rethrowIfAdminCleanupIncomplete,
+} from '../../scripts/examples/admin-ws-client.js';
 import {runRetryableControlPlaneWrite} from
   '../../src/bootstrap/shared/retryable-control-plane-write.js';
 import {
@@ -46,6 +48,7 @@ const CREATE_TABLE_ATTEMPT_TIMEOUT_MS = 15000;
 const CREATE_TABLE_RETRY_DELAY_MS = 5000;
 const CREATE_TABLE_STABLE_CONFIRMATION_COUNT = 2;
 const RATINGS_FIELD_DELIMITER = '\t';
+const INPUT_CLOSE_EVENT = 'close';
 const RATINGS_FILE_MISSING_GUIDANCE =
   'Run examples/service-data-affinity/download-movielens.js first.';
 const RATINGS_SCHEMA_CONFIRMATION_ERROR =
@@ -127,40 +130,43 @@ async function createRatingsTableWithRetry(options = {}) {
     const client = clientFactory(target, {
       timeoutMs: Math.min(CREATE_TABLE_ATTEMPT_TIMEOUT_MS, remainingMs),
     });
-    try {
-      const createResult = await client.query(CREATE_LAGRANGE_RATINGS_SQL);
-      const createOutcome = resolveRatingsSchemaCreateOutcome(createResult);
-      if (!createOutcome.ready) {
+    return withAdminWsClient(client, async () => {
+      try {
+        const createResult = await client.query(CREATE_LAGRANGE_RATINGS_SQL);
+        const createOutcome = resolveRatingsSchemaCreateOutcome(createResult);
+        if (!createOutcome.ready) {
+          stableConfirmationCount = 0;
+          return {
+            success: false,
+            deferRetry: true,
+            retryAfterMs: createOutcome.retryAfterMs,
+          };
+        }
+        stableConfirmationCount += 1;
+      } catch (error) {
         stableConfirmationCount = 0;
+        throw error;
+      }
+
+      if (stableConfirmationCount < CREATE_TABLE_STABLE_CONFIRMATION_COUNT) {
         return {
           success: false,
           deferRetry: true,
-          retryAfterMs: createOutcome.retryAfterMs,
+          retryAfterMs: CREATE_TABLE_RETRY_DELAY_MS,
         };
       }
-      stableConfirmationCount += 1;
-    } catch (error) {
-      stableConfirmationCount = 0;
-      throw error;
-    } finally {
-      await client.close();
-    }
-
-    if (stableConfirmationCount < CREATE_TABLE_STABLE_CONFIRMATION_COUNT) {
-      return {
-        success: false,
-        deferRetry: true,
-        retryAfterMs: CREATE_TABLE_RETRY_DELAY_MS,
-      };
-    }
-    return {success: true};
+      return {success: true};
+    });
   }, {
     timeoutMs,
     baseDelayMs: CREATE_TABLE_RETRY_DELAY_MS,
     maxDelayMs: CREATE_TABLE_RETRY_DELAY_MS,
     now,
     ...(typeof options.sleep === 'function' ? {sleep: options.sleep} : {}),
-    onRetry,
+    onRetry: (observation) => {
+      rethrowIfAdminCleanupIncomplete(observation.resultOrError);
+      onRetry(observation);
+    },
   });
 
   if (result?.success !== true) {
@@ -177,42 +183,53 @@ async function loadRatingsIntoLagrange({target = DEFAULT_TARGET} = {}) {
   await ensureRatingsFile();
   await createRatingsTableWithRetry({target});
   const client = new AdminWsClient({target});
+  return withAdminWsClient(client, async () => {
+    const input = createReadStream(RATINGS_FILE);
+    const inputClosed = new Promise((resolve) => input.once(INPUT_CLOSE_EVENT, resolve));
+    let rl;
+    try {
+      rl = createInterface({
+        input,
+        crlfDelay: Infinity,
+      });
 
-  const rl = createInterface({
-    input: createReadStream(RATINGS_FILE),
-    crlfDelay: Infinity,
+      let total = 0;
+      let batch = [];
+      for await (const line of rl) {
+        if (!line) {
+          continue;
+        }
+        const [userId, movieId, rating, ts] = line.split(
+          RATINGS_FIELD_DELIMITER,
+        );
+        total += 1;
+        batch.push([
+          total,
+          Number(userId),
+          Number(movieId),
+          Number(rating),
+          Number(ts),
+        ]);
+
+        if (batch.length >= BATCH_SIZE) {
+          await flushBatch(client, batch);
+          batch = [];
+        }
+      }
+
+      if (batch.length > 0) {
+        await flushBatch(client, batch);
+      }
+
+      return total;
+    } finally {
+      // Ending the readline iterator does not destroy its input stream when
+      // a batch rejects. This function owns both, including native FD close.
+      rl?.close();
+      input.destroy();
+      await inputClosed;
+    }
   });
-
-  let total = 0;
-  let batch = [];
-  for await (const line of rl) {
-    if (!line) {
-      continue;
-    }
-    const [userId, movieId, rating, ts] = line.split(
-      RATINGS_FIELD_DELIMITER,
-    );
-    total += 1;
-    batch.push([
-      total,
-      Number(userId),
-      Number(movieId),
-      Number(rating),
-      Number(ts),
-    ]);
-
-    if (batch.length >= BATCH_SIZE) {
-      await flushBatch(client, batch);
-      batch = [];
-    }
-  }
-
-  if (batch.length > 0) {
-    await flushBatch(client, batch);
-  }
-
-  await client.close();
-  return total;
 }
 
 // A 100k-row load is ~200 batches against a cluster that may still be

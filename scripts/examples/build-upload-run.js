@@ -7,7 +7,7 @@
 
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
-import {AdminWsClient} from './admin-ws-client.js';
+import {AdminWsClient, getAdminCleanupFailure} from './admin-ws-client.js';
 import {parseArgs} from './cli-args.js';
 import {executeExample, uploadExample} from './example-execution.js';
 import {
@@ -50,6 +50,8 @@ const isDirectRun = resolve(process.argv[1] || '') === __filename;
 if (isDirectRun) {
   main().catch((error) => {
     process.stderr.write(`Examples failed: ${error.message}\n`);
+    const cleanup = getAdminCleanupFailure(error);
+    if (cleanup) console.error(cleanup);
     process.exitCode = 1;
   });
 }
