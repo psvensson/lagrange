@@ -18,6 +18,8 @@ import {scenarioStampingReplicaHandler} from
 // Lifecycle scenarios: every create carries the committed-membership stamp
 // its scenario's creator would have produced (owner decision O1).
 const ReplicaHandler = scenarioStampingReplicaHandler(ProductionReplicaHandler);
+import {createIdentityTransport} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -112,13 +114,19 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
 
     seedReplicaOperation(cache, operationId, partitionId, replicaId, nodeId);
 
+    // The S-F2 executor world: the handler owns an identity-capable transport
+    // and the created runtime registers its exact handler at its address on
+    // it (production wires the node's shared transport through the factory).
+    const messageRouter = createIdentityTransport();
     const handler = new ReplicaHandler({
       nodeId,
       systemTableCache: cache,
       cdcIntegrationService,
       dataDir: tempDir,
+      messageRouter,
       createPartitionService: async (options) => {
         const service = new PartitionService(withFoundingStamp({
+          ...options,
           partitionId: options.partitionId,
           tableId: options.tableId,
           tableName: options.tableName,
@@ -130,6 +138,9 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
           dbPath: options.dbPath,
           suppressLifecycleLogs: true,
           onInitializationStage: options.onInitializationStage,
+          resolveHandlerRetirementLane: options.resolveHandlerRetirementLane,
+          transport: messageRouter,
+          replicaStateMachine: handler?.replicaStateMachine ?? null,
         }));
         await service.initialize();
         return service;

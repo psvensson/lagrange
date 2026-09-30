@@ -461,7 +461,8 @@ test('AdminControlSnapshot prefers published membership observation over newer o
   );
 });
 
-test('AdminControlSnapshot falls back to durable published membership from ack-pending convergence when published observation is unavailable', async (t) => {
+test('AdminControlSnapshot keeps an ack-pending candidate unpublished and preserves the local projection when published observation is unavailable',
+  async (t) => {
   const snapshot = new AdminControlSnapshot({
     nodeId: 'node-1',
     nowFn: () => 1000,
@@ -558,8 +559,8 @@ test('AdminControlSnapshot falls back to durable published membership from ack-p
 
   t.same(
     activeNodeViews.authoritativeActiveNodeIds,
-    ['node-1', 'node-2'],
-    'control snapshots should retain the durable published membership while the latest epoch is ack-pending',
+    [],
+    'control snapshots never count an ack-pending candidate as published membership: the owner decision (cutover seed parity round-2 rulings, verified through round 9) is that a membership candidate is pending, not published, until its acknowledgements publish it',
   );
   t.same(
     activeNodeViews.projectedActiveNodeIds,
@@ -568,10 +569,110 @@ test('AdminControlSnapshot falls back to durable published membership from ack-p
   );
   t.equal(
     activeNodeViews.publishedMembershipAvailable,
-    true,
-    'control snapshots should preserve published-membership availability from ack-pending convergence when the durable set is known',
+    false,
+    'published-membership availability is absent while the only membership epoch is ack-pending',
   );
 });
+
+test('AdminControlSnapshot keeps published authority on the published epoch and never on a converging candidate',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+      nowFn: () => 1000,
+    });
+
+    const buildViews = (publicationRows) =>
+      snapshot.resolveControlSnapshotNodeViews(
+        ['node-1', 'node-2', 'node-3', 'node-4'].map((n) => ({
+          node_id: n,
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 2000,
+        })),
+        ['node-1', 'node-2', 'node-3', 'node-4'].map((n) => ({
+          service_id: `svc-${n}`,
+          node_id: n,
+          status: 'active',
+        })),
+        ['node-1', 'node-2', 'node-3', 'node-4'].map((n) => ({
+          endpoint_id: `${n}-ws`,
+          node_id: n,
+          transport_type: 'ws',
+          status: 'active',
+          address: `ws://${n}:8082`,
+        })),
+        {
+          readinessByNodeId: Object.fromEntries(
+            ['node-1', 'node-2', 'node-3', 'node-4'].map((n) => [n, {
+              dimensions: {
+                [CONTROL_PLANE_READINESS_DIMENSION
+                  .CLUSTER_MEMBER_HEALTHY]: true,
+              },
+            }]),
+          ),
+        },
+        publicationRows,
+      );
+
+    const publishedEpochViews = buildViews([
+      {
+        publication_id: 'publication-published-6',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 6,
+        status: 'PUBLISHED',
+        published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+        required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+        acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+      },
+    ]);
+
+    t.same(
+      publishedEpochViews.authoritativeActiveNodeIds,
+      ['node-1', 'node-2', 'node-3'],
+      'positive control: a published epoch is authoritative membership',
+    );
+    t.equal(
+      publishedEpochViews.publishedMembershipAvailable,
+      true,
+      'positive control: a published epoch makes published membership available',
+    );
+
+    const convergedCandidateViews = buildViews([
+      {
+        publication_id: 'publication-published-6',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 6,
+        status: 'PUBLISHED',
+        published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+        required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+        acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+      },
+      {
+        publication_id: 'publication-pending-7',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 7,
+        status: 'ACK_PENDING',
+        published_active_node_ids: [
+          'node-1', 'node-2', 'node-3', 'node-4',
+        ],
+        required_ack_node_ids: [
+          'node-1', 'node-2', 'node-3', 'node-4',
+        ],
+        acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+      },
+    ]);
+
+    t.same(
+      convergedCandidateViews.authoritativeActiveNodeIds,
+      ['node-1', 'node-2', 'node-3'],
+      'adversarial control: a converging candidate naming a wider set never widens published authority beyond the published epoch',
+    );
+    t.equal(
+      convergedCandidateViews.publishedMembershipAvailable,
+      true,
+      'adversarial control: published membership stays available from the published epoch while a candidate converges',
+    );
+  });
 
 test('AdminControlSnapshot exposes separate published and projected node views', async (t) => {
   const snapshot = new AdminControlSnapshot({
@@ -879,7 +980,7 @@ test('AdminControlSnapshot uses repaired publication rows when publication servi
   );
 });
 
-test('AdminControlSnapshot falls back to repaired publication rows when publication services return null without acknowledging from the read path', async (t) => {
+test('AdminControlSnapshot serves only the acknowledged subset of a pending durable publication row without acknowledging from the read path', async (t) => {
   let acknowledgedPublicationRow = null;
   const snapshot = new AdminControlSnapshot({
     nodeId: 'node-2',
@@ -965,8 +1066,8 @@ test('AdminControlSnapshot falls back to repaired publication rows when publicat
   );
   t.same(
     result.nodes,
-    ['node-1', 'node-2'],
-    'fallback publication observation should still restore strict snapshot node coverage',
+    ['node-1'],
+    'coverage from a pending (never-published) durable row is its acknowledged subset only: the owner decision (cutover seed parity rounds 2-9) is that a candidate is pending, not published, until its acknowledgements publish it',
   );
   t.equal(
     result.controlPlaneDiagnostics.publishedMembershipObservation
