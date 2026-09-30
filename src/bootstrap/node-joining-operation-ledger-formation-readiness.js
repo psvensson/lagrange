@@ -11,6 +11,9 @@ import {
   SYSTEM_TABLE_NAME,
   getInitialReplicaIds,
 } from './system-table-schemas-constants.js';
+import {
+  observeCriticalPlacement,
+} from './critical-placement-formation-observer.js';
 
 const {
   JOINING_DEFAULT,
@@ -107,6 +110,15 @@ function buildOperationLedgerFormationBarrierLogFields(snapshot) {
       snapshot.formationReleaseHandoff?.requiredCohort || [],
     formationReleaseHandoffPendingNodeIds:
       snapshot.formationReleaseHandoff?.pendingNodeIds || [],
+    // The generalized question: the ledger is one critical partition, but
+    // formation is only real when the whole critical set has spread.
+    criticalPlacementState: snapshot.criticalPlacement?.state || null,
+    criticalPlacementConverged:
+      snapshot.criticalPlacement?.converged === true,
+    criticalPlacementPendingPartitionIds:
+      snapshot.criticalPlacement?.pendingPartitionIds || [],
+    criticalPlacementObservedPartitionCount:
+      snapshot.criticalPlacement?.observedPartitionCount || 0,
   };
 }
 
@@ -237,6 +249,10 @@ class NodeJoiningOperationLedgerFormationReadiness
       now,
       partitionId,
       targetReplicaCount,
+      // Observed, never acted on here: making this a release condition would
+      // deadlock formation, because a joiner would wait for spread that only
+      // its own join can supply. The lifecycle owner consumes it instead.
+      criticalPlacement: observeCriticalPlacement({systemTableCache}),
       ...buildFormationBarrierStartupAuthorityFields(startupAuthority),
       candidateNodeIds: Object.freeze(candidateNodeIds),
       preReadyCandidateNodeIds: Object.freeze(preReadyCandidateNodeIds),
@@ -409,4 +425,9 @@ class NodeJoiningOperationLedgerFormationReadiness
   }
 }
 
-export {NodeJoiningOperationLedgerFormationReadiness};
+export {
+  NodeJoiningOperationLedgerFormationReadiness,
+  OPERATION_LEDGER_FORMATION_BARRIER_STATE,
+  buildOperationLedgerFormationBarrierLogFields,
+  resolveOperationLedgerFormationBarrierState,
+};

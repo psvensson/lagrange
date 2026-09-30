@@ -1,0 +1,496 @@
+diff --git a/scripts/quest-evidence-critical-placement-formation-observer.js b/scripts/quest-evidence-critical-placement-formation-observer.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..c1c3e3b51f5ff6744d471abe77efaef237522624
+--- /dev/null
++++ b/scripts/quest-evidence-critical-placement-formation-observer.js
+@@ -0,0 +1,107 @@
++// Deterministic evidence harness for the critical-placement-formation-observer
++// quest: receipt declarations only. The witness uses raw node:test (not the
++// repo tap shim), so --test-name-pattern selects exactly one anchored scenario
++// per receipt.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const WITNESS_TEST =
++  'test/bootstrap/critical-placement-formation-observer.test.js';
++const NODE_TEST_COMMAND_PREFIX = 'node --test ';
++const TEST_NAME_PATTERN_FLAG_PREFIX = '--test-name-pattern="';
++const DOUBLE_QUOTE = '"';
++const SPACE = ' ';
++
++function scenarioCommand(scenarioPattern) {
++  return NODE_TEST_COMMAND_PREFIX +
++    TEST_NAME_PATTERN_FLAG_PREFIX + scenarioPattern + DOUBLE_QUOTE +
++    SPACE + WITNESS_TEST;
++}
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'spread-critical-set-observes-converged',
++    command: scenarioCommand('^spread-critical-set-observes-converged'),
++    detail: 'every declared critical partition spread across its required ' +
++      'distinct voting nodes observes as converged with no pending ids, so ' +
++      'the generalized question is satisfiable and not vacuously false',
++  }),
++  Object.freeze({
++    id: 'seed-local-critical-set-observes-pending',
++    command: scenarioCommand('^seed-local-critical-set-observes-pending'),
++    detail: 'the shape a cluster is ACTUALLY created in — every critical ' +
++      'partition holding its full replica count on the seed alone — observes ' +
++      'as pending, with EVERY critical partition pending rather than one. ' +
++      'This is the state an RF-only check calls satisfied at t=0',
++  }),
++  Object.freeze({
++    id: 'partial-spread-names-the-pending-partitions',
++    command: scenarioCommand('^partial-spread-names-the-pending-partitions'),
++    detail: 'three partitions pending by MIXED causes — two with no rows and ' +
++      'one present but on a single node — with pendingPartitionIds asserted ' +
++      'to equal exactly those three, sorted. Cardinality three and mixed ' +
++      'causes together defeat a constant, a cap-at-one or a cap-at-two ' +
++      'accumulation, and an implementation keyed on absence alone',
++  }),
++  Object.freeze({
++    id: 'unavailable-cache-is-typed-and-not-converged',
++    command: scenarioCommand('^unavailable-cache-is-typed-and-not-converged'),
++    detail: 'six unreadable cache shapes (absent, null, no filter, a ' +
++      'non-function filter, a filter answering null, a filter answering a ' +
++      'string) all observe NOT converged with the typed cache-unavailable ' +
++      'state. Absent evidence is never satisfaction. Mutation-verified: ' +
++      'flipping that branch to converged, or dropping the array check, each ' +
++      'reds this scenario',
++  }),
++  Object.freeze({
++    id: 'observer-reads-only-the-services-table',
++    command: scenarioCommand('^observer-reads-only-the-services-table'),
++    detail: 'the observer asks the cache for exactly one table, so the ' +
++      'observation cannot silently drift onto another and report a different ' +
++      'question\'s answer. Mutation-verified: reading NODES instead reds three ' +
++      'scenarios',
++  }),
++  Object.freeze({
++    id: 'observer-mints-no-readiness-state',
++    command: scenarioCommand('^observer-mints-no-readiness-state'),
++    detail: 'the observation is frozen and carries exactly state, converged, ' +
++      'pendingPartitionIds and observedPartitionCount — no ready, phase, ' +
++      'active, verdict, release, barrier or admitted key — so it creates no ' +
++      'second readiness or release authority',
++  }),
++  Object.freeze({
++    id: 'barrier-release-is-unchanged-by-the-observation',
++    command: scenarioCommand(
++      '^barrier-release-is-unchanged-by-the-observation'),
++    detail: 'CONTROL and the safety property of this slice: the barrier ' +
++      'REPORTS the observation and must not gate on it. A joiner that waited ' +
++      'for spread which only its own join can supply would deadlock ' +
++      'formation, so the release condition stays the startup-authority answer ' +
++      'and the lifecycle owner consumes this evidence in a later slice. ' +
++      'Mutation-verified: adding the observation to the release condition ' +
++      'reds this scenario. Must stay green',
++  }),
++  Object.freeze({
++    id: 'witness-deterministic',
++    command: scenarioCommand('^witness-deterministic'),
++    detail: 'repeated observation and reversed row order produce one ' +
++      'identical projection, so no receipt passes by row ordering or ' +
++      'retained state',
++  }),
++]);
++
++const QUEST_ID = 'critical-placement-formation-observer';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'critical-placement-formation-observer.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/src/bootstrap/critical-placement-formation-observer.js b/src/bootstrap/critical-placement-formation-observer.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d692eedc53c712b7ee0263b7c049a3ea4ecfafd7
+--- /dev/null
++++ b/src/bootstrap/critical-placement-formation-observer.js
+@@ -0,0 +1,71 @@
++import {SYSTEM_TABLE_NAME} from './system-table-schemas-constants.js';
++import {
++  resolveCriticalPlacementConvergence,
++} from './critical-placement-convergence.js';
++
++const LOCAL_STR_FUNCTION = 'function';
++const arrayIsArray = Array.isArray;
++
++// Why an observer rather than a second evaluator: the distinct-voting-node
++// invariant already has one owner (critical-placement-convergence.js). What
++// formation lacked was a way to ASK it about the live cluster, so this module
++// owns exactly one thing — reading the serving rows out of the system-table
++// cache — and delegates every judgement.
++const CRITICAL_PLACEMENT_OBSERVATION_STATE = Object.freeze({
++  CACHE_UNAVAILABLE: 'critical_placement_cache_unavailable',
++  CONVERGED: 'critical_placement_converged',
++  PENDING: 'critical_placement_pending',
++});
++
++/**
++ * Read every services row the cache can supply. A cache that cannot answer is
++ * a distinct, typed outcome: absent evidence must never read as convergence.
++ *
++ * @param {Object|null} systemTableCache
++ * @return {Object} {readable, rows}
++ */
++function readServiceRows(systemTableCache) {
++  if (!systemTableCache ||
++    typeof systemTableCache.filter !== LOCAL_STR_FUNCTION) {
++    return {readable: false, rows: []};
++  }
++  const rows = systemTableCache.filter(SYSTEM_TABLE_NAME.SERVICES, () => true);
++  return arrayIsArray(rows) ?
++    {readable: true, rows} :
++    {readable: false, rows: []};
++}
++
++/**
++ * Project critical-placement convergence for the live cluster. Projection
++ * only: it mints no readiness phase, releases no barrier, and derives nothing
++ * from nodes.status, publication counts, or coverage.
++ *
++ * @param {Object} options
++ * @param {Object|null} [options.systemTableCache]
++ * @return {Object} frozen observation
++ */
++function observeCriticalPlacement(options = {}) {
++  const {readable, rows} = readServiceRows(options.systemTableCache);
++  if (!readable) {
++    return Object.freeze({
++      state: CRITICAL_PLACEMENT_OBSERVATION_STATE.CACHE_UNAVAILABLE,
++      converged: false,
++      pendingPartitionIds: Object.freeze([]),
++      observedPartitionCount: 0,
++    });
++  }
++  const convergence = resolveCriticalPlacementConvergence({serviceRows: rows});
++  return Object.freeze({
++    state: convergence.converged ?
++      CRITICAL_PLACEMENT_OBSERVATION_STATE.CONVERGED :
++      CRITICAL_PLACEMENT_OBSERVATION_STATE.PENDING,
++    converged: convergence.converged,
++    pendingPartitionIds: convergence.pendingPartitionIds,
++    observedPartitionCount: convergence.partitions.length,
++  });
++}
++
++export {
++  CRITICAL_PLACEMENT_OBSERVATION_STATE,
++  observeCriticalPlacement,
++};
+diff --git a/src/bootstrap/node-joining-operation-ledger-formation-readiness.js b/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
+index 785de292d1506fd131ae5b19f0444974a101bd68..6ed13a4a1924e4c3c424835e3d603feece1a18df 100644
+--- a/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
++++ b/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
+@@ -11,6 +11,9 @@ import {
+   SYSTEM_TABLE_NAME,
+   getInitialReplicaIds,
+ } from './system-table-schemas-constants.js';
++import {
++  observeCriticalPlacement,
++} from './critical-placement-formation-observer.js';
+ 
+ const {
+   JOINING_DEFAULT,
+@@ -107,6 +110,14 @@ function buildOperationLedgerFormationBarrierLogFields(snapshot) {
+       snapshot.formationReleaseHandoff?.requiredCohort || [],
+     formationReleaseHandoffPendingNodeIds:
+       snapshot.formationReleaseHandoff?.pendingNodeIds || [],
++    // The generalized question: the ledger is one critical partition, but
++    // formation is only real when the whole critical set has spread.
++    criticalPlacementState: snapshot.criticalPlacement.state,
++    criticalPlacementConverged: snapshot.criticalPlacement.converged,
++    criticalPlacementPendingPartitionIds:
++      snapshot.criticalPlacement.pendingPartitionIds,
++    criticalPlacementObservedPartitionCount:
++      snapshot.criticalPlacement.observedPartitionCount,
+   };
+ }
+ 
+@@ -237,6 +248,10 @@ class NodeJoiningOperationLedgerFormationReadiness
+       now,
+       partitionId,
+       targetReplicaCount,
++      // Observed, never acted on here: making this a release condition would
++      // deadlock formation, because a joiner would wait for spread that only
++      // its own join can supply. The lifecycle owner consumes it instead.
++      criticalPlacement: observeCriticalPlacement({systemTableCache}),
+       ...buildFormationBarrierStartupAuthorityFields(startupAuthority),
+       candidateNodeIds: Object.freeze(candidateNodeIds),
+       preReadyCandidateNodeIds: Object.freeze(preReadyCandidateNodeIds),
+diff --git a/test/bootstrap/critical-placement-formation-observer.test.js b/test/bootstrap/critical-placement-formation-observer.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..6b8fa0d46e344fe334cf43047cac492b069c1700
+--- /dev/null
++++ b/test/bootstrap/critical-placement-formation-observer.test.js
+@@ -0,0 +1,171 @@
++// Witness for the critical-placement-formation-observer quest.
++// Raw node:test so --test-name-pattern selects exactly one scenario.
++import test from 'node:test';
++import assert from 'node:assert/strict';
++
++import {
++  CRITICAL_PLACEMENT_OBSERVATION_STATE,
++  observeCriticalPlacement,
++} from '../../src/bootstrap/critical-placement-formation-observer.js';
++import {
++  CRITICAL_SYSTEM_PARTITION_IDS,
++} from '../../src/bootstrap/system-partition-classification.js';
++import {
++  SYSTEM_TABLE_NAME,
++  getInitialReplicaIds,
++} from '../../src/bootstrap/system-table-schemas-constants.js';
++
++// A cache that answers only for the services table, the way the real one does.
++function cacheOf(rows) {
++  return {
++    filter: (tableName, predicate) =>
++      tableName === SYSTEM_TABLE_NAME.SERVICES ?
++        rows.filter(predicate) :
++        [],
++  };
++}
++
++function rowsFor({omit = [], soloIndex = -1} = {}) {
++  const declared = [...CRITICAL_SYSTEM_PARTITION_IDS].sort();
++  const rows = [];
++  declared.forEach((partitionId, partitionIndex) => {
++    if (omit.includes(partitionId)) {
++      return;
++    }
++    const tableId = partitionId.replace(/-p1$/u, '');
++    (getInitialReplicaIds(tableId) || []).forEach((replicaId, replicaIndex) => {
++      rows.push({
++        service_id: `svc-${replicaId}`,
++        service_type: 'partition',
++        node_id: partitionIndex === soloIndex ?
++          `node-${partitionIndex}-solo` :
++          `node-${partitionIndex}-${replicaIndex}`,
++        partition_id: partitionId,
++        replica_id: replicaId,
++        raft_role: replicaIndex === 0 ? 'leader' : 'follower',
++        status: 'active',
++      });
++    });
++  });
++  return {declared, rows};
++}
++
++test('spread-critical-set-observes-converged', () => {
++  const {rows} = rowsFor();
++  const observation = observeCriticalPlacement({systemTableCache: cacheOf(rows)});
++  assert.equal(observation.converged, true);
++  assert.equal(observation.state,
++    CRITICAL_PLACEMENT_OBSERVATION_STATE.CONVERGED);
++  assert.deepEqual([...observation.pendingPartitionIds], []);
++  assert.ok(observation.observedPartitionCount > 0);
++});
++
++test('seed-local-critical-set-observes-pending', () => {
++  // The shape a cluster is actually created in: every critical partition holds
++  // its full replica count on the seed alone.
++  const rows = [];
++  for (const partitionId of CRITICAL_SYSTEM_PARTITION_IDS) {
++    const tableId = partitionId.replace(/-p1$/u, '');
++    (getInitialReplicaIds(tableId) || []).forEach((replicaId, index) => {
++      rows.push({
++        service_id: `svc-${replicaId}`,
++        service_type: 'partition',
++        node_id: 'seed',
++        partition_id: partitionId,
++        replica_id: replicaId,
++        raft_role: index === 0 ? 'leader' : 'follower',
++        status: 'active',
++      });
++    });
++  }
++  const observation = observeCriticalPlacement({systemTableCache: cacheOf(rows)});
++  assert.equal(observation.converged, false,
++    'a seed-local critical set has not reached its serving topology');
++  assert.equal(observation.state, CRITICAL_PLACEMENT_OBSERVATION_STATE.PENDING);
++  assert.equal(observation.pendingPartitionIds.length,
++    observation.observedPartitionCount,
++    'every critical partition is pending, not just one');
++});
++
++test('partial-spread-names-the-pending-partitions', () => {
++  // Mixed causes, and more than one pending id, so neither a constant nor a
++  // cap-at-one implementation satisfies it.
++  const declared = [...CRITICAL_SYSTEM_PARTITION_IDS].sort();
++  const omitted = [declared[0], declared[Math.floor(declared.length / 2)]];
++  const soloIndex = declared.length - 1;
++  const {rows} = rowsFor({omit: omitted, soloIndex});
++  const expected = [...omitted, declared[soloIndex]].sort();
++
++  const observation = observeCriticalPlacement({systemTableCache: cacheOf(rows)});
++  assert.equal(observation.converged, false);
++  assert.deepEqual([...observation.pendingPartitionIds], expected,
++    'pending names exactly the partitions not spread, by both causes');
++});
++
++test('unavailable-cache-is-typed-and-not-converged', () => {
++  for (const systemTableCache of [
++    undefined, null, {}, {filter: 'not a function'},
++    {filter: () => null}, {filter: () => 'rows'},
++  ]) {
++    const observation = observeCriticalPlacement({systemTableCache});
++    assert.equal(observation.converged, false,
++      'an unreadable cache is never convergence');
++    assert.equal(observation.state,
++      CRITICAL_PLACEMENT_OBSERVATION_STATE.CACHE_UNAVAILABLE);
++    assert.equal(observation.observedPartitionCount, 0);
++    assert.deepEqual([...observation.pendingPartitionIds], []);
++  }
++});
++
++test('observer-reads-only-the-services-table', () => {
++  const asked = [];
++  const cache = {
++    filter: (tableName) => {
++      asked.push(tableName);
++      return [];
++    },
++  };
++  observeCriticalPlacement({systemTableCache: cache});
++  assert.deepEqual(asked, [SYSTEM_TABLE_NAME.SERVICES],
++    'exactly one table read, so the observation cannot drift onto another');
++});
++
++test('observer-mints-no-readiness-state', () => {
++  const {rows} = rowsFor();
++  const observation = observeCriticalPlacement({systemTableCache: cacheOf(rows)});
++  for (const key of ['ready', 'phase', 'active', 'verdict', 'release',
++    'barrier', 'admitted']) {
++    assert.equal(Object.hasOwn(observation, key), false,
++      `the observer must not mint ${key}`);
++  }
++  assert.equal(Object.isFrozen(observation), true);
++  assert.deepEqual(Object.keys(observation).sort(),
++    ['converged', 'observedPartitionCount', 'pendingPartitionIds', 'state']);
++});
++
++test('barrier-release-is-unchanged-by-the-observation', async () => {
++  // CONTROL: the barrier reports the observation and must NOT gate on it. A
++  // joiner that waited for spread it must itself supply would deadlock
++  // formation, which is why this slice observes and the lifecycle owner acts.
++  const source = await import('node:fs').then((fs) => fs.readFileSync(
++    'src/bootstrap/node-joining-operation-ledger-formation-readiness.js',
++    'utf8'));
++  const release = source.slice(
++    source.indexOf('function resolveOperationLedgerFormationBarrierState'),
++    source.indexOf('class NodeJoiningOperationLedgerFormationReadiness'));
++  assert.ok(release.includes('startupAuthorityReady'),
++    'the sealed release condition is still the startup-authority answer');
++  assert.equal(release.includes('criticalPlacement'), false,
++    'the release condition must not consult the observation in this slice');
++});
++
++test('witness-deterministic', () => {
++  const {rows} = rowsFor();
++  const shape = () => JSON.stringify(
++    observeCriticalPlacement({systemTableCache: cacheOf(rows)}));
++  const first = shape();
++  assert.equal(shape(), first);
++  assert.equal(JSON.stringify(observeCriticalPlacement({
++    systemTableCache: cacheOf([...rows].reverse()),
++  })), first, 'row order must not change the observation');
++});
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index 2cd5e60d4abf21cd068be75fe5330419e85ba6b0..5876cf1c64e880c8702dbfbe41fc547fd52216f2 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -4,12 +4,12 @@
+   "counts": {
+     "unit": 1859,
+     "integration": 73,
+-    "bootstrap": 175,
++    "bootstrap": 176,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2114,
+-  "digest": "fnv1a32-823e8338",
++  "censusSize": 2115,
++  "digest": "fnv1a32-62ae809d",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+@@ -136,6 +136,7 @@
+     "test/bootstrap/create-self-hosted-registration.test.js": "bootstrap",
+     "test/bootstrap/critical-placement-classification-control.test.js": "bootstrap",
+     "test/bootstrap/critical-placement-convergence.test.js": "bootstrap",
++    "test/bootstrap/critical-placement-formation-observer.test.js": "bootstrap",
+     "test/bootstrap/debug-meta-table-schemas.test.js": "bootstrap",
+     "test/bootstrap/duplicate-replica-assignment.test.js": "bootstrap",
+     "test/bootstrap/durable-rejoin-partition-restore-planner.test.js": "bootstrap",
+diff --git a/test/shards/resource-classes.json b/test/shards/resource-classes.json
+index e0be725ea790bab3a84e497e446d5b839456b5d6..c8b346ff762f99e8518657e0bdae375d831d7d22 100644
+--- a/test/shards/resource-classes.json
++++ b/test/shards/resource-classes.json
+@@ -2,13 +2,13 @@
+   "schemaVersion": 1,
+   "id": "test-resource-classification",
+   "counts": {
+-    "ordinary": 2097,
++    "ordinary": 2098,
+     "cpu-heavy": 0,
+     "external-toolchain": 14,
+     "exclusive": 3
+   },
+-  "censusSize": 2114,
+-  "digest": "fnv1a32-b74ea154",
++  "censusSize": 2115,
++  "digest": "fnv1a32-ef87b485",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
+     "test/address/address-malformed-rejection.property.test.js": "ordinary",
+@@ -135,6 +135,7 @@
+     "test/bootstrap/create-self-hosted-registration.test.js": "ordinary",
+     "test/bootstrap/critical-placement-classification-control.test.js": "ordinary",
+     "test/bootstrap/critical-placement-convergence.test.js": "ordinary",
++    "test/bootstrap/critical-placement-formation-observer.test.js": "ordinary",
+     "test/bootstrap/debug-meta-table-schemas.test.js": "ordinary",
+     "test/bootstrap/duplicate-replica-assignment.test.js": "ordinary",
+     "test/bootstrap/durable-rejoin-partition-restore-planner.test.js": "ordinary",
+diff --git a/test/shards/subsystem-classes.json b/test/shards/subsystem-classes.json
+index 093a6a95237c29dd8c05fb9a91c2eb69b65949b7..a5a55ea6ce189c310f18f11584a34915dd470f46 100644
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -4,7 +4,7 @@
+   "counts": {
+     "admin-diagnostics": 106,
+     "architecture-governance": 19,
+-    "bootstrap-membership": 244,
++    "bootstrap-membership": 245,
+     "cdc-metadata": 54,
+     "cli-tooling": 96,
+     "control-plane": 172,
+@@ -25,8 +25,8 @@
+     "transport-messaging": 89,
+     "wasm-toolchain": 57
+   },
+-  "censusSize": 2114,
+-  "digest": "fnv1a32-d09151b0",
++  "censusSize": 2115,
++  "digest": "fnv1a32-798c883c",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
+     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+@@ -153,6 +153,7 @@
+     "test/bootstrap/create-self-hosted-registration.test.js": "bootstrap-membership",
+     "test/bootstrap/critical-placement-classification-control.test.js": "bootstrap-membership",
+     "test/bootstrap/critical-placement-convergence.test.js": "bootstrap-membership",
++    "test/bootstrap/critical-placement-formation-observer.test.js": "bootstrap-membership",
+     "test/bootstrap/debug-meta-table-schemas.test.js": "bootstrap-membership",
+     "test/bootstrap/duplicate-replica-assignment.test.js": "bootstrap-membership",
+     "test/bootstrap/durable-rejoin-partition-restore-planner.test.js": "bootstrap-membership",

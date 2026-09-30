@@ -1,0 +1,80 @@
+{
+  "id": "critical-placement-formation-observer",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Generalize the formation readiness primitive from 'has the operation ledger got off the seed?' to 'has the critical system-table set reached its required serving topology?': a single observer projects critical-placement convergence from the system-table cache and the formation barrier reports it as typed evidence. This slice observes and proves; making it a hard prerequisite for initial TRAFFIC_READY is the next slice, because a joiner that waited on spread it must itself supply would deadlock formation.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "src/bootstrap/critical-placement-convergence.js",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/cluster-formation-topology-admission-closure.md",
+    "draftedAtCommit": "3cddfcf65971a3cc131e54483fe433c7bf5a50f7"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/critical-placement-formation-observer.receipt.json",
+      "requiredReceipts": [
+        "spread-critical-set-observes-converged",
+        "seed-local-critical-set-observes-pending",
+        "partial-spread-names-the-pending-partitions",
+        "unavailable-cache-is-typed-and-not-converged",
+        "observer-reads-only-the-services-table",
+        "observer-mints-no-readiness-state",
+        "barrier-release-is-unchanged-by-the-observation",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "critical-placement-formation-observer-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/critical-placement-formation-observer.receipt.json",
+          "requiredReceipts": [
+            "spread-critical-set-observes-converged",
+            "seed-local-critical-set-observes-pending",
+            "partial-spread-names-the-pending-partitions",
+            "unavailable-cache-is-typed-and-not-converged",
+            "observer-reads-only-the-services-table",
+            "observer-mints-no-readiness-state",
+            "barrier-release-is-unchanged-by-the-observation",
+            "witness-deterministic"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-invariant-owner",
+      "statement": "The distinct-voting-node invariant keeps its single owner in critical-placement-convergence.js. This observer owns exactly one thing \u2014 reading the serving rows out of the system-table cache \u2014 and delegates every judgement to that evaluator; it re-derives no replication factor, no critical set and no convergence rule."
+    },
+    {
+      "id": "observe-do-not-release",
+      "statement": "The formation barrier reports the observation and MUST NOT gate its release on it. A joiner that waited for spread which only its own join can supply would deadlock formation; the lifecycle owner consumes this evidence in a later slice. The sealed release condition stays the startup-authority answer, pinned by a control."
+    },
+    {
+      "id": "fail-closed-typed",
+      "statement": "A cache that cannot answer is a distinct typed outcome and is never convergence; absent evidence is never read as satisfaction."
+    },
+    {
+      "id": "projection-only",
+      "statement": "The observation is frozen, carries exactly state, converged, pendingPartitionIds and observedPartitionCount, mints no readiness phase, releases no barrier, and derives nothing from nodes.status, publication counts, or coverage."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Proof is a deterministic node:test witness over cache fixtures, with barrier-release-is-unchanged-by-the-observation as the control that must stay green; every guard is mutation-verified with a harness that asserts the patch anchor is unique, and no cloud run is part of the proof."
+    }
+  ]
+}

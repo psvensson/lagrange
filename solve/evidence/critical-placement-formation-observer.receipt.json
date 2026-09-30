@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "critical-placement-formation-observer",
+  "status": "pass",
+  "generatedAt": "2026-08-31T10:42:02.517Z",
+  "receipts": [
+    {
+      "id": "spread-critical-set-observes-converged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^spread-critical-set-observes-converged\" test/bootstrap/critical-placement-formation-observer.test.js",
+      "detail": "every declared critical partition spread across its required distinct voting nodes observes as converged with no pending ids, so the generalized question is satisfiable and not vacuously false"
+    },
+    {
+      "id": "seed-local-critical-set-observes-pending",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^seed-local-critical-set-observes-pending\" test/bootstrap/critical-placement-formation-observer.test.js",
+      "detail": "the shape a cluster is ACTUALLY created in — every critical partition holding its full replica count on the seed alone — observes as pending, with EVERY critical partition pending rather than one. This is the state an RF-only check calls satisfied at t=0"
+    },
+    {
+      "id": "partial-spread-names-the-pending-partitions",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^partial-spread-names-the-pending-partitions\" test/bootstrap/critical-placement-formation-observer.test.js",
+      "detail": "three partitions pending by MIXED causes — two with no rows and one present but on a single node — with pendingPartitionIds asserted to equal exactly those three, sorted. Cardinality three and mixed causes together defeat a constant, a cap-at-one or a cap-at-two accumulation, and an implementation keyed on absence alone"
+    },
+    {
+      "id": "unavailable-cache-is-typed-and-not-converged",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^unavailable-cache-is-typed-and-not-converged\" test/bootstrap/critical-placement-formation-observer.test.js",
+      "detail": "six unreadable cache shapes (absent, null, no filter, a non-function filter, a filter answering null, a filter answering a string) all observe NOT converged with the typed cache-unavailable state. Absent evidence is never satisfaction. Mutation-verified: flipping that branch to converged, or dropping the array check, each reds this scenario"
+    },
+    {
+      "id": "observer-reads-only-the-services-table",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^observer-reads-only-the-services-table\" test/bootstrap/critical-placement-formation-observer.test.js",
+      "detail": "the observer asks the cache for exactly one table, so the observation cannot silently drift onto another and report a different question's answer. Mutation-verified: reading NODES instead reds three scenarios"
+    },
+    {
+      "id": "observer-mints-no-readiness-state",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^observer-mints-no-readiness-state\" test/bootstrap/critical-placement-formation-observer.test.js",
+      "detail": "the observation is frozen and carries exactly state, converged, pendingPartitionIds and observedPartitionCount — no ready, phase, active, verdict, release, barrier or admitted key — so it creates no second readiness or release authority"
+    },
+    {
+      "id": "barrier-release-is-unchanged-by-the-observation",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^barrier-release-is-unchanged-by-the-observation\" test/bootstrap/critical-placement-formation-observer.test.js",
+      "detail": "CONTROL and the safety property of this slice: the barrier REPORTS the observation and must not gate on it. A joiner that waited for spread which only its own join can supply would deadlock formation, so the release condition stays the startup-authority answer and the lifecycle owner consumes this evidence in a later slice. Mutation-verified: adding the observation to the release condition reds this scenario. Must stay green"
+    },
+    {
+      "id": "witness-deterministic",
+      "passed": true,
+      "command": "node --test --test-name-pattern=\"^witness-deterministic\" test/bootstrap/critical-placement-formation-observer.test.js",
+      "detail": "repeated observation and reversed row order produce one identical projection, so no receipt passes by row ordering or retained state"
+    }
+  ]
+}
