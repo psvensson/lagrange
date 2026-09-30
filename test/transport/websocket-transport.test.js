@@ -11,6 +11,11 @@ import {
 } from '../../src/transport/websocket-transport.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  REPLICA_HANDLER_RETIREMENT_OUTCOME,
+  isExactReplicaHandlerRegistered,
+  retireReplicaTransportHandler,
+} from '../../src/node/replica-transport-handler-identity.js';
 
 // Initialize configuration and logging for tests (module level)
 ConfigurationManager.resetInstance();
@@ -89,6 +94,52 @@ test('WebSocketTransport', async (t) => {
 
     t.notOk(transport.messageHandlers.has('service-1'), 'should not have handler');
   });
+
+  // Owner decision N2 (D11): the transport's handler identity API is exact.
+  // getRegisteredHandler returns the registered function itself (the
+  // identity isExactReplicaHandlerRegistered compares), and unregisterExact
+  // removes only that identical handler, never a successor at the address.
+  t.test('exact handler identity: getRegisteredHandler / unregisterExact',
+    async (t) => {
+      const transport = new WebSocketTransport();
+      const address = 'node-a/message-group/mg-1-r1';
+      const g1 = () => ({acknowledged: true});
+      const g2 = () => ({acknowledged: true});
+
+      t.equal(transport.getRegisteredHandler(address), null,
+        'nothing registered: null, not a handler');
+      transport.register(address, g1);
+      t.equal(transport.getRegisteredHandler(address), g1,
+        'returns the exact registered function');
+      t.equal(isExactReplicaHandlerRegistered(transport, address, g1), true,
+        'the identity check accepts the registered handler');
+      t.equal(isExactReplicaHandlerRegistered(transport, address, g2), false,
+        'presence at the address is not identity');
+
+      t.equal(transport.unregisterExact(address, g2), false,
+        'a different handler identity removes nothing');
+      t.equal(transport.getRegisteredHandler(address), g1,
+        'the registered handler is untouched');
+
+      transport.register(address, g2);
+      t.equal(transport.unregisterExact(address, g1), false,
+        'a delayed G1 removal does not remove the G2 handler');
+      t.equal(transport.getRegisteredHandler(address), g2,
+        'the successor handler at the same address survives');
+      t.equal(await retireReplicaTransportHandler({transport, address,
+        handler: g1, replicaId: 'mg-1-r1', lane: null}),
+      REPLICA_HANDLER_RETIREMENT_OUTCOME.ALREADY_ABSENT,
+      'the exact retirement of G1 finds its handler absent');
+      t.equal(transport.getRegisteredHandler(address), g2,
+        'the G2 handler survives the G1 retirement');
+
+      t.equal(transport.unregisterExact(address, g2), true,
+        'the identical handler is removed');
+      t.equal(transport.getRegisteredHandler(address), null,
+        'nothing remains at the address');
+      t.equal(transport.unregisterExact(address, g2), false,
+        'a repeated exact removal is a no-op');
+    });
 
   t.test('getConnectionState returns null for unknown node', async (t) => {
     const transport = new WebSocketTransport();
