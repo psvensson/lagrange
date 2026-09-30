@@ -10,8 +10,6 @@ import {
 } from './rebalancer-entity-identity.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const RESERVATION_CONFLICT_NOT_OBSERVED =
-  'reservation insert conflicted without an exact active owner row';
 const RESERVATION_ORPHAN_RECONCILE_STATE = Object.freeze({
   ABSENT_OPERATION: 'absent_operation',
   DEFERRED_OPERATION_VISIBILITY: 'deferred_operation_visibility',
@@ -82,31 +80,6 @@ const {
   assertCritical,
   readAuthoritativeControlPlaneRows,
 } = REBALANCE_COORDINATOR_SHARED;
-
-function reservationOwnerMatchesExpected(row, expected) {
-  return Boolean(
-    row?.reservation_id === expected.reservationId &&
-    row?.operation_id === expected.operationId &&
-    row?.entity_type === expected.entityType &&
-    row?.entity_id === expected.entityId &&
-    row?.partition_id === expected.partitionId &&
-    row?.target_node_id === expected.targetNodeId,
-  );
-}
-
-function reservationContractMatchesExpected(row, expected) {
-  return Boolean(
-    Number(row?.estimated_bytes) === expected.estimatedBytes &&
-    Number(row?.amplification_factor) === expected.amplificationFactor &&
-    row?.status === RESERVATION_STATUS.ACTIVE &&
-    row?.reason_code === expected.reasonCode,
-  );
-}
-
-function activeReservationMatchesExpected(row, expected) {
-  return reservationOwnerMatchesExpected(row, expected) &&
-    reservationContractMatchesExpected(row, expected);
-}
 
 class RebalanceCoordinatorReservationLifecycleMethods {
   // --- Reservation lifecycle (Req 4.1, 4.2, 4.3, 4.4, 4.5) ---
@@ -215,10 +188,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
    * partition's REAL size_bytes: the caller that already resolved the
    * size at operation-creation time passes it via
    * options.resolvedEntitySizeBytes so the persisted reservation is the
-   * same admission witness; repair paths resolve it from the cache. The
-   * INSERT OR IGNORE primary-key arbitration is the idempotency boundary: a
-   * zero-row result is accepted only after an authoritative read proves the
-   * exact ACTIVE reservation.
+   * same admission witness; repair paths resolve it from the cache.
    * Requirements: 4.1
    *
    * @param {Object} operation - The persisted operation record.
@@ -255,18 +225,6 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     const now = Date.now();
     const reservationId = `res-${operation.operationId}`;
     const expiresAt = now + this.config.reservationTtlMs;
-    const reasonCode = this.getReservationReasonCode(operation.type);
-    const expectedReservation = Object.freeze({
-      reservationId,
-      operationId: operation.operationId,
-      entityType,
-      entityId,
-      partitionId: operation.partitionId,
-      targetNodeId: operation.targetNodeId,
-      estimatedBytes,
-      amplificationFactor: DEFAULT_AMPLIFICATION_FACTOR,
-      reasonCode,
-    });
 
     const result = await this.executeOperationMutationWithRetry(
       SQL.INSERT_RESERVATION,
@@ -280,7 +238,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         estimatedBytes,
         DEFAULT_AMPLIFICATION_FACTOR,
         RESERVATION_STATUS.ACTIVE,
-        reasonCode,
+        this.getReservationReasonCode(operation.type),
         now,
         now,
         expiresAt,
@@ -304,32 +262,6 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
         reservationId,
         error: result.error || null,
-      });
-    }
-
-    const changeCount = this.extractMutationChangeCount(result);
-    if (changeCount === 0) {
-      const activeResult = await readAuthoritativeControlPlaneRows(
-        this.controlPlaneSystemTableGateway,
-        SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
-        SQL.SELECT_ACTIVE_RESERVATIONS_BY_OPERATION,
-        [operation.operationId, RESERVATION_STATUS.ACTIVE],
-        STORAGE_RESERVATION_READ_QUERY_OPTIONS,
-      );
-      const exactReservation = activeResult.success === true &&
-        activeResult.rows?.find((row) =>
-          activeReservationMatchesExpected(row, expectedReservation),
-        );
-      if (exactReservation) {
-        return Object.freeze({
-          outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE,
-          reservationId,
-        });
-      }
-      return Object.freeze({
-        outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
-        reservationId,
-        error: activeResult.error || RESERVATION_CONFLICT_NOT_OBSERVED,
       });
     }
 
@@ -376,6 +308,34 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     if (!this.isStorageIncreasingOperation(operation?.type)) {
       return Object.freeze({
         outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.NOT_REQUIRED,
+      });
+    }
+    const activeResult = await readAuthoritativeControlPlaneRows(
+      this.controlPlaneSystemTableGateway,
+      SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
+      SQL.SELECT_ACTIVE_RESERVATIONS_BY_OPERATION,
+      [operation.operationId, RESERVATION_STATUS.ACTIVE],
+      STORAGE_RESERVATION_READ_QUERY_OPTIONS,
+    );
+    if (activeResult.success && activeResult.rows?.length > 0) {
+      return Object.freeze({
+        outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE,
+        reservationId: `res-${operation.operationId}`,
+      });
+    }
+    if (!activeResult.success) {
+      this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_CREATE_FAILED,
+        {
+          operationId: operation.operationId,
+          reservationId: `res-${operation.operationId}`,
+          error: activeResult.error,
+        },
+      );
+      return Object.freeze({
+        outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+        reservationId: `res-${operation.operationId}`,
+        error: activeResult.error || null,
       });
     }
     return this.createReservationForOperation(operation);

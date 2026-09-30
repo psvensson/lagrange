@@ -122,7 +122,7 @@ function createTrackingSqlEngine() {
         });
         return {success: true, changes: 1};
       }
-      if (sql.includes('INTO storage_reservations')) {
+      if (sql.includes('INSERT INTO storage_reservations')) {
         const [resId, opId, eType, eId, partId, tgtNode,
           estBytes, ampFactor, status, reason,
           created, updated, expires] = params;
