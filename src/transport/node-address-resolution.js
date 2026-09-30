@@ -402,11 +402,7 @@ function getAuthoritativeNodeRow(systemTableCache, targetNodeId) {
     null;
 }
 
-function getCacheEndpointRows(systemTableCache, targetNodeId) {
-  if (!systemTableCache || !targetNodeId) {
-    return [];
-  }
-  const nodeRow = getAuthoritativeNodeRow(systemTableCache, targetNodeId);
+function getCacheEndpointRows(systemTableCache, targetNodeId, nodeRow) {
   if (typeof systemTableCache.filter === 'function') {
     return getActiveWebSocketEndpointRows(
       systemTableCache.filter(
@@ -429,21 +425,21 @@ function getCacheEndpointRows(systemTableCache, targetNodeId) {
 
 // Bootstrap discovery exception (owner decision F-R1, option b). Precedence:
 // (1) the authoritative NODES row in the cache, if the cache has ANY row for
-// the node: the snapshot then contributes nothing (a newer, terminal or
-// unusable cache row can never be out-ranked or bypassed by it);
-// (2) otherwise the accepted bootstrap snapshot's own NODES row may supply the
-// dial address, matched to its own incarnation (breaks the initial
-// connection circularity before the cache is hydrated);
-// (3) otherwise unavailable. The snapshot only lets a connection be
-// attempted: resolution results carry no READY, routing, placement,
+// the node (any status or incarnation): the cache owner alone decides (its
+// current endpoint, or unavailable) and the bootstrap response contributes
+// nothing (a newer, terminal or unusable cache row can never be out-ranked or
+// bypassed by it, neither by the snapshot nor by the seed pin);
+// (2) otherwise the bootstrap response may supply a dial address: the seed
+// pin (bootstrapResponse.seedNodeWsAddress, the seed's self-advertised
+// ingress) for the seed, or the accepted bootstrap snapshot's own NODES row
+// matched to its own incarnation (breaks the initial connection circularity
+// before the cache is hydrated);
+// (3) otherwise unavailable. The bootstrap response only lets a connection
+// be attempted: resolution results carry no READY, routing, placement,
 // lifecycle, incarnation or write authority, and every consumer only dials.
 // Callers pass only the accepted bootstrap response (contact-seed-phase
 // setBootstrapResponse, scoped by the mesh bootstrap address scope).
-function getBootstrapSnapshotEndpointRows(bootstrapResponse, targetNodeId,
-  systemTableCache) {
-  if (getAuthoritativeNodeRow(systemTableCache, targetNodeId)) {
-    return [];
-  }
+function getBootstrapSnapshotEndpointRows(bootstrapResponse, targetNodeId) {
   const snapshots = bootstrapResponse?.systemTableSnapshots;
   const snapshotNodeRow = (snapshots?.[TABLES.NODES] || []).find((row) =>
     row?.[COLUMN.NODE_ID] === targetNodeId) || null;
@@ -452,6 +448,62 @@ function getBootstrapSnapshotEndpointRows(bootstrapResponse, targetNodeId,
     targetNodeId,
     snapshotNodeRow,
   );
+}
+
+function resolvedEndpointAddress(address, evidenceSource) {
+  return Object.freeze({
+    state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
+    address: normalizeToWebSocketAddress(address) || address,
+    authority:
+      NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY.CANONICAL_NODE_ENDPOINT,
+    evidenceSource,
+  });
+}
+
+function isNonEmptyAddress(address) {
+  return typeof address === 'string' && address.length > 0;
+}
+
+const CANONICAL_METADATA_MISSING_RESULT = Object.freeze({
+  state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.UNAVAILABLE,
+  reason:
+    NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON.CANONICAL_METADATA_MISSING,
+});
+
+// F-R1 (1): the cache holds a NODES row for the target, so the cache owner
+// decides alone.
+function resolveFromCacheNodeRow(systemTableCache, targetNodeId, nodeRow) {
+  const address = getCacheEndpointRows(
+    systemTableCache, targetNodeId, nodeRow)[0]?.[COLUMN.ADDRESS];
+  return isNonEmptyAddress(address) ?
+    resolvedEndpointAddress(address,
+      NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE.SYSTEM_TABLE_CACHE) :
+    CANONICAL_METADATA_MISSING_RESULT;
+}
+
+// F-R1 (2)/(3): the cache has no NODES row for the target; the bootstrap
+// response may supply a dial address only.
+function resolveFromBootstrapDiscovery(bootstrapResponse, targetNodeId) {
+  if (targetNodeId === bootstrapResponse?.seedNodeId &&
+      isNonEmptyAddress(bootstrapResponse?.seedNodeWsAddress)) {
+    return Object.freeze({
+      state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
+      address: bootstrapResponse.seedNodeWsAddress,
+      authority:
+        NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY
+          .NORMALIZED_BOOTSTRAP_SEED,
+      evidenceSource:
+        NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE
+          .BOOTSTRAP_SEED_INGRESS,
+    });
+  }
+  const address = getBootstrapSnapshotEndpointRows(
+    bootstrapResponse, targetNodeId)[0]?.[COLUMN.ADDRESS];
+  return isNonEmptyAddress(address) ?
+    resolvedEndpointAddress(address,
+      NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE
+        .BOOTSTRAP_SNAPSHOT_NODE_ENDPOINTS) :
+    CANONICAL_METADATA_MISSING_RESULT;
 }
 
 function resolveNodeWebSocketAddress(options = {}) {
@@ -467,76 +519,12 @@ function resolveNodeWebSocketAddressResult(options = {}) {
     });
   }
 
-  const bootstrapResponse = options.bootstrapResponse;
-  const systemTableCache = options.systemTableCache;
-  const cacheEndpointRows =
-    getCacheEndpointRows(systemTableCache, targetNodeId);
-  const cacheEndpointAddress = cacheEndpointRows[0]?.[COLUMN.ADDRESS];
-  const hasCanonicalCacheRow =
-    typeof cacheEndpointAddress === 'string' &&
-    cacheEndpointAddress.length > 0;
-
-  // The seed pin (bootstrapResponse.seedNodeWsAddress) and the canonical
-  // node_endpoints cache row are the SAME self-advertised value; the pin is a
-  // point-in-time bootstrap snapshot while the cache row is CDC-updated. When a
-  // seed restarts with a new address, a peer's held bootstrapResponse goes
-  // stale, so the fresher canonical cache row must win. The seed pin remains the
-  // authority only during cold start, before CDC has populated the cache.
-  if (!hasCanonicalCacheRow &&
-      targetNodeId === bootstrapResponse?.seedNodeId &&
-      typeof bootstrapResponse?.seedNodeWsAddress === 'string' &&
-      bootstrapResponse.seedNodeWsAddress.length > 0) {
-    return Object.freeze({
-      state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
-      address: bootstrapResponse.seedNodeWsAddress,
-      authority:
-        NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY
-          .NORMALIZED_BOOTSTRAP_SEED,
-      evidenceSource:
-        NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE
-          .BOOTSTRAP_SEED_INGRESS,
-    });
-  }
-
-  if (hasCanonicalCacheRow) {
-    return Object.freeze({
-      state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
-      address:
-        normalizeToWebSocketAddress(cacheEndpointAddress) ||
-        cacheEndpointAddress,
-      authority:
-        NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY
-          .CANONICAL_NODE_ENDPOINT,
-      evidenceSource:
-        NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE.SYSTEM_TABLE_CACHE,
-    });
-  }
-
-  const bootstrapEndpointRows = getBootstrapSnapshotEndpointRows(
-    bootstrapResponse, targetNodeId, systemTableCache);
-  const bootstrapEndpointAddress =
-    bootstrapEndpointRows[0]?.[COLUMN.ADDRESS];
-  if (typeof bootstrapEndpointAddress === 'string' &&
-      bootstrapEndpointAddress.length > 0) {
-    return Object.freeze({
-      state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
-      address:
-        normalizeToWebSocketAddress(bootstrapEndpointAddress) ||
-        bootstrapEndpointAddress,
-      authority:
-        NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY
-          .CANONICAL_NODE_ENDPOINT,
-      evidenceSource:
-        NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE
-          .BOOTSTRAP_SNAPSHOT_NODE_ENDPOINTS,
-    });
-  }
-
-  return Object.freeze({
-    state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.UNAVAILABLE,
-    reason:
-      NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON.CANONICAL_METADATA_MISSING,
-  });
+  const cacheNodeRow =
+    getAuthoritativeNodeRow(options.systemTableCache, targetNodeId);
+  return cacheNodeRow ?
+    resolveFromCacheNodeRow(
+      options.systemTableCache, targetNodeId, cacheNodeRow) :
+    resolveFromBootstrapDiscovery(options.bootstrapResponse, targetNodeId);
 }
 
 export {

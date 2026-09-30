@@ -20,6 +20,8 @@ import {applyUnifiedRebalancerCriticalTopologyMethods} from
   '../../src/rebalancer/unified-rebalancer-critical-topology-methods.js';
 import {registeredNodeRow} from '../test-helpers/endpoint-incarnation-fixture.js';
 import {
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY,
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE,
   NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
   resolveNodeWebSocketAddressResult,
 } from '../../src/transport/node-address-resolution.js';
@@ -242,3 +244,80 @@ test('F-R1 (6): after cache hydration the snapshot row is no longer ' +
     'the route comes from the cache owner');
   t.end();
 });
+
+// F-R1 applies to the seed pin too (owner decision 2026-09-30, D4): the
+// bootstrap response's seed ingress address is discovery-only. It supplies a
+// dial address only when the cache has no NODES row for the seed; any cache
+// NODES row (any status, any incarnation) makes the cache owner decide.
+const PIN_ADDRESS = 'ws://old-seed:8082';
+
+function seedPinned(snapshot) {
+  return {...(snapshot ?? {systemTableSnapshots: {}}), seedNodeId: NODE_ID,
+    seedNodeWsAddress: PIN_ADDRESS};
+}
+
+test('F-R1 (7) seed pin: with no cache NODES row the pin supplies the dial ' +
+  'address (discovery only)', (t) => {
+  t.match(resolveWith(new SystemTableCache(), seedPinned(null)),
+    {state: 'resolved', address: PIN_ADDRESS,
+      authority: NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY
+        .NORMALIZED_BOOTSTRAP_SEED,
+      evidenceSource: NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE
+        .BOOTSTRAP_SEED_INGRESS});
+  t.end();
+});
+
+test('F-R1 (8) seed pin: a cache NODES G2 row (stopped, no endpoint) makes ' +
+  'the seed unavailable; the pin is never used', (t) => {
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(TABLES.NODES, 'INSERT',
+    registeredNodeRow(NODE_ID, G2, {status: 'stopped',
+      connection_state: 'disconnected'}));
+  const resolution = resolveWith(cache, seedPinned(snapshotOf(G1, [G1])));
+  t.equal(resolution.state, UNAVAILABLE, 'the cache owner decided: no route');
+  t.not(resolution.address, PIN_ADDRESS, 'the pin is not a bypass');
+  t.end();
+});
+
+test('F-R1 (9) seed pin: a cache NODES row with no current endpoint beats ' +
+  'the pin at any status', (t) => {
+  for (const status of ['active', 'joining', 'stopped']) {
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT',
+      registeredNodeRow(NODE_ID, G2, {status}));
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+      nodeEndpoint(G1));
+    t.equal(resolveWith(cache, seedPinned(null)).state, UNAVAILABLE,
+      `${status} G2 row with only a stale G1 endpoint: no pin fallback`);
+  }
+  t.end();
+});
+
+test('F-R1 (10) seed pin: a cache NODES G2 row with a current endpoint ' +
+  'wins over the pin', (t) => {
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(TABLES.NODES, 'INSERT', readyNode(G2));
+  cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT',
+    nodeEndpoint(G2));
+  t.match(resolveWith(cache, seedPinned(null)),
+    {state: 'resolved', address: 'ws://g2-host:8082',
+      evidenceSource: 'system_table_cache'});
+  t.end();
+});
+
+test('F-R1 (11) seed pin: the pin mints no READY or routing authority',
+  (t) => {
+    const cache = new SystemTableCache();
+    const resolution = resolveWith(cache, seedPinned(null));
+    t.equal(resolution.state, 'resolved', 'a dial may be attempted');
+    t.not(resolution.authority,
+      NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY.CANONICAL_NODE_ENDPOINT,
+      'the pin is never labelled a canonical endpoint');
+    t.equal(resolveWith(cache, undefined).state, UNAVAILABLE,
+      'routing (the cache-only resolver) has no route from the pin');
+    t.equal(cache.get(TABLES.NODES, NODE_ID) ?? null, null,
+      'no NODES row (incarnation, READY, eligibility) was minted');
+    t.same(resolveProjectedActiveNodeIds({nodeRows: [], nowMs: Date.now(),
+      nodeEndpointRows: []}), [], 'the pin is not active-node evidence');
+    t.end();
+  });

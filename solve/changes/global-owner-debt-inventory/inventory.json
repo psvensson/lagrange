@@ -5,8 +5,8 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 423627,
-        "sha256": "da7b46cf7d9f42b0b18e982d7c53dae640d111669b442b01f75dd65fc6cd07ab"
+        "bytes": 423403,
+        "sha256": "0ccdb1a4643e17889b7ac9f4278c33e0a4764c9720f35ca914b58ec4bf5c1c69"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -21,7 +21,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2661015,
-        "sha256": "49c13a51e8244da4e451170fdf0c91a33e10bee07f2caa6aad26bca12fcb18a9"
+        "sha256": "0b797000cb9b5b94ba77da36d0aee7ce2dbaf1eb618c40b3d797ad82039baadd"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "1c348a7d18b3c48650fe4e2aae83627507f392698f474fc8f15189c97eb8a301"
+        "sha256": "ec3858bb102bfde323b58292a2ea54dbdbb72de2e7f769654c1db9fbf8f19a10"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "6bee2bece296134098eac9c379aabd1b04d211b232e202c5b07709087795401f"
+        "sha256": "92a4bbdd4fdffbc0201bcc0ebdc447556755a3b81cd39fc77e70cb0fc8223fc1"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,18 +62,18 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "e11030dbdedd10387f489df0f1946c59884ce35f5fb0e99f054796c16d8c5860"
+    "inputDigest": "dfefc5631d1305e7db579d1ffadaa1c532dfe8a41449c90c9caab89c1f7c82c9"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 423627,
-        "sha256": "da7b46cf7d9f42b0b18e982d7c53dae640d111669b442b01f75dd65fc6cd07ab"
+        "bytes": 423403,
+        "sha256": "0ccdb1a4643e17889b7ac9f4278c33e0a4764c9720f35ca914b58ec4bf5c1c69"
       },
-      "declaredCount": 1795,
-      "observedCount": 1795,
-      "assignedCount": 1795
+      "declaredCount": 1794,
+      "observedCount": 1794,
+      "assignedCount": 1794
     },
     "cognitive": {
       "identity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "1c348a7d18b3c48650fe4e2aae83627507f392698f474fc8f15189c97eb8a301"
+          "sha256": "ec3858bb102bfde323b58292a2ea54dbdbb72de2e7f769654c1db9fbf8f19a10"
         },
         "cloneGroups": 54,
         "duplicatedLines": 1731,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "6bee2bece296134098eac9c379aabd1b04d211b232e202c5b07709087795401f"
+          "sha256": "92a4bbdd4fdffbc0201bcc0ebdc447556755a3b81cd39fc77e70cb0fc8223fc1"
         },
         "cloneGroups": 765,
         "duplicatedLines": 29402,
@@ -168,28 +168,28 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2661015,
-        "sha256": "49c13a51e8244da4e451170fdf0c91a33e10bee07f2caa6aad26bca12fcb18a9"
+        "sha256": "0b797000cb9b5b94ba77da36d0aee7ce2dbaf1eb618c40b3d797ad82039baadd"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "8c1d806361ddfe87e4b5df23e826f5d7e49f0ca61e8964f2ba7be84b5ac08299",
+      "sourceDigest": "7f31394a40ea196d84d73d974a4c5ede416b13143429e917d2a6ac1cc21a313b",
       "moduleCount": 5102,
       "edgeCount": 24799,
       "unresolvedCount": 35
     }
   },
   "assignment": {
-    "sourceSignalCount": 2596,
-    "assignedSignalCount": 2596,
-    "uniqueAssignmentCount": 2596,
-    "digest": "35d642834405405aaa86d6e0446377896de92d49cb880cfdb1753dc74183d65b"
+    "sourceSignalCount": 2595,
+    "assignedSignalCount": 2595,
+    "uniqueAssignmentCount": 2595,
+    "digest": "f1ddd3978e9685ee6b001dea551d9daaf1ba7a1bdbaf33fb18c5d8a2121f6397"
   },
   "signalCounts": {
     "cognitive": 155,
-    "complexity": 1795,
+    "complexity": 1794,
     "duplication": 559,
     "fileSize": 48,
     "lintExclusion": 39
@@ -1763,33 +1763,6 @@
       ]
     },
     {
-      "key": "area:src/transport",
-      "owner": null,
-      "boundary": "src/transport",
-      "classification": "owner-area-fallback",
-      "ownerAreas": [
-        "src/transport"
-      ],
-      "fileCount": 4,
-      "signalCount": 7,
-      "complexity": 4,
-      "cognitive": 1,
-      "oversizedFiles": 0,
-      "duplicatedLines": 76,
-      "cloneTouches": 3,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 22,
-      "importOut": 19,
-      "score": 31.6,
-      "topPaths": [
-        "src/transport/router-message-handler.js",
-        "src/transport/node-address-resolution.js",
-        "src/transport/websocket-transport.js",
-        "src/transport/router-server-manager.js"
-      ]
-    },
-    {
       "key": "area:scripts/checks",
       "owner": null,
       "boundary": "scripts/checks",
@@ -1869,6 +1842,33 @@
         "src/live-query/live-query-startup-wiring.js",
         "src/live-query/live-query-group.js",
         "src/live-query/live-query-service.js"
+      ]
+    },
+    {
+      "key": "area:src/transport",
+      "owner": null,
+      "boundary": "src/transport",
+      "classification": "owner-area-fallback",
+      "ownerAreas": [
+        "src/transport"
+      ],
+      "fileCount": 4,
+      "signalCount": 6,
+      "complexity": 3,
+      "cognitive": 1,
+      "oversizedFiles": 0,
+      "duplicatedLines": 76,
+      "cloneTouches": 3,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 22,
+      "importOut": 19,
+      "score": 27.6,
+      "topPaths": [
+        "src/transport/router-message-handler.js",
+        "src/transport/node-address-resolution.js",
+        "src/transport/websocket-transport.js",
+        "src/transport/router-server-manager.js"
       ]
     },
     {
