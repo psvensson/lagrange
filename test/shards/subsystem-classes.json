@@ -8,7 +8,7 @@
     "cdc-metadata": 56,
     "cli-tooling": 96,
     "control-plane": 190,
-    "convergence-topology": 91,
+    "convergence-topology": 92,
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2126,
-  "digest": "fnv1a32-3b40788f",
+  "censusSize": 2127,
+  "digest": "fnv1a32-0b23a1f5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-be06516a",
+  "observationDigest": "fnv1a32-ab3138cc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1955,6 +1955,7 @@
     "test/simulation/formation-sim-bootstrap-owner-entry.test.js": "convergence-topology",
     "test/simulation/formation-sim-charged-seed-host.test.js": "convergence-topology",
     "test/simulation/formation-sim-connection-environment.test.js": "convergence-topology",
+    "test/simulation/formation-sim-critical-spread-replay.test.js": "convergence-topology",
     "test/simulation/formation-sim-instant-closure.test.js": "convergence-topology",
     "test/simulation/formation-sim-production-bootstrap-phase-one.test.js": "convergence-topology",
     "test/simulation/formation-sim-production-five-node-composition.test.js": "convergence-topology",
@@ -9253,6 +9254,20 @@
     "test/simulation/formation-sim-connection-environment.test.js": {
       "files": [
         "src/diagnostics/formation-turn-attribution.js"
+      ]
+    },
+    "test/simulation/formation-sim-critical-spread-replay.test.js": {
+      "files": [
+        "src/control-plane/active-node-publication-snapshots.js",
+        "src/control-plane/control-plane-gateway-registry.js",
+        "src/control-plane/control-plane-publications-leadership.js",
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/diagnostics/formation-turn-attribution.js",
+        "test/simulation/formation-sim-infrastructure-composition.js"
+      ],
+      "directories": [
+        "test/simulation/calibration/critical-spread-scenarios"
       ]
     },
     "test/simulation/formation-sim-instant-closure.test.js": {

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1863,
+    "unit": 1864,
     "integration": 75,
     "bootstrap": 181,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2126,
-  "digest": "fnv1a32-6da4e76a",
+  "censusSize": 2127,
+  "digest": "fnv1a32-e9cc2979",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1936,6 +1936,7 @@
     "test/simulation/formation-sim-bootstrap-owner-entry.test.js": "unit",
     "test/simulation/formation-sim-charged-seed-host.test.js": "unit",
     "test/simulation/formation-sim-connection-environment.test.js": "unit",
+    "test/simulation/formation-sim-critical-spread-replay.test.js": "unit",
     "test/simulation/formation-sim-instant-closure.test.js": "unit",
     "test/simulation/formation-sim-production-bootstrap-phase-one.test.js": "unit",
     "test/simulation/formation-sim-production-five-node-composition.test.js": "unit",

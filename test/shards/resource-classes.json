@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2109,
+    "ordinary": 2110,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2126,
-  "digest": "fnv1a32-f65d627e",
+  "censusSize": 2127,
+  "digest": "fnv1a32-5814401d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1935,6 +1935,7 @@
     "test/simulation/formation-sim-bootstrap-owner-entry.test.js": "ordinary",
     "test/simulation/formation-sim-charged-seed-host.test.js": "ordinary",
     "test/simulation/formation-sim-connection-environment.test.js": "ordinary",
+    "test/simulation/formation-sim-critical-spread-replay.test.js": "ordinary",
     "test/simulation/formation-sim-instant-closure.test.js": "ordinary",
     "test/simulation/formation-sim-production-bootstrap-phase-one.test.js": "ordinary",
     "test/simulation/formation-sim-production-five-node-composition.test.js": "ordinary",

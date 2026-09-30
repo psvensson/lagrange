@@ -24,10 +24,21 @@ const STATEMENT = /^\s*(select|insert|update|delete)\s+/iu;
 // The CDC owner writes publications with INSERT OR REPLACE (cdc-emitter):
 // an upsert by primary key.
 const INSERT_OR_REPLACE = /^\s*insert\s+or\s+replace\s+into\s+([a-z_]+)\s*\(([^)]*)\)/iu;
+// The rebalance coordinator creates operations with INSERT OR IGNORE: a row
+// whose key already exists is left as it is (SQLite's semantics).
+const INSERT_OR_IGNORE = /^\s*insert\s+or\s+ignore\s+into\s+([a-z_]+)\s*\(([^)]*)\)/iu;
 const SELECT_FROM = /\bfrom\s+([a-z_]+)/iu;
 const INSERT_INTO = /^\s*insert\s+into\s+([a-z_]+)\s*\(([^)]*)\)/iu;
-const UPDATE_SET = /^\s*update\s+([a-z_]+)\s+set\s+(.*?)\s+where\s+([a-z_]+)\s*=\s*\?/iu;
-const DELETE_FROM = /^\s*delete\s+from\s+([a-z_]+)\s+where\s+([a-z_]+)\s*=\s*\?/iu;
+// The owners write these statements as multi-line template literals, so the
+// SET clause spans newlines: without the dotAll flag the assignment group
+// stops at the first line break, the statement does not parse, and the write
+// silently reports "not a system table" instead of committing.
+const UPDATE_SET = /^\s*update\s+([a-z_]+)\s+set\s+(.*?)\s+where\s+([a-z_]+)\s*=\s*\?/isu;
+const DELETE_FROM = /^\s*delete\s+from\s+([a-z_]+)\s+where\s+([a-z_]+)\s*=\s*\?/isu;
+// A first-terminal-wins guard (rebalance coordinator: `... AND completed_at
+// IS NULL`) is SQLite's row filter, so the seam refuses the write when the
+// guarded column already holds a value, exactly as the engine would.
+const WHERE_IS_NULL_GUARD = /\band\s+([a-z_]+)\s+is\s+null/igsu;
 const WHERE_EQ = /\bwhere\s+([a-z_]+)\s*=\s*\?/iu;
 const COLUMN_SEPARATOR = ',';
 const ASSIGNMENT = /([a-z_]+)\s*=\s*\?/giu;
@@ -38,6 +49,8 @@ const KEY_FIELDS = Object.freeze({
   [SYSTEM_TABLE_NAME.SERVICES]: 'service_id',
   [SYSTEM_TABLE_NAME.REPLICA_OPERATIONS]: 'operation_id',
   [SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS]: 'publication_id',
+  // The coordinator reserves storage for an operation it creates.
+  [SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS]: 'reservation_id',
 });
 
 function tableOf(name) {
@@ -64,7 +77,8 @@ function selectRows(cache, sql, params) {
 
 function insertRow(cache, sql, params) {
   const upsert = INSERT_OR_REPLACE.exec(sql);
-  const match = upsert || INSERT_INTO.exec(sql);
+  const ignoring = INSERT_OR_IGNORE.exec(sql);
+  const match = upsert || ignoring || INSERT_INTO.exec(sql);
   const table = match ? tableOf(match[1]) : null;
   if (!table) return failure(`${UNKNOWN_TABLE_ERROR}${match ? match[1] : sql}`);
   const columns = arrayFilter(
@@ -73,10 +87,25 @@ function insertRow(cache, sql, params) {
   columns.forEach((column, index) => {
     row[stringToLowerCase(column)] = params[index];
   });
+  if (ignoring && cache.get(table, row[KEY_FIELDS[table]])) {
+    return {success: true, rows: [], affectedRows: 0};
+  }
   const replaces = upsert && cache.get(table, row[KEY_FIELDS[table]]);
   cache.applySystemTableChange(table,
     replaces ? CDC_OPERATION.UPDATE : CDC_OPERATION.INSERT, row);
   return {success: true, rows: [], affectedRows: 1};
+}
+
+// True when the statement carries an `AND <column> IS NULL` guard that the
+// stored row already violates.
+function guardedColumnsAlreadySet(sql, existing) {
+  WHERE_IS_NULL_GUARD.lastIndex = 0;
+  for (const guard of String(sql).matchAll(WHERE_IS_NULL_GUARD)) {
+    const column = stringToLowerCase(guard[1]);
+    const value = existing[column];
+    if (value !== null && value !== undefined) return true;
+  }
+  return false;
 }
 
 function updateRow(cache, sql, params) {
@@ -88,6 +117,9 @@ function updateRow(cache, sql, params) {
   const key = params[assignments.length];
   const existing = cache.get(table, key);
   if (!existing) return {success: true, rows: [], affectedRows: 0};
+  if (guardedColumnsAlreadySet(sql, existing)) {
+    return {success: true, rows: [], affectedRows: 0};
+  }
   const merged = {...existing};
   assignments.forEach((field, index) => {
     merged[field] = params[index];

@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "critical-spread-overflow-disagreement-replay",
+  "class": "fix",
+  "epic": "formation-seed-decoupling",
+  "statement": "The 2026-09-18 static reproduction of the critical-spread overflow disagreement produced the learner's refusal only from a synthetic input the live logs do not show, so it is a candidate mechanism, not an explanation. This quest replaces the snapshot with a replay. A scenario is a committed fixture extracted from one live run's artifacts: the priority-partition operations the seed's coordinator created and completed, in their live order with their live targets and outcomes, the membership publication, and the node readiness transitions, every entry citing its run id, node and log time. The replay drives that sequence through the real coordinator and planner on the simulator's seed host, delivers the rows the coordinator wrote to the other hosts' caches in the order it wrote them, and at each live promotion attempt runs a real learner PartitionService count check on the live target node. It sets no state the scenario does not cite: no hand-written node status, planning answer, summary or budget. Done when the seed's real planner, from replayed state, retains the spread-cure ADD at four voters on two nodes as live did; the 2026-09-15 scenario grants every promotion live granted; and, for a failing run whose artifacts carry the guard-input records that learner-promotion-guard-inputs-observed adds, the replay's guard inputs at the refused check equal the live ones on every decisive field and the refusal follows. If the honest replay grants where live refused, the result is a finding that names the first live input the hosts lack; nothing is tuned to emit the label.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/critical-spread-overflow-disagreement-replay/evidence/receipt.json",
+      "requiredReceipts": [
+        "scenario-fixtures-are-cited",
+        "planner-retains-the-cure-add-from-replayed-state",
+        "pass-scenario-grants-what-live-granted",
+        "fail-scenario-refuses-on-the-live-guard-inputs"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "cited-or-absent",
+      "statement": "Every row, operation, transition and delivery in a scenario fixture cites run id, node and log time; the replay reads nothing else as scenario input."
+    },
+    {
+      "id": "delivery-is-ordered-not-tuned",
+      "statement": "Cross-node row delivery is immediate and in write order by default; any lag is itself a cited scenario entry."
+    },
+    {
+      "id": "real-owners-decide",
+      "statement": "The planner's retention, the coordinator's admission and the learner's count check are the production owners' decisions on the hosts; the replay applies only the effects live applied (a completed operation's services rows) and never an owner's verdict."
+    },
+    {
+      "id": "test-only",
+      "statement": "No file under src/ changes."
+    }
+  ],
+  "sealedAt": "3e186639dafb8711db018bf286dd8b69fc48520a"
+}

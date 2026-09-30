@@ -1,0 +1,41 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "critical-spread-overflow-disagreement-replay",
+  "status": "fail",
+  "testFileDigests": {
+    "test/simulation/formation-sim-critical-spread-replay.test.js": "00d94be86d20084b9ebaa8a187522482a040629cbb0ff22454cacf3b74c4b173"
+  },
+  "generatedAt": "2026-09-19T05:47:31.151Z",
+  "receipts": [
+    {
+      "id": "scenario-fixtures-are-cited",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^scenario fixtures cite the run they came from$\" test/simulation/formation-sim-critical-spread-replay.test.js",
+      "detail": "every fixture entry cites its run id, node and log time",
+      "testFile": "test/simulation/formation-sim-critical-spread-replay.test.js"
+    },
+    {
+      "id": "planner-retains-the-cure-add-from-replayed-state",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the seed planner retains the spread-cure add from replayed state$\" test/simulation/formation-sim-critical-spread-replay.test.js",
+      "detail": "the real planner on the seed host retains the spread-cure ADD at target + 1 voters on fewer distinct nodes than required, as live did",
+      "failure": "1 test(s) failed",
+      "testFile": "test/simulation/formation-sim-critical-spread-replay.test.js"
+    },
+    {
+      "id": "pass-scenario-grants-what-live-granted",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the pass scenario grants every promotion live granted$\" test/simulation/formation-sim-critical-spread-replay.test.js",
+      "detail": "the real learner count check admits every promotion the 2026-09-15 run granted",
+      "testFile": "test/simulation/formation-sim-critical-spread-replay.test.js"
+    },
+    {
+      "id": "fail-scenario-refuses-on-the-live-guard-inputs",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the fail scenario refuses on the live guard inputs$\" test/simulation/formation-sim-critical-spread-replay.test.js",
+      "detail": "a failing run whose artifacts carry guard-input records replays to the same inputs and the same refusal",
+      "failure": "1 test(s) failed",
+      "testFile": "test/simulation/formation-sim-critical-spread-replay.test.js"
+    }
+  ]
+}
