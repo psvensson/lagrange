@@ -17,6 +17,7 @@ import {
   isExactReplicaHandlerRegistered,
   retireReplicaTransportHandler,
 } from '../../src/node/replica-transport-handler-identity.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const NODE_ID = 'node-a';
 const REPLICA_ID = 'p1-r1';
@@ -52,7 +53,8 @@ function createPresenceOnlyTransport() {
 test('Removal-8: an old generation shut down before registration never ' +
   'removes the new generation\'s handler', async (t) => {
   initializeEnvironment();
-  const router = new MessageRouter({nodeId: NODE_ID});
+  const router = new MessageRouter({nodeId: NODE_ID,
+    bootIncarnation: TEST_BOOT_INCARNATION});
   const stateMachine = new ReplicaStateMachine({nodeId: NODE_ID,
     controlPlaneSystemTableGateway: {}});
   // G1 never reached raft-init registration (transportHandler unset).
@@ -76,7 +78,8 @@ test('Removal-8: an old generation shut down before registration never ' +
 });
 
 test('Removal-8: exact removal removes only the exact handler', async (t) => {
-  const router = new MessageRouter({nodeId: NODE_ID});
+  const router = new MessageRouter({nodeId: NODE_ID,
+    bootIncarnation: TEST_BOOT_INCARNATION});
   const g1Handler = () => ({acknowledged: true});
   const g2Handler = () => ({acknowledged: true});
   router.register(ADDRESS, g1Handler);

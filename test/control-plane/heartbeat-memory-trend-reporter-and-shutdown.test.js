@@ -504,8 +504,9 @@ async (t) => {
   try {
     await t.rejects(
       service.sendHeartbeat(null, ['partition_replica']),
-      {code: 'refused_source_changed'},
-      'READY is published only from a JOINING or ACTIVE source row',
+      {code: 'refused_terminal_state'},
+      'a STOPPED row of this boot is a typed terminal refusal: READY is ' +
+          'published only from a JOINING or ACTIVE source row',
     );
     t.equal(nodeUpdates.length, 0,
       'a terminal STOPPED row is re-admitted by registration, never by a ' +

@@ -178,8 +178,10 @@ const RATCHET_TARGETS = [
     // lifecycle owner witness (F3) and the required boot incarnation contract.
     // 2026-09-30: tightened 771/29548 -> 765/29409 after the boot lifecycle
     // components took one test incarnation value owner.
+    // 2026-09-30: tightened 765/29409 -> 765/29402 on the round-8 combined
+    // tree (Track A boot incarnation + Track B handler identity).
     baselineCloneGroupCount: 765,
-    baselineDuplicatedLineCount: 29409,
+    baselineDuplicatedLineCount: 29402,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

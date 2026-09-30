@@ -27,6 +27,7 @@ import {
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {createLifecycleCdcService} from
   '../test-helpers/lifecycle-state-store.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const NODE_ID = 'node-a';
 const PARTITION_ID = 'p1';
@@ -49,7 +50,8 @@ async function createWorld() {
   const cdc = createLifecycleCdcService();
   const stateMachine = new ReplicaStateMachine({nodeId: NODE_ID,
     cdcIntegrationService: cdc});
-  const router = new MessageRouter({nodeId: NODE_ID});
+  const router = new MessageRouter({nodeId: NODE_ID,
+    bootIncarnation: TEST_BOOT_INCARNATION});
   const handler = new ReplicaHandler({nodeId: NODE_ID,
     systemTableCache: new SystemTableCache(), cdcIntegrationService: cdc,
     replicaStateMachine: stateMachine,
