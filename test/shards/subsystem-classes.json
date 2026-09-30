@@ -12,7 +12,7 @@
     "distributed-harness": 169,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 255,
+    "placement-rebalance": 256,
     "query-sql": 164,
     "release-packaging": 14,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2283,
-  "digest": "fnv1a32-b1918f5e",
+  "censusSize": 2284,
+  "digest": "fnv1a32-d7a28763",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-71623871",
+  "observationDigest": "fnv1a32-4cf47ef3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1578,6 +1578,7 @@
     "test/random/random-source.test.js": "runtime-primitives",
     "test/rebalancer/add-workflow-step-progression.property.test.js": "placement-rebalance",
     "test/rebalancer/admission-real-size-estimates.test.js": "placement-rebalance",
+    "test/rebalancer/application-write-formation-authority.test.js": "placement-rebalance",
     "test/rebalancer/assignment-epoch-fencing.test.js": "placement-rebalance",
     "test/rebalancer/assignment-epoch-manager.test.js": "placement-rebalance",
     "test/rebalancer/assignment-epoch.test.js": "placement-rebalance",
@@ -7960,6 +7961,7 @@
     "test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js": {
       "files": [
         "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation-admission.js",
         "src/rebalancer/rebalance-coordinator-operation-creation.js"
       ]
     },
@@ -8712,6 +8714,19 @@
         "src/rebalancer/rebalance-coordinator.js"
       ]
     },
+    "test/rebalancer/application-write-formation-authority.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/readiness-planning-version-contract.js",
+        "src/query/sql-query-engine-initial-partition-provisioning.js",
+        "src/rebalancer/provisioning-admission-policy.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository.js"
+      ],
+      "directories": [
+        "src"
+      ]
+    },
     "test/rebalancer/assignment-epoch-fencing.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -9457,6 +9472,7 @@
         "src/rebalancer/move-planner-move-calculation-methods.js",
         "src/rebalancer/operation-workflow-dispatch-epoch-gate.js",
         "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation-admission.js",
         "src/rebalancer/rebalance-coordinator-operation-creation.js",
         "src/rebalancer/rebalance-coordinator-owner-delegation-methods.js",
         "src/rebalancer/rebalance-coordinator-shared.js",
