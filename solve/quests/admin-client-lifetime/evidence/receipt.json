@@ -1,0 +1,11 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "red-before-fix-lifetime-witnesses", "passed": true},
+    {"id": "generation-close-admission-and-resource-plateau", "passed": true},
+    {"id": "existing-client-and-tail-consumer-contracts", "passed": false},
+    {"id": "independent-exact-content-review", "passed": false},
+    {"id": "static-selected-proof-and-duration-budgets", "passed": false}
+  ]
+}

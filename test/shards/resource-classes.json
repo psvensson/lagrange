@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2051,
+    "ordinary": 2052,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2068,
-  "digest": "fnv1a32-89dfc943",
+  "censusSize": 2069,
+  "digest": "fnv1a32-9a7eeabb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1648,6 +1648,7 @@
     "test/runtime/endpoint-sync-planner.test.js": "ordinary",
     "test/runtime/endpoint-sync-source-client.test.js": "ordinary",
     "test/runtime/endpoint-sync-source-query.test.js": "ordinary",
+    "test/runtime/formation-probe-cleanup.test.js": "ordinary",
     "test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js": "external-toolchain",
     "test/runtime/movielens-affinity-demo-wiring.test.js": "ordinary",
     "test/runtime/movielens-failure-report-participant-failures.test.js": "ordinary",

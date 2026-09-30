@@ -3,7 +3,9 @@ import {createWriteStream} from 'node:fs';
 import {mkdir, readFile, rm} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
-import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
+import {
+  AdminWsClient, withAdminWsClient, rethrowIfAdminCleanupIncomplete,
+} from '../../scripts/examples/admin-ws-client.js';
 import {DEFAULT_TARGET} from './lagrange-loader.js';
 
 const DEFAULT_NODE_COUNT = 5;
@@ -55,12 +57,10 @@ async function startLocalNode(index, dataRoot) {
 
 async function queryRows(target, sql) {
   const client = new AdminWsClient({target, timeoutMs: 10000});
-  try {
+  return withAdminWsClient(client, async () => {
     const result = await client.query(sql);
     return result?.results || result?.rows || [];
-  } finally {
-    await client.close();
-  }
+  });
 }
 
 async function waitForAdmin(target, timeoutMs = 60000) {
@@ -71,6 +71,7 @@ async function waitForAdmin(target, timeoutMs = 60000) {
       await queryRows(target, 'SELECT 1');
       return;
     } catch (error) {
+      rethrowIfAdminCleanupIncomplete(error);
       lastError = error;
       await sleep(1000);
     }
@@ -88,7 +89,8 @@ async function waitForClusterSize(target, expectedCount) {
     let rows = [];
     try {
       rows = await queryRows(target, 'SELECT node_id, status FROM nodes');
-    } catch {
+    } catch (error) {
+      rethrowIfAdminCleanupIncomplete(error);
       rows = [];
     }
     const active = rows.filter((row) => row.status === NODE_STATUS_ACTIVE);

@@ -1,4 +1,5 @@
 import {ADMIN_CONTROL_SNAPSHOT} from '../../src/admin/admin-constants.js';
+import {rethrowIfAdminCleanupIncomplete} from '../../scripts/examples/admin-ws-client.js';
 import {
   buildLoadLaneTableAdmissionProbeSql,
 } from '../../src/admin/load-lane-table-admission-probe.js';
@@ -338,6 +339,7 @@ async function observeControlSnapshot(options, target, timeoutMs) {
       timeoutMs,
     });
   } catch (error) {
+    rethrowIfAdminCleanupIncomplete(error);
     snapshotResult = {rows: []};
     snapshotError = String(error?.message || error);
   }
@@ -359,6 +361,7 @@ async function observeControlSnapshot(options, target, timeoutMs) {
         snapshotRow = resolveRows(snapshotResult)[ZERO];
         readyLeaseAgeWitness = resolveReadyLeaseAgeWitness(snapshotRow);
       } catch (error) {
+        rethrowIfAdminCleanupIncomplete(error);
         snapshotRow = null;
         snapshotError = String(error?.message || error);
       }
@@ -554,6 +557,7 @@ async function observePreloadAdmission(options, targets, probeSql, deadlineMs) {
       targets,
     );
   } catch (error) {
+    rethrowIfAdminCleanupIncomplete(error);
     return buildPreloadEvidence(
       snapshot,
       buildLoadLaneAdmission(

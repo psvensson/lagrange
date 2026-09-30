@@ -4,7 +4,9 @@ import {dirname, resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {fileURLToPath} from 'node:url';
 import {STATE} from '../../src/constants/index.js';
-import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
+import {
+  AdminWsClient, withAdminWsClient, getAdminCleanupFailure, rethrowIfAdminCleanupIncomplete,
+} from '../../scripts/examples/admin-ws-client.js';
 import {CREATE_RATINGS_SQL} from './movie-ranking.js';
 import {queryRows, startCluster} from './cluster-harness.js';
 
@@ -18,6 +20,41 @@ import {queryRows, startCluster} from './cluster-harness.js';
 // noisy abort axes unrelated to the measured signal.
 
 const PROBE_ID = 'movielens-formation-schema-provisioning';
+const NO_PROBE_FAILURE = Symbol('no probe failure');
+const PROBE_CLEANUP_FAILURES = new WeakMap();
+
+function getFormationProbeCleanupFailure(error) {
+  return PROBE_CLEANUP_FAILURES.get(error) ?? null;
+}
+
+async function stopFormationProbeCluster(clusterHandle) {
+  try {
+    const stop = clusterHandle?.stop;
+    if (typeof stop !== 'function') return NO_PROBE_FAILURE;
+    await stop.call(clusterHandle);
+    return NO_PROBE_FAILURE;
+  } catch (error) {
+    return (typeof error === 'object' && error !== null) || typeof error === 'function' ?
+      error : new Error('Formation probe cleanup rejected a non-Error value', {cause: error});
+  }
+}
+
+function completeFormationProbe(primary, cleanup, result) {
+  if (primary === NO_PROBE_FAILURE) {
+    if (cleanup !== NO_PROBE_FAILURE) throw cleanup;
+    return result;
+  }
+  if (cleanup !== NO_PROBE_FAILURE) {
+    if ((typeof primary === 'object' && primary !== null) || typeof primary === 'function') {
+      PROBE_CLEANUP_FAILURES.set(primary, cleanup);
+    } else {
+      const combined = new AggregateError([primary, cleanup], 'Formation probe and teardown failed');
+      PROBE_CLEANUP_FAILURES.set(combined, cleanup);
+      throw combined;
+    }
+  }
+  throw primary;
+}
 // Exact emitted strings (see src/rebalancer/
 // rebalance-coordinator-ledger-interlock-admission.js, src/partition/
 // partition-service-shared.js, src/rebalancer/operation-workflow-owner-
@@ -79,7 +116,7 @@ async function createRatingsTable(target) {
   for (let attempt = 1; attempt <= CREATE_TABLE_MAX_ATTEMPTS; attempt += 1) {
     const client = new AdminWsClient({target});
     try {
-      await client.query(CREATE_RATINGS_SQL);
+      await withAdminWsClient(client, () => client.query(CREATE_RATINGS_SQL));
       return {
         ok: true,
         attempts: attempt,
@@ -87,13 +124,12 @@ async function createRatingsTable(target) {
         error: null,
       };
     } catch (error) {
+      rethrowIfAdminCleanupIncomplete(error);
       lastError = error;
       console.log(
         `CREATE TABLE attempt ${attempt}/${CREATE_TABLE_MAX_ATTEMPTS} ` +
         `failed: ${error?.message || error}`,
       );
-    } finally {
-      await client.close();
     }
     if (attempt < CREATE_TABLE_MAX_ATTEMPTS) {
       await sleep(CREATE_TABLE_RETRY_DELAY_MS);
@@ -145,7 +181,8 @@ async function pollRatingsPartitionsReady(target) {
     let rows = [];
     try {
       rows = await queryRows(target, PARTITIONS_SQL);
-    } catch {
+    } catch (error) {
+      rethrowIfAdminCleanupIncomplete(error);
       rows = [];
     }
     snapshot = summarizeRatingsPartitions(rows);
@@ -283,6 +320,8 @@ function resolveProbeResult(createTable, partitions) {
 async function runFormationProbe(options = null) {
   const resolvedOptions = options || parseProbeArgs(process.argv.slice(2));
   const clusterHandle = await startCluster(resolvedOptions);
+  let primary = NO_PROBE_FAILURE;
+  let summary;
   try {
     const {target} = clusterHandle;
     console.log('Creating ratings table (partition provisioning)...');
@@ -292,7 +331,7 @@ async function runFormationProbe(options = null) {
     console.log('Harvesting deferral counters from node logs...');
     const harvest = await harvestDeferralCounters(clusterHandle);
     const result = resolveProbeResult(createTable, partitions);
-    return {
+    summary = {
       probe: PROBE_ID,
       mode: clusterHandle.mode,
       target,
@@ -304,12 +343,11 @@ async function runFormationProbe(options = null) {
       countersError: harvest.error,
       result,
     };
-  } finally {
-    if (typeof clusterHandle?.stop === 'function') {
-      console.log('Stopping cluster...');
-      await clusterHandle.stop();
-    }
+  } catch (error) {
+    primary = error;
   }
+  const cleanup = await stopFormationProbeCluster(clusterHandle);
+  return completeFormationProbe(primary, cleanup, summary);
 }
 
 if (process.argv[1]?.includes('run-formation-probe.js')) {
@@ -325,6 +363,10 @@ if (process.argv[1]?.includes('run-formation-probe.js')) {
     })
     .catch((error) => {
       console.error(error);
+      const cleanup = getAdminCleanupFailure(error);
+      if (cleanup) console.error(cleanup);
+      const clusterCleanup = getFormationProbeCleanupFailure(error);
+      if (clusterCleanup) console.error(clusterCleanup);
       process.exitCode = 1;
     });
 }
@@ -333,6 +375,7 @@ export {
   DEFERRAL_COUNTER_STRINGS,
   PROBE_RESULT,
   countOccurrences,
+  getFormationProbeCleanupFailure,
   harvestDeferralCounters,
   parseProbeArgs,
   pollRatingsPartitionsReady,

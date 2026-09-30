@@ -1,0 +1,3052 @@
+TAP version 14
+# Subtest: confidence-adjusted ranking rewards supported quality rather than a single five-star vote
+    ok 1 - Bayesian support and confidence penalty defeat the one-vote winner
+    ok 2 - the shared PostgreSQL/Lagrange SQL projection uses the richer score
+    1..2
+ok 1 - confidence-adjusted ranking rewards supported quality rather than a single five-star vote # time=2.037ms
+
+# Subtest: replica reduction implements the exact shared ranking formula
+    ok 1 - service replicas and grouped-SQL paths produce the same order
+    ok 2 - rank 1 score is identical
+    ok 3 - rank 2 score is identical
+    ok 4 - rank 3 score is identical
+    1..4
+ok 2 - replica reduction implements the exact shared ranking formula # time=1.24ms
+
+# Subtest: service and grouped-SQL ranking share the movie-id tie-break
+    ok 1 - fixture reaches the exact-score tie
+    ok 2 - should be equivalent
+    ok 3 - shared movie-id order cannot diverge at the top-N boundary
+    1..3
+ok 3 - service and grouped-SQL ranking share the movie-id tie-break # time=4.756ms
+
+# Subtest: confidence-adjusted runtime config is explicit and validated
+    ok 1 - implicit ranking priors are rejected
+    ok 2 - the documented ranking policy is accepted
+    1..2
+ok 4 - confidence-adjusted runtime config is explicit and validated # time=3.978ms
+
+# Subtest: three-way report compares correctness and transfer shape without a misleading speedup
+    ok 1 - should be equal
+    ok 2 - the report refuses an apples-to-oranges speedup ratio
+    ok 3 - bounded service exchange is explicit
+    ok 4 - should be equal
+    1..4
+ok 5 - three-way report compares correctness and transfer shape without a misleading speedup # time=0.483ms
+
+# Subtest: PostgreSQL baseline fails closed on replica readiness and emits machine-parseable status SQL
+    ok 1 - a claimed three-node baseline cannot silently run primary-only
+    ok 2 - tuples-only unaligned output makes replica counts parseable
+    1..2
+ok 6 - PostgreSQL baseline fails closed on replica readiness and emits machine-parseable status SQL # time=0.565ms
+
+# Subtest: Lagrange loader confirms one atomic ratings policy through durable CREATE
+    ok 1 - should be equivalent
+    ok 2 - should be equal
+    ok 3 - each durable confirmation uses and closes a fresh admin session
+    ok 4 - should be equivalent
+    ok 5 - should be equivalent
+    ok 6 - the split-capable Lagrange table has one deterministic partition key
+    ok 7 - the sparse teaching policy is part of the durable CREATE intent
+    ok 8 - the loader cannot race CREATE with cache-backed policy SQL
+    1..8
+ok 7 - Lagrange loader confirms one atomic ratings policy through durable CREATE # time=2.715ms
+
+# Subtest: MovieLens durable CREATE confirmation resets after a transport failure
+    ok 1 - should be equivalent
+    ok 2 - should be equal
+    ok 3 - the failed durable replay also closes its client
+    ok 4 - a failure between successes resets stable confirmation
+    1..4
+ok 8 - MovieLens durable CREATE confirmation resets after a transport failure # time=3.337ms
+
+# Subtest: MovieLens durable CREATE retries a typed ambiguous admin timeout on fresh bounded sessions
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - the caller response deadline crosses the websocket owner boundary
+    ok 6 - the real timer removes the expired request before rejecting
+    ok 7 - the canonical retry owner receives the real typed timeout
+    ok 8 - a late result cannot resurrect or satisfy the expired attempt
+    ok 9 - the retry witness comes from the AdminWsClient timer seam
+    ok 10 - should be equal
+    ok 11 - should be equivalent
+    ok 12 - should be equal
+    ok 13 - every ambiguous or confirming attempt closes its fresh session
+    ok 14 - each attempt deadline is shorter than the non-resetting outer budget
+    ok 15 - the timeout resets the first confirmation before two new READY results
+    ok 16 - typed timeout replay and confirmations remain inside the outer budget
+    1..16
+ok 9 - MovieLens durable CREATE retries a typed ambiguous admin timeout on fresh bounded sessions # time=32.729ms
+
+# Subtest: AdminWsClient bounds a stalled websocket opening and releases it
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - the canonical retry owner accepts the typed opening timeout
+    ok 6 - the stalled opening rejects inside a bounded real deadline
+    ok 7 - no opened socket is retained
+    ok 8 - the opening socket is released
+    ok 9 - the opening promise is released
+    ok 10 - should be equal
+    ok 11 - a later attempt owns a fresh timeout
+    ok 12 - a later attempt opens a fresh TCP session
+    ok 13 - the repeated timeout also releases socket ownership
+    1..13
+ok 10 - AdminWsClient bounds a stalled websocket opening and releases it # time=206.248ms
+
+# Subtest: MovieLens durable CREATE does not replay a hard validation error
+    ok 1 - expected to reject
+    ok 2 - a non-retryable failure stops at the existing owner boundary
+    ok 3 - the terminal attempt still closes its admin session
+    1..3
+ok 11 - MovieLens durable CREATE does not replay a hard validation error # time=1.348ms
+
+# Subtest: MovieLens durable CREATE confirmation resets after typed pending
+    ok 1 - should be equivalent
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - pending resets the streak before two new ready outcomes
+    1..4
+ok 12 - MovieLens durable CREATE confirmation resets after typed pending # time=0.926ms
+
+# Subtest: MovieLens durable CREATE confirmation exhausts at its time bound
+    ok 1 - the terminal incomplete confirmation is surfaced loudly
+    ok 2 - the canonical owner creates no fresh client at its virtual deadline
+    ok 3 - should be equal
+    ok 4 - each fresh session is capped by the canonical remaining budget
+    1..4
+ok 13 - MovieLens durable CREATE confirmation exhausts at its time bound # time=1.022ms
+
+# Subtest: MovieLens durable CREATE confirmation never counts typed pending
+    ok 1 - expected to reject
+    ok 2 - pending-only replay creates no client after deadline exhaustion
+    ok 3 - should be equal
+    1..3
+ok 14 - MovieLens durable CREATE confirmation never counts typed pending # time=0.526ms
+
+# Subtest: MovieLens durable CREATE confirmation fails closed without metadata
+    ok 1 - expected to reject
+    ok 2 - an untyped response closes its session and cannot be retried as ready
+    1..2
+ok 15 - MovieLens durable CREATE confirmation fails closed without metadata # time=0.394ms
+
+# Subtest: AdminWsClient refuses invalid lifetime budgets before acquiring sockets
+    ok 1 - expected to throw
+    ok 2 - expected to throw
+    ok 3 - expected to throw
+    ok 4 - expected to throw
+    ok 5 - expected to throw
+    ok 6 - expected to throw
+    ok 7 - expected to throw
+    ok 8 - legacy zero selects the default without allocating a socket
+    1..8
+ok 16 - AdminWsClient refuses invalid lifetime budgets before acquiring sockets # time=0.924ms
+
+# Subtest: AdminWsClient close is single-flight and observes actual socket close
+    ok 1 - concurrent close calls share the exact retirement promise
+    ok 2 - successful cleanup certifies the owned socket is CLOSED, not merely CLOSING
+    ok 3 - should be equal
+    1..3
+ok 17 - AdminWsClient close is single-flight and observes actual socket close # time=2.849ms
+
+# Subtest: AdminWsClient revalidates a mutable opening budget before generation acquisition
+    not ok 1 - invalid capture must not acquire a socket
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 681
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:681:7)
+      source: >2
+            fixture.client.timeoutMs = timeoutMs;
+            const connecting = fixture.client.connect().catch((error) => error);
+            t.equal(fixture.client.openingSocket, null, 'invalid capture must not acquire a socket');
+        ------^
+            const result = await observeAdminOwner(connecting, 'invalid mutable opening budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+      diff: >
+        --- expected
+      
+        +++ actual
+      
+        @@ -1,1 +1,146 @@
+      
+        -null
+      
+        +WebSocket {
+      
+        +  "_events": Null Object {
+      
+        +    "open": Function onOpen(),
+      
+        +    "message": Function onMessage(data),
+      
+        +    "error": Function onError(error),
+      
+        +    "close": Function onClose(code, reason),
+      
+        +  },
+      
+        +  "_eventsCount": 4,
+      
+        +  "_maxListeners": undefined,
+      
+        +  "_binaryType": "nodebuffer",
+      
+        +  "_closeCode": 1006,
+      
+        +  "_closeFrameReceived": false,
+      
+        +  "_closeFrameSent": false,
+      
+        +  "_closeMessage": Buffer <>,
+      
+        +  "_closeTimer": null,
+      
+        +  "_errorEmitted": false,
+      
+        +  "_extensions": Object {},
+      
+        +  "_paused": false,
+      
+        +  "_protocol": "",
+      
+        +  "_readyState": 0,
+      
+        +  "_receiver": null,
+      
+        +  "_sender": null,
+      
+        +  "_socket": null,
+      
+        +  "_bufferedAmount": 0,
+      
+        +  "_isServer": false,
+      
+        +  "_redirects": 0,
+      
+        +  "_autoPong": true,
+      
+        +  "_closeTimeout": 50,
+      
+        +  "_url": "ws://127.0.0.1:40953/",
+      
+        +  "_req": ClientRequest {
+      
+        +    "_events": Null Object {
+      
+        +      "error": Function (err),
+      
+        +      "response": Function (res),
+      
+        +      "upgrade": Function (res, socket, head),
+      
+        +    },
+      
+        +    "_eventsCount": 3,
+      
+        +    "_maxListeners": undefined,
+      
+        +    "outputData": Array [
+      
+        +      Object {
+      
+        +        "data": String(
+      
+        +          GET / HTTP/1.1\r
+      
+        +          Sec-WebSocket-Version: 13\r
+      
+        +          Sec-WebSocket-Key: 5LhW4VAgPHw65tPGmrPrpA==\r
+      
+        +          Connection: Upgrade\r
+      
+        +          Upgrade: websocket\r
+      
+        +          Sec-WebSocket-Extensions: permessage-deflate;
+        client_max_window_bits\r
+      
+        +          Host: 127.0.0.1:40953\r
+      
+        +          \r
+      
+        +          
+      
+        +        ),
+      
+        +        "encoding": "latin1",
+      
+        +        "callback": Function bound onFinish(),
+      
+        +      },
+      
+        +    ],
+      
+        +    "outputSize": 224,
+      
+        +    "writable": true,
+      
+        +    "destroyed": false,
+      
+        +    "_last": true,
+      
+        +    "chunkedEncoding": false,
+      
+        +    "shouldKeepAlive": true,
+      
+        +    "maxRequestsOnConnectionReached": false,
+      
+        +    "_defaultKeepAlive": true,
+      
+        +    "useChunkedEncodingByDefault": false,
+      
+        +    "sendDate": false,
+      
+        +    "_removedConnection": false,
+      
+        +    "_removedContLen": false,
+      
+        +    "_removedTE": false,
+      
+        +    "strictContentLength": false,
+      
+        +    "_contentLength": 0,
+      
+        +    "_hasBody": true,
+      
+        +    "_trailer": "",
+      
+        +    "finished": true,
+      
+        +    "_headerSent": true,
+      
+        +    "_closed": false,
+      
+        +    "_header": String(
+      
+        +      GET / HTTP/1.1\r
+      
+        +      Sec-WebSocket-Version: 13\r
+      
+        +      Sec-WebSocket-Key: 5LhW4VAgPHw65tPGmrPrpA==\r
+      
+        +      Connection: Upgrade\r
+      
+        +      Upgrade: websocket\r
+      
+        +      Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r
+      
+        +      Host: 127.0.0.1:40953\r
+      
+        +      \r
+      
+        +      
+      
+        +    ),
+      
+        +    "_keepAliveTimeout": 0,
+      
+        +    "_onPendingData": Function nop(),
+      
+        +    "agent": undefined,
+      
+        +    "socketPath": undefined,
+      
+        +    "method": "GET",
+      
+        +    "maxHeaderSize": undefined,
+      
+        +    "insecureHTTPParser": undefined,
+      
+        +    "joinDuplicateHeaders": undefined,
+      
+        +    "path": "/",
+      
+        +    "_ended": false,
+      
+        +    "res": null,
+      
+        +    "aborted": false,
+      
+        +    "timeoutCb": null,
+      
+        +    "upgradeOrConnect": false,
+      
+        +    "parser": null,
+      
+        +    "maxHeadersCount": null,
+      
+        +    "reusedSocket": false,
+      
+        +    "host": "127.0.0.1",
+      
+        +    "protocol": "http:",
+      
+        +    [Symbol(shapeMode)]: false,
+      
+        +    [Symbol(kCapture)]: false,
+      
+        +    [Symbol(kBytesWritten)]: 0,
+      
+        +    [Symbol(kNeedDrain)]: false,
+      
+        +    [Symbol(corked)]: 0,
+      
+        +    [Symbol(kChunkedBuffer)]: Array [],
+      
+        +    [Symbol(kChunkedLength)]: 0,
+      
+        +    [Symbol(kSocket)]: null,
+      
+        +    [Symbol(kOutHeaders)]: Null Object {
+      
+        +      "sec-websocket-version": Array [
+      
+        +        "Sec-WebSocket-Version",
+      
+        +        13,
+      
+        +      ],
+      
+        +      "sec-websocket-key": Array [
+      
+        +        "Sec-WebSocket-Key",
+      
+        +        "5LhW4VAgPHw65tPGmrPrpA==",
+      
+        +      ],
+      
+        +      "connection": Array [
+      
+        +        "Connection",
+      
+        +        "Upgrade",
+      
+        +      ],
+      
+        +      "upgrade": Array [
+      
+        +        "Upgrade",
+      
+        +        "websocket",
+      
+        +      ],
+      
+        +      "sec-websocket-extensions": Array [
+      
+        +        "Sec-WebSocket-Extensions",
+      
+        +        "permessage-deflate; client_max_window_bits",
+      
+        +      ],
+      
+        +      "host": Array [
+      
+        +        "Host",
+      
+        +        "127.0.0.1:40953",
+      
+        +      ],
+      
+        +    },
+      
+        +    [Symbol(errored)]: null,
+      
+        +    [Symbol(kHighWaterMark)]: 65536,
+      
+        +    [Symbol(kRejectNonStandardBodyWrites)]: false,
+      
+        +    [Symbol(kUniqueHeaders)]: null,
+      
+        +  },
+      
+        +  [Symbol(shapeMode)]: false,
+      
+        +  [Symbol(kCapture)]: false,
+      
+        +}
+      ...
+    
+    not ok 2 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 683
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:683:7)
+      source: >2
+            t.equal(fixture.client.openingSocket, null, 'invalid capture must not acquire a socket');
+            const result = await observeAdminOwner(connecting, 'invalid mutable opening budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+        ------^
+            await observeAdminOwner(fixture.client.close(), 'invalid opening cleanup');
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_INVALID_TIMEOUT
+        +ADMIN_CONNECT_TIMEOUT
+      ...
+    
+    not ok 3 - invalid capture must not acquire a socket
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 681
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:681:7)
+      source: >2
+            fixture.client.timeoutMs = timeoutMs;
+            const connecting = fixture.client.connect().catch((error) => error);
+            t.equal(fixture.client.openingSocket, null, 'invalid capture must not acquire a socket');
+        ------^
+            const result = await observeAdminOwner(connecting, 'invalid mutable opening budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+      diff: >
+        --- expected
+      
+        +++ actual
+      
+        @@ -1,1 +1,146 @@
+      
+        -null
+      
+        +WebSocket {
+      
+        +  "_events": Null Object {
+      
+        +    "open": Function onOpen(),
+      
+        +    "message": Function onMessage(data),
+      
+        +    "error": Function onError(error),
+      
+        +    "close": Function onClose(code, reason),
+      
+        +  },
+      
+        +  "_eventsCount": 4,
+      
+        +  "_maxListeners": undefined,
+      
+        +  "_binaryType": "nodebuffer",
+      
+        +  "_closeCode": 1006,
+      
+        +  "_closeFrameReceived": false,
+      
+        +  "_closeFrameSent": false,
+      
+        +  "_closeMessage": Buffer <>,
+      
+        +  "_closeTimer": null,
+      
+        +  "_errorEmitted": false,
+      
+        +  "_extensions": Object {},
+      
+        +  "_paused": false,
+      
+        +  "_protocol": "",
+      
+        +  "_readyState": 0,
+      
+        +  "_receiver": null,
+      
+        +  "_sender": null,
+      
+        +  "_socket": null,
+      
+        +  "_bufferedAmount": 0,
+      
+        +  "_isServer": false,
+      
+        +  "_redirects": 0,
+      
+        +  "_autoPong": true,
+      
+        +  "_closeTimeout": 50,
+      
+        +  "_url": "ws://127.0.0.1:40953/",
+      
+        +  "_req": ClientRequest {
+      
+        +    "_events": Null Object {
+      
+        +      "error": Function (err),
+      
+        +      "response": Function (res),
+      
+        +      "upgrade": Function (res, socket, head),
+      
+        +    },
+      
+        +    "_eventsCount": 3,
+      
+        +    "_maxListeners": undefined,
+      
+        +    "outputData": Array [
+      
+        +      Object {
+      
+        +        "data": String(
+      
+        +          GET / HTTP/1.1\r
+      
+        +          Sec-WebSocket-Version: 13\r
+      
+        +          Sec-WebSocket-Key: tbUGT1hA5IMqWDckQJ2vrw==\r
+      
+        +          Connection: Upgrade\r
+      
+        +          Upgrade: websocket\r
+      
+        +          Sec-WebSocket-Extensions: permessage-deflate;
+        client_max_window_bits\r
+      
+        +          Host: 127.0.0.1:40953\r
+      
+        +          \r
+      
+        +          
+      
+        +        ),
+      
+        +        "encoding": "latin1",
+      
+        +        "callback": Function bound onFinish(),
+      
+        +      },
+      
+        +    ],
+      
+        +    "outputSize": 224,
+      
+        +    "writable": true,
+      
+        +    "destroyed": false,
+      
+        +    "_last": true,
+      
+        +    "chunkedEncoding": false,
+      
+        +    "shouldKeepAlive": true,
+      
+        +    "maxRequestsOnConnectionReached": false,
+      
+        +    "_defaultKeepAlive": true,
+      
+        +    "useChunkedEncodingByDefault": false,
+      
+        +    "sendDate": false,
+      
+        +    "_removedConnection": false,
+      
+        +    "_removedContLen": false,
+      
+        +    "_removedTE": false,
+      
+        +    "strictContentLength": false,
+      
+        +    "_contentLength": 0,
+      
+        +    "_hasBody": true,
+      
+        +    "_trailer": "",
+      
+        +    "finished": true,
+      
+        +    "_headerSent": true,
+      
+        +    "_closed": false,
+      
+        +    "_header": String(
+      
+        +      GET / HTTP/1.1\r
+      
+        +      Sec-WebSocket-Version: 13\r
+      
+        +      Sec-WebSocket-Key: tbUGT1hA5IMqWDckQJ2vrw==\r
+      
+        +      Connection: Upgrade\r
+      
+        +      Upgrade: websocket\r
+      
+        +      Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r
+      
+        +      Host: 127.0.0.1:40953\r
+      
+        +      \r
+      
+        +      
+      
+        +    ),
+      
+        +    "_keepAliveTimeout": 0,
+      
+        +    "_onPendingData": Function nop(),
+      
+        +    "agent": undefined,
+      
+        +    "socketPath": undefined,
+      
+        +    "method": "GET",
+      
+        +    "maxHeaderSize": undefined,
+      
+        +    "insecureHTTPParser": undefined,
+      
+        +    "joinDuplicateHeaders": undefined,
+      
+        +    "path": "/",
+      
+        +    "_ended": false,
+      
+        +    "res": null,
+      
+        +    "aborted": false,
+      
+        +    "timeoutCb": null,
+      
+        +    "upgradeOrConnect": false,
+      
+        +    "parser": null,
+      
+        +    "maxHeadersCount": null,
+      
+        +    "reusedSocket": false,
+      
+        +    "host": "127.0.0.1",
+      
+        +    "protocol": "http:",
+      
+        +    [Symbol(shapeMode)]: false,
+      
+        +    [Symbol(kCapture)]: false,
+      
+        +    [Symbol(kBytesWritten)]: 0,
+      
+        +    [Symbol(kNeedDrain)]: false,
+      
+        +    [Symbol(corked)]: 0,
+      
+        +    [Symbol(kChunkedBuffer)]: Array [],
+      
+        +    [Symbol(kChunkedLength)]: 0,
+      
+        +    [Symbol(kSocket)]: null,
+      
+        +    [Symbol(kOutHeaders)]: Null Object {
+      
+        +      "sec-websocket-version": Array [
+      
+        +        "Sec-WebSocket-Version",
+      
+        +        13,
+      
+        +      ],
+      
+        +      "sec-websocket-key": Array [
+      
+        +        "Sec-WebSocket-Key",
+      
+        +        "tbUGT1hA5IMqWDckQJ2vrw==",
+      
+        +      ],
+      
+        +      "connection": Array [
+      
+        +        "Connection",
+      
+        +        "Upgrade",
+      
+        +      ],
+      
+        +      "upgrade": Array [
+      
+        +        "Upgrade",
+      
+        +        "websocket",
+      
+        +      ],
+      
+        +      "sec-websocket-extensions": Array [
+      
+        +        "Sec-WebSocket-Extensions",
+      
+        +        "permessage-deflate; client_max_window_bits",
+      
+        +      ],
+      
+        +      "host": Array [
+      
+        +        "Host",
+      
+        +        "127.0.0.1:40953",
+      
+        +      ],
+      
+        +    },
+      
+        +    [Symbol(errored)]: null,
+      
+        +    [Symbol(kHighWaterMark)]: 65536,
+      
+        +    [Symbol(kRejectNonStandardBodyWrites)]: false,
+      
+        +    [Symbol(kUniqueHeaders)]: null,
+      
+        +  },
+      
+        +  [Symbol(shapeMode)]: false,
+      
+        +  [Symbol(kCapture)]: false,
+      
+        +}
+      ...
+    
+    not ok 4 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 683
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:683:7)
+      source: >2
+            t.equal(fixture.client.openingSocket, null, 'invalid capture must not acquire a socket');
+            const result = await observeAdminOwner(connecting, 'invalid mutable opening budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+        ------^
+            await observeAdminOwner(fixture.client.close(), 'invalid opening cleanup');
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_INVALID_TIMEOUT
+        +ADMIN_CONNECT_TIMEOUT
+      ...
+    
+    not ok 5 - invalid capture must not acquire a socket
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 681
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:681:7)
+      source: >2
+            fixture.client.timeoutMs = timeoutMs;
+            const connecting = fixture.client.connect().catch((error) => error);
+            t.equal(fixture.client.openingSocket, null, 'invalid capture must not acquire a socket');
+        ------^
+            const result = await observeAdminOwner(connecting, 'invalid mutable opening budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+      diff: >
+        --- expected
+      
+        +++ actual
+      
+        @@ -1,1 +1,146 @@
+      
+        -null
+      
+        +WebSocket {
+      
+        +  "_events": Null Object {
+      
+        +    "open": Function onOpen(),
+      
+        +    "message": Function onMessage(data),
+      
+        +    "error": Function onError(error),
+      
+        +    "close": Function onClose(code, reason),
+      
+        +  },
+      
+        +  "_eventsCount": 4,
+      
+        +  "_maxListeners": undefined,
+      
+        +  "_binaryType": "nodebuffer",
+      
+        +  "_closeCode": 1006,
+      
+        +  "_closeFrameReceived": false,
+      
+        +  "_closeFrameSent": false,
+      
+        +  "_closeMessage": Buffer <>,
+      
+        +  "_closeTimer": null,
+      
+        +  "_errorEmitted": false,
+      
+        +  "_extensions": Object {},
+      
+        +  "_paused": false,
+      
+        +  "_protocol": "",
+      
+        +  "_readyState": 0,
+      
+        +  "_receiver": null,
+      
+        +  "_sender": null,
+      
+        +  "_socket": null,
+      
+        +  "_bufferedAmount": 0,
+      
+        +  "_isServer": false,
+      
+        +  "_redirects": 0,
+      
+        +  "_autoPong": true,
+      
+        +  "_closeTimeout": 50,
+      
+        +  "_url": "ws://127.0.0.1:40953/",
+      
+        +  "_req": ClientRequest {
+      
+        +    "_events": Null Object {
+      
+        +      "error": Function (err),
+      
+        +      "response": Function (res),
+      
+        +      "upgrade": Function (res, socket, head),
+      
+        +    },
+      
+        +    "_eventsCount": 3,
+      
+        +    "_maxListeners": undefined,
+      
+        +    "outputData": Array [
+      
+        +      Object {
+      
+        +        "data": String(
+      
+        +          GET / HTTP/1.1\r
+      
+        +          Sec-WebSocket-Version: 13\r
+      
+        +          Sec-WebSocket-Key: DRPOCQmSe7YRqEQfd5MmGw==\r
+      
+        +          Connection: Upgrade\r
+      
+        +          Upgrade: websocket\r
+      
+        +          Sec-WebSocket-Extensions: permessage-deflate;
+        client_max_window_bits\r
+      
+        +          Host: 127.0.0.1:40953\r
+      
+        +          \r
+      
+        +          
+      
+        +        ),
+      
+        +        "encoding": "latin1",
+      
+        +        "callback": Function bound onFinish(),
+      
+        +      },
+      
+        +    ],
+      
+        +    "outputSize": 224,
+      
+        +    "writable": true,
+      
+        +    "destroyed": false,
+      
+        +    "_last": true,
+      
+        +    "chunkedEncoding": false,
+      
+        +    "shouldKeepAlive": true,
+      
+        +    "maxRequestsOnConnectionReached": false,
+      
+        +    "_defaultKeepAlive": true,
+      
+        +    "useChunkedEncodingByDefault": false,
+      
+        +    "sendDate": false,
+      
+        +    "_removedConnection": false,
+      
+        +    "_removedContLen": false,
+      
+        +    "_removedTE": false,
+      
+        +    "strictContentLength": false,
+      
+        +    "_contentLength": 0,
+      
+        +    "_hasBody": true,
+      
+        +    "_trailer": "",
+      
+        +    "finished": true,
+      
+        +    "_headerSent": true,
+      
+        +    "_closed": false,
+      
+        +    "_header": String(
+      
+        +      GET / HTTP/1.1\r
+      
+        +      Sec-WebSocket-Version: 13\r
+      
+        +      Sec-WebSocket-Key: DRPOCQmSe7YRqEQfd5MmGw==\r
+      
+        +      Connection: Upgrade\r
+      
+        +      Upgrade: websocket\r
+      
+        +      Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r
+      
+        +      Host: 127.0.0.1:40953\r
+      
+        +      \r
+      
+        +      
+      
+        +    ),
+      
+        +    "_keepAliveTimeout": 0,
+      
+        +    "_onPendingData": Function nop(),
+      
+        +    "agent": undefined,
+      
+        +    "socketPath": undefined,
+      
+        +    "method": "GET",
+      
+        +    "maxHeaderSize": undefined,
+      
+        +    "insecureHTTPParser": undefined,
+      
+        +    "joinDuplicateHeaders": undefined,
+      
+        +    "path": "/",
+      
+        +    "_ended": false,
+      
+        +    "res": null,
+      
+        +    "aborted": false,
+      
+        +    "timeoutCb": null,
+      
+        +    "upgradeOrConnect": false,
+      
+        +    "parser": null,
+      
+        +    "maxHeadersCount": null,
+      
+        +    "reusedSocket": false,
+      
+        +    "host": "127.0.0.1",
+      
+        +    "protocol": "http:",
+      
+        +    [Symbol(shapeMode)]: false,
+      
+        +    [Symbol(kCapture)]: false,
+      
+        +    [Symbol(kBytesWritten)]: 0,
+      
+        +    [Symbol(kNeedDrain)]: false,
+      
+        +    [Symbol(corked)]: 0,
+      
+        +    [Symbol(kChunkedBuffer)]: Array [],
+      
+        +    [Symbol(kChunkedLength)]: 0,
+      
+        +    [Symbol(kSocket)]: null,
+      
+        +    [Symbol(kOutHeaders)]: Null Object {
+      
+        +      "sec-websocket-version": Array [
+      
+        +        "Sec-WebSocket-Version",
+      
+        +        13,
+      
+        +      ],
+      
+        +      "sec-websocket-key": Array [
+      
+        +        "Sec-WebSocket-Key",
+      
+        +        "DRPOCQmSe7YRqEQfd5MmGw==",
+      
+        +      ],
+      
+        +      "connection": Array [
+      
+        +        "Connection",
+      
+        +        "Upgrade",
+      
+        +      ],
+      
+        +      "upgrade": Array [
+      
+        +        "Upgrade",
+      
+        +        "websocket",
+      
+        +      ],
+      
+        +      "sec-websocket-extensions": Array [
+      
+        +        "Sec-WebSocket-Extensions",
+      
+        +        "permessage-deflate; client_max_window_bits",
+      
+        +      ],
+      
+        +      "host": Array [
+      
+        +        "Host",
+      
+        +        "127.0.0.1:40953",
+      
+        +      ],
+      
+        +    },
+      
+        +    [Symbol(errored)]: null,
+      
+        +    [Symbol(kHighWaterMark)]: 65536,
+      
+        +    [Symbol(kRejectNonStandardBodyWrites)]: false,
+      
+        +    [Symbol(kUniqueHeaders)]: null,
+      
+        +  },
+      
+        +  [Symbol(shapeMode)]: false,
+      
+        +  [Symbol(kCapture)]: false,
+      
+        +}
+      ...
+    
+    not ok 6 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 683
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:683:7)
+      source: >2
+            t.equal(fixture.client.openingSocket, null, 'invalid capture must not acquire a socket');
+            const result = await observeAdminOwner(connecting, 'invalid mutable opening budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+        ------^
+            await observeAdminOwner(fixture.client.close(), 'invalid opening cleanup');
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_INVALID_TIMEOUT
+        +ADMIN_CONNECT_TIMEOUT
+      ...
+    
+    not ok 7 - invalid capture must not acquire a socket
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 681
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:681:7)
+      source: >2
+            fixture.client.timeoutMs = timeoutMs;
+            const connecting = fixture.client.connect().catch((error) => error);
+            t.equal(fixture.client.openingSocket, null, 'invalid capture must not acquire a socket');
+        ------^
+            const result = await observeAdminOwner(connecting, 'invalid mutable opening budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+      diff: >
+        --- expected
+      
+        +++ actual
+      
+        @@ -1,1 +1,146 @@
+      
+        -null
+      
+        +WebSocket {
+      
+        +  "_events": Null Object {
+      
+        +    "open": Function onOpen(),
+      
+        +    "message": Function onMessage(data),
+      
+        +    "error": Function onError(error),
+      
+        +    "close": Function onClose(code, reason),
+      
+        +  },
+      
+        +  "_eventsCount": 4,
+      
+        +  "_maxListeners": undefined,
+      
+        +  "_binaryType": "nodebuffer",
+      
+        +  "_closeCode": 1006,
+      
+        +  "_closeFrameReceived": false,
+      
+        +  "_closeFrameSent": false,
+      
+        +  "_closeMessage": Buffer <>,
+      
+        +  "_closeTimer": null,
+      
+        +  "_errorEmitted": false,
+      
+        +  "_extensions": Object {},
+      
+        +  "_paused": false,
+      
+        +  "_protocol": "",
+      
+        +  "_readyState": 0,
+      
+        +  "_receiver": null,
+      
+        +  "_sender": null,
+      
+        +  "_socket": null,
+      
+        +  "_bufferedAmount": 0,
+      
+        +  "_isServer": false,
+      
+        +  "_redirects": 0,
+      
+        +  "_autoPong": true,
+      
+        +  "_closeTimeout": 50,
+      
+        +  "_url": "ws://127.0.0.1:40953/",
+      
+        +  "_req": ClientRequest {
+      
+        +    "_events": Null Object {
+      
+        +      "error": Function (err),
+      
+        +      "response": Function (res),
+      
+        +      "upgrade": Function (res, socket, head),
+      
+        +    },
+      
+        +    "_eventsCount": 3,
+      
+        +    "_maxListeners": undefined,
+      
+        +    "outputData": Array [
+      
+        +      Object {
+      
+        +        "data": String(
+      
+        +          GET / HTTP/1.1\r
+      
+        +          Sec-WebSocket-Version: 13\r
+      
+        +          Sec-WebSocket-Key: reQbB8I4ft2ghkQJV4dgAQ==\r
+      
+        +          Connection: Upgrade\r
+      
+        +          Upgrade: websocket\r
+      
+        +          Sec-WebSocket-Extensions: permessage-deflate;
+        client_max_window_bits\r
+      
+        +          Host: 127.0.0.1:40953\r
+      
+        +          \r
+      
+        +          
+      
+        +        ),
+      
+        +        "encoding": "latin1",
+      
+        +        "callback": Function bound onFinish(),
+      
+        +      },
+      
+        +    ],
+      
+        +    "outputSize": 224,
+      
+        +    "writable": true,
+      
+        +    "destroyed": false,
+      
+        +    "_last": true,
+      
+        +    "chunkedEncoding": false,
+      
+        +    "shouldKeepAlive": true,
+      
+        +    "maxRequestsOnConnectionReached": false,
+      
+        +    "_defaultKeepAlive": true,
+      
+        +    "useChunkedEncodingByDefault": false,
+      
+        +    "sendDate": false,
+      
+        +    "_removedConnection": false,
+      
+        +    "_removedContLen": false,
+      
+        +    "_removedTE": false,
+      
+        +    "strictContentLength": false,
+      
+        +    "_contentLength": 0,
+      
+        +    "_hasBody": true,
+      
+        +    "_trailer": "",
+      
+        +    "finished": true,
+      
+        +    "_headerSent": true,
+      
+        +    "_closed": false,
+      
+        +    "_header": String(
+      
+        +      GET / HTTP/1.1\r
+      
+        +      Sec-WebSocket-Version: 13\r
+      
+        +      Sec-WebSocket-Key: reQbB8I4ft2ghkQJV4dgAQ==\r
+      
+        +      Connection: Upgrade\r
+      
+        +      Upgrade: websocket\r
+      
+        +      Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r
+      
+        +      Host: 127.0.0.1:40953\r
+      
+        +      \r
+      
+        +      
+      
+        +    ),
+      
+        +    "_keepAliveTimeout": 0,
+      
+        +    "_onPendingData": Function nop(),
+      
+        +    "agent": undefined,
+      
+        +    "socketPath": undefined,
+      
+        +    "method": "GET",
+      
+        +    "maxHeaderSize": undefined,
+      
+        +    "insecureHTTPParser": undefined,
+      
+        +    "joinDuplicateHeaders": undefined,
+      
+        +    "path": "/",
+      
+        +    "_ended": false,
+      
+        +    "res": null,
+      
+        +    "aborted": false,
+      
+        +    "timeoutCb": null,
+      
+        +    "upgradeOrConnect": false,
+      
+        +    "parser": null,
+      
+        +    "maxHeadersCount": null,
+      
+        +    "reusedSocket": false,
+      
+        +    "host": "127.0.0.1",
+      
+        +    "protocol": "http:",
+      
+        +    [Symbol(shapeMode)]: false,
+      
+        +    [Symbol(kCapture)]: false,
+      
+        +    [Symbol(kBytesWritten)]: 0,
+      
+        +    [Symbol(kNeedDrain)]: false,
+      
+        +    [Symbol(corked)]: 0,
+      
+        +    [Symbol(kChunkedBuffer)]: Array [],
+      
+        +    [Symbol(kChunkedLength)]: 0,
+      
+        +    [Symbol(kSocket)]: null,
+      
+        +    [Symbol(kOutHeaders)]: Null Object {
+      
+        +      "sec-websocket-version": Array [
+      
+        +        "Sec-WebSocket-Version",
+      
+        +        13,
+      
+        +      ],
+      
+        +      "sec-websocket-key": Array [
+      
+        +        "Sec-WebSocket-Key",
+      
+        +        "reQbB8I4ft2ghkQJV4dgAQ==",
+      
+        +      ],
+      
+        +      "connection": Array [
+      
+        +        "Connection",
+      
+        +        "Upgrade",
+      
+        +      ],
+      
+        +      "upgrade": Array [
+      
+        +        "Upgrade",
+      
+        +        "websocket",
+      
+        +      ],
+      
+        +      "sec-websocket-extensions": Array [
+      
+        +        "Sec-WebSocket-Extensions",
+      
+        +        "permessage-deflate; client_max_window_bits",
+      
+        +      ],
+      
+        +      "host": Array [
+      
+        +        "Host",
+      
+        +        "127.0.0.1:40953",
+      
+        +      ],
+      
+        +    },
+      
+        +    [Symbol(errored)]: null,
+      
+        +    [Symbol(kHighWaterMark)]: 65536,
+      
+        +    [Symbol(kRejectNonStandardBodyWrites)]: false,
+      
+        +    [Symbol(kUniqueHeaders)]: null,
+      
+        +  },
+      
+        +  [Symbol(shapeMode)]: false,
+      
+        +  [Symbol(kCapture)]: false,
+      
+        +}
+      ...
+    
+    not ok 8 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 683
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:683:7)
+      source: >2
+            t.equal(fixture.client.openingSocket, null, 'invalid capture must not acquire a socket');
+            const result = await observeAdminOwner(connecting, 'invalid mutable opening budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+        ------^
+            await observeAdminOwner(fixture.client.close(), 'invalid opening cleanup');
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_INVALID_TIMEOUT
+        +ADMIN_CONNECT_TIMEOUT
+      ...
+    
+    not ok 9 - invalid capture must not acquire a socket
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 681
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:681:7)
+      source: >2
+            fixture.client.timeoutMs = timeoutMs;
+            const connecting = fixture.client.connect().catch((error) => error);
+            t.equal(fixture.client.openingSocket, null, 'invalid capture must not acquire a socket');
+        ------^
+            const result = await observeAdminOwner(connecting, 'invalid mutable opening budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+      diff: >
+        --- expected
+      
+        +++ actual
+      
+        @@ -1,1 +1,146 @@
+      
+        -null
+      
+        +WebSocket {
+      
+        +  "_events": Null Object {
+      
+        +    "open": Function onOpen(),
+      
+        +    "message": Function onMessage(data),
+      
+        +    "error": Function onError(error),
+      
+        +    "close": Function onClose(code, reason),
+      
+        +  },
+      
+        +  "_eventsCount": 4,
+      
+        +  "_maxListeners": undefined,
+      
+        +  "_binaryType": "nodebuffer",
+      
+        +  "_closeCode": 1006,
+      
+        +  "_closeFrameReceived": false,
+      
+        +  "_closeFrameSent": false,
+      
+        +  "_closeMessage": Buffer <>,
+      
+        +  "_closeTimer": null,
+      
+        +  "_errorEmitted": false,
+      
+        +  "_extensions": Object {},
+      
+        +  "_paused": false,
+      
+        +  "_protocol": "",
+      
+        +  "_readyState": 0,
+      
+        +  "_receiver": null,
+      
+        +  "_sender": null,
+      
+        +  "_socket": null,
+      
+        +  "_bufferedAmount": 0,
+      
+        +  "_isServer": false,
+      
+        +  "_redirects": 0,
+      
+        +  "_autoPong": true,
+      
+        +  "_closeTimeout": 50,
+      
+        +  "_url": "ws://127.0.0.1:40953/",
+      
+        +  "_req": ClientRequest {
+      
+        +    "_events": Null Object {
+      
+        +      "error": Function (err),
+      
+        +      "response": Function (res),
+      
+        +      "upgrade": Function (res, socket, head),
+      
+        +    },
+      
+        +    "_eventsCount": 3,
+      
+        +    "_maxListeners": undefined,
+      
+        +    "outputData": Array [
+      
+        +      Object {
+      
+        +        "data": String(
+      
+        +          GET / HTTP/1.1\r
+      
+        +          Sec-WebSocket-Version: 13\r
+      
+        +          Sec-WebSocket-Key: h4TpJM28A1B4agMm/TOv5A==\r
+      
+        +          Connection: Upgrade\r
+      
+        +          Upgrade: websocket\r
+      
+        +          Sec-WebSocket-Extensions: permessage-deflate;
+        client_max_window_bits\r
+      
+        +          Host: 127.0.0.1:40953\r
+      
+        +          \r
+      
+        +          
+      
+        +        ),
+      
+        +        "encoding": "latin1",
+      
+        +        "callback": Function bound onFinish(),
+      
+        +      },
+      
+        +    ],
+      
+        +    "outputSize": 224,
+      
+        +    "writable": true,
+      
+        +    "destroyed": false,
+      
+        +    "_last": true,
+      
+        +    "chunkedEncoding": false,
+      
+        +    "shouldKeepAlive": true,
+      
+        +    "maxRequestsOnConnectionReached": false,
+      
+        +    "_defaultKeepAlive": true,
+      
+        +    "useChunkedEncodingByDefault": false,
+      
+        +    "sendDate": false,
+      
+        +    "_removedConnection": false,
+      
+        +    "_removedContLen": false,
+      
+        +    "_removedTE": false,
+      
+        +    "strictContentLength": false,
+      
+        +    "_contentLength": 0,
+      
+        +    "_hasBody": true,
+      
+        +    "_trailer": "",
+      
+        +    "finished": true,
+      
+        +    "_headerSent": true,
+      
+        +    "_closed": false,
+      
+        +    "_header": String(
+      
+        +      GET / HTTP/1.1\r
+      
+        +      Sec-WebSocket-Version: 13\r
+      
+        +      Sec-WebSocket-Key: h4TpJM28A1B4agMm/TOv5A==\r
+      
+        +      Connection: Upgrade\r
+      
+        +      Upgrade: websocket\r
+      
+        +      Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r
+      
+        +      Host: 127.0.0.1:40953\r
+      
+        +      \r
+      
+        +      
+      
+        +    ),
+      
+        +    "_keepAliveTimeout": 0,
+      
+        +    "_onPendingData": Function nop(),
+      
+        +    "agent": undefined,
+      
+        +    "socketPath": undefined,
+      
+        +    "method": "GET",
+      
+        +    "maxHeaderSize": undefined,
+      
+        +    "insecureHTTPParser": undefined,
+      
+        +    "joinDuplicateHeaders": undefined,
+      
+        +    "path": "/",
+      
+        +    "_ended": false,
+      
+        +    "res": null,
+      
+        +    "aborted": false,
+      
+        +    "timeoutCb": null,
+      
+        +    "upgradeOrConnect": false,
+      
+        +    "parser": null,
+      
+        +    "maxHeadersCount": null,
+      
+        +    "reusedSocket": false,
+      
+        +    "host": "127.0.0.1",
+      
+        +    "protocol": "http:",
+      
+        +    [Symbol(shapeMode)]: false,
+      
+        +    [Symbol(kCapture)]: false,
+      
+        +    [Symbol(kBytesWritten)]: 0,
+      
+        +    [Symbol(kNeedDrain)]: false,
+      
+        +    [Symbol(corked)]: 0,
+      
+        +    [Symbol(kChunkedBuffer)]: Array [],
+      
+        +    [Symbol(kChunkedLength)]: 0,
+      
+        +    [Symbol(kSocket)]: null,
+      
+        +    [Symbol(kOutHeaders)]: Null Object {
+      
+        +      "sec-websocket-version": Array [
+      
+        +        "Sec-WebSocket-Version",
+      
+        +        13,
+      
+        +      ],
+      
+        +      "sec-websocket-key": Array [
+      
+        +        "Sec-WebSocket-Key",
+      
+        +        "h4TpJM28A1B4agMm/TOv5A==",
+      
+        +      ],
+      
+        +      "connection": Array [
+      
+        +        "Connection",
+      
+        +        "Upgrade",
+      
+        +      ],
+      
+        +      "upgrade": Array [
+      
+        +        "Upgrade",
+      
+        +        "websocket",
+      
+        +      ],
+      
+        +      "sec-websocket-extensions": Array [
+      
+        +        "Sec-WebSocket-Extensions",
+      
+        +        "permessage-deflate; client_max_window_bits",
+      
+        +      ],
+      
+        +      "host": Array [
+      
+        +        "Host",
+      
+        +        "127.0.0.1:40953",
+      
+        +      ],
+      
+        +    },
+      
+        +    [Symbol(errored)]: null,
+      
+        +    [Symbol(kHighWaterMark)]: 65536,
+      
+        +    [Symbol(kRejectNonStandardBodyWrites)]: false,
+      
+        +    [Symbol(kUniqueHeaders)]: null,
+      
+        +  },
+      
+        +  [Symbol(shapeMode)]: false,
+      
+        +  [Symbol(kCapture)]: false,
+      
+        +}
+      ...
+    
+    not ok 10 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 683
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:683:7)
+      source: >2
+            t.equal(fixture.client.openingSocket, null, 'invalid capture must not acquire a socket');
+            const result = await observeAdminOwner(connecting, 'invalid mutable opening budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+        ------^
+            await observeAdminOwner(fixture.client.close(), 'invalid opening cleanup');
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_INVALID_TIMEOUT
+        +ADMIN_CONNECT_TIMEOUT
+      ...
+    
+    not ok 11 - invalid capture must not acquire a socket
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 681
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:681:7)
+      source: >2
+            fixture.client.timeoutMs = timeoutMs;
+            const connecting = fixture.client.connect().catch((error) => error);
+            t.equal(fixture.client.openingSocket, null, 'invalid capture must not acquire a socket');
+        ------^
+            const result = await observeAdminOwner(connecting, 'invalid mutable opening budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+      diff: >
+        --- expected
+      
+        +++ actual
+      
+        @@ -1,1 +1,146 @@
+      
+        -null
+      
+        +WebSocket {
+      
+        +  "_events": Null Object {
+      
+        +    "open": Function onOpen(),
+      
+        +    "message": Function onMessage(data),
+      
+        +    "error": Function onError(error),
+      
+        +    "close": Function onClose(code, reason),
+      
+        +  },
+      
+        +  "_eventsCount": 4,
+      
+        +  "_maxListeners": undefined,
+      
+        +  "_binaryType": "nodebuffer",
+      
+        +  "_closeCode": 1006,
+      
+        +  "_closeFrameReceived": false,
+      
+        +  "_closeFrameSent": false,
+      
+        +  "_closeMessage": Buffer <>,
+      
+        +  "_closeTimer": null,
+      
+        +  "_errorEmitted": false,
+      
+        +  "_extensions": Object {},
+      
+        +  "_paused": false,
+      
+        +  "_protocol": "",
+      
+        +  "_readyState": 0,
+      
+        +  "_receiver": null,
+      
+        +  "_sender": null,
+      
+        +  "_socket": null,
+      
+        +  "_bufferedAmount": 0,
+      
+        +  "_isServer": false,
+      
+        +  "_redirects": 0,
+      
+        +  "_autoPong": true,
+      
+        +  "_closeTimeout": 50,
+      
+        +  "_url": "ws://127.0.0.1:40953/",
+      
+        +  "_req": ClientRequest {
+      
+        +    "_events": Null Object {
+      
+        +      "error": Function (err),
+      
+        +      "response": Function (res),
+      
+        +      "upgrade": Function (res, socket, head),
+      
+        +    },
+      
+        +    "_eventsCount": 3,
+      
+        +    "_maxListeners": undefined,
+      
+        +    "outputData": Array [
+      
+        +      Object {
+      
+        +        "data": String(
+      
+        +          GET / HTTP/1.1\r
+      
+        +          Sec-WebSocket-Version: 13\r
+      
+        +          Sec-WebSocket-Key: RYa/Az5lwK/A0+c2nKy8yg==\r
+      
+        +          Connection: Upgrade\r
+      
+        +          Upgrade: websocket\r
+      
+        +          Sec-WebSocket-Extensions: permessage-deflate;
+        client_max_window_bits\r
+      
+        +          Host: 127.0.0.1:40953\r
+      
+        +          \r
+      
+        +          
+      
+        +        ),
+      
+        +        "encoding": "latin1",
+      
+        +        "callback": Function bound onFinish(),
+      
+        +      },
+      
+        +    ],
+      
+        +    "outputSize": 224,
+      
+        +    "writable": true,
+      
+        +    "destroyed": false,
+      
+        +    "_last": true,
+      
+        +    "chunkedEncoding": false,
+      
+        +    "shouldKeepAlive": true,
+      
+        +    "maxRequestsOnConnectionReached": false,
+      
+        +    "_defaultKeepAlive": true,
+      
+        +    "useChunkedEncodingByDefault": false,
+      
+        +    "sendDate": false,
+      
+        +    "_removedConnection": false,
+      
+        +    "_removedContLen": false,
+      
+        +    "_removedTE": false,
+      
+        +    "strictContentLength": false,
+      
+        +    "_contentLength": 0,
+      
+        +    "_hasBody": true,
+      
+        +    "_trailer": "",
+      
+        +    "finished": true,
+      
+        +    "_headerSent": true,
+      
+        +    "_closed": false,
+      
+        +    "_header": String(
+      
+        +      GET / HTTP/1.1\r
+      
+        +      Sec-WebSocket-Version: 13\r
+      
+        +      Sec-WebSocket-Key: RYa/Az5lwK/A0+c2nKy8yg==\r
+      
+        +      Connection: Upgrade\r
+      
+        +      Upgrade: websocket\r
+      
+        +      Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r
+      
+        +      Host: 127.0.0.1:40953\r
+      
+        +      \r
+      
+        +      
+      
+        +    ),
+      
+        +    "_keepAliveTimeout": 0,
+      
+        +    "_onPendingData": Function nop(),
+      
+        +    "agent": undefined,
+      
+        +    "socketPath": undefined,
+      
+        +    "method": "GET",
+      
+        +    "maxHeaderSize": undefined,
+      
+        +    "insecureHTTPParser": undefined,
+      
+        +    "joinDuplicateHeaders": undefined,
+      
+        +    "path": "/",
+      
+        +    "_ended": false,
+      
+        +    "res": null,
+      
+        +    "aborted": false,
+      
+        +    "timeoutCb": null,
+      
+        +    "upgradeOrConnect": false,
+      
+        +    "parser": null,
+      
+        +    "maxHeadersCount": null,
+      
+        +    "reusedSocket": false,
+      
+        +    "host": "127.0.0.1",
+      
+        +    "protocol": "http:",
+      
+        +    [Symbol(shapeMode)]: false,
+      
+        +    [Symbol(kCapture)]: false,
+      
+        +    [Symbol(kBytesWritten)]: 0,
+      
+        +    [Symbol(kNeedDrain)]: false,
+      
+        +    [Symbol(corked)]: 0,
+      
+        +    [Symbol(kChunkedBuffer)]: Array [],
+      
+        +    [Symbol(kChunkedLength)]: 0,
+      
+        +    [Symbol(kSocket)]: null,
+      
+        +    [Symbol(kOutHeaders)]: Null Object {
+      
+        +      "sec-websocket-version": Array [
+      
+        +        "Sec-WebSocket-Version",
+      
+        +        13,
+      
+        +      ],
+      
+        +      "sec-websocket-key": Array [
+      
+        +        "Sec-WebSocket-Key",
+      
+        +        "RYa/Az5lwK/A0+c2nKy8yg==",
+      
+        +      ],
+      
+        +      "connection": Array [
+      
+        +        "Connection",
+      
+        +        "Upgrade",
+      
+        +      ],
+      
+        +      "upgrade": Array [
+      
+        +        "Upgrade",
+      
+        +        "websocket",
+      
+        +      ],
+      
+        +      "sec-websocket-extensions": Array [
+      
+        +        "Sec-WebSocket-Extensions",
+      
+        +        "permessage-deflate; client_max_window_bits",
+      
+        +      ],
+      
+        +      "host": Array [
+      
+        +        "Host",
+      
+        +        "127.0.0.1:40953",
+      
+        +      ],
+      
+        +    },
+      
+        +    [Symbol(errored)]: null,
+      
+        +    [Symbol(kHighWaterMark)]: 65536,
+      
+        +    [Symbol(kRejectNonStandardBodyWrites)]: false,
+      
+        +    [Symbol(kUniqueHeaders)]: null,
+      
+        +  },
+      
+        +  [Symbol(shapeMode)]: false,
+      
+        +  [Symbol(kCapture)]: false,
+      
+        +}
+      ...
+    
+    not ok 12 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 683
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:683:7)
+      source: >2
+            t.equal(fixture.client.openingSocket, null, 'invalid capture must not acquire a socket');
+            const result = await observeAdminOwner(connecting, 'invalid mutable opening budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+        ------^
+            await observeAdminOwner(fixture.client.close(), 'invalid opening cleanup');
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_INVALID_TIMEOUT
+        +ADMIN_CONNECT_TIMEOUT
+      ...
+    
+    not ok 13 - invalid capture must not acquire a socket
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 681
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:681:7)
+      source: >2
+            fixture.client.timeoutMs = timeoutMs;
+            const connecting = fixture.client.connect().catch((error) => error);
+            t.equal(fixture.client.openingSocket, null, 'invalid capture must not acquire a socket');
+        ------^
+            const result = await observeAdminOwner(connecting, 'invalid mutable opening budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+      diff: >
+        --- expected
+      
+        +++ actual
+      
+        @@ -1,1 +1,146 @@
+      
+        -null
+      
+        +WebSocket {
+      
+        +  "_events": Null Object {
+      
+        +    "open": Function onOpen(),
+      
+        +    "message": Function onMessage(data),
+      
+        +    "error": Function onError(error),
+      
+        +    "close": Function onClose(code, reason),
+      
+        +  },
+      
+        +  "_eventsCount": 4,
+      
+        +  "_maxListeners": undefined,
+      
+        +  "_binaryType": "nodebuffer",
+      
+        +  "_closeCode": 1006,
+      
+        +  "_closeFrameReceived": false,
+      
+        +  "_closeFrameSent": false,
+      
+        +  "_closeMessage": Buffer <>,
+      
+        +  "_closeTimer": null,
+      
+        +  "_errorEmitted": false,
+      
+        +  "_extensions": Object {},
+      
+        +  "_paused": false,
+      
+        +  "_protocol": "",
+      
+        +  "_readyState": 0,
+      
+        +  "_receiver": null,
+      
+        +  "_sender": null,
+      
+        +  "_socket": null,
+      
+        +  "_bufferedAmount": 0,
+      
+        +  "_isServer": false,
+      
+        +  "_redirects": 0,
+      
+        +  "_autoPong": true,
+      
+        +  "_closeTimeout": 50,
+      
+        +  "_url": "ws://127.0.0.1:40953/",
+      
+        +  "_req": ClientRequest {
+      
+        +    "_events": Null Object {
+      
+        +      "error": Function (err),
+      
+        +      "response": Function (res),
+      
+        +      "upgrade": Function (res, socket, head),
+      
+        +    },
+      
+        +    "_eventsCount": 3,
+      
+        +    "_maxListeners": undefined,
+      
+        +    "outputData": Array [
+      
+        +      Object {
+      
+        +        "data": String(
+      
+        +          GET / HTTP/1.1\r
+      
+        +          Sec-WebSocket-Version: 13\r
+      
+        +          Sec-WebSocket-Key: Jj5feCSRqkDo7Bm5ZQHymQ==\r
+      
+        +          Connection: Upgrade\r
+      
+        +          Upgrade: websocket\r
+      
+        +          Sec-WebSocket-Extensions: permessage-deflate;
+        client_max_window_bits\r
+      
+        +          Host: 127.0.0.1:40953\r
+      
+        +          \r
+      
+        +          
+      
+        +        ),
+      
+        +        "encoding": "latin1",
+      
+        +        "callback": Function bound onFinish(),
+      
+        +      },
+      
+        +    ],
+      
+        +    "outputSize": 224,
+      
+        +    "writable": true,
+      
+        +    "destroyed": false,
+      
+        +    "_last": true,
+      
+        +    "chunkedEncoding": false,
+      
+        +    "shouldKeepAlive": true,
+      
+        +    "maxRequestsOnConnectionReached": false,
+      
+        +    "_defaultKeepAlive": true,
+      
+        +    "useChunkedEncodingByDefault": false,
+      
+        +    "sendDate": false,
+      
+        +    "_removedConnection": false,
+      
+        +    "_removedContLen": false,
+      
+        +    "_removedTE": false,
+      
+        +    "strictContentLength": false,
+      
+        +    "_contentLength": 0,
+      
+        +    "_hasBody": true,
+      
+        +    "_trailer": "",
+      
+        +    "finished": true,
+      
+        +    "_headerSent": true,
+      
+        +    "_closed": false,
+      
+        +    "_header": String(
+      
+        +      GET / HTTP/1.1\r
+      
+        +      Sec-WebSocket-Version: 13\r
+      
+        +      Sec-WebSocket-Key: Jj5feCSRqkDo7Bm5ZQHymQ==\r
+      
+        +      Connection: Upgrade\r
+      
+        +      Upgrade: websocket\r
+      
+        +      Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r
+      
+        +      Host: 127.0.0.1:40953\r
+      
+        +      \r
+      
+        +      
+      
+        +    ),
+      
+        +    "_keepAliveTimeout": 0,
+      
+        +    "_onPendingData": Function nop(),
+      
+        +    "agent": undefined,
+      
+        +    "socketPath": undefined,
+      
+        +    "method": "GET",
+      
+        +    "maxHeaderSize": undefined,
+      
+        +    "insecureHTTPParser": undefined,
+      
+        +    "joinDuplicateHeaders": undefined,
+      
+        +    "path": "/",
+      
+        +    "_ended": false,
+      
+        +    "res": null,
+      
+        +    "aborted": false,
+      
+        +    "timeoutCb": null,
+      
+        +    "upgradeOrConnect": false,
+      
+        +    "parser": null,
+      
+        +    "maxHeadersCount": null,
+      
+        +    "reusedSocket": false,
+      
+        +    "host": "127.0.0.1",
+      
+        +    "protocol": "http:",
+      
+        +    [Symbol(shapeMode)]: false,
+      
+        +    [Symbol(kCapture)]: false,
+      
+        +    [Symbol(kBytesWritten)]: 0,
+      
+        +    [Symbol(kNeedDrain)]: false,
+      
+        +    [Symbol(corked)]: 0,
+      
+        +    [Symbol(kChunkedBuffer)]: Array [],
+      
+        +    [Symbol(kChunkedLength)]: 0,
+      
+        +    [Symbol(kSocket)]: null,
+      
+        +    [Symbol(kOutHeaders)]: Null Object {
+      
+        +      "sec-websocket-version": Array [
+      
+        +        "Sec-WebSocket-Version",
+      
+        +        13,
+      
+        +      ],
+      
+        +      "sec-websocket-key": Array [
+      
+        +        "Sec-WebSocket-Key",
+      
+        +        "Jj5feCSRqkDo7Bm5ZQHymQ==",
+      
+        +      ],
+      
+        +      "connection": Array [
+      
+        +        "Connection",
+      
+        +        "Upgrade",
+      
+        +      ],
+      
+        +      "upgrade": Array [
+      
+        +        "Upgrade",
+      
+        +        "websocket",
+      
+        +      ],
+      
+        +      "sec-websocket-extensions": Array [
+      
+        +        "Sec-WebSocket-Extensions",
+      
+        +        "permessage-deflate; client_max_window_bits",
+      
+        +      ],
+      
+        +      "host": Array [
+      
+        +        "Host",
+      
+        +        "127.0.0.1:40953",
+      
+        +      ],
+      
+        +    },
+      
+        +    [Symbol(errored)]: null,
+      
+        +    [Symbol(kHighWaterMark)]: 65536,
+      
+        +    [Symbol(kRejectNonStandardBodyWrites)]: false,
+      
+        +    [Symbol(kUniqueHeaders)]: null,
+      
+        +  },
+      
+        +  [Symbol(shapeMode)]: false,
+      
+        +  [Symbol(kCapture)]: false,
+      
+        +}
+      ...
+    
+    not ok 14 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 683
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:683:7)
+      source: >2
+            t.equal(fixture.client.openingSocket, null, 'invalid capture must not acquire a socket');
+            const result = await observeAdminOwner(connecting, 'invalid mutable opening budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+        ------^
+            await observeAdminOwner(fixture.client.close(), 'invalid opening cleanup');
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_INVALID_TIMEOUT
+        +undefined
+      ...
+    
+    1..14
+not ok 18 - AdminWsClient revalidates a mutable opening budget before generation acquisition # time=56.71ms
+  ---
+  at:
+    fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+    lineNumber: 676
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('AdminWsClient revalidates a mutable opening budget before generation
+    acquisition', async (t) => {
+  
+    ^
+      const fixture = await createAdminLifetimeFixture(t);
+      for (const timeoutMs of [Infinity, -Infinity, NaN, -1, 0.5, 2147483648, '100']) {
+  ...
+
+# Subtest: AdminWsClient revalidates a mutable request budget before serialization and send
+    not ok 1 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 712
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:712:7)
+      source: >2
+            const result = await observeAdminOwner(
+              fixture.client.query('SELECT 1', params).catch((error) => error), 'invalid request budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+        ------^
+            t.equal(fixture.client.pending.size, 0);
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_INVALID_TIMEOUT
+        +undefined
+      ...
+    
+    ok 2 - should be equal
+    not ok 3 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 712
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:712:7)
+      source: >2
+            const result = await observeAdminOwner(
+              fixture.client.query('SELECT 1', params).catch((error) => error), 'invalid request budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+        ------^
+            t.equal(fixture.client.pending.size, 0);
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_INVALID_TIMEOUT
+        +undefined
+      ...
+    
+    ok 4 - should be equal
+    not ok 5 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 712
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:712:7)
+      source: >2
+            const result = await observeAdminOwner(
+              fixture.client.query('SELECT 1', params).catch((error) => error), 'invalid request budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+        ------^
+            t.equal(fixture.client.pending.size, 0);
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_INVALID_TIMEOUT
+        +undefined
+      ...
+    
+    ok 6 - should be equal
+    not ok 7 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 712
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:712:7)
+      source: >2
+            const result = await observeAdminOwner(
+              fixture.client.query('SELECT 1', params).catch((error) => error), 'invalid request budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+        ------^
+            t.equal(fixture.client.pending.size, 0);
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_INVALID_TIMEOUT
+        +undefined
+      ...
+    
+    ok 8 - should be equal
+    not ok 9 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 712
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:712:7)
+      source: >2
+            const result = await observeAdminOwner(
+              fixture.client.query('SELECT 1', params).catch((error) => error), 'invalid request budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+        ------^
+            t.equal(fixture.client.pending.size, 0);
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_INVALID_TIMEOUT
+        +undefined
+      ...
+    
+    ok 10 - should be equal
+    not ok 11 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 712
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:712:7)
+      source: >2
+            const result = await observeAdminOwner(
+              fixture.client.query('SELECT 1', params).catch((error) => error), 'invalid request budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+        ------^
+            t.equal(fixture.client.pending.size, 0);
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_INVALID_TIMEOUT
+        +ADMIN_RESPONSE_TIMEOUT
+      ...
+    
+    ok 12 - should be equal
+    not ok 13 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 712
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:712:7)
+      source: >2
+            const result = await observeAdminOwner(
+              fixture.client.query('SELECT 1', params).catch((error) => error), 'invalid request budget');
+            t.equal(result?.code, 'ADMIN_INVALID_TIMEOUT');
+        ------^
+            t.equal(fixture.client.pending.size, 0);
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_INVALID_TIMEOUT
+        +undefined
+      ...
+    
+    ok 14 - should be equal
+    not ok 15 - rejected budget cannot execute caller serialization
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 715
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:715:5)
+      source: >2
+            t.equal(fixture.client.pending.size, 0);
+          }
+          t.equal(serialized, 0, 'rejected budget cannot execute caller serialization');
+        ----^
+          t.equal(sends, 0, 'rejected budget cannot enter the transport');
+          fixture.client.timeoutMs = 20;
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +7
+      ...
+    
+    not ok 16 - rejected budget cannot enter the transport
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 716
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:716:5)
+      source: >2
+          }
+          t.equal(serialized, 0, 'rejected budget cannot execute caller serialization');
+          t.equal(sends, 0, 'rejected budget cannot enter the transport');
+        ----^
+          fixture.client.timeoutMs = 20;
+          const result = await observeAdminOwner(fixture.client.query('SELECT 1', params), 'valid shrink');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +7
+      ...
+    
+    ok 17 - should be equivalent
+    ok 18 - a valid shrunken request budget remains supported
+    not ok 19 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+        lineNumber: 721
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/runtime/movielens-three-way-affinity-demo.test.js:721:5)
+      source: >2
+          t.same(result.rows, []);
+          t.equal(observedBudget, 20, 'a valid shrunken request budget remains supported');
+          t.equal(sends, 1);
+        ----^
+      
+        });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +8
+      ...
+    
+    1..19
+not ok 19 - AdminWsClient revalidates a mutable request budget before serialization and send # time=15.046ms
+  ---
+  at:
+    fileName: test/runtime/movielens-three-way-affinity-demo.test.js
+    lineNumber: 688
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('AdminWsClient revalidates a mutable request budget before serialization
+    and send', async (t) => {
+  
+    ^
+      const fixture = await createAdminLifetimeFixture(t);
+      const {peer, socket} = await fixture.connect();
+  ...
+
+# Subtest: AdminWsClient close owns a connecting socket through actual close
+    ok 1 - CONNECTING termination also waits for the close event
+    ok 2 - opening is rejected by retirement authority
+    ok 3 - should be equal
+    1..3
+ok 20 - AdminWsClient close owns a connecting socket through actual close # time=1.198ms
+
+# Subtest: AdminWsClient retired callbacks cannot reset or complete a fresh session
+    ok 1 - stale frames and CLOSE cannot settle fresh pending work
+    ok 2 - fresh connection remains authoritative
+    ok 3 - only the current socket completes its request
+    1..3
+ok 21 - AdminWsClient retired callbacks cannot reset or complete a fresh session # time=2.736ms
+
+# Subtest: AdminWsClient retires a physically closing socket without losing its close observation
+    ok 1 - physical CLOSING is not reusable OPEN admission
+    ok 2 - old and new real connections stay owned through close
+    1..2
+ok 22 - AdminWsClient retires a physically closing socket without losing its close observation # time=2.59ms
+
+# Subtest: AdminWsClient retirement fences the post-connect request admission gap
+    ok 1 - resumed admitted caller cannot send on the retired socket
+    ok 2 - should be equal
+    ok 3 - no response timer survives retirement
+    1..3
+ok 23 - AdminWsClient retirement fences the post-connect request admission gap # time=1.802ms
+
+# Subtest: AdminWsClient publishes retirement before synchronous socket callbacks
+    ok 1 - synchronous reentry observes the published owner promise
+    ok 2 - should be equal
+    1..2
+ok 24 - AdminWsClient publishes retirement before synchronous socket callbacks # time=1.556ms
+
+# Subtest: AdminWsClient serialization cannot send across synchronous retirement
+    ok 1 - should be equal
+    ok 2 - caller serialization runs before the final send admission fence
+    ok 3 - should be equal
+    1..3
+ok 25 - AdminWsClient serialization cannot send across synchronous retirement # time=1.5ms
+
+# Subtest: MovieLens client cleanup preserves an exact frozen primary query failure
+    ok 1 - cleanup must not replace the query owner error or its classification
+    ok 2 - the failed operation still closes exactly once
+    1..2
+ok 26 - MovieLens client cleanup preserves an exact frozen primary query failure # time=0.379ms
+
+# Subtest: MovieLens incomplete cleanup vetoes retry before sleep or fresh client creation
+    ok 1 - should be equal
+    ok 2 - query classification is preserved, not mutated into a veto
+    ok 3 - should be equal
+    ok 4 - cleanup authority is checked before the injected retry observer
+    ok 5 - should be equal
+    1..5
+ok 27 - MovieLens incomplete cleanup vetoes retry before sleep or fresh client creation # time=0.335ms
+
+# Subtest: AdminWsClient observes unresponsive peer disposal inside one close budget
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - observed abnormal code is retained without a force claim
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    1..6
+ok 28 - AdminWsClient observes unresponsive peer disposal inside one close budget # time=50.829ms
+
+# Subtest: AdminWsClient explicit retirement has one hard-deadline timer owner
+    ok 1 - global close owns the deadline; joined generations do not separately fire it
+    1..1
+ok 29 - AdminWsClient explicit retirement has one hard-deadline timer owner # time=1.829ms
+
+# Subtest: AdminWsClient close timeout cannot veto later authoritative CLOSE
+    ok 1 - observed completion, not physical socket state, owns release
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - deadline diagnostics retain the acquired endpoint
+    ok 6 - should be equal
+    ok 7 - unresolved old generation is retained and fences new admission
+    ok 8 - late CLOSE permits a fresh cleanup attempt
+    ok 9 - the expired attempt stays rejected with its exact error
+    ok 10 - fresh connection becomes legal after observed old CLOSE
+    1..10
+ok 30 - AdminWsClient close timeout cannot veto later authoritative CLOSE # time=3.215ms
+
+# Subtest: AdminWsClient one close deadline retains every unresolved generation
+    ok 1 - should be equal
+    ok 2 - one immutable deadline reports both still-owned generations
+    ok 3 - a mixed-target retirement has no fabricated common endpoint
+    ok 4 - should be equivalent
+    ok 5 - one late CLOSE cannot release another unresolved generation
+    ok 6 - should be equal
+    ok 7 - late completion never rewrites the expired attempt
+    ok 8 - only complete retirement permits fresh admission
+    1..8
+ok 31 - AdminWsClient one close deadline retains every unresolved generation # time=3.408ms
+
+# Subtest: AdminWsClient automatic retirement timeout vetoes real preload degradation
+    ok 1 - should be equal
+    ok 2 - owner-produced timeout enters the same authority as composed cleanup
+    ok 3 - real preload owner cannot convert incomplete cleanup into a snapshot
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - catalog preserves the same real owner-produced cleanup veto
+    ok 7 - no second example is admitted
+    ok 8 - incomplete cleanup cannot become a completed catalog artifact
+    1..8
+ok 32 - AdminWsClient automatic retirement timeout vetoes real preload degradation # time=10.366ms
+
+# Subtest: AdminWsClient private pending ownership survives snapshot mutation and settles once
+    ok 1 - snapshot mutation cannot erase pending authority
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - one retirement reason settles both requests
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    1..7
+ok 33 - AdminWsClient private pending ownership survives snapshot mutation and settles once # time=8.278ms
+
+# Subtest: AdminWsClient repeated sessions retire listeners, requests and callback frames
+    ok 1 - should be equal
+    ok 2 - only this generation remains in the owned set
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - opening, response, handshake and close deadlines are all retired
+    ok 6 - should be equal
+    ok 7 - only this generation remains in the owned set
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - opening, response, handshake and close deadlines are all retired
+    ok 11 - should be equal
+    ok 12 - only this generation remains in the owned set
+    ok 13 - should be equal
+    ok 14 - should be equal
+    ok 15 - opening, response, handshake and close deadlines are all retired
+    ok 16 - should be equal
+    ok 17 - only this generation remains in the owned set
+    ok 18 - should be equal
+    ok 19 - should be equal
+    ok 20 - opening, response, handshake and close deadlines are all retired
+    ok 21 - should be equal
+    ok 22 - only this generation remains in the owned set
+    ok 23 - should be equal
+    ok 24 - should be equal
+    ok 25 - opening, response, handshake and close deadlines are all retired
+    ok 26 - should be equal
+    ok 27 - only this generation remains in the owned set
+    ok 28 - should be equal
+    ok 29 - should be equal
+    ok 30 - opening, response, handshake and close deadlines are all retired
+    ok 31 - should be equal
+    ok 32 - only this generation remains in the owned set
+    ok 33 - should be equal
+    ok 34 - should be equal
+    ok 35 - opening, response, handshake and close deadlines are all retired
+    ok 36 - should be equal
+    ok 37 - only this generation remains in the owned set
+    ok 38 - should be equal
+    ok 39 - should be equal
+    ok 40 - opening, response, handshake and close deadlines are all retired
+    1..40
+ok 34 - AdminWsClient repeated sessions retire listeners, requests and callback frames # time=9.688ms
+
+# Subtest: MovieLens batch failure closes its long-lived client and unfinished input
+    ok 1 - should be equal
+    ok 2 - two schema sessions precede one batch session
+    ok 3 - should be equal
+    ok 4 - early iterator return also releases the owned input
+    ok 5 - native input close is observed before the load rejects
+    1..5
+ok 35 - MovieLens batch failure closes its long-lived client and unfinished input # time=11.116ms
+
+# Subtest: obsolete callback demo and orchestration are absent
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - one surviving comparison entry point replaces both demos
+    1..3
+ok 36 - obsolete callback demo and orchestration are absent # time=0.167ms
+
+1..36
+# { total: 229, pass: 205, fail: 24 }
+# time=516.715ms

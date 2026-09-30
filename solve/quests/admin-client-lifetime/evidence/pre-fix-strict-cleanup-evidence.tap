@@ -1,0 +1,377 @@
+TAP version 14
+# Subtest: admin cleanup evidence preserves and reports an exact frozen primary error
+    ok 1 - should be equal
+    ok 2 - one owner retains the secondary failure
+    ok 3 - should be equal
+    ok 4 - no second mutable-property authority exists
+    ok 5 - should be equal
+    ok 6 - should match pattern
+    ok 7 - report is not a mutable view of retained evidence
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - the frozen report snapshot does not follow source mutation
+    1..10
+ok 1 - admin cleanup evidence preserves and reports an exact frozen primary error # time=6.069ms
+
+# Subtest: admin cleanup failure is terminal even when the operation succeeded
+    ok 1 - successful body cannot hide failed cleanup
+    ok 2 - should be equal
+    ok 3 - the same canonical signal guards standalone failure
+    1..3
+ok 2 - admin cleanup failure is terminal even when the operation succeeded # time=0.375ms
+
+# Subtest: primitive admin failures retain cleanup authority without a WeakMap TypeError
+    ok 1 - should be equal
+    ok 2 - should be equivalent
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - combined failure vetoes degradation before any redrive
+    ok 6 - normalization retains the exact thrown cause
+    ok 7 - should be equal
+    ok 8 - WeakMap admission never replaces the cleanup cause
+    1..8
+ok 3 - primitive admin failures retain cleanup authority without a WeakMap TypeError # time=0.802ms
+
+# Subtest: nested admin cleanup reports retain every typed generation failure
+    ok 1 - should be equal
+    ok 2 - should be equivalent
+    ok 3 - serialization preserves both owned-generation failure leaves
+    1..3
+ok 4 - nested admin cleanup reports retain every typed generation failure # time=0.764ms
+
+# Subtest: admin cleanup reporting refuses accessors and ignores array iterators
+    ok 1 - expect to not throw
+    not ok 2 - diagnostics consume own data, never invoke collaborator accessors
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+        lineNumber: 232
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/runtime/movielens-failure-report-participant-failures.test.js:232:5)
+      source: >2
+            report = getAdminCleanupFailureReport(retained);
+          });
+          t.equal(reads, 0, 'diagnostics consume own data, never invoke collaborator accessors');
+        ----^
+          t.equal(report?.code, 'ADMIN_CLEANUP_EVIDENCE_UNAVAILABLE');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 3 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+        lineNumber: 233
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/runtime/movielens-failure-report-participant-failures.test.js:233:5)
+      source: >2
+          });
+          t.equal(reads, 0, 'diagnostics consume own data, never invoke collaborator accessors');
+          t.equal(report?.code, 'ADMIN_CLEANUP_EVIDENCE_UNAVAILABLE');
+        ----^
+      
+          const aggregate = new AggregateError([new Error('first'), new Error('second')], 'both failed');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_CLEANUP_EVIDENCE_UNAVAILABLE
+        +undefined
+      ...
+    
+    ok 4 - expect to not throw
+    ok 5 - should be equivalent
+    1..5
+not ok 5 - admin cleanup reporting refuses accessors and ignores array iterators # time=10.762ms
+  ---
+  at:
+    fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+    lineNumber: 219
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('admin cleanup reporting refuses accessors and ignores array iterators',
+    async (t) => {
+  
+    ^
+      const cleanup = new Error('close failed');
+      let reads = 0;
+  ...
+
+# Subtest: admin cleanup projection failure cannot replace the retained primary
+    ok 1 - expect to not throw
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - expected to throw
+    1..4
+ok 6 - admin cleanup projection failure cannot replace the retained primary # time=0.613ms
+
+# Subtest: admin cleanup projection bounds numeric and collection evidence before traversal
+    not ok 1 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+        lineNumber: 277
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/runtime/movielens-failure-report-participant-failures.test.js:277:7)
+      source: >2
+            await retainCleanup(cleanup);
+            const report = getAdminCleanupFailureReport(cleanup);
+            t.equal(report.code, 'ADMIN_CLEANUP_EVIDENCE_UNAVAILABLE');
+        ------^
+            t.equal(getAdminCleanupFailure(cleanup), cleanup, 'report rejection does not change cleanup veto');
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_CLEANUP_EVIDENCE_UNAVAILABLE
+        +undefined
+      ...
+    
+    ok 2 - report rejection does not change cleanup veto
+    not ok 3 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+        lineNumber: 277
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/runtime/movielens-failure-report-participant-failures.test.js:277:7)
+      source: >2
+            await retainCleanup(cleanup);
+            const report = getAdminCleanupFailureReport(cleanup);
+            t.equal(report.code, 'ADMIN_CLEANUP_EVIDENCE_UNAVAILABLE');
+        ------^
+            t.equal(getAdminCleanupFailure(cleanup), cleanup, 'report rejection does not change cleanup veto');
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_CLEANUP_EVIDENCE_UNAVAILABLE
+        +undefined
+      ...
+    
+    ok 4 - report rejection does not change cleanup veto
+    not ok 5 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+        lineNumber: 277
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/runtime/movielens-failure-report-participant-failures.test.js:277:7)
+      source: >2
+            await retainCleanup(cleanup);
+            const report = getAdminCleanupFailureReport(cleanup);
+            t.equal(report.code, 'ADMIN_CLEANUP_EVIDENCE_UNAVAILABLE');
+        ------^
+            t.equal(getAdminCleanupFailure(cleanup), cleanup, 'report rejection does not change cleanup veto');
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_CLEANUP_EVIDENCE_UNAVAILABLE
+        +undefined
+      ...
+    
+    ok 6 - report rejection does not change cleanup veto
+    ok 7 - should be equal
+    ok 8 - report rejection does not change cleanup veto
+    ok 9 - should be equal
+    ok 10 - report rejection does not change cleanup veto
+    ok 11 - should be equal
+    ok 12 - report rejection does not change cleanup veto
+    not ok 13 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+        lineNumber: 277
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/runtime/movielens-failure-report-participant-failures.test.js:277:7)
+      source: >2
+            await retainCleanup(cleanup);
+            const report = getAdminCleanupFailureReport(cleanup);
+            t.equal(report.code, 'ADMIN_CLEANUP_EVIDENCE_UNAVAILABLE');
+        ------^
+            t.equal(getAdminCleanupFailure(cleanup), cleanup, 'report rejection does not change cleanup veto');
+          }
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -ADMIN_CLEANUP_EVIDENCE_UNAVAILABLE
+        +undefined
+      ...
+    
+    ok 14 - report rejection does not change cleanup veto
+    1..14
+not ok 7 - admin cleanup projection bounds numeric and collection evidence before traversal # time=7.209ms
+  ---
+  at:
+    fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+    lineNumber: 261
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('admin cleanup projection bounds numeric and collection evidence before
+    traversal', async (t) => {
+  
+    ^
+      const inherited = Object.create({generation: 99});
+      const sparse = [];
+  ...
+
+# Subtest: admin cleanup projection does not dispatch through mutable array stack methods
+    not ok 1 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+        lineNumber: 301
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/runtime/movielens-failure-report-participant-failures.test.js:301:5)
+      source: >2
+            Array.prototype.push = originalPush;
+          }
+          t.equal(calls, 0);
+        ----^
+          t.same(report.failures?.map((failure) => failure.message), ['first', 'second']);
+        });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +1
+      ...
+    
+    not ok 2 - should be equivalent
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,4 +1,1 @@
+        -Array [
+        -  "first",
+        -  "second",
+        -]
+        +undefined
+      at:
+        fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+        lineNumber: 302
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/runtime/movielens-failure-report-participant-failures.test.js:302:5)
+      source: >2
+          }
+          t.equal(calls, 0);
+          t.same(report.failures?.map((failure) => failure.message), ['first', 'second']);
+        ----^
+      
+        });
+      ...
+    
+    1..2
+not ok 8 - admin cleanup projection does not dispatch through mutable array stack methods # time=3.601ms
+  ---
+  at:
+    fileName: test/runtime/movielens-failure-report-participant-failures.test.js
+    lineNumber: 282
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('admin cleanup projection does not dispatch through mutable array stack
+    methods', async (t) => {
+  
+    ^
+      const cleanup = new AggregateError([new Error('first'), new Error('second')], 'both failed');
+      await retainCleanup(cleanup);
+  ...
+
+# Subtest: AdminWsClient attaches the typed error-envelope fields to the rejected query Error
+    ok 1 - the client still rejects with an Error
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equivalent
+    ok 5 - the rejected Error names every forwarded participant failure
+    ok 6 - should be equivalent
+    ok 7 - should be equal
+    1..7
+ok 9 - AdminWsClient attaches the typed error-envelope fields to the rejected query Error # time=13.047ms
+
+# Subtest: AdminWsClient rejects a plain error frame with only the message
+    ok 1 - should be equal
+    ok 2 - no field is fabricated when the frame does not carry it
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    1..5
+ok 10 - AdminWsClient rejects a plain error frame with only the message # time=2.833ms
+
+# Subtest: MovieLens comparison and live failure reports serialise the participant failures beside the error message
+    ok 1 - should be equal
+    ok 2 - the comparison report keeps the error string every reader consumes
+    ok 3 - the comparison failure report names partitions and participant errors
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - the live failure report names partitions and participant errors
+    ok 7 - the report survives JSON serialisation with the error codes intact
+    1..7
+ok 11 - MovieLens comparison and live failure reports serialise the participant failures beside the error message # time=2.868ms
+
+# Subtest: demo report error owner writes a plain error and a passing run unchanged
+    ok 1 - should be equal
+    ok 2 - a plain error carries only its message
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - a passing run carries no error detail
+    1..5
+ok 12 - demo report error owner writes a plain error and a passing run unchanged # time=0.431ms
+
+1..12
+# { total: 73, pass: 65, fail: 8 }
+# time=57.277ms

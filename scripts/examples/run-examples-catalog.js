@@ -1,7 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
-import {AdminWsClient} from './admin-ws-client.js';
+import {AdminWsClient, withAdminWsClient, rethrowIfAdminCleanupIncomplete} from './admin-ws-client.js';
 import {executeExample, uploadExample} from './example-execution.js';
 import {
   DEFAULT_EXAMPLES_DIR,
@@ -91,6 +91,18 @@ function buildRunId(startedAt) {
   )}-${randomUUID().slice(0, RUN_ID_RANDOM_SLICE_LENGTH)}`;
 }
 
+function acquireCatalogClient(options) {
+  const injectedClient = options.client;
+  if (injectedClient) return {client: injectedClient, owned: false};
+  return {
+    client: new AdminWsClient({
+      target: options.target || DEFAULT_TARGET,
+      timeoutMs: options.timeoutMs || DEFAULT_TIMEOUT_MS,
+    }),
+    owned: true,
+  };
+}
+
 /**
  * Execute all selected examples and write a result artifact.
  *
@@ -117,15 +129,11 @@ async function runExamplesCatalog(options = {}) {
     exclude: options.exclude || [],
   });
 
-  const ownClient = !options.client;
-  const client = options.client || new AdminWsClient({
-    target: options.target || DEFAULT_TARGET,
-    timeoutMs: options.timeoutMs || DEFAULT_TIMEOUT_MS,
-  });
+  const {client, owned: ownClient} = acquireCatalogClient(options);
 
   const results = [];
 
-  try {
+  const execute = async () => {
     if (ownClient && typeof client.connect === LOCAL_STR_FUNCTION) {
       await client.connect();
     }
@@ -145,6 +153,7 @@ async function runExamplesCatalog(options = {}) {
         validationError = validation.error;
         rows = validation.rows;
       } catch (error) {
+        rethrowIfAdminCleanupIncomplete(error);
         passed = false;
         validationError = error.message;
       }
@@ -166,11 +175,9 @@ async function runExamplesCatalog(options = {}) {
         hostResult: executionResult?.hostResult || null,
       });
     }
-  } finally {
-    if (ownClient && typeof client.close === LOCAL_STR_FUNCTION) {
-      await client.close();
-    }
-  }
+  };
+  if (ownClient) await withAdminWsClient(client, execute);
+  else await execute();
 
   const endedAt = new Date();
   const summary = summarizeExamples(results);

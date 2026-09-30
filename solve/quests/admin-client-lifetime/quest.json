@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "admin-client-lifetime",
+  "class": "fix",
+  "statement": "AdminWsClient owns each websocket from allocation through observed close, fences retired callbacks and request admission, and exposes single-flight bounded cleanup without consumer socket wrappers. Preserve correlated responses, typed timeout/error envelopes and fresh connection retries after failed opening or completed close.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/admin-client-lifetime/evidence/receipt.json",
+      "requiredReceipts": [
+        "red-before-fix-lifetime-witnesses",
+        "generation-close-admission-and-resource-plateau",
+        "existing-client-and-tail-consumer-contracts",
+        "independent-exact-content-review",
+        "static-selected-proof-and-duration-budgets"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-owner",
+      "statement": "Repair scripts/examples/admin-ws-client.js, its direct witnesses and named consumer contract. No caller-level socket lifecycle wrapper or runtime transport edits."
+    },
+    {
+      "id": "bounded-lifetime",
+      "statement": "Register generation ownership before acquisition, retire synchronously, observe actual CLOSE, clear every opening/response/close timer and reject pending work exactly once. Graceful-to-forced cleanup uses an explicit bounded owner outcome; no timer or retry inflation."
+    },
+    {
+      "id": "compatibility",
+      "statement": "Preserve existing connect/response timeout classification, server error envelopes, partition callbacks and immediate retry after opening timeout. Do not retry ambiguous queries or translate semantic failures into readiness."
+    },
+    {
+      "id": "proof",
+      "statement": "Deterministic temporal tests plus real raw TCP and websocket witnesses; independent review; no skips, weakened checks or raised ratchets. Every authored unit test meets 2 seconds."
+    }
+  ],
+  "sealedAt": "59f3427c1557618c65f8dcd36d506826e8ffcbcf"
+}

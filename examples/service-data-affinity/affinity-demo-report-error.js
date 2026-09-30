@@ -4,6 +4,8 @@
 // per-participant failures of a distributed write) travel beside it as
 // `errorDetail`, so a failed load names its partitions and participant errors.
 
+import {getAdminCleanupFailureReport} from '../../scripts/examples/admin-ws-client.js';
+
 const REPORT_ERROR_DETAIL_FIELDS = Object.freeze([
   'errorCode',
   'details',
@@ -27,6 +29,10 @@ function buildAffinityDemoReportError(error) {
     if (error[field] !== undefined) {
       errorDetail[field] = error[field];
     }
+  }
+  const cleanup = getAdminCleanupFailureReport(error);
+  if (cleanup) {
+    errorDetail.cleanupFailure = cleanup;
   }
   return {error: error.message || null, errorDetail};
 }
