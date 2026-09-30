@@ -1,3 +1,7 @@
+import {
+  QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
+} from '../query/query-execution-budget.js';
+
 import {isReroutableWriteError} from '../constants/errors.js';
 import {isReroutableWriteFailureCode} from
   '../partition/partition-write-kernel.js';
@@ -99,13 +103,35 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     ) {
       const startedAt = this.timeSource.now();
       let retryAttempt = 0;
+      let priorMutationDeliveryMayHaveBeenAttempted = false;
       const shouldRetryDeferredCanonicalMutation =
         this.canUseReplicaOperationMutationIngress(mutation?.operation);
+      const operationCreationInsert =
+        mutation?.operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT;
       while (true) {
         const result = await this.executeReplicaOperationGatewayMutationAttempt(
           mutation, options, fallback, retryAttempt);
-        if (result.success || !this.isRetryableOperationPersistError(result)) {
+        if (result.success) {
           return result;
+        }
+        const preSubmissionRouteUnavailable =
+          result?.deliveryDisposition ===
+            QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE;
+        if (operationCreationInsert && !preSubmissionRouteUnavailable) {
+          priorMutationDeliveryMayHaveBeenAttempted = true;
+        }
+        const bindPriorMutationDeliveryAttempt = (failureResult) => ({
+          ...(failureResult && typeof failureResult === 'object' ?
+            failureResult : {}),
+          success: false,
+          error: this.getOperationPersistErrorMessage(failureResult),
+          priorMutationDeliveryMayHaveBeenAttempted: true,
+        });
+        if (!this.isRetryableOperationPersistError(result)) {
+          return operationCreationInsert &&
+              preSubmissionRouteUnavailable &&
+              priorMutationDeliveryMayHaveBeenAttempted ?
+            bindPriorMutationDeliveryAttempt(result) : result;
         }
         const recoveredAfterRetryableFailure =
           typeof options?.onRetryableFailure === 'function' ?
@@ -113,6 +139,14 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
             false;
         if (recoveredAfterRetryableFailure) {
           return {success: true, recoveredAfterRetryableFailure: true};
+        }
+        // Creation INSERT is one-shot once delivery may have occurred. A
+        // zero-candidate answer is re-entry only when this invocation is
+        // proven pre-submission. Lifecycle UPDATEs retain bounded retry after
+        // the same proof because no mutation was submitted.
+        if (operationCreationInsert && preSubmissionRouteUnavailable) {
+          return priorMutationDeliveryMayHaveBeenAttempted ?
+            bindPriorMutationDeliveryAttempt(result) : result;
         }
         if (
           this.shouldShortCircuitDeferredMutationRetry(result) &&
@@ -363,6 +397,15 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         errorResult.outcome.length > 0
       ) {
         error.outcome = errorResult.outcome;
+      }
+      if (
+        typeof errorResult?.deliveryDisposition === 'string' &&
+        errorResult.deliveryDisposition.length > 0
+      ) {
+        error.deliveryDisposition = errorResult.deliveryDisposition;
+      }
+      if (errorResult?.priorMutationDeliveryMayHaveBeenAttempted === true) {
+        error.priorMutationDeliveryMayHaveBeenAttempted = true;
       }
       if (errorResult?.cause && !error.cause) {
         error.cause = errorResult.cause;
