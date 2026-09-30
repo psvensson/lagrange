@@ -60,6 +60,25 @@ function incarnationOf(row) {
   return normalizeKnownNodeBootIncarnation(row?.[COLUMN.BOOT_INCARNATION]);
 }
 
+// How an observed NODES row relates to this boot's incarnation: the one
+// classification behind every registration and incarnation-advance decision
+// (absent -> birth, older -> one CAS advance, current -> no write, newer ->
+// refused).
+const NODE_INCARNATION_RELATION = Object.freeze({
+  ABSENT: 'absent',
+  OLDER: 'older',
+  CURRENT: 'current',
+  NEWER: 'newer',
+});
+
+function classifyNodeIncarnationRelation(observedRow, bootIncarnation) {
+  if (!observedRow) return NODE_INCARNATION_RELATION.ABSENT;
+  const observed = incarnationOf(observedRow);
+  if (observed > bootIncarnation) return NODE_INCARNATION_RELATION.NEWER;
+  return observed === bootIncarnation ? NODE_INCARNATION_RELATION.CURRENT :
+    NODE_INCARNATION_RELATION.OLDER;
+}
+
 /**
  * Authoritative read of one NODES row from its owner.
  * @param {Object} gateway
@@ -119,9 +138,12 @@ function failedResultError(result) {
 // The one mutation an observation admits: birth when absent, one CAS on
 // the exact older incarnation observed, none otherwise.
 function planRegistration(options, row, observedRow, bootIncarnation) {
-  if (!observedRow) return () => options.insert(row);
-  const observed = incarnationOf(observedRow);
-  if (observed >= bootIncarnation) return null;
+  const relation = classifyNodeIncarnationRelation(observedRow,
+    bootIncarnation);
+  if (relation === NODE_INCARNATION_RELATION.ABSENT) {
+    return () => options.insert(row);
+  }
+  if (relation !== NODE_INCARNATION_RELATION.OLDER) return null;
   const observedValue = observedRow[COLUMN.BOOT_INCARNATION];
   return () => options.advance({
     [COLUMN.NODE_ID]: row[COLUMN.NODE_ID],
@@ -134,9 +156,11 @@ function classifyObservation(read, bootIncarnation, afterAttempt) {
   if (read.available !== true || !read.row) {
     return NODE_REGISTRATION_OUTCOME.UNRESOLVED;
   }
-  const observed = incarnationOf(read.row);
-  if (observed > bootIncarnation) return NODE_REGISTRATION_OUTCOME.REFUSED_STALE;
-  if (observed === bootIncarnation) {
+  const relation = classifyNodeIncarnationRelation(read.row, bootIncarnation);
+  if (relation === NODE_INCARNATION_RELATION.NEWER) {
+    return NODE_REGISTRATION_OUTCOME.REFUSED_STALE;
+  }
+  if (relation === NODE_INCARNATION_RELATION.CURRENT) {
     return afterAttempt ? NODE_REGISTRATION_OUTCOME.ACCEPTED :
       NODE_REGISTRATION_OUTCOME.CURRENT;
   }
@@ -223,8 +247,10 @@ function buildSupersededRegistrationError(nodeId, receivedIncarnation,
 }
 
 export {
+  NODE_INCARNATION_RELATION,
   NODE_REGISTRATION_OUTCOME,
   buildSupersededRegistrationError,
+  classifyNodeIncarnationRelation,
   readAuthoritativeNodeRow,
   writeNodeRegistrationAtIncarnation,
 };

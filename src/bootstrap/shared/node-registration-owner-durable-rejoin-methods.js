@@ -24,8 +24,10 @@ import {
   AUTHORITATIVE_ROW_READ_STATE,
 } from '../rejoin-hints-constants.js';
 import {
+  NODE_INCARNATION_RELATION,
   NODE_REGISTRATION_OUTCOME,
   buildSupersededRegistrationError,
+  classifyNodeIncarnationRelation,
 } from '../../control-plane/owners/node-registration-incarnation-write.js';
 import {
   AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE,
@@ -350,12 +352,23 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     const nextIncarnation = normalizeKnownNodeBootIncarnation(
       nextNodeRow?.[COLUMN.BOOT_INCARNATION],
     );
+    // The NODES registration classification (D-7): newer -> refused; this
+    // boot already owns the row -> CURRENT, no write (a same-boot re-entry
+    // never re-CASes its own row); absent -> no CAS, the reread decides and
+    // the registration re-entry births the row; older -> one CAS below.
+    const relation = classifyNodeIncarnationRelation(observedNodeRow,
+      nextIncarnation);
     this.assertNodeBootIncarnationNotStale(
       normalizeKnownNodeBootIncarnation(
         readObservedBootIncarnation(observedNodeRow),
       ),
       nextIncarnation,
     );
+    if (relation === NODE_INCARNATION_RELATION.CURRENT) return nextNodeRow;
+    if (relation === NODE_INCARNATION_RELATION.ABSENT) {
+      return this.resolveNodeBootIncarnationAdvanceByReadback(
+        nextNodeRow, nextIncarnation);
+    }
     let result = null;
     try {
       result = await this.getMembershipPublicationRuntimeOwner()
@@ -384,17 +397,12 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   /**
    * Resumed join-admission progress from an earlier boot still carries that
    * boot's incarnation; advance it before this boot publishes lifecycle.
-   * Progress already on this boot is left untouched.
+   * Progress already on this boot is left untouched (the advance verb's
+   * CURRENT outcome).
    * @param {Object} progress - Resolved existing join-admission progress.
    * @return {Promise<void>}
    */
   async advanceStaleJoinAdmissionIncarnation(progress) {
-    const observedIncarnation = readObservedBootIncarnation(
-      progress?.observedNodeRow,
-    );
-    if (observedIncarnation === this.getRegistrationBootIncarnation()) {
-      return;
-    }
     await this.advanceNodeBootIncarnation(
       progress.observedNodeRow,
       progress.nodeRow,
