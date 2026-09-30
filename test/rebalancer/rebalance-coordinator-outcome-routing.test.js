@@ -80,7 +80,6 @@ const TEST_DEFERRED_OUTCOME_COMPLETION_STATE =
   'authoritative_operation_read_deferred';
 const TEST_REPLICA_OPERATION_UPDATE_SQL_PREFIX =
   'UPDATE replica_operations';
-const TEST_REPLICA_OPERATION_LEASE_SQL = /SET\s+lease_expires_at\s*=/u;
 const TEST_RETRY_PAYLOAD_WAIT_INITIAL_ATTEMPT = 0;
 const TEST_RETRY_PAYLOAD_WAIT_ATTEMPT_INCREMENT = 1;
 const TEST_RETRY_PAYLOAD_WAIT_ATTEMPT_COUNT = 4;
@@ -159,11 +158,8 @@ function createTestCoordinator(options = {}) {
         };
       }
     }
-    // The owner-lease stamp (SET lease_expires_at) carries no workflow
-    // columns; only the workflow-step UPDATE statements are modelled here.
     if (
       sql.includes(TEST_REPLICA_OPERATION_UPDATE_SQL_PREFIX) &&
-      !TEST_REPLICA_OPERATION_LEASE_SQL.test(sql) &&
       operation
     ) {
       operation.status = params?.[0];
