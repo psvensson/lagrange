@@ -12,6 +12,7 @@
 // (quest constraint diagnostics-never-decide).
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 
 import {
   INITIAL_PARTITION_IDS,
@@ -27,10 +28,33 @@ import {
   normalizePositiveInteger,
 } from '../../src/control-plane/membership-publication-row-helpers.js';
 import {
+  PRIORITY_PARTITION_SUMMARY_BASE_SOURCE,
   PRIORITY_PARTITION_SUMMARY_SOURCE,
   chooseClosureRefreshedPriorityPartitionSummary,
+  choosePriorityPartitionSummaryBase,
+  readPriorityPartitionSummaryClosureChoice,
   readPriorityPartitionSummarySource,
 } from '../../src/control-plane/priority-partition-summary-source.js';
+import {
+  PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE,
+} from '../../src/control-plane/membership-publication-readiness-repair.js';
+import {
+  buildMembershipPublicationRow,
+  deriveMembershipPublicationCandidate,
+  serializeMembershipPublicationRow,
+} from '../../src/control-plane/membership-publication-planning-evidence.js';
+import {
+  buildPriorityRecoveryBlockedPartitionIds,
+} from '../../src/control-plane/priority-recovery-planning-intent.js';
+import {
+  CLOSURE_ROUTE_CASE,
+  CLOSURE_ROUTE_CASE_IDS,
+  LEARNER_NODE,
+  NOW_MS,
+  SUBJECT_PARTITION_ID,
+  buildClosureRouteCacheRows,
+  buildClosureRouteCaseInput,
+} from './closure-witness-route-cases.js';
 import {
   PRIORITY_RECOVERY_PLANNING_ANSWER_ORIGIN,
   beginPriorityRecoveryPlanningAnswer,
@@ -69,7 +93,7 @@ const SUMMARY_HELPERS = Object.freeze({
 });
 const PUBLISHER_NODE_ID = 'seed';
 const GUARD_NODE_ID = 'node-2';
-const GUARD_PARTITION_ID = 'schema_operations-p1';
+const GUARD_PARTITION_ID = SUBJECT_PARTITION_ID;
 const GUARD_REPLICA_ID = `${GUARD_PARTITION_ID}-r5`;
 const GUARD_CHECK_LIMIT = 6;
 const OTHER_NODE_ID = 'node-2';
@@ -190,14 +214,46 @@ function retentionOwner(shape = RETENTION_SHAPE.COMPLETE_RETAIN) {
 // CDC service, publication coordinator and planning memos. Only the guard's
 // own system-table rows are a fixture, because the subject here is the
 // planning owner, not the census.
-function guardOverRealPlanningOwner() {
-  const network = createVirtualNetwork({startMs: Date.now()});
-  network.registerNode(GUARD_NODE_ID, () => undefined);
-  const hosts = createSimulatedNodeHosts({
+function learnerGuardOver(readinessService, systemTableCache, nodeId) {
+  const lines = [];
+  const guard = {
+    ...createPartitionServiceLearnerPromotionMethods(),
+    role: 'learner',
+    leaderId: `${GUARD_PARTITION_ID}-r1`,
+    partitionId: GUARD_PARTITION_ID,
+    replicaId: GUARD_REPLICA_ID,
+    nodeId,
+    isJoiningExistingGroup: false,
+    isShutdown: false,
+    learnerPromotionTimer: null,
+    learnerPromotionCountCheckInputsLogged: false,
+    learnerCatchUpCheckIntervalMs: 1000,
+    logger: {info: (msg, fields) => lines.push({msg, fields}),
+      warn() {}, debug() {}},
+    systemTableCache,
+    controlPlaneReadinessService: readinessService,
+    metadataPublicationReadinessState: {
+      getSnapshot: () => ({phase: 'warming', ready: false, draining: false,
+        reasons: ['READINESS_STABLE_WINDOW_PENDING']}),
+    },
+    scheduleLearnerPromotion() {},
+    async applyLearnerPromotionProofGate() {},
+  };
+  return {guard, lines};
+}
+
+function simulatedReadinessService(nodeId, startMs) {
+  const network = createVirtualNetwork({startMs});
+  network.registerNode(nodeId, () => undefined);
+  return createSimulatedNodeHosts({
     network,
-    nodeId: GUARD_NODE_ID,
+    nodeId,
     randomSource: {random: () => 0.5},
   });
+}
+
+function guardOverRealPlanningOwner() {
+  const hosts = simulatedReadinessService(GUARD_NODE_ID, Date.now());
   const serviceRow = (index, raftRole, nodeId) => ({
     partition_id: GUARD_PARTITION_ID,
     service_type: SERVICE_TYPE.PARTITION,
@@ -212,36 +268,39 @@ function guardOverRealPlanningOwner() {
     serviceRow(3, 'follower', 'node-1'), serviceRow(4, 'follower', 'node-1'),
     serviceRow(5, 'learner', GUARD_NODE_ID),
   ];
-  const lines = [];
-  const guard = {
-    ...createPartitionServiceLearnerPromotionMethods(),
-    role: 'learner',
-    leaderId: `${GUARD_PARTITION_ID}-r1`,
-    partitionId: GUARD_PARTITION_ID,
-    replicaId: GUARD_REPLICA_ID,
-    nodeId: GUARD_NODE_ID,
-    isJoiningExistingGroup: false,
-    isShutdown: false,
-    learnerPromotionTimer: null,
-    learnerPromotionCountCheckInputsLogged: false,
-    learnerCatchUpCheckIntervalMs: 1000,
-    logger: {info: (msg, fields) => lines.push({msg, fields}),
-      warn() {}, debug() {}},
-    systemTableCache: {
-      get: (table) => (table === TABLES.PARTITIONS ?
-        {partition_id: GUARD_PARTITION_ID, replica_count: 3} : null),
-      filter: (table, predicate) =>
-        (table === TABLES.SERVICES ? services : []).filter(predicate),
-    },
-    controlPlaneReadinessService: hosts.controlPlaneReadinessService,
-    metadataPublicationReadinessState: {
-      getSnapshot: () => ({phase: 'warming', ready: false, draining: false,
-        reasons: ['READINESS_STABLE_WINDOW_PENDING']}),
-    },
-    scheduleLearnerPromotion() {},
-    async applyLearnerPromotionProofGate() {},
+  return learnerGuardOver(hosts.controlPlaneReadinessService, {
+    get: (table) => (table === TABLES.PARTITIONS ?
+      {partition_id: GUARD_PARTITION_ID, replica_count: 3} : null),
+    filter: (table, predicate) =>
+      (table === TABLES.SERVICES ? services : []).filter(predicate),
+  }, GUARD_NODE_ID);
+}
+
+// The same real owner, with the recorded refusal's rows in its own cache: it
+// derives the candidate itself, so the route the guard's payload names is the
+// route that service's derivation took, end to end.
+function guardOverSeededPlanningOwner(caseId) {
+  const rows = buildClosureRouteCacheRows(caseId);
+  const hosts = simulatedReadinessService(LEARNER_NODE, rows.nowMs);
+  const seed = (table, tableRows) => {
+    for (const row of tableRows) {
+      hosts.cache.applySystemTableChange(table, 'INSERT', row, rows.nowMs);
+    }
   };
-  return {guard, lines};
+  seed(TABLES.NODES, rows.nodeRows);
+  seed(TABLES.PARTITIONS, rows.partitionRows);
+  seed(TABLES.SERVICES, rows.serviceRows);
+  seed(TABLES.REPLICA_OPERATIONS, rows.replicaOperationRows);
+  seed(TABLES.CONTROL_PLANE_PUBLICATIONS, [rows.publicationRow]);
+  return learnerGuardOver(hosts.controlPlaneReadinessService, {
+    get: (table, key) => (table === TABLES.PARTITIONS ?
+      rows.partitionRows.find((row) => row.partition_id === key) || null :
+      null),
+    filter: (table, predicate) => (table === TABLES.SERVICES ?
+      rows.serviceRows :
+      table === TABLES.REPLICA_OPERATIONS ? rows.replicaOperationRows : [])
+      .filter(predicate),
+  }, LEARNER_NODE);
 }
 
 test('the summary source and the planning answer origin are named by their owners',
@@ -493,5 +552,272 @@ test('the summary source and the planning answer origin are named by their owner
       assert.notEqual(payload.origin,
         PRIORITY_RECOVERY_PLANNING_ANSWER_ORIGIN.RETAINED,
         'nothing on this path came out of the retention layer');
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// Witness for the closure-witness-route-observed quest.
+//
+// SCOPE. The refusal payload names WHICH summary won, never WHY. The closure
+// evidence owner has three routes - a witness retained from the planning
+// snapshot outright, one built from the node's own rows, or none at all - and
+// which one ran is not observable, so a reproduction cannot know which live
+// input it lacks. The three cases below reach the owner THROUGH the real
+// candidate derivation, never by calling it, and the route, the witness, this
+// partition's own decision and the base summary the choice was made against
+// are read back from beside the chosen summary.
+// ---------------------------------------------------------------------------
+
+function deriveRouteCase(caseId, retainedClosureWitness = null) {
+  const candidate = deriveMembershipPublicationCandidate(
+    buildClosureRouteCaseInput(caseId, retainedClosureWitness));
+  return {
+    candidate,
+    choice: readPriorityPartitionSummaryClosureChoice(
+      candidate.priorityPartitionSummary),
+  };
+}
+
+// Main's own output for each case, captured on f9d388499 before this quest
+// changed a line: the sha256 of the whole candidate, of the row the
+// publication writer persists from it, and the change flag the publication
+// comparison produced. A candidate that gained one field breaks all three.
+const MAIN_ORACLE = Object.freeze({
+  [CLOSURE_ROUTE_CASE.BUILT_CLOSURE_REFRESHED]: Object.freeze({
+    candidate: 'f05bab25eec0db2f67b44db18c42d878',
+    publicationRow: 'd3eb80b95cfe8ef064ca4c74cd96be01',
+    summaryChanged: true,
+  }),
+  [CLOSURE_ROUTE_CASE.BUILT_CLOSURE_PENDING]: Object.freeze({
+    candidate: 'a7be6ca34e622d7a59f987ea485505d7',
+    publicationRow: 'fd981c81009a272eddfcadb4eda11de4',
+    summaryChanged: true,
+  }),
+  [CLOSURE_ROUTE_CASE.NONE_NO_OPERATION_ROWS]: Object.freeze({
+    candidate: '1eb5518fae1f4820c0382c7c65264f70',
+    publicationRow: 'fd981c81009a272eddfcadb4eda11de4',
+    summaryChanged: true,
+  }),
+  [CLOSURE_ROUTE_CASE.RETAINED_SATISFIED_WITNESS]: Object.freeze({
+    candidate: 'bc27d9eca791bb4e75d381ae63ccd586',
+    publicationRow: 'd3eb80b95cfe8ef064ca4c74cd96be01',
+    summaryChanged: true,
+  }),
+});
+const ORACLE_DIGEST_LENGTH = 32;
+
+function oracleDigest(value) {
+  return createHash('sha256')
+    .update(JSON.stringify(value))
+    .digest('hex')
+    .slice(0, ORACLE_DIGEST_LENGTH);
+}
+
+test('the closure evidence route is stated on every route the derivation takes',
+  async () => {
+    // The names are what a log reader sees, so they are pinned as literals
+    // rather than through the constant the payload is built from.
+    assert.deepStrictEqual({...PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE},
+      {RETAINED: 'retained', BUILT: 'built', NONE: 'none'},
+      'the three route names are the ones the log will carry');
+
+    // BUILT: replica-operation rows and no retained witness, so the owner
+    // builds the decision snapshots from the node's own rows.
+    const built = deriveRouteCase(CLOSURE_ROUTE_CASE.BUILT_CLOSURE_REFRESHED);
+    assert.equal(built.choice.closureRoute,
+      PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE.BUILT,
+      'rows and no retained witness is the built route');
+    assert.ok(built.candidate.priorityRecoveryDecisionSnapshots,
+      'the built route produced decision snapshots');
+    assert.equal(built.choice.decisionSnapshots,
+      built.candidate.priorityRecoveryDecisionSnapshots,
+      'and recorded the very snapshots the derivation produced');
+    assert.equal(built.choice.closureWitness,
+      built.candidate.priorityRecoveryClosureWitness,
+      'and the witness object the derivation chose against');
+    assert.equal(built.choice.source,
+      PRIORITY_PARTITION_SUMMARY_SOURCE.CLOSURE_REFRESHED,
+      'this is the recorded refusal shape: the refreshed summary won');
+
+    // NONE: no replica-operation rows at all, so there is no witness to have.
+    const none = deriveRouteCase(CLOSURE_ROUTE_CASE.NONE_NO_OPERATION_ROWS);
+    assert.equal(none.choice.closureRoute,
+      PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE.NONE,
+      'no operation rows is the none route');
+    assert.equal(none.candidate.priorityRecoveryClosureWitness, null);
+    assert.equal(none.choice.closureWitness, null);
+    assert.equal(none.choice.decisionSnapshots, null);
+
+    // RETAINED: the planning snapshot already carries a witness, and the
+    // owner takes it outright before it reads a local row.
+    const retained = deriveRouteCase(
+      CLOSURE_ROUTE_CASE.RETAINED_SATISFIED_WITNESS,
+      built.candidate.priorityRecoveryClosureWitness);
+    assert.equal(retained.choice.closureRoute,
+      PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE.RETAINED,
+      'a witness on the planning snapshot is the retained route');
+    assert.equal(retained.candidate.priorityRecoveryDecisionSnapshots, null,
+      'the retained route builds no decision snapshots');
+    assert.equal(retained.choice.decisionSnapshots, null);
+    assert.equal(retained.choice.closureWitness,
+      built.candidate.priorityRecoveryClosureWitness,
+      'the retained witness is the one that was handed in');
+    assert.equal(retained.choice.source,
+      PRIORITY_PARTITION_SUMMARY_SOURCE.CLOSURE_REFRESHED,
+      'a retained satisfied witness wins the choice with no local evidence');
+
+    // A summary no derivation chose is UNRECORDED, never a route by default.
+    assert.equal(
+      readPriorityPartitionSummaryClosureChoice(semanticSummary(
+        semanticBlock())).closureRoute,
+      PRIORITY_PARTITION_SUMMARY_SOURCE.UNRECORDED);
+    assert.equal(
+      readPriorityPartitionSummaryClosureChoice(null).closureRoute,
+      PRIORITY_PARTITION_SUMMARY_SOURCE.UNRECORDED);
+
+    // END TO END through a REAL ControlPlaneReadinessService holding the
+    // recorded refusal's rows: the service derives the candidate itself, and
+    // the guard's payload names the route that derivation took.
+    const seeded = guardOverSeededPlanningOwner(
+      CLOSURE_ROUTE_CASE.BUILT_CLOSURE_REFRESHED);
+    await seeded.guard.runLearnerPromotionCheck();
+    const {closure, prioritySummary, completion} =
+      seeded.lines[seeded.lines.length - 1]
+        .fields.countCheckInputs.priorityRecovery;
+    assert.equal(prioritySummary.satisfied, true);
+    assert.equal(prioritySummary.source,
+      PRIORITY_PARTITION_SUMMARY_SOURCE.CLOSURE_REFRESHED);
+    assert.equal(completion.temporaryOverflowVoterBudget, 0,
+      'this is the recorded refusal reading, produced by a real owner');
+    assert.equal(closure.route,
+      PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE.BUILT,
+      'and the payload now says which route produced the witness it read');
+    assert.equal(closure.witnessMatchesAnswer, true,
+      'the record is the one the answer the guard decided on carries');
+
+    // The same real owner with no operation rows in its cache takes the
+    // none route, so the end-to-end route is not a constant.
+    const empty = guardOverRealPlanningOwner();
+    await empty.guard.runLearnerPromotionCheck();
+    assert.equal(
+      empty.lines[empty.lines.length - 1]
+        .fields.countCheckInputs.priorityRecovery.closure.route,
+      PRIORITY_PARTITION_SUMMARY_SOURCE.UNRECORDED,
+      'a real service that chose no summary at all records no route');
+  });
+
+test('the base summary the closure choice was made against is stated',
+  async () => {
+    // The base is itself a choice: the planning snapshot's own summary,
+    // normalized, against the one derived from this node's service rows.
+    const derived = semanticSummary(semanticBlock());
+    const published = semanticSummary(semanticBlock({
+      readyDistinctNodeCount: 3, spreadGap: 0}));
+    assert.equal(
+      choosePriorityPartitionSummaryBase(published, derived, SUMMARY_HELPERS)
+        .source,
+      PRIORITY_PARTITION_SUMMARY_BASE_SOURCE.PUBLISHED_NORMALIZED,
+      'the planning snapshot\'s own summary names itself when it wins');
+    assert.equal(
+      choosePriorityPartitionSummaryBase(derived, published, SUMMARY_HELPERS)
+        .source,
+      PRIORITY_PARTITION_SUMMARY_BASE_SOURCE.DERIVED,
+      'the locally derived census names itself when it wins');
+    // The choice itself is still main's, on every ordering and on null.
+    for (const [left, right] of [[published, derived], [derived, published],
+      [null, derived], [published, null], [null, null]]) {
+      assert.deepStrictEqual(
+        choosePriorityPartitionSummaryBase(left, right, SUMMARY_HELPERS)
+          .summary,
+        chooseMoreAdvancedPriorityPartitionSummary(
+          left, right, SUMMARY_HELPERS),
+        'the base choice is the one main\'s owner makes');
+    }
+
+    // Through the real derivation: the base the closure choice compared
+    // against is recorded beside the chosen summary, with this partition's
+    // blocked flag readable off it.
+    for (const caseId of [CLOSURE_ROUTE_CASE.BUILT_CLOSURE_REFRESHED,
+      CLOSURE_ROUTE_CASE.BUILT_CLOSURE_PENDING]) {
+      const {choice} = deriveRouteCase(caseId);
+      assert.ok(choice.baseSummary,
+        `${caseId} recorded the base summary it compared against`);
+      assert.equal(choice.baseSummary.satisfied, false,
+        `${caseId} base summary still shows the spread gap`);
+      assert.equal(choice.baseSummarySource,
+        PRIORITY_PARTITION_SUMMARY_BASE_SOURCE.DERIVED,
+        `${caseId} base summary came from this node's own census`);
+      assert.ok(
+        buildPriorityRecoveryBlockedPartitionIds(choice.baseSummary)
+          .includes(GUARD_PARTITION_ID),
+        `${caseId} base summary blocks the subject partition`);
+    }
+
+    // END TO END: the payload block, from a real owner that derived the
+    // recorded refusal's candidate itself.
+    const seeded = guardOverSeededPlanningOwner(
+      CLOSURE_ROUTE_CASE.BUILT_CLOSURE_REFRESHED);
+    await seeded.guard.runLearnerPromotionCheck();
+    const payload = seeded.lines[seeded.lines.length - 1]
+      .fields.countCheckInputs.priorityRecovery;
+    assert.equal(payload.prioritySummary.satisfied, true,
+      'the summary the guard read says satisfied');
+    assert.deepStrictEqual({...payload.closure.baseSummary}, {
+      satisfied: false,
+      source: PRIORITY_PARTITION_SUMMARY_BASE_SOURCE.DERIVED,
+      thisPartitionBlocked: true,
+    }, 'while the base it was chosen over still blocked this partition');
+
+    // The recorded base summary is the object the derivation held, never a
+    // copy, and it never became a field of the chosen summary.
+    const {candidate, choice} = deriveRouteCase(
+      CLOSURE_ROUTE_CASE.BUILT_CLOSURE_REFRESHED);
+    assert.notEqual(choice.baseSummary, candidate.priorityPartitionSummary,
+      'the base and the chosen summary are different objects here');
+    assert.equal(
+      Object.keys(candidate.priorityPartitionSummary)
+        .includes('baseSummary'), false,
+      'and nothing about the base is a field of the chosen summary');
+  });
+
+test('the candidate derivation and the row it is persisted as are unchanged',
+  async () => {
+    const seed = deriveMembershipPublicationCandidate(
+      buildClosureRouteCaseInput(
+        CLOSURE_ROUTE_CASE.BUILT_CLOSURE_REFRESHED));
+    const retainedWitness = seed.priorityRecoveryClosureWitness;
+    for (const caseId of CLOSURE_ROUTE_CASE_IDS) {
+      const candidate = deriveMembershipPublicationCandidate(
+        buildClosureRouteCaseInput(caseId, retainedWitness));
+      const expected = MAIN_ORACLE[caseId];
+      assert.equal(oracleDigest(candidate), expected.candidate,
+        `${caseId}: the whole candidate is main's, field for field`);
+      assert.equal(
+        oracleDigest(serializeMembershipPublicationRow(
+          buildMembershipPublicationRow({candidate, nowMs: NOW_MS}))),
+        expected.publicationRow,
+        `${caseId}: the persisted publication row is byte-identical`);
+      assert.equal(candidate.priorityPartitionSummaryChanged,
+        expected.summaryChanged,
+        `${caseId}: the publication change comparison is unchanged`);
+      assert.equal(
+        Object.keys(candidate).includes('priorityRecoveryClosureRoute'),
+        false,
+        `${caseId}: the route never became a field of the candidate`);
+      assert.deepStrictEqual(
+        candidate.priorityPartitionSummary,
+        normalizePriorityPartitionSummary(
+          candidate.priorityPartitionSummary, {}, SUMMARY_HELPERS),
+        `${caseId}: the chosen summary is its own normal form, field for field`);
+      // The chosen summary carries no diagnostic field, so the equality the
+      // publication writer compares on cannot see one.
+      assert.equal(
+        arePriorityPartitionSummariesEqual(
+          candidate.priorityPartitionSummary,
+          normalizePriorityPartitionSummary(
+            candidate.priorityPartitionSummary, {}, SUMMARY_HELPERS),
+          SUMMARY_HELPERS),
+        true,
+        `${caseId}: summary equality still sees the normal form as equal`);
     }
   });

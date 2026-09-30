@@ -1,0 +1,54 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "closure-witness-route-observed",
+  "status": "pass",
+  "testFileDigests": {
+    "test/control-plane/priority-recovery-decision-provenance.test.js": "7e042266d964952be124a01f758e3c9f5a2e13d1793e8a254a0b1da601e6f607",
+    "test/partition/learner-promotion-count-check-inputs.test.js": "c348c10deda5cfcc2058127260bcd953e7cf190632474dbdf775cb7cc4378634"
+  },
+  "generatedAt": "2026-09-19T09:41:22.478Z",
+  "receipts": [
+    {
+      "id": "route-retained-built-none-stated",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the closure evidence route is stated on every route the derivation takes$\" test/control-plane/priority-recovery-decision-provenance.test.js",
+      "detail": "retained, built and none are each reached through the real derivation",
+      "testFile": "test/control-plane/priority-recovery-decision-provenance.test.js"
+    },
+    {
+      "id": "witness-state-and-unresolved-ids-stated",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the payload states the closure witness state and its unresolved ids$\" test/partition/learner-promotion-count-check-inputs.test.js",
+      "detail": "state, summarySpreadPending and both capped id lists reach the payload",
+      "testFile": "test/partition/learner-promotion-count-check-inputs.test.js"
+    },
+    {
+      "id": "this-partitions-semantic-state-and-satisfying-operations-stated",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the payload states this partition's semantic state and satisfying operations$\" test/partition/learner-promotion-count-check-inputs.test.js",
+      "detail": "semantic state, spread-completion reason and each satisfying target",
+      "testFile": "test/partition/learner-promotion-count-check-inputs.test.js"
+    },
+    {
+      "id": "base-summary-before-the-closure-choice-stated",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the base summary the closure choice was made against is stated$\" test/control-plane/priority-recovery-decision-provenance.test.js",
+      "detail": "the base summary's satisfied flag, its own source and this partition",
+      "testFile": "test/control-plane/priority-recovery-decision-provenance.test.js"
+    },
+    {
+      "id": "absent-values-are-stated-as-absent",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every absent closure value is stated as absent$\" test/partition/learner-promotion-count-check-inputs.test.js",
+      "detail": "no answer, no witness, no decision snapshots, partition not tracked",
+      "testFile": "test/partition/learner-promotion-count-check-inputs.test.js"
+    },
+    {
+      "id": "decisions-unchanged",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the candidate derivation and the row it is persisted as are unchanged$\" test/control-plane/priority-recovery-decision-provenance.test.js",
+      "detail": "candidate, publication row and summary equality match main's oracle",
+      "testFile": "test/control-plane/priority-recovery-decision-provenance.test.js"
+    }
+  ]
+}

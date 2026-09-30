@@ -25,9 +25,32 @@ import {
   evaluateLearnerPromotionCountCheck,
 } from '../../src/partition/learner-promotion-count-check.js';
 import {
+  LEARNER_PROMOTION_CLOSURE_ABSENT,
   LEARNER_PROMOTION_INPUTS_LIST_LIMIT,
   buildLearnerPromotionCountCheckInputs,
 } from '../../src/partition/learner-promotion-count-check-evidence.js';
+import {
+  chooseClosureRefreshedPriorityPartitionSummary,
+} from '../../src/control-plane/priority-partition-summary-source.js';
+import {
+  PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE,
+} from '../../src/control-plane/membership-publication-readiness-repair.js';
+import {
+  deriveMembershipPublicationCandidate,
+} from '../../src/control-plane/membership-publication-planning-evidence.js';
+import {
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
+  PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON,
+} from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
+import {
+  PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
+  PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
+} from '../../src/control-plane/priority-recovery-snapshot-contract.js';
+import {
+  CLOSURE_ROUTE_CASE,
+  LEARNER_NODE as ROUTE_LEARNER_NODE,
+  buildClosureRouteCaseInput,
+} from '../control-plane/closure-witness-route-cases.js';
 import {TABLES, SERVICE_TYPE} from '../../src/constants/index.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
@@ -68,6 +91,24 @@ const TARGET_SOURCE_PARTITION_ROW = 'partition_row_replica_count';
 const TARGET_SOURCE_UNDECLARED = 'undeclared';
 const ORIGIN_UNSTATED = 'unstated';
 const SUMMARY_SOURCE_UNRECORDED = 'unrecorded';
+const CLOSURE_ROUTE_BUILT = PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE.BUILT;
+const CLOSURE_ROUTE_NONE = PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE.NONE;
+const CLOSURE_ROUTE_RETAINED = PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE.RETAINED;
+const CLOSURE_PENDING = PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.PENDING;
+const CLOSURE_SATISFIED_STALE_PUBLICATION =
+  PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION;
+const RECOVERING_IN_FLIGHT =
+  PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT;
+const SPREAD_SATISFIED_IN_FLIGHT =
+  PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT;
+const OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE =
+  PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON
+    .OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE;
+const ACTIVE_OPERATION_STILL_BLOCKS_SPREAD =
+  PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON.ACTIVE_OPERATION_STILL_BLOCKS_SPREAD;
+const ACTIVE_OPERATIONAL =
+  PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL;
+const WITHHELD_BEYOND_LIMIT = 5;
 const LEARNER_ROLE = 'learner';
 const FOLLOWER_ROLE = 'follower';
 const LEADER_ROLE = 'leader';
@@ -1141,3 +1182,198 @@ test('every count-check decision matches the frozen copy of main\'s arithmetic',
       }
     }
   });
+
+// ---------------------------------------------------------------------------
+// Witness for the closure-witness-route-observed quest.
+//
+// The payload names WHICH summary won; these scenarios add WHY. Every answer
+// the guard is handed below is a candidate the REAL membership-publication
+// derivation produced from rows, so the route, the witness, this partition's
+// own decision and the base summary are the ones an evaluation recorded, not
+// values a fixture asserted into place.
+// ---------------------------------------------------------------------------
+
+const ROUTE_ANSWER_CACHE = new Map();
+
+function routeAnswer(caseId) {
+  if (!ROUTE_ANSWER_CACHE.has(caseId)) {
+    // The retained case needs a witness a BUILT run produced, so the route
+    // it takes is driven by real evidence rather than a hand-written one.
+    const retainedWitness =
+      caseId === CLOSURE_ROUTE_CASE.RETAINED_SATISFIED_WITNESS ?
+        routeAnswer(CLOSURE_ROUTE_CASE.BUILT_CLOSURE_REFRESHED)
+          .priorityRecoveryClosureWitness :
+        null;
+    ROUTE_ANSWER_CACHE.set(caseId, deriveMembershipPublicationCandidate(
+      buildClosureRouteCaseInput(caseId, retainedWitness)));
+  }
+  return ROUTE_ANSWER_CACHE.get(caseId);
+}
+
+// The one entry point: the guard runs one check against a REAL candidate as
+// its planning answer, and the closure block of whichever line carried the
+// payload - the refusal or the first pass, both state the same record - is
+// returned.
+async function closureBlockFor(caseId, overrides = {}) {
+  const {context, logLines} = refusalFixture({
+    planningAnswer: caseId === null ? null : routeAnswer(caseId),
+    ...overrides,
+  });
+  await context.runLearnerPromotionCheck();
+  const payloads = logLines.filter(
+    (line) => line.fields?.countCheckInputs !== undefined);
+  assert.equal(payloads.length, 1, 'exactly one line carried the payload');
+  return payloads[0].fields.countCheckInputs.priorityRecovery.closure;
+}
+
+test('the payload states the closure witness state and its unresolved ids',
+  async () => {
+    const refreshed = await closureBlockFor(
+      CLOSURE_ROUTE_CASE.BUILT_CLOSURE_REFRESHED);
+    assert.equal(refreshed.route, CLOSURE_ROUTE_BUILT);
+    assert.equal(refreshed.witness.state, CLOSURE_SATISFIED_STALE_PUBLICATION,
+      'the recorded refusal reads a satisfied witness over a stale summary');
+    assert.equal(refreshed.witness.summarySpreadPending, true,
+      'and the summary it was compared against still showed the gap');
+    assert.deepStrictEqual(refreshed.witness.unresolvedSemanticStateIds, [],
+      'nothing was unresolved, which is why the witness said satisfied');
+    assert.deepStrictEqual(refreshed.witness.blockedPartitionIds, []);
+    assert.equal(refreshed.witness.unresolvedSemanticStateIdsWithheld, 0);
+    assert.equal(refreshed.witness.blockedPartitionIdsWithheld, 0);
+
+    const pending = await closureBlockFor(
+      CLOSURE_ROUTE_CASE.BUILT_CLOSURE_PENDING);
+    assert.equal(pending.witness.state, CLOSURE_PENDING);
+    assert.deepStrictEqual(pending.witness.unresolvedSemanticStateIds,
+      [RECOVERING_IN_FLIGHT],
+      'the pending witness names the semantic state that held it open');
+    assert.ok(pending.witness.blockedPartitionIds.includes(
+      CRITICAL_PARTITION_ID),
+    'and the partitions that were in it');
+
+    // Both lists are capped and say how many entries they withheld.
+    const wide = Array.from({length: LEARNER_PROMOTION_INPUTS_LIST_LIMIT + WITHHELD_BEYOND_LIMIT},
+      (_unused, index) => `partition-${index}`);
+    const widened = chooseClosureRefreshedPriorityPartitionSummary(
+      satisfiedSummary(), null, {}, {
+        route: CLOSURE_ROUTE_BUILT,
+        closureWitness: Object.freeze({
+          state: CLOSURE_PENDING,
+          summarySpreadPending: true,
+          unresolvedSemanticStateIds: wide,
+          blockedPartitionIds: wide,
+        }),
+        decisionSnapshots: null,
+        baseSummary: satisfiedSummary(),
+        baseSummarySource: SUMMARY_SOURCE_UNRECORDED,
+      });
+    const capped = buildLearnerPromotionCountCheckInputs({
+      priorityRecovery: {
+        partitionId: CRITICAL_PARTITION_ID,
+        priorityPartitionSummary: widened,
+        planningAnswer: {priorityRecoveryClosureWitness: null},
+      },
+    }).priorityRecovery.closure;
+    assert.equal(capped.witness.blockedPartitionIds.length,
+      LEARNER_PROMOTION_INPUTS_LIST_LIMIT);
+    assert.equal(capped.witness.blockedPartitionIdsWithheld,
+      WITHHELD_BEYOND_LIMIT);
+    assert.equal(capped.witness.unresolvedSemanticStateIdsWithheld,
+      WITHHELD_BEYOND_LIMIT);
+  });
+
+test('the payload states this partition\'s semantic state and satisfying operations',
+  async () => {
+    const refreshed = await closureBlockFor(
+      CLOSURE_ROUTE_CASE.BUILT_CLOSURE_REFRESHED);
+    assert.equal(refreshed.partition.semanticState, SPREAD_SATISFIED_IN_FLIGHT,
+      'an in-flight ADD is what made this partition count as resolved');
+    assert.equal(refreshed.partition.spreadCompletionReasonCode,
+      OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
+      'and the reason is the target row the census never showed');
+    assert.deepStrictEqual(refreshed.partition.satisfyingOperations, [{
+      operationId: 'op-0',
+      targetNodeId: ROUTE_LEARNER_NODE,
+      targetVisibilityState: ACTIVE_OPERATIONAL,
+    }], 'each satisfying operation names its target and that target\'s state');
+    assert.equal(refreshed.partition.satisfyingOperationsWithheld, 0);
+
+    const pending = await closureBlockFor(
+      CLOSURE_ROUTE_CASE.BUILT_CLOSURE_PENDING);
+    assert.equal(pending.partition.semanticState, RECOVERING_IN_FLIGHT);
+    assert.equal(pending.partition.spreadCompletionReasonCode,
+      ACTIVE_OPERATION_STILL_BLOCKS_SPREAD);
+    assert.deepStrictEqual(pending.partition.satisfyingOperations, []);
+
+    // On the retained route the owner builds no decision snapshots, so the
+    // three fields are stated as unavailable rather than left out.
+    const retained = await closureBlockFor(
+      CLOSURE_ROUTE_CASE.RETAINED_SATISFIED_WITNESS);
+    assert.equal(retained.route, CLOSURE_ROUTE_RETAINED);
+    assert.equal(retained.partition.semanticState,
+      LEARNER_PROMOTION_CLOSURE_ABSENT.RETAINED_ROUTE);
+    assert.equal(retained.partition.spreadCompletionReasonCode,
+      LEARNER_PROMOTION_CLOSURE_ABSENT.RETAINED_ROUTE);
+    assert.deepStrictEqual(retained.partition.satisfyingOperations, []);
+    assert.equal(retained.witness.state, CLOSURE_SATISFIED_STALE_PUBLICATION,
+      'the retained witness still states why it read satisfied');
+  });
+
+test('every absent closure value is stated as absent', async () => {
+  const shapeOf = (closure) => Object.freeze({
+    route: typeof closure.route,
+    witness: Object.keys(closure.witness).sort().join(','),
+    partition: Object.keys(closure.partition).sort().join(','),
+    baseSummary: Object.keys(closure.baseSummary).sort().join(','),
+  });
+
+  // No planning answer at all: nothing chose a summary, so nothing is
+  // recorded, and every field says so.
+  const noAnswer = await closureBlockFor(null);
+  assert.equal(noAnswer.route, SUMMARY_SOURCE_UNRECORDED);
+  assert.equal(noAnswer.witness.state,
+    LEARNER_PROMOTION_CLOSURE_ABSENT.NO_CLOSURE_CHOICE);
+  assert.equal(noAnswer.partition.semanticState,
+    LEARNER_PROMOTION_CLOSURE_ABSENT.NO_CLOSURE_CHOICE);
+  assert.equal(noAnswer.baseSummary.satisfied,
+    LEARNER_PROMOTION_CLOSURE_ABSENT.NO_CLOSURE_CHOICE);
+
+  // No witness: the none route produced neither a witness nor snapshots.
+  const none = await closureBlockFor(
+    CLOSURE_ROUTE_CASE.NONE_NO_OPERATION_ROWS);
+  assert.equal(none.route, CLOSURE_ROUTE_NONE);
+  assert.equal(none.witness.state,
+    LEARNER_PROMOTION_CLOSURE_ABSENT.NO_WITNESS);
+  assert.equal(none.witness.summarySpreadPending,
+    LEARNER_PROMOTION_CLOSURE_ABSENT.NO_WITNESS);
+  assert.deepStrictEqual(none.witness.blockedPartitionIds, []);
+  assert.equal(none.partition.semanticState,
+    LEARNER_PROMOTION_CLOSURE_ABSENT.NO_DECISION_SNAPSHOTS);
+  assert.equal(none.baseSummary.satisfied, false,
+    'the base summary is still stated when there is no witness');
+
+  // Partition not tracked: the decision snapshots exist and hold no row for
+  // the partition this guard is asking about.
+  const tracked = routeAnswer(CLOSURE_ROUTE_CASE.BUILT_CLOSURE_REFRESHED);
+  const untracked = buildLearnerPromotionCountCheckInputs({
+    priorityRecovery: {
+      partitionId: 'not_a_tracked_partition-p9',
+      priorityPartitionSummary: tracked.priorityPartitionSummary,
+      planningAnswer: tracked,
+    },
+  }).priorityRecovery.closure;
+  assert.equal(untracked.route, CLOSURE_ROUTE_BUILT);
+  assert.equal(untracked.partition.semanticState,
+    LEARNER_PROMOTION_CLOSURE_ABSENT.PARTITION_NOT_TRACKED);
+  assert.equal(untracked.partition.spreadCompletionReasonCode,
+    LEARNER_PROMOTION_CLOSURE_ABSENT.PARTITION_NOT_TRACKED);
+
+  // The shape is the same in every one of them.
+  const shapes = [noAnswer, none, untracked,
+    await closureBlockFor(CLOSURE_ROUTE_CASE.RETAINED_SATISFIED_WITNESS)]
+    .map(shapeOf);
+  for (const shape of shapes) {
+    assert.deepStrictEqual(shape, shapes[0],
+      'the payload shape does not change with the route');
+  }
+});

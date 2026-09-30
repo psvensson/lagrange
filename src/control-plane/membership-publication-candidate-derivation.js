@@ -45,12 +45,12 @@ import {
   PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT,
   arePriorityPartitionSummariesEqual,
   buildDerivedPriorityPartitionSummary,
-  chooseMoreAdvancedPriorityPartitionSummary,
   isReadinessPromotable,
   normalizePriorityPartitionSummary,
 } from './membership-publication-priority-partition-summary.js';
 import {
   chooseClosureRefreshedPriorityPartitionSummary,
+  choosePriorityPartitionSummaryBase,
 } from './priority-partition-summary-source.js';
 import {
   buildMembershipPublicationAckCompletionSnapshot,
@@ -606,11 +606,18 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     },
     helperFns,
   );
-  const priorityPartitionSummaryBase = chooseMoreAdvancedPriorityPartitionSummary(
-    normalizedPriorityPartitionSummary,
-    derivedPriorityPartitionSummary,
-    helperFns,
-  );
+  // The BASE choice, made by the owner that also says which side it took, so
+  // the closure choice below can record the summary it was compared against
+  // (quest closure-witness-route-observed). The choice itself is
+  // chooseMoreAdvancedPriorityPartitionSummary's, unchanged.
+  const priorityPartitionSummaryBaseChoice =
+    choosePriorityPartitionSummaryBase(
+      normalizedPriorityPartitionSummary,
+      derivedPriorityPartitionSummary,
+      helperFns,
+    );
+  const priorityPartitionSummaryBase =
+    priorityPartitionSummaryBaseChoice.summary;
   const reasonCode =
     typeof planningSnapshot.reasonCode === 'string' && planningSnapshot.reasonCode.length > 0 ?
       planningSnapshot.reasonCode :
@@ -655,6 +662,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   const {
     priorityRecoveryClosureWitness,
     priorityRecoveryDecisionSnapshots,
+    priorityRecoveryClosureRoute,
   } = buildPriorityRecoveryClosureEvidence(
     {
       latestPublicationRow,
@@ -680,12 +688,22 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   );
   // The final summary choice, made by the owner that also records which of
   // the two it took, so a downstream decision can name the summary it read
-  // (quest learner-promotion-guard-inputs-observed).
+  // (quest learner-promotion-guard-inputs-observed) — and, with the closure
+  // evidence of this same evaluation, WHY that summary said what it said
+  // (quest closure-witness-route-observed). The evidence is passed by
+  // reference and recorded beside the chosen summary, never on it.
   const priorityPartitionSummary =
     chooseClosureRefreshedPriorityPartitionSummary(
       priorityPartitionSummaryBase,
       priorityRecoveryClosureWitness?.refreshedPriorityPartitionSummary,
       helperFns,
+      {
+        route: priorityRecoveryClosureRoute,
+        closureWitness: priorityRecoveryClosureWitness,
+        decisionSnapshots: priorityRecoveryDecisionSnapshots,
+        baseSummary: priorityPartitionSummaryBase,
+        baseSummarySource: priorityPartitionSummaryBaseChoice.source,
+      },
     );
   const priorityPartitionSummaryChanged = !arePriorityPartitionSummariesEqual(
     latestPublicationRow?.priorityPartitionSummary,

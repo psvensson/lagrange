@@ -170,6 +170,10 @@ class PartitionServiceLearnerPromotionCountCheckMethods {
           priorityRecoveryActive ||
           hasPriorityRecoverySpreadGap(priorityPartitionSummary),
       }),
+      // The partition the closure evidence is read FOR: the guard's own id,
+      // so the renderer never has to look one up (quest
+      // closure-witness-route-observed).
+      partitionId: this.partitionId,
       nodeReadiness,
       planningAnswer: planningSnapshot,
       planningAnswerOrigin,

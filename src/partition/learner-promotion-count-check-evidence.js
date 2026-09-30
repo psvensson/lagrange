@@ -4,9 +4,12 @@
  *
  * Every value here is handed in by the single evaluation that decided
  * (`runLearnerPromotionCheck`); this module only renders it. It never reads a
- * source, so it cannot re-read one, and the only derivation it makes is over
- * the summary object the decision already held (quest
- * learner-promotion-guard-inputs-observed).
+ * source, so it cannot re-read one. The two derivations it makes are both
+ * over material that one evaluation already produced: the summary object the
+ * decision held (quest learner-promotion-guard-inputs-observed), and that
+ * evaluation's own closure record - its route, witness and decision
+ * snapshots - read from beside that summary (quest
+ * closure-witness-route-observed).
  *
  * Every list is capped and says how many entries it withheld, so a partition
  * with many replicas or many in-flight operations cannot turn a refusal into
@@ -17,8 +20,13 @@ import {
   buildPriorityRecoveryBlockedPartitionIds,
 } from '../control-plane/priority-recovery-planning-intent.js';
 import {
+  PRIORITY_PARTITION_SUMMARY_SOURCE,
+  readPriorityPartitionSummaryClosureChoice,
   readPriorityPartitionSummarySource,
 } from '../control-plane/priority-partition-summary-source.js';
+import {
+  PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE,
+} from '../control-plane/membership-publication-readiness-repair.js';
 
 // Bound for every list in the payload. Five-node formation carries 4 to 6
 // replicas and 1 to 3 in-flight operations per critical partition, so this
@@ -26,6 +34,20 @@ import {
 const LEARNER_PROMOTION_INPUTS_LIST_LIMIT = 8;
 const EVIDENCE_OBJECT_TYPE = 'object';
 const NO_ENTRIES_WITHHELD = 0;
+
+// Why a closure value is not in the payload. Each is an explicit named state
+// in the field the value would have occupied: the route taken decides which
+// evidence exists, and a reader must be able to tell "there was none" from
+// "nobody looked" (quest closure-witness-route-observed).
+const LEARNER_PROMOTION_CLOSURE_ABSENT = Object.freeze({
+  NO_CLOSURE_CHOICE: 'unavailable_no_closure_choice_recorded',
+  NO_WITNESS: 'unavailable_no_closure_witness',
+  RETAINED_ROUTE: 'unavailable_on_retained_route',
+  NO_DECISION_SNAPSHOTS: 'unavailable_no_decision_snapshots',
+  PARTITION_NOT_TRACKED: 'unavailable_partition_not_tracked',
+  NO_BASE_SUMMARY: 'unavailable_no_base_summary',
+});
+const DECISION_SNAPSHOT_LIST_KEY = 'snapshots';
 
 // The list is always COPIED before it is frozen: the caller's own array (the
 // census rows, the in-flight replica id set) must stay mutable for its owner.
@@ -133,6 +155,149 @@ function buildCompletionEvidence(completion) {
   });
 }
 
+// The witness half: what the closure witness said, and what it had left
+// unresolved when it said it. `absent` is the state that stands in for every
+// field when the route produced no witness at all.
+function buildClosureWitnessEvidence(closureWitness, absent) {
+  const present =
+    Boolean(closureWitness) &&
+    typeof closureWitness === EVIDENCE_OBJECT_TYPE;
+  const unresolved = capList(present ?
+    closureWitness.unresolvedSemanticStateIds :
+    []);
+  const blocked = capList(present ? closureWitness.blockedPartitionIds : []);
+  return Object.freeze({
+    state: present ? closureWitness.state ?? absent : absent,
+    summarySpreadPending: present ?
+      closureWitness.summarySpreadPending ?? absent :
+      absent,
+    unresolvedSemanticStateIds: unresolved.entries,
+    unresolvedSemanticStateIdsWithheld: unresolved.withheld,
+    blockedPartitionIds: blocked.entries,
+    blockedPartitionIdsWithheld: blocked.withheld,
+  });
+}
+
+// This partition's own row of the decision snapshots the closure witness was
+// built from. The snapshots hold one entry per operation, so the satisfying
+// operations are read off the entries whose operation the partition's spread
+// completion counted — no row, snapshot or answer is read again.
+function buildClosureDecisionEvidence(decisionSnapshots, partitionId, absent) {
+  const snapshots = Array.isArray(
+    decisionSnapshots?.[DECISION_SNAPSHOT_LIST_KEY],
+  ) ?
+    decisionSnapshots[DECISION_SNAPSHOT_LIST_KEY].filter(
+      (snapshot) => snapshot?.partitionId === partitionId,
+    ) :
+    null;
+  if (snapshots === null || snapshots.length === 0) {
+    return Object.freeze({
+      semanticState: absent,
+      spreadCompletionReasonCode: absent,
+      satisfyingOperations: Object.freeze([]),
+      satisfyingOperationsWithheld: NO_ENTRIES_WITHHELD,
+    });
+  }
+  const [partitionSnapshot] = snapshots;
+  const satisfyingOperationIds = Array.isArray(
+    partitionSnapshot.spreadCompletion?.satisfyingOperationIds,
+  ) ?
+    partitionSnapshot.spreadCompletion.satisfyingOperationIds :
+    [];
+  const satisfying = capList(satisfyingOperationIds.map((operationId) => {
+    const operation = snapshots
+      .map((snapshot) => snapshot.coordinator?.operation)
+      .find((context) => context?.operationId === operationId);
+    return Object.freeze({
+      operationId,
+      targetNodeId: operation?.targetNodeId ?? null,
+      targetVisibilityState: operation?.targetVisibilityState ?? null,
+    });
+  }));
+  return Object.freeze({
+    semanticState: partitionSnapshot.semanticState ?? absent,
+    spreadCompletionReasonCode:
+      partitionSnapshot.spreadCompletion?.reasonCode ?? absent,
+    satisfyingOperations: satisfying.entries,
+    satisfyingOperationsWithheld: satisfying.withheld,
+  });
+}
+
+// The summary the closure choice was made AGAINST, before the witness's
+// refreshed one was allowed to win it.
+function buildClosureBaseSummaryEvidence(choice, partitionId, absent) {
+  const baseSummary = choice.baseSummary;
+  if (!baseSummary || typeof baseSummary !== EVIDENCE_OBJECT_TYPE) {
+    return Object.freeze({
+      satisfied: absent,
+      source: absent,
+      thisPartitionBlocked: absent,
+    });
+  }
+  return Object.freeze({
+    satisfied: baseSummary.satisfied ?? absent,
+    source: choice.baseSummarySource,
+    thisPartitionBlocked:
+      buildPriorityRecoveryBlockedPartitionIds(baseSummary)
+        .includes(partitionId),
+  });
+}
+
+// Which of the closure evidence owner's three routes produced the witness
+// the chosen summary was decided against, and what that route left behind.
+// Everything here is read from the record the ONE evaluation wrote beside
+// the summary the guard holds; `witnessMatchesAnswer` says whether that
+// record's witness is the witness the answer itself carries, which is how a
+// reader tells a record written for this answer from one a later derivation
+// of the same summary object overwrote.
+function buildClosureRouteEvidence(priorityRecovery) {
+  const choice = readPriorityPartitionSummaryClosureChoice(
+    priorityRecovery.priorityPartitionSummary,
+  );
+  const partitionId = priorityRecovery.partitionId ?? null;
+  const unrecorded =
+    choice.closureRoute === PRIORITY_PARTITION_SUMMARY_SOURCE.UNRECORDED;
+  const routeAbsent = unrecorded ?
+    LEARNER_PROMOTION_CLOSURE_ABSENT.NO_CLOSURE_CHOICE :
+    LEARNER_PROMOTION_CLOSURE_ABSENT.NO_WITNESS;
+  const decisionAbsent = unrecorded ?
+    LEARNER_PROMOTION_CLOSURE_ABSENT.NO_CLOSURE_CHOICE :
+    resolveClosureDecisionAbsentState(choice);
+  return Object.freeze({
+    route: choice.closureRoute,
+    witnessMatchesAnswer: unrecorded ?
+      LEARNER_PROMOTION_CLOSURE_ABSENT.NO_CLOSURE_CHOICE :
+      choice.closureWitness ===
+        (priorityRecovery.planningAnswer?.priorityRecoveryClosureWitness ??
+          null),
+    witness: buildClosureWitnessEvidence(choice.closureWitness, routeAbsent),
+    partition: buildClosureDecisionEvidence(
+      choice.decisionSnapshots,
+      partitionId,
+      decisionAbsent,
+    ),
+    baseSummary: buildClosureBaseSummaryEvidence(
+      choice,
+      partitionId,
+      unrecorded ?
+        LEARNER_PROMOTION_CLOSURE_ABSENT.NO_CLOSURE_CHOICE :
+        LEARNER_PROMOTION_CLOSURE_ABSENT.NO_BASE_SUMMARY,
+    ),
+  });
+}
+
+// Why this partition has no decision row: the route built none, or it built
+// them and this partition was not one of the ones it tracked.
+function resolveClosureDecisionAbsentState(choice) {
+  if (choice.closureRoute === PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE.RETAINED) {
+    return LEARNER_PROMOTION_CLOSURE_ABSENT.RETAINED_ROUTE;
+  }
+  if (!choice.decisionSnapshots) {
+    return LEARNER_PROMOTION_CLOSURE_ABSENT.NO_DECISION_SNAPSHOTS;
+  }
+  return LEARNER_PROMOTION_CLOSURE_ABSENT.PARTITION_NOT_TRACKED;
+}
+
 function buildPriorityRecoveryEvidence(priorityRecovery) {
   if (!priorityRecovery || typeof priorityRecovery !== EVIDENCE_OBJECT_TYPE) {
     // The named state for an ordinary partition: main never resolves the
@@ -155,6 +320,7 @@ function buildPriorityRecoveryEvidence(priorityRecovery) {
       priorityRecovery.completion,
     ),
     completion: buildCompletionEvidence(priorityRecovery.completion),
+    closure: buildClosureRouteEvidence(priorityRecovery),
   });
 }
 
@@ -201,6 +367,7 @@ function buildLearnerPromotionCountCheckInputs(observation = {}) {
 }
 
 export {
+  LEARNER_PROMOTION_CLOSURE_ABSENT,
   LEARNER_PROMOTION_INPUTS_LIST_LIMIT,
   buildLearnerPromotionCountCheckInputs,
 };

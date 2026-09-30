@@ -12,6 +12,19 @@ import {
   normalizeMembershipPublicationStringList,
 } from './membership-publication-normalizers.js';
 
+// Which of the three routes `buildPriorityRecoveryClosureEvidence` took for
+// one candidate. RETAINED takes the planning snapshot's own witness outright,
+// before a single local row is read; NONE is the named state for "no
+// replica-operation rows, so there is nothing to witness"; BUILT is the only
+// route that produces decision snapshots. The route decides nothing - it is
+// the one fact the refusal payload could not state (quest
+// closure-witness-route-observed).
+const PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE = Object.freeze({
+  RETAINED: 'retained',
+  BUILT: 'built',
+  NONE: 'none',
+});
+
 const READINESS_REASON_CODE_KEY = 'code';
 const READINESS_REASON_CODES_KEY = 'reasonCodes';
 const READINESS_REASONS_KEY = 'reasons';
@@ -155,11 +168,15 @@ function buildPriorityRecoveryClosureEvidence(options = {}, helperFns = {}) {
   const closureShortcut = [
     {
       matches: Boolean(retainedPriorityRecoveryClosureWitness),
+      priorityRecoveryClosureRoute:
+        PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE.RETAINED,
       priorityRecoveryClosureWitness: retainedPriorityRecoveryClosureWitness,
       priorityRecoveryDecisionSnapshots: null,
     },
     {
       matches: replicaOperationRows.length === 0,
+      priorityRecoveryClosureRoute:
+        PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE.NONE,
       priorityRecoveryClosureWitness: null,
       priorityRecoveryDecisionSnapshots: null,
     },
@@ -170,6 +187,8 @@ function buildPriorityRecoveryClosureEvidence(options = {}, helperFns = {}) {
         closureShortcut.priorityRecoveryClosureWitness,
       priorityRecoveryDecisionSnapshots:
         closureShortcut.priorityRecoveryDecisionSnapshots,
+      priorityRecoveryClosureRoute:
+        closureShortcut.priorityRecoveryClosureRoute,
     };
   }
   const priorityRecoveryDecisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
@@ -190,10 +209,13 @@ function buildPriorityRecoveryClosureEvidence(options = {}, helperFns = {}) {
         decisionSnapshots: priorityRecoveryDecisionSnapshots,
         priorityPartitionSummary: options.priorityPartitionSummary,
       }),
+    priorityRecoveryClosureRoute:
+      PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE.BUILT,
   };
 }
 
 export {
+  PRIORITY_RECOVERY_CLOSURE_EVIDENCE_ROUTE,
   buildPriorityRecoveryClosureEvidence,
   buildPublicationPlanningReadinessByNodeId,
 };
