@@ -26,6 +26,7 @@ import {
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 /**
  * Build a minimal node row for testing.
@@ -359,6 +360,7 @@ describe('Heartbeat budget preservation (Req 9.2)', () => {
     };
 
     const heartbeat = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'test-node-1',
       nodeAddress: 'ws://localhost:9000',
       cdcIntegrationService: mockCdc,

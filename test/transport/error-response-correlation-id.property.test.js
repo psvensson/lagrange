@@ -21,6 +21,7 @@ import fc from 'fast-check';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // Initialize configuration and logging for tests (module level)
 ConfigurationManager.resetInstance();
@@ -72,6 +73,7 @@ const nodeIdArb = fc.uuid();
  */
 async function deliverWithRouter(nodeId, targetAddress, payload) {
   const router = new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId,
     wsPort: null,
   });

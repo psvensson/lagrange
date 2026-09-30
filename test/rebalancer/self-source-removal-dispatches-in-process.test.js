@@ -1,5 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // Deterministic repro / instrument for the self-dispatch source-removal stall
 // (the now-dominant settle-gate blocker: a REPLACE/REMOVE source-removal whose
@@ -39,7 +40,7 @@ test('a self-targeted source-removal REMOVE delivers in-process to its ' +
   'registered replica-handler instead of looping back as a remote self-send',
 async (t) => {
   const nodeId = 'self-source-removal-node';
-  const router = new MessageRouter({nodeId});
+  const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId});
   await router.initialize({startServer: false});
   router.logger = {info() {}, error() {}, warn() {}, debug() {}};
 

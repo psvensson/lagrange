@@ -62,6 +62,7 @@ import {
   publishRegisteredEndpoint,
 } from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const REPORTER_FORWARD_NODE_ID = 'joiner-reporter-publication-mode';
 const REPORTER_FORWARD_NODE_ADDRESS = 'ws://localhost:19103';
@@ -138,6 +139,7 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
       // Initialize MessageRouter for local communication only
       const {MessageRouter} = await import('../../src/transport/message-router.js');
       this.messageRouter = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: this.nodeId,
         nodeAddress: this.nodeAddress,
         wsPort: this.wsPort,

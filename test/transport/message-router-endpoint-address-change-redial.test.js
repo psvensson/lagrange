@@ -17,6 +17,7 @@ import assert from 'node:assert';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -76,12 +77,14 @@ describe('MessageRouter same-nodeId new-address recovery', () => {
     async () => {
       const peerAddr = 'ws://127.0.0.1:19811';
       routerA = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-a',
         inProcess: true,
         wsPort: 19810,
         resolveNodeAddress: (id) => (id === 'node-b' ? peerAddr : null),
       });
       routerB = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-b',
         inProcess: true,
         wsPort: 19811,
@@ -119,12 +122,14 @@ describe('MessageRouter same-nodeId new-address recovery', () => {
     async () => {
       let peerAddr = 'ws://127.0.0.1:19821';
       routerA = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-a',
         inProcess: true,
         wsPort: 19820,
         resolveNodeAddress: (id) => (id === 'node-b' ? peerAddr : null),
       });
       routerB = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-b',
         inProcess: true,
         wsPort: 19821,
@@ -144,6 +149,7 @@ describe('MessageRouter same-nodeId new-address recovery', () => {
       // endpoint first, publish the new address to the resolver, then make the
       // old node-b go dark on a half-open socket (no clean close).
       routerB2 = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-b',
         inProcess: true,
         wsPort: 19822,
@@ -175,12 +181,14 @@ describe('MessageRouter same-nodeId new-address recovery', () => {
       // socket (clear its outbound keepalive) nor answers node-b's pings.
       const peerAddr = 'ws://127.0.0.1:19831';
       routerA = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-a',
         inProcess: true,
         wsPort: 19830,
         resolveNodeAddress: (id) => (id === 'node-b' ? peerAddr : null),
       });
       routerB = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-b',
         inProcess: true,
         wsPort: 19831,

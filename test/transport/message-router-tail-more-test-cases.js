@@ -1,4 +1,5 @@
 import {registerMessageRouterTailFinalTests} from './message-router-tail-final-test-cases.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 export async function registerMessageRouterTailMoreTests({
   t,
@@ -13,7 +14,9 @@ export async function registerMessageRouterTailMoreTests({
   cleanupTestEnvironment,
 }) {
   t.test('should emit initialized event', async (t) => {
-    const router = new MessageRouter({nodeId: 'event-test-node'});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'event-test-node'});
 
     const events = [];
     router.on('initialized', (data) => events.push(data));
@@ -28,7 +31,9 @@ export async function registerMessageRouterTailMoreTests({
   });
 
   t.test('should emit shutdown event', async (t) => {
-    const router = new MessageRouter({nodeId: 'shutdown-test'});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'shutdown-test'});
     await router.initialize();
 
     const events = [];
@@ -41,7 +46,9 @@ export async function registerMessageRouterTailMoreTests({
   });
 
   t.test('should clear all state on shutdown', async (t) => {
-    const router = new MessageRouter({nodeId: 'cleanup-test'});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'cleanup-test'});
     await router.initialize();
 
     router.register('cleanup-test/service/service-1', () => ({}));
@@ -57,7 +64,9 @@ export async function registerMessageRouterTailMoreTests({
 
   t.test('should not surface pending response shutdown races as unhandled rejections',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'shutdown-race-test'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'shutdown-race-test'});
       await router.initialize({startServer: false});
 
       const unhandledRejections = [];
@@ -108,6 +117,7 @@ export async function registerMessageRouterTailMoreTests({
   t.test('should rate-limit unmatched service response warnings', async (t) => {
     let nowMs = 1000;
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'service-response-throttle-test',
       nowFn: () => nowMs,
       unmatchedServiceResponseWarnIntervalMs: 5000,
@@ -167,6 +177,7 @@ export async function registerMessageRouterTailMoreTests({
     async (t) => {
       let nowMs = 1000;
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'retired-service-response-test',
         nowFn: () => nowMs,
         unmatchedServiceResponseWarnIntervalMs: 5000,
@@ -220,7 +231,9 @@ export async function registerMessageRouterTailMoreTests({
     });
 
   t.test('should handle multiple initializations idempotently', async (t) => {
-    const router = new MessageRouter({nodeId: 'idempotent-test'});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'idempotent-test'});
 
     const events = [];
     router.on('initialized', () => events.push('init'));
@@ -236,7 +249,7 @@ export async function registerMessageRouterTailMoreTests({
   });
 
   t.test('should return null connection state for unknown node', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     const state = router.getConnectionState('unknown-node');
@@ -246,7 +259,7 @@ export async function registerMessageRouterTailMoreTests({
   });
 
   t.test('should return empty array for connected nodes when none connected', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     const connected = router.getConnectedNodes();
@@ -258,6 +271,7 @@ export async function registerMessageRouterTailMoreTests({
   // Self-connection tests (Requirements: 2.1, 2.2)
   t.test('should establish self-connection when starting server', async (t) => {
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'self-connect-test',
       wsPort: 9876,
     });
@@ -281,6 +295,7 @@ export async function registerMessageRouterTailMoreTests({
 
   t.test('should deliver messages to self via WebSocket', async (t) => {
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'self-delivery-test',
       wsPort: 9877,
     });
@@ -309,6 +324,7 @@ export async function registerMessageRouterTailMoreTests({
 
   t.test('should preserve no-handler error details on acknowledged self delivery', async (t) => {
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'self-no-handler-test',
       wsPort: 9887,
     });
@@ -333,6 +349,7 @@ export async function registerMessageRouterTailMoreTests({
 
   t.test('should preserve handler-provided error details on acknowledged self delivery', async (t) => {
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'self-error-detail-test',
       wsPort: 9888,
     });
@@ -365,6 +382,7 @@ export async function registerMessageRouterTailMoreTests({
 
   t.test('should emit selfDisconnect event when self-connection is lost', async (t) => {
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'self-disconnect-test',
       wsPort: 9878,
     });
@@ -388,6 +406,7 @@ export async function registerMessageRouterTailMoreTests({
 
   t.test('should mark self-connection as isSelfConnection', async (t) => {
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'self-mark-test',
       wsPort: 9881,
     });
@@ -411,6 +430,7 @@ export async function registerMessageRouterTailMoreTests({
 
   t.test('should not have self-connection without starting server', async (t) => {
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'no-server-test',
       wsPort: 9879,
     });
@@ -426,12 +446,14 @@ export async function registerMessageRouterTailMoreTests({
   t.test('should fail initialization if self-connection fails', async (t) => {
     // Use a port that's already in use to cause server start failure
     const router1 = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'port-holder',
       wsPort: 9890,
     });
     await router1.initialize({startServer: true});
 
     const router2 = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'fail-connect-test',
       wsPort: 9890, // Same port - will fail
     });
@@ -449,7 +471,9 @@ export async function registerMessageRouterTailMoreTests({
 
   t.test('should fall back to deliverRemote when no handler registered',
     async (t) => {
-      const router = new MessageRouter({nodeId: 'test-node'});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
       await router.initialize({startServer: false});
 
       let deliverRemoteCalled = false;
@@ -477,7 +501,9 @@ export async function registerMessageRouterTailMoreTests({
     });
 
   t.test('should log metrics for local delivery', async (t) => {
-    const router = new MessageRouter({nodeId: 'metrics-local-node'});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'metrics-local-node'});
     await router.initialize({startServer: false});
 
     const loggedEntries = [];
@@ -520,7 +546,7 @@ export async function registerMessageRouterTailMoreTests({
   });
 
   t.test('outbound queue enforces per-node concurrency', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize({startServer: false});
     router.outboundQueueMaxConcurrent = 1;
 
@@ -545,7 +571,7 @@ export async function registerMessageRouterTailMoreTests({
   });
 
   t.test('failOutboundQueue rejects pending deliveries', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize({startServer: false});
     router.outboundQueueMaxConcurrent = 1;
 
@@ -571,7 +597,7 @@ export async function registerMessageRouterTailMoreTests({
   });
 
   t.test('default outbound concurrency allows parallel writes', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize({startServer: false});
 
     const parallelCount = 8;
@@ -627,11 +653,13 @@ export async function registerMessageRouterTailMoreTests({
       logging.initialize({level: 'error'});
 
       const routerA = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-a',
         wsPort: 12901,
         inProcess: true,
       });
       const routerB = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-b',
         wsPort: 12902,
         inProcess: true,
@@ -710,11 +738,13 @@ export async function registerMessageRouterTailMoreTests({
       logging.initialize({level: 'error'});
 
       const routerA = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-a',
         wsPort: 12903,
         inProcess: true,
       });
       const routerB = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-b',
         wsPort: 12904,
         inProcess: true,
@@ -761,6 +791,7 @@ export async function registerMessageRouterTailMoreTests({
       logging.initialize({level: 'error'});
 
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-a',
       });
       await router.initialize({startServer: false});
@@ -818,6 +849,7 @@ export async function registerMessageRouterTailMoreTests({
   t.test('closed socket before send returns a deferred failure and arms reconnect',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-a',
         reconnectIntervalMs: 250,
       });
@@ -897,6 +929,7 @@ export async function registerMessageRouterTailMoreTests({
       logging.initialize({level: 'error'});
 
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-a',
       });
       await router.initialize({startServer: false});

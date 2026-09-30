@@ -55,7 +55,7 @@ import {reserveBootIncarnation} from
   '../../src/bootstrap/boot-incarnation-owner.js';
 import {BOOT_INCARNATION_REQUIRED} from
   '../../src/bootstrap/boot-incarnation-contract.js';
-import {mkdtemp, rm} from 'node:fs/promises';
+import {mkdtemp, readdir, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {
@@ -786,30 +786,97 @@ test('F3 missing incarnation: the acquisition owner refuses it with a typed ' +
   owner.release();
 });
 
+// Count every EventEmitter initialization (every lifecycle owner, state
+// machine, handler and the service's own super()) while `construct` runs.
+function observeConstruction(runtime, construct) {
+  const initialize = EventEmitter.init;
+  let emitterInitializations = 0;
+  EventEmitter.init = function(...args) {
+    emitterInitializations += 1;
+    return initialize.apply(this, args);
+  };
+  const before = {
+    owners: runtime.tracker.owners.size,
+    timers: runtime.nodeTimeSource.pendingTimerCount(),
+  };
+  let refusal = null;
+  try {
+    construct();
+  } catch (error) {
+    refusal = error;
+  } finally {
+    EventEmitter.init = initialize;
+  }
+  return {
+    refusal,
+    emitterInitializations,
+    ownersCreated: runtime.tracker.owners.size - before.owners,
+    timersArmed: runtime.nodeTimeSource.pendingTimerCount() - before.timers,
+  };
+}
+
+function assertRefusedAtBoundary(t, observed, subject, label) {
+  t.same({
+    code: observed.refusal?.code,
+    subject: observed.refusal?.subject,
+    emitterInitializations: observed.emitterInitializations,
+    ownersCreated: observed.ownersCreated,
+    timersArmed: observed.timersArmed,
+  }, {
+    code: BOOT_INCARNATION_REQUIRED,
+    subject,
+    emitterInitializations: 0,
+    ownersCreated: 0,
+    timersArmed: 0,
+  }, `${subject} refuses ${label} at its own boundary, before super() or ` +
+    'any owner, state machine, handler or timer exists');
+}
+
 test('F3 public boundary: BootstrapService and NodeJoiningService require an ' +
   'issued boot incarnation and fail closed before any side effect',
 async (t) => {
   const runtime = installNodeRuntime(t);
   const nodeService = NodeService.getInstance();
+  const dataDir = await mkdtemp(join(tmpdir(), 'f3-boundary-'));
+  t.teardown(() => rm(dataDir, {recursive: true, force: true}));
   for (const bootIncarnation of UNISSUED_INCARNATIONS) {
     const label = `incarnation ${String(bootIncarnation)}`;
-    t.throws(() => new BootstrapService({
-      nodeId: 'seed-node', nodeAddress: 'ws://localhost:9001',
-      nodeService, bootIncarnation,
-    }), {code: BOOT_INCARNATION_REQUIRED}, `BootstrapService refuses ${label}`);
-    t.throws(() => new NodeJoiningService({
-      nodeId: NODE_ID, nodeAddress: NODE_ADDRESS,
-      seedNodeAddress: SEED_ADDRESS, bootIncarnation,
-    }), {code: BOOT_INCARNATION_REQUIRED},
-    `NodeJoiningService refuses ${label}`);
+    assertRefusedAtBoundary(t, observeConstruction(runtime,
+      () => new BootstrapService({
+        nodeId: 'seed-node', nodeAddress: 'ws://localhost:9001',
+        nodeService, bootIncarnation,
+      })), 'BootstrapService', label);
+    assertRefusedAtBoundary(t, observeConstruction(runtime,
+      () => new NodeJoiningService({
+        nodeId: NODE_ID, nodeAddress: NODE_ADDRESS,
+        seedNodeAddress: SEED_ADDRESS, dataDir, bootIncarnation,
+      })), 'NodeJoiningService', label);
   }
-  await t.rejects(BootstrapService.bootstrapOrExit({
-    nodeId: 'seed-node', nodeAddress: 'ws://localhost:9001', nodeService,
-  }), {code: BOOT_INCARNATION_REQUIRED},
-  'the static seed entry point refuses a missing incarnation');
+  const initialize = EventEmitter.init;
+  let entryEmitters = 0;
+  EventEmitter.init = function(...args) {
+    entryEmitters += 1;
+    return initialize.apply(this, args);
+  };
+  let entryRefusal = null;
+  try {
+    await BootstrapService.bootstrapOrExit({
+      nodeId: 'seed-node', nodeAddress: 'ws://localhost:9001', nodeService,
+    });
+  } catch (error) {
+    entryRefusal = error;
+  } finally {
+    EventEmitter.init = initialize;
+  }
+  t.same([entryRefusal?.code, entryRefusal?.subject, entryEmitters],
+    [BOOT_INCARNATION_REQUIRED, 'BootstrapService', 0],
+    'the static seed entry point refuses at the service boundary before ' +
+    'any initialization');
   t.same([runtime.tracker.owners.size,
     runtime.nodeTimeSource.pendingTimerCount(),
-    nodeService.getLifecycleStateMachine?.() ?? null],
-  [0, 0, null],
-  'no lifecycle owner, timer or node lifecycle state machine was created');
+    nodeService.getLifecycleStateMachine?.() ?? null,
+    (await readdir(dataDir)).length],
+  [0, 0, null, 0],
+  'no lifecycle owner, timer, node lifecycle state machine or durable file ' +
+  'was created');
 });

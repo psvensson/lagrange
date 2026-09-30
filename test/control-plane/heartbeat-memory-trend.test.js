@@ -25,6 +25,7 @@ import {
   insertViaUpsert,
 } from './heartbeat-memory-trend-test-helpers.js';
 import './heartbeat-owner-completion-test-cases.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 test('Heartbeat memory trend slope helper handles minimal and rising samples', async (t) => {
   t.equal(calculateUsageSlopePerMinute([]), 0, 'empty sample list should return 0');
@@ -47,6 +48,7 @@ test('HeartbeatService emits memory trend warning and enforces cooldown', async 
   initEnv();
 
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-a',
     nodeAddress: '10.0.0.1:8080',
     cdcIntegrationService: createMockCdc(),
@@ -86,6 +88,7 @@ test('HeartbeatService does not emit warning below usage threshold', async (t) =
   initEnv();
 
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-b',
     nodeAddress: '10.0.0.2:8080',
     cdcIntegrationService: createMockCdc(),
@@ -125,6 +128,7 @@ test('HeartbeatService start and stop use injected interval scheduler', async (t
   const scheduled = [];
   const cleared = [];
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-timer',
     nodeAddress: '10.0.0.9:8080',
     cdcIntegrationService: createMockCdc(),
@@ -170,6 +174,7 @@ test('HeartbeatService sendHeartbeat uses injected clock', async (t) => {
   let capturedUpdate = null;
   const now = 12345;
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-clock',
     nodeAddress: '10.0.0.10:8080',
     cdcIntegrationService: {
@@ -205,6 +210,7 @@ test('HeartbeatService sendHeartbeat uses injected control-plane system-table ' 
 
   const gatewayCalls = [];
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-gateway',
     nodeAddress: '10.0.0.15:8080',
     cdcIntegrationService: {
@@ -272,6 +278,7 @@ test('HeartbeatService skips cache wait for heartbeat writes and fails on missin
     const now = 56789;
     const createService = (updates, upserts, options = {}) =>
       new HeartbeatService({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'node-heartbeat-repair',
         nodeAddress: '10.0.0.11:8080',
         cdcIntegrationService: {
@@ -343,6 +350,7 @@ test('HeartbeatService keeps attempt timeout outside transport message timeout b
     initEnv();
 
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-timeout-budget',
       nodeAddress: '10.0.0.12:8080',
       cdcIntegrationService: createMockCdc(),
@@ -371,6 +379,7 @@ test('HeartbeatService throttles endpoint upserts but refreshes after interval',
     endpointUpserts: 0,
   };
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-c',
     nodeAddress: '10.0.0.3:8080',
     cdcIntegrationService: {
@@ -437,6 +446,7 @@ test('HeartbeatService coalesces unchanged node heartbeat writes within min inte
       endpointUpserts: 0,
     };
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-e',
       nodeAddress: '10.0.0.5:8080',
       cdcIntegrationService: {
@@ -490,6 +500,7 @@ test('HeartbeatService forces node heartbeat refresh once max staleness elapses'
 
     let nodeUpdates = 0;
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-f',
       nodeAddress: '10.0.0.6:8080',
       cdcIntegrationService: {
@@ -534,6 +545,7 @@ test('HeartbeatService routes confirmed stale refreshes through the ' +
   initEnv();
 
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-maintenance-refresh',
     nodeAddress: '10.0.0.62:8080',
     cdcIntegrationService: createMockCdc(),
@@ -590,6 +602,7 @@ test('HeartbeatService escalates stale refreshes back to recovery after ' +
   initEnv();
 
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-maintenance-recovery',
     nodeAddress: '10.0.0.63:8080',
     cdcIntegrationService: createMockCdc(),
@@ -629,6 +642,7 @@ test('HeartbeatService suppresses bucket-equivalent utilization churn even after
 
     let nodeUpdates = 0;
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-f1',
       nodeAddress: '10.0.0.61:8080',
       cdcIntegrationService: {
@@ -683,6 +697,7 @@ test('HeartbeatService writes immediately when structural metadata changes',
 
     let nodeUpdates = 0;
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-f2',
       nodeAddress: '10.0.0.62:8080',
       cdcIntegrationService: {
@@ -729,6 +744,7 @@ test('HeartbeatService prefers node-state reporter for node heartbeats', async (
   let reportedHeartbeat = null;
   let authoritativeReads = 0;
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-reporter',
     nodeAddress: '10.0.0.9:8080',
     cdcIntegrationService: {
@@ -834,6 +850,7 @@ test('HeartbeatService promotes stopped rows back to active in reporter heartbea
       created_at: 100,
     };
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-reporter-restart',
       nodeAddress: '10.0.0.91:8080',
       cdcIntegrationService: createMockCdc(),
@@ -880,6 +897,7 @@ test('HeartbeatService surfaces reporter failure when node-state reporter fails'
     let reporterAttempts = 0;
     let nodeUpdates = 0;
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-reporter-fallback',
       nodeAddress: '10.0.0.10:8080',
       cdcIntegrationService: {
@@ -933,6 +951,7 @@ async (t) => {
 
   let nodeUpdates = 0;
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-reporter-timeout-fallback',
     nodeAddress: '10.0.0.15:8080',
     heartbeatAttemptTimeoutMs: 7000,
@@ -993,6 +1012,7 @@ async (t) => {
   let reporterAttempts = 0;
   let nodeUpdates = 0;
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-reporter-budget-aligned',
     nodeAddress: '10.0.0.16:8080',
     heartbeatAttemptTimeoutMs: 7000,
@@ -1056,6 +1076,7 @@ async (t) => {
   let nodeUpdates = 0;
   let authoritativeReads = 0;
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-reporter-default-visibility',
     nodeAddress: '10.0.0.14:8080',
     cdcIntegrationService: {
@@ -1118,6 +1139,7 @@ test('HeartbeatService surfaces reporter failure without routed SQL fallback',
     const nodeWriteOptions = [];
     const endpointWriteOptions = [];
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-reporter-timeout-budget',
       nodeAddress: '10.0.0.13:8080',
       heartbeatAttemptTimeoutMs: 7000,
@@ -1174,6 +1196,7 @@ async (t) => {
     }
   };
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-reporter-visibility-gap',
     nodeAddress: '10.0.0.11:8080',
     cdcIntegrationService: {
@@ -1273,6 +1296,7 @@ async (t) => {
     }
   };
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-reporter-routed-visibility',
     nodeAddress: '10.0.0.12:8080',
     cdcIntegrationService: {
@@ -1360,6 +1384,7 @@ async (t) => {
     }
   };
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-reporter-confirmation-gap',
     nodeAddress: '10.0.0.30:8080',
     cdcIntegrationService: {

@@ -23,6 +23,7 @@ import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {
   CLUSTER_ID_CONFIG_KEY,
 } from '../../src/bootstrap/cluster-identity-constants.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const LOCAL_NODE_ID = 'node-local';
 const LOCAL_NODE_ADDRESS = 'seed-node:8080';
@@ -201,6 +202,7 @@ test('resolveAutoRejoinPeerAddress prefers a reachable persisted peer', async (t
   t.after(() => rm(dataDir, {recursive: true, force: true}));
 
   const persistence = new RejoinHintsPersistenceService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     dataDir,
     nodeId: LOCAL_NODE_ID,
     nodeAddress: LOCAL_NODE_ADDRESS,
@@ -244,6 +246,7 @@ test('resolveAutoRejoinPeerAddress rejects persisted hints from another node', a
   t.after(() => rm(dataDir, {recursive: true, force: true}));
 
   const persistence = new RejoinHintsPersistenceService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     dataDir,
     nodeId: 'different-node',
     nodeAddress: LOCAL_NODE_ADDRESS,
@@ -284,6 +287,7 @@ test('resolveAutoRejoinStartupDecision accepts address drift when node ID matche
     t.after(() => rm(dataDir, {recursive: true, force: true}));
 
     const persistence = new RejoinHintsPersistenceService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
@@ -350,6 +354,7 @@ test('resolveAutoRejoinStartupDecision keeps persisted seed role in seed mode',
     // match is confirmed; live peer contact (probe true) supplies the
     // recovery proof. A persisted seed role ALONE is no longer sufficient.
     const persistence = new RejoinHintsPersistenceService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
@@ -516,6 +521,7 @@ test('RejoinHintsPersistenceService writes the canonical hints file', async (t) 
   t.after(() => rm(dataDir, {recursive: true, force: true}));
 
   const persistence = new RejoinHintsPersistenceService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     dataDir,
     nodeId: LOCAL_NODE_ID,
     nodeAddress: LOCAL_NODE_ADDRESS,
@@ -545,6 +551,7 @@ test('RejoinHintsPersistenceService writes the canonical hints file', async (t) 
     peerAddresses: [PEER_NODE_ADDRESS_A],
     requiresPeerRejoin: true,
     updatedAt: 9999,
+    bootIncarnation: TEST_BOOT_INCARNATION,
   });
 
   const rawPersistedHints = JSON.parse(
@@ -561,6 +568,7 @@ test('RejoinHintsPersistenceService serializes overlapping writes without warnin
     const warnings = [];
     let nowValue = 1000;
     const persistence = new RejoinHintsPersistenceService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,

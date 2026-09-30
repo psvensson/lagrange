@@ -1,11 +1,13 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {RouterMessageHandler} from '../../src/transport/router-message-handler.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 test('MessageRouter preserves retired late-response classification and delivery source',
   async (t) => {
     let nowMs = 1000;
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'retired-service-response-test',
       nowFn: () => nowMs,
       unmatchedServiceResponseWarnIntervalMs: 5000,
@@ -58,6 +60,7 @@ test('MessageRouter classifies timed-out late responses by retirement cause',
   async (t) => {
     let nowMs = 1000;
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'retired-service-response-timeout-test',
       nowFn: () => nowMs,
       unmatchedServiceResponseWarnIntervalMs: 5000,
@@ -114,6 +117,7 @@ test('MessageRouter classifies timed-out late responses by retirement cause',
 test('MessageRouter tracks settled, absorbed, and orphaned service-response dispositions',
   async (t) => {
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'service-response-disposition-count-test',
       nowFn: () => 1000,
       unmatchedServiceResponseWarnIntervalMs: 5000,

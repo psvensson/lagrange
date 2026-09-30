@@ -16,6 +16,7 @@ import {
   FIXTURE_ENDPOINT_INCARNATION,
   registeredNodeRow,
 } from '../../test-helpers/endpoint-incarnation-fixture.js';
+import {TEST_BOOT_INCARNATION} from '../../test-helpers/boot-incarnation-fixture.js';
 
 // Bind 127.0.0.1 explicitly: in CI containers 'localhost' can resolve to ::1
 // for the server bind while cross-router dials go to 127.0.0.1, producing
@@ -52,6 +53,7 @@ describe('MessageRouterSetup', () => {
       await assert.rejects(
         async () => {
           await MessageRouterSetup.create({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeAddress: 'ws://localhost:9999',
             wsPort: 9999,
           });
@@ -67,6 +69,7 @@ describe('MessageRouterSetup', () => {
 
     it('should create MessageRouter without wsPort (no server)', async () => {
       const router = await MessageRouterSetup.create({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node-no-port',
         nodeAddress: 'ws://localhost:9999',
       });
@@ -82,6 +85,7 @@ describe('MessageRouterSetup', () => {
     it('should create MessageRouter with wsPort and establish self-connection', async () => {
       const port = ports.getPort();
       const router = await MessageRouterSetup.create({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node-with-port',
         nodeAddress: `ws://localhost:${port}`,
         wsPort: port,
@@ -102,6 +106,7 @@ describe('MessageRouterSetup', () => {
         // once, then a second create on the SAME port surfaces a real EADDRINUSE.
         const port = ports.getPort();
         const holder = await MessageRouterSetup.create({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'eaddrinuse-holder',
           nodeAddress: `ws://localhost:${port}`,
           wsPort: port,
@@ -111,6 +116,7 @@ describe('MessageRouterSetup', () => {
         await assert.rejects(
           async () => {
             const conflicting = await MessageRouterSetup.create({
+              bootIncarnation: TEST_BOOT_INCARNATION,
               nodeId: 'eaddrinuse-rejoiner',
               nodeAddress: `ws://localhost:${port}`,
               wsPort: port,
@@ -138,12 +144,14 @@ describe('MessageRouterSetup', () => {
         const gatedPort = ports.getPort();
         const peerPort = ports.getPort();
         const gatedRouter = await MessageRouterSetup.create({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'gated-node',
           nodeAddress: `ws://localhost:${gatedPort}`,
           wsPort: gatedPort,
           externalAdmissionEnabled: false,
         });
         const peerRouter = await MessageRouterSetup.create({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'peer-node',
           nodeAddress: `ws://localhost:${peerPort}`,
           wsPort: peerPort,
@@ -186,6 +194,7 @@ describe('MessageRouterSetup', () => {
 
     it('should configure service node resolver', async () => {
       const router = await MessageRouterSetup.create({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'resolver-test-node',
         nodeAddress: 'ws://localhost:9999',
       });
@@ -206,6 +215,7 @@ describe('MessageRouterSetup', () => {
     it('should pass identifyPayload to MessageRouter', async () => {
       const identifyPayload = {role: 'joining', version: '1.0'};
       const router = await MessageRouterSetup.create({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'identify-test-node',
         nodeAddress: 'ws://localhost:9999',
         identifyPayload,
@@ -217,6 +227,7 @@ describe('MessageRouterSetup', () => {
 
     it('should preserve a distinct advertised websocket identity address', async () => {
       const router = await MessageRouterSetup.create({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'advertised-address-node',
         nodeAddress: 'joiner-host:8080',
         advertisedNodeWsAddress: 'ws://172.20.0.42:8082',
@@ -268,6 +279,7 @@ describe('MessageRouterSetup', () => {
         });
 
         const router = await MessageRouterSetup.create({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: 'resolver-normalization-test-node',
           nodeAddress: 'ws://localhost:9999',
         });
@@ -287,6 +299,7 @@ describe('MessageRouterSetup', () => {
 
       // Create first router on the port
       const router1 = await MessageRouterSetup.create({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'first-node',
         nodeAddress: `ws://localhost:${port}`,
         wsPort: port,
@@ -297,6 +310,7 @@ describe('MessageRouterSetup', () => {
       await assert.rejects(
         async () => {
           const router2 = await MessageRouterSetup.create({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId: 'second-node',
             nodeAddress: `ws://localhost:${port}`,
             wsPort: port,

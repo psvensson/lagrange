@@ -38,6 +38,7 @@ import {
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {createLifecycleCdcServiceForCache} from
   '../test-helpers/lifecycle-state-store.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // Port counter for unique ports per test
 let integrationPortCounter = 25000;
@@ -244,6 +245,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         // ========================================
         const bootstrapPort = integrationPortCounter++;
         resources.bootstrapRouter = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: seedNodeId,
           wsPort: bootstrapPort,
         });
@@ -278,6 +280,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         // ========================================
         const seedPort = integrationPortCounter++;
         resources.seedRouter = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: seedNodeId,
           wsPort: seedPort,
         });
@@ -285,6 +288,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
 
         const secondPort = integrationPortCounter++;
         resources.secondNodeRouter = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId: secondNodeId,
           wsPort: secondPort,
         });
@@ -527,6 +531,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
 
       const port = integrationPortCounter++;
       resources.router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId,
         wsPort: port,
       });

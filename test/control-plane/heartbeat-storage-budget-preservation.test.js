@@ -144,6 +144,7 @@ test('writeNodeHeartbeat fails loudly when the authoritative nodes row is missin
     const updates = [];
     const upserts = [];
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       cdcIntegrationService: {
@@ -189,6 +190,7 @@ async (t) => {
 
   let reportedPayload = null;
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     cdcIntegrationService: {
@@ -250,6 +252,7 @@ async (t) => {
 
   let capturedUpdateRow = null;
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     cdcIntegrationService: {
@@ -302,6 +305,7 @@ async (t) => {
   const nodeWrites = [];
   const endpointWrites = [];
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     controlPlaneSystemTableGateway: {
@@ -385,6 +389,7 @@ async (t) => {
   const nodeWrites = [];
   const endpointWrites = [];
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     controlPlaneSystemTableGateway: {
@@ -450,6 +455,7 @@ async (t) => {
   const nodeWrites = [];
   const endpointWrites = [];
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     controlPlaneSystemTableGateway: {
@@ -512,6 +518,7 @@ async (t) => {
     get: () => null,
   };
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     cdcIntegrationService: {

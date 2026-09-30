@@ -28,6 +28,7 @@ import {ControlPlaneSystemTableGateway} from
 import {NODE_STATE, SERVICE_STATUS, STATE} from '../../src/constants/index.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const TEST_NODE_ID = 'node-joining-fence';
 const TEST_NODE_ADDRESS = '10.0.0.98:8080';
@@ -69,6 +70,7 @@ function createHeartbeatService(options = {}) {
       messageRouter: null,
     });
   return new RawHeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     ...options,
     controlPlaneSystemTableGateway,
   });
@@ -80,6 +82,9 @@ async function captureHeartbeatReporterPayload(nodeRow, options = {}) {
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     cdcIntegrationService: {
+      // A heartbeat at a real incarnation (re)publishes its node endpoint at
+      // that incarnation: born by insert when no current row exists.
+      insertSystemTableRow: async () => ({success: true}),
       updateSystemTableRow: async () => ({success: true}),
       upsertSystemTableRow: async () => ({success: true}),
     },
@@ -107,6 +112,7 @@ async (t) => {
   try {
     const payload = await captureHeartbeatReporterPayload({
       node_id: TEST_NODE_ID,
+      boot_incarnation: TEST_BOOT_INCARNATION,
       node_address: TEST_NODE_ADDRESS,
       created_at: TEST_CREATED_AT,
       status: NODE_STATE.JOINING,
@@ -150,6 +156,7 @@ async (t) => {
     const payload = await captureHeartbeatReporterPayload(
       {
         node_id: TEST_NODE_ID,
+        boot_incarnation: TEST_BOOT_INCARNATION,
         node_address: TEST_NODE_ADDRESS,
         created_at: TEST_CREATED_AT,
         status: NODE_STATE.JOINING,
@@ -182,6 +189,7 @@ async (t) => {
   try {
     const payload = await captureHeartbeatReporterPayload({
       node_id: TEST_NODE_ID,
+      boot_incarnation: TEST_BOOT_INCARNATION,
       node_address: TEST_NODE_ADDRESS,
       created_at: TEST_CREATED_AT,
       status: SERVICE_STATUS.ACTIVE,

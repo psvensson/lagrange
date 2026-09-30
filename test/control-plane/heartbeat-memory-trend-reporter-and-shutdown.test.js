@@ -12,6 +12,7 @@ import {
   initEnv,
   insertViaUpsert,
 } from './heartbeat-memory-trend-test-helpers.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 test('HeartbeatService retries a reporter heartbeat after a fresh publish ' +
   'loses canonical visibility proof even inside the min update interval',
@@ -30,6 +31,7 @@ async (t) => {
     }
   };
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-reporter-target-change',
     nodeAddress: '10.0.0.31:8080',
     cdcIntegrationService: {
@@ -131,6 +133,7 @@ test('HeartbeatService reuses a recent successful reporter visibility proof',
       }
     };
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-reporter-visibility-throttle',
       nodeAddress: '10.0.0.13:8080',
       cdcIntegrationService: {
@@ -208,6 +211,7 @@ test('HeartbeatService throttles repeated unverified reporter visibility retries
       }
     };
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-reporter-visibility-retry-throttle',
       nodeAddress: '10.0.0.14:8080',
       cdcIntegrationService: {
@@ -285,6 +289,7 @@ test('HeartbeatService cancels deferred reporter visibility verification when th
       }
     };
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-reporter-disabled-before-verify',
       nodeAddress: '10.0.0.15:8080',
       cdcIntegrationService: {
@@ -345,6 +350,7 @@ test('HeartbeatService suppresses non-critical heartbeat writes while quiet mode
     };
     let quietModeActive = false;
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-g',
       nodeAddress: '10.0.0.7:8080',
       cdcIntegrationService: {
@@ -402,6 +408,7 @@ test('HeartbeatService allows initial node heartbeat write during quiet mode',
     let nodeUpdates = 0;
     let endpointUpserts = 0;
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-g0',
       nodeAddress: '10.0.0.70:8080',
       cdcIntegrationService: {
@@ -473,6 +480,7 @@ async (t) => {
     created_at: 100,
   };
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-direct-restart',
     nodeAddress: '10.0.0.92:8080',
     cdcIntegrationService: {
@@ -516,6 +524,7 @@ test('HeartbeatService allows quiet-mode safety bypass for staleness guard and r
     let nodeUpdates = 0;
     let quietModeActive = false;
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-h',
       nodeAddress: '10.0.0.8:8080',
       cdcIntegrationService: {
@@ -569,6 +578,7 @@ test('HeartbeatService preserves max-staleness liveness writes in quiet mode eve
     let nodeUpdates = 0;
     let quietModeActive = false;
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-h2',
       nodeAddress: '10.0.0.81:8080',
       cdcIntegrationService: {
@@ -632,6 +642,7 @@ test('HeartbeatService allows quiet-mode structural-change bypass and records re
     let nodeUpdates = 0;
     let quietModeActive = false;
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-h3',
       nodeAddress: '10.0.0.82:8080',
       cdcIntegrationService: {
@@ -686,6 +697,7 @@ test('HeartbeatService does not overlap heartbeat writes when a tick is still in
     let maxInFlightWrites = 0;
     const releaseWrites = [];
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-d',
       nodeAddress: '10.0.0.4:8080',
       cdcIntegrationService: {
@@ -763,6 +775,7 @@ test('HeartbeatService recovers from a hung heartbeat attempt after timeout',
         }),
       });
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-timeout',
       nodeAddress: '10.0.0.11:8080',
       cdcIntegrationService: {
@@ -862,6 +875,7 @@ async (t) => {
   const updates = [];
   const reporterCalls = [];
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-shutdown-reporter',
     nodeAddress: '10.0.0.21:8080',
     cdcIntegrationService: {
@@ -926,6 +940,7 @@ test('HeartbeatService reportNodeShutdown skips publication when node row is abs
 
     let updateCalls = 0;
     const service = new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-shutdown-missing',
       nodeAddress: '10.0.0.23:8080',
       cdcIntegrationService: {

@@ -30,6 +30,7 @@ import {
 } from '../../src/raft/raft-committed-membership-stamp.js';
 import {createLifecycleCdcServiceForCache} from
   '../test-helpers/lifecycle-state-store.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 let portCounter = 33000;
 
@@ -92,7 +93,7 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
   try {
     const nodeId = 'ack-node';
     const port = portCounter++;
-    res.router = new MessageRouter({nodeId, wsPort: port});
+    res.router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId, wsPort: port});
     await res.router.initialize({startServer: true});
 
     res.mg = new MessageGroupService({

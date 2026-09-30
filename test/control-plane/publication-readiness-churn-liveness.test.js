@@ -54,6 +54,7 @@ import {
   churnRow,
   createProductionShapedCache,
 } from './publication-readiness-churn-liveness-test-support.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 test('readiness planning dependency registry is complete and explicit',
   async (t) => {
@@ -557,6 +558,7 @@ test('full production-composition storm closes cache, owner-RPC, dependency, ' +
     }),
   };
   const heartbeatOwner = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-0',
     nodeAddress: 'node-0:8080',
     systemTableCache: activeCache,
@@ -769,6 +771,7 @@ test('full production-composition storm closes cache, owner-RPC, dependency, ' +
     }),
     cdcGroupPropagationService: {...publicationOwner},
     heartbeatService: new HeartbeatService({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-0',
       nodeAddress: 'node-0:8080',
       systemTableCache: activeCache,

@@ -11,6 +11,7 @@ import {
   buildTransportDeliveryOutcome,
   classifyTransportDeliveryOutcome,
 } from '../../src/transport/transport-semantic-outcome.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 test('transport delivery outcome grammar classifies deferred and failed deliveries',
   async (t) => {
@@ -124,7 +125,9 @@ test('transport delivery outcome fails closed when ACK contradicts delivery meta
 
 test('message router normalizes local delivery results onto the shared delivery grammar',
   async (t) => {
-    const router = new MessageRouter({nodeId: 'transport-delivery-test'});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: 'transport-delivery-test'});
     await router.initialize({startServer: false});
 
     router.register(

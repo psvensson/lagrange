@@ -31,6 +31,7 @@ import {
   initializeTestEnvironment as initTestEnv,
 } from './helpers/cluster-test-helpers.js';
 import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 async function shutdownOrFail(t, promise, label) {
   try {
@@ -234,6 +235,7 @@ function createSqlEngineSeamFor(cache) {
  */
 function createMessageRouterHost(options = {}) {
   return new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: options.nodeId || HOST_NODE_ID,
     nodeAddress: HOST_ROUTER_ADDRESS,
     wsPort: 0,

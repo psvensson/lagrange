@@ -68,6 +68,7 @@ import {
   waitForPlacementEligible,
   waitForPublishedMembership,
 } from './membership-consistency-integration-test-helpers.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // ============================================================================
 // TEST SUITE
@@ -707,6 +708,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       const mockCoordinator = createRebalanceCoordinatorHost(cache);
 
       const heartbeatSvc = new HeartbeatService({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'control-plane-node',
         nodeAddress: 'ws://control-plane-node:9000',
         cdcIntegrationService: cdcService,
@@ -1344,6 +1346,7 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
       const mockCoordinator = createRebalanceCoordinatorHost(cache);
 
       const heartbeatSvc = new HeartbeatService({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'follower-node',
         nodeAddress: 'ws://follower-node:9000',
         cdcIntegrationService: cdcService,

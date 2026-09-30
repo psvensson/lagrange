@@ -19,6 +19,7 @@ import {activatePartitionServiceRows} from
   '../../src/bootstrap/shared/partition-service-activation.js';
 import {runSerializedReplicaMutation} from
   '../../src/node/replica-state-machine-serialization.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const NODE_ID = 'node-a';
 const REPLICA_ID = 'p1-r1';
@@ -116,7 +117,7 @@ function createDurable(initialRow, options = {}) {
 
 function createWorld(initialRow = registeredRow()) {
   initializeEnvironment();
-  const router = new MessageRouter({nodeId: NODE_ID});
+  const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: NODE_ID});
   const stateMachine = new ReplicaStateMachine({nodeId: NODE_ID,
     controlPlaneSystemTableGateway: {}, now: () => 150});
   const service = {partitionId: 'p1', replicaId: REPLICA_ID,

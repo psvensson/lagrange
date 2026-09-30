@@ -15,6 +15,7 @@ import {MessageRouter, ConnectionState} from '../../src/transport/message-router
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const ports = createPortAllocator(import.meta.url);
 
@@ -99,7 +100,7 @@ t.test('MessageRouter API Compatibility Property Tests', async (t) => {
      *
      * **Validates: Requirements 1.1**
      */
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
 
     fc.assert(
       fc.property(
@@ -127,6 +128,7 @@ t.test('MessageRouter API Compatibility Property Tests', async (t) => {
      */
     const port = ports.getPort();
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'test-node',
       wsPort: port,
       inProcess: true,
@@ -157,7 +159,7 @@ t.test('MessageRouter API Compatibility Property Tests', async (t) => {
     /**
      * For any valid address, parseAddress should return consistent components.
      */
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
 
     fc.assert(
       fc.property(
@@ -189,7 +191,7 @@ t.test('MessageRouter API Compatibility Property Tests', async (t) => {
     /**
      * For any address with valid entity type, isValidAddress should return true.
      */
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
 
     fc.assert(
       fc.property(
@@ -218,7 +220,7 @@ t.test('MessageRouter API Compatibility Property Tests', async (t) => {
     /**
      * For any address with invalid entity type, isValidAddress should return false.
      */
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
 
     fc.assert(
       fc.property(
@@ -245,7 +247,7 @@ t.test('MessageRouter API Compatibility Property Tests', async (t) => {
   });
 
   t.test('Property: legacy join protocol API is absent', async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
 
     t.equal(
       typeof router.setJoinRequestHandler,

@@ -6,6 +6,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const config = ConfigurationManager.getInstance();
 config.initialize({});
@@ -16,7 +17,7 @@ if (!loggingService.isInitialized()) {
 
 test('MessageRouter - does not expose legacy JOIN_REQUEST/JOIN_COMPLETE APIs',
   async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     t.equal(
@@ -46,7 +47,7 @@ test('MessageRouter - does not expose legacy JOIN_REQUEST/JOIN_COMPLETE APIs',
 
 test('MessageRouter - does not keep legacy join handler state',
   async (t) => {
-    const router = new MessageRouter({nodeId: 'test-node'});
+    const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
     t.equal(

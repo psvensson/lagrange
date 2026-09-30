@@ -81,6 +81,7 @@ import {CALL_CELL_INVOCATION_ID_PREFIX} from
   '../../src/service/call-cell-routing-contract.js';
 import {createCallCellRoutingSurface} from
   '../../src/service/call-cell-routing-surface.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const NODE_ID = 'call-cell-live-node';
 const TENANT_ID = 'tenant-a';
@@ -724,6 +725,7 @@ describe('minimal deployment call-cell invocation live wiring', () => {
         durableStore.read;
 
     const setup = await ControlPlaneSetup.create({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       cdcIntegrationService,
       messageRouter,
       nodeAddress: '127.0.0.1:7411',

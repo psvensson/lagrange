@@ -18,6 +18,7 @@ import {
 } from '../../src/transport/message-router-outbound-queue-admission.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 /**
  * Initialize test environment.
  */
@@ -54,6 +55,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
   t.test('should reserve pending capacity for critical outbound deliveries',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node',
         outboundQueueMaxConcurrent: 1,
         outboundQueueMaxPending: 4,
@@ -154,6 +156,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
   t.test('should reserve in-flight dispatch capacity for critical outbound deliveries',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node',
         outboundQueueMaxConcurrent: 2,
         outboundQueueMaxPending: 4,
@@ -253,6 +256,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
       const TEST_HOT_PENDING_LABEL = 'hot-1';
       const TEST_CONTROL_PLANE_LABEL = 'control-plane';
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: TEST_LOCAL_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
         startServer: false,
@@ -349,6 +353,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
   t.test('should attribute saturated queue warnings to delivery sources',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node',
         outboundQueueMaxConcurrent: 1,
         outboundQueueMaxPending: 1,
@@ -451,6 +456,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
   t.test('should attribute Raft append saturation to underlying command types',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node',
         outboundQueueMaxConcurrent: 1,
         outboundQueueMaxPending: 1,
@@ -566,6 +572,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
     'should keep one background delivery source from monopolizing the pending queue',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node',
         outboundQueueMaxConcurrent: 1,
         outboundQueueMaxPending: 8,
@@ -679,6 +686,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
     'should keep one critical recovery source from monopolizing the pending queue',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'local-node',
         nodeAddress: 'ws://local-node:7000',
         startServer: false,
@@ -805,6 +813,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
     'should defer scheduled reconnect deliveries before outbound queue admission',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'local-node',
         nodeAddress: 'ws://local-node:7000',
         startServer: false,
@@ -879,6 +888,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
     'should defer pending reconnect attempts before outbound queue admission',
     async (t) => {
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'local-node',
         nodeAddress: 'ws://local-node:7000',
         startServer: false,
@@ -971,6 +981,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
         'remote-node/partition/sql_write_operations-p1-r4',
       ]);
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: TEST_LOCAL_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
         startServer: false,
@@ -1081,6 +1092,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
         'remote-node/partition/sql_transaction_participants-p1-r4',
       ]);
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: TEST_LOCAL_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
         startServer: false,
@@ -1202,6 +1214,7 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
         TEST_SECOND_HOT_RECOVERY_TARGET_ADDRESS,
       ];
       const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: TEST_LOCAL_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
         startServer: false,

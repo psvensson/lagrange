@@ -48,7 +48,9 @@ async function withDataDir(run) {
 }
 
 // Every production writer of the rejoin hints document, driven with the
-// most hostile incarnation it can carry (absent, 0 or 1).
+// most hostile incarnation it can carry (absent or 1 where the writer takes
+// the snapshot as given; the persistence service refuses absent and 0 at
+// construction, so 1 is its lowest).
 const HINTS_WRITER_ADAPTERS = Object.freeze({
   'src/entrypoint-runtime-join-decision.js#persistJoinSeedRejoinHints':
     (dataDir) => persistJoinSeedRejoinHints({
@@ -63,7 +65,7 @@ const HINTS_WRITER_ADAPTERS = Object.freeze({
   'src/bootstrap/rejoin-hints.js#persistSnapshot':
     (dataDir) => new RejoinHintsPersistenceService({
       dataDir, nodeId: NODE_ID, nodeAddress: 'node-f1:8080',
-      nodeRole: 'seed', bootIncarnation: 0, logger: quietLogger,
+      nodeRole: 'seed', bootIncarnation: 1, logger: quietLogger,
       getSystemTableCache: () => null,
     }).persistNow(),
 });

@@ -8,10 +8,7 @@ import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert';
 import {ReplicaHandlerSetup} from '../../../src/bootstrap/shared/replica-handler-setup.js';
 import {DependencyError} from '../../../src/bootstrap/bootstrap-errors.js';
-
-// The startup lifecycle owner's incarnation, as the boot incarnation owner
-// would have issued it.
-const TEST_BOOT_INCARNATION = 1;
+import {TEST_BOOT_INCARNATION} from '../../test-helpers/boot-incarnation-fixture.js';
 
 const TEST_NODE_ID = 'test-node';
 const TEST_FORWARDS_EXECUTOR_OUTCOME_EMITTER =

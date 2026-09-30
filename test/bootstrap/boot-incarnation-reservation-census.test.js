@@ -16,6 +16,8 @@ import {test} from '../../src/test-helpers/tap.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const OWNER_FILE = 'src/bootstrap/boot-incarnation-owner.js';
+// The package surface (src/public-api.js re-exports src/bootstrap/index.js).
+const PUBLIC_REEXPORT_FILE = 'src/bootstrap/index.js';
 const INCARNATION = '(?:[bB]oot|[oO]wner)Incarnation';
 const ZERO = '(?:0|TRANSPORT_NUM\\.ZERO)';
 
@@ -41,22 +43,11 @@ const SITE_CLASS = Object.freeze({
   // identification: an observation of another node, not this node's
   // lifecycle incarnation.
   REMOTE_PEER_OBSERVATION: 'remote_peer_observation',
-  // A downstream collaborator constructor that still reads an absent option
-  // as 0 (unfenced). Production always hands it the lifecycle owner's
-  // required incarnation; removing the default is a contract change on the
-  // collaborator, recorded here as debt (entries only shrink).
-  COMPONENT_NORMALIZER_DEBT: 'component_normalizer_debt',
 });
 
 const CLASSIFIED_SITES = Object.freeze({
   'src/bootstrap/boot-incarnation-owner.js#else_zero':
     {count: 1, siteClass: SITE_CLASS.OWNER_ISSUED_WATERMARK},
-  'src/bootstrap/rejoin-hints.js#else_zero':
-    {count: 1, siteClass: SITE_CLASS.COMPONENT_NORMALIZER_DEBT},
-  'src/control-plane/heartbeat-service.js#else_zero':
-    {count: 1, siteClass: SITE_CLASS.COMPONENT_NORMALIZER_DEBT},
-  'src/transport/message-router.js#else_zero':
-    {count: 1, siteClass: SITE_CLASS.COMPONENT_NORMALIZER_DEBT},
   'src/control-plane/control-plane-error-classification.js#normalizer':
     {count: 1, siteClass: SITE_CLASS.REMOTE_PEER_OBSERVATION},
   'src/transport/message-router-connection-authority.js#literal_zero':
@@ -141,6 +132,9 @@ test('no lifecycle path manufactures a default boot incarnation: every ' +
     'src/bootstrap/shared/replica-handler-setup.js',
     'src/bootstrap/shared/node-state-publication-owner.js',
     'src/node/replica-state-machine.js',
+    'src/control-plane/heartbeat-service.js',
+    'src/transport/message-router.js',
+    'src/bootstrap/rejoin-hints.js',
   ]) {
     t.notOk(Object.keys(sites).some((site) =>
       site.startsWith(`${lifecycleOwner}#`)),
@@ -172,5 +166,45 @@ test('the boot incarnation owner is the only reservation authority', (t) => {
     .sort();
   t.same(callers, [...RESERVATION_CALLERS],
     'the reservation verb has exactly the classified callers');
+  const publicReexports = files
+    .filter(({file, source}) => file !== OWNER_FILE &&
+      /export\s*\{[^}]*\breserveBootIncarnation\b[^}]*\}/u.test(source))
+    .map(({file, source}) => ({
+      file,
+      fromOwner: /export\s*\{\s*reserveBootIncarnation\s*\}\s*from\s*'\.\/boot-incarnation-owner\.js'/u
+        .test(source),
+    }));
+  t.same(publicReexports, [{file: PUBLIC_REEXPORT_FILE, fromOwner: true}],
+    'the public surface re-exports the owner\'s own operation, not a new ' +
+    'issuer');
+  t.end();
+});
+
+test('every node boot lifecycle component refuses a missing or unissued ' +
+  'incarnation (typed), never defaulting to 0', async (t) => {
+  const {BOOT_INCARNATION_REQUIRED} =
+    await import('../../src/bootstrap/boot-incarnation-contract.js');
+  const {HeartbeatService} =
+    await import('../../src/control-plane/heartbeat-service.js');
+  const {MessageRouter} = await import('../../src/transport/message-router.js');
+  const {RejoinHintsPersistenceService} =
+    await import('../../src/bootstrap/rejoin-hints.js');
+  const components = {
+    HeartbeatService: (bootIncarnation) =>
+      new HeartbeatService({nodeId: 'census-node', bootIncarnation}),
+    MessageRouter: (bootIncarnation) =>
+      new MessageRouter({nodeId: 'census-node', bootIncarnation}),
+    RejoinHintsPersistenceService: (bootIncarnation) =>
+      new RejoinHintsPersistenceService({
+        nodeId: 'census-node', bootIncarnation,
+      }),
+  };
+  for (const [subject, construct] of Object.entries(components)) {
+    for (const bootIncarnation of [undefined, null, 0, -1, 1.5]) {
+      t.throws(() => construct(bootIncarnation),
+        {code: BOOT_INCARNATION_REQUIRED, subject},
+        `${subject} refuses incarnation ${String(bootIncarnation)}`);
+    }
+  }
   t.end();
 });

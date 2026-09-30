@@ -35,9 +35,18 @@ exact incarnation to the lifecycle owners:
 node/process startup -> reserveBootIncarnation(dataDir) -> incarnation G
   -> BootstrapService({bootIncarnation: G})   (seed)
   -> NodeJoiningService({bootIncarnation: G}) (join, durable rejoin)
-  -> replica lifecycle owner, node-state publication, IDENTIFY, NODES rows
+  -> replica lifecycle owner, node-state publication, heartbeat, router
+     IDENTIFY, rejoin hints, NODES rows (each requires it; none defaults it)
 ```
 
+- The package exports the reservation operation itself,
+  `reserveBootIncarnation(dataDir)` (from `lagrange-server`), and nothing
+  else of the owner: an embedding caller reserves over the node's data
+  directory, then constructs the lifecycle owner with the result. The
+  operation persists the reservation before returning it, never returns 0,
+  and fails closed on unreadable reservation state
+  (`BOOT_INCARNATION_STATE_UNREADABLE`) or a missing data directory
+  (`BOOT_INCARNATION_DATA_DIR_REQUIRED`).
 - `BootstrapService` requires `bootIncarnation`, including through
   `BootstrapService.bootstrapOrExit`.
 - `NodeJoiningService` requires `bootIncarnation`.

@@ -24,6 +24,7 @@ import {
 } from '../../src/raft/snapshot-install.js';
 import {waitForCondition} from './bulk-transfer-socket-fixture.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // The leader checkpoint cadence on the rs-raft partition path (quest
 // raft-rs-single-path-partition-cutover, design S19). Checkpoint creation and
@@ -163,6 +164,7 @@ test('ENGAGEMENT: the 1s prepared-state-hold sweep ticks the cadence on a ' +
   const dbPath = path.join(workDir, 'partition', 'replica.db');
   fs.mkdirSync(path.dirname(dbPath), {recursive: true});
   const router = new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'cadence-node',
     nodeAddress: 'ws://cadence-node:7000',
     startServer: false,

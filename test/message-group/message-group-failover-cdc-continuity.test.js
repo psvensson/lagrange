@@ -26,6 +26,7 @@ import {
   MESSAGE_GROUP_SERVICE_LOG_MSG,
 } from '../../src/message-group/constants.js';
 import {NUM} from '../../src/constants/index.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // Test-local constants for fixture values.
 const TEST_PORT_BASE = 25200;
@@ -45,7 +46,7 @@ const LEADER_ACTIVATION_STABILIZATION_MS = 20;
 async function createTestTransport() {
   const port = testPortCounter++;
   const nodeId = `${TEST_NODE_ID_PREFIX}${port}`;
-  const router = new MessageRouter({nodeId, wsPort: port});
+  const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId, wsPort: port});
   await router.initialize({startServer: true});
   return {
     router,

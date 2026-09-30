@@ -42,6 +42,7 @@ import {
 } from './helpers/cluster-test-helpers.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../../src/control-plane/control-plane-readiness-constants.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 async function shutdownOrFail(t, promise, label) {
   try {
@@ -681,6 +682,7 @@ test('Node joining rebalancing integration', {timeout: TEST_TIMEOUT_MS}, async (
 
       // Create decomposed control-plane services
       const heartbeatSvc = new HeartbeatService({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         cdcIntegrationService,

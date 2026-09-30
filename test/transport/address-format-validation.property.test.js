@@ -16,6 +16,7 @@ import fc from 'fast-check';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // Initialize configuration and logging for tests (module level)
 ConfigurationManager.resetInstance();
@@ -51,7 +52,9 @@ test('Property 1: Address Format and Parsing', async (t) => {
         fc.constantFrom(...VALID_ENTITY_TYPES),
         fc.string({minLength: 1, maxLength: 30}).filter((s) => !s.includes('/')),
         async (nodeId, entityType, entityId) => {
-          const router = new MessageRouter({nodeId: 'test-node'});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: 'test-node'});
 
           const address = `${nodeId}/${entityType}/${entityId}`;
           const parsed = router.parseAddress(address);
@@ -101,7 +104,9 @@ test('Property 1: Address Format and Parsing', async (t) => {
           ).map(([a, b, c, d]) => `${a}/${b}/${c}/${d}`),
         ),
         async (malformedAddress) => {
-          const router = new MessageRouter({nodeId: 'test-node'});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: 'test-node'});
 
           let parsed;
           let didThrow = false;
@@ -148,7 +153,9 @@ test('Property 1: Address Format and Parsing', async (t) => {
         fc.constantFrom(...VALID_ENTITY_TYPES),
         fc.string({minLength: 1, maxLength: 30}).filter((s) => !s.includes('/')),
         async (nodeId, entityType, entityId) => {
-          const router = new MessageRouter({nodeId: 'test-node'});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: 'test-node'});
 
           const address = `${nodeId}/${entityType}/${entityId}`;
           const isValid = router.isValidAddress(address);
@@ -180,7 +187,9 @@ test('Property 1: Address Format and Parsing', async (t) => {
         ),
         fc.string({minLength: 1, maxLength: 30}).filter((s) => !s.includes('/')),
         async (nodeId, invalidEntityType, entityId) => {
-          const router = new MessageRouter({nodeId: 'test-node'});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: 'test-node'});
 
           const address = `${nodeId}/${invalidEntityType}/${entityId}`;
           const isValid = router.isValidAddress(address);
@@ -222,7 +231,9 @@ test('Property 1: Address Format and Parsing', async (t) => {
           ).map(([a, b, c, d]) => `${a}/${b}/${c}/${d}`),
         ),
         async (wrongSegmentAddress) => {
-          const router = new MessageRouter({nodeId: 'test-node'});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: 'test-node'});
 
           const isValid = router.isValidAddress(wrongSegmentAddress);
 
@@ -264,7 +275,9 @@ test('Property 1: Address Format and Parsing', async (t) => {
           ).map(([nodeId, entityType]) => `${nodeId}/${entityType}/`),
         ),
         async (emptySegmentAddress) => {
-          const router = new MessageRouter({nodeId: 'test-node'});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: 'test-node'});
 
           const isValid = router.isValidAddress(emptySegmentAddress);
 
@@ -302,7 +315,9 @@ test('Property 1: Address Format and Parsing', async (t) => {
           ).map(([a, b, c]) => `${a}/${b}/${c}`),
         ),
         async (invalidAddress) => {
-          const router = new MessageRouter({nodeId: 'test-node'});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: 'test-node'});
           await router.initialize();
 
           let threwError = false;
@@ -339,7 +354,9 @@ test('Property 1: Address Format and Parsing', async (t) => {
         fc.constantFrom(...VALID_ENTITY_TYPES),
         fc.string({minLength: 1, maxLength: 30}).filter((s) => !s.includes('/')),
         async (nodeId, entityType, entityId) => {
-          const router = new MessageRouter({nodeId: 'test-node'});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: 'test-node'});
           await router.initialize();
 
           const address = `${nodeId}/${entityType}/${entityId}`;
@@ -377,7 +394,9 @@ test('Property 1: Address Format and Parsing', async (t) => {
         fc.constantFrom(...VALID_ENTITY_TYPES),
         fc.string({minLength: 1, maxLength: 30}).filter((s) => !s.includes('/')),
         async (nodeId, entityType, entityId) => {
-          const router = new MessageRouter({nodeId: 'test-node'});
+          const router = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId: 'test-node'});
 
           // Construct address
           const address = `${nodeId}/${entityType}/${entityId}`;

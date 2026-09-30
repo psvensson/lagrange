@@ -2,6 +2,7 @@ import {rename, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {TABLES} from '../constants/index.js';
 import {buildClusterIncarnationFence} from './cluster-incarnation-fence.js';
+import {requireIssuedBootIncarnation} from './boot-incarnation-contract.js';
 import {
   CLUSTER_ID_CONFIG_KEY,
   CLUSTER_ID_MATCH_STATE,
@@ -37,6 +38,15 @@ import {
   parseClusterNodeCount,
   prioritizePeerAddress,
 } from './rejoin-hints-addresses.js';
+
+const REJOIN_HINTS_PERSISTENCE_SUBJECT = 'RejoinHintsPersistenceService';
+
+// The hints persistence participates in one boot lifecycle: its incarnation
+// is the reserved one, required (never defaulted).
+function requireHintsBootIncarnation(bootIncarnation) {
+  return requireIssuedBootIncarnation(
+    bootIncarnation, REJOIN_HINTS_PERSISTENCE_SUBJECT);
+}
 
 const REJOIN_ROLE_SEED = 'seed';
 const STARTUP_MODE_JOIN = 'join';
@@ -654,11 +664,9 @@ class RejoinHintsPersistenceService {
     this.nodeAddress = options.nodeAddress || null;
     this.nodeRole = options.nodeRole || null;
     // Reserved once per boot lifecycle by the boot incarnation owner and
-    // projected here unchanged: the 1s cadence never advances it.
-    this.bootIncarnation = Number.isSafeInteger(options.bootIncarnation) &&
-      options.bootIncarnation > 0 ?
-      options.bootIncarnation :
-      0;
+    // projected here unchanged (required): the 1s cadence never advances it.
+    this.bootIncarnation = requireHintsBootIncarnation(
+      options.bootIncarnation);
     this.getSystemTableCache =
       typeof options.getSystemTableCache === 'function' ?
         options.getSystemTableCache :

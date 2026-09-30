@@ -26,6 +26,7 @@ import {
 } from '../../src/bootstrap/shared/message-group-transport-handler.js';
 import {runSerializedReplicaMutation} from
   '../../src/node/replica-state-machine-serialization.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const NODE_ID = 'node-a';
 const GROUP_ID = 'mg-1';
@@ -133,7 +134,7 @@ function createService(router, stateMachine, register = true) {
 
 function createWorld(initialRow = registeredRow(), options = {}) {
   initializeEnvironment();
-  const router = new MessageRouter({nodeId: NODE_ID});
+  const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: NODE_ID});
   const stateMachine = new ReplicaStateMachine({nodeId: NODE_ID,
     controlPlaneSystemTableGateway: {}, now: () => 150});
   const service = createService(router, stateMachine,

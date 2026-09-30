@@ -16,12 +16,14 @@ import assert from 'node:assert';
 import fc from 'fast-check';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {WORKER_ENTITY_TYPE} from '../../src/worker/worker-constants.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 describe('Property 15: Handler Registration on Worker Registration', () => {
   let router;
 
   beforeEach(() => {
     router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'node-1',
       inProcess: true,
     });
@@ -42,6 +44,7 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
         fc.uuid(),
         async (nodeId, entityType, replicaId) => {
           const testRouter = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId,
             inProcess: true,
           });
@@ -72,6 +75,7 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
         }),
         async (nodeId, replicaId, payload) => {
           const testRouter = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId,
             inProcess: true,
           });
@@ -104,6 +108,7 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
         fc.uuid(),
         async (nodeId, replicaId) => {
           const testRouter = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId,
             inProcess: true,
           });
@@ -129,6 +134,7 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
         fc.array(fc.uuid(), {minLength: 2, maxLength: 5}),
         async (nodeId, replicaIds) => {
           const testRouter = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId,
             inProcess: true,
           });
@@ -171,6 +177,7 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
         fc.uuid(),
         async (nodeId, partitionReplicaId, msgGroupReplicaId) => {
           const testRouter = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId,
             inProcess: true,
           });
@@ -212,6 +219,7 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
         fc.array(fc.uuid(), {minLength: 1, maxLength: 5}),
         async (nodeId, replicaIds) => {
           const testRouter = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId,
             inProcess: true,
           });

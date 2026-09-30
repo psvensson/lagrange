@@ -25,6 +25,7 @@ import {
   collectModuleImporters,
   collectNodesMutationSites,
 } from './node-lifecycle-writer-census.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // A lifecycle owner stand-in that records each request and answers APPLIED
 // with the requested lifecycle as the authoritative row.
@@ -57,6 +58,7 @@ test('HeartbeatService membership reconciliation cannot retain heartbeat ' +
   let heartbeatWrites = 0;
   let now = 1000;
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-independent-reconcile',
     nodeAddress: '10.0.0.11:8080',
     cdcIntegrationService: {
@@ -367,6 +369,7 @@ test('HeartbeatService join-critical reporter publication consumes the ' +
   const reporterPayloads = [];
   const projectionInstalls = [];
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-strict-ready-visibility',
     nodeAddress: '10.0.0.41:8080',
     cdcIntegrationService: {
@@ -442,6 +445,7 @@ test('HeartbeatService join-critical reporter completion cannot install stale ' 
 
   let projectionInstalls = 0;
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-strict-ready-stale-owner',
     nodeAddress: '10.0.0.44:8080',
     cdcIntegrationService: {
@@ -491,6 +495,7 @@ test('HeartbeatService join-critical reporter publication rejects a transport ' 
 
   let authoritativeReads = 0;
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-strict-ready-gap',
     nodeAddress: '10.0.0.42:8080',
     cdcIntegrationService: {
@@ -546,6 +551,7 @@ test('HeartbeatService join-critical reporter publication fails closed without '
   initEnv();
 
   const service = new HeartbeatService({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: 'node-strict-ready-no-authority',
     nodeAddress: '10.0.0.43:8080',
     systemTableCache: createMockCache(),

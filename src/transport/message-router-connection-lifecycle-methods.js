@@ -21,7 +21,6 @@ const {
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
 
-const numberIsSafeInteger = Number.isSafeInteger;
 const objectFreeze = Object.freeze;
 
 class MessageRouterConnectionLifecycleMethods {
@@ -511,12 +510,9 @@ class MessageRouterConnectionLifecycleMethods {
       address: this.advertisedAddress,
       timestamp: this.timeSource.now(),
     };
-    // Stamp this boot's incarnation so receivers fence stale-incarnation
-    // (zombie) identifications. 0 (pre-incarnation) leaves the field OFF the
-    // frame — the UNKNOWN compat policy.
-    if (this.bootIncarnation > TRANSPORT_NUM.ZERO) {
-      message.bootIncarnation = this.bootIncarnation;
-    }
+    // Stamp this boot's (required) incarnation so receivers fence
+    // stale-incarnation (zombie) identifications.
+    message.bootIncarnation = this.bootIncarnation;
     if (this.identifyPayload && !connectionInfo.isSelfConnection) {
       message.bootstrap = this.identifyPayload;
     }
@@ -528,12 +524,6 @@ class MessageRouterConnectionLifecycleMethods {
     );
   }
   getLocalBootIncarnationIdentity() {
-    if (
-      !numberIsSafeInteger(this.bootIncarnation) ||
-      this.bootIncarnation <= TRANSPORT_NUM.ZERO
-    ) {
-      return null;
-    }
     return objectFreeze({
       nodeId: this.nodeId,
       bootIncarnation: this.bootIncarnation,

@@ -18,6 +18,7 @@ import {
 } from './message-router-contract-support.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
@@ -29,7 +30,9 @@ test('real MessageRouter honors the delivery contract', async (t) => {
     registeredAddress: `${CONTRACT_NODE_ID}/service/contract-probe`,
     missingAddress: `${CONTRACT_NODE_ID}/service/contract-missing`,
     async createRouter() {
-      const router = new MessageRouter({nodeId: CONTRACT_NODE_ID});
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: CONTRACT_NODE_ID});
       await router.initialize({startServer: false});
       router.logger = {info() {}, error() {}, warn() {}, debug() {}};
       return {

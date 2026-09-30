@@ -60,6 +60,7 @@ import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {publishRegisteredEndpoint} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // The canonical node clock the joiner hands its replica lifecycle owner.
 const nodeTimeSource = new RealTimeSource();
@@ -546,6 +547,7 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
       // Initialize MessageRouter for local communication only
       const {MessageRouter} = await import('../../src/transport/message-router.js');
       this.messageRouter = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: this.nodeId,
         nodeAddress: this.nodeAddress,
         wsPort: this.wsPort,
@@ -695,6 +697,7 @@ test('NodeJoiningService - emits events', async (t) => {
       // Initialize MessageRouter for local communication only
       const {MessageRouter} = await import('../../src/transport/message-router.js');
       this.messageRouter = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: this.nodeId,
         nodeAddress: this.nodeAddress,
         wsPort: this.wsPort,

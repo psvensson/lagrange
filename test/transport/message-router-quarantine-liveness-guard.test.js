@@ -19,6 +19,7 @@ import {
 } from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const PEER_NODE_ID = 'node-b';
 const PEER_ADDRESS = 'ws://node-b:9999';
@@ -71,7 +72,7 @@ function installPeerConnection(router) {
 }
 
 async function buildRouter(t) {
-  const router = new MessageRouter({nodeId: 'node-a'});
+  const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'node-a'});
   await router.initialize({startServer: false});
   t.teardown(async () => {
     await router.shutdown().catch(() => {});

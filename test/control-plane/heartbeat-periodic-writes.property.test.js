@@ -20,6 +20,7 @@ import {ConfigurationManager} from
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {HEARTBEAT_STATE} from
   '../../src/control-plane/heartbeat-service-constants.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 /**
  * Initialize test singletons.
@@ -92,6 +93,7 @@ test('Property 13: Heartbeat service periodic writes',
           const mockCache = createMockCache();
 
           const service = new HeartbeatService({
+            bootIncarnation: TEST_BOOT_INCARNATION,
             nodeId: 'test-node',
             nodeAddress: 'ws://localhost:8080',
             cdcIntegrationService: mockCdc,

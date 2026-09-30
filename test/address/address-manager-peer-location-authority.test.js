@@ -53,6 +53,7 @@ import {
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {waitForCondition} from '../partition/partition-service-test-support.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -341,7 +342,9 @@ test('a poisoned process registry cannot move a message-group peer destination',
       MessageRouter.prototype.deliver = realDeliver;
     });
 
-    const router = new MessageRouter({nodeId: NODE_ID, wsPort: nextPort++});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: NODE_ID, wsPort: nextPort++});
     await router.initialize({startServer: false});
     const group = new MessageGroupService({
       groupId: GROUP_ID,
@@ -383,7 +386,9 @@ test('a poisoned process registry cannot move a message-group peer destination',
 test('with no authoritative location a message group refuses rather than using the registry',
   async (t) => {
     initializeProcess();
-    const router = new MessageRouter({nodeId: NODE_ID, wsPort: nextPort++});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId: NODE_ID, wsPort: nextPort++});
     await router.initialize({startServer: false});
     const group = new MessageGroupService({
       groupId: GROUP_ID,

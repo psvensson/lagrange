@@ -25,6 +25,7 @@ import {createLifecycleCdcServiceForCache} from
   '../test-helpers/lifecycle-state-store.js';
 import {committedStampFor} from
   '../node/replica-handler-bootstrap-stamps.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 /**
  * Initialize test environment.
@@ -103,6 +104,7 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
 
     // Create MessageRouter for seed node (sends CREATE_REPLICA)
     const seedRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: seedNodeId,
       nodeAddress: `ws://127.0.0.1:${seedPort}`,
       wsPort: seedPort,
@@ -110,6 +112,7 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
 
     // Create MessageRouter for joining node (receives CREATE_REPLICA)
     const joiningRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: joiningNodeId,
       nodeAddress: `ws://127.0.0.1:${joiningPort}`,
       wsPort: joiningPort,
@@ -273,12 +276,14 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
     const joiningPort = 19879;
 
     const seedRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: seedNodeId,
       nodeAddress: `ws://127.0.0.1:${seedPort}`,
       wsPort: seedPort,
     });
 
     const joiningRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: joiningNodeId,
       nodeAddress: `ws://127.0.0.1:${joiningPort}`,
       wsPort: joiningPort,
@@ -345,6 +350,7 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
     const joiningPort = 19881;
 
     const seedRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: seedNodeId,
       nodeAddress: `ws://127.0.0.1:${seedPort}`,
       wsPort: seedPort,
@@ -353,6 +359,7 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
     seedRouter.messageTimeoutMs = 200;
 
     const joiningRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: joiningNodeId,
       nodeAddress: `ws://127.0.0.1:${joiningPort}`,
       wsPort: joiningPort,

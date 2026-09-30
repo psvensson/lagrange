@@ -73,7 +73,9 @@ const TARGET_THRESHOLD = 12;
 // follow-up branches deleted).
 // 2026-09-29: tightened 1797 -> 1796 on the checker's hint (census walker
 // split into named node predicates).
-const BASELINE_COUNT = 1796;
+// 2026-09-30: tightened 1796 -> 1795 on the checker's hint (the boot
+// lifecycle components no longer branch on a missing incarnation).
+const BASELINE_COUNT = 1795;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

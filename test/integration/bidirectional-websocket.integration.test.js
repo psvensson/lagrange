@@ -13,6 +13,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 /**
  * Initialize test environment.
@@ -64,6 +65,7 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
 
     // Create seed node router (like bootstrap service)
     const seedRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: seedNodeId,
       nodeAddress: `ws://127.0.0.1:${seedPort}`,
       wsPort: seedPort,
@@ -77,6 +79,7 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
 
     // Create joining node router (like node joining service)
     const joiningRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: joiningNodeId,
       nodeAddress: `ws://127.0.0.1:${joiningPort}`,
       wsPort: joiningPort,
@@ -168,6 +171,7 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
 
     // Create seed node router
     const seedRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: seedNodeId,
       nodeAddress: `ws://127.0.0.1:${seedPort}`,
       wsPort: seedPort,
@@ -179,6 +183,7 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
 
     // Create joining node router
     const joiningRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: joiningNodeId,
       nodeAddress: `ws://127.0.0.1:${joiningPort}`,
       wsPort: joiningPort,

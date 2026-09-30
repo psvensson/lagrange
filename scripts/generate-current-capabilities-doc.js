@@ -166,6 +166,11 @@ schema, or authorization boundaries. Transaction-control SQL is reserved for
 the callback API. The current lifecycle permits one runtime start per process
 lifetime.
 
+Code that constructs \`BootstrapService\` or \`NodeJoiningService\` directly
+must first reserve the node's boot incarnation with the exported
+\`reserveBootIncarnation(dataDir)\` and pass it as \`bootIncarnation\`; both
+constructors refuse its absence.
+
 ## Replication and recovery
 
 | Capability | Current state |

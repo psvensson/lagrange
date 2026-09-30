@@ -12,6 +12,7 @@ import {
   ROUTER_IDENTIFY_CHANNEL,
   ROUTER_MESSAGE_TYPE,
 } from '../../src/constants/transport.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // S6 Phase A link 3 guard (quest raft-snapshot-live-rebuild): the shared
 // MessageRouterSetup (both bootstrap phases flow through it) instantiates
@@ -48,6 +49,7 @@ async function flushDeliveries() {
 test('a MessageRouterSetup-built router adopts a bulk IDENTIFY instead of ' +
   'warn-and-closing it', async (t) => {
   const router = await MessageRouterSetup.create({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
   });

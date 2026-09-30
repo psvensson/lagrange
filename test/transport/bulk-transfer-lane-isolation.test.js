@@ -19,6 +19,7 @@ import {
   PRESSURE_GOVERNOR_ACTION,
   PressureGovernor,
 } from '../../src/control-plane/pressure-governor.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // raft-snapshot-bulk-transfer (S3) transport lane-isolation guard: with the
 // bulk channel saturated (never-draining bulk sends, pending at cap) the
@@ -96,6 +97,7 @@ t.test('bulk saturation leaves critical enqueue+dispatch and quarantine ' +
   initializeTestEnvironment();
   PressureGovernor.clearSharedForTests();
   const router = new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_LOCAL_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     startServer: false,
@@ -210,6 +212,7 @@ t.test('the IDENTIFY bulk fork adopts the socket and leaves the primary ' +
   'connection intact', async (t) => {
   initializeTestEnvironment();
   const router = new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
     nodeId: TEST_LOCAL_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     startServer: false,
@@ -279,6 +282,7 @@ t.test('a bulk identify is refused while external admission is closed',
   async (t) => {
     initializeTestEnvironment();
     const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: TEST_LOCAL_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       startServer: false,

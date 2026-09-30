@@ -28,6 +28,7 @@ import {
   getUniquePort,
   TEST_CONFIG,
 } from './helpers/cluster-test-helpers.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 function createAlwaysReadyControlPlaneReadinessService() {
   const dimensions = {
@@ -284,7 +285,9 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
   await t.test('message routing - local message delivery', async (t) => {
     const port = getUniquePort();
     const nodeId = 'node-1';
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     const messageGroups = [];
 
     try {
@@ -353,7 +356,9 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
   await t.test('message routing - cross-replica communication', async (t) => {
     const port = getUniquePort();
     const nodeId = 'node-1';
-    const router = new MessageRouter({nodeId, wsPort: port});
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId, wsPort: port});
     const replicas = [];
 
     try {

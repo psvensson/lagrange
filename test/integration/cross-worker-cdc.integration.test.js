@@ -35,6 +35,7 @@ import {
   CACHE_MESSAGE_TYPE,
 } from '../../src/worker/worker-constants.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -226,6 +227,7 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
     const wsPort = ports.getPort();
 
     const messageRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId,
       wsPort,
       logger: {
@@ -460,6 +462,7 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
     const wsPort = ports.getPort();
 
     const messageRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId,
       wsPort,
       logger: {
@@ -715,6 +718,7 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
     const wsPort = ports.getPort();
 
     const messageRouter = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId,
       wsPort,
       logger: {

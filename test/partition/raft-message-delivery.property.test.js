@@ -17,6 +17,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
 import {isRaftPacket, RAFT_PACKET_TYPES} from '../../src/raft/raft-packet-utils.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 // Port counter for unique ports per test
 let testPortCounter = 32000;
@@ -94,6 +95,7 @@ test('Property 3: Raft messages are delivered to correct handler', async (t) => 
         const nodeId = `delivery-test-${port}`;
 
         const router = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId,
           wsPort: port,
         });
@@ -190,6 +192,7 @@ test('Property 3: Co-located replicas receive messages via router', async (t) =>
         const nodeId = `colocated-test-${port}`;
 
         const router = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId,
           wsPort: port,
         });
@@ -340,6 +343,7 @@ test('Property 3: Message delivery preserves all packet fields', async (t) => {
         const nodeId = `preserve-test-${port}`;
 
         const router = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
           nodeId,
           wsPort: port,
         });

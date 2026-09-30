@@ -14,7 +14,7 @@
     "pgwire-compat": 17,
     "placement-rebalance": 255,
     "query-sql": 161,
-    "release-packaging": 11,
+    "release-packaging": 12,
     "runtime-primitives": 22,
     "services-runtime": 169,
     "solver-tooling": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2261,
-  "digest": "fnv1a32-cb30aec7",
+  "censusSize": 2262,
+  "digest": "fnv1a32-2b85fb17",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b659306e",
+  "observationDigest": "fnv1a32-a13d43c2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1808,6 +1808,7 @@
     "test/rebalancer/unified-rebalancer.test.js": "placement-rebalance",
     "test/rebalancer/user-table-leader-placement-cure.test.js": "placement-rebalance",
     "test/release/project-hardening-contracts.test.js": "release-packaging",
+    "test/release/public-api-boot-incarnation-contract.test.js": "release-packaging",
     "test/release/public-api-side-effect-boundary.test.js": "release-packaging",
     "test/release/release-pipeline-proof-reuse.test.js": "release-packaging",
     "test/release/version-single-source.test.js": "release-packaging",
@@ -2556,12 +2557,16 @@
         "examples/request-binding-deployment/request-binding-example-node.js",
         "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/bootstrap-service.js",
+        "src/bootstrap/index.js",
         "src/bootstrap/node-joining-delegate-bundles.js",
         "src/bootstrap/node-joining-owner-construction.js",
+        "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/shared/node-state-publication-owner.js",
         "src/bootstrap/shared/replica-handler-setup.js",
+        "src/control-plane/heartbeat-service.js",
         "src/lagrange-runtime-startup.js",
         "src/node/replica-state-machine.js",
+        "src/transport/message-router.js",
         "test/simulation/formation-sim-boot-incarnation.js"
       ],
       "directories": [
@@ -9647,6 +9652,11 @@
         "scripts"
       ]
     },
+    "test/release/public-api-boot-incarnation-contract.test.js": {
+      "files": [
+        "src/bootstrap/boot-incarnation-contract.js"
+      ]
+    },
     "test/release/public-api-side-effect-boundary.test.js": {
       "files": [
         "package.json"
@@ -12399,6 +12409,11 @@
     "test/transport/node-identity-separation.property.test.js": {
       "files": [
         "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/transport/node-incarnation-websocket-fence.test.js": {
+      "files": [
+        "src/bootstrap/boot-incarnation-contract.js"
       ]
     },
     "test/transport/node-registration-creates-endpoint.property.test.js": {
