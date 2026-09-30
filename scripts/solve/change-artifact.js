@@ -355,6 +355,159 @@ export function changedPathsFromDiffContent(content) {
   return [...paths].sort();
 }
 
+const DIFF_SECTION_SPLIT = /(?=^diff --git )/mu;
+const DIFF_GIT_HEADER = 'diff --git ';
+const NOT_FOUND_INDEX = -1;
+const DIFF_LINE_SEPARATOR = '\n';
+const DELETED_FILE_MODE_LINE = /^deleted file mode /mu;
+const GIT_BINARY_PATCH_LINE = /^GIT binary patch$/mu;
+const DIFF_ADDED_PREFIX = '+';
+const DIFF_REMOVED_PREFIX = '-';
+const ROOT_PACKAGE_JSON_PATH = 'package.json';
+// The package.json lines that make a change a MODEL change: the commands
+// that run the model, decision-table, statechart, contract, invariant and
+// owner-trace checkers. A scripts-only or version edit is not model evidence.
+const PACKAGE_JSON_MODEL_TOOLING_PATTERN =
+  /"model:|scripts\/model-|check-alloy-models|check-decision-tables|check-statecharts|check-system-contracts|check-invariants|check-owner-traces/u;
+
+// Per-path diff sections of a `git diff` payload (path -> section text).
+export function diffSectionsByPath(content) {
+  const sections = new Map();
+  for (const section of String(content || '').split(DIFF_SECTION_SPLIT)) {
+    if (!section.startsWith(DIFF_GIT_HEADER)) continue;
+    for (const filePath of changedPathsFromDiffContent(section)) {
+      sections.set(filePath, section);
+    }
+  }
+  return sections;
+}
+
+// Paths whose section deletes the whole file: they cost review, not scope.
+export function deletedPathsFromDiffContent(content) {
+  const deleted = [];
+  for (const [filePath, section] of diffSectionsByPath(content)) {
+    if (DELETED_FILE_MODE_LINE.test(section)) deleted.push(filePath);
+  }
+  return deleted.sort();
+}
+
+const HUNK_HEADER_PREFIX = '@@';
+const DIFF_CONTEXT_PREFIX = ' ';
+const DIFF_NO_NEWLINE_PREFIX = '\\';
+const WHITESPACE_RUN = /\s+/gu;
+
+// The hunk bodies of a section: header lines (everything before the first
+// `@@`, including the `+++`/`---` file headers) are skipped, so a column-0
+// `++i;` in a hunk is a changed line like any other.
+function hunkLines(section) {
+  const lines = String(section || '').split(DIFF_LINE_SEPARATOR);
+  const firstHunk = lines.findIndex((line) =>
+    line.startsWith(HUNK_HEADER_PREFIX));
+  if (firstHunk === NOT_FOUND_INDEX) return [];
+  return lines.slice(firstHunk).filter((line) =>
+    !line.startsWith(HUNK_HEADER_PREFIX) &&
+    !line.startsWith(DIFF_NO_NEWLINE_PREFIX));
+}
+
+function changedBodyLines(section) {
+  return hunkLines(section)
+    .filter((line) =>
+      line.startsWith(DIFF_ADDED_PREFIX) || line.startsWith(DIFF_REMOVED_PREFIX))
+    .map((line) => line.slice(DIFF_ADDED_PREFIX.length).trim());
+}
+
+const LINE_COMMENT_MARKER = '//';
+const BLOCK_COMMENT_OPEN = '/*';
+const BLOCK_COMMENT_CLOSE = '*/';
+const STRING_DELIMITERS = /['"`]/u;
+
+// Strip the comment text from one line given the block-comment state
+// carried from the previous line; returns the code that is left and the new
+// state. Anything that is not provably comment stays code: a string
+// delimiter before a marker, a `*/` with no open block, or a generator or
+// multiplication `*` all leave code behind.
+function stripCommentText(line, inBlock) {
+  let rest = line;
+  let code = '';
+  let open = inBlock;
+  while (rest.length > 0) {
+    if (open) {
+      const close = rest.indexOf(BLOCK_COMMENT_CLOSE);
+      if (close === NOT_FOUND_INDEX) return {code, inBlock: true};
+      rest = rest.slice(close + BLOCK_COMMENT_CLOSE.length);
+      open = false;
+      continue;
+    }
+    const lineMarker = rest.indexOf(LINE_COMMENT_MARKER);
+    const blockMarker = rest.indexOf(BLOCK_COMMENT_OPEN);
+    const marker = [lineMarker, blockMarker]
+      .filter((index) => index !== NOT_FOUND_INDEX)
+      .sort((a, b) => a - b)[0];
+    if (marker === undefined) return {code: code + rest, inBlock: false};
+    const before = rest.slice(0, marker);
+    if (STRING_DELIMITERS.test(before)) {
+      return {code: code + rest, inBlock: false};
+    }
+    code += before;
+    if (marker === lineMarker) return {code, inBlock: false};
+    rest = rest.slice(marker + BLOCK_COMMENT_OPEN.length);
+    open = true;
+  }
+  return {code, inBlock: open};
+}
+
+// The code of one side of a hunk (context plus removed, or context plus
+// added lines) with every comment stripped and whitespace collapsed. Block
+// state is carried across ALL of that side's lines, so commenting out or
+// uncommenting unchanged context lines changes the code that is left.
+function strippedHunkCode(lines, keptPrefix) {
+  let inBlock = false;
+  const code = [];
+  for (const line of lines) {
+    if (!line.startsWith(DIFF_CONTEXT_PREFIX) && !line.startsWith(keptPrefix)) {
+      continue;
+    }
+    const stripped = stripCommentText(line.slice(DIFF_CONTEXT_PREFIX.length),
+      inBlock);
+    inBlock = stripped.inBlock;
+    code.push(stripped.code);
+  }
+  return {
+    code: code.join(DIFF_LINE_SEPARATOR).replaceAll(WHITESPACE_RUN, ''),
+    endsInBlock: inBlock,
+  };
+}
+
+// A section changes no behaviour when the code left after stripping every
+// comment is identical before and after the hunks and both sides end in the
+// same block-comment state: a process quest may carry it through a runtime
+// path without a runtime Quest. Comment text may be added, removed or
+// edited; any difference in the remaining code (including code commented
+// out or back in through unchanged context lines, or a block left open past
+// the hunk) is a code change. Binary patches and sections without changed
+// lines never qualify.
+export function isCommentOnlyDiffSection(section) {
+  if (GIT_BINARY_PATCH_LINE.test(String(section || ''))) return false;
+  const lines = hunkLines(section);
+  if (changedBodyLines(section).length === 0) return false;
+  const before = strippedHunkCode(lines, DIFF_REMOVED_PREFIX);
+  const after = strippedHunkCode(lines, DIFF_ADDED_PREFIX);
+  // A side that ends inside an open block comments out everything after the
+  // hunk; only an identical end state on both sides is behaviour-neutral.
+  return before.code === after.code && before.endsInBlock === after.endsInBlock;
+}
+
+// Model evidence is owed for a package.json change only when the diff
+// touches a model-checking command; every other model path keeps the
+// prefix rule.
+export function requiresModelEvidenceForSection(filePath, section) {
+  if (normalizeSlash(filePath) !== ROOT_PACKAGE_JSON_PATH) {
+    return requiresModelEvidence(filePath);
+  }
+  return changedBodyLines(section)
+    .some((body) => PACKAGE_JSON_MODEL_TOOLING_PATTERN.test(body));
+}
+
 function hasUnifiedDiffHunk(content) {
   return /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/mu.test(String(content || ''));
 }
@@ -678,6 +831,12 @@ export function inspectChangeArtifact(root, quest, changeRef) {
   const scopeChangedPaths = changedPaths
     .filter((filePath) => !isVerificationBookkeeping(filePath, quest?.id));
   const categories = [...new Set(scopeChangedPaths.map(classifyPath))].sort();
+  // A comment-only edit on a runtime path (a stale reference in a header
+  // comment) is not runtime scope for a workflow quest's attempt.
+  const sectionsByPath = diffSectionsByPath(content);
+  const runtimeScopePaths = scopeChangedPaths.filter((filePath) =>
+    classifyPath(filePath) === QUEST_SCOPE_RUNTIME &&
+    !isCommentOnlyDiffSection(sectionsByPath.get(filePath)));
   const questScope = classifyQuestScope(quest);
   if (changedPaths.length === 0) {
     problems.push('changeRef artifact must contain file paths from a patch');
@@ -693,11 +852,10 @@ export function inspectChangeArtifact(root, quest, changeRef) {
       QUEST_SCOPE_WORKFLOW,
     ));
   }
-  if (questScope === QUEST_SCOPE_WORKFLOW &&
-    categories.includes(QUEST_SCOPE_RUNTIME)) {
+  if (questScope === QUEST_SCOPE_WORKFLOW && runtimeScopePaths.length > 0) {
     problems.push(scopeProblemNamingPaths(
       LOCAL_STR_PROBLEM_RUNTIME_SCOPE,
-      scopeChangedPaths,
+      runtimeScopePaths,
       QUEST_SCOPE_RUNTIME,
     ));
   }

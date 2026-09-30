@@ -4,7 +4,12 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import {questHarnessMissing, questHarnessPath} from './harness-scaffold.js';
+import {
+  isTestReceiptQuest,
+  questHarnessMissing,
+  questHarnessPath,
+} from './harness-scaffold.js';
+import {epicPlanningBoundProblem} from './ledger-consistency.js';
 
 import {loadQuest} from './store.js';
 import {questClass} from './closure-kind.js';
@@ -19,6 +24,12 @@ import {
 
 const LOCAL_STR_OWNED_001 = 'statement must be a concrete terminal result predicate';
 const HARNESS_MISSING_PREFIX = 'no evidence harness at ';
+const HARNESS_PROBE_MISMATCH_PREFIX = 'evidence harness exists at ';
+const HARNESS_PROBE_MISMATCH_SUFFIX =
+  ' but doneWhen.probe is not test-receipt; the probe kind is immutable ' +
+  'after declaration, so redeclare with --probe test-receipt before sealing';
+const EPIC_PLAN_DOC_PREFIX = 'solve/epics/';
+const EPIC_PLAN_DOC_SUFFIX = '.md';
 const HARNESS_MISSING_SUFFIX =
   '; run solve scaffold-harness (or solve start) to write the skeleton';
 const LOCAL_STR_OWNED_002 = '|';
@@ -161,6 +172,7 @@ function authoringErrors(quest, options) {
     errors.push(LOCAL_STR_OWNED_005);
   }
   pushFrontierErrors(quest, errors);
+  errors.push(...planDocErrors(quest, options));
   if (QUEST_CLASSES.includes(quest.class) &&
     questClass(quest) === QUEST_CLASS_PRODUCT) {
     if (!recognizedPlanningLink(quest.links)) {
@@ -194,9 +206,29 @@ function authoringWarnings(quest) {
 // A test-receipt quest without its evidence harness cannot regenerate its
 // receipt; `solve start` scaffolds one, so this stays a warning, not an error.
 function harnessWarnings(quest, options) {
-  if (!options?.root || !questHarnessMissing(options.root, quest)) return [];
-  return [`${HARNESS_MISSING_PREFIX}${questHarnessPath(quest.id)}` +
-    HARNESS_MISSING_SUFFIX];
+  if (!options?.root) return [];
+  const harnessPath = questHarnessPath(quest.id);
+  // A scaffolded harness under a scenario-harness probe reads as "evidence
+  // artifact missing" on every attempt and the quest has to be redeclared
+  // (2026-09-05); say so before the declaration seals the probe.
+  if (!isTestReceiptQuest(quest) &&
+    fs.existsSync(path.join(options.root, harnessPath))) {
+    return [`${HARNESS_PROBE_MISMATCH_PREFIX}${harnessPath}` +
+      HARNESS_PROBE_MISMATCH_SUFFIX];
+  }
+  if (!questHarnessMissing(options.root, quest)) return [];
+  return [`${HARNESS_MISSING_PREFIX}${harnessPath}${HARNESS_MISSING_SUFFIX}`];
+}
+
+// The plan memo a quest cites must itself be within the planning bound;
+// the corpus ledger test must never be the first to say it.
+export function planDocErrors(quest, options) {
+  const planDoc = text(quest.links?.planDoc);
+  if (!options?.root || !planDoc ||
+    !planDoc.startsWith(EPIC_PLAN_DOC_PREFIX) ||
+    !planDoc.endsWith(EPIC_PLAN_DOC_SUFFIX)) return [];
+  const boundProblem = epicPlanningBoundProblem(options.root, planDoc);
+  return boundProblem ? [boundProblem] : [];
 }
 
 export function lintQuest(quest, options = {}) {
@@ -217,8 +249,10 @@ export function lintQuest(quest, options = {}) {
   };
 }
 
-export function assertQuestReadyToSeal(quest) {
-  const result = lintQuest(quest);
+// `options.root` lets the seal see the plan-doc bound and the harness/probe
+// mismatch; without it those root-dependent checks are silently skipped.
+export function assertQuestReadyToSeal(quest, options = {}) {
+  const result = lintQuest(quest, options);
   if (result.errors.length > 0) {
     throw new Error(`quest lint failed: ${result.errors.join(LOCAL_STR_OWNED_014)}`);
   }

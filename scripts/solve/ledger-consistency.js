@@ -36,6 +36,29 @@ const KNOWN_STATUS_BASES = [
 ];
 const TERMINAL_STATE = new Set(['solved', 'exhausted']);
 
+// E3 for one epic body: the same rule quest lint and the attempt static
+// gate apply, so the corpus ledger test is never the first place an
+// over-bound plan memo is named (it cost a 25-minute publish gate once).
+function epicPlanningBoundProblemForText(name, text) {
+  const lineCount = String(text || '').trimEnd().split(/\r?\n/u).length;
+  if (lineCount <= EPIC_PLANNING_LINE_LIMIT) return null;
+  return `epic ${name}: version 2 exceeds the ` +
+    `${EPIC_PLANNING_LINE_LIMIT}-line planning bound (lines=${lineCount}); ` +
+    'graduate executable detail to a spec or Quest (E3)';
+}
+
+// The bound for one epic path relative to the repository root; null when
+// the file is missing, not a version-2 epic, or within the bound.
+export function epicPlanningBoundProblem(root, relativePath) {
+  const file = path.join(root, relativePath);
+  if (!fs.existsSync(file)) return null;
+  const text = fs.readFileSync(file, 'utf8');
+  const front = readFrontmatter(text);
+  if (Number(front.epicContractVersion) !==
+    EPIC_CONTRACT_VERSION_DERIVED_STAGE) return null;
+  return epicPlanningBoundProblemForText(path.basename(file), text);
+}
+
 function readFrontmatter(text) {
   const front = {};
   const fm = text.match(/^---\n([\s\S]*?)\n---/);
@@ -85,12 +108,8 @@ function checkEpics(root, errors, warnings) {
         errors.push(`epic ${name}: version 2 derives work stage and must not ` +
           'declare `status:` (E1)');
       }
-      const lineCount = text.trimEnd().split(/\r?\n/u).length;
-      if (lineCount > EPIC_PLANNING_LINE_LIMIT) {
-        errors.push(`epic ${name}: version 2 exceeds the ` +
-          `${EPIC_PLANNING_LINE_LIMIT}-line planning bound (lines=${lineCount}); ` +
-          'graduate executable detail to a spec or Quest (E3)');
-      }
+      const boundProblem = epicPlanningBoundProblemForText(name, text);
+      if (boundProblem) errors.push(boundProblem);
       if (!/^## Decision log\s*$/mu.test(text)) {
         errors.push(`epic ${name}: version 2 requires \`## Decision log\` (E4)`);
       }

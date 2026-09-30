@@ -103,6 +103,30 @@ function parseOneRejectionFinding(value, severity = SEVERITY_DEFECT) {
 // decomposition that discharges every remaining path. A verifier demanded
 // those attempts, so a stall detector must not read them as the Solver
 // shuffling the same blocker; the escalation gate owns repeated rounds.
+// True while a candidate rejection stands on the frontier (the same window
+// the attempt scan above uses): the next attempt is the verifier-directed
+// replacement, and the rejection finding is its theory.
+export function hasStandingRejection(log, frontierId) {
+  let standing = false;
+  (log || []).forEach((event) => {
+    if (event.frontier !== frontierId) return;
+    if (event.type === EVENT_REJECTION_DECOMPOSITION &&
+      Array.isArray(event.remainingPaths) &&
+      event.remainingPaths.length === 0) {
+      standing = false;
+      return;
+    }
+    if (event.type === EVENT_FINDING && event.verification) {
+      if (event.kind === VERIFIER_APPROVAL_FINDING_KIND) standing = false;
+      if (event.kind === VERIFIER_REJECTION_FINDING_KIND &&
+        CANDIDATE_VERIFICATION_SCOPES.includes(event.verification.scope)) {
+        standing = true;
+      }
+    }
+  });
+  return standing;
+}
+
 export function attemptIndicesUnderStandingRejection(log, frontierId) {
   const indices = new Set();
   let standing = false;

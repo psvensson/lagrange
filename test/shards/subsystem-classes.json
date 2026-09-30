@@ -17,7 +17,7 @@
     "release-packaging": 10,
     "runtime-primitives": 22,
     "services-runtime": 169,
-    "solver-tooling": 105,
+    "solver-tooling": 106,
     "storage-partition": 141,
     "storage-raft": 75,
     "test-infrastructure": 110,
@@ -25,8 +25,8 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2150,
-  "digest": "fnv1a32-aef9859f",
+  "censusSize": 2151,
+  "digest": "fnv1a32-df38b9c1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1976,6 +1976,7 @@
     "test/solve/solver-attempt-base-pending-step-pin.test.js": "solver-tooling",
     "test/solve/solver-capture-foreign-bookkeeping-exclusion.test.js": "solver-tooling",
     "test/solve/solver-capture-foreign-evidence-exclusion.test.js": "solver-tooling",
+    "test/solve/solver-friction-2026-09-06.test.js": "solver-tooling",
     "test/solve/solver-land-generated-output-coverage.test.js": "solver-tooling",
     "test/solve/solver-land-recorded-attempt-union-guard.test.js": "solver-tooling",
     "test/solve/solver-preflight.test.js": "solver-tooling",

@@ -39,14 +39,36 @@ const RECEIPTS_OPEN_LINES = Object.freeze(['', 'const RECEIPTS = Object.freeze([
 const RECEIPTS_CLOSE_LINES = Object.freeze([']);', '']);
 const RUN_OPEN_LINES = Object.freeze(['', 'runQuestEvidenceHarness({']);
 const RUN_OUTPUT_LINE =
-  `${INDENT}outputFile: path.join(...OUTPUT_FILE.split('/')),`;
+  `${INDENT}outputFile: path.join(...OUTPUT_FILE_SEGMENTS),`;
+const PATH_SEGMENT_SEPARATOR = '/';
+const SEGMENT_LIST_SEPARATOR = ', ';
+const SEGMENTS_OPEN = 'Object.freeze([';
+const SEGMENTS_CLOSE = '])';
+const SINGLE_QUOTE = '\'';
+const ESCAPED_SINGLE_QUOTE = '\\\'';
 const RUN_RECEIPTS_LINE = `${INDENT}receipts: RECEIPTS,`;
 const RUN_QUEST_LINE = `${INDENT}questId: QUEST_ID,`;
 const RUN_CLOSE_LINES = Object.freeze(['});', '']);
 const HEADER_PREFIX = '// Deterministic evidence harness for the ';
 const HEADER_SUFFIX = ' quest: receipt';
 const QUEST_ID_DECLARATION = 'const QUEST_ID = ';
-const OUTPUT_FILE_DECLARATION = 'const OUTPUT_FILE = ';
+const OUTPUT_FILE_DECLARATION = 'const OUTPUT_FILE_SEGMENTS = ';
+
+// The rendered harness must pass the repository's own lint and literal
+// audit as written (single-quoted strings, no free-floating separator
+// literal), so a scaffold never costs a repair edit.
+function jsString(value) {
+  return SINGLE_QUOTE +
+    String(value).replaceAll(SINGLE_QUOTE, ESCAPED_SINGLE_QUOTE) +
+    SINGLE_QUOTE;
+}
+
+function jsSegments(filePath) {
+  return SEGMENTS_OPEN +
+    String(filePath).split(PATH_SEGMENT_SEPARATOR).map(jsString)
+      .join(SEGMENT_LIST_SEPARATOR) +
+    SEGMENTS_CLOSE;
+}
 const STATEMENT_END = ';';
 
 export function questHarnessPath(questId) {
@@ -65,10 +87,10 @@ export function questHarnessMissing(root, quest) {
 function receiptBlock(id) {
   return [
     `${INDENT}Object.freeze({`,
-    `${INDENT}${INDENT}id: ${JSON.stringify(id)},`,
+    `${INDENT}${INDENT}id: ${jsString(id)},`,
     `${INDENT}${INDENT}testFile: ${TODO_TEST_FILE},`,
     `${INDENT}${INDENT}testNamePattern: null,`,
-    `${INDENT}${INDENT}detail: ${JSON.stringify(TODO_DETAIL)},`,
+    `${INDENT}${INDENT}detail: ${jsString(TODO_DETAIL)},`,
     `${INDENT}}),`,
   ].join(LINE_SEPARATOR);
 }
@@ -85,8 +107,8 @@ export function renderQuestHarness(quest) {
     ...RECEIPTS_OPEN_LINES,
     ...receiptIds.map(receiptBlock),
     ...RECEIPTS_CLOSE_LINES,
-    `${QUEST_ID_DECLARATION}${JSON.stringify(quest.id)}${STATEMENT_END}`,
-    `${OUTPUT_FILE_DECLARATION}${JSON.stringify(outputFile)}${STATEMENT_END}`,
+    `${QUEST_ID_DECLARATION}${jsString(quest.id)}${STATEMENT_END}`,
+    `${OUTPUT_FILE_DECLARATION}${jsSegments(outputFile)}${STATEMENT_END}`,
     ...RUN_OPEN_LINES,
     RUN_QUEST_LINE,
     RUN_OUTPUT_LINE,

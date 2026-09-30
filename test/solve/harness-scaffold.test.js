@@ -56,7 +56,14 @@ test('scaffold-writes-one-placeholder-per-required-receipt-and-stages-intent',
     const result = scaffoldQuestHarness(root, quest());
     assert.deepEqual(result, {path: questHarnessPath(QUEST_ID), created: true});
     const source = fs.readFileSync(path.join(root, result.path), TEXT_ENCODING);
-    for (const id of RECEIPT_IDS) assert.ok(source.includes(`id: "${id}"`));
+    for (const id of RECEIPT_IDS) assert.ok(source.includes(`id: '${id}'`));
+    // Lint-clean as written: single-quoted strings only, the output file
+    // as path segments (no free-floating '/' literal).
+    assert.ok(!source.includes('"'), 'no double-quoted strings');
+    assert.ok(source.includes(
+      'const OUTPUT_FILE_SEGMENTS = Object.freeze([\'solve\', \'evidence\', ' +
+      `'${QUEST_ID}.receipt.json']);`));
+    assert.ok(source.includes('outputFile: path.join(...OUTPUT_FILE_SEGMENTS),'));
     assert.equal((source.match(/testFile: null/gu) || []).length, 2,
       'every placeholder is fail-closed');
     const status = execFileSync('git', ['status', '--porcelain', '--',

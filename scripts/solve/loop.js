@@ -81,7 +81,7 @@ import {
   sourceVerificationFingerprint,
 } from './verification.js';
 import {resolveAttemptBaseCommit} from './pending-step.js';
-import {assertQuestReadyToSeal} from './quest-lint.js';
+import {assertQuestReadyToSeal, planDocErrors} from './quest-lint.js';
 import {writeReportForQuest} from './report.js';
 import {evaluate} from './probe.js';
 import {
@@ -189,10 +189,18 @@ function sealGoal(quest) {
   return sealed;
 }
 
+const PLAN_DOC_PROBLEM_SEPARATOR = '; ';
+
 function ensureDeclared(root, quest) {
   const log = readLog(root, quest.id);
   const declared = log.find((e) => e.type === EVENT_QUEST_DECLARED);
   if (declared) return declared;
+  // The plan-doc bound is root-dependent; the rest of the seal lint stays
+  // root-free here so fixture roots without steering templates still seal.
+  const planDocProblems = planDocErrors(quest, {root});
+  if (planDocProblems.length > 0) {
+    throw new Error(`quest lint failed: ${planDocProblems.join(PLAN_DOC_PROBLEM_SEPARATOR)}`);
+  }
   assertQuestReadyToSeal(quest);
   return appendEvent(root, quest.id, {
     type: EVENT_QUEST_DECLARED,

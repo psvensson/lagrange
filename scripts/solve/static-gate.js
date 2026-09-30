@@ -22,10 +22,12 @@ import {fileURLToPath} from 'node:url';
 
 import {fileSizeAdmissionProblems} from './file-size-admission.js';
 import {complexityAdmissionProblems} from './complexity-admission.js';
+import {epicPlanningBoundProblem} from './ledger-consistency.js';
 
 // Only trees the repository's lint configuration actually covers (`lint` and
 // `lint:scripts`); gating an unlinted tree would manufacture false blocks.
 const LINTED_PATH_PATTERN = /^(?:src|test|scripts)\/.+\.(?:js|mjs|cjs)$/u;
+const EPIC_PATH_PATTERN = /^solve\/epics\/.+\.md$/u;
 const ESLINT_BIN_SEGMENTS = ['node_modules', 'eslint', 'bin', 'eslint.js'];
 const LITERALS_CHECK_SEGMENTS = ['scripts', 'check-guideline-literals.js'];
 const AMBIENT_INTRINSICS_CHECK_SEGMENTS =
@@ -81,13 +83,25 @@ function runChecker(root, label, scriptPath, extraArgs, jsPaths) {
   return [];
 }
 
+// A changed plan memo over the planning bound is named at attempt time,
+// where repair costs one edit, not at the publish gate's ledger test.
+function epicBoundProblems(root, changedPaths) {
+  return [...new Set(changedPaths || [])]
+    .filter((filePath) => EPIC_PATH_PATTERN.test(filePath))
+    .sort()
+    .map((filePath) => epicPlanningBoundProblem(root, filePath))
+    .filter(Boolean);
+}
+
 export function staticQualityProblems(root, changedPaths, options = {}) {
+  const epicProblems = epicBoundProblems(root, changedPaths);
   const jsPaths = [...new Set(changedPaths || [])]
     .filter((filePath) => LINTED_PATH_PATTERN.test(filePath) &&
       fs.existsSync(path.join(root, filePath)))
     .sort();
-  if (jsPaths.length === 0) return [];
+  if (jsPaths.length === 0) return epicProblems;
   return [
+    ...epicProblems,
     // The attempt-time projection of the pre-commit oversized-file ratchet
     // (C3): a touched file the candidate pushes over its scope threshold is
     // named here, where repair costs one edit, instead of at landing, where

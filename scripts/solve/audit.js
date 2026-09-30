@@ -31,7 +31,8 @@ import {eventEvidenceFingerprint} from './evidence-identity.js';
 import {
   changedPathsFromDiffContent,
   inspectChangeArtifact,
-  requiresModelEvidence,
+  diffSectionsByPath,
+  requiresModelEvidenceForSection,
 } from './change-artifact.js';
 import {
   contractsForChangedPath,
@@ -274,7 +275,13 @@ function auditModelEvidence(root, quest, log, startIndex) {
   for (const [index, event] of log.entries()) {
     if (index < startIndex || event.type !== EVENT_ATTEMPT) continue;
     const inspection = inspectChangeArtifact(root, quest, event.changeRef);
-    if (!inspection.changedPaths.some(requiresModelEvidence)) continue;
+    // package.json owes model evidence only when its diff touches a
+    // model-checking command; a scripts-only edit does not.
+    const sections = diffSectionsByPath(inspection.content);
+    if (!inspection.changedPaths.some((filePath) =>
+      requiresModelEvidenceForSection(filePath, sections.get(filePath)))) {
+      continue;
+    }
     const hasInlineModelEvidence = Boolean(event.modelRef);
     const hasLaterModelEvidence = log
       .slice(index + 1)

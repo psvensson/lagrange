@@ -1,0 +1,60 @@
+{
+  "id": "solver-friction-2026-09-06",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 3,
+  "statement": "The seven Solver gates that cost a verifier round, an override or a parked declaration on 2026-09-05 are corrected: process quests declare the test-receipt probe by default, preflight --full reports a stale steering pack, quest lint and the attempt static gate enforce the epic planning bound, package.json demands model evidence only for model-checking changes, a standing candidate rejection waives the widen-scope theory demand, scope pressure ignores deletions and registered generated outputs, and comment-only runtime edits do not stamp runtime scope on a workflow quest.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/solver-friction-2026-09-06.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/solver-friction-2026-09-06.md",
+    "draftedAtCommit": "14df53cccde45bd95c0ba3b2042877c6f6c89ee7"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/solver-friction-2026-09-06.receipt.json",
+      "requiredReceipts": [
+        "F1-process-quest-declares-test-receipt-probe",
+        "F2-preflight-reports-stale-steering-pack",
+        "F3-epic-planning-bound-at-lint-and-static-gate",
+        "F4-package-json-model-evidence-only-for-model-changes",
+        "F5-standing-rejection-waives-widen-scope-theory",
+        "F6-scope-pressure-ignores-deletions-and-generated-outputs",
+        "F7-comment-only-runtime-edit-not-runtime-scope",
+        "F8-existing-gate-suites-green"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-friction-2026-09-06-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/solver-friction-2026-09-06.receipt.json",
+          "requiredReceipts": [
+            "F1-process-quest-declares-test-receipt-probe",
+            "F2-preflight-reports-stale-steering-pack",
+            "F3-epic-planning-bound-at-lint-and-static-gate",
+            "F4-package-json-model-evidence-only-for-model-changes",
+            "F5-standing-rejection-waives-widen-scope-theory",
+            "F6-scope-pressure-ignores-deletions-and-generated-outputs",
+            "F7-comment-only-runtime-edit-not-runtime-scope",
+            "F8-existing-gate-suites-green"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

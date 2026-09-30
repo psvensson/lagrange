@@ -16,6 +16,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import {spawnSync} from 'node:child_process';
 
 import {auditQuest} from './audit.js';
@@ -47,7 +48,8 @@ const SECTION_PUBLISH_STATIC = 'publish-static';
 const FULL_FLAG = 'full';
 const PUBLISH_STATIC_SKIPPED_NOTE =
   'publish statics not run: pass --full to run the duplication, unused-export, ' +
-  'circular-dependency, and complexity ratchets the publish gate enforces';
+  'circular-dependency, and complexity ratchets and the steering-pack ' +
+  'freshness check the publish gate enforces';
 const PUBLISH_STATIC_OUTPUT_LINE_LIMIT = 12;
 const PUBLISH_STATIC_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
 const PUBLISH_STATIC_CHECKS = Object.freeze([
@@ -63,6 +65,25 @@ const PUBLISH_STATIC_CHECKS = Object.freeze([
     segments: ['scripts', 'check-cognitive-complexity.js']}),
 ]);
 const HEAD_BASE = 'HEAD';
+// The steering pack is a projection of its configured sources; a stale pack
+// fails `npm run steering:check` at the publish gate (and cost a verifier
+// round on 2026-09-05). Regenerate it in a scratch copy of the tracked
+// files, never in the tree, and name every file that differs.
+const STEERING_PACK_LABEL = 'steering pack freshness';
+const STEERING_SCRATCH_PREFIX = 'solve-preflight-steering-';
+const STEERING_PACK_DIR = path.join('docs', 'steering');
+const STEERING_PACK_COMMAND = 'steering:llm:pack';
+const NPM_BINARY = 'npm';
+const TEXT_ENCODING = 'utf8';
+const PACKAGE_JSON_FILE = 'package.json';
+const NPM_RUN_SILENT_ARGUMENTS = Object.freeze(['run', '-s']);
+const NODE_MODULES_DIR = 'node_modules';
+const GIT_BINARY = 'git';
+const GIT_LS_FILES_ARGUMENTS = Object.freeze(['ls-files', '-z']);
+const NUL_SEPARATOR = '\0';
+const STEERING_STALE_PREFIX = 'steering pack stale (run npm run ' +
+  `${STEERING_PACK_COMMAND}): `;
+const STEERING_STALE_SEPARATOR = ', ';
 const LINE_SEPARATOR = '\n';
 const SECTION_PROBLEM_SUFFIX = ' problem(s)';
 const SECTION_CLEAN = 'clean';
@@ -147,6 +168,97 @@ function publishStaticProblemMessages(root) {
   return problems;
 }
 
+function trackedFiles(root) {
+  const result = spawnSync(GIT_BINARY, [...GIT_LS_FILES_ARGUMENTS], {
+    cwd: root, encoding: TEXT_ENCODING, maxBuffer: PUBLISH_STATIC_MAX_BUFFER_BYTES,
+  });
+  return result.status === 0 ?
+    String(result.stdout || '').split(NUL_SEPARATOR).filter(Boolean) : [];
+}
+
+function copyTrackedFiles(root, files, scratch) {
+  for (const relative of files) {
+    const source = path.join(root, relative);
+    if (!fs.existsSync(source)) continue;
+    const target = path.join(scratch, relative);
+    fs.mkdirSync(path.dirname(target), {recursive: true});
+    fs.copyFileSync(source, target);
+  }
+}
+
+function listFilesUnder(dir, base = dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, {withFileTypes: true}).flatMap((entry) => {
+    const full = path.join(dir, entry.name);
+    return entry.isDirectory() ?
+      listFilesUnder(full, base) : [path.relative(base, full)];
+  });
+}
+
+function differingSteeringFiles(root, scratch) {
+  const treeDir = path.join(root, STEERING_PACK_DIR);
+  const scratchDir = path.join(scratch, STEERING_PACK_DIR);
+  const names = new Set([
+    ...listFilesUnder(treeDir), ...listFilesUnder(scratchDir),
+  ]);
+  return [...names].sort().filter((name) => {
+    const treeFile = path.join(treeDir, name);
+    const scratchFile = path.join(scratchDir, name);
+    if (!fs.existsSync(treeFile) || !fs.existsSync(scratchFile)) return true;
+    return !fs.readFileSync(treeFile).equals(fs.readFileSync(scratchFile));
+  }).map((name) => path.join(STEERING_PACK_DIR, name));
+}
+
+function regenerateSteeringPack(scratch) {
+  return spawnSync(NPM_BINARY,
+    [...NPM_RUN_SILENT_ARGUMENTS, STEERING_PACK_COMMAND],
+    {cwd: scratch, encoding: TEXT_ENCODING,
+      maxBuffer: PUBLISH_STATIC_MAX_BUFFER_BYTES});
+}
+
+// Injectable for the witness: `tracked` lists the files to copy, `regenerate`
+// runs the pack generators inside the scratch copy (spawnSync-shaped result).
+function steeringPackConfigured(root) {
+  const packageFile = path.join(root, PACKAGE_JSON_FILE);
+  if (!fs.existsSync(path.join(root, STEERING_PACK_DIR)) ||
+    !fs.existsSync(packageFile)) return false;
+  try {
+    const scripts = JSON.parse(fs.readFileSync(packageFile, TEXT_ENCODING)).scripts;
+    return Boolean(scripts && typeof scripts[STEERING_PACK_COMMAND] === 'string');
+  } catch (_error) {
+    return false;
+  }
+}
+
+export function steeringPackProblemMessages(root, {
+  tracked = trackedFiles,
+  regenerate = regenerateSteeringPack,
+  configured = steeringPackConfigured,
+} = {}) {
+  // A tree without a steering pack (unit fixtures, other repositories) has
+  // nothing to be stale.
+  if (!configured(root)) return [];
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), STEERING_SCRATCH_PREFIX));
+  try {
+    copyTrackedFiles(root, tracked(root), scratch);
+    const modules = path.join(root, NODE_MODULES_DIR);
+    if (fs.existsSync(modules)) {
+      fs.symlinkSync(modules, path.join(scratch, NODE_MODULES_DIR));
+    }
+    const result = regenerate(scratch);
+    if (result.error || result.status !== 0) {
+      return [`${STEERING_PACK_LABEL} could not run: ` +
+        (result.error?.message ||
+          String(result.stderr || '').trim().split(LINE_SEPARATOR).pop())];
+    }
+    const stale = differingSteeringFiles(root, scratch);
+    return stale.length === 0 ?
+      [] : [STEERING_STALE_PREFIX + stale.join(STEERING_STALE_SEPARATOR)];
+  } finally {
+    fs.rmSync(scratch, {recursive: true, force: true});
+  }
+}
+
 function fileSizeProblemMessages(root) {
   const dirty = workingSourceDelta(root).paths;
   if (dirty.length === 0) return [];
@@ -170,7 +282,10 @@ export function preflightReport(root, quest, options = {}) {
   const log = readLog(root, quest.id);
   const generated = generatedOutputProblemMessages(root, quest, log);
   const publishStatic = options.full ?
-    {problems: publishStaticProblemMessages(root), notes: []} :
+    {problems: [
+      ...publishStaticProblemMessages(root),
+      ...steeringPackProblemMessages(root),
+    ], notes: []} :
     {problems: [], notes: [PUBLISH_STATIC_SKIPPED_NOTE]};
   const sections = [
     {name: SECTION_AUDIT, problems: auditProblemMessages(root, quest),

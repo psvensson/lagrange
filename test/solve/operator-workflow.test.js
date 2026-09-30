@@ -109,10 +109,14 @@ function landingFixture(changedPath = 'scripts/demo.js', finalMetric = 0,
   const changedFile = path.join(root, changedPath);
   fs.mkdirSync(path.dirname(changedFile), {recursive: true});
   fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+  // package.json owes model evidence only when a model-checking command
+  // changes (a version bump no longer does), so the fixture edits one.
   const initialContent = changedPath === 'package.json' ?
-    '{"version":1}\n' : 'export const value = 1;\n';
+    '{"scripts":{"model:contracts":"node scripts/check-system-contracts.js"}}\n' :
+    'export const value = 1;\n';
   const finalContent = changedPath === 'package.json' ?
-    '{"version":2}\n' : 'export const value = 2;\n';
+    '{"scripts":{"model:contracts":"node scripts/check-system-contracts.js --strict"}}\n' :
+    'export const value = 2;\n';
   fs.writeFileSync(changedFile, finalContent);
   const metric = {probe: 'oracle', args: {file: oracle}};
   const quest = {

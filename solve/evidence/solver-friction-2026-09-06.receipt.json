@@ -1,0 +1,56 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "solver-friction-2026-09-06",
+  "status": "pass",
+  "generatedAt": "2026-09-06T06:38:10.507Z",
+  "receipts": [
+    {
+      "id": "F1-process-quest-declares-test-receipt-probe",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^F1: .*$\" test/solve/solver-friction-2026-09-06.test.js",
+      "detail": "solve new declares test-receipt for a process quest, honours --probe and --required-receipt, and lint warns on a harness under a non-receipt probe"
+    },
+    {
+      "id": "F2-preflight-reports-stale-steering-pack",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^F2: .*$\" test/solve/solver-friction-2026-09-06.test.js",
+      "detail": "preflight --full names every stale steering pack file from a scratch regeneration and never touches the tree"
+    },
+    {
+      "id": "F3-epic-planning-bound-at-lint-and-static-gate",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^F3: .*$\" test/solve/solver-friction-2026-09-06.test.js",
+      "detail": "an over-bound version-2 epic is refused by quest lint through links.planDoc and named by the attempt static gate"
+    },
+    {
+      "id": "F4-package-json-model-evidence-only-for-model-changes",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^F4: .*$\" test/solve/solver-friction-2026-09-06.test.js",
+      "detail": "package.json owes model evidence only when its diff touches a model-checking command"
+    },
+    {
+      "id": "F5-standing-rejection-waives-widen-scope-theory",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^F5: .*$\" test/solve/solver-friction-2026-09-06.test.js",
+      "detail": "a standing candidate rejection waives the widen-scope theory demand at commit only"
+    },
+    {
+      "id": "F6-scope-pressure-ignores-deletions-and-generated-outputs",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^F6: .*$\" test/solve/solver-friction-2026-09-06.test.js",
+      "detail": "deleted files and registered generated outputs do not count toward admission files, owners or bytes"
+    },
+    {
+      "id": "F7-comment-only-runtime-edit-not-runtime-scope",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^F7: .*$\" test/solve/solver-friction-2026-09-06.test.js",
+      "detail": "a comment-only runtime section is admitted on a workflow quest; a code change on the same path is still refused"
+    },
+    {
+      "id": "F8-existing-gate-suites-green",
+      "passed": true,
+      "command": "npm run test:file -- test/solve/quest-lint.test.js",
+      "detail": "the gate suites the seven changes touch stay green"
+    }
+  ]
+}

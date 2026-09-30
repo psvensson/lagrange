@@ -54,7 +54,10 @@ import {
   continuationIsAllowed,
 } from './continuation.js';
 import {isFrontierProbeEvent} from './probe-spec.js';
-import {attemptIndicesUnderStandingRejection} from './rejection-findings.js';
+import {
+  attemptIndicesUnderStandingRejection,
+  hasStandingRejection,
+} from './rejection-findings.js';
 
 const FLAG_ID = 'id';
 const FLAG_THEORY = 'theory';
@@ -262,7 +265,13 @@ export function stepTheoryGateProblems({
       'select a fresh frontier theory',
     );
   }
-  if (rungIndex >= RUNG_INDEX_WIDEN_SCOPE && !selected) {
+  // A commit while a candidate rejection stands is the verifier-directed
+  // replacement: the rejection finding is its theory, so the widen-scope rung
+  // demands no fresh frontier theory for it.
+  const verifierDirectedReplacement =
+    phase === 'commit' && hasStandingRejection(log, frontierId);
+  if (rungIndex >= RUNG_INDEX_WIDEN_SCOPE && !selected &&
+    !verifierDirectedReplacement) {
     problems.push(`frontier theory required at rung ${rungIndex}`);
   }
 

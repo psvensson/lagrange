@@ -17,8 +17,8 @@
     "usage": "node scripts/solve.js decompose-rejection --id <id> [--from-quest <successorId>]"
   },
   "new": {
-    "summary": "Create a versioned Quest draft under solve/quests/<id>.json. Drafting is not sealing: the first execution command lints and declares it. Link flags author the planning graph without hand-editing JSON; --force is refused once append-only history exists.",
-    "usage": "node scripts/solve.js new --id <id> --statement \"<sealed result>\" [--class product|process] [--plan-doc <path>] [--parent-quest <id>] [--roadmap-row <id>] [--spec-ref <ref>] [--closes-cl <CL-id>] [--inherit-rulesout-from <parentQuestId>]"
+    "summary": "Create a versioned Quest draft under solve/quests/<id>.json. Drafting is not sealing: the first execution command lints and declares it. Link flags author the planning graph without hand-editing JSON; --force is refused once append-only history exists. A process quest closes on its evidence-harness receipt (test-receipt) by default, a product quest on a live scenario; the probe kind is immutable after declaration.",
+    "usage": "node scripts/solve.js new --id <id> --statement \"<sealed result>\" [--class product|process] [--probe scenario-harness|test-receipt] [--required-receipt <id>]... [--plan-doc <path>] [--parent-quest <id>] [--roadmap-row <id>] [--spec-ref <ref>] [--closes-cl <CL-id>] [--inherit-rulesout-from <parentQuestId>]"
   },
   "run": {
     "summary": "Run the Quest loop toward SOLVED/EXHAUSTED. Bare `run --id <id>` uses the default `dry` executor (a no-op skeleton — it prints a banner saying so); real autonomous work needs `--executor agent --yes`. Add `--keep-alive` to replay only progress-bearing MAX_CYCLES boundaries; judgment and repair stops return once with a typed action.",

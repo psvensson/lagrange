@@ -7,6 +7,7 @@ import {
   inspectChangeArtifact,
   isVerificationBookkeeping,
   requiresSourceVerification,
+  deletedPathsFromDiffContent,
 } from './change-artifact.js';
 import {isRegenerableQuestReport} from './report-retention.js';
 import {isRegisteredGeneratedOutput} from './generated-dependencies.js';
@@ -160,25 +161,38 @@ function isGeneratedProjection(root, filePath) {
     isRegenerableQuestReport(root, filePath);
 }
 
-function authoredPayloadBytes(root, inspection) {
+function authoredPayloadBytes(root, inspection, deletedPaths = new Set()) {
   const content = String(inspection.content || '');
   if (!content.startsWith('diff --git ')) return inspection.payloadBytes || 0;
   return content.split(/(?=^diff --git )/mu).reduce((total, section) => {
     const paths = changedPathsFromDiffContent(section);
     return paths.length > 0 && paths.every((filePath) =>
-      isGeneratedProjection(root, filePath)) ? total :
+      isUnauthoredScope(root, filePath, deletedPaths)) ? total :
       total + Buffer.byteLength(section);
   }, 0);
 }
 
+// Scope is what the candidate AUTHORS: a deleted file and a registered
+// generated output cost review, not scope, so neither counts toward the
+// file, owner or byte totals (33 files of mostly deletions blocked one
+// six-item process quest on 2026-09-05).
+function isUnauthoredScope(root, filePath, deletedPaths) {
+  return isGeneratedProjection(root, filePath) ||
+    isRegisteredGeneratedOutput(filePath) ||
+    deletedPaths.has(filePath);
+}
+
 function admissionInspection(root, entry) {
+  const deletedPaths =
+    new Set(deletedPathsFromDiffContent(entry.inspection.content));
   return {
     ...entry,
     inspection: {
       ...entry.inspection,
       changedPaths: (entry.inspection.changedPaths || [])
-        .filter((filePath) => !isGeneratedProjection(root, filePath)),
-      payloadBytes: authoredPayloadBytes(root, entry.inspection),
+        .filter((filePath) =>
+          !isUnauthoredScope(root, filePath, deletedPaths)),
+      payloadBytes: authoredPayloadBytes(root, entry.inspection, deletedPaths),
     },
   };
 }

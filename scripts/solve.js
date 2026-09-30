@@ -33,6 +33,7 @@ import {runStep, stepAbort, stepPending} from './solve/step.js';
 import {runNextCommand} from './solve/next.js';
 import {buildDoctorReport, renderDoctor} from './solve/doctor.js';
 import {
+  QUEST_CLASS_PROCESS,
   QUEST_CLASS_PRODUCT,
   QUEST_CLASSES,
   SAME_GUARD_OVERRIDE_LIMIT,
@@ -196,7 +197,62 @@ function parseArgs(argv) {
   return args;
 }
 
-function questTemplate(id, statement, questClass) {
+const DRAFT_PROBE_SCENARIO_HARNESS = 'scenario-harness';
+const DRAFT_PROBE_TEST_RECEIPT = 'test-receipt';
+const DRAFT_PROBES = Object.freeze([
+  DRAFT_PROBE_SCENARIO_HARNESS, DRAFT_PROBE_TEST_RECEIPT,
+]);
+const DRAFT_PROBE_FLAG = 'probe';
+const DRAFT_REQUIRED_RECEIPT_FLAG = 'required-receipt';
+const DRAFT_RECEIPT_DIR = 'solve/evidence';
+const DRAFT_RECEIPT_SUFFIX = '.receipt.json';
+const DRAFT_MAIN_SUFFIX = '-main';
+const DRAFT_METRIC_PRIORITY = 'priority';
+const DRAFT_CONSECUTIVE = 3;
+const DRAFT_PROBE_LIST_SEPARATOR = ', ';
+
+function requiredReceiptsFromArgs(id, args) {
+  const raw = args[DRAFT_REQUIRED_RECEIPT_FLAG];
+  const ids = (Array.isArray(raw) ? raw : [raw])
+    .filter((value) => typeof value === 'string' && value.trim().length > 0);
+  return ids.length > 0 ? ids : [`${id}${DRAFT_MAIN_SUFFIX}`];
+}
+
+// The draft's probe kind is sealed at declaration and immutable after it, so
+// it is chosen here: a process quest closes on its evidence-harness receipt
+// (test-receipt), a product quest on a live scenario report; --probe
+// overrides either, --required-receipt names the receipt ids.
+function resolveDraftProbe(id, questClass, args = {}) {
+  const requested = args[DRAFT_PROBE_FLAG];
+  if (requested !== undefined && !DRAFT_PROBES.includes(requested)) {
+    throw new Error(
+      `new: --${DRAFT_PROBE_FLAG} must be one of ` +
+      DRAFT_PROBES.join(DRAFT_PROBE_LIST_SEPARATOR));
+  }
+  const probe = requested ||
+    (questClass === QUEST_CLASS_PROCESS ?
+      DRAFT_PROBE_TEST_RECEIPT : DRAFT_PROBE_SCENARIO_HARNESS);
+  if (probe === DRAFT_PROBE_TEST_RECEIPT) {
+    const receiptArgs = {
+      file: `${DRAFT_RECEIPT_DIR}/${id}${DRAFT_RECEIPT_SUFFIX}`,
+      requiredReceipts: requiredReceiptsFromArgs(id, args),
+    };
+    return {
+      doneWhen: {probe, args: {...receiptArgs}},
+      metric: {probe, args: {...receiptArgs}},
+    };
+  }
+  return {
+    doneWhen: {probe, args: {
+      scenario: id, consecutive: DRAFT_CONSECUTIVE,
+      metric: DRAFT_METRIC_PRIORITY,
+    }},
+    metric: {probe, args: {scenario: id, metric: DRAFT_METRIC_PRIORITY}},
+  };
+}
+
+function questTemplate(id, statement, questClass, draftProbe = null) {
+  const probe = draftProbe || resolveDraftProbe(id, questClass);
   return {
     id,
     authoringContractVersion: QUEST_AUTHORING_CONTRACT_VERSION,
@@ -224,20 +280,14 @@ function questTemplate(id, statement, questClass) {
       draftedAtCommit: null,
     },
     // done_when: the binary, artifact-bound success predicate. Sealed once declared.
-    doneWhen: {
-      probe: 'scenario-harness',
-      args: {scenario: id, consecutive: 3, metric: 'priority'},
-    },
+    doneWhen: probe.doneWhen,
     // frontiers: independent work surfaces. Each carries its own lower-is-better
     // metric (the progress gradient). The scheduler picks among open frontiers.
     frontiers: [
       {
         id: `${id}-main`,
         priority: 1,
-        metric: {
-          probe: 'scenario-harness',
-          args: {scenario: id, metric: 'priority'},
-        },
+        metric: probe.metric,
       },
     ],
     constraints: [
@@ -316,8 +366,9 @@ function cmdNew(root, args) {
       LOCAL_STR_OWNED_002,
     );
   }
+  const questClass = resolveQuestClass(args);
   const quest = questTemplate(id, typeof args.statement === 'string' ?
-    args.statement : null, resolveQuestClass(args));
+    args.statement : null, questClass, resolveDraftProbe(id, questClass, args));
   quest.links.draftedAtCommit = resolveHeadCommit(root);
   quest.links.roadmapRow = typeof args[LOCAL_STR_OWNED_003] === 'string' ?
     args[LOCAL_STR_OWNED_003] : null;
@@ -450,7 +501,11 @@ function cmdStart(root, args) {
   // the first execution command seals it: never overwrites, never seals.
   const scaffold = scaffoldQuestHarness(root, loadQuest(root, id));
   if (scaffold.created) {
-    process.stdout.write(`${SCAFFOLD_NOTICE_PREFIX}${scaffold.path}\n`);
+    // Under --json stdout is the structured result; the notice goes to
+    // stderr so a machine reader never sees a corrupted document.
+    const notice = `${SCAFFOLD_NOTICE_PREFIX}${scaffold.path}\n`;
+    if (args.json === true) process.stderr.write(notice);
+    else process.stdout.write(notice);
   }
   writeFacadeResult('start', args, startQuestWorkflow(root, {...args, id, doctor}));
 }
