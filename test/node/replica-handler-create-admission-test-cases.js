@@ -2,6 +2,8 @@ import {
   createLifecycleControlPlaneGatewayForCache,
   createReplicaLifecycleStateMachineFixture,
 } from '../test-helpers/lifecycle-state-store.js';
+import {bindRegisteredReplicaHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 const TEST_INITIAL_STATUS_RETRY_OPERATION_ID =
   'op-initial-create-status-retry';
@@ -48,14 +50,14 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         systemTableCache: cache,
         createPartitionService: async (options) => {
           createdReplicaIds.push(options.replicaId);
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             role: 'follower',
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
         replicaStateMachine: createReplicaLifecycleStateMachineFixture({
           async transition(replicaId, newStatus) {
@@ -144,13 +146,13 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         systemTableCache: cache,
         createPartitionService: async (options) => {
           createdReplicaIds.push(options.replicaId);
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
         replicaStateMachine: createReplicaLifecycleStateMachineFixture({
           async transition(replicaId, newStatus) {
@@ -296,13 +298,13 @@ export async function registerReplicaHandlerCreateAdmissionTests({
             handler.getLocalReplica(options.replicaId)?.status || null;
           stateMachineStatusAtFactory =
             replicaStateMachine.getState(options.replicaId)?.state || null;
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
         dataDir: getTempDir(),
       });
@@ -433,13 +435,13 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
       });
 
@@ -462,6 +464,10 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         'lifecycle logs are suppressed for dynamic replica creation');
       t.equal(typeof capturedOptions.onInitializationStage, 'function',
         'stage callback is passed to partition service factory');
+      t.equal(capturedOptions.resolveHandlerRetirementLane(),
+        handler.replicaStateMachine,
+        'the executor-created runtime retires its handler through the ' +
+        'executor lifecycle owner that runs its handler-bound ACTIVE');
 
       handler.shutdown();
     },
@@ -482,13 +488,13 @@ export async function registerReplicaHandlerCreateAdmissionTests({
         dataDir: getTempDir(),
         createPartitionService: async (options) => {
           capturedOptions = options;
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
       });
 
@@ -579,13 +585,13 @@ export async function registerReplicaHandlerCreateAdmissionTests({
           localOnlyAtFactory = replicaStateMachine.isServiceRowLocalOnly(
             options.replicaId,
           );
-          return {
+          return bindRegisteredReplicaHandler({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
             async shutdown() {},
             async syncFromLeader() {},
-          };
+          }, options);
         },
         dataDir: getTempDir(),
       });

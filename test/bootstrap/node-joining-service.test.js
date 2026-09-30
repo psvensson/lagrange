@@ -892,6 +892,11 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
       isRegistered(address) {
         return address === 'durable-join-node/partition/nodes-p1-r1';
       },
+      // Identity, not presence: the exact handler of the restored runtime.
+      getRegisteredHandler(address) {
+        return this.isRegistered(address) ? service.partitionServices.get(
+          address.split('/').pop())?.transportHandler || null : null;
+      },
     };
     service.cdcIntegrationService = {
       updateSystemTableRow: async (_tableName, predicate) => {
@@ -912,6 +917,7 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
       for (const replicaId of service.joinReplicaOptionsByServiceId.keys()) {
         service.partitionServices.set(replicaId, {
           initialized: true,
+          transportHandler: () => ({acknowledged: true}),
           partitionId: 'nodes-p1',
           startElection() {
             calls.push(`start:${replicaId}`);
@@ -1044,6 +1050,11 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
     isRegistered(address) {
       return address === 'durable-join-node/partition/nodes-p1-r1';
     },
+    // Identity, not presence: the exact handler of the restored runtime.
+    getRegisteredHandler(address) {
+      return this.isRegistered(address) ? service.partitionServices.get(
+        address.split('/').pop())?.transportHandler || null : null;
+    },
   };
   service.cdcIntegrationService = {
     updateSystemTableRow: async (_tableName, predicate) => {
@@ -1067,6 +1078,7 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
     calls.push(`create:${options.replicaId}`);
     service.partitionServices.set(options.replicaId, {
       initialized: true,
+      transportHandler: () => ({acknowledged: true}),
       partitionId: options.partitionId,
       startElection() {
         calls.push(`start:${options.replicaId}`);
@@ -1202,6 +1214,11 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
     isRegistered(address) {
       return address === `durable-join-node/partition/${replicaId}`;
     },
+    // Identity, not presence: the exact handler of the restored runtime.
+    getRegisteredHandler(address) {
+      return this.isRegistered(address) ? service.partitionServices.get(
+        address.split('/').pop())?.transportHandler || null : null;
+    },
   };
   service.cdcIntegrationService = {
     updateSystemTableRow: async (_tableName, predicate) => {
@@ -1231,6 +1248,7 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
     calls.push(`create:${options.replicaId}`);
     service.partitionServices.set(options.replicaId, {
       initialized: true,
+      transportHandler: () => ({acknowledged: true}),
       partitionId: options.partitionId,
       startElection() {
         calls.push(`start:${options.replicaId}`);

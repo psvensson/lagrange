@@ -34,6 +34,8 @@ import {
   evaluateLearnerPromotionProof,
 } from '../../src/raft/learner-promotion-progress.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {handlerIdentityApi} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 const PROOF_STUB_TERM = 1;
 const PROOF_STUB_COMMITTED_INDEX = 0;
@@ -336,6 +338,7 @@ export function createLoopbackTransport() {
     unregister(address) {
       handlers.delete(address);
     },
+    ...handlerIdentityApi(handlers),
     async deliver(address, payload) {
       const handler = handlers.get(address);
       if (!handler) {

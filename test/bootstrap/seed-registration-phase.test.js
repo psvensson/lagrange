@@ -45,6 +45,7 @@ test('SeedRegistrationPhase registers partition rows as stopped before activatio
         partitionId: 'p1',
         replicaId: 'p1-r1',
         initialized: true,
+        transportHandler: () => ({acknowledged: true}),
         getUnifiedAddress() {
           return 'node-a/partition/p1-r1';
         },
@@ -80,6 +81,10 @@ test('SeedRegistrationPhase registers partition rows as stopped before activatio
         getMessageRouter: () => ({
           isRegistered(address) {
             return address === 'node-a/partition/p1-r1';
+          },
+          getRegisteredHandler(address) {
+            return address === 'node-a/partition/p1-r1' ?
+              partitionServices.get('p1-r1').transportHandler : null;
           },
         }),
         getMessageGroupServices: () => messageGroupServices,
@@ -154,6 +159,7 @@ test('SeedRegistrationPhase does not complete while partition activation is ' +
     ['p1-r1', {
       partitionId: 'p1',
       initialized: true,
+      transportHandler: () => ({acknowledged: true}),
       getUnifiedAddress: () => 'node-a/partition/p1-r1',
       getRole: () => 'follower',
     }],
@@ -190,7 +196,9 @@ test('SeedRegistrationPhase does not complete while partition activation is ' +
       }),
       getNodeId: () => 'node-a',
       getBootIncarnation: () => 1,
-      getMessageRouter: () => ({isRegistered: () => true}),
+      getMessageRouter: () => ({isRegistered: () => true,
+        getRegisteredHandler: (address) =>
+          partitionServices.get(address.split('/').pop())?.transportHandler}),
       getMessageGroupServices: () => new Map(),
       getPartitionServices: () => partitionServices,
     },

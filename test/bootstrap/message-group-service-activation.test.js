@@ -4,6 +4,24 @@ import {
   MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR,
 } from '../../src/bootstrap/shared/message-group-service-activation.js';
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
+import {createIdentityTransport} from
+  '../test-helpers/replica-handler-identity-fixture.js';
+
+// A router holding the exact handler of each listed replica (identity, not
+// presence: activation fails closed on a router without the identity API).
+function routerWithHandlers(services, registeredReplicaIds) {
+  const router = createIdentityTransport();
+  for (const replicaId of registeredReplicaIds) {
+    router.register(`node-a/message-group/${replicaId}`,
+      services.get(replicaId).transportHandler);
+  }
+  return router;
+}
+
+function messageGroupReplicas(replicaIds) {
+  return new Map(replicaIds.map((replicaId) => [replicaId,
+    {groupId: 'mg-1', transportHandler: () => replicaId}]));
+}
 
 function createLifecycleOwner() {
   return new ReplicaStateMachine({nodeId: 'node-a',
@@ -36,6 +54,7 @@ test('activateMessageGroupServiceRows requires endpoint publication',
 
 test('activateMessageGroupServiceRows requires per-replica handler registration',
   async (t) => {
+    const twoReplicas = messageGroupReplicas(['mg-1-r1', 'mg-1-r2']);
     await t.rejects(
       activateMessageGroupServiceRows({
         nodeId: 'node-a',
@@ -44,16 +63,10 @@ test('activateMessageGroupServiceRows requires per-replica handler registration'
           upsertSystemTableRow: async () => ({success: true}),
         },
         replicaStateMachine: createLifecycleOwner(),
-        messageRouter: {
-          isRegistered: (address) =>
-            address === 'node-a/message-group/mg-1-r1',
-        },
+        messageRouter: routerWithHandlers(twoReplicas, ['mg-1-r1']),
         messageGroupServiceHandler: {},
         endpointsPublished: true,
-        messageGroupServices: new Map([
-          ['mg-1-r1', {groupId: 'mg-1'}],
-          ['mg-1-r2', {groupId: 'mg-1'}],
-        ]),
+        messageGroupServices: twoReplicas,
       }),
       new Error(
         MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR
@@ -66,6 +79,7 @@ test('activateMessageGroupServiceRows requires per-replica handler registration'
 test('activateMessageGroupServiceRows can defer transient writer failures',
   async (t) => {
     const deferred = [];
+    const oneReplica = messageGroupReplicas(['mg-1-r1']);
 
     await t.resolves(
       activateMessageGroupServiceRows({
@@ -83,16 +97,12 @@ test('activateMessageGroupServiceRows can defer transient writer failures',
           },
         },
         replicaStateMachine: createLifecycleOwner(),
-        messageRouter: {
-          isRegistered: () => true,
-        },
+        messageRouter: routerWithHandlers(oneReplica, ['mg-1-r1']),
         messageGroupServiceHandler: {},
         endpointsPublished: true,
         deferTransientFailures: true,
         onDeferredActivation: (details) => deferred.push(details),
-        messageGroupServices: new Map([
-          ['mg-1-r1', {groupId: 'mg-1'}],
-        ]),
+        messageGroupServices: oneReplica,
       }),
       'join-time activation should not fail hard on transient system-table pressure when deferral is enabled',
     );

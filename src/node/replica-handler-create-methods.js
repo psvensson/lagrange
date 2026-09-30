@@ -537,11 +537,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             0,
         });
         partitionService = await this.createPartitionService({
-          partitionId,
-          tableId,
-          tableName,
-          schema,
-          keyRange,
+          partitionId, tableId, tableName, schema, keyRange,
           replicaId,
           replicaIds,
           peerAddresses: peerAddresses || [],
@@ -556,6 +552,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           suppressLifecycleLogs: true,
           onInitializationStage: (stageEvent) =>
             this.updateReplicaCreationProgress(progress, stageEvent),
+          resolveHandlerRetirementLane: () => this.replicaStateMachine,
         });
         if (
           this.shuttingDown &&
@@ -632,7 +629,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           await this.persistReplicaStatusWithRetry(
             replicaId,
             ReplicaStatus.ACTIVE,
-            {partitionId},
+            {partitionId, activationService: partitionService},
           );
         } else {
           this.setLocalReplica(replicaId, {

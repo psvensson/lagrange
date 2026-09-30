@@ -267,6 +267,9 @@ function createFixtureNetwork() {
     state,
     register: (address, handler) => loopback.register(address, handler),
     unregister: (address) => loopback.unregister(address),
+    getRegisteredHandler: (address) => loopback.getRegisteredHandler(address),
+    unregisterExact: (address, handler) =>
+      loopback.unregisterExact(address, handler),
     deliver: async (address, payload, options) => {
       if (state.closed) {
         return undefined;
@@ -286,6 +289,9 @@ function createPartitionableTransport(inner) {
     state,
     register: (address, handler) => inner.register(address, handler),
     unregister: (address) => inner.unregister(address),
+    getRegisteredHandler: (address) => inner.getRegisteredHandler(address),
+    unregisterExact: (address, handler) =>
+      inner.unregisterExact(address, handler),
     deliver: async (address, payload, options) => {
       if (state.dropToLearner && address === LEARNER_ADDRESS) {
         return undefined;

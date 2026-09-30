@@ -18,6 +18,8 @@ import {
 } from './replica-handler-constants.js';
 import {settlePartitionServiceActiveAdmission} from
   '../bootstrap/shared/partition-service-activation.js';
+import {isReplicaServiceHandlerBound} from
+  './replica-transport-handler-identity.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -111,6 +113,13 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
             existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
           serviceAddress:
             existing?.address || this.buildTrackedServiceAddress(replicaId),
+          // A durable ACTIVE is bound to the exact runtime this activation
+          // created (additionalData.activationService): its transport handler
+          // stays registered through the activation effect boundary, and the
+          // runtime retires it through this lifecycle owner (the create path
+          // passes resolveHandlerRetirementLane) (owner decision N2, S-F2).
+          isEffectHandlerCurrent: () => isReplicaServiceHandlerBound(
+            additionalData.activationService, this.replicaStateMachine),
         };
         const requiresAuthoritativeAdmission = !trackedState &&
           newStatus !== ReplicaStatus.PENDING && existing &&

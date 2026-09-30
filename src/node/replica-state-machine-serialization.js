@@ -1,3 +1,8 @@
+import {
+  REPLICA_ACTIVATION_HANDLER_NOT_REGISTERED,
+  REPLICA_STATE_MACHINE_STATE,
+} from './replica-state-machine-constants.js';
+
 function getReplicaRevision(stateMachine, replicaId) {
   return stateMachine.replicaRevisionByReplicaId.get(replicaId) || 0;
 }
@@ -179,6 +184,47 @@ async function runActivationEffectSection(
   }
 }
 
+function activationHandlerNotRegisteredError(replicaId) {
+  const error = new Error(
+    `Replica activation ${REPLICA_ACTIVATION_HANDLER_NOT_REGISTERED}: ` +
+    replicaId);
+  error.code = REPLICA_ACTIVATION_HANDLER_NOT_REGISTERED;
+  error.errorCode = REPLICA_ACTIVATION_HANDLER_NOT_REGISTERED;
+  error.deferRetry = false;
+  return error;
+}
+
+/**
+ * The durable effect of one lane-serialized lifecycle transition (owner
+ * decision N2, S-F2): a durable ACTIVE for generation G is written only while
+ * the exact transport handler of G stays registered. The caller's check
+ * (context.isEffectHandlerCurrent) runs in the lane and opens the activation
+ * effect section in the same synchronous step, so handler retirement waits
+ * for the ACTIVE CAS and its readback. A persisted ACTIVE without the check
+ * is refused. Other destinations persist directly.
+ * @param {Object} stateMachine
+ * @param {string} replicaId
+ * @param {string} newState
+ * @param {Object} context - Transition context.
+ * @param {Function} persist - Issues the durable write without a prior await.
+ * @return {*|Promise<*>} The persistence result.
+ */
+function runPersistedTransitionEffect(
+  stateMachine,
+  replicaId,
+  newState,
+  context,
+  persist,
+) {
+  if (newState !== REPLICA_STATE_MACHINE_STATE.ACTIVE) return persist();
+  return runActivationEffectSection(stateMachine, replicaId, () => {
+    if (typeof context.isEffectHandlerCurrent !== 'function' ||
+        context.isEffectHandlerCurrent() !== true) {
+      throw activationHandlerNotRegisteredError(replicaId);
+    }
+  }, persist);
+}
+
 /**
  * Run a handler-bound activation in the replica's lifecycle lane: resolve the
  * durable source, then check the exact handler and run the ACTIVE effect in
@@ -225,6 +271,7 @@ export {
   recordCanonicalLeaderClearSettlement,
   runActivationEffectSection,
   runHandlerBoundActivation,
+  runPersistedTransitionEffect,
   runReplicaHandlerRetirement,
   runSerializedReplicaMutation,
 };

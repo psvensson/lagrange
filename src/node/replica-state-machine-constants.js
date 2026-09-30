@@ -95,6 +95,11 @@ const REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE = Object.freeze({
     'replica_canonical_leader_clear_deferred',
 });
 
+// The typed refusal of a durable ACTIVE whose exact transport handler is not
+// registered at the activation effect boundary (owner decision N2).
+const REPLICA_ACTIVATION_HANDLER_NOT_REGISTERED =
+  'REPLICA_ACTIVATION_HANDLER_NOT_REGISTERED';
+
 const REPLICA_STATE_MACHINE_REASON = Object.freeze({
   UNKNOWN: 'unknown',
   CREATE_REDRIVE: 'authoritative_create_redrive',
@@ -180,6 +185,7 @@ function isRepairOnlyReplicaRaftRole(role) {
 }
 
 export {
+  REPLICA_ACTIVATION_HANDLER_NOT_REGISTERED,
   REPLICA_STATE_MACHINE_DEFAULT,
   REPLICA_STATE_MACHINE_DEFAULT_TIMEOUTS,
   REPLICA_STATE_MACHINE_NOW,

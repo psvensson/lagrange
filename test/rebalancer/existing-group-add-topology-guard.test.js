@@ -75,6 +75,8 @@ import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+import {bindRegisteredReplicaHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 const TEST_SCHEMA = Object.freeze({
   columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
@@ -152,13 +154,13 @@ function seedSiblingServiceRow(cache, {partitionId, replicaId, nodeId}) {
 function createCapturingPartitionServiceFactory(captured) {
   return async (options) => {
     captured.options = options;
-    return {
+    return bindRegisteredReplicaHandler({
       partitionId: options.partitionId,
       replicaId: options.replicaId,
       initialized: true,
       async shutdown() {},
       async syncFromLeader() {},
-    };
+    }, options);
   };
 }
 

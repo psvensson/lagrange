@@ -336,6 +336,7 @@ test('ReplicaStateMachine does not commit runtime state when persistence fails a
         nodeId: TEST_RETRY_NODE_ID,
         reason: TEST_RETRY_ACTIVE_REASON,
         serviceId: TEST_RETRY_SERVICE_ID,
+        isEffectHandlerCurrent: () => true,
       }),
       new Error(TEST_RETRY_PRESSURE_ERROR),
       'retryable persistence failure should surface without committing runtime state',
@@ -363,6 +364,7 @@ test('ReplicaStateMachine does not commit runtime state when persistence fails a
         nodeId: TEST_RETRY_NODE_ID,
         reason: TEST_RETRY_ACTIVE_REASON,
         serviceId: TEST_RETRY_SERVICE_ID,
+        isEffectHandlerCurrent: () => true,
       });
 
     t.equal(retryResult, true, 'the same transition should succeed on retry');

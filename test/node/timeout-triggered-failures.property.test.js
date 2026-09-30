@@ -18,6 +18,8 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {withRegisteredActivationHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 function createMockCDCService() {
   return {
@@ -88,14 +90,14 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
         fc.uuid(),
         async (targetState, replicaId, partitionId) => {
           // Use very short timeouts for testing
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
             pendingTimeoutMs: 1,
             creatingTimeoutMs: 1,
             syncingTimeoutMs: 1,
             removingTimeoutMs: 1,
-          });
+          }));
 
           // Get to the target transitional state
           const path = getPathToState(targetState);
@@ -145,14 +147,14 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
         fc.uuid(),
         async (targetState, replicaId, partitionId) => {
           const timeoutMs = 50;
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
             pendingTimeoutMs: timeoutMs,
             creatingTimeoutMs: timeoutMs,
             syncingTimeoutMs: timeoutMs,
             removingTimeoutMs: timeoutMs,
-          });
+          }));
 
           // Get to the target transitional state
           const path = getPathToState(targetState);
@@ -199,14 +201,14 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
         fc.uuid(),
         fc.uuid(),
         async (targetState, replicaId, partitionId) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
             pendingTimeoutMs: 1,
             creatingTimeoutMs: 1,
             syncingTimeoutMs: 1,
             removingTimeoutMs: 1,
-          });
+          }));
 
           // Get to the target transitional state
           const path = getPathToState(targetState);
@@ -254,14 +256,14 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
         fc.uuid(),
         async (targetState, replicaId, partitionId) => {
           // Use very long timeouts
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
             pendingTimeoutMs: 999999,
             creatingTimeoutMs: 999999,
             syncingTimeoutMs: 999999,
             removingTimeoutMs: 999999,
-          });
+          }));
 
           // Get to the target transitional state
           const path = getPathToState(targetState);
@@ -302,14 +304,14 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
         fc.uuid(),
         fc.uuid(),
         async (targetState, replicaId, partitionId) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
             pendingTimeoutMs: 1,
             creatingTimeoutMs: 1,
             syncingTimeoutMs: 1,
             removingTimeoutMs: 1,
-          });
+          }));
 
           let timeoutEventReceived = false;
           let timeoutEventData = null;
@@ -361,14 +363,14 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
         fc.uuid(),
         fc.uuid(),
         async (replicaId, partitionId) => {
-          const stateMachine = new ReplicaStateMachine({
+          const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
             pendingTimeoutMs: 1,
             creatingTimeoutMs: 1,
             syncingTimeoutMs: 1,
             removingTimeoutMs: 1,
-          });
+          }));
 
           // Get replica to active state
           const path = getPathToState(ReplicaState.ACTIVE);
@@ -427,11 +429,11 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
    * Property: startTimeoutChecker and stopTimeoutChecker work correctly.
    */
   t.test('timeout checker can be started and stopped', async (t) => {
-    const stateMachine = new ReplicaStateMachine({
+    const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
       nodeId: 'test-node',
       cdcIntegrationService: createMockCDCService(),
       timeoutCheckIntervalMs: 10000, // Long interval to avoid actual checks
-    });
+    }));
 
     // Initially not running
     t.equal(stateMachine.timeoutCheckInterval, null,
@@ -465,11 +467,11 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
    * Property: clear() stops the timeout checker.
    */
   t.test('clear stops timeout checker', async (t) => {
-    const stateMachine = new ReplicaStateMachine({
+    const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
       nodeId: 'test-node',
       cdcIntegrationService: createMockCDCService(),
       timeoutCheckIntervalMs: 10000,
-    });
+    }));
 
     stateMachine.startTimeoutChecker();
     t.not(stateMachine.timeoutCheckInterval, null,
@@ -491,11 +493,11 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
       removingTimeoutMs: 400,
     };
 
-    const stateMachine = new ReplicaStateMachine({
+    const stateMachine = withRegisteredActivationHandler(new ReplicaStateMachine({
       nodeId: 'test-node',
       cdcIntegrationService: createMockCDCService(),
       ...customTimeouts,
-    });
+    }));
 
     t.equal(stateMachine.getTimeout(ReplicaState.PENDING), 100,
       'pending timeout correct');

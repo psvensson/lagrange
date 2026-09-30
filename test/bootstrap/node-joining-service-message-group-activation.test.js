@@ -60,6 +60,8 @@ import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
 import {publishRegisteredEndpoint} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {createIdentityTransport} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 // The canonical node clock the joiner hands its replica lifecycle owner.
 const nodeTimeSource = new RealTimeSource();
@@ -423,14 +425,16 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
         ]});
 
         service.messageGroupServiceHandler = {};
-        service.messageRouter = {
-          isRegistered: () => true,
-        };
+        const transportHandler = () => ({acknowledged: true});
+        service.messageRouter = createIdentityTransport();
+        service.messageRouter.register(
+          'join-activation-node/message-group/mg-cache-r1', transportHandler);
         service.replicaStateMachine = new ReplicaStateMachine({
           nodeId: 'join-activation-node', controlPlaneSystemTableGateway: {}});
         service.messageGroupServices.set('mg-cache-r1', {
           groupId: 'mg-cache',
           unifiedAddress: 'join-activation-node/message-group/mg-cache-r1',
+          transportHandler,
         });
         service.createCdcIntegrationService = () => writer;
         service.createMessageGroupPhase.registrationEvidenceByReplicaId.set(

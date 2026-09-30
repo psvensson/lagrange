@@ -42,6 +42,8 @@ import {OperationType} from
 import {ReplicaOperationField} from
   '../../../src/rebalancer/replica-operation-constants.js';
 import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
+import {handlerIdentityApi} from
+  '../../test-helpers/replica-handler-identity-fixture.js';
 
 const TABLE_NAME = 'committed_membership_table';
 const WAIT_BUDGET_MS = 8000;
@@ -162,6 +164,7 @@ function createCuttableTransport() {
     unregister(address) {
       handlers.delete(address);
     },
+    ...handlerIdentityApi(handlers),
     async deliver(address, payload) {
       if (cutAddresses.has(address) ||
           cutPeerIds.has(String(payload?.from))) {

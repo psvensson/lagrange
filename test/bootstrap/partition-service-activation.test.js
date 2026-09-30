@@ -4,6 +4,25 @@ import {
   PARTITION_SERVICE_ACTIVATION_ERROR,
   settlePartitionServiceActiveAdmission,
 } from '../../src/bootstrap/shared/partition-service-activation.js';
+import {createIdentityTransport} from
+  '../test-helpers/replica-handler-identity-fixture.js';
+
+// A router holding each listed replica's exact handler (identity, not
+// presence: activation fails closed on a router without the identity API).
+function routerWithExactHandlers(services, registeredReplicaIds) {
+  const router = createIdentityTransport();
+  for (const replicaId of registeredReplicaIds) {
+    router.register(`node-a/partition/${replicaId}`,
+      services.get(replicaId).transportHandler);
+  }
+  return router;
+}
+
+function partitionReplicas(replicaIds) {
+  return new Map(replicaIds.map((replicaId) => [replicaId, {
+    partitionId: 'p1', initialized: true,
+    transportHandler: () => replicaId}]));
+}
 
 function createActiveAdmissionService(snapshotFactory) {
   const calls = {leader: 0, role: 0, repairs: []};
@@ -174,6 +193,7 @@ test('activatePartitionServiceRows requires initialized runtime',
 test('activatePartitionServiceRows requires per-replica handler registration',
   async (t) => {
     const activated = [];
+    const twoReplicas = partitionReplicas(['p1-r1', 'p1-r2']);
     await t.rejects(
       activatePartitionServiceRows({
         nodeId: 'node-a',
@@ -187,20 +207,8 @@ test('activatePartitionServiceRows requires per-replica handler registration',
             return {};
           },
         },
-        messageRouter: {
-          isRegistered: (address) =>
-            address === 'node-a/partition/p1-r1',
-        },
-        partitionServices: new Map([
-          ['p1-r1', {
-            partitionId: 'p1',
-            initialized: true,
-          }],
-          ['p1-r2', {
-            partitionId: 'p1',
-            initialized: true,
-          }],
-        ]),
+        messageRouter: routerWithExactHandlers(twoReplicas, ['p1-r1']),
+        partitionServices: twoReplicas,
       }),
       new Error(
         PARTITION_SERVICE_ACTIVATION_ERROR
@@ -215,6 +223,7 @@ test('activatePartitionServiceRows requires per-replica handler registration',
 test('activatePartitionServiceRows retains pressure admission failures as debt',
   async (t) => {
     const deferred = [];
+    const oneReplica = partitionReplicas(['p1-r1']);
 
     await t.rejects(
       activatePartitionServiceRows({
@@ -244,15 +253,8 @@ test('activatePartitionServiceRows retains pressure admission failures as debt',
             throw error;
           },
         },
-        messageRouter: {
-          isRegistered: () => true,
-        },
-        partitionServices: new Map([
-          ['p1-r1', {
-            partitionId: 'p1',
-            initialized: true,
-          }],
-        ]),
+        messageRouter: routerWithExactHandlers(oneReplica, ['p1-r1']),
+        partitionServices: oneReplica,
         onDeferredActivation: (details) => deferred.push(details),
       }),
       {code: 'CONTROL_PLANE_PRESSURE_DEGRADED'},
