@@ -60,8 +60,10 @@ const RATCHET_TARGETS = [
     // handoff candidate (incarnation-fence normalization shared one owner).
     // 2026-09-06: tightened 58/1865 -> 57/1845 after the solve-v2 phase-2
     // cutover deleted the v1 solver (checker hint).
-    baselineCloneGroupCount: 57,
-    baselineDuplicatedLineCount: 1845,
+    // 2026-09-11: tightened 57/1845 -> 55/1794 after the router lifetime
+    // closure refresh measured the lower totals (checker hint).
+    baselineCloneGroupCount: 55,
+    baselineDuplicatedLineCount: 1794,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },

@@ -65,6 +65,8 @@ function resolvePingTimeout(
 }
 
 export async function pingNode(router, nodeId, timeoutMs = null) {
+  const lifetime = router.transportLifetime;
+  lifetime.assertOpen();
   const connection = router.nodeConnections.get(nodeId);
   if (
     !connection ||
@@ -78,6 +80,10 @@ export async function pingNode(router, nodeId, timeoutMs = null) {
   const initiatingWebSocket = connection.ws;
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
+      if (lifetime.signal.aborted) {
+        resolve(false);
+        return;
+      }
       resolvePingTimeout(
         router,
         nodeId,

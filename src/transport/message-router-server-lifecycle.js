@@ -1,4 +1,5 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+import {MessageRouterLifetime} from './message-router-lifetime.js';
 
 const {
   ConnectionState,
@@ -28,17 +29,43 @@ class MessageRouterServerLifecycle {
    * @return {Promise<void>}
    */
   async initialize(options = {}) {
+    if (this.transportLifetime.signal.aborted) {
+      if (!this.transportLifetime.shutdownComplete) {
+        this.transportLifetime.assertOpen();
+      }
+      const nextLifetime = new MessageRouterLifetime();
+      this.bulkChannelRegistry?.bindRouterLifetime(nextLifetime);
+      this.transportLifetime = nextLifetime;
+    }
+    const lifetime = this.transportLifetime;
+    const previous = lifetime.initializationPromise || Promise.resolve();
+    const initialization = previous.then(() => this.initializeTransport(options, lifetime));
+    lifetime.initializationPromise = initialization;
+    try {
+      await initialization;
+    } finally {
+      if (lifetime.initializationPromise === initialization) {
+        lifetime.initializationPromise = null;
+      }
+    }
+  }
+
+  async initializeTransport(options, lifetime) {
+    lifetime.assertOpen();
     const shouldStartServer = options.startServer === true && this.wsPort;
     if (this.initialized) {
       let startedServerNow = false;
       if (shouldStartServer && !this.server) {
         await this.startServer();
+        lifetime.assertOpen();
         startedServerNow = true;
       }
       if (shouldStartServer && !this.hasSelfConnection()) {
         try {
           await this.connectToSelf();
+          lifetime.assertOpen();
         } catch (error) {
+          lifetime.assertOpen();
           if (startedServerNow && this.server) {
             await new Promise((resolve) => this.server.close(resolve));
             this.server = null;
@@ -48,7 +75,6 @@ class MessageRouterServerLifecycle {
       }
       return;
     }
-    this.isShuttingDown = false;
     this.logger.info(ROUTER_LOG_MSG.INITIALIZING, {
       routerId: this.routerId,
       nodeId: this.nodeId,
@@ -57,9 +83,12 @@ class MessageRouterServerLifecycle {
     });
     if (shouldStartServer) {
       await this.startServer();
+      lifetime.assertOpen();
       try {
         await this.connectToSelf();
+        lifetime.assertOpen();
       } catch (error) {
+        lifetime.assertOpen();
         this.logger.error(ROUTER_LOG_MSG.SELF_CONNECTION_FAILED, {
           error: error.message,
           nodeId: this.nodeId,
@@ -82,20 +111,28 @@ class MessageRouterServerLifecycle {
    * @return {Promise<void>}
    */
   async startServer() {
+    const lifetime = this.transportLifetime;
+    lifetime.assertOpen();
     return new Promise((resolve, reject) => {
       let settled = false;
       const resolveOnce = () => {
         if (!settled) {
           settled = true;
+          lifetime.signal.removeEventListener(TRANSPORT_EVENT.ABORT, onAbort);
           resolve();
         }
       };
       const rejectOnce = (error) => {
         if (!settled) {
           settled = true;
+          lifetime.signal.removeEventListener(TRANSPORT_EVENT.ABORT, onAbort);
           reject(error);
         }
       };
+      function onAbort() {
+        rejectOnce(lifetime.signal.reason);
+      }
+      lifetime.signal.addEventListener(TRANSPORT_EVENT.ABORT, onAbort, {once: true});
       try {
         if (this.inProcess) {
           this.startInProcessServer();
@@ -111,6 +148,10 @@ class MessageRouterServerLifecycle {
         const wsServer = new WebSocketServer(serverOptions);
         this.server = wsServer;
         wsServer.on(TRANSPORT_EVENT.CONNECTION, (ws, req) => {
+          if (lifetime.signal.aborted) {
+            ws.terminate();
+            return;
+          }
           this.handleIncomingConnection(ws, req);
         });
         wsServer.on(TRANSPORT_EVENT.LISTENING, () => {
@@ -137,6 +178,7 @@ class MessageRouterServerLifecycle {
    * @private
    */
   startInProcessServer() {
+    this.transportLifetime.assertOpen();
     const portKey = Number(this.wsPort);
     if (!Number.isFinite(portKey)) {
       throw new Error(
@@ -174,6 +216,12 @@ class MessageRouterServerLifecycle {
    * @private
    */
   handleIncomingConnection(ws, _req) {
+    const lifetime = this.transportLifetime;
+    if (lifetime.signal.aborted) {
+      ws.terminate();
+      return;
+    }
+    lifetime.ownSocket(ws);
     const connectionId = uuidv4();
     const connectionInfo = {
       connectionId,
@@ -190,9 +238,11 @@ class MessageRouterServerLifecycle {
       routerId: this.routerId,
     });
     ws.on(TRANSPORT_EVENT.MESSAGE, (data) => {
+      if (lifetime.signal.aborted) return;
       this.handleMessage(connectionInfo.nodeId || connectionId, ws, data);
     });
     ws.on(TRANSPORT_EVENT.CLOSE, () => {
+      if (lifetime.signal.aborted) return;
       this.handleConnectionClose(
         connectionInfo.nodeId || connectionId,
         connectionInfo.connectionId,

@@ -27,7 +27,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-09-02: tightened 1439 -> 1438 per checker hint after landing
 // critical-placement-authoritative-evidence (isConvergedPlacementCount
 // removed; every new evidence/observer export has a consumer).
-const BASELINE_UNUSED_EXPORT_COUNT = 1438;
+// 2026-09-11: tightened 1438 -> 1437 per checker hint while closing the
+// MessageRouter lifetime contract (all new lifetime exports have consumers).
+const BASELINE_UNUSED_EXPORT_COUNT = 1437;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

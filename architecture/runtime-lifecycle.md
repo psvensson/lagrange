@@ -124,6 +124,43 @@ No-dual-path policy for these concerns is mandatory:
 3. No direct runtime setup constructor duplication is allowed outside setup owners.
 4. Ownership violations fail fast and must not silently continue.
 
+### MessageRouter transport retirement
+
+`MessageRouter` owns one captured transport lifetime (`MessageRouterLifetime`).
+Its abort signal is the admission authority; `isShuttingDown` is only a read-only
+projection. Primary and attached bulk sockets belong to that lifetime from
+allocation, including CONNECTING and superseded sockets outside the peer map.
+The bulk registry consumes the router lifetime; it does not mint one. Standalone
+bulk registries retain their caller-signal contract. An attached registry has
+stable identity: same-registry attachment is idempotent, but replacement or
+detachment refuses so its paced sends remain reachable by shutdown. Explicit
+router restart reuses and rebinds that registry, rather than replacing its owner.
+
+Shutdown retires admission synchronously, settles admitted delivery with the
+existing graceful shutdown outcome through `deliver`, `deliverLocal` and
+`deliverRemote`, and preserves distinct caller cancellation. The entire admitted
+call, including implicit initialization, shares that completion boundary.
+It retires queued work and pending dials, terminates sockets within the existing
+socket-close grace, and terminates non-upgrading HTTP connections before awaiting
+server closure. Reconnect authority, retry policy, and response cancellation
+classification stay with their existing owners. Per-lifetime liveness evidence
+is cleared; peer incarnation watermarks remain the zombie fence.
+
+Repeated shutdown shares one completion. Initialization is serialized;
+initialization during shutdown refuses. Only an explicit initialize after
+completed shutdown creates a new lifetime and rebinds the attached bulk registry.
+Delivery never implicitly restarts a retired router. Old callbacks, queue
+finalizers, and socket frames cannot acquire the new lifetime or settle its
+same-ID waiters. An already-running application handler may finish, but its
+router completion is fenced; this does not undo application effects. Callers
+must serialize their own producer/handler cleanup before explicitly restarting:
+the address-only unregister API is not a cross-lifetime capability.
+
+Witness: `test/transport/message-router-shutdown-lifetime.test.js`, together with
+the existing transport delivery, bulk-lane and late-response contracts, plus
+`test/service/minimal-deployment-request-cell-routing.test.js`. The
+`message-envelope` impact contract selects these witnesses together.
+
 ## Latency Topology Ownership
 
 Latency-aware topology follows the same single-owner contract as core bootstrap

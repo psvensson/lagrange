@@ -24,6 +24,7 @@ import {
 const MS_PER_SECOND = 1000;
 const MIN_DRAIN_WAIT_MS = 1;
 const SIGNAL_ABORT_EVENT = 'abort';
+const BULK_LIFETIME_REBIND_ERROR = 'Cannot replace an active bulk registry router lifetime';
 const BULK_CHANNEL_TYPEOF = Object.freeze({
   FUNCTION: 'function',
 });
@@ -42,6 +43,16 @@ const NO_OP_LOGGER = Object.freeze({
   warn() {},
   error() {},
 });
+
+function assertBulkDialOpen(lifetime, signal) {
+  lifetime?.assertOpen();
+  if (signal?.aborted) throw new Error(BULK_CHANNEL_SEND_OUTCOME.CANCELLED);
+}
+
+function bulkDialAbortReason(lifetime) {
+  return lifetime?.signal.aborted ? lifetime.signal.reason :
+    new Error(BULK_CHANNEL_SEND_OUTCOME.CANCELLED);
+}
 
 function frozenSendResult(outcome) {
   return Object.freeze({outcome});
@@ -199,6 +210,7 @@ function createBulkTransferConnection(context) {
   };
 
   ws.on(TRANSPORT_EVENT.MESSAGE, (data, isBinary) => {
+    if (!state.open) return;
     for (const listener of [...messageListeners]) {
       listener(data, isBinary);
     }
@@ -331,6 +343,8 @@ function createBulkTransferChannelRegistry(options = {}) {
       options.createWebSocket :
       (address, wsOptions) => new WebSocket(address, wsOptions);
   const connections = new Map();
+  let routerLifetime = null;
+  let pendingDialCount = 0;
   // Adoption listeners (S6): the follower-side snapshot offer router arms
   // its first-frame peek here — INBOUND adopted sockets only, never dials
   // (the dialing side is the transfer initiator, not an offer target).
@@ -345,7 +359,9 @@ function createBulkTransferChannelRegistry(options = {}) {
     }
   };
 
-  const attach = (nodeId, ws) => {
+  const attach = (nodeId, ws, lifetime) => {
+    lifetime?.assertOpen();
+    lifetime?.ownSocket(ws);
     const existing = connections.get(nodeId);
     if (existing) {
       existing.close();
@@ -365,8 +381,22 @@ function createBulkTransferChannelRegistry(options = {}) {
 
   return Object.freeze({
     tokenBucket,
+    bindRouterLifetime(lifetime) {
+      if (routerLifetime === lifetime) return;
+      if ((routerLifetime && !routerLifetime.signal.aborted) ||
+          (!routerLifetime && (connections.size > 0 || pendingDialCount > 0))) {
+        throw new Error(BULK_LIFETIME_REBIND_ERROR);
+      }
+      lifetime.assertOpen();
+      routerLifetime = lifetime;
+    },
     adoptIncomingSocket({nodeId, ws}) {
-      const connection = attach(nodeId, ws);
+      const lifetime = routerLifetime;
+      if (lifetime?.signal.aborted) {
+        ws.terminate();
+        lifetime.assertOpen();
+      }
+      const connection = attach(nodeId, ws, lifetime);
       for (const listener of [...adoptListeners]) {
         listener(connection);
       }
@@ -376,24 +406,45 @@ function createBulkTransferChannelRegistry(options = {}) {
       adoptListeners.push(listener);
     },
     async dial(dialOptions) {
-      const {nodeId, address, identify, signal} = dialOptions;
+      const {nodeId, address, identify} = dialOptions;
+      const dialLifetime = routerLifetime;
+      const signal = dialLifetime ?
+        dialLifetime.deliverySignal(dialOptions.signal) : dialOptions.signal;
+      assertBulkDialOpen(dialLifetime, signal);
       const maxPayload = Number.isFinite(dialOptions.maxPayload) &&
           dialOptions.maxPayload > 0 ?
         dialOptions.maxPayload :
         BULK_TRANSFER_CHANNEL_DEFAULT.MAX_PAYLOAD_BYTES;
       const ws = createWebSocket(address, {maxPayload});
-      await new Promise((resolve, reject) => {
-        const failDial = (error) => reject(error);
-        ws.once(TRANSPORT_EVENT.OPEN, () => {
-          ws.removeListener(TRANSPORT_EVENT.ERROR, failDial);
-          resolve();
+      dialLifetime?.ownSocket(ws);
+      pendingDialCount += 1;
+      try {
+        await new Promise((resolve, reject) => {
+          const failDial = (error) => {
+            signal?.removeEventListener(SIGNAL_ABORT_EVENT, onAbort);
+            reject(error);
+          };
+          function onAbort() {
+            failDial(bulkDialAbortReason(dialLifetime));
+            ws.terminate();
+          }
+          ws.once(TRANSPORT_EVENT.OPEN, () => {
+            resolve();
+          });
+          ws.once(TRANSPORT_EVENT.CLOSE, () => {
+            signal?.removeEventListener(SIGNAL_ABORT_EVENT, onAbort);
+            reject(new Error(BULK_CHANNEL_SEND_OUTCOME.CLOSED));
+          });
+          ws.once(TRANSPORT_EVENT.ERROR, failDial);
+          signal?.addEventListener(SIGNAL_ABORT_EVENT, onAbort, {once: true});
         });
-        ws.once(TRANSPORT_EVENT.ERROR, failDial);
-        signal?.addEventListener(SIGNAL_ABORT_EVENT, () => {
-          ws.terminate();
-          reject(new Error(BULK_CHANNEL_SEND_OUTCOME.CANCELLED));
-        }, {once: true});
-      });
+        assertBulkDialOpen(dialLifetime, signal);
+      } catch (error) {
+        ws.terminate();
+        throw error;
+      } finally {
+        pendingDialCount -= 1;
+      }
       // Pre-claim frame discipline (load-bearing): the IDENTIFY frame with
       // the bulk channel marker is the FIRST and ONLY frame on this socket
       // until the receiver's claim completes.
@@ -405,7 +456,7 @@ function createBulkTransferChannelRegistry(options = {}) {
         channel: ROUTER_IDENTIFY_CHANNEL.BULK,
         timestamp: Date.now(),
       }));
-      return attach(nodeId, ws);
+      return attach(nodeId, ws, dialLifetime);
     },
     hasConnection(nodeId) {
       return connections.has(nodeId);

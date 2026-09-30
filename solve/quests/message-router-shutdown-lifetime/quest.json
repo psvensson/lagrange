@@ -1,0 +1,42 @@
+{
+  "schema": "solve-quest/2",
+  "id": "message-router-shutdown-lifetime",
+  "class": "fix",
+  "statement": "MessageRouter shutdown retires one transport lifetime: late delivery cannot implicitly restart it; connecting and connected sockets, pending dials and reconnect callbacks retire with that lifetime; stale completions cannot repopulate retired state or affect a later explicitly initialized lifetime. Existing caller cancellation, correlated-response retirement, delivery classification and bounded shutdown remain one transport contract.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/message-router-shutdown-lifetime/evidence/receipt.json",
+      "requiredReceipts": [
+        "late-admission-and-pending-dial-red-witnesses",
+        "lifetime-retirement-temporal-regressions",
+        "existing-transport-and-request-cancellation-contracts",
+        "independent-category-complete-review",
+        "static-and-required-change-proof"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-lifetime-authority",
+      "statement": "Extend MessageRouter and its existing delivery cancellation/connection owners. Do not add a competing retry or request cancellation owner, consumer shutdown workaround, arbitrary sleep, timeout increase or error absorption."
+    },
+    {
+      "id": "explicit-restart-only",
+      "statement": "Preserve explicit initialize after completed shutdown as a new lifetime. Initialization concurrent with shutdown must serialize or refuse; implicit delivery initialization is allowed only before the first shutdown. Captured old lifetime work never acquires new authority."
+    },
+    {
+      "id": "allocation-to-retirement",
+      "statement": "Own connecting sockets from allocation, terminate and settle pending connection work within the existing shutdown grace, reject late direct connect/adoption/delivery, and prevent retired reconnect completion or cleanup from modifying a new lifetime."
+    },
+    {
+      "id": "proof-before-system-run",
+      "statement": "First reproduce the lifecycle defects with deterministic real-owner tests, then prove caller cancellation, retired late responses, queue/reconnect and shutdown interaction. No full release or live statistical run before focused proof and independent verification."
+    },
+    {
+      "id": "fixture-fidelity-separate",
+      "statement": "The release failure test places multiple logical nodes around process-global state. Repair that invalid multi-node fixture in a separately scoped Quest, not by cleanup reordering or weakening its assertion. This Quest changes only the router lifetime, its contract documentation, witnesses and generated metadata."
+    }
+  ],
+  "sealedAt": "59f3427c1557618c65f8dcd36d506826e8ffcbcf"
+}

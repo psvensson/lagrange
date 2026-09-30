@@ -22,11 +22,11 @@
     "storage-raft": 76,
     "test-infrastructure": 122,
     "transactions": 12,
-    "transport-messaging": 89,
+    "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2068,
-  "digest": "fnv1a32-d947c88f",
+  "censusSize": 2069,
+  "digest": "fnv1a32-841642a7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1965,6 +1965,7 @@
     "test/transport/message-router-quarantine-liveness-guard.test.js": "transport-messaging",
     "test/transport/message-router-readiness-inflight-reserve.test.js": "transport-messaging",
     "test/transport/message-router-readiness-reserve.test.js": "transport-messaging",
+    "test/transport/message-router-shutdown-lifetime.test.js": "transport-messaging",
     "test/transport/message-router-transport-cleanup.test.js": "transport-messaging",
     "test/transport/message-router.test.js": "transport-messaging",
     "test/transport/name-first-advertising-publication.test.js": "transport-messaging",

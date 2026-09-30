@@ -25,6 +25,7 @@ class MessageRouterHandlerRegistry {
    * @param {Function} handler - Message handler function.
    */
   register(address, handler, _options = {}) {
+    this.transportLifetime.assertOpen();
     if (typeof handler !== TRANSPORT_TYPEOF.FUNCTION) {
       throw new Error(TRANSPORT_ERROR_MSG.HANDLER_MUST_BE_FUNCTION);
     }

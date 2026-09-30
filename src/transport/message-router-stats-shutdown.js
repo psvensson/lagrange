@@ -119,11 +119,23 @@ class MessageRouterStatsShutdown {
    * Shutdown the message router.
    * @return {Promise<void>}
    */
-  async shutdown() {
+  shutdown() {
+    const lifetime = this.transportLifetime;
+    if (lifetime.shutdownPromise) return lifetime.shutdownPromise;
+    const completion = Promise.withResolvers();
+    lifetime.shutdownPromise = completion.promise;
+    lifetime.retire();
+    this.shutdownTransport(lifetime).then(() => {
+      lifetime.shutdownComplete = true;
+      completion.resolve();
+    }, completion.reject);
+    return completion.promise;
+  }
+
+  async shutdownTransport(lifetime) {
     this.logger.debug(ROUTER_LOG_MSG.SHUTTING_DOWN, {
       routerId: this.routerId,
     });
-    this.isShuttingDown = true;
     // Close the bulk transfer channel lane with the router (S6): adopted and
     // dialed bulk sockets plus the token-bucket drain timer.
     this.bulkChannelRegistry?.closeAll();
@@ -138,10 +150,8 @@ class MessageRouterStatsShutdown {
     }
     this.pendingMessages.clear();
     const shutdownError = new Error(ROUTER_ERROR_MSG.SHUTDOWN);
-    for (const [, pending] of this.pendingResponses) {
-      clearTimeout(pending.timeoutId);
-      this.detachPendingResponseAbortSignal(pending);
-      pending.reject(shutdownError);
+    for (const [messageId] of this.pendingResponses) {
+      this.abortPendingResponse(messageId, shutdownError);
     }
     this.pendingResponses.clear();
     this.retiredPendingResponses.clear();
@@ -157,24 +167,17 @@ class MessageRouterStatsShutdown {
     this.outboundQueues.clear();
     const closePromises = [];
     for (const [, connection] of this.nodeConnections) {
-      if (connection.pingInterval) {
-        clearInterval(connection.pingInterval);
-        connection.pingInterval = null;
-      }
-      if (connection.reconnectTimeout) {
-        clearTimeout(connection.reconnectTimeout);
-        connection.reconnectTimeout = null;
-      }
-      if (connection.ws) {
-        const ws = connection.ws;
-        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-          closePromises.push(new Promise((resolve) => {
-            ws.once(TRANSPORT_EVENT.CLOSE, resolve);
-            ws.terminate();
-          }));
-        }
+      this.retireConnection(connection);
+    }
+    for (const ws of lifetime.sockets) {
+      if (ws.readyState !== WebSocket.CLOSED) {
+        closePromises.push(new Promise((resolve) => {
+          ws.once(TRANSPORT_EVENT.CLOSE, resolve);
+          ws.terminate();
+        }));
       }
     }
+    this.pendingNodeConnections.clear();
     if (closePromises.length > TRANSPORT_NUM.ZERO) {
       let timeoutId;
       await Promise.race([Promise.all(closePromises), new Promise((resolve) => {
@@ -199,11 +202,11 @@ class MessageRouterStatsShutdown {
         }
         await new Promise((resolve) => {
           wsServer.close(() => resolve());
-        });
-        if (httpServer) {
-          if (typeof httpServer.closeAllConnections === TRANSPORT_TYPEOF.FUNCTION) {
+          if (typeof httpServer?.closeAllConnections === TRANSPORT_TYPEOF.FUNCTION) {
             httpServer.closeAllConnections();
           }
+        });
+        if (httpServer) {
           await new Promise((resolve) => {
             httpServer.close(() => resolve());
           });
@@ -215,8 +218,10 @@ class MessageRouterStatsShutdown {
       }
     }
     this.nodeConnections.clear();
+    this.nodeInboundActivityAt.clear();
     this.handlers.clear();
     this.initialized = false;
+    await Promise.allSettled([lifetime.initializationPromise]);
     this.emit(TRANSPORT_EVENT.SHUTDOWN, {
       routerId: this.routerId,
     });

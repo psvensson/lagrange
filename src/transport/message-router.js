@@ -18,6 +18,7 @@ import {defineMessageRouterConnectionCloseReconnect} from './message-router-conn
 import {defineMessageRouterHandlerRegistry} from './message-router-handler-registry.js';
 import {defineMessageRouterDeliveryDelegation} from './message-router-delivery-delegation.js';
 import {defineMessageRouterStatsShutdown} from './message-router-stats-shutdown.js';
+import {MessageRouterLifetime} from './message-router-lifetime.js';
 
 const {
   ConfigurationManager,
@@ -42,6 +43,10 @@ const {
 } = MESSAGE_ROUTER_SHARED;
 
 class MessageRouter extends EventEmitter {
+  get isShuttingDown() {
+    return this.transportLifetime.signal.aborted;
+  }
+
   constructor(options = {}) {
     super();
     const nodeWsPort = options.wsPort || TRANSPORT_DEFAULT.WS_PORT;
@@ -244,9 +249,9 @@ class MessageRouter extends EventEmitter {
     this.unmatchedServiceResponseWarnSuppressedCount = TRANSPORT_NUM.ZERO;
     this.serviceResponseDispositionCounts = /* @__PURE__ */ new Map();
     this.initialized = false;
+    this.transportLifetime = new MessageRouterLifetime();
     this.server = null;
     this.messageCount = TRANSPORT_NUM.ZERO;
-    this.isShuttingDown = false;
     this.inProcessTransport = false;
     this.externalAdmissionEnabled = options.externalAdmissionEnabled !== false;
     this.outboundQueues = /* @__PURE__ */ new Map();
@@ -278,7 +283,7 @@ class MessageRouter extends EventEmitter {
     // Optional bulk transfer channel registry (S3): adopts identified
     // `channel: bulk` sockets and feeds the additive bulkChannel stats
     // section. Attached via attachBulkChannelRegistry or constructor option.
-    this.bulkChannelRegistry = options.bulkChannelRegistry || null;
+    this.attachBulkChannelRegistry(options.bulkChannelRegistry || null);
     this.connectionAuthorityOwner = new RouterConnectionAuthorityOwner(this);
     this.outboundDeliveryRegistryOwner = new OutboundDeliveryRegistryOwner(
       this,

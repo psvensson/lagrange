@@ -1,0 +1,11 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "late-admission-and-pending-dial-red-witnesses", "passed": true},
+    {"id": "lifetime-retirement-temporal-regressions", "passed": true},
+    {"id": "existing-transport-and-request-cancellation-contracts", "passed": false},
+    {"id": "independent-category-complete-review", "passed": false},
+    {"id": "static-and-required-change-proof", "passed": false}
+  ]
+}
