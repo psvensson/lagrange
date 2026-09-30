@@ -35,8 +35,7 @@ import {clearLeaderOrRecordDebt} from
   './replica-state-machine-leader-clear.js';
 import {createReplicaRowInCdc} from
   './replica-state-machine-create-persistence.js';
-import {mintPartitionServiceCreatedAt} from
-  '../partition/partition-service-incarnation.js';
+import {mintServiceRowCreatedAt} from './service-row-incarnation.js';
 
 const STATE_ENTERED_AT_COLUMN = 'state_entered_at';
 const OBSERVED_STATE_CHANGED_OUTCOME = 'observed_state_changed';
@@ -136,7 +135,7 @@ function resolveTransitionTimestamp(stateMachine, existingState, context) {
 function buildTransitionLifecycleIdentity(replicaId, existingState, now) {
   const createdAt = Number.isFinite(existingState?.createdAt) ?
     existingState.createdAt :
-    mintPartitionServiceCreatedAt(now);
+    mintServiceRowCreatedAt(now);
   return {
     replicaIdentity: existingState?.replicaIdentity || replicaId,
     groupId: existingState?.groupId ?? null,
