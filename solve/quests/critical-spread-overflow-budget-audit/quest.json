@@ -1,0 +1,58 @@
+{
+  "schema": "solve-quest/2",
+  "id": "critical-spread-overflow-budget-audit",
+  "class": "process",
+  "epic": "formation-seed-decoupling",
+  "statement": "The learner promotion guard admits some over-target promotions on bootstrap-critical system partitions only because it re-derives a temporary overflow budget of two voters from its own priority-recovery view; the carry stage now lets the cure policy's exact-transition authorization travel with the operation, and enforcement will remove the budget. Before it can, every production path whose success can depend on that budget today must be enumerated and given one of four dispositions - explicit authority required, proved unreachable, proved obsolete, or still unclassified - and frequency of observation is never the proof: an unobserved path stays unclassified. This quest changes nothing in production. It measures the set of partitions the guard treats as bootstrap-critical and the subset the cure policy can mint for; it enumerates the budget-admitted cases by a state grid over the real count check and by a census of every producer of an add-like operation; for each case it records the path, the partition class, the triggering state, the current guard reason, the budget dependency, the semantic owner, a proposed authorization kind, the minting and validation evidence available, a reachable witness or none, and the disposition, with a precisely scoped repair quest wherever an owner would have to start minting; it audits the five mintable partitions for ways to reach the guard without the minting owner, every other admitted partition without widening the mint, and the unhealthy-source REPLACE independently of the spread cure; it inventories the whole membership-publication-epoch domain including the alias observedMembershipEpoch, reproduces reader divergence on real owners, states what makes an authorization stale and the candidate canonical models without choosing one or adding tolerance, and pins the future transition - present, correct authority, matching epoch, honoured - with its falsifiers; it settles as findings the partition-row read's timing, whether operation type is part of authority identity, and what quantity the authorized count bounds; and it proves that only the complete outcome honoured may ever replace the budget. Its output is the decision matrix, the epoch-domain inventory and the nine-point enforcement entry gate with each item's status, from which the enforce quest is later authored.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/critical-spread-overflow-budget-audit/evidence/receipt.json",
+      "requiredReceipts": [
+        "critical-and-mintable-partition-sets-measured",
+        "budget-admitted-cases-enumerated-by-state-grid",
+        "every-add-like-producer-is-in-the-matrix",
+        "mintable-five-have-no-unminted-route-or-it-is-a-row",
+        "every-unmintable-partition-is-audited",
+        "unhealthy-source-replace-traced-and-classified",
+        "epoch-domain-inventory-is-complete-by-census",
+        "epoch-reader-divergence-reproduced-on-real-owners",
+        "future-honoured-transition-and-its-falsifiers-pinned",
+        "only-honoured-can-grant",
+        "carried-forward-details-settled-as-findings",
+        "matrix-and-gate-are-complete-and-in-sync"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "read-only-production",
+      "statement": "No file under src, examples, .github or .githooks changes; no behaviour changes anywhere; the landed carry stage's semantics are not modified."
+    },
+    {
+      "id": "not-from-frequency",
+      "statement": "No disposition, reachability or legitimacy rests on how often something occurred in a formation; formation evidence is its own field and never upgrades a disposition."
+    },
+    {
+      "id": "four-dispositions-only",
+      "statement": "Every row's disposition is one of explicit-authority-required, proved-unreachable, proved-obsolete, still-unclassified; proved-unreachable states its exhaustive domain and the argument for the domain's completeness, proved-obsolete shows the dead or superseded producer, and anything short of that is still-unclassified."
+    },
+    {
+      "id": "owner-of-the-condition",
+      "statement": "A semantic owner is named only where the code shows that module owns the condition; the spread-cure policy is never named for a condition that is not a spread cure; none_identified is an acceptable answer."
+    },
+    {
+      "id": "proposals-not-decisions",
+      "statement": "Authorization kinds, canonical epoch models, the count's name and repair-quest scopes are proposals with consequences for the owner; the quest decides nothing, repairs nothing and starts no other quest."
+    },
+    {
+      "id": "enumeration-is-mechanical",
+      "statement": "The partition sets, the add-like producers, the budget-dependent grid rows and the epoch-domain entries are produced by censuses and grids a test re-runs, so a path, producer, alias or partition added later turns a receipt red instead of being missed."
+    },
+    {
+      "id": "no-guard-reconstruction",
+      "statement": "No proposed validation has the guard reconstruct why an operation is legal, read more than it reads today, or add tolerance between epoch readers."
+    }
+  ],
+  "sealedAt": "902714be831a8dea3963b0e6cc098932e6b5457b"
+}

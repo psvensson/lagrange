@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2455019,
-        "sha256": "60d1cd27609d8040a39e137daa84e2db35fb67a6a9c583ffb53a3ef7b3511695"
+        "bytes": 2464585,
+        "sha256": "e0f97b658048a9502d9d72144754c1c8f5555c2ead6018d2d58107a778bccf96"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "eb18268ef0757459302e41ea40e45e390d40a29745ac937e4dd9a13f8580aac2"
+        "sha256": "099d9de7a1f470f3730bc56e5776a34acb2041eeb8182fe77962fcd770b7d0ad"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "a2e2323e88f36418d8070a5c8461bc831cc9424ad820a588e8f48a24cffd32c2"
+        "sha256": "af5ab788a3db92cbdbc6720c3138d642057891860862d48ecad2f0c33013c664"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "8e8a613e2446f63adef26097cdec2de4d1964c57f533632d8b73072c28a72a52"
+    "inputDigest": "de4dc225be2d9c4cde58a5ac55dc7f3797af8f25e27bf2c756af00c1b9301f33"
   },
   "reconciliation": {
     "complexity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "eb18268ef0757459302e41ea40e45e390d40a29745ac937e4dd9a13f8580aac2"
+          "sha256": "099d9de7a1f470f3730bc56e5776a34acb2041eeb8182fe77962fcd770b7d0ad"
         },
         "cloneGroups": 57,
         "duplicatedLines": 1845,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "a2e2323e88f36418d8070a5c8461bc831cc9424ad820a588e8f48a24cffd32c2"
+          "sha256": "af5ab788a3db92cbdbc6720c3138d642057891860862d48ecad2f0c33013c664"
         },
         "cloneGroups": 793,
         "duplicatedLines": 30519,
@@ -166,17 +166,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2455019,
-        "sha256": "60d1cd27609d8040a39e137daa84e2db35fb67a6a9c583ffb53a3ef7b3511695"
+        "bytes": 2464585,
+        "sha256": "e0f97b658048a9502d9d72144754c1c8f5555c2ead6018d2d58107a778bccf96"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "3e8c5d4f4b6da723d7365206bc5d2d78a55eb7672e8cd9c9e03f0d5c55cedaa1",
-      "moduleCount": 4836,
-      "edgeCount": 22354,
+      "sourceDigest": "e83bb4bd084d3f3c34fd8fd1cca72ac1e68fd1dada9853e7752c452bc071b7dd",
+      "moduleCount": 4851,
+      "edgeCount": 22457,
       "unresolvedCount": 34
     }
   },
@@ -246,7 +246,7 @@
       "cloneTouches": 319,
       "cycleGroups": 0,
       "lintExclusions": 15,
-      "importIn": 181,
+      "importIn": 182,
       "importOut": 685,
       "score": 1616,
       "topPaths": [
@@ -274,7 +274,7 @@
       "cloneTouches": 6,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 660,
+      "importIn": 661,
       "importOut": 417,
       "score": 1188.3,
       "topPaths": [
@@ -330,7 +330,7 @@
       "cloneTouches": 5,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 278,
+      "importIn": 280,
       "importOut": 265,
       "score": 670.2,
       "topPaths": [
@@ -358,7 +358,7 @@
       "cloneTouches": 137,
       "cycleGroups": 0,
       "lintExclusions": 5,
-      "importIn": 74,
+      "importIn": 75,
       "importOut": 287,
       "score": 664.3,
       "topPaths": [
@@ -1282,7 +1282,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 17,
+      "importIn": 18,
       "importOut": 49,
       "score": 64,
       "topPaths": [
@@ -1309,7 +1309,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 583,
+      "importIn": 591,
       "importOut": 43,
       "score": 56,
       "topPaths": [
@@ -3488,13 +3488,13 @@
           "src/control-plane/membership-publication-coordinator-reads.js",
           "src/control-plane/membership-publication-coordinator-reconcile.js",
           "test/control-plane/cl-033-epoch-probe-node-scope.test.js",
+          "test/control-plane/membership-epoch-reader-divergence.test.js",
           "test/control-plane/membership-publication-deferred-catchup.test.js",
           "test/control-plane/membership-publication-epoch-status-probe.test.js",
           "test/control-plane/membership-publication-leader-driven-gate.test.js",
           "test/control-plane/membership-swim-coordinator-divergence.test.js",
           "test/control-plane/owner-membership-driver.test.js",
-          "test/control-plane/publications-catchup-leader-pinned-read.test.js",
-          "test/control-plane/readiness-planning-publication-version-key.test.js"
+          "test/control-plane/publications-catchup-leader-pinned-read.test.js"
         ],
         "ownerAreas": [
           "scripts/run-owner-complexity-membership-publication-owner-membership-publication-coordination-scenarios.js",
