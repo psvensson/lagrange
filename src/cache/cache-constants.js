@@ -61,6 +61,20 @@ const CACHE_DEFAULT = Object.freeze({
   CACHE_ID_LENGTH: 9,
 });
 
+// Typed outcome of one applySystemTableChange call, reported to cache-change
+// listeners as metadata.applyOutcome. UPDATE_ON_MISSING_KEY is the joiner-side
+// witness that a CDC-propagated row's INSERT fan-out never reached this node
+// (the UPDATE is applied as an INSERT so the row is not lost, but its payload
+// may be partial): the CDC integration service observes it and schedules an
+// authoritative re-hydration of the table. Cache observes; owners decide.
+const SYSTEM_TABLE_CACHE_APPLY_OUTCOME = Object.freeze({
+  APPLIED: 'applied',
+  UPDATE_ON_MISSING_KEY: 'update_on_missing_key',
+  STALE_IGNORED: 'stale_ignored',
+  FENCED_BY_TOMBSTONE: 'fenced_by_tombstone',
+  DELETE_ON_MISSING_KEY: 'delete_on_missing_key',
+});
+
 const SYSTEM_TABLE_CACHE_MUTATION_MODE = Object.freeze({
   CDC_MERGE: 'cdc_merge',
   AUTHORITATIVE_RECONCILIATION: 'authoritative_reconciliation',
@@ -212,6 +226,7 @@ export {
   CACHE_SYSTEM_TABLES,
   CDC_NON_PROPAGATED_TABLES,
   CDC_PROPAGATED_TABLES,
+  SYSTEM_TABLE_CACHE_APPLY_OUTCOME,
   SYSTEM_TABLE_CACHE_LOCAL_FIELD_NAMES,
   SYSTEM_TABLE_CACHE_MUTATION_MODE,
   SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES,
