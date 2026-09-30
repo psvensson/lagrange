@@ -79,8 +79,11 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
   constructor(options) {
     super(options);
     // A new owner instance begins its REPLACE-owner session: an operation
-    // whose step began earlier may have lost its attempt state (BR10).
-    startReplaceOwnerSession(this, REPLACE_OWNER_RESTART_CLASS.PROCESS_RESTART);
+    // whose step began earlier may have lost its attempt state (BR10). The
+    // stamp reads the injected clock (this runs before the owner field is
+    // assigned), never ambient time under an owner that carries a clock.
+    startReplaceOwnerSession(this, REPLACE_OWNER_RESTART_CLASS.PROCESS_RESTART,
+      options?.timeSource || null);
   }
 
   handleObservedReplicaStateChange(tableName, cacheOperation, record) {

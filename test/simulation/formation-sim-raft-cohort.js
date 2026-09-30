@@ -93,10 +93,14 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, raftOptions,
   // Constructing a Raft runs protocol work immediately: LifeRaft's
   // constructor calls heartbeat, which is an attributed raft_protocol
   // segment. In production that construction happens in the node's own
-  // process, so the scheduler binds the node around it here too.
+  // process, so the scheduler binds the node around it here too. The node
+  // identity is also threaded into the raft itself: the attribution timing
+  // seam binds protocol turns to their own execution node rather than
+  // inheriting whichever ambient scheduling context continues them.
   function construct(nodeId) {
     runOnExecutionNode(nodeId, () => {
       rafts.set(nodeId, new LifeRaft(nodeId, {
+        nodeId,
         timeSource: chargingTimeSource(nodeId),
         ...raftOptions(nodeId),
       }));

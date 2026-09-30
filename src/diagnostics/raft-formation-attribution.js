@@ -12,8 +12,9 @@ import {
  * buckets. With no active attribution window, runFormationOwner invokes the
  * callback directly and preserves the participant's behavior.
  */
-function runRaftProtocolActivity(callback) {
-  return runFormationOwner(FORMATION_OWNER.RAFT_PROTOCOL, callback);
+function runRaftProtocolActivity(callback, executionNodeId) {
+  return runFormationOwner(FORMATION_OWNER.RAFT_PROTOCOL, callback,
+    executionNodeId);
 }
 
 function runRaftApplySlice(callback) {

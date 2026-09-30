@@ -25,6 +25,14 @@ import {
 class LifeRaft extends BaseLifeRaft {
   constructor(address, options = {}) {
     super(address, options);
+    // The owning replica's node identity, threaded for the formation
+    // attribution seam: protocol turns bind to their own execution node
+    // instead of inheriting whichever ambient scheduling context continues.
+    this._formationAttributionNodeId =
+      typeof options.nodeId === 'string' &&
+      options.nodeId.length > 0 ?
+        options.nodeId :
+        null;
     // Async protocol work this node has already started.
     this.protocolTasks = new RaftProtocolTaskTracker();
     // With an injected time source the base initialization was DEFERRED by

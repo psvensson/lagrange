@@ -53,9 +53,16 @@ function isExactReplicaHandlerRegistered(messageRouter, address, handler) {
 function isReplicaServiceHandlerBound(service, lifecycleOwner) {
   const retirementLane = service?.resolveHandlerRetirementLane?.() ||
     service?.replicaStateMachine || null;
-  return Boolean(lifecycleOwner) && retirementLane === lifecycleOwner &&
-    isExactReplicaHandlerRegistered(service.transport,
-      service.unifiedAddress, service.transportHandler);
+  const reg = isExactReplicaHandlerRegistered(service.transport,
+    service.unifiedAddress, service.transportHandler);
+  console.error('SF2BIND', JSON.stringify({
+    hasService: !!service, laneMatch: retirementLane === lifecycleOwner,
+    addr: service?.unifiedAddress || null,
+    hasTransport: !!service?.transport,
+    hasHandler: !!service?.transportHandler,
+    reg,
+  }));
+  return Boolean(lifecycleOwner) && retirementLane === lifecycleOwner && reg;
 }
 
 /**

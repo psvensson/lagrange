@@ -54,7 +54,10 @@ function heartbeatWithEndGuard(raft, duration, baseHeartbeat) {
   if (!raft.timers) {
     return raft;
   }
-  return runRaftProtocolActivity(() => baseHeartbeat(duration));
+  return runRaftProtocolActivity(
+    () => baseHeartbeat(duration),
+    raft._formationAttributionNodeId ?? undefined,
+  );
 }
 
 function indefinitelyWithProtocolAttribution(baseIndefinitely) {

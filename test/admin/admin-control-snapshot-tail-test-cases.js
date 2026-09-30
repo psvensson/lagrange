@@ -117,8 +117,8 @@ export function registerAdminControlSnapshotTailTests({
 
       t.same(
         result.nodes,
-        ['node-1', 'node-2', 'node-3'],
-        'default snapshots should use the locally observed open membership without authoritative recovery',
+        ['node-1'],
+        'default snapshots serve only the acknowledged subset of the locally observed pending publication without authoritative recovery: a candidate is pending, not published, until its acknowledgements publish it (cutover seed parity rounds 2-9)',
       );
       t.same(
         publishedReadOptions,
@@ -139,25 +139,25 @@ export function registerAdminControlSnapshotTailTests({
       t.same(
         result.controlPlaneDiagnostics.activeNodeViews,
         {
-          authoritativeSource: 'published_membership',
-          authoritativeActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+          authoritativeSource: 'unpublished',
+          authoritativeActiveNodeIds: [],
           projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
           locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
           suspectedOrTransitioningNodeIds: [],
           membershipFreeze: {
             active: false,
             reasonCode: null,
-            retainedPublishedNodeIds: ['node-1', 'node-2', 'node-3'],
+            retainedPublishedNodeIds: [],
             missingProjectedNodeIds: [],
             unconfirmedProjectedNodeIds: [],
           },
-          effectiveSource: 'published_membership',
-          effectiveActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+          effectiveSource: 'projected',
+          effectiveActiveNodeIds: ['node-1'],
           projectedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-          publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-          publishedMembershipAvailable: true,
+          publishedActiveNodeIds: [],
+          publishedMembershipAvailable: false,
         },
-        'default snapshots should advertise only local membership availability after recovery stays local',
+        'default snapshots keep published authority empty while the pending publication is unpublished, and serve its acknowledged subset as effective coverage',
       );
     });
 
