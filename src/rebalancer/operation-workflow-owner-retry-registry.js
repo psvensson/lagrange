@@ -1,6 +1,11 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {OperationWorkflowTransitionRetryGrace} from './operation-workflow-transition-retry-grace.js';
 import {
+  classifyOperationLedgerSelfMoveParkEvidence,
+  clearOperationLedgerSelfMoveParkEvidence,
+  hasFreshOperationLedgerSelfMoveParkEvidence,
+} from './operation-workflow-ledger-self-move-park-evidence.js';
+import {
   OperationWorkflowCoordinatorCreatedHandoffRetryRegistry,
 } from './operation-workflow-coordinator-created-handoff-retry-registry.js';
 import {
@@ -129,6 +134,11 @@ class OperationWorkflowOwnerRetryRegistry extends
     // with backoff until authoritatively visible (run-21 ghost-row class).
     this.terminalTransitionRepairTimerByOperationId = new Map();
     this.terminalTransitionRepairStateByOperationId = new Map();
+    // Park evidence of PENDING ledger self-moves parked by this owner's
+    // dispatch gate (operation-workflow-ledger-self-move-park-evidence.js):
+    // refreshed on every park, cleared on claim / proven terminal, read by
+    // this owner's priority-recovery drain as progress.
+    this.operationLedgerSelfMoveParkEvidenceByOperationId = new Map();
     // Ownership fence epoch (audit finding 14): bumped at the START of
     // shutdown so every lane continuation that wakes after the flag observes
     // a stale generation and stands down; lane runners capture the epoch
@@ -229,6 +239,7 @@ class OperationWorkflowOwnerRetryRegistry extends
       this.clearTimeoutFn(timerHandle);
     }
     this.transitionRetryTimerByOperationId.clear();
+    this.operationLedgerSelfMoveParkEvidenceByOperationId.clear();
     this.transitionRetryGrace.clearAll();
     this.transitionRetryOperationSnapshotByOperationId.clear();
     for (const timerHandle of this.executorOutcomeRetryTimerByOperationId.values()) {
@@ -256,6 +267,32 @@ class OperationWorkflowOwnerRetryRegistry extends
     }
     this.clearTimeoutFn(timerHandle);
     this.safetyDeferredRetryTimerByOperationId.delete(operationId);
+  }
+
+  /**
+   * The owner's park evidence of a PENDING ledger self-move, classified
+   * against this owner's clock (the drain's progress-versus-staleness read).
+   * @param {Object} operation
+   * @return {{state: string, ageMs: number, boundMs: number,
+   *   evidence: Object|null}}
+   */
+  classifyOperationLedgerSelfMoveParkEvidence(operation) {
+    return classifyOperationLedgerSelfMoveParkEvidence(this, operation);
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {boolean}
+   */
+  hasFreshOperationLedgerSelfMoveParkEvidence(operation) {
+    return hasFreshOperationLedgerSelfMoveParkEvidence(this, operation);
+  }
+
+  /**
+   * @param {string|null} operationId
+   */
+  clearOperationLedgerSelfMoveParkEvidence(operationId) {
+    clearOperationLedgerSelfMoveParkEvidence(this, operationId);
   }
 
   /**

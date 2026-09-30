@@ -1,0 +1,80 @@
+{
+  "id": "priority-recovery-drain-parked-self-move-progress",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The priority-recovery drain owned by the operation_workflow_owner does not stale-fail a locally-owned ledger self-move that is parked at the IDLE_ONLY census behind live incumbents: a PENDING self-move whose dispatch lane holds fresh waiting_for_incumbent or waiting_for_idle_ledger park evidence is progress, not staleness, so the drain settles it as recovering (an available local owner is woken, not killed — the same rule already applied to remote owners) and the self-move claims SENDING on the incumbent's terminal without a stale FAIL, re-plan, or successor. PENDING_TIMEOUT_MS and the stale rules for self-moves without park evidence, exclusion once engaged, IDLE_ONLY, terminal-only release, budgets and cadences, the 60-second certification window and the single cluster-ACTIVE authority are unchanged. Proven by the hold-fairness real-owner witness with a 35-second incumbent: red on HEAD (fail_priority_recovery_drain_stale on the parked local_owner self-move at age 30 s, then re-plan and a successor 15 s later), green after (no stale FAIL while park evidence is fresh; SENDING on the incumbent's terminal; a parked self-move with no park evidence for a full PENDING_TIMEOUT_MS still stale-fails). Root cause from GCP runs 2026-08-30T04-49-12 and 07-06-30 (REPLACE b0b98821 parked behind cpp learner ADDs, drain-failed stale at age 33.6/39.8 s while local_owner, costing 15 s of re-plan).",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "architecture/contracts/rolling-restart-rebalancer-handoff.md",
+    "closesCL": [],
+    "parentQuest": "operation-ledger-self-move-holder-release-on-engagement-v2",
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "dae475a3b375c6d017b99ba54b774f756bc63760"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/priority-recovery-drain-parked-self-move-progress.receipt.json",
+      "requiredReceipts": [
+        "parked-local-self-move-with-fresh-park-evidence-is-recovering",
+        "no-stale-fail-while-park-evidence-fresh",
+        "self-move-claims-on-incumbent-terminal-without-successor",
+        "parked-self-move-without-park-evidence-still-stale-fails",
+        "remote-owner-drain-rule-unchanged",
+        "idle-only-exclusion-and-terminal-release-preserved",
+        "budgets-and-cadence-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "priority-recovery-drain-parked-self-move-progress-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/priority-recovery-drain-parked-self-move-progress.receipt.json",
+          "requiredReceipts": [
+            "parked-local-self-move-with-fresh-park-evidence-is-recovering",
+            "no-stale-fail-while-park-evidence-fresh",
+            "self-move-claims-on-incumbent-terminal-without-successor",
+            "parked-self-move-without-park-evidence-still-stale-fails",
+            "remote-owner-drain-rule-unchanged",
+            "idle-only-exclusion-and-terminal-release-preserved",
+            "budgets-and-cadence-unchanged",
+            "witness-deterministic"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-operation-workflow-owner",
+      "statement": "The operation_workflow_owner (priority-recovery drain in operation-workflow-recovery-timeout.js / recovery-drain.js / reconcile-shared.js together with the dispatch gate park evidence) stays the sole owner of staleness and progress classification; planners, the harness and the readiness owner never re-derive it."
+    },
+    {
+      "id": "stale-rules-unchanged-without-progress-evidence",
+      "statement": "PENDING_TIMEOUT_MS and the stale-fail rules are unchanged for self-moves and other operations without fresh park/progress evidence; park evidence must be typed, time-bounded (fresh relative to the same clock the drain uses) and produced only by the dispatch gate of the owning node."
+    },
+    {
+      "id": "unchanged-budgets-and-cadence",
+      "statement": "IDLE_ONLY, exclusion once engaged, terminal-only release, DISPATCH_RETRY_DELAY_MS, the 60-second GCP certification window and the failed-repair backoff are unchanged. No sleeps or timeout widening."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Prove through the hold-fairness real-owner witness fixture (virtual clock, run-cited latencies) red on HEAD and green after, before any GCP run."
+    },
+    {
+      "id": "no-second-active-authority",
+      "statement": "Do not make the harness, analyzer, or readiness owner derive cluster-ACTIVE or READY from nodes.status, publication counts, or coverage."
+    }
+  ]
+}

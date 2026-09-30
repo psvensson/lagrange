@@ -265,6 +265,12 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_STATE = Object.freeze({
   IN_FLIGHT: 'in_flight',
   OWNER_UNAVAILABLE_RELEASED: 'owner_unavailable_released',
   STALE_WITHOUT_RETIREMENT_EVIDENCE: 'stale_without_retirement_evidence',
+  // A locally-owned PENDING ledger self-move whose step age is stale but whose
+  // owner's dispatch lane holds fresh park evidence (parked behind live
+  // incumbents on the dispatch-retry cadence): progress, not staleness — the
+  // available local owner is left to claim on the incumbents' terminal, the
+  // same "wake, not kill" outcome the remote-owner rule produces.
+  RECOVERING_DISPATCH_PARKED: 'recovering_dispatch_parked',
   SUPERSEDED_TARGET: 'superseded_target',
 });
 
@@ -342,6 +348,10 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE = Object.freeze(
     ],
     [
       PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.IN_FLIGHT,
+      OPERATION_LIFECYCLE_ACTION.NOOP,
+    ],
+    [
+      PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.RECOVERING_DISPATCH_PARKED,
       OPERATION_LIFECYCLE_ACTION.NOOP,
     ],
   ]),
@@ -570,8 +580,15 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_STATE_BY_SOURCE_STATE = Object.freeze(
   ]),
 );
 
+// LOCAL_LANE_PARKED: the local owner's dispatch lane holds fresh park
+// evidence for this PENDING ledger self-move (drain state
+// RECOVERING_DISPATCH_PARKED): the lane is the wake — it re-drives itself on
+// DISPATCH_RETRY_DELAY_MS and claims on the incumbents' terminal through the
+// dispatch gate — so the drain sweep leaves the operation to it (no lifecycle
+// entry), exactly as it leaves a woken remote owner to its own lane.
 const PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE = Object.freeze({
   LOCAL_OWNER: 'local_owner',
+  LOCAL_LANE_PARKED: 'local_lane_parked',
   REMOTE_REARM_REQUIRED: 'remote_rearm_required',
   REMOTE_SETTLE_ALLOWED: 'remote_settle_allowed',
   REMOTE_OWNER_REQUIRED: 'remote_owner_required',
@@ -579,6 +596,7 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE = Object.freeze({
 
 const PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION = Object.freeze({
   ALLOW_RECONCILE: 'allow_reconcile',
+  SKIP_LOCAL_PARKED_LANE: 'skip_local_parked_lane',
   SKIP_REMOTE_OWNER: 'skip_remote_owner',
   WAKE_REMOTE_OWNER: 'wake_remote_owner',
 });
@@ -588,6 +606,10 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION_BY_STATE = Object.freeze(
     [
       PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_OWNER,
       PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION.ALLOW_RECONCILE,
+    ],
+    [
+      PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_LANE_PARKED,
+      PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION.SKIP_LOCAL_PARKED_LANE,
     ],
     [
       PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_REARM_REQUIRED,
