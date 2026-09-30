@@ -61,13 +61,19 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, raftOptions,
   }
 
   function link(from, to) {
-    rafts.get(from).join(to, (packet, written) => {
-      const reqId = (requestSequence += ONE);
-      if (typeof written === 'function') pendingReplies.set(reqId, written);
-      network.send({
-        from, to, type: MESSAGE_REQUEST,
-        payload: {groupId, packet, reqId},
-        delayMs: linkDelayMs,
+    // Membership work belongs to the source Raft runtime. join() can run
+    // protocol work synchronously and create promise continuations, so bind
+    // the source node at the scheduler boundary rather than relying on the
+    // ambient caller of admit().
+    runOnExecutionNode(from, () => {
+      rafts.get(from).join(to, (packet, written) => {
+        const reqId = (requestSequence += ONE);
+        if (typeof written === 'function') pendingReplies.set(reqId, written);
+        network.send({
+          from, to, type: MESSAGE_REQUEST,
+          payload: {groupId, packet, reqId},
+          delayMs: linkDelayMs,
+        });
       });
     });
   }
@@ -133,7 +139,9 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, raftOptions,
   }
 
   construct(seedId);
-  rafts.get(seedId).promote();
+  // Promotion is protocol execution by the seed runtime, not harness work.
+  // It may heartbeat synchronously and seed tracked promise continuations.
+  runOnExecutionNode(seedId, () => rafts.get(seedId).promote());
   // Every Raft this cohort created is ended through LifeRaft's own lifecycle
   // before the scenario seals. Without it the promotion chain each instance
   // starts at construction survives the scenario and resumes inside the next
