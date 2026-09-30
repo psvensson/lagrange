@@ -29,9 +29,17 @@ import {
 import {
   NodeJoiningReadySignalReadiness,
 } from '../../src/bootstrap/node-joining-ready-signal-readiness.js';
+import {buildClusterIncarnationFence} from '../../src/bootstrap/cluster-incarnation-fence.js';
 import fs from 'node:fs';
 
 const NOW = 10_000;
+// The real startup-branch fences (src/lagrange-runtime-startup.js): the seed
+// boots over a fresh data directory; a joiner persists rejoin hints first.
+const SEED_FENCE = buildClusterIncarnationFence({durableStateDetected: false});
+const JOINER_FENCE = buildClusterIncarnationFence({
+  durableStateDetected: true, localIdentityMatched: true,
+  peerProofRequired: true, peerAddresses: ['seed-host:9000'],
+});
 
 test('joiner control-plane construction binds formation authority to the ' +
   'seed identity', (t) => {
@@ -56,6 +64,7 @@ function buildAuthority({
   reasonCodes = ready ? [] : ['priority_partitions_not_spread'],
   publicationEpoch = 41,
   canonicalNodeIds = ['joiner-a', 'joiner-b', 'seed'],
+  clusterIncarnationFence = SEED_FENCE,
 } = {}) {
   return Object.freeze({
     state,
@@ -70,13 +79,7 @@ function buildAuthority({
       state: 'admitted',
       admitted: true,
       reasonCodes: Object.freeze([]),
-      clusterIncarnationFence: Object.freeze({
-        allowed: true,
-        state: 'matched',
-        localIdentityState: 'matched',
-        durableMembershipState: 'present',
-        peerProofState: 'confirmed',
-      }),
+      clusterIncarnationFence,
     }),
   });
 }
@@ -154,7 +157,9 @@ function observeFormation(
     contract;
 }
 
-function buildMessageRouter(getRows, localNodeId = 'seed') {
+// `boundNodeIds` limits which peers hold a bound primary connection (a joiner
+// after only the acceptor IDENTIFY reply binds the seed alone).
+function buildMessageRouter(getRows, localNodeId = 'seed', boundNodeIds = null) {
   return {
     nodeId: localNodeId,
     bootIncarnation: 1,
@@ -166,6 +171,7 @@ function buildMessageRouter(getRows, localNodeId = 'seed') {
       };
     },
     getCurrentPrimaryConnectionBootIncarnation(nodeId) {
+      if (boundNodeIds && !boundNodeIds.includes(nodeId)) return null;
       return buildConnectionEvidence(getRows())
         .find((evidence) => evidence.nodeId === nodeId) || null;
     },
@@ -194,6 +200,21 @@ function buildPlacementOptions(node, handoffActive) {
     priorityRecoveryLane: true,
     priorityRecoveryActive: false,
     formationReleaseHandoffActive: handoffActive,
+  };
+}
+
+function buildNodesCache(rows) {
+  return {
+    getAll(tableName) {
+      return tableName === 'nodes' ? rows : [];
+    },
+    get() {
+      return null;
+    },
+    filter(tableName, predicate) {
+      return this.getAll(tableName).filter(predicate);
+    },
+    onCacheChange() {},
   };
 }
 
@@ -346,18 +367,7 @@ async (t) => {
   const rows = buildFormationRows();
   let currentAuthority = buildAuthority();
   const requestedNodeIds = [];
-  const cache = {
-    getAll(tableName) {
-      return tableName === 'nodes' ? rows : [];
-    },
-    get() {
-      return null;
-    },
-    filter(tableName, predicate) {
-      return this.getAll(tableName).filter(predicate);
-    },
-    onCacheChange() {},
-  };
+  const cache = buildNodesCache(rows);
   const service = new ControlPlaneReadinessService({
     nodeId: 'seed',
     formationReleaseAuthorityNodeId: 'seed',
@@ -455,18 +465,7 @@ test('the seed rebalancer read is the authoritative handoff observation ' +
   'path and retains the cure after spread reopens', async (t) => {
   const rows = buildFormationRows();
   let currentAuthority = buildAuthority();
-  const cache = {
-    getAll(tableName) {
-      return tableName === 'nodes' ? rows : [];
-    },
-    get() {
-      return null;
-    },
-    filter(tableName, predicate) {
-      return this.getAll(tableName).filter(predicate);
-    },
-    onCacheChange() {},
-  };
+  const cache = buildNodesCache(rows);
   const service = new ControlPlaneReadinessService({
     nodeId: 'seed',
     systemTableCache: cache,
@@ -521,8 +520,13 @@ test('the seed rebalancer read is the authoritative handoff observation ' +
 
 test('formation barrier consumes the seed-owned durable contract on a distinct ' +
   'joiner process after spread reopens', async (t) => {
+  // GCP run 2026-08-30T02-15-53.462Z: the joiner is a distinct process whose
+  // admission carries the join-branch fence (not the seed's) and whose router
+  // binds only the seed after the acceptor IDENTIFY reply.
   const rows = buildFormationRows();
-  const localPending = buildAuthority({ready: false, satisfied: false});
+  const localPending = buildAuthority({
+    ready: false, satisfied: false, clusterIncarnationFence: JOINER_FENCE,
+  });
   const ownerReady = buildAuthority();
   let durablePublicationRow = null;
   const storageOwner = {
@@ -534,18 +538,7 @@ test('formation barrier consumes the seed-owned durable contract on a distinct '
       return durablePublicationRow;
     },
   };
-  const cache = {
-    getAll(tableName) {
-      return tableName === 'nodes' ? rows : [];
-    },
-    get() {
-      return null;
-    },
-    filter(tableName, predicate) {
-      return this.getAll(tableName).filter(predicate);
-    },
-    onCacheChange() {},
-  };
+  const cache = buildNodesCache(rows);
   const seedService = new ControlPlaneReadinessService({
     nodeId: 'seed',
     formationReleaseAuthorityNodeId: 'seed',
@@ -578,7 +571,7 @@ test('formation barrier consumes the seed-owned durable contract on a distinct '
     nodeId: 'joiner-a',
     formationReleaseAuthorityNodeId: 'seed',
     systemTableCache: cache,
-    messageRouter: buildMessageRouter(() => rows, 'joiner-a'),
+    messageRouter: buildMessageRouter(() => rows, 'joiner-a', ['seed']),
     membershipPublicationService: {
       controlPlanePublicationsOwner: storageOwner,
     },
@@ -593,10 +586,15 @@ test('formation barrier consumes the seed-owned durable contract on a distinct '
   service.buildStartupAuthoritySnapshotFromPlanningAnswer = (answer) =>
     answer.authority;
 
-  t.equal(
-    service.getStartupAuthoritySnapshotSync('seed', NOW).ready,
-    false,
-    'fixture proves the local projection is still stale-negative',
+  t.same(
+    [
+      service.getStartupAuthoritySnapshotSync('seed', NOW).ready,
+      buildAuthorityEvidence(localPending).value.fenceIdentity ===
+        seedCapture.formationReleaseHandoff.fenceIdentity,
+    ],
+    [false, false],
+    'fixture: the local projection is stale-negative and the joiner ' +
+      'admission fence is provably not the seed-published fence',
   );
   const joiningOwner = Object.create(
     NodeJoiningReadySignalReadiness.prototype,

@@ -1,6 +1,7 @@
 import {STARTUP_AUTHORITY_STATE} from './startup-authority-snapshot-owner.js';
 import {NODE_STATE, STATE} from '../constants/index.js';
 import {
+  CONTRACT_VALIDATION_ROLE,
   FORMATION_RELEASE_HANDOFF_REASON,
   FORMATION_RELEASE_HANDOFF_STATE,
   attachFormationReleaseHandoffToStartupAuthority,
@@ -141,12 +142,15 @@ class FormationReleaseHandoffClosureOwner {
     if (!normalized || normalized.authorityNodeId !== authorityNodeId) {
       return this.lastContract;
     }
+    // The restoring seed IS the authority: its own admission fence and its
+    // own adopted primary connections are the authority evidence.
     const current = validatePublishedContractAgainstCurrent(
       normalized,
       startupAuthority,
       nodeRows,
       observedAt,
       connectionEvidence,
+      CONTRACT_VALIDATION_ROLE.AUTHORITY,
     );
     if (!current) {
       return this.lastContract;

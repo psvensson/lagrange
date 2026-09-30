@@ -228,6 +228,13 @@ const formationReleaseMethods = {
         connectionEvidence,
       );
     }
+    // A non-authority node consumes the seed-published contract: the
+    // consumer validation validates the authority-published fence identity
+    // and the authority's current boot incarnation (bound on this node's
+    // primary connection to the authority) plus its own process identity —
+    // never this node's own admission fence or its view of other members'
+    // connections (decision-table formation-release-handoff-closure:
+    // joiner-consumes-durable-generation).
     const authorityBootIncarnation =
       this.getFormationReleaseAuthorityBootIncarnation(authorityNodeId);
     const cachedHandoff = this.readFormationReleaseHandoffFromCache(

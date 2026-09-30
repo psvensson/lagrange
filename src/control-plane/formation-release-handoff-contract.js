@@ -8,6 +8,7 @@ import {
   buildConnectionEvidenceById,
   buildNodeEvidenceById,
   isAuthorityReadyRetainable,
+  isPublishedFenceIdentity,
   listCoversCohort,
   listIsSubset,
   listsAreDisjoint,
@@ -46,6 +47,23 @@ const RETAINABLE_RECOVERY_REASONS = objectFreeze(
 const AUTHORIZATION_INTENT_OUTCOME = objectFreeze({
   AUTHORIZED: 'authorized',
   REJECTED: 'rejected',
+});
+// Explicit typed-role vocabulary (system-guidelines §4.5): who validates a
+// published contract against current evidence decides which fence witness is
+// authoritative. The AUTHORITY (seed) compares the generation fence with its
+// own admission fence — that fence IS the authority fence — and vouches for
+// every captured member through its own adopted primary connections. A
+// CONSUMER (joiner) boots on a different startup branch, so its own admission
+// fence is provably not the authority fence, and after the acceptor IDENTIFY
+// reply it holds a bound connection only to the authority and to itself; it
+// therefore validates the fence the authority PUBLISHED in the durable
+// contract, the authority's current boot incarnation, the durable node rows,
+// and its own process identity (decision-table
+// formation-release-handoff-closure: joiner-consumes-durable-generation), and
+// never re-derives release authority from its own admission states.
+const CONTRACT_VALIDATION_ROLE = objectFreeze({
+  AUTHORITY: 'authority',
+  CONSUMER: 'consumer',
 });
 function readOwnData(target, field) {
   if (!target || typeof target !== 'object' || !objectHasOwn(target, field)) {
@@ -274,6 +292,7 @@ function validatePublishedContractAgainstCurrent(
   nodeRows,
   observedAt,
   connectionEvidence,
+  validationRole = CONTRACT_VALIDATION_ROLE.AUTHORITY,
 ) {
   const authorityResult = buildAuthorityEvidence(startupAuthority);
   const rowsById = buildNodeEvidenceById(nodeRows);
@@ -291,7 +310,9 @@ function validatePublishedContractAgainstCurrent(
   };
   if (!rowsById || !connectionsById) return null;
   if (!numberIsFinite(observedAt)) return null;
-  if (!isRetainableAuthority(authority, generation)) return null;
+  if (!isRetainableAuthority(authority, generation, validationRole)) {
+    return null;
+  }
   const authorityConnection = mapPrototypeGet(
     connectionsById,
     normalizedContract.authorityNodeId,
@@ -307,13 +328,43 @@ function validatePublishedContractAgainstCurrent(
     const member = normalizedContract.requiredCohort[index];
     const node = mapPrototypeGet(rowsById, member.nodeId);
     const connection = mapPrototypeGet(connectionsById, member.nodeId);
-    if (!publishedMemberMatchesCurrent(member, node, connection)) return null;
+    if (
+      !publishedMemberMatchesCurrent(member, node, connection, validationRole)
+    ) {
+      return null;
+    }
   }
   return {authority, rowsById, connectionsById};
 }
-function publishedMemberMatchesCurrent(member, node, connection) {
-  if (!node || !connection) return false;
-  if (connection.bootIncarnation !== member.bootIncarnation) return false;
+// The authority vouches for every captured member through its own adopted
+// primary connection. A consumer holds a bound connection only to the
+// authority and to itself (its local boot-incarnation identity); the other
+// members' current connections are the authority's evidence, not the
+// consumer's, so an ABSENT consumer connection is not a mismatch — a PRESENT
+// connection bound to another incarnation still is (a restarted peer, or the
+// consumer's own restarted process).
+function publishedMemberConnectionMatchesCurrent(
+  member,
+  connection,
+  validationRole,
+) {
+  if (!connection) {
+    return validationRole === CONTRACT_VALIDATION_ROLE.CONSUMER;
+  }
+  return connection.bootIncarnation === member.bootIncarnation;
+}
+function publishedMemberMatchesCurrent(
+  member,
+  node,
+  connection,
+  validationRole,
+) {
+  if (!node) return false;
+  if (
+    !publishedMemberConnectionMatchesCurrent(member, connection, validationRole)
+  ) {
+    return false;
+  }
   if (node.bootIncarnation > 0 &&
       node.bootIncarnation !== member.bootIncarnation) return false;
   if (node.status !== NODE_STATE.JOINING && node.status !== NODE_STATE.ACTIVE) {
@@ -322,11 +373,27 @@ function publishedMemberMatchesCurrent(member, node, connection) {
   return node.connectionState === STATE.CONNECTED ||
     node.connectionState === STATE.READY;
 }
-function isRetainableAuthority(evidence, generation) {
+// Authority-identity fencing is exact (epoch, fence, boot incarnation, state).
+// The fence witness depends on who validates: the authority compares the
+// generation fence with its own admission fence; a consumer validates the
+// fence the authority published (its own admission fence is a different
+// startup branch's), while the boot incarnation is fenced through the live
+// authority connection in validatePublishedContractAgainstCurrent.
+function authorityIdentityIsFenced(evidence, generation, validationRole) {
   if (!evidence || evidence.publicationEpoch < generation.publicationEpoch) {
     return false;
   }
-  if (evidence.fenceIdentity !== generation.fenceIdentity) {
+  if (validationRole === CONTRACT_VALIDATION_ROLE.CONSUMER) {
+    return isPublishedFenceIdentity(generation.fenceIdentity);
+  }
+  return evidence.fenceIdentity === generation.fenceIdentity;
+}
+function isRetainableAuthority(
+  evidence,
+  generation,
+  validationRole = CONTRACT_VALIDATION_ROLE.AUTHORITY,
+) {
+  if (!authorityIdentityIsFenced(evidence, generation, validationRole)) {
     return false;
   }
   // Authority-identity fencing is exact (epoch, fence, boot incarnation, state);
@@ -525,10 +592,12 @@ function validateFormationReleaseHandoffConsumerContract(
     nodeRows,
     observedAt,
     connectionEvidence,
+    CONTRACT_VALIDATION_ROLE.CONSUMER,
   ) ? contract : null;
 }
 export {
   AUTHORIZATION_INTENT_OUTCOME,
+  CONTRACT_VALIDATION_ROLE,
   FORMATION_RELEASE_HANDOFF_REASON, FORMATION_RELEASE_HANDOFF_STATE,
   attachFormationReleaseHandoffToStartupAuthority,
   authorizeFormationReleaseHandoffPublicationIntent, buildContract,
