@@ -16,13 +16,17 @@ import {RuntimeServiceHandlerSetup} from
   '../../src/bootstrap/shared/runtime-service-handler-setup.js';
 import {DependencyError} from '../../src/bootstrap/bootstrap-errors.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {BOOT_INCARNATION_REQUIRED} from
+  '../../src/bootstrap/boot-incarnation-contract.js';
+import {TEST_BOOT_INCARNATION} from
+  '../test-helpers/boot-incarnation-fixture.js';
 
 const NODE_ID = 'node-a';
 const LOGICAL_SERVICE_ID = 'sys-postgres-wire';
 const REPLICA_ID = `${LOGICAL_SERVICE_ID}-r1`;
 
 // The hosting node's boot incarnation, threaded by the runtime setup.
-const RUNTIME_NODE_INCARNATION = 1;
+const RUNTIME_NODE_INCARNATION = TEST_BOOT_INCARNATION;
 
 function createRuntimeEndpointFixture() {
   const mutations = [];
@@ -152,6 +156,7 @@ describe('meta-service-endpoint-registration', () => {
       nodeId: 'node-1',
       nodeAddress: 'ws://127.0.0.1:18080',
       wsPort: 18080,
+      bootIncarnation: TEST_BOOT_INCARNATION,
     });
 
     assert.equal(endpointIds.length, 2);
@@ -190,6 +195,7 @@ describe('meta-service-endpoint-registration', () => {
       },
       nodeId: 'node-1',
       nodeAddress: 'localhost:19090',
+      bootIncarnation: TEST_BOOT_INCARNATION,
     });
 
     const endpointUpserts = upserts.filter(
@@ -213,6 +219,7 @@ describe('meta-service-endpoint-registration', () => {
         upsertRow: async () => {},
         nodeId: 'node-1',
         nodeAddress: 'node-without-port',
+        bootIncarnation: TEST_BOOT_INCARNATION,
       }),
       new RegExp(META_SERVICE_DEFINITION_REGISTRATION_ERROR.ENDPOINT_PORT_REQUIRED),
     );
@@ -224,12 +231,50 @@ describe('meta-service-endpoint-registration', () => {
         upsertRow: async () => {},
         nodeId: 'node-1',
         wsPort: 18080,
+        bootIncarnation: TEST_BOOT_INCARNATION,
       }),
       new RegExp(
         META_SERVICE_DEFINITION_REGISTRATION_ERROR.ENDPOINT_ADDRESS_REQUIRED,
       ),
     );
   });
+
+  it('refuses a missing or invalid incarnation before any endpoint row is ' +
+    'written (never stamps 0)', async () => {
+    for (const bootIncarnation of [undefined, null, 0, -1, 1.5]) {
+      const upserts = [];
+      await assert.rejects(
+        registerBuiltInMetaServiceEndpoints({
+          upsertRow: async (tableName, row) => {
+            upserts.push({tableName, row});
+          },
+          nodeId: 'node-1',
+          nodeAddress: 'ws://127.0.0.1:18080',
+          wsPort: 18080,
+          bootIncarnation,
+        }),
+        {code: BOOT_INCARNATION_REQUIRED},
+        `incarnation ${String(bootIncarnation)} is refused`,
+      );
+      assert.equal(upserts.length, 0, 'no row was written');
+    }
+  });
+
+  it('stamps every boot-owned endpoint with the issued incarnation',
+    async () => {
+      const upserts = [];
+      await registerBuiltInMetaServiceEndpoints({
+        upsertRow: async (tableName, row) => {
+          upserts.push({tableName, row});
+        },
+        nodeId: 'node-1',
+        nodeAddress: 'ws://127.0.0.1:18080',
+        wsPort: 18080,
+        bootIncarnation: 3,
+      });
+      assert.equal(upserts.length, 2);
+      for (const {row} of upserts) assert.equal(row.boot_incarnation, 3);
+    });
 
   it('publishes a runtime endpoint only after runtime endpoint intent', async () => {
     const {lifecycle, mutations} = createRuntimeEndpointFixture();

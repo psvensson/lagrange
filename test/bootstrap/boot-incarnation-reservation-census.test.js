@@ -3,11 +3,14 @@
 // incarnation. Node/process startup -> BootIncarnationOwner -> exact
 // incarnation G -> BootstrapService / NodeJoiningService / lifecycle owners.
 //
-// Every remaining site that turns an absent incarnation into 0 is listed here
-// with its classification. The list is a ratchet: a new unclassified site
-// fails, and a classified site that disappears must be removed (entries only
+// Every remaining site that turns an absent incarnation into 0 — in a local
+// value, in a durable COLUMN write, in a table's schema default, or by
+// dropping the field from a row it otherwise carries — is listed here with
+// its classification. The list is a ratchet: a new unclassified site fails,
+// and a classified site that disappears must be removed (entries only
 // shrink). Literal zeros in unrelated tests and data are not in scope; the
-// scan targets incarnation acquisition/default shapes only.
+// scan targets incarnation acquisition, default, column-write, schema-default
+// and field-omission shapes only.
 import {readFileSync, readdirSync, statSync} from 'node:fs';
 import {join, relative} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -18,7 +21,13 @@ const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const OWNER_FILE = 'src/bootstrap/boot-incarnation-owner.js';
 // The package surface (src/public-api.js re-exports src/bootstrap/index.js).
 const PUBLIC_REEXPORT_FILE = 'src/bootstrap/index.js';
-const INCARNATION = '(?:[bB]oot|[oO]wner)Incarnation';
+// Every name the incarnation is known by: the option/field, the constant, and
+// the durable column. A COLUMN-keyed write (`[COLUMN.BOOT_INCARNATION]:`) and
+// a quoted column key (`'boot_incarnation':`) are the same site class as a
+// plain `bootIncarnation:` — the trailing quote/bracket is part of the token.
+const INCARNATION_NAME =
+  '(?:(?:[bB]oot|[oO]wner)Incarnation|BOOT_INCARNATION(?!_)|boot_incarnation)';
+const INCARNATION = `${INCARNATION_NAME}['"\\]]?`;
 const ZERO = '(?:0|TRANSPORT_NUM\\.ZERO)';
 
 // The shapes that interpret "missing" as an incarnation.
@@ -28,10 +37,22 @@ const DEFAULT_SHAPES = Object.freeze({
     `${INCARNATION}[^;\\n]*?(?:\\|\\||\\?\\?)\\s*${ZERO}\\b`, 'gu'),
   // ... ? x.bootIncarnation : 0;
   else_zero: new RegExp(`${INCARNATION}\\)?\\s*:\\s*${ZERO}\\s*[;,]`, 'gu'),
-  // bootIncarnation: 0 / bootIncarnation = 0
+  // bootIncarnation: 0 / bootIncarnation = 0 / [COLUMN.BOOT_INCARNATION]: 0
   literal_zero: new RegExp(`${INCARNATION}[ \\t]*[:=][ \\t]*${ZERO}\\b`, 'gu'),
   // function normalizeBootIncarnationOption(...)
   normalizer: /function\s+normalize\w*(?:Boot|Owner)Incarnation\w*/gu,
+  // The durable column's own default: a row that reaches storage without a
+  // writer-supplied incarnation still gets one.
+  schema_default_zero: new RegExp(
+    `(?:${INCARNATION_NAME}['"]?[^}\\n]*?defaultValue:\\s*${ZERO}\\b` +
+    `|ADD COLUMN\\s+boot_incarnation[^'"\\n]*DEFAULT\\s+${ZERO}\\b)`, 'gu'),
+  // cond ? {...row, bootIncarnation} : <not an object>  — one branch carries
+  // the field and the other does not.
+  dropped_field: new RegExp(
+    `\\?[\\s\\S]{0,160}?\\{[^{}]*${INCARNATION_NAME}[^{}]*\\}\\s*:\\s*(?!\\{)`,
+    'gu'),
+  // delete row.bootIncarnation / delete row[COLUMN.BOOT_INCARNATION]
+  deleted_field: new RegExp(`delete\\s+[^;\\n]*${INCARNATION}`, 'gu'),
 });
 
 const SITE_CLASS = Object.freeze({
@@ -39,6 +60,13 @@ const SITE_CLASS = Object.freeze({
   // identification: an observation of another node, not this node's
   // lifecycle incarnation.
   REMOTE_PEER_OBSERVATION: 'remote_peer_observation',
+  // The durable column's schema default, required by its NOT NULL migration.
+  // 0 is the pre-incarnation (legacy) row marker, never current for routing
+  // (endpoint-incarnation-currentness.js); no writer supplies it.
+  LEGACY_ROW_SCHEMA_DEFAULT: 'legacy_row_schema_default',
+  // A conditional whose alternative is the ABSENCE of the row, not the row
+  // without its incarnation: nothing is written, so no field is dropped.
+  ABSENT_ROW_NOT_STAMPED: 'absent_row_not_stamped',
 });
 
 const CLASSIFIED_SITES = Object.freeze({
@@ -62,6 +90,17 @@ const CLASSIFIED_SITES = Object.freeze({
     {count: 1, siteClass: SITE_CLASS.REMOTE_PEER_OBSERVATION},
   'src/transport/message-router-server-lifecycle.js#literal_zero':
     {count: 1, siteClass: SITE_CLASS.REMOTE_PEER_OBSERVATION},
+  // nodes
+  'src/bootstrap/system-table-core-schema-definitions.js#schema_default_zero':
+    {count: 1, siteClass: SITE_CLASS.LEGACY_ROW_SCHEMA_DEFAULT},
+  // node_endpoints + service_endpoints
+  'src/bootstrap/system-table-runtime-schema-definitions.js#schema_default_zero':
+    {count: 2, siteClass: SITE_CLASS.LEGACY_ROW_SCHEMA_DEFAULT},
+  // the ADD COLUMN migration of an existing deployment's nodes table
+  'src/partition/partition-service-constants.js#schema_default_zero':
+    {count: 1, siteClass: SITE_CLASS.LEGACY_ROW_SCHEMA_DEFAULT},
+  'src/bootstrap/shared/node-registration-owner-durable-rejoin-methods.js#dropped_field':
+    {count: 1, siteClass: SITE_CLASS.ABSENT_ROW_NOT_STAMPED},
 });
 
 // Every caller of the reservation verb: the runtime entrypoint (the reference
@@ -135,6 +174,43 @@ test('no lifecycle path manufactures a default boot incarnation: every ' +
       site.startsWith(`${lifecycleOwner}#`)),
     `${lifecycleOwner} carries no incarnation default`);
   }
+  t.end();
+});
+
+// Anti-vacuous: the widened shapes are what make the ratchet cover a durable
+// COLUMN write, a table's schema default and a conditionally dropped field —
+// the three ways an absent incarnation reached storage as 0 before D5. Each
+// snippet below is the exact shape that was, or could be, written.
+test('the widened default shapes detect a column write, a schema default ' +
+  'and a dropped field', (t) => {
+  const cases = [
+    ['literal_zero', 'const row = {[COLUMN.BOOT_INCARNATION]: 0};'],
+    ['literal_zero', 'const row = {\'boot_incarnation\': 0};'],
+    ['fallback_zero', 'row[COLUMN.BOOT_INCARNATION] = observed || 0;'],
+    ['schema_default_zero',
+      '{name: \'boot_incarnation\', type: COLUMN_TYPE.INTEGER, ' +
+      'notNull: true, defaultValue: 0},'],
+    ['schema_default_zero',
+      'ADD_BOOT_INCARNATION: \'ADD COLUMN boot_incarnation INTEGER ' +
+      'NOT NULL DEFAULT 0\','],
+    // The pre-D5 hints builder: the field left OFF the object entirely.
+    ['dropped_field',
+      'return Number.isSafeInteger(bootIncarnation) && bootIncarnation > 0 ?\n' +
+      '  {...snapshot, bootIncarnation} :\n  snapshot;'],
+    ['deleted_field', 'delete snapshot.bootIncarnation;'],
+    ['deleted_field', 'delete row[COLUMN.BOOT_INCARNATION];'],
+  ];
+  for (const [shape, snippet] of cases) {
+    const sites = collectDefaultSites([{file: 'probe.js', source: snippet}]);
+    t.same(Object.keys(sites), [`probe.js#${shape}`],
+      `${shape} detects: ${snippet.split('\n')[0]}`);
+  }
+  // A stamped write is not a default site.
+  t.same(collectDefaultSites([{
+    file: 'probe.js',
+    source: 'const row = {[COLUMN.BOOT_INCARNATION]: ' +
+      'requireIssuedBootIncarnation(bootIncarnation, SUBJECT)};',
+  }]), {}, 'a required-incarnation stamp is not a default site');
   t.end();
 });
 

@@ -39,6 +39,8 @@ import {
   BULK_TRANSFER_CHANNEL_DEFAULT,
   ROUTER_IDENTIFY_CHANNEL,
 } from '../../src/constants/transport.js';
+import {TEST_BOOT_INCARNATION} from
+  '../test-helpers/boot-incarnation-fixture.js';
 
 // S4 recorded-gap guards (quest raft-snapshot-compacted-follower-catchup):
 // five previously-untested lines pinned — (1) the wrong-term-at-boundary
@@ -286,7 +288,8 @@ test('gap 4: the bulk dial passes an explicit per-socket maxPayload',
       await registry.dial({
         nodeId: 'peer-1',
         address: 'ws://peer-1:9999',
-        identify: {nodeId: 'self-node', nodeAddress: 'ws://self:9999'},
+        identify: {nodeId: 'self-node', nodeAddress: 'ws://self:9999',
+          bootIncarnation: TEST_BOOT_INCARNATION},
       });
       t.equal(dials[0].wsOptions.maxPayload,
         BULK_TRANSFER_CHANNEL_DEFAULT.MAX_PAYLOAD_BYTES,
@@ -298,7 +301,8 @@ test('gap 4: the bulk dial passes an explicit per-socket maxPayload',
       await registry.dial({
         nodeId: 'peer-2',
         address: 'ws://peer-2:9999',
-        identify: {nodeId: 'self-node', nodeAddress: 'ws://self:9999'},
+        identify: {nodeId: 'self-node', nodeAddress: 'ws://self:9999',
+          bootIncarnation: TEST_BOOT_INCARNATION},
         maxPayload: 12345,
       });
       t.equal(dials[1].wsOptions.maxPayload, 12345,

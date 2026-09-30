@@ -2,6 +2,8 @@ import {COLUMN} from '../../constants/index.js';
 import {endpointIncarnationOf} from './endpoint-incarnation-currentness.js';
 import {normalizeKnownNodeBootIncarnation} from
   '../control-plane-error-classification.js';
+import {requireIssuedBootIncarnation} from
+  '../../bootstrap/boot-incarnation-contract.js';
 import {classifyControlPlaneMutationResult} from
   '../control-plane-mutation-outcome-classifier.js';
 import {
@@ -55,16 +57,22 @@ function isEndpointIncarnationOutcomeCompleted(outcome) {
   return COMPLETED_OUTCOMES.includes(outcome);
 }
 
+const ENDPOINT_STAMP_SUBJECT = 'Endpoint incarnation stamp';
+
 /**
+ * Stamp a row this node writes with its own boot incarnation. The value is
+ * the node's issued incarnation (boot-incarnation-contract.js); a missing or
+ * invalid one fails closed (BOOT_INCARNATION_REQUIRED) and is never stamped
+ * as 0.
  * @param {Object} row
- * @param {number} bootIncarnation
+ * @param {number} bootIncarnation - This node's issued boot incarnation.
  * @return {Object} The row stamped with its owning incarnation.
  */
 function stampEndpointIncarnation(row, bootIncarnation) {
   return {
     ...row,
     [COLUMN.BOOT_INCARNATION]:
-      normalizeKnownNodeBootIncarnation(bootIncarnation),
+      requireIssuedBootIncarnation(bootIncarnation, ENDPOINT_STAMP_SUBJECT),
   };
 }
 

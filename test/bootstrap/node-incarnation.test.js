@@ -15,6 +15,7 @@ import {BOOT_INCARNATION_REQUIRED} from
 import {
   buildBootstrapRejoinHintsSnapshot,
   buildRejoinHintsSnapshot,
+  persistBootstrapRejoinHints,
   readRejoinHints,
   RejoinHintsPersistenceService,
 } from '../../src/bootstrap/rejoin-hints.js';
@@ -69,33 +70,53 @@ test('both hints builders carry the boot incarnation when known', async (t) => {
   );
 });
 
-test('an absent incarnation leaves the field off (pre-incarnation ' +
-  'compatibility)', async (t) => {
-  const snapshot = buildRejoinHintsSnapshot({
-    systemTableCache: createSystemTableCache(),
+test('every hints builder refuses a missing or invalid incarnation: the ' +
+  'field is never dropped and never written as 0', async (t) => {
+  const builders = {
+    buildRejoinHintsSnapshot: (bootIncarnation) => buildRejoinHintsSnapshot({
+      systemTableCache: createSystemTableCache(),
+      nodeId: LOCAL_NODE_ID,
+      nodeAddress: LOCAL_NODE_ADDRESS,
+      nodeRole: 'seed',
+      bootIncarnation,
+      now: () => 1234,
+    }),
+    buildBootstrapRejoinHintsSnapshot: (bootIncarnation) =>
+      buildBootstrapRejoinHintsSnapshot({
+        nodeId: LOCAL_NODE_ID,
+        nodeAddress: LOCAL_NODE_ADDRESS,
+        nodeRole: 'joiner',
+        peerAddresses: [PEER_NODE_ADDRESS],
+        bootIncarnation,
+        now: () => 1234,
+      }),
+  };
+  for (const [name, build] of Object.entries(builders)) {
+    for (const bootIncarnation of [undefined, null, 0, -1, 1.5]) {
+      t.throws(() => build(bootIncarnation),
+        {code: BOOT_INCARNATION_REQUIRED},
+        `${name} refuses ${String(bootIncarnation)}`);
+    }
+  }
+});
+
+test('a hints persist without an issued incarnation never erases the ' +
+  'legacy floor the owner migration reads', async (t) => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'node-incarnation-refuse-'));
+  t.after(() => rm(dataDir, {recursive: true, force: true}));
+  const legacyFloor = 4;
+  const persist = (bootIncarnation) => persistBootstrapRejoinHints({
+    dataDir,
     nodeId: LOCAL_NODE_ID,
     nodeAddress: LOCAL_NODE_ADDRESS,
-    nodeRole: 'seed',
-    now: () => 1234,
+    nodeRole: 'joiner',
+    peerAddresses: [PEER_NODE_ADDRESS],
+    bootIncarnation,
   });
-  t.equal(
-    Object.prototype.hasOwnProperty.call(snapshot, 'bootIncarnation'),
-    false,
-    'a pre-incarnation write has no bootIncarnation field',
-  );
-  const zero = buildRejoinHintsSnapshot({
-    systemTableCache: createSystemTableCache(),
-    nodeId: LOCAL_NODE_ID,
-    nodeAddress: LOCAL_NODE_ADDRESS,
-    nodeRole: 'seed',
-    bootIncarnation: 0,
-    now: () => 1234,
-  });
-  t.equal(
-    Object.prototype.hasOwnProperty.call(zero, 'bootIncarnation'),
-    false,
-    'incarnation 0 (pre-incarnation) is never written',
-  );
+  await persist(legacyFloor);
+  await t.rejects(persist(undefined), {code: BOOT_INCARNATION_REQUIRED});
+  t.equal((await readRejoinHints(dataDir)).bootIncarnation, legacyFloor,
+    'the refused write replaced nothing');
 });
 
 test('the persistence cadence rewrites the hints with the SAME ' +

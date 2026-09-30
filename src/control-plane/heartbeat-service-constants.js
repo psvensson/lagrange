@@ -41,6 +41,8 @@ const HEARTBEAT_STATE = Object.freeze({
 });
 
 const HEARTBEAT_LOG_MSG = Object.freeze({
+  ENDPOINT_REFRESH_REFUSED_TERMINAL_NODE_ROW:
+    'Node endpoint not refreshed: this generation\'s node row is terminal',
   ENDPOINT_WRITE_NOT_CURRENT:
     'Node endpoint not written: this incarnation does not own the row',
   INITIALIZED: 'HeartbeatService initialized',

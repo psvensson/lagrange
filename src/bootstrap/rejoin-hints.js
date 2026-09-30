@@ -40,6 +40,7 @@ import {
 } from './rejoin-hints-addresses.js';
 
 const REJOIN_HINTS_PERSISTENCE_SUBJECT = 'RejoinHintsPersistenceService';
+const REJOIN_HINTS_SNAPSHOT_SUBJECT = 'Rejoin hints snapshot';
 
 // The hints persistence participates in one boot lifecycle: its incarnation
 // is the reserved one, required (never defaulted).
@@ -106,14 +107,18 @@ function withClusterId(snapshot, clusterId) {
     snapshot;
 }
 
-// Attach the boot incarnation to one hints snapshot only when one is known.
-// The hints are a projection: the authority is the boot incarnation owner
+// Attach this boot's incarnation to one hints snapshot. The hints are a
+// projection copy: the authority is the boot incarnation owner
 // (boot-incarnation-owner.js), which reserved the value durably before this
-// boot used it. An absent incarnation leaves the field OFF the object.
+// boot used it. Every hints writer runs inside a boot lifecycle, so a
+// missing or invalid incarnation is refused (BOOT_INCARNATION_REQUIRED);
+// the field is never dropped and never written as 0.
 function withBootIncarnation(snapshot, bootIncarnation) {
-  return Number.isSafeInteger(bootIncarnation) && bootIncarnation > 0 ?
-    {...snapshot, bootIncarnation} :
-    snapshot;
+  return {
+    ...snapshot,
+    bootIncarnation: requireIssuedBootIncarnation(
+      bootIncarnation, REJOIN_HINTS_SNAPSHOT_SUBJECT),
+  };
 }
 
 // Read the durable cluster identity from the replicated CONFIG row through

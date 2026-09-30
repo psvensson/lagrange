@@ -1,23 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {readFileSync, readdirSync, statSync} from 'node:fs';
-import {join, relative} from 'node:path';
-import {fileURLToPath} from 'node:url';
 import {
   ENDPOINT_WRITERS,
   ENDPOINT_WRITE_CLASS,
   collectEndpointMutationSites,
 } from './endpoint-writer-census.js';
-
-const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
-
-function srcFiles(directory, files = []) {
-  for (const entry of readdirSync(directory)) {
-    const path = join(directory, entry);
-    if (statSync(path).isDirectory()) srcFiles(path, files);
-    else if (path.endsWith('.js')) files.push(path);
-  }
-  return files;
-}
 
 test('every endpoint mutation path is a classified incarnation owner ' +
   '(a new, unclassified endpoint writer fails here)', (t) => {
@@ -29,20 +15,15 @@ test('every endpoint mutation path is a classified incarnation owner ' +
   t.end();
 });
 
-test('dormant endpoint writers have no runtime caller', (t) => {
-  const dormantVerbs = Object.entries(ENDPOINT_WRITERS)
+test('no endpoint writer is classified dormant: an incarnation-less ' +
+  'writer is deleted, never recorded (D5/W-4)', (t) => {
+  t.same(Object.values(ENDPOINT_WRITE_CLASS).sort(),
+    ['incarnation_fenced', 'virgin_birth_stamped'],
+    'the only writer classes carry the node boot incarnation');
+  const unfenced = Object.entries(ENDPOINT_WRITERS)
     .filter(([, entry]) =>
-      entry.writeClass === ENDPOINT_WRITE_CLASS.DORMANT_DEBT)
-    .map(([site]) => site.split('#')[1]);
-  const callers = [];
-  for (const path of srcFiles(join(REPO_ROOT, 'src'))) {
-    const source = readFileSync(path, 'utf8');
-    for (const verb of dormantVerbs) {
-      if (new RegExp(`endpointService\\??\\.${verb}\\(`, 'u').test(source)) {
-        callers.push(`${relative(REPO_ROOT, path)}:${verb}`);
-      }
-    }
-  }
-  t.same(callers, [], 'EndpointService mutation verbs are never called');
+      !Object.values(ENDPOINT_WRITE_CLASS).includes(entry.writeClass))
+    .map(([site]) => site);
+  t.same(unfenced, [], 'every classified writer is fenced or stamped');
   t.end();
 });

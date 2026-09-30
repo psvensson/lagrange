@@ -88,6 +88,7 @@ async function writeDurableNodesTableSnapshot(dataDir, rows = []) {
 test('buildRejoinHintsSnapshot records non-self peer addresses from nodes table',
   async (t) => {
     const snapshot = buildRejoinHintsSnapshot({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       systemTableCache: createSystemTableCache([
         {
           [COLUMN.NODE_ID]: LOCAL_NODE_ID,
@@ -120,6 +121,7 @@ test('buildRejoinHintsSnapshot records non-self peer addresses from nodes table'
       peerAddresses: [PEER_NODE_ADDRESS_A, PEER_NODE_ADDRESS_B],
       requiresPeerRejoin: true,
       updatedAt: 1234,
+      bootIncarnation: TEST_BOOT_INCARNATION,
     });
   });
 
@@ -129,6 +131,7 @@ test('persistBootstrapRejoinHints seeds durable rejoin from the chosen peer',
     t.after(() => rm(dataDir, {recursive: true, force: true}));
 
     const bootstrapSnapshot = buildBootstrapRejoinHintsSnapshot({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
       nodeRole: 'joiner',
@@ -145,9 +148,11 @@ test('persistBootstrapRejoinHints seeds durable rejoin from the chosen peer',
       peerAddresses: [PEER_NODE_ADDRESS_A],
       requiresPeerRejoin: true,
       updatedAt: 2345,
+      bootIncarnation: TEST_BOOT_INCARNATION,
     });
 
     await persistBootstrapRejoinHints({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
@@ -734,6 +739,7 @@ test('readPersistedLocalNodeId restores the durable identity for restart reuse',
     t.after(() => rm(dataDir, {recursive: true, force: true}));
 
     await persistBootstrapRejoinHints({
+      bootIncarnation: TEST_BOOT_INCARNATION,
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,

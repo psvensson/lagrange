@@ -2,8 +2,9 @@
  * Structural census of every node_endpoints / service_endpoints mutation
  * site in src/** (invariant I9). Every endpoint row belongs to one exact node
  * boot incarnation; a mutation path may exist only as a classified owner
- * site whose final mutation carries that incarnation (or, for a dormant
- * owner, no runtime caller). The table only shrinks: an unlisted site fails.
+ * site whose final mutation carries that incarnation. The table only
+ * shrinks: an unlisted site fails. (The dormant EndpointService writers,
+ * which carried no incarnation, were deleted: D5/W-4.)
  */
 import {readFileSync, readdirSync, statSync} from 'node:fs';
 import {join, relative} from 'node:path';
@@ -45,8 +46,6 @@ const ENDPOINT_WRITE_CLASS = Object.freeze({
   INCARNATION_FENCED: 'incarnation_fenced',
   // Rows born on a virgin cluster (no prior endpoint row can exist).
   VIRGIN_BIRTH_STAMPED: 'virgin_birth_stamped',
-  // A writer with no runtime caller (recorded debt, not permission).
-  DORMANT_DEBT: 'dormant_debt',
 });
 const C = ENDPOINT_WRITE_CLASS;
 
@@ -89,10 +88,6 @@ const ENDPOINT_WRITER_ENTRIES = Object.freeze([
   ['src/runtime/runtime-endpoint-publication-wiring.js',
     'removeRuntimeEndpointAtIncarnation', C.INCARNATION_FENCED,
     'runtime service endpoint removal', 'node boot incarnation'],
-  ['src/control-plane/endpoint-service.js', 'registerEndpoint',
-    C.DORMANT_DEBT, 'service endpoint upsert (no runtime caller)', 'none'],
-  ['src/control-plane/endpoint-service.js', 'removeEndpoint',
-    C.DORMANT_DEBT, 'service endpoint removal (no runtime caller)', 'none'],
 ]);
 
 const ENDPOINT_WRITERS = Object.freeze(Object.fromEntries(

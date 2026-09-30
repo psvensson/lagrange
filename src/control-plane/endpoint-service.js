@@ -1,16 +1,14 @@
 /**
- * EndpointService - Endpoint registration and management.
- * Extracted from ControlPlaneService.
+ * EndpointService - the control-plane endpoint service lifecycle shell.
+ * Extracted from ControlPlaneService. It writes no endpoint row: every
+ * node_endpoints / service_endpoints mutation belongs to the endpoint
+ * incarnation authority (owners/endpoint-incarnation-authority.js), whose
+ * writes carry the node's exact boot incarnation.
  * Requirements: 8.4, 8.6
  */
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
-import {
-  COLUMN,
-  ENDPOINT_STATUS,
-  TRANSPORT_TYPE,
-} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   createSystemMetadataOwnerRequiredError,
@@ -21,7 +19,6 @@ import {
 import {
   ENDPOINT_SUBSYSTEM,
   ENDPOINT_SVC_ERROR_MSG,
-  ENDPOINT_SVC_EVENT,
   ENDPOINT_SVC_LOG_MSG,
   ENDPOINT_SVC_STATE,
 } from './endpoint-service-constants.js';
@@ -73,98 +70,6 @@ class EndpointService extends EventEmitter {
     this.logger.info(ENDPOINT_SVC_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
     });
-  }
-
-  /**
-   * Register or update an endpoint.
-   * @param {Object} endpointData - Endpoint data.
-   * @param {string} endpointData.endpointId - Endpoint ID.
-   * @param {string} endpointData.nodeId - Node ID.
-   * @param {string} endpointData.address - Endpoint address.
-   * @param {string} [endpointData.transportType] - Transport type.
-   * @param {number} [endpointData.priority] - Priority.
-   * @param {Object} [endpointData.metadata] - Metadata.
-   * @return {Promise<Object>} Registration result.
-   */
-  async registerEndpoint(endpointData) {
-    assertCritical(
-      endpointData?.endpointId,
-      ENDPOINT_SVC_ERROR_MSG.MISSING_ENDPOINT_ID,
-    );
-
-    const now = Date.now();
-    const existing = unwrapRowReadResult(
-      await this.serviceEndpointsOwner.getEndpoint(
-        endpointData.endpointId,
-      ),
-    );
-
-    let result;
-    if (existing) {
-      // Update only mutable fields — do not reconstruct identity fields.
-      const updates = {
-        [COLUMN.ADDRESS]: endpointData.address,
-        [COLUMN.TRANSPORT_TYPE]: endpointData.transportType ||
-          TRANSPORT_TYPE.WEBSOCKET,
-        [COLUMN.PRIORITY]: endpointData.priority ?? 0,
-        [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
-        [COLUMN.UPDATED_AT]: now,
-      };
-      if (endpointData.metadata) {
-        updates[COLUMN.METADATA] = JSON.stringify(endpointData.metadata);
-      }
-      result = await this.serviceEndpointsOwner.updateEndpoint(
-        endpointData.endpointId,
-        updates,
-      );
-    } else {
-      // Insert full canonical row shape for new endpoints.
-      const row = {
-        [COLUMN.ENDPOINT_ID]: endpointData.endpointId,
-        [COLUMN.NODE_ID]: endpointData.nodeId || this.nodeId,
-        [COLUMN.TRANSPORT_TYPE]: endpointData.transportType ||
-          TRANSPORT_TYPE.WEBSOCKET,
-        [COLUMN.ADDRESS]: endpointData.address,
-        [COLUMN.PRIORITY]: endpointData.priority ?? 0,
-        [COLUMN.METADATA]: endpointData.metadata ?
-          JSON.stringify(endpointData.metadata) :
-          JSON.stringify({}),
-        [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
-        [COLUMN.CREATED_AT]: now,
-        [COLUMN.UPDATED_AT]: now,
-      };
-      result = await this.serviceEndpointsOwner.insertEndpoint(row);
-    }
-
-    this.logger.debug(ENDPOINT_SVC_LOG_MSG.REGISTERED, {
-      endpointId: endpointData.endpointId,
-      nodeId: endpointData.nodeId || this.nodeId,
-    });
-
-    this.emit(ENDPOINT_SVC_EVENT.REGISTERED, {
-      endpointId: endpointData.endpointId,
-    });
-
-    return result;
-  }
-
-  /**
-   * Remove an endpoint.
-   * @param {string} endpointId - Endpoint ID to remove.
-   * @return {Promise<Object>} Deletion result.
-   */
-  async removeEndpoint(endpointId) {
-    assertCritical(endpointId, ENDPOINT_SVC_ERROR_MSG.MISSING_ENDPOINT_ID);
-
-    const result =
-      await this.serviceEndpointsOwner.removeEndpoint(endpointId);
-
-    this.logger.debug(ENDPOINT_SVC_LOG_MSG.REMOVED, {
-      endpointId,
-    });
-
-    this.emit(ENDPOINT_SVC_EVENT.REMOVED, {endpointId});
-    return result;
   }
 
   /**

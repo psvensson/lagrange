@@ -62,6 +62,7 @@ import {PRESSURE_WORK_CLASS} from './pressure-governor.js';
 import {
   isNodeLifecyclePublicationCompleted,
   isNodeLifecyclePublicationDeferred,
+  isTerminalNodeLifecycleSource,
   NODE_LIFECYCLE_PUBLICATION_OUTCOME,
 } from './node-lifecycle-publication.js';
 
@@ -204,6 +205,19 @@ class HeartbeatServicePublicationMethods {
       );
     } // Register or refresh WebSocket endpoint, but avoid rewriting unchanged
     // endpoint rows on every heartbeat.
+    // The endpoint refresh is this node's second liveness publication, and it
+    // is fenced by the same source rule as the first (N2/D6): a terminal
+    // (reaped or withdrawn) own row of this generation is not a publication
+    // source, so its routing target is never reactivated — not even on a tick
+    // whose node-row write coalesced away and therefore never reached the
+    // lifecycle owner's own refusal.
+    if (isTerminalNodeLifecycleSource(existing, this.bootIncarnation)) {
+      this.logger.debug(
+        HEARTBEAT_LOG_MSG.ENDPOINT_REFRESH_REFUSED_TERMINAL_NODE_ROW,
+        {nodeId: this.nodeId, bootIncarnation: this.bootIncarnation},
+      );
+      return;
+    }
     const endpointId = `${ENDPOINT_ID_PREFIX}${this.nodeId}${ENDPOINT_ID_SUFFIX}`;
     const existingEp = cache.get(SYSTEM_TABLE_NAME.NODE_ENDPOINTS, endpointId) || null;
     const endpointRow = this.buildEndpointRow(existingEp, now);

@@ -7,7 +7,7 @@
     "bootstrap-membership": 277,
     "cdc-metadata": 59,
     "cli-tooling": 96,
-    "control-plane": 203,
+    "control-plane": 204,
     "convergence-topology": 92,
     "distributed-harness": 167,
     "examples-e2e": 7,
@@ -22,13 +22,13 @@
     "storage-raft": 135,
     "test-infrastructure": 136,
     "transactions": 15,
-    "transport-messaging": 90,
+    "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2266,
-  "digest": "fnv1a32-5248436c",
+  "censusSize": 2269,
+  "digest": "fnv1a32-fe29fe74",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-72f4b835",
+  "observationDigest": "fnv1a32-b32c1af3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -544,6 +544,7 @@
     "test/control-plane/heartbeat-memory-trend.test.js": "control-plane",
     "test/control-plane/heartbeat-periodic-writes.property.test.js": "control-plane",
     "test/control-plane/heartbeat-storage-budget-preservation.test.js": "control-plane",
+    "test/control-plane/heartbeat-terminal-node-row-endpoint.test.js": "control-plane",
     "test/control-plane/incarnation-reuse-cross-owner-anchor.test.js": "control-plane",
     "test/control-plane/invariant-engine.test.js": "control-plane",
     "test/control-plane/lease-sweep-expired.property.test.js": "control-plane",
@@ -2141,6 +2142,7 @@
     "test/transaction/transaction-durability-raft.property.test.js": "transactions",
     "test/transaction/transaction-support.test.js": "transactions",
     "test/transport/address-format-validation.property.test.js": "transport-messaging",
+    "test/transport/bulk-channel-identify-incarnation.test.js": "transport-messaging",
     "test/transport/bulk-registry-bootstrap.test.js": "transport-messaging",
     "test/transport/bulk-transfer-lane-isolation.test.js": "transport-messaging",
     "test/transport/connection-pool.test.js": "transport-messaging",
@@ -2148,6 +2150,7 @@
     "test/transport/delivery-semantics.property.test.js": "transport-messaging",
     "test/transport/endpoint-priority-selection.property.test.js": "transport-messaging",
     "test/transport/error-response-correlation-id.property.test.js": "transport-messaging",
+    "test/transport/exact-handler-identity-api.test.js": "transport-messaging",
     "test/transport/handler-registration.property.test.js": "transport-messaging",
     "test/transport/immediate-ack-ordering.property.test.js": "transport-messaging",
     "test/transport/local-delivery.property.test.js": "transport-messaging",
@@ -2674,9 +2677,15 @@
         "src/bootstrap/pipeline/startup-pipeline-runner.js"
       ]
     },
+    "test/bootstrap/cluster-identity.test.js": {
+      "files": [
+        "test/test-helpers/boot-incarnation-fixture.js"
+      ]
+    },
     "test/bootstrap/cold-node-authority-reacquisition-pressure.test.js": {
       "files": [
         "src/node/replica-state-machine.js",
+        "test/test-helpers/boot-incarnation-fixture.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
@@ -2779,9 +2788,11 @@
     },
     "test/bootstrap/meta-service-endpoint-registration.test.js": {
       "files": [
+        "src/bootstrap/boot-incarnation-contract.js",
         "src/bootstrap/shared/runtime-service-handler-setup.js",
         "src/bootstrap/system-table-schemas-constants.js",
-        "src/control-plane/owners/service-endpoints-owner.js"
+        "src/control-plane/owners/service-endpoints-owner.js",
+        "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
     "test/bootstrap/no-eslint-disable.test.js": {
@@ -3581,7 +3592,6 @@
     "test/control-plane/endpoint-registration-round-trip.property.test.js": {
       "files": [
         "src/config/configuration-manager.js",
-        "src/constants/index.js",
         "src/control-plane/endpoint-service.js"
       ]
     },
@@ -3589,7 +3599,6 @@
       "files": [
         "src/bootstrap/shared/meta-service-definition-registration.js",
         "src/bootstrap/shared/node-registration-owner-publication-methods.js",
-        "src/control-plane/endpoint-service.js",
         "src/control-plane/heartbeat-service-publication-methods.js",
         "src/control-plane/lease-service.js",
         "src/control-plane/owners/endpoint-incarnation-authority.js",
@@ -3680,6 +3689,15 @@
         "src/control-plane/pressure-governor.js",
         "test/control-plane/heartbeat-memory-trend-test-helpers.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/control-plane/heartbeat-terminal-node-row-endpoint.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/heartbeat-service.js",
+        "src/control-plane/node-lifecycle-publication.js",
+        "src/control-plane/node-ready-lease-authority.js",
+        "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
     "test/control-plane/incarnation-reuse-cross-owner-anchor.test.js": {
@@ -6337,6 +6355,11 @@
         "test/distributed/scenarios/table-distribution-helpers-load-node-planning.js"
       ]
     },
+    "test/entrypoint-runtime-helpers-join-decision.test.js": {
+      "files": [
+        "test/test-helpers/boot-incarnation-fixture.js"
+      ]
+    },
     "test/entrypoint/application-database-runtime-composition.test.js": {
       "files": [
         "src/config/configuration-manager.js",
@@ -8604,7 +8627,8 @@
     },
     "test/raft/snapshot-dispatcher-wiring.test.js": {
       "files": [
-        "src/raft/raft-committed-membership-stamp.js"
+        "src/raft/raft-committed-membership-stamp.js",
+        "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
     "test/raft/snapshot-gated-compaction-catchup.test.js": {
@@ -8628,6 +8652,9 @@
       ]
     },
     "test/raft/snapshot-recorded-gaps.test.js": {
+      "files": [
+        "test/test-helpers/boot-incarnation-fixture.js"
+      ],
       "directories": [
         "data"
       ]
@@ -12487,6 +12514,14 @@
         "src/partition/partition-service-constants.js",
         "src/raft/raft-rs-proposal-codec.js",
         "src/raft/raft-rs-ready-loop-constants.js"
+      ]
+    },
+    "test/transport/bulk-channel-identify-incarnation.test.js": {
+      "files": [
+        "src/bootstrap/boot-incarnation-contract.js",
+        "src/bootstrap/shared/snapshot-catchup-wiring.js",
+        "src/constants/transport.js",
+        "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
     "test/transport/endpoint-priority-selection.property.test.js": {

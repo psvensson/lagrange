@@ -111,7 +111,9 @@ async function registerBuiltInMetaServiceDefinitions(options = {}) {
  * @param {string} options.nodeId - Hosting node identifier.
  * @param {string} [options.nodeAddress] - Host or URL string used to derive endpoint address/port.
  * @param {number} [options.wsPort] - Explicit endpoint port.
- * @param {number} [options.bootIncarnation] - This boot's incarnation.
+ * @param {number} options.bootIncarnation - Required: this boot's issued
+ *   incarnation (boot-incarnation-contract.js); absence is refused before
+ *   any row is written.
  * @return {Promise<string[]>} Registered endpoint IDs.
  */
 async function registerBuiltInMetaServiceEndpoints(options = {}) {

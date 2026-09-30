@@ -240,6 +240,26 @@ function isTerminalNodeRow(row) {
   return TERMINAL_NODE_STATUSES.includes(readColumn(row, COLUMN.STATUS));
 }
 
+/**
+ * Whether one observed NODES row is the terminal (reaped or withdrawn) row of
+ * the generation `bootIncarnation` — exactly the source this owner's fence
+ * refuses with REFUSED_TERMINAL_STATE. Every liveness writer of that
+ * generation consumes this predicate instead of restating the terminal status
+ * set: the heartbeat's node_endpoints refresh is a second liveness
+ * publication and must not revive a terminal generation's routing target
+ * (D6). A successor generation is never fenced by its predecessor's row.
+ * @param {Object|null} row - Observed NODES row, or null when unobserved.
+ * @param {*} bootIncarnation - The writing generation.
+ * @return {boolean}
+ */
+function isTerminalNodeLifecycleSource(row, bootIncarnation) {
+  if (!row) return false;
+  return normalizeKnownNodeBootIncarnation(readColumn(row,
+    COLUMN.BOOT_INCARNATION)) ===
+      normalizeKnownNodeBootIncarnation(bootIncarnation) &&
+    isTerminalNodeRow(row);
+}
+
 function resolveSourceRefusalOutcome(row, knownIncarnation, bootIncarnation) {
   if (knownIncarnation > bootIncarnation) {
     return NODE_LIFECYCLE_PUBLICATION_OUTCOME.REFUSED_STALE_INCARNATION;
@@ -603,4 +623,5 @@ export {
   SELECT_NODE_ROW_SQL,
   isNodeLifecyclePublicationCompleted,
   isNodeLifecyclePublicationDeferred,
+  isTerminalNodeLifecycleSource,
 };

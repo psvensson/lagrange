@@ -84,6 +84,10 @@ function createBulkSocketProvider(context) {
         nodeId: messageRouter.nodeId,
         nodeAddress: messageRouter.advertisedAddress ||
           messageRouter.nodeAddress,
+        // This node's issued boot incarnation (MessageRouter requires it at
+        // construction): the snapshot channel identifies the exact generation
+        // that dialled it, like the primary channel (D5).
+        bootIncarnation: messageRouter.bootIncarnation,
       },
     });
     return bulkConnectionTransferSocket(connection);

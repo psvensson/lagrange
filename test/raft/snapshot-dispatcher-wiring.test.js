@@ -48,6 +48,8 @@ import {
   createLifecycleServiceRow,
   createLifecycleStateStore,
 } from '../test-helpers/lifecycle-state-store.js';
+import {TEST_BOOT_INCARNATION} from
+  '../test-helpers/boot-incarnation-fixture.js';
 
 // S6 Phase A link 2 guard (quest raft-snapshot-live-rebuild): the
 // onSnapshotCatchupNeeded dispatcher seam is set on services built through
@@ -111,6 +113,9 @@ function createStubRouter(bulkChannelRegistry) {
     nodeId: NODE_ID,
     nodeAddress: `ws://${NODE_ID}:7000`,
     advertisedAddress: `ws://${NODE_ID}:7000`,
+    // The router requires an issued incarnation in production; the bulk dial
+    // identity takes it from here (D5).
+    bootIncarnation: TEST_BOOT_INCARNATION,
     bulkChannelRegistry: bulkChannelRegistry || null,
     register() {},
   };
