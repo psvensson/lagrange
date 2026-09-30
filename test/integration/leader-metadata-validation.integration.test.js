@@ -29,6 +29,7 @@ import {
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {URL} from 'url';
+import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
 import {
   createVirginSeedBootstrapService,
   initializeTestEnvironment,
@@ -181,7 +182,8 @@ function createIncompleteAuthoritativeView(realCache, options = {}) {
  * @param {number} intervalMs - Polling interval.
  * @return {Promise<Object|null>} Leader service or null.
  */
-async function waitForPartitionLeader(bootstrapResult, partitionId, timeoutMs = 3000,
+async function waitForPartitionLeader(bootstrapResult, partitionId,
+  timeoutMs = scaleByMachineFactor(3000),
   intervalMs = 50) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -201,7 +203,11 @@ async function waitForPartitionLeader(bootstrapResult, partitionId, timeoutMs = 
  * @param {number} timeoutMs - Readiness timeout.
  * @return {Promise<void>}
  */
-async function waitForCdcPipelineReadiness(bootstrapResult, timeoutMs = 3000) {
+// Readiness budgets follow the runner's machine factor, as the other
+// node-starting integration files do: a fixed 3 s no-progress window expires
+// under a parallel lane before the pipeline's first progress event.
+async function waitForCdcPipelineReadiness(
+  bootstrapResult, timeoutMs = scaleByMachineFactor(3000)) {
   const systemTableCache = NodeService.getInstance().getSystemTableCache();
   const readinessGate = new CDCPipelineReadinessGate({
     systemTableCache,
@@ -262,7 +268,7 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
         const servicesLeader = await waitForPartitionLeader(
           bootstrapResult,
           'services-p1',
-          3000,
+          scaleByMachineFactor(3000),
         );
         t.ok(servicesLeader, 'services partition should elect a leader');
 
@@ -379,7 +385,7 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
         const servicesLeader = await waitForPartitionLeader(
           bootstrapResult,
           'services-p1',
-          3000,
+          scaleByMachineFactor(3000),
         );
         t.ok(servicesLeader, 'services partition should elect a leader');
 
@@ -491,7 +497,7 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
       const servicesLeader = await waitForPartitionLeader(
         bootstrapResult,
         'services-p1',
-        3000,
+        scaleByMachineFactor(3000),
       );
       t.ok(servicesLeader, 'services partition should elect a leader');
 
@@ -628,7 +634,7 @@ test('Leader metadata validation on join', {timeout: 60000}, async (t) => {
       const servicesLeader = await waitForPartitionLeader(
         bootstrapResult,
         'services-p1',
-        3000,
+        scaleByMachineFactor(3000),
       );
       t.ok(servicesLeader, 'services partition should elect a leader');
 
