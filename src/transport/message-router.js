@@ -18,6 +18,8 @@ import {defineMessageRouterConnectionCloseReconnect} from './message-router-conn
 import {defineMessageRouterHandlerRegistry} from './message-router-handler-registry.js';
 import {defineMessageRouterDeliveryDelegation} from './message-router-delivery-delegation.js';
 import {defineMessageRouterStatsShutdown} from './message-router-stats-shutdown.js';
+import {installTransportMessageFormationAttribution} from
+  '../diagnostics/transport-formation-attribution.js';
 
 const {
   ConfigurationManager,
@@ -315,6 +317,7 @@ defineMessageRouterConnectionCloseReconnect(MessageRouter);
 defineMessageRouterHandlerRegistry(MessageRouter);
 defineMessageRouterDeliveryDelegation(MessageRouter);
 defineMessageRouterStatsShutdown(MessageRouter);
+installTransportMessageFormationAttribution(MessageRouter);
 
 export {
   ConnectionState,

@@ -256,6 +256,20 @@
       "tests": [
         "test/raft/liferaft-formation-attribution-interaction.test.js"
       ]
+    },
+    "transport-message-formation-attribution": {
+      "description": "MessageRouter retains all inbound socket, control-frame, ACK, response, handler, delivery, and error behavior while the formation diagnostics interaction maps the existing handleMessage entry point exclusively to transport_message.",
+      "owners": [
+        "src/diagnostics/formation-diagnostics-contract.js",
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/diagnostics/transport-formation-attribution.js",
+        "src/transport/message-router.js",
+        "src/transport/message-router-inbound-dispatch.js",
+        "src/transport/message-router-server-lifecycle.js"
+      ],
+      "tests": [
+        "test/transport/message-router-formation-attribution-interaction.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -503,6 +517,31 @@
       "contract": "raft-formation-attribution",
       "witnessTests": [
         "test/raft/liferaft-formation-attribution-interaction.test.js"
+      ]
+    },
+    "transport-message-formation-attribution": {
+      "description": "MessageRouter remains the inbound transport behavior owner and formation diagnostics remains the accounting owner; their interaction maps the production socket listener and its asynchronous descendants to transport_message without changing delivery semantics.",
+      "endpoints": [
+        {
+          "id": "message-router-inbound-behavior",
+          "owners": [
+            "src/transport/message-router.js",
+            "src/transport/message-router-inbound-dispatch.js",
+            "src/transport/message-router-server-lifecycle.js"
+          ]
+        },
+        {
+          "id": "formation-attribution-mapping",
+          "owners": [
+            "src/diagnostics/formation-diagnostics-contract.js",
+            "src/diagnostics/formation-turn-attribution.js",
+            "src/diagnostics/transport-formation-attribution.js"
+          ]
+        }
+      ],
+      "contract": "transport-message-formation-attribution",
+      "witnessTests": [
+        "test/transport/message-router-formation-attribution-interaction.test.js"
       ]
     }
   }
