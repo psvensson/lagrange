@@ -87,7 +87,6 @@ function resolveDependencies(cluster) {
       listHarnessTopologyIdentifiers,
     openPublicClient: overrides.openPublicClient || openPgPublicClient,
     provisionListener: overrides.provisionListener || provisionPublicListener,
-    resolveRuntimeProvider: overrides.resolveRuntimeProvider,
     retryPolicy: overrides.retryPolicy || PUBLIC_SEAM_INTERIM_RETRY_POLICY,
     runId: typeof overrides.runId === 'string' ?
       overrides.runId :
