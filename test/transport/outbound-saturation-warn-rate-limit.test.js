@@ -14,31 +14,30 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   OUTBOUND_SATURATION_WARN_INTERVAL_MS,
-  OutboundDeliveryRegistryOwner,
   takeOutboundSaturationWarnSample,
 } from '../../src/transport/message-router-outbound-delivery-registry.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
 
 const TARGET_NODE_ID = 'node-b';
 const SOURCE_ADDRESS = `${TARGET_NODE_ID}/partition/sql_transactions-p1-r5`;
 
-function createRegistryWithStubRouter({maxPending = 2} = {}) {
+function createRegistryWithRouter({maxPending = 2} = {}) {
   const warns = [];
-  const router = {
+  const router = new MessageRouter({
     nodeId: 'node-a',
-    outboundQueues: new Map(),
     outboundQueueMaxConcurrent: 1,
     outboundQueueMaxPending: maxPending,
     outboundQueueCriticalReserve: 0,
     outboundQueueReadinessReserve: 0,
     outboundQueueReadinessInflightReserve: 0,
-    logger: {
-      warn: (message, context) => warns.push({message, context}),
-      info: () => {},
-      debug: () => {},
-      error: () => {},
-    },
+  });
+  router.logger = {
+    warn: (message, context) => warns.push({message, context}),
+    info: () => {},
+    debug: () => {},
+    error: () => {},
   };
-  return {registry: new OutboundDeliveryRegistryOwner(router), warns};
+  return {router, registry: router.outboundDeliveryRegistryOwner, warns};
 }
 
 test('CL-009: outbound saturation warn rate limit', async (t) => {
@@ -83,12 +82,18 @@ test('CL-009: outbound saturation warn rate limit', async (t) => {
   await t.test(
     'enqueue storm: every attempt is rejected but warns stay bounded',
     async (t) => {
-      const {registry, warns} = createRegistryWithStubRouter({maxPending: 2});
-      const neverDeliver = () => new Promise(() => {});
+      const {router, registry, warns} = createRegistryWithRouter({maxPending: 2});
+      const heldDelivery = Promise.withResolvers();
+      const neverDeliver = () => heldDelivery.promise;
       const stormSize = 200;
       let rejected = 0;
 
       const admitted = [];
+      t.teardown(async () => {
+        await router.shutdown();
+        heldDelivery.resolve({acknowledged: false});
+        await Promise.all(admitted);
+      });
       for (let i = 0; i < stormSize; i++) {
         const promise = registry
           .enqueue(TARGET_NODE_ID, neverDeliver, {

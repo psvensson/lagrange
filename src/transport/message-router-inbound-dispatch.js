@@ -1,6 +1,8 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {ROUTER_IDENTIFY_CHANNEL} from '../constants/transport.js';
 
+const BULK_REGISTRY_REPLACEMENT_ERROR = 'Cannot replace an attached bulk registry';
+
 const {
   ConnectionState,
   INCOMING_CONNECTION_ADOPTION,
@@ -364,6 +366,11 @@ class MessageRouterInboundDispatch {
    * @return {void}
    */
   attachBulkChannelRegistry(registry) {
+    this.transportLifetime.assertOpen();
+    if (this.bulkChannelRegistry && this.bulkChannelRegistry !== registry) {
+      throw new Error(BULK_REGISTRY_REPLACEMENT_ERROR);
+    }
+    registry?.bindRouterLifetime(this.transportLifetime);
     this.bulkChannelRegistry = registry;
   }
   /**
@@ -379,11 +386,14 @@ class MessageRouterInboundDispatch {
    * @private
    */
   adoptBulkChannelSocket(connectionId, ws, nodeId) {
+    this.transportLifetime.assertOpen();
+    this.transportLifetime.sockets.delete(ws);
     this.nodeConnections.delete(connectionId);
     this.nodeInboundActivityAt.delete(connectionId);
     ws.removeAllListeners(TRANSPORT_EVENT.MESSAGE);
     ws.removeAllListeners(TRANSPORT_EVENT.CLOSE);
     ws.removeAllListeners(TRANSPORT_EVENT.ERROR);
+    this.transportLifetime.ownSocket(ws);
     if (!this.bulkChannelRegistry) {
       this.logger.warn(ROUTER_LOG_MSG.BULK_CHANNEL_NO_REGISTRY, {
         connectionId,
@@ -415,6 +425,8 @@ class MessageRouterInboundDispatch {
    * @private
    */
   handleServiceMessage(ws, message) {
+    const lifetime = this.transportLifetime;
+    if (lifetime.signal.aborted) return;
     const {targetAddress, messageId, payload} = message;
     this.logger.debug(ROUTER_LOG_MSG.SERVICE_MESSAGE_HANDLING, {
       messageId,
@@ -457,8 +469,12 @@ class MessageRouterInboundDispatch {
       timestamp: message.timestamp,
     };
     Promise.resolve()
-      .then(() => handler(envelope))
+      .then(() => {
+        lifetime.assertOpen();
+        return handler(envelope);
+      })
       .then((result) => {
+        if (lifetime.signal.aborted) return;
         this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_SENT, {
           messageId,
           targetAddress,
@@ -471,6 +487,7 @@ class MessageRouterInboundDispatch {
         });
       })
       .catch((error) => {
+        if (lifetime.signal.aborted) return;
         this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_ERROR, {
           messageId,
           targetAddress,

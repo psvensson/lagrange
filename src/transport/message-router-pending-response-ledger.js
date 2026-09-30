@@ -279,6 +279,7 @@ class MessageRouterPendingResponseLedger {
    */
   registerPendingResponse(messageId, targetNodeId = null, options = {}) {
     return new Promise((resolve, reject) => {
+      this.transportLifetime.assertOpen();
       const pending = {
         abortListener: null,
         abortSignal: null,

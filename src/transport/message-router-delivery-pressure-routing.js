@@ -283,6 +283,8 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
     queryTransportSelection,
     options = {},
   ) {
+    const lifetime = this.transportLifetime;
+    lifetime.assertOpen();
     const queryTransport = queryTransportSelection.service;
     if (!queryTransport) {
       return this.buildDeferredQueryTransportOutcome(queryTransportSelection);
@@ -293,6 +295,8 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
         message,
         this.buildQueryTransportSendOptions(options),
       );
+      lifetime.assertOpen();
+      options.signal?.throwIfAborted();
       return await this.normalizeQueryTransportFailure({
         failure: queryResult,
         targetNodeId,
@@ -302,6 +306,8 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
         correlationId,
       });
     } catch (error) {
+      lifetime.assertOpen();
+      options.signal?.throwIfAborted();
       return this.normalizeQueryTransportFailure({
         failure: error,
         targetNodeId,

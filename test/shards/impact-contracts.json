@@ -20,7 +20,8 @@
       ],
       "tests": [
         "test/transport/",
-        "test/message-group/"
+        "test/message-group/",
+        "test/service/minimal-deployment-request-cell-routing.test.js"
       ]
     },
     "partition-topology": {

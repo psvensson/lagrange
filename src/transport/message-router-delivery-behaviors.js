@@ -65,6 +65,19 @@ function awaitDeliveryWithCancellation(deliveryPromise, signal) {
   });
 }
 
+function awaitAdmittedDelivery(deliveryPromise, signal, lifetime, messageId, correlationId) {
+  return awaitDeliveryWithCancellation(deliveryPromise, signal).catch((error) => {
+    if (!lifetime.signal.aborted || error !== lifetime.signal.reason) throw error;
+    return {
+      result: {
+        messageId, correlationId, acknowledged: false,
+        error: ROUTER_ERROR_MSG.SHUTDOWN, shutdown: true,
+      },
+      queueWaitMs: TRANSPORT_NUM.ZERO,
+    };
+  });
+}
+
 export async function deliverLocal(
   router,
   targetAddress,
@@ -72,6 +85,18 @@ export async function deliverLocal(
   payload,
   correlationId,
 ) {
+  const lifetime = router.transportLifetime;
+  lifetime.assertOpen();
+  return awaitAdmittedDelivery(
+    deliverLocalInLifetime(router, targetAddress, messageId, payload, correlationId),
+    lifetime.signal,
+    lifetime,
+    messageId,
+    correlationId,
+  );
+}
+
+async function deliverLocalInLifetime(router, targetAddress, messageId, payload, correlationId) {
   const handler = router.handlers.get(targetAddress);
   if (!handler) {
     return router.deliverRemote(
@@ -135,8 +160,25 @@ export async function deliver(
   message,
   options = {},
 ) {
-  const deliverStartMs = Date.now();
+  const lifetime = router.transportLifetime;
+  options = {...options, signal: lifetime.deliverySignal(options.signal)};
   assertDeliveryOpen(options.signal);
+  const messageId = message.messageId || uuidv4();
+  const correlationId = message.correlationId || messageId;
+  const outcome = await awaitAdmittedDelivery(
+    deliverInLifetime(router, targetAddress, message, options, lifetime, messageId, correlationId),
+    options.signal,
+    lifetime,
+    messageId,
+    correlationId,
+  );
+  return normalizeDeliveryOutcome(outcome).result;
+}
+
+async function deliverInLifetime(
+  router, targetAddress, message, options, lifetime, messageId, correlationId,
+) {
+  const deliverStartMs = Date.now();
   if (!router.initialized) {
     await router.initialize();
   }
@@ -146,8 +188,6 @@ export async function deliver(
     options.timeoutMs > TRANSPORT_NUM.ZERO ?
       Math.floor(options.timeoutMs) :
       router.messageTimeoutMs;
-  const messageId = message.messageId || uuidv4();
-  const correlationId = message.correlationId || messageId;
   const requestId = resolveRequestIdFromMessage(message);
   const operationId = resolveOperationIdFromMessage(message);
   const deliverySource = resolveDeliverySource(
@@ -169,23 +209,22 @@ export async function deliver(
   if (!targetNodeId) {
     throw new Error(ROUTER_ERROR_MSG.invalidAddressFormat(targetAddress));
   }
-  const deliveryOutcome = await awaitDeliveryWithCancellation(
-    router.resolveDeliveryOutcome(
-      targetAddress,
-      message,
-      messageId,
-      targetNodeId,
-      correlationId,
-      {
-        ...options,
-        deliverySource,
-        timeoutMs: deliveryTimeoutMs,
-      },
-    ),
-    options.signal,
+  const deliveryOutcome = await router.resolveDeliveryOutcome(
+    targetAddress,
+    message,
+    messageId,
+    targetNodeId,
+    correlationId,
+    {
+      ...options,
+      deliverySource,
+      timeoutMs: deliveryTimeoutMs,
+    },
   );
+  assertDeliveryOpen(options.signal);
   const normalizedOutcome = normalizeDeliveryOutcome(deliveryOutcome);
   const result = normalizedOutcome.result;
+  lifetime.assertOpen();
   const queueWaitMs = normalizedOutcome.queueWaitMs;
   try {
     const queue = router.outboundQueues.get(targetNodeId);
@@ -223,7 +262,7 @@ export async function deliver(
   } catch (_metricsErr) {
     void _metricsErr;
   }
-  return result;
+  return normalizedOutcome;
 }
 
 export function tryDeliverRaftDirect(
@@ -233,6 +272,7 @@ export function tryDeliverRaftDirect(
   payload,
   targetNodeId,
 ) {
+  router.transportLifetime.assertOpen();
   if (!isRaftPacket(payload)) {
     return null;
   }
@@ -280,6 +320,23 @@ export async function deliverRemote(
   correlationId,
   options = {},
 ) {
+  const lifetime = router.transportLifetime;
+  options = {...options, signal: lifetime.deliverySignal(options.signal)};
+  assertDeliveryOpen(options.signal);
+  return awaitAdmittedDelivery(
+    deliverRemoteInLifetime(
+      router, targetAddress, messageId, payload, targetNodeId, correlationId, options,
+    ),
+    options.signal,
+    lifetime,
+    messageId,
+    correlationId,
+  );
+}
+
+async function deliverRemoteInLifetime(
+  router, targetAddress, messageId, payload, targetNodeId, correlationId, options,
+) {
   const directRaftDelivery = router.tryDeliverRaftDirect(
     targetAddress,
     messageId,
@@ -320,6 +377,7 @@ export async function deliverRemote(
     const ackOutcome = await router.enqueueOutbound(
       targetNodeId,
       () => {
+        assertDeliveryOpen(options.signal);
         const connection = router.nodeConnections.get(targetNodeId);
         const reconnectInProgress = router.buildReconnectInProgressFailure(
           targetNodeId,
@@ -386,10 +444,12 @@ export async function deliverRemote(
         message: payload,
       },
     );
+    assertDeliveryOpen(options.signal);
     const normalizedAckOutcome = normalizeDeliveryOutcome(ackOutcome);
     ackResult = normalizedAckOutcome.result;
     queueWaitMs = normalizedAckOutcome.queueWaitMs;
   } catch (error) {
+    assertDeliveryOpen(options.signal);
     const deferredFailure = await router.resolveRecoverableDeliveryError({
       error,
       targetNodeId,
@@ -399,6 +459,7 @@ export async function deliverRemote(
       correlationId,
       deliveryTimeoutMs,
     });
+    assertDeliveryOpen(options.signal);
     if (deferredFailure) {
       router.cancelPendingResponse(messageId, {
         ignoreLateResponse: true,
@@ -455,6 +516,7 @@ export async function deliverRemote(
       throw earlyResponseError;
     }
     const serviceResult = await responsePromise;
+    assertDeliveryOpen(options.signal);
     return {
       result: {
         messageId,
@@ -465,6 +527,7 @@ export async function deliverRemote(
       queueWaitMs,
     };
   } catch (error) {
+    assertDeliveryOpen(options.signal);
     return {
       result: {
         messageId,
@@ -567,6 +630,7 @@ export function sendMessage(
   timeoutMs = null,
 ) {
   return new Promise((resolve, reject) => {
+    router.transportLifetime.assertOpen();
     const message = {
       type: RouterMessageType.SERVICE_MESSAGE,
       messageId,
@@ -654,7 +718,7 @@ export function sendMessage(
 }
 
 export function sendRaw(router, ws, message) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
+  if (!router.transportLifetime.signal.aborted && ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(message));
   }
 }
