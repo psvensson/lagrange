@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 277,
+    "bootstrap-membership": 280,
     "cdc-metadata": 59,
     "cli-tooling": 96,
     "control-plane": 204,
@@ -25,10 +25,10 @@
     "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2269,
-  "digest": "fnv1a32-fe29fe74",
+  "censusSize": 2272,
+  "digest": "fnv1a32-61c52398",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b32c1af3",
+  "observationDigest": "fnv1a32-ad2cbe45",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1107,6 +1107,9 @@
     "test/node/fault-recovery-behavior.property.test.js": "bootstrap-membership",
     "test/node/idempotent-operations.property.test.js": "bootstrap-membership",
     "test/node/lifecycle-readiness.test.js": "bootstrap-membership",
+    "test/node/local-only-reconcile-activation-boundary.test.js": "bootstrap-membership",
+    "test/node/message-group-executor-activation-handler-boundary.test.js": "bootstrap-membership",
+    "test/node/message-group-registration-redrive-owner.test.js": "bootstrap-membership",
     "test/node/message-group-service-handler.test.js": "bootstrap-membership",
     "test/node/metrics-accuracy.property.test.js": "bootstrap-membership",
     "test/node/node-lifecycle-service.test.js": "bootstrap-membership",
@@ -2767,6 +2770,7 @@
         "src/bootstrap/phases/seed-cleanup-handler.js",
         "src/bootstrap/phases/seed-message-groups-phase.js",
         "src/bootstrap/shared/message-group-service-activation.js",
+        "src/bootstrap/shared/message-group-transport-handler.js",
         "src/message-group/message-group-service-row-owner.js",
         "src/node/message-group-service-handler.js",
         "src/node/replica-handler-runtime-methods.js",
@@ -6715,8 +6719,10 @@
     },
     "test/integration/message-group-service-handler-services-row.integration.test.js": {
       "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/node/message-group-service-handler.js",
+        "test/test-helpers/boot-incarnation-fixture.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
@@ -7035,9 +7041,32 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/node/local-only-reconcile-activation-boundary.test.js": {
+      "files": [
+        "src/node/replica-transport-handler-identity.js"
+      ]
+    },
+    "test/node/message-group-executor-activation-handler-boundary.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/message-group/message-group-service-row-owner.js",
+        "src/node/message-group-service-handler.js",
+        "src/rebalancer/executor-outcome-constants.js"
+      ]
+    },
+    "test/node/message-group-registration-redrive-owner.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/message-group/message-group-service-row-owner.js",
+        "src/node/message-group-service-handler.js",
+        "test/test-helpers/message-group-activation-boundary-fixture.js"
+      ]
+    },
     "test/node/message-group-service-handler.test.js": {
       "files": [
-        "src/node/message-group-service-handler.js"
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/node/message-group-service-handler.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ],
       "env": [
         "NODE_ENV"
@@ -8769,7 +8798,6 @@
     "test/rebalancer/coordinator-reservation-lifecycle.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
-        "src/rebalancer/operation-reservation-attempt-outcome.js",
         "src/rebalancer/rebalance-coordinator.js"
       ]
     },
@@ -10493,6 +10521,7 @@
         "docs/current-capabilities.json",
         "docs/service-portability-capabilities.json",
         "scripts/check-current-capabilities.js",
+        "scripts/generate-current-capabilities-doc.js",
         "src/bootstrap/bootstrap-api-constants.js",
         "src/service/request-cell-http-authenticator.js",
         "src/transport/router-server-manager.js"
@@ -10981,9 +11010,14 @@
         "docs/steering/rules.md",
         "docs/steering/workflow-guidelines/solver-quests.md",
         "scripts/check-guideline-literals-baseline.json",
-        "scripts/solve/store.js"
+        "scripts/solve/store.js",
+        "src/cli/service-command-router.js",
+        "src/cli/service-wasm-scaffold.js"
       ],
       "directories": [
+        "architecture",
+        "docs",
+        "examples",
         "scripts/checks",
         "solve/changes",
         "solve/epics",
@@ -11876,20 +11910,12 @@
       "files": [
         "README.md",
         "docs/current-capabilities-and-limitations.md",
+        "docs/native-programming-model.md",
         "docs/service-deployment-guide.md",
         "docs/service-portability-capabilities.json",
         "examples/README.md",
-        "examples/distributed-sql/06-wasm-remote-replica/example.manifest.json",
-        "examples/distributed-sql/06-wasm-remote-replica/expected.json",
-        "examples/distributed-sql/06-wasm-remote-replica/index.js",
-        "examples/distributed-sql/README.md",
-        "src/query/callback/callback-module-artifact.js",
         "src/query/callback/callback-runtime-driver-registry.js",
-        "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
         "src/runtime/oci-container-driver.js"
-      ],
-      "directories": [
-        "examples/distributed-sql/06-wasm-remote-replica"
       ]
     },
     "test/scripts/service-portability-static-gate.test.js": {
