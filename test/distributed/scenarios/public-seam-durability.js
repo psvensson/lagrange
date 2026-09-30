@@ -13,11 +13,10 @@
  * convergence verdicts. The stopped node is chosen by its harness role (a
  * joiner), never by consensus role.
  *
- * Every step is reported with expected/actual and a named outcome; the
- * report ends with a certification line derived from the runtime's
- * provider-control owner. While the legacy provider is the runtime
- * default the status is PREPARED_BLOCKED_ON_RS_RAFT_CUTOVER: a PASS then
- * proves the harness, not an rs-raft certification.
+ * Every step is reported with expected/actual and a named outcome. The
+ * report ends with CANDIDATE because current production partitions have one
+ * fixed rs-raft consensus path. CANDIDATE is eligibility for certification,
+ * not a claim that this scenario or transaction replication has passed.
  */
 
 import {
@@ -576,8 +575,7 @@ function createContext(cluster) {
 }
 
 function buildReport(ctx, steps) {
-  const certification = deriveCertificationStatus(
-    ctx.deps.resolveRuntimeProvider);
+  const certification = deriveCertificationStatus();
   const failed = steps.filter((step) =>
     step.outcome === PUBLIC_SEAM_STEP_OUTCOME.FAIL ||
     (step.outcome === PUBLIC_SEAM_STEP_OUTCOME.NOT_RUN &&

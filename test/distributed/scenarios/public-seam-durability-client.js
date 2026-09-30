@@ -15,10 +15,6 @@ import {COLUMN} from '../../../src/constants/columns.js';
 import {META_SERVICE_ID} from '../../../src/constants/wasm-meta.js';
 import {TABLES} from '../../../src/constants/tables.js';
 import {
-  RAFT_PROVIDER_CONTROL,
-} from '../../../src/raft/raft-provider-control-constants.js';
-import {resolveRaftProvider} from '../../../src/raft/raft-provider-control.js';
-import {
   PGWIRE_AUTH_MODE,
   PGWIRE_CONFIG_FIELD,
   PGWIRE_TLS_MODE,
@@ -267,25 +263,16 @@ async function openPgPublicClient(node, port) {
 }
 
 /**
- * Certification status from the runtime's own provider-control owner: while
- * the runtime's default consensus provider is the legacy one, a PASS is a
- * prepared harness, not an rs-raft certification.
- * @param {Function} [resolveProvider] - Defaults to the owner's resolver
- *   with no provider selected (the runtime default).
- * @return {{status: string, line: string, runtimeDefaultProvider: string,
- *   legacyProvider: string, source: string}}
+ * Certification eligibility follows the partition consensus owner. The hard
+ * cutover made rs-raft the one production partition path, so this scenario is
+ * a candidate on every current tree carrying that contract. This is not a
+ * claim that the scenario itself passes.
+ * @return {{status: string, line: string, source: string}}
  */
-function deriveCertificationStatus(
-  resolveProvider = () => resolveRaftProvider({}),
-) {
-  const runtimeDefaultProvider = resolveProvider();
-  const status = runtimeDefaultProvider === RAFT_PROVIDER_CONTROL.LIFERAFT ?
-    PUBLIC_SEAM_CERTIFICATION.PREPARED_BLOCKED :
-    PUBLIC_SEAM_CERTIFICATION.CANDIDATE;
+function deriveCertificationStatus() {
+  const status = PUBLIC_SEAM_CERTIFICATION.CANDIDATE;
   return {
-    legacyProvider: RAFT_PROVIDER_CONTROL.LIFERAFT,
     line: `${PUBLIC_SEAM_CERTIFICATION_LINE_PREFIX}${status}`,
-    runtimeDefaultProvider,
     source: PUBLIC_SEAM_CERTIFICATION_SOURCE,
     status,
   };

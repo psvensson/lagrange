@@ -23,17 +23,16 @@ const PUBLIC_SEAM_VERDICT = Object.freeze({
   PASS: 'PASS',
 });
 
-// Certification status of this scenario's evidence. PREPARED means the
-// harness exists but the tree still runs the legacy consensus provider, so
-// a PASS is not an rs-raft certification; CANDIDATE means the legacy
-// provider is gone and the owner decides whether the run certifies.
+// Certification eligibility of this scenario. Current production partitions
+// have one fixed rs-raft consensus path. CANDIDATE means this scenario may be
+// used as rs-raft evidence; it is not a claim that the scenario has passed or
+// that the separate transaction-replication prerequisite is satisfied.
 const PUBLIC_SEAM_CERTIFICATION = Object.freeze({
   CANDIDATE: 'CANDIDATE',
-  PREPARED_BLOCKED: 'PREPARED_BLOCKED_ON_RS_RAFT_CUTOVER',
 });
 const PUBLIC_SEAM_CERTIFICATION_LINE_PREFIX = 'certification: ';
 const PUBLIC_SEAM_CERTIFICATION_SOURCE =
-  'src/raft/raft-provider-control.js#resolveRaftProvider (runtime default)';
+  'test/raft/raft-rs-backend/single-path-partition-cutover.test.js';
 
 const PUBLIC_SEAM_STEP = Object.freeze({
   BINDING_AFTER_RESTART: 'binding_after_restart',

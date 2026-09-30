@@ -1,9 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
 import {test} from '../../../../src/test-helpers/tap.js';
-import {
-  RAFT_PROVIDER_CONTROL,
-} from '../../../../src/raft/raft-provider-control-constants.js';
 import {PARSER_DIALECT} from '../../../../src/query/pg/pg-compat-constants.js';
 import {
   SERVICE_LIFECYCLE_SQL_CLASSIFICATION,
@@ -60,8 +56,6 @@ const SEED_ROLE = 'seed';
 const JOINER_ROLE = 'joiner';
 const PUBLIC_PORT = 5432;
 const CALL_BINDING_NAME = 'account-summary--call--summarize-account-activity';
-const LEGACY_PROVIDER_PACKAGE = '@markwylde/liferaft';
-const PACKAGE_JSON_URL = new URL('../../../../package.json', import.meta.url);
 const HEX = 'hex';
 const INTERNAL_ERROR_CODE = 'XX000';
 const REFUSED_CODE = 'ECONNREFUSED';
@@ -347,7 +341,7 @@ test('public-seam-durability passes through stop and restart of a joiner ' +
     steps[PUBLIC_SEAM_STEP.FINAL_STATE_AGREEMENT].actual['seed-1'].history,
     (row) => row.version), [1, 2, 3]);
   assert.equal(report.certificationLine,
-    `certification: ${PUBLIC_SEAM_CERTIFICATION.PREPARED_BLOCKED}`);
+    `certification: ${PUBLIC_SEAM_CERTIFICATION.CANDIDATE}`);
   t.end();
 });
 
@@ -820,22 +814,14 @@ test('public-seam-durability sends only statements the PostgreSQL-wire ' +
   t.end();
 });
 
-test('public-seam-durability certification derives from the runtime ' +
-  'provider owner', (t) => {
-  assert.equal(
-    deriveCertificationStatus(() => RAFT_PROVIDER_CONTROL.LIFERAFT).status,
-    PUBLIC_SEAM_CERTIFICATION.PREPARED_BLOCKED);
-  assert.equal(
-    deriveCertificationStatus(() => RAFT_PROVIDER_CONTROL.RAFT_LOGIC).status,
-    PUBLIC_SEAM_CERTIFICATION.CANDIDATE);
-  // Differential oracle: this tree still declares the legacy provider
-  // package, so the owner-derived default must say PREPARED.
-  const manifest = JSON.parse(readFileSync(PACKAGE_JSON_URL, 'utf8'));
-  const legacyDeclared = Object.hasOwn(manifest.dependencies || {},
-    LEGACY_PROVIDER_PACKAGE);
-  assert.equal(deriveCertificationStatus().status, legacyDeclared ?
-    PUBLIC_SEAM_CERTIFICATION.PREPARED_BLOCKED :
-    PUBLIC_SEAM_CERTIFICATION.CANDIDATE);
+test('public-seam-durability certification follows the fixed ' +
+  'partition consensus path', (t) => {
+  const certification = deriveCertificationStatus();
+  assert.equal(certification.status, PUBLIC_SEAM_CERTIFICATION.CANDIDATE);
+  assert.equal(certification.line,
+    `certification: ${PUBLIC_SEAM_CERTIFICATION.CANDIDATE}`);
+  assert.equal(certification.source,
+    'test/raft/raft-rs-backend/single-path-partition-cutover.test.js');
   t.end();
 });
 

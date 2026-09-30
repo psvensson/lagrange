@@ -157,7 +157,7 @@ in [Execution semantics](../docs/execution-semantics.md).
 | I3 public Binding invocation | PROVEN | `test/integration/public-binding-cell-invocation-seam.integration.test.js` |
 | I4 outcome contract | PROVEN | `test/integration/call-cell-public-outcome-adversarial.integration.test.js`, `test/service/call-cell-public-outcome.test.js` |
 | I5 consumer-contract ratchet | PROVEN | `test/release/public-consumer-contract-ratchet.test.js`, `test/integration/public-consumer-contract-ratchet.integration.test.js` |
-| I6 durability harness | PREPARED, certification blocked on the rs-raft cutover and on the transaction finding | `test/distributed/scenarios/public-seam-durability.js` (`certification: PREPARED_BLOCKED_ON_RS_RAFT_CUTOVER`) |
+| I6 durability harness | CANDIDATE on the hard rs-raft path; final durability certification still blocked on the transaction finding and a fresh current-main run | `test/distributed/scenarios/public-seam-durability.js` (`certification: CANDIDATE`); the consensus prerequisite is owned by `test/raft/raft-rs-backend/single-path-partition-cutover.test.js` |
 
 ## Falsifiers
 
@@ -171,7 +171,7 @@ in [Execution semantics](../docs/execution-semantics.md).
 | F6 legacy callback axis used | no | static token scan |
 | F7 retry policy needs Raft vocabulary | no | class plus `retrySafe` only |
 | F8 ratchet imports private core | no | static import census |
-| F9 rs-raft WIP edited | no | no commit touches those worktrees or `src/raft/**` |
+| F9 second partition-consensus path introduced by the Images seam | no | current main already owns the hard rs-raft path; this seam adds no backend selector or provider path |
 | F10 new physical locator | no | none added |
 
 ## Findings routed to their owners
@@ -229,8 +229,10 @@ epic's memory notes.
 
 The provider-neutral durability scenario runs in the existing distributed
 harness (`local-three-node.json`, scenario `public-seam-durability`) on local,
-lab and GCP targets. It reports `certification: PREPARED_BLOCKED_ON_RS_RAFT_CUTOVER`
-while the runtime's default provider is the legacy one, and `CANDIDATE`
-otherwise. Final rs-raft multi-node failure and recovery acceptance is pending
-the cutover and the transaction replication repair; a green run today proves
-the harness, not the backend.
+lab and GCP targets. Current main has one fixed rs-raft partition consensus path,
+so the scenario reports `certification: CANDIDATE` without consulting the
+retired provider-selection compatibility surface. The single-path prerequisite
+is proven by `test/raft/raft-rs-backend/single-path-partition-cutover.test.js`.
+Final Images durability certification still requires a fresh current-main run
+and the separate transaction replicated-apply repair; CANDIDATE is eligibility,
+not a passing verdict.
