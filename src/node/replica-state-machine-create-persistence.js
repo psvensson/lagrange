@@ -26,8 +26,10 @@ import {
   REPLICA_STATE_MACHINE_NUM,
   REPLICA_STATE_MACHINE_STATE,
 } from './replica-state-machine-constants.js';
-import {runSerializedReplicaMutation} from
-  './replica-state-machine-serialization.js';
+import {
+  runPersistedTransitionEffect,
+  runSerializedReplicaMutation,
+} from './replica-state-machine-serialization.js';
 
 const REPLICA_CREATE_ERROR_CODE = Object.freeze({
   CREATE_OWNER_DEFERRED: 'CREATE_OWNER_DEFERRED',
@@ -159,7 +161,23 @@ async function reconcileOneLocalOnlyServiceRow(
       stateMachine,
       serviceId,
       async () => {
-        const result = await stateMachine._createReplicaRowInCdc(stampedState);
+        // D2: the reconcile's create is the deferred durable effect of the
+        // transition that seeded this row locally, so it crosses the same
+        // activation boundary: a durable ACTIVE is written only while the
+        // exact transport handler of this generation stays registered, and
+        // handler retirement waits for that write. A row whose deferring
+        // owner supplied no handler check cannot become a durable ACTIVE by
+        // this path; it stays local-only retry debt.
+        const result = await runPersistedTransitionEffect(
+          stateMachine,
+          serviceId,
+          replicaState.state,
+          {
+            isEffectHandlerCurrent: stateMachine
+              .localOnlyServiceRowActivationByServiceId.get(serviceId),
+          },
+          () => stateMachine._createReplicaRowInCdc(stampedState),
+        );
         if (result === true ||
             classifyControlPlaneMutationResult(result).applied) {
           replicaState.groupId = stampedState.groupId;

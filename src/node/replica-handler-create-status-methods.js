@@ -24,6 +24,8 @@ import {
   REPLICA_HANDLER_SERVICE,
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
+import {isReplicaServiceHandlerBound} from
+  './replica-transport-handler-identity.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_UPSERT = 'UPSERT';
@@ -31,6 +33,19 @@ const MISSING_TRACKED_REPLICA_OBSERVATION = Object.freeze({
   available: false,
   trackedState: null,
 });
+
+// D2: the handler binding this owner hands to the deferred durable write. It
+// resolves the live runtime at reconcile time, so a durable ACTIVE is written
+// only while the exact transport handler of the tracked generation is still
+// registered and retires through this lifecycle owner.
+function deferredDurableWriteActivation(handler, replicaId) {
+  return {
+    isEffectHandlerCurrent: () => isReplicaServiceHandlerBound(
+      handler.getTrackedService(replicaId),
+      handler.replicaStateMachine,
+    ),
+  };
+}
 
 function registerAuthoritativeFailedCreateSnapshot(
   handler,
@@ -347,7 +362,10 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       // Lifecycle persistence must UPSERT for this row until a durable
       // write confirms remote existence (the local row no longer proxies
       // it).
-      this.replicaStateMachine?.markServiceRowLocalOnly?.(replicaId);
+      this.replicaStateMachine?.markServiceRowLocalOnly?.(
+        replicaId,
+        deferredDurableWriteActivation(this, replicaId),
+      );
       return true;
     }
 
@@ -418,7 +436,10 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         },
         {causeId: `local-voter-ready:${replicaId}`},
       );
-      this.replicaStateMachine?.markServiceRowLocalOnly?.(replicaId);
+      this.replicaStateMachine?.markServiceRowLocalOnly?.(
+        replicaId,
+        deferredDurableWriteActivation(this, replicaId),
+      );
       return true;
     }
 

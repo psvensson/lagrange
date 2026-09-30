@@ -181,6 +181,12 @@ class ReplicaStateMachine extends EventEmitter {
     // writes on the timeout-checker tick (serviceId -> {delayMs,
     // notBeforeMs}); entries clear with the local-only marker.
     this.localOnlyServiceRowRetryStateByServiceId = new Map();
+    // D2: the exact-handler check of the transition that deferred the write
+    // (serviceId -> isEffectHandlerCurrent). The reconcile's create is the
+    // deferred durable effect of that transition, so a durable ACTIVE is
+    // bound to the same handler it would have been bound to then; entries
+    // clear with the local-only marker.
+    this.localOnlyServiceRowActivationByServiceId = new Map();
     this.localOnlyServiceRowReconcileInFlight = false;
     // CL-021: per-row durable-write serialization between transition
     // persistence and the local-only reconcile (serviceId -> in-flight
@@ -561,12 +567,23 @@ class ReplicaStateMachine extends EventEmitter {
   /**
    * CL-016: mark a service row as seeded locally (durable write deferred).
    * Only the dedicated reconcile owner may INSERT that missing generation.
+   *
+   * D2: the deferring owner hands over the exact-handler check its durable
+   * transition would have used. The reconcile's create runs that check at
+   * the same boundary a persisted ACTIVE transition does, so the deferred
+   * write is never a second path to a durable ACTIVE.
    * @param {string} serviceId
+   * @param {?{isEffectHandlerCurrent: Function}} [activation]
    * @return {void}
    */
-  markServiceRowLocalOnly(serviceId) {
-    if (serviceId) {
-      this.localOnlyServiceRowIds.add(serviceId);
+  markServiceRowLocalOnly(serviceId, activation = null) {
+    if (!serviceId) return;
+    this.localOnlyServiceRowIds.add(serviceId);
+    if (typeof activation?.isEffectHandlerCurrent === 'function') {
+      this.localOnlyServiceRowActivationByServiceId.set(
+        serviceId,
+        activation.isEffectHandlerCurrent,
+      );
     }
   }
 
@@ -587,6 +604,7 @@ class ReplicaStateMachine extends EventEmitter {
   clearServiceRowLocalOnly(serviceId) {
     this.localOnlyServiceRowIds.delete(serviceId);
     this.localOnlyServiceRowRetryStateByServiceId.delete(serviceId);
+    this.localOnlyServiceRowActivationByServiceId.delete(serviceId);
   }
 
   /**
