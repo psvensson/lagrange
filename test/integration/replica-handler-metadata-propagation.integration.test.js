@@ -32,6 +32,8 @@ import {
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {createLifecycleCdcServiceForCache} from
   '../test-helpers/lifecycle-state-store.js';
+import {bindRegisteredReplicaHandler} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 function createMockCDCService(cache) {
   return createLifecycleCdcServiceForCache(cache);
@@ -132,7 +134,7 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
           onInitializationStage: options.onInitializationStage,
         }));
         await service.initialize();
-        return service;
+        return bindRegisteredReplicaHandler(service, options);
       },
     });
     handler.initialize();
