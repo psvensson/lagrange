@@ -17,6 +17,9 @@
 //     leader's own election tick;
 //   - F6: a transfer is decided and stepped in one turn: by the time the
 //     port answers an accepted request, its MsgTransferLeader is stepped;
+//   - R13: the per-sender record of refused inbound steps is bounded: past
+//     INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT senders, the sender refused
+//     longest ago is evicted first, and a sender refused again is renewed;
 //   - CA9: a leader demoted to learner by the canonical request keeps
 //     leading; its transfer's dropped proposal is the transfer's.
 
@@ -28,8 +31,10 @@ import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
-import {PERSISTENCE_ADMISSION_WAIT} from
-  '../../../src/raft/raft-rs-runtime-owner-constants.js';
+import {
+  INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT,
+  PERSISTENCE_ADMISSION_WAIT,
+} from '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {
   OracleRun,
   SEND_MODE,
@@ -97,6 +102,47 @@ for (const reentry of [true, false]) {
     }
   });
 }
+
+// Senders no configuration holds: every one of their responses is refused.
+const UNKNOWN_SENDER_BASE = 9000000000000000000n;
+
+function unknownSender(index) {
+  return String(UNKNOWN_SENDER_BASE + BigInt(index));
+}
+
+async function refuseFrom(run, senders) {
+  const heartbeatResponse = ENUMERATIONS.types.get('MsgHeartbeatResponse');
+  for (const sender of senders) {
+    craft(run, {to: A, from: B, fromRaftId: sender,
+      msgType: heartbeatResponse});
+  }
+  run.driver.stepUndrained(A);
+  await run.act(() => run.driver.port(A).readStatus());
+}
+
+test('R13: the record of refused inbound steps holds at most its bound of ' +
+  'senders and evicts the one refused longest ago', async () => {
+  const run = await formed('anchor-refusal-bound');
+  try {
+    const limit = INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT;
+    const senders = Array.from({length: limit + 1}, (_, index) =>
+      unknownSender(index));
+    await refuseFrom(run, senders.slice(0, limit));
+    await refuseFrom(run, [senders[0]]);
+    await refuseFrom(run, [senders[limit]]);
+    const recorded = run.driver.status(A).inboundStepRefusals
+      .map((refusal) => refusal.from);
+    assert.equal(recorded.length, limit, 'the record is at its bound');
+    assert.equal(recorded.includes(senders[1]), false,
+      'the sender refused longest ago was evicted');
+    assert.equal(recorded.includes(senders[0]), true,
+      'a sender refused again was renewed');
+    assert.equal(recorded.includes(senders[limit]), true,
+      'the newest sender is recorded');
+  } finally {
+    run.dispose();
+  }
+});
 
 test('B1/F9b: a turn that awaited a send enters the core again only once ' +
   'the store admits persistence', async () => {

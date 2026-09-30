@@ -36,34 +36,45 @@ const C = 'oracle-c';
 // Reserved in every registry, never a member: a peer with no progress.
 const D = 'oracle-d';
 const REPLICAS = Object.freeze([A, B, C]);
-const MOVES = Object.freeze({
-  INPUT: 'input',
-  OUTBOUND: 'outbound',
-  // The receiver predicate makes the core refuse the envelope's own step;
-  // the build asserts the predicate.
-  REFUSED: 'refused',
-  EITHER: 'input-or-outbound',
+// The decision inputs of the model (coverage-model.md section 3, as amended):
+// what a decision reads, and what a pending event moves. The transfer in
+// progress (I6) and the transferee's catch-up (I18) are hidden from status;
+// their move is read from the requester's outbound messages.
+const INPUT = Object.freeze({
+  ROLE: 'role, term, leader',
+  CONF: 'configuration',
+  PROGRESS: 'progress',
+  SELF: 'own membership',
+  TRANSFER: 'transfer in progress',
+  CATCHUP: 'transferee catch-up',
 });
+const HIDDEN_INPUTS = Object.freeze([INPUT.TRANSFER, INPUT.CATCHUP]);
 
 // ---------------------------------------------------------------- decisions
 
 const DECISIONS = Object.freeze({
   D1: {name: 'named transfer',
+    inputs: [INPUT.ROLE, INPUT.CONF, INPUT.TRANSFER, INPUT.CATCHUP],
     request: (requester, target = C) => (driver) =>
       driver.port(requester).transferLeadership(namedSuccessor(target))},
   D2: {name: 'most-caught-up transfer',
+    inputs: [INPUT.ROLE, INPUT.CONF, INPUT.PROGRESS, INPUT.TRANSFER],
     request: (requester) => (driver) =>
       driver.port(requester).transferLeadership(mostCaughtUp())},
   D3: {name: 'dropped-propose classification',
+    inputs: [INPUT.ROLE, INPUT.SELF, INPUT.TRANSFER],
     request: (requester) => (driver) =>
       driver.port(requester).propose({decision: 'propose', at: requester})},
   D4: {name: 'dropped-conf-change classification',
+    inputs: [INPUT.ROLE, INPUT.SELF, INPUT.TRANSFER],
     request: (requester) => (driver) =>
       driver.port(requester).proposeConfChange({
         type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D})},
   D5: {name: 'campaign eligibility',
+    inputs: [INPUT.SELF],
     request: (requester) => (driver) => driver.port(requester).campaign()},
   D6: {name: 'progress probe',
+    inputs: [INPUT.ROLE, INPUT.CONF, INPUT.PROGRESS],
     request: (requester, target = C) => (driver) =>
       driver.port(requester).probePeerProgress(
         driver.cluster.addressOf(target))},
@@ -124,6 +135,15 @@ async function selfRemovalAtA(run) {
   await run.deliverOnly([B, C]);
 }
 
+// A removes C; the commit that includes it reaches C, which is still a
+// voter in its own view until it processes that commit.
+async function ownRemovalAtFollowerC(run) {
+  await run.act(() => run.driver.port(A).proposeConfChange({
+    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C}));
+  await run.deliverOnly([B, C]);
+  await run.deliverOnly([A]);
+}
+
 // B asks for leadership; its MsgTransferLeader is forwarded to A.
 async function forwardedTransferToBAtA(run) {
   await run.act(() =>
@@ -175,78 +195,93 @@ function assertNoProgressAt({driver}, requester, identity) {
 
 // --------------------------------------------------------------- the events
 
-// One event per decision input, all pending at A (the decision axis).
+// The decision axis's events: each declares the inputs it moves, and every
+// decision is crossed with the events that move an input it reads.
 const INPUT_EVENTS = Object.freeze([
   {input: 'role, term, leader (higher-term vote request)',
-    type: 'MsgRequestVote', build: higherTermVoteAtA},
+    type: 'MsgRequestVote', build: higherTermVoteAtA, moves: [INPUT.ROLE]},
   {input: 'role, term, leader (new leader\'s append at a stale leader)',
-    type: 'MsgAppend', build: newLeaderAppendAtStaleA},
+    type: 'MsgAppend', build: newLeaderAppendAtStaleA, moves: [INPUT.ROLE]},
   {input: 'role, term, leader (new leader\'s heartbeat at a stale leader)',
-    type: 'MsgHeartbeat', build: newLeaderHeartbeatAtStaleA},
+    type: 'MsgHeartbeat', build: newLeaderHeartbeatAtStaleA,
+    moves: [INPUT.ROLE]},
   {input: 'progress (unequal acknowledgements)',
-    type: 'MsgAppendResponse', build: unequalProgressAtA},
+    type: 'MsgAppendResponse', build: unequalProgressAtA,
+    moves: [INPUT.PROGRESS]},
   {input: 'configuration (a removal committed by the acknowledgement)',
-    type: 'MsgAppendResponse', build: removalOfCAtA},
+    type: 'MsgAppendResponse', build: removalOfCAtA,
+    moves: [INPUT.CONF, INPUT.PROGRESS]},
   {input: 'transfer in progress (a forwarded MsgTransferLeader)',
     type: 'MsgTransferLeader', build: forwardedTransferToBAtA,
-    moves: MOVES.OUTBOUND},
+    moves: [INPUT.TRANSFER]},
+  {input: 'own membership at the leader (its removal committed)',
+    type: 'MsgAppendResponse', build: selfRemovalAtA,
+    moves: [INPUT.SELF, INPUT.CONF]},
+  {input: 'own membership at a follower (its removal committed)',
+    type: 'MsgAppend', build: ownRemovalAtFollowerC, requester: C, target: B,
+    moves: [INPUT.SELF, INPUT.CONF]},
 ]);
 
 // Receiver predicates per message type (the event axis). Local-only types
 // and response types from a sender without progress are generated.
 const CATALOGUE = Object.freeze({
   MsgPropose: [
-    {predicate: 'leader', requester: A, decisions: ['D1', 'D3'],
-      moves: MOVES.OUTBOUND,
+    {predicate: 'leader', requester: A, decisions: ['D1'],
+      moves: [INPUT.CATCHUP],
       build: (run) => run.act(() =>
         run.driver.port(B).propose({forwardedBy: B}))},
     {predicate: 'leader with a transfer in progress', requester: A,
-      decisions: ['D3'], moves: MOVES.REFUSED,
+      decisions: ['D3'], refusedFrom: B,
       build: async (run) => {
         await leaderInTransfer(run);
         await run.act(() => run.driver.port(B).propose({forwardedBy: B}));
       }},
     {predicate: 'leader removed from its configuration', requester: A,
-      decisions: ['D3'], moves: MOVES.REFUSED,
+      decisions: ['D3'], refusedFrom: B,
       build: async (run) => {
         await leaderSelfRemoved(run);
         await run.act(() => run.driver.port(B).propose({forwardedBy: B}));
       }},
     {predicate: 'candidate', requester: B, decisions: ['D3'],
-      moves: MOVES.REFUSED, timeoutDriven: true,
+      refusedFrom: C, timeoutDriven: true,
       build: async (run) => {
         await candidateB(run);
         craft(run, {to: B, from: C, msgType: 2,
           term: 0, entries: [proposalEntry({forwardedBy: C})]});
       }},
     {predicate: 'follower with a leader', requester: B, decisions: ['D1'],
-      moves: MOVES.OUTBOUND,
+      control: 'forwarded to the leader unchanged: it moves no input of ' +
+        'the follower\'s decisions',
       build: (run) => craft(run, {to: B, from: C, msgType: 2,
         term: 0, entries: [proposalEntry({forwardedBy: C})]})},
     {predicate: 'follower without a leader', requester: B, form: false,
-      decisions: ['D3'], moves: MOVES.REFUSED, timeoutDriven: true,
+      decisions: ['D3'], refusedFrom: A, timeoutDriven: true,
       build: (run) => craft(run, {to: B, from: A, msgType: 2,
         term: 0, entries: [proposalEntry({forwardedBy: A})]})},
   ],
   MsgAppend: [
     {predicate: 'stale leader, higher term', requester: A,
-      decisions: ['D1', 'D2'], build: newLeaderAppendAtStaleA},
+      decisions: ['D1', 'D2'], moves: [INPUT.ROLE],
+      build: newLeaderAppendAtStaleA},
   ],
   MsgAppendResponse: [
     {predicate: 'sender with progress, unequal progress', requester: A,
-      decisions: ['D2'], build: unequalProgressAtA},
+      decisions: ['D2'], moves: [INPUT.PROGRESS],
+      build: unequalProgressAtA},
     {predicate: 'sender with progress, commits the target\'s removal',
-      requester: A, decisions: ['D1'], build: removalOfCAtA},
+      requester: A, decisions: ['D1'], moves: [INPUT.CONF, INPUT.PROGRESS],
+      build: removalOfCAtA},
     {predicate: 'sender with progress, commits the leader\'s own removal',
-      requester: A, decisions: ['D3', 'D4'], build: selfRemovalAtA},
+      requester: A, decisions: ['D3', 'D4', 'D5'],
+      moves: [INPUT.SELF, INPUT.CONF], build: selfRemovalAtA},
   ],
   MsgRequestVote: [
     {predicate: 'leader, higher term', requester: A, decisions: ['D1', 'D2'],
-      build: higherTermVoteAtA},
+      moves: [INPUT.ROLE], build: higherTermVoteAtA},
   ],
   MsgRequestVoteResponse: [
     {predicate: 'sender with progress, candidate collects the votes',
-      requester: B, decisions: ['D1'], target: B,
+      requester: B, decisions: ['D1'], target: B, moves: [INPUT.ROLE],
       build: async (run) => {
         await run.act(() => run.driver.port(B).campaign());
         await run.deliverOnly([A, C]);
@@ -254,39 +289,44 @@ const CATALOGUE = Object.freeze({
   ],
   MsgHeartbeat: [
     {predicate: 'stale leader, higher term', requester: A,
-      decisions: ['D1', 'D2'], build: newLeaderHeartbeatAtStaleA},
+      decisions: ['D1', 'D2'], moves: [INPUT.ROLE],
+      build: newLeaderHeartbeatAtStaleA},
   ],
   MsgHeartbeatResponse: [
     {predicate: 'sender with progress, lagging follower', requester: A,
-      decisions: ['D1'], moves: MOVES.OUTBOUND,
+      decisions: ['D1'], moves: [INPUT.CATCHUP],
       build: laggingHeartbeatResponseAtA},
   ],
   MsgTransferLeader: [
     {predicate: 'leader, a transfer to another voter', requester: A,
-      decisions: ['D1', 'D1:same', 'D2', 'D3', 'D4'], moves: MOVES.OUTBOUND,
+      decisions: ['D1', 'D1:same', 'D2', 'D3', 'D4'], moves: [INPUT.TRANSFER],
       sameTarget: B, build: forwardedTransferToBAtA},
   ],
   MsgTimeoutNow: [
     {predicate: 'the transferee, a follower', requester: C,
-      decisions: ['D1'], target: B,
+      decisions: ['D1'], target: B, moves: [INPUT.ROLE],
       build: (run) => run.act(() =>
         run.driver.port(A).transferLeadership(namedSuccessor(C)))},
   ],
   MsgRequestPreVote: [
     {predicate: 'leader, higher term (crafted; pre-vote is off)',
-      requester: A, decisions: ['D1'], moves: MOVES.OUTBOUND,
+      requester: A, decisions: ['D1'],
+      control: 'a pre-vote request never moves the receiver\'s term or ' +
+        'role (raft.rs 1363-1374); it is answered',
       build: (run) => craft(run, {to: A, from: B, msgType: 17,
         term: run.driver.status(A).term + 1})},
   ],
   MsgRequestPreVoteResponse: [
     {predicate: 'sender with progress, higher-term rejection (crafted)',
-      requester: A, decisions: ['D1'],
+      requester: A, decisions: ['D1'], moves: [INPUT.ROLE],
       build: (run) => craft(run, {to: A, from: B, msgType: 18,
         term: run.driver.status(A).term + 1, reject: true})},
   ],
   MsgReadIndex: [
     {predicate: 'leader (crafted; the port never reads by index)',
-      requester: A, decisions: ['D1'], moves: MOVES.OUTBOUND,
+      requester: A, decisions: ['D1'],
+      control: 'a read-index request moves no decision input; it is ' +
+        'answered',
       build: (run) => craft(run, {to: A, from: B, msgType: 15,
         entries: [proposalEntry({readIndexContext: B})]})},
   ],
@@ -348,20 +388,20 @@ const KNOWN_PAIRS = Object.freeze({
 
 const PAIR_BUILDS = Object.freeze({
   'MsgTransferLeader>MsgPropose@transfer in progress': {
-    requester: A, decision: 'D3', moves: MOVES.REFUSED,
+    requester: A, decision: 'D3', refusedFrom: C,
     build: async (run) => {
       await forwardedTransferToBAtA(run);
       await run.act(() => run.driver.port(C).propose({forwardedBy: C}));
     }},
   'MsgAppendResponse>MsgAppendResponse@sender has progress': {
-    requester: A, decision: 'D1', target: B, moves: MOVES.REFUSED,
+    requester: A, decision: 'D1', target: B, refusedFrom: C,
     build: async (run) => {
       await run.act(() => run.driver.port(A).proposeConfChange({
         type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C}));
       await run.deliverOnly([B, C]);
     }},
   'MsgAppendResponse>MsgHeartbeatResponse@sender has progress': {
-    requester: A, decision: 'D3', moves: MOVES.REFUSED,
+    requester: A, decision: 'D3', refusedFrom: C,
     build: async (run) => {
       await run.act(() => run.driver.port(A).proposeConfChange({
         type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: C}));
@@ -370,20 +410,20 @@ const PAIR_BUILDS = Object.freeze({
       await run.deliverOnly([C]);
     }},
   'MsgRequestVote>MsgPropose@follower without a leader': {
-    requester: A, decision: 'D3', moves: MOVES.REFUSED,
+    requester: A, decision: 'D3', refusedFrom: C,
     build: async (run) => {
       await run.act(() => run.driver.port(B).campaign());
       await run.act(() => run.driver.port(C).propose({forwardedBy: C}));
     }},
   'MsgRequestVote>MsgTransferLeader@follower without a leader': {
-    requester: A, decision: 'D1',
+    requester: A, decision: 'D1', moves: [INPUT.ROLE],
     build: async (run) => {
       await run.act(() => run.driver.port(B).campaign());
       await run.act(() =>
         run.driver.port(C).transferLeadership(namedSuccessor(C)));
     }},
   'MsgTimeoutNow>MsgPropose@candidate': {
-    requester: C, decision: 'D3', moves: MOVES.REFUSED,
+    requester: C, decision: 'D3', refusedFrom: B,
     build: async (run) => {
       await run.act(() =>
         run.driver.port(A).transferLeadership(namedSuccessor(C)));
@@ -391,27 +431,27 @@ const PAIR_BUILDS = Object.freeze({
         term: 0, entries: [proposalEntry({forwardedBy: B})]});
     }},
   'MsgTimeoutNow>MsgTransferLeader@candidate': {
-    requester: C, decision: 'D1', target: B,
+    requester: C, decision: 'D1', target: B, moves: [INPUT.ROLE],
     build: async (run) => {
       await run.act(() =>
         run.driver.port(A).transferLeadership(namedSuccessor(C)));
       craft(run, {to: C, from: B, msgType: 13});
     }},
   'MsgRequestVote>MsgAppend@leader identity (announcement)': {
-    requester: A, decision: 'D1', build: async (run) => {
+    requester: A, decision: 'D1', moves: [INPUT.ROLE], build: async (run) => {
       await run.act(() => run.driver.port(B).campaign());
       await run.deliverOnly([C]);
       await run.deliverOnly([B]);
     }},
   'MsgRequestVote>MsgHeartbeat@leader identity (announcement)': {
-    requester: A, decision: 'D1', build: async (run) => {
+    requester: A, decision: 'D1', moves: [INPUT.ROLE], build: async (run) => {
       await run.act(() => run.driver.port(B).campaign());
       await run.deliverOnly([C]);
       await run.deliverOnly([B]);
       await run.tickUntilHeartbeat(B, A);
     }},
   'MsgTransferLeader>MsgAppendResponse@transferee caught up': {
-    requester: A, decision: 'D3', build: async (run) => {
+    requester: A, decision: 'D3', moves: [INPUT.TRANSFER], build: async (run) => {
       run.driver.isolate(B);
       await run.propose(A, {lag: B});
       run.driver.heal(B);
@@ -444,12 +484,17 @@ function withD(build) {
   };
 }
 
+function decisionOf(decision) {
+  return DECISIONS[decision.split(':')[0]];
+}
+
 function cell({id, family, types, predicate, decision, requester, build,
-  axes = {}, moves = MOVES.EITHER, timeoutDriven = false, form = true,
-  entry = {}, ...extra}) {
+  axes = {}, moves = [], refusedFrom = null, control = null,
+  timeoutDriven = false, form = true, entry = {}, ...extra}) {
   return {
     id, family, types, predicate, decision, requester,
-    replicaIds: REPLICAS, axes, moves, timeoutDriven, form,
+    decisionInputs: decisionOf(decision).inputs, moves, refusedFrom, control,
+    replicaIds: REPLICAS, axes, timeoutDriven, form,
     settle: timeoutDriven,
     build: form ? withD(build) : build,
     request: requestOf(decision, requester, entry),
@@ -464,7 +509,7 @@ function eventCells(enumerations) {
       for (const decision of ['D1', 'D3']) {
         cells.push(cell({id: `event-${name}-local-${decision}`,
           family: 'event', types: [name], predicate: 'local-only',
-          decision, requester: A, moves: MOVES.REFUSED,
+          decision, requester: A, refusedFrom: B,
           build: (run) => craft(run, {to: A, from: B, msgType: number})}));
       }
       continue;
@@ -474,7 +519,7 @@ function eventCells(enumerations) {
         cells.push(cell({id: `event-${name}-no-progress-${decision}`,
           family: 'event', types: [name],
           predicate: 'sender without progress', decision, requester: A,
-          moves: MOVES.REFUSED,
+          refusedFrom: D,
           build: (run) => {
             assertNoProgressAt(run, A, D);
             craft(run, {to: A, from: D, msgType: number,
@@ -487,7 +532,8 @@ function eventCells(enumerations) {
         cells.push(cell({id: `event-${name}-${entry.predicate}-${decision}`,
           family: 'event', types: [name], predicate: entry.predicate,
           decision, requester: entry.requester, build: entry.build,
-          moves: entry.moves, timeoutDriven: entry.timeoutDriven,
+          moves: entry.moves, refusedFrom: entry.refusedFrom,
+          control: entry.control, timeoutDriven: entry.timeoutDriven,
           form: entry.form, entry}));
       }
     }
@@ -504,14 +550,29 @@ const DECISION_MODES = Object.freeze([
   {label: 'no-reentry', axes: {reentry: false}, decisions: ['D1']},
 ]);
 
+// Whether an event moves an input the decision reads (the model's D x I).
+function reads(decision, event) {
+  return event.moves.some((input) =>
+    decisionOf(decision).inputs.includes(input));
+}
+
+function eventCell(decision, event, index, {label, axes}) {
+  return cell({
+    id: `decision-${decision}-${index}-${label}`, family: 'decision',
+    types: [event.type], predicate: event.input, decision,
+    requester: event.requester ?? A, build: event.build, axes,
+    moves: event.moves, entry: event});
+}
+
 function decisionCells() {
-  return DECISION_MODES.flatMap(({label, axes, decisions}) =>
+  return DECISION_MODES.flatMap((mode) =>
     Object.keys(DECISIONS)
-      .filter((decision) => !decisions || decisions.includes(decision))
-      .flatMap((decision) => INPUT_EVENTS.map((event, index) => cell({
-        id: `decision-${decision}-${index}-${label}`, family: 'decision',
-        types: [event.type], predicate: event.input, decision,
-        requester: A, build: event.build, axes, moves: event.moves}))));
+      .filter((decision) => !mode.decisions ||
+        mode.decisions.includes(decision))
+      .flatMap((decision) => INPUT_EVENTS
+        .map((event, index) => ({event, index}))
+        .filter(({event}) => reads(decision, event))
+        .map(({event, index}) => eventCell(decision, event, index, mode))));
 }
 
 function pairCells() {
@@ -521,7 +582,7 @@ function pairCells() {
     return cell({id: `pair-${key}`, family: 'pair',
       types: types.split('>'), predicate: key.split('@')[1],
       decision: pair.decision, requester: pair.requester, build: pair.build,
-      moves: pair.moves, entry: pair});
+      moves: pair.moves, refusedFrom: pair.refusedFrom, entry: pair});
   });
 }
 
@@ -531,6 +592,7 @@ function uncommittedConfCells() {
   return [cell({id: 'window-D1-uncommitted-conf-entry', family: 'window',
     types: ['MsgAppendResponse'], predicate: 'acknowledgements of an ' +
       'uncommitted configuration entry', decision: 'D1', requester: A,
+    moves: [INPUT.CONF],
     build: async (run) => {
       await run.act(() => run.driver.port(A).proposeConfChange({
         type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity: D}));
@@ -541,11 +603,15 @@ function uncommittedConfCells() {
 // Admission closed by a real BEGIN on the requester's database when the
 // request is made (the reference processed the envelopes before BEGIN).
 function admissionCells() {
-  return Object.keys(DECISIONS).map((decision) => cell({
-    id: `admission-closed-${decision}`, family: 'admission',
-    types: ['MsgRequestVote'], predicate: 'user transaction open',
-    decision, requester: A, build: higherTermVoteAtA,
-    admissionClosed: true}));
+  return Object.keys(DECISIONS).map((decision) => {
+    const event = INPUT_EVENTS.find((candidate) =>
+      reads(decision, candidate));
+    return cell({
+      id: `admission-closed-${decision}`, family: 'admission',
+      types: [event.type], predicate: `user transaction open; ${event.input}`,
+      decision, requester: event.requester ?? A, build: event.build,
+      moves: event.moves, entry: event, admissionClosed: true});
+  });
 }
 
 // An envelope delivered while the request's turn awaits a send (held by the
@@ -555,7 +621,7 @@ function midTurnCells() {
     id: `mid-turn-${decision}`, family: 'mid-turn',
     types: ['MsgAppendResponse'], arrivingMidTurn: ['MsgRequestVote'],
     predicate: 'a higher-term vote request arrives during an awaited send',
-    decision, requester: A, hold: true,
+    decision, requester: A, hold: true, moves: [INPUT.ROLE],
     build: async (run) => {
       await run.act(() =>
         run.driver.port(A).propose({acknowledged: 'mid-turn'}));
@@ -579,8 +645,9 @@ function allCells(enumerations) {
 
 export {
   CATALOGUE,
+  HIDDEN_INPUTS,
+  INPUT,
   KNOWN_PAIRS,
-  MOVES,
   NO_CELL,
   NO_MOVE,
   PAIR_BUILDS,

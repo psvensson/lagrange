@@ -376,6 +376,14 @@ class OracleRun {
       // one; compared like every other observation.
       inboundStepRefusals: status.inboundStepRefusals ?? null,
       progress: status.followerProgress,
+      // The requester's own membership: what campaign eligibility and the
+      // drop classification read of the configuration.
+      self: {
+        voter: status.confState.voters.map(String).includes(
+          String(status.peerId)),
+        learner: status.confState.learners.map(String).includes(
+          String(status.peerId)),
+      },
       voters: sortedIds(status.confState.voters),
       learners: sortedIds(status.confState.learners),
     };
@@ -553,6 +561,8 @@ async function runCell(cell, mode) {
     await cell.build(run);
     const types = run.driver.cluster.replica(cell.requester).inbox
       .map((envelope) => envelope.message.msgType);
+    const refusedFromId = cell.refusedFrom === null ? null :
+      String(run.driver.raftIdAt(cell.requester, cell.refusedFrom));
     const inputsBefore = run.inputsOf(cell.requester);
     const decided = await decide(run, cell, mode);
     await run.deliver();
@@ -573,7 +583,8 @@ async function runCell(cell, mode) {
       settled = run.observe();
     }
     const recovered = run.recover(cell.requester);
-    return {types, inputsBefore, ...decided, exact, streams, durable,
+    return {types, refusedFromId, inputsBefore, ...decided, exact, streams,
+      durable,
       atExact, settled, recovered};
   } finally {
     run.dispose();
