@@ -1,62 +1,10 @@
-/**
- * Tier-3 demo of the service↔data affinity placement epic
- * (solve/epics/service-data-affinity-placement.md): CODE MOVES TO ITS
- * DATA, live - at NODE granularity, inside a single latency group.
- *
- * Latency groups exist for CDC fan-out efficiency; the placement thesis
- * is independent of them. Data affinity is intrinsic: the service starts
- * without an access history, its normal queries publish attribution, and
- * placement learns the best production-weighted node set.
- *
- * The story:
- *   1. Coordination schemas bootstrap on the seed, then four nodes join (no
- *      zone pinning - one latency domain). Once the expanded control plane is
- *      quiescent, the ratings schema is created and the dataset loads with a
- *      deliberately small split threshold that forces several partitions
- *      across the cluster - real parallelism: multiple raft groups and
- *      multiple leaders.
- *   2. The movielens ratings are loaded and split across partitions
- *      whose replicas land on different node subsets. Distributed
- *      grouped SQL emits one AVG/COUNT row per movie and establishes the
- *      confidence-adjusted top-10 reference result.
- *   3. A REAL runtime service is started on the internal placement
- *      substrate: the harness writes a service_definitions row directly
- *      (runtime_kind native_js, runtime_ref sql-query-loop-runtime)
- *      with read_locality='any' (routing choice, not an affinity switch).
- *      This direct write is demo scaffolding against a migration-input
- *      table, not the user deployment surface; user deployment is
- *      declared through Bindings (architecture/minimal-deployment-
- *      surface.md), where replica capacity is system-policy output. A
- *      native_js query-loop module has no component export, so it is
- *      not expressible as a Binding; the demo pins its replica shape
- *      only to make the shard/merge arithmetic reproducible.
- *      Stable leased slot 1 reduces
- *      movie ids <= 1000 and slot 2 reduces ids > 1000. Because group
- *      keys are disjoint, the slot-1 replica can exactly merge the two
- *      atomic partial top-10 snapshots while exchanging at most 20
- *      candidates. Slot ownership survives replica REPLACE generations.
- *   4. Every statement is attributed into service_partition_access; the
- *      runtime-service rebalancer always lifts fresh per-node weights
- *      into DATA_AFFINITY placement. The planner converges service
- *      replicas onto the highest-weight nodes without a public enable
- *      toggle. The service result must match distributed SQL.
- *
- * Local processes only (no Docker): the staged bring-up needs process
- * control.
- *
- * Usage:
- *   node examples/service-data-affinity/download-movielens.js
- *   node examples/service-data-affinity/run-affinity-demo.js
- */
-
-import {execFile, spawn} from 'node:child_process';
-import {createWriteStream, existsSync, realpathSync} from 'node:fs';
-import {mkdir, readdir, rm, stat, writeFile} from 'node:fs/promises';
-import {promisify} from 'node:util';
+import {existsSync, realpathSync} from 'node:fs';
+import {randomUUID} from 'node:crypto';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
+import {buildLocalNodeSpec} from './cluster-harness.js';
 import {
   createRatingsTableWithRetry,
   loadRatingsIntoLagrange,
@@ -69,12 +17,18 @@ import {
   writeAffinityDemoLiveReport,
 } from './affinity-demo-live-report.js';
 import {
-  collectHostSchedulingEvidence,
-} from './host-scheduling-evidence.js';
-import {collectFormationVerdict} from './formation-verdict.js';
-import {
-  startGcpAffinityCluster,
-} from './gcp-cluster-provider.js';
+  archivePreviousAffinityRun,
+  completeAffinityDemoRun,
+  finalizeAffinityDemoRun,
+  resolveClusterMode,
+  resolveFormationOnly,
+  restartExitedLocalNode,
+  startAffinityDemoCluster,
+  waitForActiveGcpNodes,
+  waitForActiveLocalNodes,
+  waitForAffinityAdmin,
+  withAffinityDemoCleanup,
+} from './affinity-demo-cluster-lifecycle.js';
 import {
   assessAffinityDemoCompletion,
   buildWeightedLocalitySnapshot,
@@ -89,182 +43,35 @@ import {
   RATINGS_AGGREGATE_SQL,
   rankMovieQuality,
 } from './movie-ranking.js';
-
-const NODE_COUNT = 5;
-const BASE_REST_PORT = 8080;
-const BASE_ADMIN_PORT = 8081;
-const PORT_STRIDE = 4;
-const CLUSTER_DATA_ROOT = 'data/examples/service-data-affinity-demo';
-// The admin target is normally the local seed (127.0.0.1); a GCP-mode run
-// rebinds it to the provisioned seed host's external IP before any use.
+import {
+  BASE_ADMIN_PORT,
+  CLUSTER_DATA_ROOT,
+  CLUSTER_FORM_TIMEOUT_MS,
+  CONVERGE_TIMEOUT_MS,
+  COORDINATION_TABLE,
+  CREATE_COORDINATION_TABLE_SQL,
+  CREATE_RESULT_TABLE_SQL,
+  DEMO_CONSTANTS,
+  NODE_COUNT,
+  NODE_STATUS_ACTIVE,
+  OBSERVE_INTERVAL_MS,
+  PARALLEL_REDUCE_CONFIG,
+  PARTITION_EVAL_INTERVAL_MS,
+  POLL_INTERVAL_MS,
+  QUERY_INTERVAL_MS,
+  RESULT_ID,
+  RESULT_SNAPSHOT_COLUMN,
+  RESULT_TABLE,
+  SCAN_SQL,
+  SCHEMA_ADMISSION_SUCCESS_PREFIX,
+  SCHEMA_ADMISSION_WAIT_MESSAGE,
+  SERVICE_ID,
+  SERVICE_REPLICA_COUNT,
+  STALL_TIMEOUT_MS,
+  TOP_N,
+} from './affinity-demo-run-constants.js';
 let TARGET = `ws://127.0.0.1:${BASE_ADMIN_PORT}/api/admin/stream`;
 let LOAD_TARGET = `${TARGET}?lane=load`;
-const GCP_MODE_ENV = 'LAGRANGE_AFFINITY_DEMO_GCP';
-const GCP_MODE_FLAG = '--gcp';
-// Formation-only: form the cluster and wait for schema admission, then stop.
-// The local seed-starvation gate (npm run check:formation) and the formation
-// health trend read the formation verdict from this shorter run.
-const FORMATION_ONLY_ENV = 'LAGRANGE_AFFINITY_DEMO_FORMATION_ONLY';
-const FORMATION_ONLY_FLAG = '--formation-only';
-const CLUSTER_FORM_TIMEOUT_MS = 180000;
-const POLL_INTERVAL_MS = 2000;
-const OBSERVE_INTERVAL_MS = 10000;
-// Hard cap on the convergence watch - but staleness usually fires
-// first: if NOTHING observable changes (placement set, on-data count,
-// attribution row count) for STALL_TIMEOUT_MS, the demo aborts with a
-// STALLED diagnosis instead of burning the full budget. The stall
-// window allows ~3 rebalancer cycles (~90-120s cadence) of genuinely
-// zero progress before giving up.
-const CONVERGE_TIMEOUT_MS = 600000;
-const STALL_TIMEOUT_MS = 300000;
-const NODE_STATUS_ACTIVE = 'active';
-const SCHEMA_ADMISSION_WAIT_MESSAGE =
-  '      Waiting for production schema admission...';
-const SCHEMA_ADMISSION_SUCCESS_PREFIX =
-  '      Schema mutation admitted after stable control snapshots ';
-const DEMO_CONSTANTS = Object.freeze({
-  SEED_FLAG: '--seed',
-  ADMIN_QUERY_TIMEOUT_MS: 15000,
-  ADMIN_WAIT_LABEL: 'seed admin endpoint',
-  ADMIN_HEALTH_QUERY: 'SELECT 1',
-  SQL_ESCAPED_SINGLE_QUOTE: '\'\'',
-  CONFIG_INSERT_PREFIX:
-    'INSERT INTO config (config_key, config_value, value_type, ' +
-    'requires_restart, description, default_value, updated_by, ' +
-    'updated_at, created_at) VALUES (',
-  CONFIG_VALUE_TYPE: 'json',
-  SQL_FALSE: '0',
-  ACCESS_POLICY_DESCRIPTION: 'Runtime service data access policy',
-  EMPTY_JSON_OBJECT: '{}',
-  ACCESS_POLICY_UPDATED_BY: 'affinity-demo',
-  SQL_LIST_SEPARATOR: ', ',
-  SQL_CLOSE_PAREN: ')',
-  SERVICE_INSERT_PREFIX: 'INSERT INTO service_definitions (',
-  PARTITION_SERVICE_TYPE: 'partition',
-  REDUCE_SLOT_QUERY:
-    'SELECT slot_id, replica_id, lease_expires_at, partial_json, ',
-  NODES_QUERY: 'SELECT node_id, latency_group_id FROM nodes',
-  PARTITIONS_QUERY: 'SELECT partition_id, leader_node_id FROM partitions',
-  SERVICES_QUERY:
-    'SELECT partition_id, node_id, service_type, status FROM services',
-  MILLISECONDS_PER_SECOND: 1000,
-  LOCALITY_DECIMAL_PLACES: 3,
-  INITIAL_PLACEMENT_ERROR: 'service replicas were not initially placed',
-  NODE_STOP_POLL_MS: 250,
-  FORCE_STOP_SIGNAL: 'SIGKILL',
-  GRACEFUL_STOP_SIGNAL: 'SIGTERM',
-  ARCHIVE_COMMAND: 'tar',
-  ARCHIVE_CREATE_FLAG: '-czf',
-  ARCHIVE_DIRECTORY_FLAG: '-C',
-  PARENT_DIRECTORY: '..',
-  PATH_SEPARATOR: '/',
-  ENABLED_VALUE: '1',
-  GCP_MODE: 'gcp',
-  LOCAL_MODE: 'local',
-  GCP_START_MESSAGE:
-    '      Provisioning GCP Docker hosts and starting the cluster remotely ' +
-    '(one node per VM)...',
-  BOOTSTRAP_MESSAGE: '[1/5] Bootstrapping the MovieLens schema on the seed...',
-  EXPANSION_SUFFIX: 'the existing data...',
-  CLUSTER_FORMED_MESSAGE: '      Cluster formed.',
-  FORMATION_ONLY_MESSAGE:
-    '      Formation-only run: stopping after schema admission.',
-  PRELOAD_WAIT_MESSAGE:
-    '      Waiting for production ratings-load admission...',
-  PRELOAD_SUCCESS_PREFIX: '      Ratings load admitted (snapshot=',
-  LOAD_MESSAGE: '      Loading 100,000 ratings into the routable source...',
-  SPLIT_WAIT_MESSAGE:
-    '      Waiting for ratings partitions to split and spread...',
-  DISTRIBUTED_SQL_MESSAGE:
-    '[3/5] Running Lagrange distributed grouped SQL...',
-  SERVICE_START_SUFFIX:
-    'harness, intrinsic data affinity): disjoint movie-id shards compute a ' +
-    'confidence-adjusted Bayesian ranking, publish 10 candidates each, and ' +
-    'slot 1 merges them)...',
-  COORDINATION_INSERT_COLUMNS:
-    '(slot_id, replica_id, lease_expires_at, partial_json, computed_at) ',
-  COORDINATION_INSERT_VALUES:
-    'VALUES (1, \'\', 0, \'[]\', 0), (2, \'\', 0, \'[]\', 0)',
-  AFFINITY_WAIT_MESSAGE:
-    '[5/5] Waiting for access attribution to teach placement where the ' +
-    'service data is (no affinity switch)...',
-  CONVERGED_PREFIX:
-    '\n      CONVERGED: intrinsic affinity reached the best production-',
-  REPLICAS_MOVED: 'replicas moved',
-  INITIAL_PLACEMENT_OPTIMAL: 'initial placement was already optimal',
-  EXCHANGE_PREFIX: '      Cross-replica exchange was bounded to ',
-  RANKING_SUFFIX: 'The confidence-adjusted top-10 is identical:\n',
-  SCORE_DECIMAL_PLACES: 4,
-  STOP_MESSAGE: 'Stopping cluster...',
-  SCRIPT_NAME: 'run-affinity-demo.js',
-  RESULT_MESSAGE: 'Affinity demo result:',
-  EMPTY_STRING: '',
-});
-
-// Config floor: partition.evaluationIntervalMs must be >= 60000.
-const PARTITION_EVAL_INTERVAL_MS = 60000;
-
-const SERVICE_ID = 'svc-movielens-topn';
-const SERVICE_REPLICA_COUNT = 2;
-// The distributed-SQL reference groups the table to one row per movie.
-// The deployed service runs the richer confidence-adjusted ranking on
-// two disjoint movie-id shards and exchanges only their top-N candidates.
-const SCAN_SQL = 'SELECT movie_id, rating FROM ratings';
-const MOVIE_ID_SHARD_BOUNDARY = 1000;
-const SHARD_SQL_BY_SLOT = Object.freeze({
-  1: `${SCAN_SQL} WHERE movie_id <= ${MOVIE_ID_SHARD_BOUNDARY}`,
-  2: `${SCAN_SQL} WHERE movie_id > ${MOVIE_ID_SHARD_BOUNDARY}`,
-});
-const RESULT_TABLE = 'movielens_top10';
-const COORDINATION_TABLE = 'movielens_top10_reduce_slots';
-const RESULT_ID = 'global-top10';
-const RESULT_SNAPSHOT_COLUMN = 'source_snapshot_json';
-const CREATE_RESULT_TABLE_SQL =
-  `CREATE TABLE IF NOT EXISTS ${RESULT_TABLE} (` +
-  'result_id TEXT PRIMARY KEY, result_json TEXT, computed_at INTEGER, ' +
-  `${RESULT_SNAPSHOT_COLUMN} TEXT NOT NULL DEFAULT '{}')`;
-const CREATE_COORDINATION_TABLE_SQL =
-  `CREATE TABLE IF NOT EXISTS ${COORDINATION_TABLE} (` +
-  'slot_id INTEGER PRIMARY KEY, replica_id TEXT, ' +
-  'lease_expires_at INTEGER, partial_json TEXT, computed_at INTEGER)';
-const QUERY_INTERVAL_MS = 5000;
-const TOP_N = 10;
-const REDUCE_SLOT_LEASE_MS = 30000;
-const PARALLEL_REDUCE_CONFIG = Object.freeze({
-  shardSqlBySlot: SHARD_SQL_BY_SLOT,
-  coordinationTable: COORDINATION_TABLE,
-  leaseMs: REDUCE_SLOT_LEASE_MS,
-  coordinatorSlot: 1,
-  resultId: RESULT_ID,
-  resultSnapshotColumn: RESULT_SNAPSHOT_COLUMN,
-});
-
-async function startNode(index, dataRoot) {
-  const restPort = BASE_REST_PORT + index * PORT_STRIDE;
-  const adminPort = BASE_ADMIN_PORT + index * PORT_STRIDE;
-  const dataDir = resolve(dataRoot, `node-${index}`);
-  await mkdir(dataDir, {recursive: true});
-  const logStream = createWriteStream(resolve(dataRoot, `node-${index}.log`));
-
-  const env = {
-    ...process.env,
-    NODE_ADDRESS: `localhost:${restPort}`,
-    REST_API_PORT: String(restPort),
-    ADMIN_WS_PORT: String(adminPort),
-    DATA_DIR: dataDir,
-    LOG_LEVEL: 'info',
-    PARTITION_EVALUATION_INTERVAL_MS: String(PARTITION_EVAL_INTERVAL_MS),
-  };
-  const args = ['src/index.js', '--data-dir', dataDir];
-  if (index > 0) {
-    env.SEED_NODE_ADDRESS = `localhost:${BASE_REST_PORT}`;
-    args.push(DEMO_CONSTANTS.SEED_FLAG, `localhost:${BASE_REST_PORT}`);
-  }
-  const child = spawn('node', args, {env, stdio: ['ignore', 'pipe', 'pipe']});
-  child.stdout.pipe(logStream);
-  child.stderr.pipe(logStream);
-  return {index, process: child};
-}
 
 async function queryAdmin(
   sql,
@@ -282,7 +89,6 @@ async function queryAdmin(
     await client.close();
   }
 }
-
 async function queryRows(sql, target = TARGET) {
   const result = await queryAdmin(sql, target);
   return result?.results || result?.rows || [];
@@ -352,10 +158,14 @@ async function runBootstrapDdl(sql, target = TARGET) {
 
 async function waitFor(label, predicate, timeoutMs) {
   const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
+  const deadlineMs = start + timeoutMs;
+  while (Date.now() < deadlineMs) {
     let value = null;
     try {
-      value = await predicate();
+      value = await predicate({
+        deadlineMs,
+        remainingMs: Math.max(0, deadlineMs - Date.now()),
+      });
     } catch {
       value = null;
     }
@@ -365,60 +175,6 @@ async function waitFor(label, predicate, timeoutMs) {
     await sleep(POLL_INTERVAL_MS);
   }
   throw new Error(`Timed out waiting for ${label} after ${timeoutMs}ms`);
-}
-
-async function waitForAdmin() {
-  await waitFor(DEMO_CONSTANTS.ADMIN_WAIT_LABEL, async () => {
-    await queryRows(DEMO_CONSTANTS.ADMIN_HEALTH_QUERY);
-    return true;
-  }, CLUSTER_FORM_TIMEOUT_MS);
-}
-
-const MAX_JOIN_RESTARTS = 5;
-
-// GCP mode: the harness's createCluster already started and formed every
-// node; here we only confirm the membership view reports them active. The
-// remote VMs are dedicated and quiet, so there is no per-node respawn loop.
-async function waitForActiveNodesGcp(expectedCount) {
-  await waitFor(`${expectedCount} active nodes`, async () => {
-    const rows = await queryRows('SELECT node_id, status FROM nodes');
-    const active = rows.filter((r) => r.status === NODE_STATUS_ACTIVE);
-    return active.length >= expectedCount ? true : null;
-  }, CLUSTER_FORM_TIMEOUT_MS);
-}
-
-// Node processes are supervised like an orchestrator would: a joiner
-// that exhausts its (deliberately impatient) join retry budget and
-// exits - e.g. because the seed's leader-metadata view is briefly
-// stale after a leadership move - is simply respawned with a fresh
-// data dir until the cluster reaches the expected size.
-async function waitForActiveNodes(expectedCount, nodes, dataRoot) {
-  await waitFor(`${expectedCount} active nodes`, async () => {
-    for (let i = 0; i < nodes.length; i += 1) {
-      const node = nodes[i];
-      if (node.process.exitCode === null) {
-        continue;
-      }
-      node.restarts = (node.restarts || 0) + 1;
-      if (node.restarts > MAX_JOIN_RESTARTS) {
-        throw new Error(
-          `node-${node.index} exceeded ` +
-          `${MAX_JOIN_RESTARTS} join restarts`);
-      }
-      console.log(
-        `      node-${node.index} exited before joining ` +
-        `(exit=${node.process.exitCode}); respawning ` +
-        `(attempt ${node.restarts}/${MAX_JOIN_RESTARTS})...`);
-      const dataDir = resolve(dataRoot, `node-${node.index}`);
-      await rm(dataDir, {recursive: true, force: true});
-      const respawned = await startNode(node.index, dataRoot);
-      respawned.restarts = node.restarts;
-      nodes[i] = respawned;
-    }
-    const rows = await queryRows('SELECT node_id, status FROM nodes');
-    const active = rows.filter((r) => r.status === NODE_STATUS_ACTIVE);
-    return active.length >= expectedCount ? true : null;
-  }, CLUSTER_FORM_TIMEOUT_MS);
 }
 
 function sqlQuote(value) {
@@ -759,134 +515,32 @@ function retainObservedDemoResult(phaseEvidence, observedResult) {
   return true;
 }
 
-function isNodeProcessRunning(node) {
-  return Boolean(node?.process && node.process.exitCode === null);
-}
-
-async function awaitNodeProcessStop(node, deadline) {
-  while (isNodeProcessRunning(node) && Date.now() < deadline) {
-    await sleep(DEMO_CONSTANTS.NODE_STOP_POLL_MS);
-  }
-  if (isNodeProcessRunning(node)) {
-    node.process.kill(DEMO_CONSTANTS.FORCE_STOP_SIGNAL);
-  }
-}
-
-async function stopNodes(nodes) {
-  for (const node of nodes) {
-    if (isNodeProcessRunning(node)) {
-      node.process.kill(DEMO_CONSTANTS.GRACEFUL_STOP_SIGNAL);
-    }
-  }
-  const deadline = Date.now() + DEMO_CONSTANTS.ADMIN_QUERY_TIMEOUT_MS;
-  for (const node of nodes) {
-    await awaitNodeProcessStop(node, deadline);
-  }
-}
-
-const execFileAsync = promisify(execFile);
-const ARCHIVE_ROOT = `${CLUSTER_DATA_ROOT}-archive`;
-const ARCHIVE_RETENTION = 3;
-const AUTO_ARCHIVE_NAME_PATTERN = /^run-\d{4}-\d{2}-\d{2}T.*\.tar\.gz$/;
-
-/**
- * Archive the previous run's cluster state (logs + SQLite) before wiping -
- * run-13's forensics were destroyed by the unconditional wipe and the
- * root-cause investigation had to work from a later run. Keeps the newest
- * ARCHIVE_RETENTION archives (~15-30MB each gzipped).
- */
-async function archivePreviousRun() {
-  if (!existsSync(CLUSTER_DATA_ROOT)) {
-    return;
-  }
-  await mkdir(ARCHIVE_ROOT, {recursive: true});
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const archivePath = resolve(ARCHIVE_ROOT, `run-${stamp}.tar.gz`);
-  try {
-    await execFileAsync(DEMO_CONSTANTS.ARCHIVE_COMMAND, [
-      DEMO_CONSTANTS.ARCHIVE_CREATE_FLAG, archivePath,
-      DEMO_CONSTANTS.ARCHIVE_DIRECTORY_FLAG,
-      resolve(CLUSTER_DATA_ROOT, DEMO_CONSTANTS.PARENT_DIRECTORY),
-      CLUSTER_DATA_ROOT.split(DEMO_CONSTANTS.PATH_SEPARATOR).pop(),
-    ]);
-    console.log(`      Archived previous run state to ${archivePath}`);
-  } catch (error) {
-    console.log(
-      `      (previous-run archive failed: ${error.message} - proceeding)`);
-    return;
-  }
-  const archiveNames = (await readdir(ARCHIVE_ROOT))
-    .filter((name) => AUTO_ARCHIVE_NAME_PATTERN.test(name));
-  const entries = await Promise.all(archiveNames.map(async (name) => ({
-    name,
-    mtimeMs: (await stat(resolve(ARCHIVE_ROOT, name))).mtimeMs,
-  })));
-  entries.sort((left, right) => left.mtimeMs - right.mtimeMs);
-  while (entries.length > ARCHIVE_RETENTION) {
-    const oldest = entries.shift();
-    await rm(resolve(ARCHIVE_ROOT, oldest.name), {force: true});
-  }
-}
-
-// Resolve the requested cluster mode: default local node processes, or a
-// GCP-provisioned remote Docker cluster when --gcp / the env opt-in is set.
-function resolveFormationOnly() {
-  return process.argv.includes(FORMATION_ONLY_FLAG) ||
-    process.env[FORMATION_ONLY_ENV] === DEMO_CONSTANTS.ENABLED_VALUE;
-}
-
-function resolveClusterMode() {
-  return process.argv.includes(GCP_MODE_FLAG) ||
-    process.env[GCP_MODE_ENV] === DEMO_CONSTANTS.ENABLED_VALUE ?
-    DEMO_CONSTANTS.GCP_MODE :
-    DEMO_CONSTANTS.LOCAL_MODE;
-}
-
-// Start the seed + joiners and wait for the full active cluster. Returns a
-// handle {stop, harvestLogs}. In local mode this is the existing per-node
-// process supervision; in GCP mode the harness's createCluster owns the
-// node lifecycle and the seed admin target is rebound to the external IP.
-async function startClusterNodes(mode, nodes, dataRoot) {
-  if (mode === DEMO_CONSTANTS.GCP_MODE) {
-    console.log(DEMO_CONSTANTS.GCP_START_MESSAGE);
-    const gcp = await startGcpAffinityCluster({
-      verbose: true,
-      outputDir: dataRoot,
-    });
-    TARGET = gcp.target;
-    LOAD_TARGET = `${gcp.target}?lane=load`;
-    return {
-      cluster: gcp.cluster,
-      provisioner: gcp.provisioner,
-      stop: gcp.stop,
-    };
-  }
-  // Local mode: unchanged per-node process supervision.
-  return {
-    stop: () => stopNodes(nodes),
-    harvestLogs: async () => null,
-  };
-}
-
 async function runAffinityDemo({phaseEvidence = {}} = {}) {
   const mode = resolveClusterMode();
   const formationOnly = resolveFormationOnly();
   phaseEvidence.formationOnly = formationOnly;
   const formation = {clusterStartedAtMs: Date.now(), clusterFormedAtMs: null};
+  const formationDeadlineMs =
+    formation.clusterStartedAtMs + CLUSTER_FORM_TIMEOUT_MS;
+  const dataRoot = resolve(CLUSTER_DATA_ROOT, `run-${randomUUID()}`);
   phaseEvidence.formation = formation;
-  const nodes = [];
-  await archivePreviousRun();
-  await rm(CLUSTER_DATA_ROOT, {recursive: true, force: true});
-  await mkdir(CLUSTER_DATA_ROOT, {recursive: true});
-  let clusterHandle = null;
-
-  try {
+  await archivePreviousAffinityRun();
+  const cleanupContext = {
+    clusterHandle: null, phaseEvidence, formation, dataRoot};
+  return withAffinityDemoCleanup(cleanupContext, async () => {
     console.log(DEMO_CONSTANTS.BOOTSTRAP_MESSAGE);
-    clusterHandle = await startClusterNodes(mode, nodes, CLUSTER_DATA_ROOT);
-    if (mode !== DEMO_CONSTANTS.GCP_MODE) {
-      nodes.push(await startNode(0, CLUSTER_DATA_ROOT));
+    const clusterHandle = await startAffinityDemoCluster(
+      mode, dataRoot);
+    cleanupContext.clusterHandle = clusterHandle;
+    if (clusterHandle.target) {
+      TARGET = clusterHandle.target;
+      LOAD_TARGET = clusterHandle.loadTarget;
     }
-    await waitForAdmin();
+    if (mode !== DEMO_CONSTANTS.GCP_MODE) {
+      await clusterHandle.cluster.startNode(
+        buildLocalNodeSpec(0, dataRoot), {deadlineMs: formationDeadlineMs});
+    }
+    await waitForAffinityAdmin(waitFor, queryRows, formationDeadlineMs);
     // Bootstrap the two small coordination tables on the seed too. Their
     // schemas then scale out with the cluster instead of exercising unrelated
     // cold multi-node DDL while the example is teaching service affinity.
@@ -898,12 +552,16 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
       DEMO_CONSTANTS.EXPANSION_SUFFIX);
     if (mode !== DEMO_CONSTANTS.GCP_MODE) {
       for (let i = 1; i < NODE_COUNT; i += 1) {
-        nodes.push(await startNode(i, CLUSTER_DATA_ROOT));
+        await clusterHandle.cluster.startNode(
+          buildLocalNodeSpec(i, dataRoot), {deadlineMs: formationDeadlineMs});
       }
-      await waitForActiveNodes(NODE_COUNT, nodes, CLUSTER_DATA_ROOT);
+      await waitForActiveLocalNodes(
+        NODE_COUNT, clusterHandle.cluster, waitFor, queryRows,
+        formationDeadlineMs);
     } else {
       // createCluster already started and formed all nodes.
-      await waitForActiveNodesGcp(NODE_COUNT);
+      await waitForActiveGcpNodes(
+        NODE_COUNT, waitFor, queryRows, formationDeadlineMs);
     }
     formation.clusterFormedAtMs = Date.now();
     console.log(DEMO_CONSTANTS.CLUSTER_FORMED_MESSAGE);
@@ -1088,47 +746,7 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
         `#${r.rank} movie ${r.group_key} score=` +
         Number(r.agg_value).toFixed(DEMO_CONSTANTS.SCORE_DECIMAL_PLACES)),
     };
-  } catch (error) {
-    // The admission gate's timeout error carries the evidence the wait
-    // collected; the formation verdict must read it exactly as the report
-    // detail does, or a failed run - the case the verdict exists for -
-    // would record no admission state and no spread.
-    if (error?.schemaAdmission && !phaseEvidence.schemaAdmission) {
-      phaseEvidence.schemaAdmission = error.schemaAdmission;
-    }
-    throw error;
-  } finally {
-    console.log(DEMO_CONSTANTS.STOP_MESSAGE);
-    let remoteLogs = null;
-    if (clusterHandle) {
-      if (typeof clusterHandle.harvestLogs === 'function') {
-        remoteLogs = await clusterHandle.harvestLogs();
-      }
-      await clusterHandle.stop();
-    } else {
-      await stopNodes(nodes);
-    }
-    // Harvest after stop so each node's log is fully flushed. Over-budget host
-    // scheduling marks the report non-measuring rather than red. In GCP mode
-    // the node logs are written into the local data root so the same budget
-    // evaluator reads them; dedicated VMs are not expected to trip it.
-    if (remoteLogs) {
-      // Host-scheduling evidence reads node-0..node-(N-1).log; harness node
-      // IDs are UUIDs, so write the logs by cluster index instead.
-      for (let index = 0; index < remoteLogs.length; index += 1) {
-        await writeFile(
-          resolve(CLUSTER_DATA_ROOT, `node-${index}.log`),
-          remoteLogs[index].text || DEMO_CONSTANTS.EMPTY_STRING,
-        );
-      }
-    }
-    phaseEvidence.hostScheduling =
-      await collectHostSchedulingEvidence(CLUSTER_DATA_ROOT, NODE_COUNT);
-    phaseEvidence.formationVerdict = await collectFormationVerdict(
-      CLUSTER_DATA_ROOT,
-      {schemaAdmission: phaseEvidence.schemaAdmission, formation},
-    );
-  }
+  });
 }
 
 const isMainModule = Boolean(
@@ -1154,4 +772,12 @@ if (isMainModule) {
     });
 }
 
-export {retainObservedDemoResult, runAffinityDemo, summarizePhase};
+export {
+  completeAffinityDemoRun,
+  finalizeAffinityDemoRun,
+  restartExitedLocalNode,
+  retainObservedDemoResult,
+  runAffinityDemo,
+  summarizePhase,
+  withAffinityDemoCleanup,
+};

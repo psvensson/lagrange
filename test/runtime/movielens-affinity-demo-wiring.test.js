@@ -22,10 +22,12 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
+import {EventEmitter} from 'node:events';
 import {gzip as gzipCallback} from 'node:zlib';
 import {mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {PassThrough} from 'node:stream';
 import {promisify} from 'node:util';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -59,8 +61,16 @@ import {
   buildWeightedLocalitySnapshot,
 } from '../../examples/service-data-affinity/affinity-demo-evidence.js';
 import {
+  completeAffinityDemoRun,
+  finalizeAffinityDemoRun,
+  restartExitedLocalNode,
   summarizePhase,
+  withAffinityDemoCleanup,
 } from '../../examples/service-data-affinity/run-affinity-demo.js';
+import {
+  buildLocalNodeSpec,
+  createLocalProcessCluster,
+} from '../../examples/service-data-affinity/cluster-harness.js';
 import {
   GCP_DEMO_DEPLOYMENT_PROFILE,
   GCP_DEMO_SCENARIO_NAME,
@@ -236,6 +246,10 @@ test('MovieLens admits schema after formation and before ratings CREATE',
       'examples/service-data-affinity/lagrange-loader.js',
       'utf8',
     );
+    const lifecycleSource = await readFile(
+      'examples/service-data-affinity/affinity-demo-cluster-lifecycle.js',
+      'utf8',
+    );
     const runStart = runnerSource.indexOf('async function runAffinityDemo');
     const createRatingsStatement =
       'await createRatingsTableWithRetry({target: TARGET});';
@@ -248,7 +262,7 @@ test('MovieLens admits schema after formation and before ratings CREATE',
       runStart,
     );
     const formationIndex = runnerSource.indexOf(
-      'await waitForActiveNodes(NODE_COUNT, nodes, CLUSTER_DATA_ROOT);',
+      'await waitForActiveLocalNodes(',
       runStart,
     );
     const schemaAdmissionIndex = runnerSource.indexOf(
@@ -280,6 +294,14 @@ test('MovieLens admits schema after formation and before ratings CREATE',
       'joiner expansion belongs to the production runner path');
     t.ok(formationIndex > expandNodesIndex,
       'the runner awaits complete five-node formation after launching joiners');
+    t.match(lifecycleSource, /createLocalProcessCluster\(\{/u,
+      'local mode delegates child lifecycle to the canonical process owner');
+    t.notMatch(runnerSource, /\bspawn\(/u,
+      'the demo no longer owns a parallel child-process spawn path');
+    t.notMatch(runnerSource, /\bstopNodes\b/u,
+      'the demo no longer owns a parallel signal-and-wait teardown loop');
+    t.match(lifecycleSource, /cluster\.restartNode\(node,/u,
+      'respawn uses explicit canonical-owner restart adjudication');
     t.ok(schemaAdmissionIndex > formationIndex,
       'membership formation precedes authoritative schema admission');
     t.match(
@@ -293,6 +315,139 @@ test('MovieLens admits schema after formation and before ratings CREATE',
       'stable durable CREATE confirmation precedes preload admission');
     t.ok(ratingsLoadIndex > preloadAdmissionIndex,
       'ratings load begins only after the production admission gate');
+    t.end();
+  });
+
+test('MovieLens restart policy drives the shared generation owner',
+  async (t) => {
+    const dataRoot = await mkdtemp(join(tmpdir(), 'affinity-restart-owner-'));
+    t.teardown(() => rm(dataRoot, {recursive: true, force: true}));
+    function fakeChild() {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.exitCode = null;
+      child.signalCode = null;
+      child.pid = 4100;
+      child.close = (exitCode = 0, signal = null) => {
+        child.exitCode = exitCode;
+        child.signalCode = signal;
+        child.emit('exit', exitCode, signal);
+        child.stdout.end();
+        child.stderr.end();
+        queueMicrotask(() => child.emit('close', exitCode, signal));
+      };
+      child.kill = (signal) => {
+        child.close(null, signal);
+        return true;
+      };
+      return child;
+    }
+    const children = [fakeChild(), fakeChild()];
+    let spawnIndex = 0;
+    const cluster = createLocalProcessCluster({
+      dataRoot,
+      spawn: () => children[spawnIndex++],
+    });
+    const first = await cluster.startNode(buildLocalNodeSpec(0, dataRoot), {
+      deadlineMs: Date.now() + 1000,
+    });
+    children[0].close(1, null);
+    await first.closed;
+    const failed = cluster.nodes[0];
+    const second = await restartExitedLocalNode(
+      cluster, failed, new Map(), Date.now() + 1000);
+    t.equal(second.nodeId, first.nodeId,
+      'the restart preserves the bootstrap-admitted UUID');
+    t.equal(second.generation, 1,
+      'the demo policy consumes the owner generation transaction');
+    t.equal(cluster.restartHistory.length, 1,
+      'the accepted early exit remains owner-published evidence');
+    await cluster.stop();
+    t.equal(spawnIndex, 2, 'one failed generation yields one successor');
+    t.end();
+  });
+
+test('MovieLens cleanup settles every branch without replacing primary error',
+  async (t) => {
+    const calls = [];
+    const phaseEvidence = {schemaAdmission: {state: 'ready'}};
+    const harvestError = new Error('harvest failed');
+    const stopError = new Error('stop failed');
+    const cleanup = await finalizeAffinityDemoRun({
+      clusterHandle: {
+        harvestLogs: async () => {
+          calls.push('harvest');
+          throw harvestError;
+        },
+        stop: async () => {
+          calls.push('stop');
+          throw stopError;
+        },
+      },
+      phaseEvidence,
+      formation: {clusterStartedAtMs: 1, clusterFormedAtMs: null},
+      dataRoot: '/owned/evidence',
+      nodeCount: 5,
+      collectHostScheduling: async () => {
+        calls.push('host');
+        return {measuring: false};
+      },
+      collectVerdict: async () => {
+        calls.push('verdict');
+        return {complete: false};
+      },
+    });
+    t.same(calls, ['harvest', 'stop', 'host', 'verdict'],
+      'harvest failure cannot skip stop or either evidence owner');
+    t.same(phaseEvidence.cleanupFailures.map(({stage}) => stage),
+      ['harvest_logs', 'stop_cluster'],
+      'cleanup secondaries are retained as typed stage evidence');
+    const primary = new Error('body failed');
+    assert.throws(
+      () => completeAffinityDemoRun(true, primary, null, cleanup),
+      (error) => error === primary,
+      'cleanup failures cannot replace the exact primary identity',
+    );
+    assert.throws(
+      () => completeAffinityDemoRun(
+        false, undefined, {converged: true}, cleanup),
+      {code: 'AFFINITY_DEMO_CLEANUP_FAILURE'},
+      'successful body remains red when cleanup is incomplete',
+    );
+    const frozenPrimary = new Error('frozen-evidence body failure');
+    const frozenEvidence = Object.freeze({});
+    await assert.rejects(withAffinityDemoCleanup({
+      clusterHandle: null,
+      phaseEvidence: frozenEvidence,
+      formation: {},
+      dataRoot: '/owned/evidence',
+      nodeCount: 0,
+      collectHostScheduling: async () => ({measuring: false}),
+      collectVerdict: async () => ({complete: false}),
+    }, async () => {
+      throw frozenPrimary;
+    }), (error) => error === frozenPrimary,
+    'secondary evidence publication cannot mask the exact primary');
+    for (const primitive of [null, undefined, false]) {
+      const unset = Symbol('unset');
+      let observed = unset;
+      try {
+        await withAffinityDemoCleanup({
+          clusterHandle: null,
+          phaseEvidence: {},
+          formation: {},
+          dataRoot: '/owned/evidence',
+          nodeCount: 0,
+          collectHostScheduling: async () => ({measuring: false}),
+          collectVerdict: async () => ({complete: false}),
+        }, async () => Promise.reject(primitive));
+      } catch (error) {
+        observed = error;
+      }
+      t.equal(observed, primitive,
+        'cleanup preserves a falsy body rejection as the exact primary');
+    }
     t.end();
   });
 

@@ -1,0 +1,12 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "shared-process-census-disposition-and-no-new-debt", "passed": false},
+    {"id": "single-process-owner-red-and-lifecycle-proof", "passed": false},
+    {"id": "fresh-non-seed-real-contact-rotation", "passed": false},
+    {"id": "seven-process-formation-contract", "passed": false},
+    {"id": "independent-harness-fidelity-review", "passed": false},
+    {"id": "static-required-proof-and-duration-budgets", "passed": false}
+  ]
+}
