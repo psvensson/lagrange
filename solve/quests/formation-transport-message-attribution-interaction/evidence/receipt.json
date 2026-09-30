@@ -1,0 +1,50 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "formation-transport-message-attribution-interaction",
+  "status": "pass",
+  "generatedAt": "2026-09-08T23:49:07.443Z",
+  "receipts": [
+    {
+      "id": "owner-interaction-contract-registered",
+      "passed": true,
+      "command": "npm run test:file -- test/transport/message-router-formation-attribution-interaction.test.js",
+      "detail": "the protected coupled-pair registry binds inbound router behavior and formation mapping/accounting to one typed contract and this exact witness"
+    },
+    {
+      "id": "incoming-socket-production-dispatch",
+      "passed": true,
+      "command": "npm run test:file -- test/transport/message-router-formation-attribution-interaction.test.js",
+      "detail": "an asynchronous inbound resource enters the real listener installed by handleIncomingConnection before reaching handleMessage"
+    },
+    {
+      "id": "service-message-ack-before-handler-and-async-continuation",
+      "passed": true,
+      "command": "npm run test:file -- test/transport/message-router-formation-attribution-interaction.test.js",
+      "detail": "service requests retain ACK-before-handler ordering, no-handler responses, rejected-handler responses, and inherited async ownership"
+    },
+    {
+      "id": "control-and-response-branches",
+      "passed": true,
+      "command": "npm run test:file -- test/transport/message-router-formation-attribution-interaction.test.js",
+      "detail": "PING, PONG, ACK, live and retired SERVICE_RESPONSE, and incomplete IDENTIFY execute through their production branches"
+    },
+    {
+      "id": "malformed-and-unknown-behavior",
+      "passed": true,
+      "command": "npm run test:file -- test/transport/message-router-formation-attribution-interaction.test.js",
+      "detail": "unknown messages retain their warning and malformed input retains its error log and propagated SyntaxError under transport_message"
+    },
+    {
+      "id": "exclusive-partition-and-inactive-equivalence",
+      "passed": true,
+      "command": "npm run test:file -- test/transport/message-router-formation-attribution-interaction.test.js",
+      "detail": "transport and nested readiness durations partition injected time without overlap, while current and reverted mappings have identical normalized behavior when attribution is inactive"
+    },
+    {
+      "id": "interaction-red-on-revert",
+      "passed": true,
+      "command": "npm run test:file -- test/transport/message-router-formation-attribution-interaction.test.js",
+      "detail": "a module-loader control removes only the transport_message mapping, preserves production effects, and moves the measured work to unattributed so the named owner claim becomes red"
+    }
+  ]
+}

@@ -3,6 +3,7 @@ const FORMATION_OWNER = Object.freeze({
   RAFT_APPLY: 'raft_apply',
   RAFT_PROTOCOL: 'raft_protocol',
   READINESS: 'readiness',
+  TRANSPORT_MESSAGE: 'transport_message',
   UNATTRIBUTED: 'unattributed',
 });
 

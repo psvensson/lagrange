@@ -1,0 +1,56 @@
+{
+  "schema": "solve-quest/2",
+  "id": "formation-transport-message-attribution-interaction",
+  "statement": "The MessageRouter/formation-attribution interaction maps every production inbound socket dispatch to the exclusive transport_message owner while MessageRouter retains unchanged parsing, liveness, identification, PING/PONG, ACK, service response, ACK-before-handler, asynchronous handler, error, queue, reconnect, and delivery behavior when attribution is active or inactive; a deterministic source-revert control reaches the same production path and falsifies only the owner claim.",
+  "epic": "release-0-2-five-node-convergence",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/formation-transport-message-attribution-interaction/evidence/receipt.json",
+      "requiredReceipts": [
+        "owner-interaction-contract-registered",
+        "incoming-socket-production-dispatch",
+        "service-message-ack-before-handler-and-async-continuation",
+        "control-and-response-branches",
+        "malformed-and-unknown-behavior",
+        "exclusive-partition-and-inactive-equivalence",
+        "interaction-red-on-revert"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver verification with evidence subagent:<id>."
+    },
+    {
+      "id": "single-interaction-owner",
+      "statement": "MessageRouter remains the sole owner of inbound parsing, connection liveness, identification, control messages, ACK and service delivery; formation diagnostics owns exclusive accounting. A typed transport-attribution interaction may map the existing production callback to transport_message, but it may not parse, classify, schedule, deliver, retry, reconnect, acknowledge, or reinterpret a transport outcome."
+    },
+    {
+      "id": "production-socket-path",
+      "statement": "The deterministic witness must enter through MessageRouter.handleIncomingConnection and the installed socket message listener before reaching handleMessage. Calling an attribution wrapper or a copied transport decision directly is not proof."
+    },
+    {
+      "id": "transport-delivery-preservation",
+      "statement": "Preserve ACK-before-handler lookup, no-handler response semantics, late response disposition, pending PING resolution, identification adoption, unknown-message warning, parse-error propagation, and existing delivery/retry/reconnect behavior. Attribution may observe these paths but never become delivery or completion authority."
+    },
+    {
+      "id": "async-exclusive-attribution",
+      "statement": "An asynchronous service handler scheduled by an inbound dispatch inherits transport_message for its continuation, nested explicit owners hand off rather than overlap, and owner plus unattributed plus idle durations partition the injected-clock window exactly once."
+    },
+    {
+      "id": "inactive-equivalence",
+      "statement": "With no active formation attribution window, the current and exact-mapping-reverted modules produce identical normalized socket, liveness, control-frame, ACK, service-response, service-handler, return, throw, and logging effects."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "A module-loader control must remove the exact transport_message mapping while retaining the production incoming-socket path; it must reach and fail the named owner-duration assertion rather than fail import, setup, or transport behavior."
+    },
+    {
+      "id": "bounded-stage-scope",
+      "statement": "This Quest must not add heartbeat/lease, readiness, membership-publication, rebalancer, admin-snapshot, bootstrap, worker, simulator, calibration, report, artifact-transfer, scenario-ingestion, fix, or certification work. It must not use Docker, GCP, or live evidence."
+    }
+  ],
+  "sealedAt": "9bf8bc0df749d1136fe8d19c163ba433d358a0fa"
+}
