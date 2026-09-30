@@ -5,3 +5,4 @@
 test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js
 test/scripts/exact-election-evidence-same-turn-model-contract.test.js
 test/scripts/local-leader-row-visibility-model-contract.test.js
+test/integration/transaction-concurrent-read-outage.integration.test.js
