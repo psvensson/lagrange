@@ -1,0 +1,72 @@
+{
+  "schema": "solve-quest/2",
+  "id": "replica-membership-model-reduction",
+  "class": "process",
+  "epic": "formation-seed-decoupling",
+  "statement": "The owner's binding direction of 2026-09-20 makes complexity reduction the objective of the replica-membership work and names the minimal model to be falsified before any new concept is admitted: partition policy, placement observations, committed Raft membership, and zero or one unresolved durable replica operation per partition, that operation itself carrying the control-plane authority and fenced by the committed-membership generation it was planned against. This quest is read-only and answers one question - can every legitimate membership-changing behaviour Lagrange currently requires be represented by one replica-placement owner producing at most one unresolved durable replica operation per partition, fenced by committed membership generation - without designing any subsystem. It places every current concept the direction lists, and any other it meets on the way, in exactly one of four buckets - keep, derive, fold into an existing owner, delete candidate - preferring deletion, and for every concept it proposes to keep durable it states why that concept cannot be derived from the smaller set. It tries to falsify the model with the direction's eighteen hard cases on production owners, and for each case the drive itself - never an audit-authored declaration - yields the committed membership, the observations present, whether an unresolved operation already exists, what operation may be created, what prevents a second conflicting one, which durable fact permits recovery after restart, and which membership generation fences stale execution; a case that cannot be driven inside this quest is recorded as undriven with its reason and counts as unanswered, never as survived. It measures the primary invariant, at most one unresolved membership-changing operation per partition, against current production, and for the verified chained REPLACE - a previous target that is ACTIVE suppresses the second REPLACE, one that is SYNCING allows it - it determines by a drive which of five causes lets a second operation begin while the first's effects are still visible: legitimate composition inside one operation, a premature terminal state on the first operation, a stale membership observation, a recovery or re-materialization artifact, or another real requirement. It inventories mechanically what the existing durable replica operation already carries against the conceptual identity the direction lists, marking each element present, derivable or absent and adding nothing; every site that can create a membership-changing operation, which is the set one owner would absorb, apart from the components that only detect a condition; every decision that reads lifecycle status where committed Raft membership is the truth; the one candidate membership generation, worked outward from the operation boundary only - its writer, what advances it, its relation to committed Raft membership, its monotonicity, whether creation records it and execution checks it, and its behaviour across restart and leader change; the semantic decisions the promotion guard makes today set against the narrow operation fence; and the class of the landed authorization carrier. Its output is one generated model-reduction document whose verdict on the minimal model - survives the driven cases, falsified with the exact falsifier and the smallest additional concept, or undetermined where cases were not driven - follows from the case results by derivation, together with the complexity-ledger baseline the implementation phases will be measured against.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/replica-membership-model-reduction/evidence/receipt.json",
+      "requiredReceipts": [
+        "every-audited-concept-is-in-exactly-one-of-four-buckets",
+        "every-durable-keep-states-why-it-cannot-be-derived",
+        "replica-operation-identity-inventory-is-read-from-the-production-schema",
+        "every-membership-operation-creator-is-censused-from-source",
+        "status-read-as-membership-authority-is-censused-from-source",
+        "one-unresolved-operation-invariant-measured-on-production-owners",
+        "chained-replace-second-operation-cause-determined-by-a-drive",
+        "membership-generation-candidate-traced-from-writer-to-execution",
+        "every-hard-case-is-driven-or-recorded-undriven-and-unanswered",
+        "hard-case-answers-are-emitted-by-the-drive-not-declared",
+        "guard-semantic-decisions-set-against-the-operation-fence",
+        "authorization-carrier-classified",
+        "model-verdict-and-ledger-baseline-follow-by-derivation",
+        "document-is-generated-and-in-sync",
+        "no-production-file-changed"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "read-only-production",
+      "statement": "No file under src, examples, .github or .githooks changes; no behaviour changes anywhere."
+    },
+    {
+      "id": "no-new-abstraction",
+      "statement": "The quest designs no subsystem, table, authorization kind, transition object, ceiling or event type, and proposes none except as the smallest additional concept attached to a recorded falsifier of the minimal model. It never leaps to a multi-step MembershipTransition."
+    },
+    {
+      "id": "prefer-deletion",
+      "statement": "A concept stays durable only with a stated reason it cannot be derived from partition policy, placement observations, committed membership and the replica operation; absent that reason it is derive, fold or delete candidate."
+    },
+    {
+      "id": "identity-from-production",
+      "statement": "Whatever identifies a case, a state, an operation, a producer or a phase is emitted by production-owned state or read mechanically from production source; the quest keeps no hand-maintained row model whose entries declare what they represent. This is the architectural result of the stopped overflow-budget audit and binds here."
+    },
+    {
+      "id": "undriven-is-unanswered",
+      "statement": "A hard case not driven on production owners is recorded as undriven with its reason and leaves the verdict undetermined for that case; absence of a drive never counts as the model surviving, and observation frequency never counts as proof."
+    },
+    {
+      "id": "authorities-stay-distinct",
+      "statement": "Committed Raft membership is consensus truth, the replica operation is control-plane intent, placement observations are inputs only; the quest never treats an operation having advanced as evidence that membership committed."
+    },
+    {
+      "id": "generation-narrow",
+      "statement": "Version work proceeds outward from the membership-operation boundary on one candidate membership generation; another domain is named only with the concrete distinct semantic that requires it; no repository-wide token census."
+    },
+    {
+      "id": "forensic-audit-only",
+      "statement": "The stopped audit and its verified evidence packet are forensic evidence: they may be cited and compared, never extended, repaired, treated as frozen, or used as a source of canonical identities."
+    },
+    {
+      "id": "stop-on-falsifier",
+      "statement": "If a production-shaped case falsifies the minimal model, or any of the direction's stop conditions holds, the quest records the falsifier and the smallest additional concept and stops; it does not solve the case by adding a concept."
+    },
+    {
+      "id": "no-new-apparatus",
+      "statement": "One quest-evidence script for the probe and test-side files only; no new npm script, workflow or standalone checker."
+    }
+  ]
+}
