@@ -1,0 +1,87 @@
+TAP version 14
+# Subtest: process formation evidence separates real logging emitter and joiner context
+    ok 1 - should be equal
+    ok 2 - should be equal
+    not ok 3 - Received bootstrap request
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/process-formation-log-context.test.js
+        lineNumber: 20
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/runtime/process-formation-log-context.test.js:20:7)
+        test/runtime/process-formation-log-context.test.js:6:1
+      source: >2
+            t.equal(payload.nodeId, observation.emitterNodeId);
+            t.equal(payload.contextNodeId, observation.subjectNodeId);
+            t.equal(matchesNodeContext(entry, observation), true, observation.message);
+        ------^
+            t.equal(matchesNodeContext(entry, {...observation, emitterNodeId: 'unrelated'}), false);
+            t.equal(matchesNodeContext(entry, {...observation, subjectNodeId: 'unrelated'}), false);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -true
+        +false
+      ...
+    
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    not ok 8 - Bootstrap response prepared
+      ---
+      compare: ===
+      at:
+        fileName: test/runtime/process-formation-log-context.test.js
+        lineNumber: 20
+        columnNumber: 7
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/runtime/process-formation-log-context.test.js:20:7)
+        test/runtime/process-formation-log-context.test.js:6:1
+      source: >2
+            t.equal(payload.nodeId, observation.emitterNodeId);
+            t.equal(payload.contextNodeId, observation.subjectNodeId);
+            t.equal(matchesNodeContext(entry, observation), true, observation.message);
+        ------^
+            t.equal(matchesNodeContext(entry, {...observation, emitterNodeId: 'unrelated'}), false);
+            t.equal(matchesNodeContext(entry, {...observation, subjectNodeId: 'unrelated'}), false);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -true
+        +false
+      ...
+    
+    ok 9 - should be equal
+    ok 10 - should be equal
+    ok 11 - self-context remains the emitting node without a fabricated context field
+    1..11
+not ok 1 - process formation evidence separates real logging emitter and joiner context # time=13.439ms
+  ---
+  at:
+    fileName: test/runtime/process-formation-log-context.test.js
+    lineNumber: 6
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    import {matchesNodeContext} from
+    '../integration/helpers/process-formation-log-context.js';
+  
+  
+    test('process formation evidence separates real logging emitter and joiner
+    context', (t) => {
+  
+    ^
+      const logger = new LoggingService();
+      const cases = [
+  ...
+
+1..1
+# { total: 11, pass: 9, fail: 2 }
+# time=26.771ms

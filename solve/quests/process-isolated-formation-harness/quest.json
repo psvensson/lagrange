@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "process-isolated-formation-harness",
+  "class": "fix",
+  "statement": "Local multi-node formation scenarios acquire production entrypoint processes through one shared lifecycle owner, not multiple runtime owners around process-global state. Preserve fresh non-seed candidate rotation and seven-node formation assertions through real network and per-process observables; retire every child, stream and fault-proxy resource with typed failure evidence. Disposition the existing shared-process fixture census before another full release run.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/process-isolated-formation-harness/evidence/receipt.json",
+      "requiredReceipts": [
+        "shared-process-census-disposition-and-no-new-debt",
+        "single-process-owner-red-and-lifecycle-proof",
+        "fresh-non-seed-real-contact-rotation",
+        "seven-process-formation-contract",
+        "independent-harness-fidelity-review",
+        "static-required-proof-and-duration-budgets"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-owner",
+      "statement": "Extend examples/service-data-affinity/cluster-harness.js as the sole local child lifecycle owner; migrate the affinity demo duplicate spawn/kill mechanics. Keep its higher-level restart policy unchanged and record unrelated defects."
+    },
+    {
+      "id": "production-boundary",
+      "statement": "Use process.execPath and absolute src/index.js with distinct identities, data and listener ports; scrub inherited node configuration and prevent .env reloading. No shared process-global node state, forged readiness/cache/bootstrap payloads, NODE_ENV=test or altered product retry/election/cadence settings."
+    },
+    {
+      "id": "same-mechanism",
+      "statement": "Fresh C contacts a transparent proxy of real B first: the proxy forwards real readiness and drops exactly the first bootstrap POST. Prove ContactSeedPhase rotates to B at attempt2 using its real diagnostics, not merely entrypoint dead-peer preselection."
+    },
+    {
+      "id": "resource-lifetime",
+      "statement": "One owning handle acquires from spawn, races readiness with early exits, signals all children before waiting, and awaits close plus both pipe and log completion. Teardown is single-flight; forced kills, nonzero exits and cleanup errors remain loud typed outcomes."
+    },
+    {
+      "id": "bounded-proof",
+      "statement": "Preserve both scenario paths, classifications and assertion meanings. No outer join retries, timeout increases, policy relaxation or raised ratchets. Integration leaf tests must meet30seconds; an overrun is a performance or owner blocker, never a green acceptance receipt."
+    },
+    {
+      "id": "separate-router-owner",
+      "statement": "Do not edit transport runtime as a fixture workaround. The separately reviewed message-router-shutdown-lifetime Quest owns transport changes. Record and disposition the wider logical-node census rather than claiming two migrations cure all fixtures."
+    }
+  ],
+  "sealedAt": "59f3427c1557618c65f8dcd36d506826e8ffcbcf"
+}

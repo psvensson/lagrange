@@ -1,60 +1,20 @@
 /**
- * Message Group Multi-Join Formation Integration Test.
- *
- * Verifies message-group creation and availability for each joining node
- * across a larger topology than seed + 2 nodes.
+ * Seven real production entrypoints. Each process owns its runtime globals,
+ * listeners and persistent state; readiness is measured through public owners.
  */
-
 import {test} from '../../src/test-helpers/tap.js';
-import {request as httpRequest} from 'node:http';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
-import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
-import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
-import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
-import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
+import {HTTP_STATUS, META_SERVICE_ID, NODE_STATE, SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
+import {ADMIN_STATUS} from '../../src/admin/admin-constants.js';
+import {WASM_SERVICE_PROTOCOL, WASM_SERVICE_HEALTH_STATUS} from '../../src/wasm-service/wasm-service-constants.js';
 import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
-import {NodeService} from '../../src/node/node-service.js';
-import {COLUMN, NODE_STATE, NUM, SERVICE_STATUS, SERVICE_TYPE, TABLES}
-  from '../../src/constants/index.js';
-import {
-  initializeTestEnvironment,
-  cleanupTestEnvironment,
-  createInProcHttpPost,
-  getUniquePort,
-  TEST_CONFIG,
-  waitFor,
-  gracefulJoiningShutdown,
-  gracefulShutdown,
-} from './helpers/cluster-test-helpers.js';
-
-const TEST_TIMEOUT_MS = 480000;
-// A joining node's router self-connection can time out transiently when the
-// single-process multi-node cluster saturates the event loop; the production
-// entrypoint join loop retries retryable join failures, so the test does too.
-const JOIN_ATTEMPTS_PER_NODE = 3;
-const READY_WAIT_TIMEOUT_MS = 15000;
-const MESSAGE_GROUP_WAIT_TIMEOUT_MS = 10000;
-const POLL_INTERVAL_MS = 100;
-const MIN_LOCAL_MESSAGE_GROUPS = 1;
-// A distributed fan-out query over the 7-node single-process cluster can
-// transiently exceed several seconds while readiness refresh churn saturates
-// the shared event loop; give the admin probes room and retry them.
-const ADMIN_HEALTH_WAIT_TIMEOUT_MS = 30000;
-const ADMIN_QUERY_TIMEOUT_MS = 15000;
-
-const HTTP_STATUS_OK = 200;
-const LOCALHOST = '127.0.0.1';
-const ADMIN_HEALTH_PATH = '/health';
-const ADMIN_STREAM_PATH = '/api/admin/stream';
-const ADMIN_MESSAGE_TYPE_QUERY = 'query';
-const ADMIN_MESSAGE_TYPE_QUERY_RESULT = 'query_result';
-const ADMIN_SMOKE_QUERY_SQL = 'SELECT node_id FROM nodes LIMIT 1';
-const ADMIN_DISCOVERY_TABLE_NAME = 'nodes';
-const ADMIN_DISCOVERY_SQL =
-  'SELECT * FROM service_discovery_local(\'' + ADMIN_DISCOVERY_TABLE_NAME + '\')';
-const ADMIN_DISCOVERY_SERVICE_ID = 'sys-postgres-wire';
-const ADMIN_DISCOVERY_PROTOCOL = 'postgresql';
-const ADMIN_DISCOVERY_HEALTHY_STATUS = 'healthy';
+import {BOOTSTRAP_API_LOG_MSG} from '../../src/bootstrap/bootstrap-api-constants.js';
+import {JOINING_LOG_MSG} from '../../src/bootstrap/node-joining-constants.js';
+import {MESSAGE_GROUP_ASSIGNMENT_STRATEGY} from
+  '../../src/bootstrap/message-group-assignment-constants.js';
+import {MESSAGE_GROUP_SERVICE_LITERAL} from '../../src/message-group/message-group-service-runtime-support.js';
+import {FORMATION_CLEANUP_CEILING_MS, createProcessFormationScenario, messageIs, queryNode} from
+  './helpers/process-formation-scenario.js';
+import {matchesNodeContext} from './helpers/process-formation-log-context.js';
 
 const SEED_NODE_ID = '550e8400-e29b-41d4-a716-446655440600';
 const JOINING_NODE_IDS = Object.freeze([
@@ -65,572 +25,153 @@ const JOINING_NODE_IDS = Object.freeze([
   '550e8400-e29b-41d4-a716-446655440605',
   '550e8400-e29b-41d4-a716-446655440606',
 ]);
+const ALL_NODE_IDS = [SEED_NODE_ID, ...JOINING_NODE_IDS];
+const DISCOVERY_SQL = 'SELECT * FROM service_discovery_local(\'nodes\')';
+const NODE_ROWS_SQL = 'SELECT * FROM nodes';
 
-const JOINING_CONFIG = Object.freeze({
-  httpTimeoutMs: NUM.FIVE_THOUSAND,
-  leadershipWaitTimeoutMs: 12000,
-  leadershipWaitInitialDelayMs: NUM.TEN,
-  leadershipWaitMaxDelayMs: NUM.HUNDRED,
-  replicaStaggerDelayMs: 20,
-});
-
-function getNodeMessageGroupRows(systemTableCache, nodeId) {
-  return systemTableCache.filter(TABLES.SERVICES, (row) => {
-    return row[COLUMN.NODE_ID] === nodeId &&
-      row[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
-      row[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE;
-  }) || [];
+function healthyDiscoveryReplicas(rows) {
+  const services = rows[0]?.services || [];
+  const service = services.find((entry) =>
+    entry.protocol === WASM_SERVICE_PROTOCOL.POSTGRESQL &&
+    entry.serviceIds?.includes(META_SERVICE_ID.POSTGRES_WIRE),
+  );
+  return (service?.replicas || []).filter((replica) =>
+    replica.healthStatus === WASM_SERVICE_HEALTH_STATUS.HEALTHY &&
+    replica.readiness?.routingReady === true &&
+    replica.readiness?.schemaReady === true,
+  );
 }
 
-function getNodeMessageGroupRowsAnyStatus(systemTableCache, nodeId) {
-  return systemTableCache.filter(TABLES.SERVICES, (row) => {
-    return row[COLUMN.NODE_ID] === nodeId &&
-      row[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP;
-  }) || [];
+function hasAllNodeIds(rows, field) {
+  const ids = new Set(rows.map((row) => row[field]));
+  return ALL_NODE_IDS.every((nodeId) => ids.has(nodeId));
 }
 
-function hasHealthyLocalMessageGroup(service) {
-  if (!service || typeof service.getStatus !== 'function') {
-    return false;
-  }
-  const status = service.getStatus();
-  const hasAddress = typeof service.unifiedAddress === 'string' &&
-    service.unifiedAddress.length > 0;
-  return Boolean(status?.initialized) && hasAddress;
-}
-
-function createQueryId() {
-  return 'q-' + Date.now() + '-' + Math.random().toString(16).slice(2);
-}
-
-function resolveAdminApiPort(adminApi) {
-  const listenerAddress = adminApi?.getFastify?.()?.server?.address?.();
-  if (!listenerAddress || typeof listenerAddress !== 'object') {
-    return 0;
-  }
-  return Number.isInteger(listenerAddress.port) && listenerAddress.port > 0 ?
-    listenerAddress.port :
-    0;
-}
-
-async function probeAdminHealth(port) {
-  return new Promise((resolve) => {
-    let settled = false;
-    const complete = (result) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      resolve(result);
-    };
-
-    const request = httpRequest({
-      host: LOCALHOST,
-      port,
-      path: ADMIN_HEALTH_PATH,
-      method: 'GET',
-      headers: {
-        Connection: 'close',
-      },
-      agent: false,
-    }, (response) => {
-      let rawBody = '';
-      response.setEncoding('utf8');
-      response.on('data', (chunk) => {
-        rawBody += chunk;
-      });
-      response.on('end', () => {
-        let parsedBody = null;
-        if (rawBody.length > 0) {
-          try {
-            parsedBody = JSON.parse(rawBody);
-          } catch {
-            parsedBody = null;
-          }
-        }
-        complete({
-          statusCode: Number.isInteger(response.statusCode) ?
-            response.statusCode :
-            null,
-          body: parsedBody,
-        });
-      });
-    });
-
-    request.on('error', () => {
-      complete({
-        statusCode: null,
-        body: null,
-      });
-    });
-
-    request.setTimeout(ADMIN_QUERY_TIMEOUT_MS, () => {
-      request.destroy();
-      complete({
-        statusCode: null,
-        body: null,
-      });
-    });
-
-    request.end();
-  });
-}
-
-async function queryAdminWebSocket(port, sql) {
-  const {default: WebSocket} = await import('ws');
-  const endpoint = 'ws://' + LOCALHOST + ':' + port + ADMIN_STREAM_PATH;
-  const queryId = createQueryId();
-
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    let finalize = null;
-    const socket = new WebSocket(endpoint);
-    const timeoutId = setTimeout(() => {
-      finalize(new Error(
-        'timed out waiting for admin query response on port ' + port,
-      ));
-    }, ADMIN_QUERY_TIMEOUT_MS);
-    if (typeof timeoutId.unref === 'function') {
-      timeoutId.unref();
-    }
-
-    finalize = (error, rows = []) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timeoutId);
-      // ws close() is a no-op on an already-closed socket and does not
-      // throw for a plain no-argument close, so no catch guard is needed.
-      socket.close();
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(rows);
-    };
-
-    socket.once('open', () => {
-      try {
-        socket.send(JSON.stringify({
-          type: ADMIN_MESSAGE_TYPE_QUERY,
-          queryId,
-          sql,
-          params: [],
-        }));
-      } catch (error) {
-        finalize(error);
-      }
-    });
-
-    socket.on('message', (data) => {
-      let payload = null;
-      try {
-        payload = JSON.parse(data.toString());
-      } catch {
-        payload = null;
-      }
-      if (!payload || typeof payload !== 'object') {
-        return;
-      }
-      if (payload.type !== ADMIN_MESSAGE_TYPE_QUERY_RESULT) {
-        return;
-      }
-      if (payload.queryId !== queryId) {
-        return;
-      }
-      if (typeof payload.error === 'string' && payload.error.length > 0) {
-        finalize(new Error(payload.error));
-        return;
-      }
-      finalize(null, Array.isArray(payload.results) ? payload.results : []);
-    });
-
-    socket.once('error', (error) => {
-      finalize(error);
-    });
-
-    socket.once('close', () => {
-      if (!settled) {
-        finalize(new Error(
-          'admin websocket closed before query result on port ' + port,
-        ));
-      }
-    });
-  });
-}
-
-function extractPostgresWireReplicas(discoveryRows) {
-  const snapshot = discoveryRows[0];
-  const services = Array.isArray(snapshot?.services) ? snapshot.services : [];
-  const service = services.find((entry) => {
-    if (!entry || typeof entry !== 'object') {
-      return false;
-    }
-    if (entry.protocol !== ADMIN_DISCOVERY_PROTOCOL) {
-      return false;
-    }
-    const serviceIds = Array.isArray(entry.serviceIds) ? entry.serviceIds : [];
-    return serviceIds.includes(ADMIN_DISCOVERY_SERVICE_ID);
-  });
-  return Array.isArray(service?.replicas) ? service.replicas : [];
-}
-
-test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_MS}, async (t) => {
-  initializeTestEnvironment({
-    rebalancer: {
-      periodicCheckIntervalMs: 600000,
-      periodicCheckJitterMs: NUM.HUNDRED,
-      stabilizationPeriodMs: 10000,
-    },
-  });
-
-  const seedWsPort = getUniquePort();
-  const bootstrapService = new BootstrapService({
-    nodeId: SEED_NODE_ID,
-    nodeAddress: `ws://localhost:${seedWsPort}`,
-    wsPort: seedWsPort,
-    config: TEST_CONFIG.bootstrap,
-  });
-
-  let bootstrapResult = null;
-  let seedApi = null;
-  let seedQueryEngine = null;
-  const joiningServices = [];
-  const joiningServicesByNode = new Map();
-  const joinResultsByNode = new Map();
-  const adminApis = [];
-
-  try {
-    bootstrapResult = await bootstrapService.bootstrap();
-    t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
-
-    const systemTableCache = NodeService.getInstance().getSystemTableCache();
-    t.ok(systemTableCache, 'system table cache should be available');
-
-    seedApi = new BootstrapAPI({
-      seedNodeId: SEED_NODE_ID,
-      seedNodeAddress: `ws://localhost:${seedWsPort}`,
-      seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
-      messageGroupServices: bootstrapResult.messageGroupServices,
-      partitionServices: bootstrapResult.partitionServices,
-      systemTableCache,
-      messageRouter: bootstrapResult.messageRouter,
-      epochManager: bootstrapResult.epochManager,
-      bootstrapService,
-    });
-    await seedApi.initialize(0, {listen: false});
-    seedQueryEngine = new SQLQueryEngine({
-      systemCache: systemTableCache,
-      messageRouter: bootstrapResult.messageRouter,
-      nodeId: SEED_NODE_ID,
-    });
-    seedApi.setSqlQueryEngine(seedQueryEngine);
-
-    const httpPost = createInProcHttpPost(seedApi);
-    const expectedReadyNodeCount = JOINING_NODE_IDS.length + 1;
-
-    for (const joiningNodeId of JOINING_NODE_IDS) {
-      let joiningService = null;
-      let joinResult = null;
-      for (let attempt = 1; attempt <= JOIN_ATTEMPTS_PER_NODE; attempt += 1) {
-        const joiningWsPort = getUniquePort();
-        joiningService = new NodeJoiningService({
-          nodeId: joiningNodeId,
-          nodeAddress: `ws://localhost:${joiningWsPort}`,
-          seedNodeAddress: 'http://localhost:0',
-          seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
-          wsPort: joiningWsPort,
-          config: {
-            ...TEST_CONFIG.bootstrap,
-            ...JOINING_CONFIG,
-          },
-          httpPost,
-        });
-        joiningServices.push(joiningService);
-
-        joinResult = await joiningService.join();
-        if (joinResult.success) {
-          break;
-        }
-        t.comment(
-          `join attempt ${attempt} failed for ${joiningNodeId}: ` +
-            `${joinResult.error || 'unknown error'}`,
-        );
-        if (attempt < JOIN_ATTEMPTS_PER_NODE) {
-          joiningServices.pop();
-          await gracefulJoiningShutdown(joiningService);
-          joiningService = null;
-        }
-      }
-      joiningServicesByNode.set(joiningNodeId, joiningService);
-
-      joinResultsByNode.set(joiningNodeId, joinResult);
-      t.equal(joinResult.success, true, `${joiningNodeId} should join successfully`);
-      if (!joinResult.success) {
-        t.comment(`join failed for ${joiningNodeId}: ${joinResult.error || 'unknown error'}`);
-        break;
-      }
-      t.ok(
-        joinResult.messageGroupServices.size >= MIN_LOCAL_MESSAGE_GROUPS,
-        `${joiningNodeId} should have at least one local message group service`,
-      );
-
-      const assignmentStrategy = joinResult.bootstrapResponse?.
-        messageGroupAssignment?.
-        strategy;
-      const hasAssignmentStrategy = typeof assignmentStrategy === 'string' &&
-        assignmentStrategy.length > 0;
-      t.equal(
-        hasAssignmentStrategy,
-        true,
-        `${joiningNodeId} should receive a message group assignment strategy`,
-      );
-
-      const localServices = [...joinResult.messageGroupServices.values()];
-      const healthyLocalServices = localServices.filter((service) =>
-        hasHealthyLocalMessageGroup(service),
-      );
-      t.ok(
-        healthyLocalServices.length >= MIN_LOCAL_MESSAGE_GROUPS,
-        `${joiningNodeId} should initialize healthy local message group service(s)`,
-      );
-
-      const lifecycleState = joinResult.lifecycleStateMachine?.getState?.();
-      t.equal(
-        lifecycleState,
-        NODE_STATE.READY,
-        `${joiningNodeId} lifecycle should transition to READY`,
-      );
-    }
-
-    const allNodesReady = await waitFor(() => {
-      const now = Date.now();
-      const nodeRows = systemTableCache.getAll(TABLES.NODES) || [];
-      const readyNodeIds = new Set(
-        nodeRows
-          .filter((row) => isNodeRecordReady(row, {now, requireActiveStatus: true}))
-          .map((row) => row[COLUMN.NODE_ID]),
-      );
-      return readyNodeIds.size >= expectedReadyNodeCount &&
-        readyNodeIds.has(SEED_NODE_ID) &&
-        JOINING_NODE_IDS.every((nodeId) => readyNodeIds.has(nodeId));
-    }, READY_WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
-    t.equal(allNodesReady, true, 'seed and all joining nodes should reach ready state');
-
-    for (const joiningNodeId of JOINING_NODE_IDS) {
-      const hasCacheRows = await waitFor(() => {
-        const rows = getNodeMessageGroupRows(systemTableCache, joiningNodeId);
-        return rows.length >= MIN_LOCAL_MESSAGE_GROUPS;
-      }, MESSAGE_GROUP_WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
-      if (!hasCacheRows) {
-        const seedRowsAnyStatus = getNodeMessageGroupRowsAnyStatus(
-          systemTableCache,
-          joiningNodeId,
-        );
-        const localSystemTableCache = joiningServicesByNode
-          .get(joiningNodeId)?.cdcIntegrationService?.systemTableCache;
-        const localRowsAnyStatus = localSystemTableCache ?
-          getNodeMessageGroupRowsAnyStatus(localSystemTableCache, joiningNodeId) :
-          [];
-        t.comment(
-          `[diag] missing active message-group rows for ${joiningNodeId}; ` +
-          `seedRowsAnyStatus=${JSON.stringify(seedRowsAnyStatus.map((row) => ({
-            serviceId: row[COLUMN.SERVICE_ID],
-            status: row[COLUMN.STATUS],
-            groupId: row[COLUMN.GROUP_ID],
-            raftRole: row[COLUMN.RAFT_ROLE] || null,
-          })))}; localRowsAnyStatus=${JSON.stringify(localRowsAnyStatus.map((row) => ({
-            serviceId: row[COLUMN.SERVICE_ID],
-            status: row[COLUMN.STATUS],
-            groupId: row[COLUMN.GROUP_ID],
-            raftRole: row[COLUMN.RAFT_ROLE] || null,
-          })))}`,
-        );
-      }
-      t.equal(
-        hasCacheRows,
-        true,
-        `services cache should include active message group rows for ${joiningNodeId}`,
-      );
-
-      const rows = getNodeMessageGroupRows(systemTableCache, joiningNodeId);
-      const allRowsAddressable = rows.every((row) =>
-        typeof row[COLUMN.ADDRESS] === 'string' &&
-        row[COLUMN.ADDRESS].length > 0,
-      );
-      t.equal(
-        allRowsAddressable,
-        true,
-        `services cache rows for ${joiningNodeId} should include routable addresses`,
-      );
-    }
-
-    const totalLocalMessageGroups = JOINING_NODE_IDS.reduce((count, nodeId) => {
-      const joinResult = joinResultsByNode.get(nodeId);
-      const localCount = joinResult?.messageGroupServices?.size || 0;
-      return count + localCount;
-    }, 0);
-    t.ok(
-      totalLocalMessageGroups >= JOINING_NODE_IDS.length,
-      'multi-join run should create at least one local message-group replica per joiner',
+async function waitForMessageGroupRows(scenario, observer, nodeId) {
+  return scenario.waitFor(observer, async (context) => {
+    const rows = await queryNode(observer,
+      `SELECT * FROM services WHERE node_id = '${nodeId}'`, context);
+    const active = rows.filter((row) =>
+      row.service_type === SERVICE_TYPE.MESSAGE_GROUP &&
+      row.status === SERVICE_STATUS.ACTIVE,
     );
+    return {ready: active.length >= 1, value: active, diagnostic: rows};
+  }, 'message_group_not_published');
+}
 
-    const seedAdminApi = new AdminWebSocketAPI({
-      nodeId: SEED_NODE_ID,
-      systemTableCache,
-      sqlQueryEngine: seedQueryEngine,
-    });
-    await seedAdminApi.initialize(0, {
-      listen: true,
-      host: LOCALHOST,
-    });
-    adminApis.push({
-      nodeId: SEED_NODE_ID,
-      adminApi: seedAdminApi,
-    });
-
-    for (const joiningNodeId of JOINING_NODE_IDS) {
-      const joiningService = joiningServicesByNode.get(joiningNodeId);
-      const joiningSystemTableCache =
-        joiningService?.cdcIntegrationService?.systemTableCache;
-      const joiningSqlQueryEngine =
-        joiningService?.cdcIntegrationService?.sqlQueryEngine;
-      t.ok(
-        joiningSystemTableCache,
-        `${joiningNodeId} should expose a system table cache for admin API`,
-      );
-      t.ok(
-        joiningSqlQueryEngine,
-        `${joiningNodeId} should expose an SQL query engine for admin API`,
-      );
-      if (!joiningSystemTableCache || !joiningSqlQueryEngine) {
-        continue;
-      }
-
-      const joiningAdminApi = new AdminWebSocketAPI({
-        nodeId: joiningNodeId,
-        systemTableCache: joiningSystemTableCache,
-        sqlQueryEngine: joiningSqlQueryEngine,
-      });
-      await joiningAdminApi.initialize(0, {
-        listen: true,
-        host: LOCALHOST,
-      });
-      adminApis.push({
-        nodeId: joiningNodeId,
-        adminApi: joiningAdminApi,
-      });
+async function assertJoiner(t, scenario, node, completion) {
+  const label = node.nodeId;
+  t.equal(completion.nodeId, label, `${label} joins successfully`);
+  t.ok(completion.messageGroupCount >= 1, `${label} owns a local message group`);
+  const seed = scenario.cluster.nodes[0];
+  const assignment = await scenario.findLog(seed, (entry) =>
+    messageIs(entry, BOOTSTRAP_API_LOG_MSG.RESPONSE_PREPARED) &&
+    matchesNodeContext(entry, {emitterNodeId: seed.nodeId, subjectNodeId: label}),
+  'message_group_assignment_not_observed');
+  const recognizedStrategy = assignment?.strategy ===
+      MESSAGE_GROUP_ASSIGNMENT_STRATEGY.MOVE_REPLICA ||
+    assignment?.strategy === MESSAGE_GROUP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED;
+  t.equal(recognizedStrategy, true,
+    `${label} is offered a canonical message-group assignment strategy`);
+  t.ok(typeof assignment?.groupId === 'string' && assignment.groupId.length > 0,
+    `${label} is offered a concrete message-group identity`);
+  const consumed = await scenario.findLog(node, (entry) => {
+    if (entry.nodeId !== label || entry.groupId !== assignment.groupId) return false;
+    if (assignment.strategy === MESSAGE_GROUP_ASSIGNMENT_STRATEGY.MOVE_REPLICA) {
+      return messageIs(entry, JOINING_LOG_MSG.JOIN_ASSIGNMENT_RECEIVED) &&
+        entry.strategy === assignment.strategy;
     }
+    return assignment.strategy === MESSAGE_GROUP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED &&
+      messageIs(entry, JOINING_LOG_MSG.SELF_HOSTED_CREATED);
+  }, 'message_group_assignment_not_consumed');
+  t.equal(consumed.groupId, assignment.groupId,
+    `${label} consumes the exact assignment prepared by the seed`);
+  const localRows = await waitForMessageGroupRows(scenario, node, label);
+  const initialized = await scenario.findLog(node, (entry) =>
+    messageIs(entry, MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_GROUP_SERVICE_INITIALIZED) &&
+    localRows.some((row) => row.service_id === entry.replicaId),
+  'local_message_group_initialization_not_observed');
+  const initializedRow = localRows.find((row) => row.service_id === initialized.replicaId);
+  const registered = await scenario.findLog(node, (entry) =>
+    messageIs(entry, JOINING_LOG_MSG.JOIN_HANDLER_REGISTERED) &&
+    entry.nodeId === label && entry.unifiedAddress === initializedRow.address,
+  'local_message_group_handler_not_observed');
+  t.ok(initialized.replicaId, `${label} initializes an actual local replica`);
+  t.equal(registered.unifiedAddress, initializedRow.address,
+    `${label} registers that local replica at its published address`);
+  t.ok(localRows.length >= 1 && localRows.every((row) => row.address?.length > 0),
+    `${label} publishes initialized active routable local message-group services`);
+  t.equal(completion.lifecycleState, NODE_STATE.READY,
+    `${label} lifecycle transitions to READY`);
+  const ready = await scenario.ready(node);
+  t.equal(ready.startupRuntimeHandoff.joinLifecycleState, NODE_STATE.READY,
+    `${label} production handoff preserves READY`);
+  const seedRows = await waitForMessageGroupRows(scenario, scenario.cluster.nodes[0], label);
+  t.ok(seedRows.length >= 1, `seed cache observes active services for ${label}`);
+  t.ok(seedRows.every((row) => typeof row.address === 'string' && row.address.length > 0),
+    `seed service rows for ${label} have routable addresses`);
+}
 
-    for (const adminEntry of adminApis) {
-      const adminNodeId = adminEntry.nodeId;
-      const adminPort = resolveAdminApiPort(adminEntry.adminApi);
-      t.ok(
-        adminPort > 0,
-        `${adminNodeId} admin API should bind a network port`,
-      );
-      if (!(adminPort > 0)) {
-        continue;
-      }
+async function assertAdmin(t, scenario, node) {
+  const label = node.nodeId;
+  t.ok(node.adminPort > 0, `${label} production admin API binds a port`);
+  const health = await scenario.health(node);
+  t.equal(health.status, HTTP_STATUS.OK, `${label} admin health endpoint is reachable`);
+  t.equal(health.body.status, ADMIN_STATUS.HEALTHY, `${label} production admin API is healthy`);
+  const rows = await scenario.query(node, 'SELECT node_id FROM nodes LIMIT 1');
+  t.ok(rows.length >= 1, `${label} real admin WS query returns node rows`);
+  const ownRows = await scenario.query(node,
+    `SELECT node_id FROM nodes WHERE node_id = '${label}'`);
+  t.ok(ownRows.some((row) => row.node_id === label),
+    `${label} exposes its own system cache through its own SQL engine`);
+  const replicas = await scenario.waitFor(node, async (context) => {
+    const discovery = await queryNode(node, DISCOVERY_SQL, context);
+    const healthy = healthyDiscoveryReplicas(discovery);
+    return {
+      ready: hasAllNodeIds(healthy, 'nodeId'),
+      value: healthy,
+      diagnostic: discovery,
+    };
+  }, 'discovery_not_ready');
+  t.ok(replicas.length >= ALL_NODE_IDS.length,
+    `${label} table-scoped discovery sees all seven healthy pg replicas`);
+  t.ok(hasAllNodeIds(replicas, 'nodeId'),
+    `${label} discovery proves distinct peers, not duplicate rows`);
+  t.ok(replicas.every((replica) =>
+    replica.readiness.routingReady && replica.readiness.schemaReady),
+  `${label} discovered replicas are route/schema ready`);
+}
 
-      const healthReady = await waitFor(async () => {
-        const probe = await probeAdminHealth(adminPort);
-        return probe.statusCode === HTTP_STATUS_OK &&
-          probe.body?.status === 'healthy';
-      }, ADMIN_HEALTH_WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
-      t.equal(
-        healthReady,
-        true,
-        `${adminNodeId} admin API /health should be reachable`,
-      );
-
-      let queryRows = [];
-      let queryError = null;
-      // Retry the smoke query: a single distributed read can time out
-      // transiently while the in-process cluster is saturated.
-      await waitFor(async () => {
-        try {
-          queryRows = await queryAdminWebSocket(
-            adminPort,
-            ADMIN_SMOKE_QUERY_SQL,
-          );
-          queryError = null;
-          return true;
-        } catch (error) {
-          queryError = error;
-          return false;
-        }
-      }, ADMIN_HEALTH_WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
-      t.equal(
-        queryError,
-        null,
-        `${adminNodeId} admin websocket query should succeed`,
-      );
-      if (!queryError) {
-        t.ok(
-          queryRows.length >= 1,
-          `${adminNodeId} admin websocket should return node rows`,
-        );
-      }
-
-      let latestDiscoveryReplicaSummary = null;
-      const allReplicaReadinessReady = await waitFor(async () => {
-        try {
-          const discoveryRows = await queryAdminWebSocket(
-            adminPort,
-            ADMIN_DISCOVERY_SQL,
-          );
-          const replicas = extractPostgresWireReplicas(discoveryRows)
-            .filter((replica) => {
-              if (!replica || typeof replica !== 'object') {
-                return false;
-              }
-              const replicaNodeId = String(replica.nodeId || '');
-              if (!replicaNodeId) {
-                return false;
-              }
-              const healthStatus = String(replica.healthStatus || '').toLowerCase();
-              return healthStatus === ADMIN_DISCOVERY_HEALTHY_STATUS;
-            });
-          latestDiscoveryReplicaSummary = replicas.map((replica) => ({
-            nodeId: replica.nodeId,
-            routingReady: replica?.readiness?.routingReady,
-            schemaReady: replica?.readiness?.schemaReady,
-          }));
-          if (replicas.length < expectedReadyNodeCount) {
-            return false;
-          }
-          return replicas.every((replica) =>
-            replica?.readiness?.routingReady === true &&
-            replica?.readiness?.schemaReady === true,
-          );
-        } catch (_error) {
-          return false;
-        }
-      }, ADMIN_HEALTH_WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
-
-      t.equal(
-        allReplicaReadinessReady,
-        true,
-        `${adminNodeId} table-scoped discovery should keep ` +
-          'postgres-wire replicas route/schema ready',
-      );
-      if (!allReplicaReadinessReady) {
-        t.comment(
-          '[diag] ' + adminNodeId + ' readiness snapshot=' +
-            JSON.stringify(latestDiscoveryReplicaSummary),
-        );
-      }
+test('message group formation across seven production entrypoint processes',
+  {timeout: FORMATION_CLEANUP_CEILING_MS}, async (t) => {
+    const scenario = await createProcessFormationScenario(t, import.meta.url);
+    t.comment(`Process logs: ${scenario.dataRoot}`);
+    const seed = await scenario.startNode(SEED_NODE_ID);
+    t.equal((await scenario.ready(seed)).ready, true, 'seed bootstrap succeeds');
+    t.ok((await scenario.query(seed, NODE_ROWS_SQL)).length > 0,
+      'seed system cache is available through production SQL');
+    // Acquire all joiners after the seed. No outer retries or logical-node
+    // constructors: concurrency matches the production cluster-start boundary.
+    const nodes = [];
+    for (const nodeId of JOINING_NODE_IDS) {
+      nodes.push(await scenario.startNode(nodeId, [scenario.address(seed)]));
     }
-  } finally {
-    for (let index = adminApis.length - 1; index >= 0; index -= 1) {
-      await adminApis[index].adminApi.shutdown().catch(() => {});
+    const completions = await Promise.all(nodes.map((node) => scenario.joined(node)));
+    for (let index = 0; index < nodes.length; index += 1) {
+      await assertJoiner(t, scenario, nodes[index], completions[index]);
     }
-    for (let index = joiningServices.length - 1; index >= 0; index -= 1) {
-      await gracefulJoiningShutdown(joiningServices[index]);
-    }
-    await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
-    await cleanupTestEnvironment();
-  }
-});
+    const readyRows = await scenario.waitFor(seed, async (context) => {
+      const rows = await queryNode(seed, NODE_ROWS_SQL, context);
+      const ready = rows.filter((row) =>
+        isNodeRecordReady(row, {now: Date.now(), requireActiveStatus: true}),
+      );
+      return {ready: hasAllNodeIds(ready, 'node_id'), value: ready, diagnostic: rows};
+    }, 'membership_not_ready');
+    t.ok(hasAllNodeIds(readyRows, 'node_id'), 'seed and every joiner reach ready state');
+    t.ok(completions.reduce((total, entry) => total + entry.messageGroupCount, 0) >= nodes.length,
+      'formation creates at least one local message-group replica per joiner');
+    for (const node of scenario.cluster.nodes) await assertAdmin(t, scenario, node);
+    t.equal(new Set(scenario.cluster.nodes.map((node) => node.process.pid)).size,
+      ALL_NODE_IDS.length, 'seven independent process-global runtime domains');
+    await scenario.finish();
+  });
