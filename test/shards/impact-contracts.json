@@ -129,6 +129,26 @@
         "test/node/replica-local-only-row-convergence.test.js"
       ]
     },
+    "replica-durable-generation-cleanup": {
+      "description": "Exact durable replica generations, SERVICES-key cleanup ownership, storage deletion, startup admission, and live-row creation form one lifecycle closure contract.",
+      "owners": [
+        "src/node/replica-cleanup-tombstone-owner.js",
+        "src/node/replica-handler-remove-execution-methods.js",
+        "src/node/replica-handler-removed-cleanup-sweep.js",
+        "src/node/replica-handler-create-methods.js",
+        "src/node/replica-state-machine",
+        "src/node/replica-storage-artifacts.js",
+        "src/partition/partition-service-row-owner.js",
+        "src/bootstrap/phases/seed-partitions-phase.js",
+        "src/bootstrap/rejoin-hints-durable-evidence.js",
+        "src/cdc/cdc-integration-service-mutations.js"
+      ],
+      "tests": [
+        "test/node/replica-lifecycle-durable-generation.test.js",
+        "test/node/replica-handler.test.js",
+        "test/partition/partition-service-cleanup-token-schema.test.js"
+      ]
+    },
     "critical-create-admission-topology-ordering": {
       "description": "Critical create admission runs before the downstream topology guard on createOperation.",
       "owners": [
@@ -340,10 +360,11 @@
       "description": "A surplus-drain REPLACE whose declared source replica is already removed terminalizes (reaches SAFE) instead of re-dispatching a source-leader handoff to a replica that no longer exists (CL-038).",
       "owners": [
         "src/rebalancer/priority-publication-leader-safety.js",
-        "src/rebalancer/priority-publication-safety-shared.js"
+        "src/rebalancer/priority-publication-safety-shared.js",
+        "src/rebalancer/operation-workflow-replace-owner.js"
       ],
       "tests": [
-        "test/rebalancer/cl-038-source-removed-handoff-terminates.test.js"
+        "test/rebalancer/replace-source-removal-owner.test.js"
       ]
     },
     "CL-035": {
@@ -561,6 +582,53 @@
         "test/query/write-path-internal-pacing.test.js"
       ]
     },
+    "committed-bootstrap-stamp": {
+      "description": "Every join bootstrap is one canonical own-data stamp read from the group leader before operation persistence, carried unchanged through creation, decoded at the target, and enforced by the raft-rs participation gate; rows remain discovery only and an unreadable or malformed distributed answer fails closed.",
+      "owners": [
+        "src/node/replica-handler-committed-membership-methods.js",
+        "src/rebalancer/committed-membership-bootstrap-read.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation.js",
+        "src/query/sql-query-engine-initial-partition-provisioning.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-bootstrap-membership.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js",
+        "test/raft/raft-rs-backend/evidence-o1-gate-histories.test.js",
+        "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+        "test/raft/raft-rs-backend/committed-membership-target-validation.test.js",
+        "test/raft/raft-rs-backend/committed-membership-adversarial-boundary.test.js"
+      ]
+    },
+    "replace-owner-membership-observation": {
+      "description": "The REPLACE owner decides source removal, completion and its leadership handoff only from decoded replica consensus observations. The target is a wake and route; the deciding answer must be the leader's own applied-at-commit configuration and a majority of that configuration must corroborate its term and leader identity. The operation port announces applied membership, the partition and node layers relay it, and READ_REPLICA_MEMBERSHIP / RETIRE_REPLICA_PEER read or mutate through the port. Rows never decide membership.",
+      "owners": [
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/partition/partition-service-raft-lifecycle-wiring.js",
+        "src/partition/partition-service-raft-membership-administration.js",
+        "src/node/replica-handler-membership-relay.js",
+        "src/node/replica-handler-membership-methods.js",
+        "src/rebalancer/operation-workflow-replace-owner.js",
+        "src/rebalancer/operation-workflow-replace-surviving-membership.js",
+        "src/rebalancer/operation-workflow-replace-owner-wake.js",
+        "src/rebalancer/operation-workflow-replace-handoff-attempt.js",
+        "src/rebalancer/operation-workflow-replace-witness.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-backend/membership-changed-event.test.js",
+        "test/raft/raft-rs-backend/replica-membership-witness.test.js",
+        "test/node/replica-handler-membership-relay.test.js",
+        "test/node/replica-handler-replica-membership.test.js",
+        "test/rebalancer/replace-source-removal-owner.test.js",
+        "test/rebalancer/replace-owner-wake.test.js",
+        "test/rebalancer/replace-named-handoff-attempt.test.js",
+        "test/rebalancer/replace-real-group-completion.test.js",
+        "test/rebalancer/replace-real-group-scheduling.test.js",
+        "test/rebalancer/replace-witness-boundary.test.js"
+      ]
+    },
     "public-application-database-seam": {
       "description": "The public Application Database seam (createEmbeddedLagrange -> openApplicationDatabase -> query/transaction): public result shape, typed errors, statement policy, and behaviour through embedded processes.",
       "owners": [
@@ -593,12 +661,12 @@
       ]
     },
     "public-seam-durability-certification-source": {
-      "description": "The runtime's default consensus provider (provider-control owner) decides the public-seam durability scenario's certification status line (PREPARED_BLOCKED_ON_RS_RAFT_CUTOVER vs CANDIDATE).",
+      "description": "The fixed rs-raft partition construction path makes the provider-neutral public-seam durability scenario eligible as CANDIDATE; the scenario must not consult the retired provider-selection compatibility surface.",
       "owners": [
-        "src/raft/raft-provider-control.js",
-        "src/raft/raft-provider-control-constants.js"
+        "src/partition/partition-service-core-base.js"
       ],
       "tests": [
+        "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
         "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js"
       ]
     },
@@ -696,6 +764,37 @@
       "contract": "priority-services-marker-reconcile",
       "witnessTests": [
         "test/node/replica-local-only-row-convergence.test.js"
+      ]
+    },
+    "replica-durable-generation-cleanup": {
+      "description": "Lifecycle CAS, cleanup-key arbitration, physical storage deletion, and every storage-open admission must preserve one exact durable owner for a logical replica identity.",
+      "endpoints": [
+        {
+          "id": "durable-lifecycle-generation",
+          "owners": [
+            "src/node/replica-state-machine",
+            "src/partition/partition-service-row-owner.js"
+          ]
+        },
+        {
+          "id": "cleanup-creation-storage-owner",
+          "owners": [
+            "src/node/replica-cleanup-tombstone-owner.js",
+            "src/node/replica-handler-remove-execution-methods.js",
+            "src/node/replica-handler-removed-cleanup-sweep.js",
+            "src/node/replica-storage-artifacts.js",
+            "src/node/replica-handler-create-methods.js",
+            "src/bootstrap/phases/seed-partitions-phase.js",
+            "src/bootstrap/rejoin-hints-durable-evidence.js",
+            "src/cdc/cdc-integration-service-mutations.js"
+          ]
+        }
+      ],
+      "contract": "replica-durable-generation-cleanup",
+      "witnessTests": [
+        "test/node/replica-lifecycle-durable-generation.test.js",
+        "test/node/replica-handler.test.js",
+        "test/partition/partition-service-cleanup-token-schema.test.js"
       ]
     },
     "critical-create-hold-topology-guard-order": {
@@ -1107,6 +1206,74 @@
         "test/partition/partition-write-typed-releases.test.js",
         "test/query/partition-write-answer-consumers.test.js",
         "test/query/write-path-internal-pacing.test.js"
+      ]
+    },
+    "committed-bootstrap-stamp": {
+      "description": "The leader-read producer and target/raft consumer must agree on one canonical committed bootstrap stamp, including its fail-closed transport and shape boundary.",
+      "endpoints": [
+        {
+          "id": "committed-stamp-reader",
+          "owners": [
+            "src/node/replica-handler-committed-membership-methods.js",
+            "src/rebalancer/committed-membership-bootstrap-read.js",
+            "src/rebalancer/rebalance-coordinator-operation-creation.js",
+            "src/query/sql-query-engine-initial-partition-provisioning.js"
+          ]
+        },
+        {
+          "id": "committed-stamp-consumer",
+          "owners": [
+            "src/raft/raft-committed-membership-stamp.js",
+            "src/raft/raft-rs-bootstrap-membership.js",
+            "src/raft/raft-rs-operation-port.js",
+            "src/raft/raft-rs-runtime-owner.js"
+          ]
+        }
+      ],
+      "contract": "committed-bootstrap-stamp",
+      "witnessTests": [
+        "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js",
+        "test/raft/raft-rs-backend/evidence-o1-gate-histories.test.js",
+        "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+        "test/raft/raft-rs-backend/committed-membership-target-validation.test.js"
+      ]
+    },
+    "replace-owner-membership-observation": {
+      "description": "A change to how a replica announces, relays or answers its configuration, leader or term must keep the REPLACE owner's wakes, majority-current leader authority, completion and named handoff correct; a change to the owner must keep using only decoded consensus observations.",
+      "endpoints": [
+        {
+          "id": "replica-consensus-observation",
+          "owners": [
+            "src/raft/raft-rs-runtime-owner.js",
+            "src/partition/partition-service-raft-lifecycle-wiring.js",
+            "src/partition/partition-service-raft-membership-administration.js",
+            "src/node/replica-handler-membership-relay.js",
+            "src/node/replica-handler-membership-methods.js"
+          ]
+        },
+        {
+          "id": "replace-owner",
+          "owners": [
+            "src/rebalancer/operation-workflow-replace-owner.js",
+            "src/rebalancer/operation-workflow-replace-surviving-membership.js",
+            "src/rebalancer/operation-workflow-replace-owner-wake.js",
+            "src/rebalancer/operation-workflow-replace-handoff-attempt.js",
+            "src/rebalancer/operation-workflow-replace-witness.js"
+          ]
+        }
+      ],
+      "contract": "replace-owner-membership-observation",
+      "witnessTests": [
+        "test/raft/raft-rs-backend/membership-changed-event.test.js",
+        "test/raft/raft-rs-backend/replica-membership-witness.test.js",
+        "test/node/replica-handler-membership-relay.test.js",
+        "test/node/replica-handler-replica-membership.test.js",
+        "test/rebalancer/replace-source-removal-owner.test.js",
+        "test/rebalancer/replace-owner-wake.test.js",
+        "test/rebalancer/replace-named-handoff-attempt.test.js",
+        "test/rebalancer/replace-real-group-completion.test.js",
+        "test/rebalancer/replace-real-group-scheduling.test.js",
+        "test/rebalancer/replace-witness-boundary.test.js"
       ]
     }
   }
