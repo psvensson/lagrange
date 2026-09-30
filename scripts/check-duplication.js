@@ -180,8 +180,10 @@ const RATCHET_TARGETS = [
     // components took one test incarnation value owner.
     // 2026-09-30: tightened 765/29409 -> 765/29402 on the round-8 combined
     // tree (Track A boot incarnation + Track B handler identity).
+    // 2026-09-30: tightened duplicated lines 29402 -> 29388 after the
+    // rejoin-hints recovered-peer decision match became one constant.
     baselineCloneGroupCount: 765,
-    baselineDuplicatedLineCount: 29402,
+    baselineDuplicatedLineCount: 29388,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

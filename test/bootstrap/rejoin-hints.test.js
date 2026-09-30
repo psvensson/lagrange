@@ -40,6 +40,35 @@ const CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT = 'present';
 const CLUSTER_INCARNATION_PEER_PROOF_RECOVERED = 'recovered';
 const CLUSTER_INCARNATION_PEER_PROOF_NOT_REQUIRED = 'not_required';
 
+const JOIN_RECOVERED_PEER_DECISION_MATCH = {
+  state: 'join_recovered_peer',
+  mode: 'join',
+  peerAddressState: 'selected',
+  peerAddress: PEER_NODE_ADDRESS_A,
+  source: 'rejoin_hints',
+  startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+  durableStateDetected: true,
+  identityMismatch: false,
+  membershipOwnerOutcome: {
+    semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+    boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
+    startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    reasonCode: 'join_recovered_peer',
+    evidenceSource: 'rejoin_hints',
+    peerAddressState: 'selected',
+    durableStateDetected: true,
+    identityMismatch: false,
+  },
+  clusterIncarnationFence: {
+    state: CLUSTER_INCARNATION_FENCE_STATE_CURRENT,
+    allowed: true,
+    localIdentityState: CLUSTER_INCARNATION_LOCAL_IDENTITY_MATCHED,
+    durableMembershipState: CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT,
+    peerProofState: CLUSTER_INCARNATION_PEER_PROOF_RECOVERED,
+  },
+};
+
 function createSystemTableCache(nodeRows = [], clusterId = null) {
   return {
     getAll(tableName) {
@@ -167,34 +196,7 @@ test('persistBootstrapRejoinHints seeds durable rejoin from the chosen peer',
       probePeerAddress: async () => false,
     });
 
-    t.match(decision, {
-      state: 'join_recovered_peer',
-      mode: 'join',
-      peerAddressState: 'selected',
-      peerAddress: PEER_NODE_ADDRESS_A,
-      source: 'rejoin_hints',
-      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-      durableStateDetected: true,
-      identityMismatch: false,
-      membershipOwnerOutcome: {
-        semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
-        boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
-        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
-        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-        reasonCode: 'join_recovered_peer',
-        evidenceSource: 'rejoin_hints',
-        peerAddressState: 'selected',
-        durableStateDetected: true,
-        identityMismatch: false,
-      },
-      clusterIncarnationFence: {
-        state: CLUSTER_INCARNATION_FENCE_STATE_CURRENT,
-        allowed: true,
-        localIdentityState: CLUSTER_INCARNATION_LOCAL_IDENTITY_MATCHED,
-        durableMembershipState: CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT,
-        peerProofState: CLUSTER_INCARNATION_PEER_PROOF_RECOVERED,
-      },
-    });
+    t.match(decision, JOIN_RECOVERED_PEER_DECISION_MATCH);
   });
 
 test('resolveAutoRejoinPeerAddress prefers a reachable persisted peer', async (t) => {
@@ -314,34 +316,7 @@ test('resolveAutoRejoinStartupDecision accepts address drift when node ID matche
       probePeerAddress: async () => false,
     });
 
-    t.match(decision, {
-      state: 'join_recovered_peer',
-      mode: 'join',
-      peerAddressState: 'selected',
-      peerAddress: PEER_NODE_ADDRESS_A,
-      source: 'rejoin_hints',
-      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-      durableStateDetected: true,
-      identityMismatch: false,
-      membershipOwnerOutcome: {
-        semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
-        boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
-        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
-        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-        reasonCode: 'join_recovered_peer',
-        evidenceSource: 'rejoin_hints',
-        peerAddressState: 'selected',
-        durableStateDetected: true,
-        identityMismatch: false,
-      },
-      clusterIncarnationFence: {
-        state: CLUSTER_INCARNATION_FENCE_STATE_CURRENT,
-        allowed: true,
-        localIdentityState: CLUSTER_INCARNATION_LOCAL_IDENTITY_MATCHED,
-        durableMembershipState: CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT,
-        peerProofState: CLUSTER_INCARNATION_PEER_PROOF_RECOVERED,
-      },
-    });
+    t.match(decision, JOIN_RECOVERED_PEER_DECISION_MATCH);
   });
 
 test('resolveAutoRejoinStartupDecision keeps persisted seed role in seed mode',
