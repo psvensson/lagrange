@@ -25,6 +25,8 @@ import {
 } from './formation-sim-production-node-environment.js';
 import {loadCalibration} from './formation-sim-coefficients.js';
 import {transcriptCausalOrder} from './formation-sim-host-transcript.js';
+import {reserveSimulatedBootIncarnation} from
+  './formation-sim-boot-incarnation.js';
 import {
   createProductionSeedSimHost, networkTranscriptStructure,
   runSeedHandoffScenario,
@@ -63,7 +65,8 @@ async function seedThroughHandoff() {
   const environment = createProductionSimNodeEnvironment({
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT, scenario,
   });
-  const host = createProductionSeedSimHost(environment);
+  const host = createProductionSeedSimHost(environment,
+    {bootIncarnation: await reserveSimulatedBootIncarnation()});
   await runOnSimulationGenerationRoot(GENERATION, () =>
     runOnExecutionNode(NODE_ID, () => host.phaseInfrastructure()));
   await host.settleCausalConsequences();

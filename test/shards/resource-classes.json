@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2243,
+    "ordinary": 2244,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2260,
-  "digest": "fnv1a32-750556fa",
+  "censusSize": 2261,
+  "digest": "fnv1a32-6088a3a1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -83,6 +83,7 @@
     "test/bootstrap/artifact-payload-table-schemas.test.js": "ordinary",
     "test/bootstrap/behaviour-changing-consumer-convergence.test.js": "ordinary",
     "test/bootstrap/boot-incarnation-owner.test.js": "ordinary",
+    "test/bootstrap/boot-incarnation-reservation-census.test.js": "ordinary",
     "test/bootstrap/bootstrap-api-admission-snapshots.test.js": "ordinary",
     "test/bootstrap/bootstrap-api-readiness-gating.test.js": "ordinary",
     "test/bootstrap/bootstrap-api-readiness-publication.test.js": "ordinary",

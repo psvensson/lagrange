@@ -578,7 +578,7 @@ class NodeRegistrationOwnerPublicationMethods {
     const transition = await applyNodeTerminalTransition({
       gateway: this.getJoinAdmissionControlPlaneSystemTableGateway(),
       nodeId: registeredNodeId,
-      bootIncarnation: this.delegates.getBootIncarnation?.(),
+      bootIncarnation: this.delegates.getBootIncarnation(),
       destination: {
         [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
         [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,

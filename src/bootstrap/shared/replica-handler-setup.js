@@ -17,6 +17,7 @@ import {ReplicaStateMachine} from '../../node/replica-state-machine.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {SUBSYSTEM} from '../../constants/index.js';
+import {requireIssuedBootIncarnation} from '../boot-incarnation-contract.js';
 import {
   armSnapshotOfferRouting,
   wrapPartitionServiceFactoryWithSnapshotCatchup,
@@ -49,20 +50,37 @@ const ERROR_MSG = Object.freeze({
 });
 
 /**
- * Typed refusal: a replica lifecycle owner stamped for one node boot
- * incarnation was offered to another. Never re-minted silently (R07/R11).
+ * Typed refusals of the replica lifecycle acquisition owner (R07/R11): an
+ * owner of one node boot incarnation offered to another, or an acquisition
+ * without an issued incarnation. Never a silent default or re-mint.
  */
 const REPLICA_LIFECYCLE_OWNER_INCARNATION_MISMATCH =
   'REPLICA_LIFECYCLE_OWNER_INCARNATION_MISMATCH';
+const REPLICA_LIFECYCLE_OWNER_INCARNATION_REQUIRED =
+  'REPLICA_LIFECYCLE_OWNER_INCARNATION_REQUIRED';
+const REPLICA_LIFECYCLE_OWNER_SUBJECT = 'ReplicaLifecycleOwner';
+
+/**
+ * Refuse an acquisition without an issued boot incarnation.
+ * @param {*} ownerIncarnation
+ * @return {number} The incarnation.
+ */
+function requireOwnerIncarnation(ownerIncarnation) {
+  return requireIssuedBootIncarnation(
+    ownerIncarnation,
+    REPLICA_LIFECYCLE_OWNER_SUBJECT,
+    REPLICA_LIFECYCLE_OWNER_INCARNATION_REQUIRED,
+  );
+}
 
 /**
  * Refuse an owner of another node incarnation.
- * @param {Object} owner - ReplicaStateMachine or ReplicaHandler.
+ * @param {Object} owner - ReplicaStateMachine, ReplicaHandler or record.
  * @param {number} ownerIncarnation - The acquiring incarnation.
  * @return {Object} The owner, when it belongs to that incarnation.
  */
 function assertReplicaLifecycleOwnerIncarnation(owner, ownerIncarnation) {
-  const requestedIncarnation = normalizeOwnerIncarnation(ownerIncarnation);
+  const requestedIncarnation = requireOwnerIncarnation(ownerIncarnation);
   if (owner.ownerIncarnation === requestedIncarnation) {
     return owner;
   }
@@ -74,12 +92,6 @@ function assertReplicaLifecycleOwnerIncarnation(owner, ownerIncarnation) {
   error.ownerIncarnation = owner.ownerIncarnation;
   error.requestedIncarnation = requestedIncarnation;
   throw error;
-}
-
-function normalizeOwnerIncarnation(ownerIncarnation) {
-  return Number.isSafeInteger(ownerIncarnation) && ownerIncarnation > 0 ?
-    ownerIncarnation :
-    0;
 }
 
 /**
@@ -305,6 +317,7 @@ class ReplicaLifecycleOwner {
    *   replicaHandler}.
    */
   reacquire(ownerIncarnation) {
+    requireOwnerIncarnation(ownerIncarnation);
     const record = this.record;
     if (record === null) {
       return null;
@@ -329,7 +342,7 @@ class ReplicaLifecycleOwner {
     const replicaStateMachine =
       ReplicaHandlerSetup.createReplicaStateMachine(options);
     this.record = {
-      ownerIncarnation: normalizeOwnerIncarnation(options.ownerIncarnation),
+      ownerIncarnation: options.ownerIncarnation,
       replicaStateMachine,
       replicaHandler: null,
     };
@@ -355,7 +368,7 @@ class ReplicaLifecycleOwner {
       replicaStateMachine: record === null ? null : record.replicaStateMachine,
     });
     this.record = {
-      ownerIncarnation: normalizeOwnerIncarnation(options.ownerIncarnation),
+      ownerIncarnation: options.ownerIncarnation,
       replicaStateMachine: acquired.replicaStateMachine,
       replicaHandler: acquired.replicaHandler,
     };
@@ -369,9 +382,10 @@ class ReplicaLifecycleOwner {
    * @return {boolean}
    */
   isEstablished(ownerIncarnation) {
+    const requestedIncarnation = requireOwnerIncarnation(ownerIncarnation);
     const record = this.record;
     return record !== null &&
-      record.ownerIncarnation === normalizeOwnerIncarnation(ownerIncarnation) &&
+      record.ownerIncarnation === requestedIncarnation &&
       record.replicaHandler !== null &&
       record.replicaStateMachine.isTimeoutCheckerArmed() === true;
   }
@@ -393,6 +407,7 @@ class ReplicaLifecycleOwner {
 
 export {
   REPLICA_LIFECYCLE_OWNER_INCARNATION_MISMATCH,
+  REPLICA_LIFECYCLE_OWNER_INCARNATION_REQUIRED,
   ReplicaHandlerSetup,
   ReplicaLifecycleOwner,
 };

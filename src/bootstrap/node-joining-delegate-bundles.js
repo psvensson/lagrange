@@ -97,21 +97,6 @@ function defineNodeJoiningRuntimeDependencyProperties(service) {
   });
 }
 
-/**
- * Normalize the boot incarnation option: a positive safe integer, else 0
- * (pre-incarnation). This boot's locally minted incarnation (rejoin-hints
- * counter) rides every node state update the publisher emits so receivers
- * fence stale-incarnation (zombie) writers.
- * @param {Object} options - Service construction options.
- * @return {number} The normalized boot incarnation (0 when absent/invalid).
- */
-function normalizeBootIncarnationOption(options = {}) {
-  return Number.isSafeInteger(options.bootIncarnation) &&
-    options.bootIncarnation > 0 ?
-    options.bootIncarnation :
-    0;
-}
-
 function installNodeJoiningStatePublicationOwner(service) {
   service.nodeStatePublicationOwner = new NodeStatePublicationOwner({
     nodeId: service.nodeId,
@@ -489,6 +474,5 @@ export {
   defineNodeJoiningRuntimeDependencyProperties,
   assignNodeJoiningDelegateBundleMethods,
   installNodeJoiningStatePublicationOwner,
-  normalizeBootIncarnationOption,
   normalizeSeedNodeAddresses,
 };

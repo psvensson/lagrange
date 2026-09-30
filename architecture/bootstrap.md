@@ -23,6 +23,33 @@ operator-visible handoff checkpoints while lifecycle ownership stays with
 `ServiceReconciler`, and canonical topology truth stays in owner rows plus the
 declared read-model contract.
 
+### Boot Incarnation Contract
+
+Every boot lifecycle starts by reserving its boot incarnation through the boot
+incarnation owner (`reserveBootIncarnation` in
+`src/bootstrap/boot-incarnation-owner.js`), the one reservation authority: one
+durable, monotonic counter per data directory. The caller then hands that
+exact incarnation to the lifecycle owners:
+
+```
+node/process startup -> reserveBootIncarnation(dataDir) -> incarnation G
+  -> BootstrapService({bootIncarnation: G})   (seed)
+  -> NodeJoiningService({bootIncarnation: G}) (join, durable rejoin)
+  -> replica lifecycle owner, node-state publication, IDENTIFY, NODES rows
+```
+
+- `BootstrapService` requires `bootIncarnation`, including through
+  `BootstrapService.bootstrapOrExit`.
+- `NodeJoiningService` requires `bootIncarnation`.
+- The caller obtains it from the boot incarnation owner; neither service
+  reserves one. A new join attempt after an abandoned one is a new boot
+  lifecycle and reserves a new incarnation.
+- A node lifecycle owner is valid only for one explicitly established node
+  incarnation, so an omitted incarnation cannot be inferred. A missing or
+  unissued value fails closed with `BOOT_INCARNATION_REQUIRED` in the
+  constructor, before any state machine, timer, handler or system-table row
+  exists. The owner never issues 0, and no default is applied.
+
 ### Seed Node Bootstrap
 
 ```

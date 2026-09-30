@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 272,
+    "bootstrap-membership": 273,
     "cdc-metadata": 59,
     "cli-tooling": 96,
     "control-plane": 203,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2260,
-  "digest": "fnv1a32-85b0e98b",
+  "censusSize": 2261,
+  "digest": "fnv1a32-cb30aec7",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a7b3ca56",
+  "observationDigest": "fnv1a32-b659306e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -103,6 +103,7 @@
     "test/bootstrap/artifact-payload-table-schemas.test.js": "bootstrap-membership",
     "test/bootstrap/behaviour-changing-consumer-convergence.test.js": "bootstrap-membership",
     "test/bootstrap/boot-incarnation-owner.test.js": "bootstrap-membership",
+    "test/bootstrap/boot-incarnation-reservation-census.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-api-admission-snapshots.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-api-readiness-gating.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-api-readiness-publication.test.js": "bootstrap-membership",
@@ -2550,6 +2551,26 @@
         "src"
       ]
     },
+    "test/bootstrap/boot-incarnation-reservation-census.test.js": {
+      "files": [
+        "examples/request-binding-deployment/request-binding-example-node.js",
+        "src/bootstrap/boot-incarnation-owner.js",
+        "src/bootstrap/bootstrap-service.js",
+        "src/bootstrap/node-joining-delegate-bundles.js",
+        "src/bootstrap/node-joining-owner-construction.js",
+        "src/bootstrap/shared/node-state-publication-owner.js",
+        "src/bootstrap/shared/replica-handler-setup.js",
+        "src/lagrange-runtime-startup.js",
+        "src/node/replica-state-machine.js",
+        "test/simulation/formation-sim-boot-incarnation.js"
+      ],
+      "directories": [
+        "examples",
+        "src",
+        "test",
+        "test/simulation"
+      ]
+    },
     "test/bootstrap/bootstrap-api-ready-nodes.test.js": {
       "files": [
         "test/test-helpers/endpoint-incarnation-fixture.js"
@@ -2676,6 +2697,8 @@
     },
     "test/bootstrap/join-resume-replica-lifecycle-owner.test.js": {
       "files": [
+        "src/bootstrap/boot-incarnation-contract.js",
+        "src/bootstrap/boot-incarnation-owner.js",
         "src/control-plane/owners/service-endpoints-owner.js",
         "src/entrypoint-runtime-join-startup-policy.js",
         "src/node/replica-state-machine.js",
@@ -2745,6 +2768,7 @@
     },
     "test/bootstrap/node-incarnation.test.js": {
       "files": [
+        "src/bootstrap/boot-incarnation-contract.js",
         "src/control-plane/control-plane-constants.js"
       ]
     },
@@ -2908,6 +2932,7 @@
     },
     "test/bootstrap/register-node-in-cluster.test.js": {
       "files": [
+        "src/bootstrap/boot-incarnation-contract.js",
         "src/bootstrap/rejoin-hints-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "test/test-helpers/endpoint-incarnation-fixture.js"
@@ -12043,11 +12068,13 @@
     },
     "test/simulation/formation-attribution-provenance.test.js": {
       "files": [
+        "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/pipeline/startup-pipeline-runner.js",
         "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-diagnostics-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
+        "test/simulation/formation-sim-boot-incarnation.js",
         "test/simulation/formation-sim-production-seed-host.js",
         "test/simulation/formation-sim-quiescence.js"
       ]
@@ -12068,19 +12095,23 @@
     },
     "test/simulation/formation-sim-bootstrap-owner-entry.test.js": {
       "files": [
+        "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/pipeline/startup-pipeline-runner.js",
         "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-diagnostics-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
+        "test/simulation/formation-sim-boot-incarnation.js",
         "test/simulation/formation-sim-production-seed-host.js"
       ]
     },
     "test/simulation/formation-sim-charged-seed-host.test.js": {
       "files": [
+        "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
-        "test/simulation/calibration/formation-seed-2026-09-17.json"
+        "test/simulation/calibration/formation-seed-2026-09-17.json",
+        "test/simulation/formation-sim-boot-incarnation.js"
       ]
     },
     "test/simulation/formation-sim-connection-environment.test.js": {
@@ -12095,44 +12126,56 @@
     },
     "test/simulation/formation-sim-production-bootstrap-phase-one.test.js": {
       "files": [
+        "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
-        "test/simulation/calibration/formation-seed-2026-09-17.json"
+        "test/simulation/calibration/formation-seed-2026-09-17.json",
+        "test/simulation/formation-sim-boot-incarnation.js"
       ]
     },
     "test/simulation/formation-sim-production-five-node-composition.test.js": {
       "files": [
+        "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
-        "test/simulation/calibration/formation-seed-2026-09-17.json"
+        "test/simulation/calibration/formation-seed-2026-09-17.json",
+        "test/simulation/formation-sim-boot-incarnation.js"
       ]
     },
     "test/simulation/formation-sim-production-handoff.test.js": {
       "files": [
+        "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
-        "test/simulation/calibration/formation-seed-2026-09-17.json"
+        "test/simulation/calibration/formation-seed-2026-09-17.json",
+        "test/simulation/formation-sim-boot-incarnation.js"
       ]
     },
     "test/simulation/formation-sim-production-message-groups.test.js": {
       "files": [
+        "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
-        "test/simulation/calibration/formation-seed-2026-09-17.json"
+        "test/simulation/calibration/formation-seed-2026-09-17.json",
+        "test/simulation/formation-sim-boot-incarnation.js"
       ]
     },
     "test/simulation/formation-sim-production-partitions.test.js": {
       "files": [
+        "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
-        "test/simulation/calibration/formation-seed-2026-09-17.json"
+        "test/simulation/calibration/formation-seed-2026-09-17.json",
+        "test/simulation/formation-sim-boot-incarnation.js"
       ]
     },
     "test/simulation/formation-sim-production-transcript-determinism.test.js": {
       "files": [
+        "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/rejoin-hints-constants.js",
         "src/diagnostics/formation-turn-attribution.js",
-        "test/simulation/calibration/formation-seed-2026-09-17.json"
+        "test/simulation/calibration/formation-seed-2026-09-17.json",
+        "test/simulation/formation-sim-boot-incarnation.js"
       ],
       "directories": [
         "src"

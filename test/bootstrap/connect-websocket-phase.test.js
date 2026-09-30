@@ -64,6 +64,7 @@ test(
         nodeId: 'joining-node-1',
         delegates: {
           getWsPort: () => 9090,
+          getBootIncarnation: () => 1,
           getIdentifyPayload: () => ({role: 'joining'}),
           getNodeAddress: () => 'joining-node-1:8080',
           getLogger: () => ({
@@ -159,6 +160,7 @@ test(
         nodeId: 'joining-node-1',
         delegates: {
           getWsPort: () => 9090,
+          getBootIncarnation: () => 1,
           getIdentifyPayload: () => ({role: 'joining'}),
           getNodeAddress: () => 'joining-node-1:8080',
           getLogger: () => ({
@@ -282,6 +284,7 @@ test(
         nodeId: 'rejoining-node',
         delegates: {
           getWsPort: () => 8082,
+          getBootIncarnation: () => 1,
           getIdentifyPayload: () => ({role: 'joining'}),
           getNodeAddress: () => 'rejoining-node:8080',
           getAdvertisedNodeWsAddress: () => null,
@@ -349,6 +352,7 @@ test(
         nodeId: 'joining-node-1',
         delegates: {
           getWsPort: () => 9090,
+          getBootIncarnation: () => 1,
           getIdentifyPayload: () => ({role: 'joining'}),
           getNodeAddress: () => 'joining-node-1:8080',
           getLogger: () => ({
@@ -473,6 +477,7 @@ test(
         nodeId: 'joining-node-1',
         delegates: {
           getWsPort: () => 9090,
+          getBootIncarnation: () => 1,
           getIdentifyPayload: () => ({role: 'joining'}),
           getNodeAddress: () => 'joining-node-1:8080',
           getLogger: () => ({
@@ -610,6 +615,7 @@ test(
         nodeId: 'joining-node-query-transport-selection',
         delegates: {
           getWsPort: () => 9090,
+          getBootIncarnation: () => 1,
           getIdentifyPayload: () => ({role: 'joining'}),
           getNodeAddress: () => 'joining-node-query-transport-selection:8080',
           getLogger: () => ({
@@ -745,6 +751,7 @@ test(
         nodeId: 'joining-node-1',
         delegates: {
           getWsPort: () => 9090,
+          getBootIncarnation: () => 1,
           getIdentifyPayload: () => ({role: 'joining'}),
           getNodeAddress: () => 'joining-node-1:8080',
           getLogger: () => ({
@@ -868,6 +875,7 @@ test(
         nodeId: 'joining-node-1',
         delegates: {
           getWsPort: () => 9090,
+          getBootIncarnation: () => 1,
           getIdentifyPayload: () => ({role: 'joining'}),
           getNodeAddress: () => 'joining-node-1:8080',
           getLogger: () => ({
@@ -995,6 +1003,7 @@ test(
         nodeId: 'joining-node-1',
         delegates: {
           getWsPort: () => 9090,
+          getBootIncarnation: () => 1,
           getIdentifyPayload: () => ({role: 'joining'}),
           getNodeAddress: () => 'joining-node-1:8080',
           getLogger: () => ({
@@ -1131,6 +1140,7 @@ test(
         nodeId: 'joining-node-1',
         delegates: {
           getWsPort: () => 9090,
+          getBootIncarnation: () => 1,
           getIdentifyPayload: () => ({role: 'joining'}),
           getNodeAddress: () => 'joining-node-1:8080',
           getLogger: () => ({

@@ -332,7 +332,7 @@ class NodeRegistrationOwnerDurableRejoinMethods {
   }
 
   getRegistrationBootIncarnation() {
-    return this.delegates.getBootIncarnation?.() || 0;
+    return this.delegates.getBootIncarnation();
   }
 
   /**

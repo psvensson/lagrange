@@ -76,6 +76,7 @@ test('SeedRegistrationPhase registers partition rows as stopped before activatio
           },
         }),
         getNodeId: () => 'node-a',
+        getBootIncarnation: () => 1,
         getMessageRouter: () => ({
           isRegistered(address) {
             return address === 'node-a/partition/p1-r1';
@@ -188,6 +189,7 @@ test('SeedRegistrationPhase does not complete while partition activation is ' +
         },
       }),
       getNodeId: () => 'node-a',
+      getBootIncarnation: () => 1,
       getMessageRouter: () => ({isRegistered: () => true}),
       getMessageGroupServices: () => new Map(),
       getPartitionServices: () => partitionServices,
@@ -231,6 +233,7 @@ test('SeedRegistrationPhase projects local meta service endpoints into cache dur
           },
         }),
         getNodeId: () => 'node-a',
+        getBootIncarnation: () => 1,
         getNodeAddress: () => 'ws://127.0.0.1:18080',
         getAdvertisedNodeWsAddress: () => null,
         getWsPort: () => 18080,
@@ -271,6 +274,7 @@ test('SeedRegistrationPhase waits only for cache-hydration leader partitions bef
         },
         getSystemTableWriter: () => writer,
         getNodeId: () => 'node-a',
+        getBootIncarnation: () => 1,
         getPartitionServices: () => new Map(),
         getServicesCreated: () => 0,
       },
@@ -340,6 +344,7 @@ test('SeedRegistrationPhase persists bootstrap epoch directly when config leader
           },
         }),
         getNodeId: () => 'node-a',
+        getBootIncarnation: () => 1,
         getPartitionServices: () => new Map(),
       },
     });

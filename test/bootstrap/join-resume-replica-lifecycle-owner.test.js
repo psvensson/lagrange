@@ -36,6 +36,7 @@ import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
   REPLICA_LIFECYCLE_OWNER_INCARNATION_MISMATCH,
+  REPLICA_LIFECYCLE_OWNER_INCARNATION_REQUIRED,
   ReplicaHandlerSetup,
   ReplicaLifecycleOwner,
 } from '../../src/bootstrap/shared/replica-handler-setup.js';
@@ -50,6 +51,13 @@ import {ServiceEndpointsOwner} from
   '../../src/control-plane/owners/service-endpoints-owner.js';
 import {resolveFailedJoinReattempt} from
   '../../src/entrypoint-runtime-join-startup-policy.js';
+import {reserveBootIncarnation} from
+  '../../src/bootstrap/boot-incarnation-owner.js';
+import {BOOT_INCARNATION_REQUIRED} from
+  '../../src/bootstrap/boot-incarnation-contract.js';
+import {mkdtemp, rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {
   initializeTestEnvironment,
 } from './node-joining-service-test-support.js';
@@ -555,9 +563,15 @@ test('F3 siblings: a rerun replaces the message-group and runtime-service ' +
 test('F3 outer reattempt: incarnation G+1 mints exactly one new owner, R1 ' +
   'is stopped, never reused and refused for G+1', async (t) => {
   const runtime = installNodeRuntime(t);
+  // Each boot lifecycle reserves its incarnation through the one reservation
+  // authority over the node's data directory, as lagrange-runtime-startup
+  // does per startJoinNode attempt.
+  const dataDir = await mkdtemp(join(tmpdir(), 'f3-boot-incarnation-'));
+  t.teardown(() => rm(dataDir, {recursive: true, force: true}));
+  const incarnationG = await reserveBootIncarnation(dataDir);
   let r1 = null;
   const serviceG = buildJoiner(runtime, {
-    bootIncarnation: BOOT_INCARNATION,
+    bootIncarnation: incarnationG,
     fault: FAULT.CONTROL_PLANE,
     onMembership: async (joiner) => {
       r1 = joiner.replicaStateMachine;
@@ -567,7 +581,7 @@ test('F3 outer reattempt: incarnation G+1 mints exactly one new owner, R1 ' +
   const noop = () => {};
   const retry = await resolveFailedJoinReattempt({
     bootstrapAPI: {shutdown: async () => {}},
-    dataDir: null,
+    dataDir,
     joinAttempt: 0,
     joinResult,
     logger: {error: noop, warn: noop, info: noop, debug: noop},
@@ -581,8 +595,11 @@ test('F3 outer reattempt: incarnation G+1 mints exactly one new owner, R1 ' +
     },
   });
   t.equal(retry.joinAttempt, 1, 'the real outer reattempt path admits G+1');
+  const incarnationG1 = await reserveBootIncarnation(dataDir);
+  t.ok(incarnationG1 > incarnationG,
+    'the next lifecycle reserves a strictly newer incarnation G+1');
   t.ok(r1 instanceof ReplicaStateMachine, 'sanity: incarnation G owned R1');
-  t.equal(r1.ownerIncarnation, BOOT_INCARNATION, 'R1 is stamped with G');
+  t.equal(r1.ownerIncarnation, incarnationG, 'R1 is stamped with G');
   t.equal(r1.isTimeoutCheckerArmed(), false,
     '(c) R1 is stopped before G+1 begins');
 
@@ -590,7 +607,7 @@ test('F3 outer reattempt: incarnation G+1 mints exactly one new owner, R1 ' +
   r1._checkTimeouts = () => r1Ticks.push(runtime.nodeTimeSource.now());
   let observed = null;
   const serviceG1 = buildJoiner(runtime, {
-    bootIncarnation: BOOT_INCARNATION + 1,
+    bootIncarnation: incarnationG1,
     fault: null,
     onMembership: async (joiner) => {
       const r2 = joiner.replicaStateMachine;
@@ -614,7 +631,7 @@ test('F3 outer reattempt: incarnation G+1 mints exactly one new owner, R1 ' +
   t.ok(serviceG1 !== serviceG, 'G+1 is a fresh NodeJoiningService');
   t.ok(observed.r2 instanceof ReplicaStateMachine &&
     observed.r2 !== r1, '(c) G+1 minted its own owner R2, not R1');
-  t.equal(observed.r2.ownerIncarnation, BOOT_INCARNATION + 1,
+  t.equal(observed.r2.ownerIncarnation, incarnationG1,
     '(c) R2 is stamped with G+1');
   t.same([observed.owners, observed.armed, observed.nodeTimers], [2, 1, 1],
     '(c) exactly one new owner: R1 (stopped) + R2 (the only armed timer)');
@@ -629,7 +646,7 @@ test('F3 outer reattempt: incarnation G+1 mints exactly one new owner, R1 ' +
     systemTableCache: NodeService.getInstance().getSystemTableCache(),
     createPartitionService: async () => null,
     replicaStateMachine: r1,
-    ownerIncarnation: BOOT_INCARNATION + 1,
+    ownerIncarnation: incarnationG1,
   });
   t.throws(handOver, {code: REPLICA_LIFECYCLE_OWNER_INCARNATION_MISMATCH},
     '(c) handing R1 to a G+1 acquisition is refused');
@@ -639,14 +656,14 @@ test('F3 outer reattempt: incarnation G+1 mints exactly one new owner, R1 ' +
     cdcIntegrationService: new EventEmitter(),
     systemTableCache: NodeService.getInstance().getSystemTableCache(),
     timeSource: runtime.nodeTimeSource,
-    ownerIncarnation: BOOT_INCARNATION,
+    ownerIncarnation: incarnationG,
   });
   t.throws(() => owner.acquireStateMachine({
     nodeId: NODE_ID,
     cdcIntegrationService: new EventEmitter(),
     systemTableCache: NodeService.getInstance().getSystemTableCache(),
     timeSource: runtime.nodeTimeSource,
-    ownerIncarnation: BOOT_INCARNATION + 1,
+    ownerIncarnation: incarnationG1,
   }), {code: REPLICA_LIFECYCLE_OWNER_INCARNATION_MISMATCH},
   '(c) a recorded owner of G is refused for G+1, never re-minted silently');
   owner.release();
@@ -690,4 +707,109 @@ async (t) => {
     '(e) the seed owner runs on the node\'s canonical time source');
   t.equal(second.replicaStateMachine.ownerIncarnation, BOOT_INCARNATION,
     '(e) the seed owner is stamped with the seed boot incarnation');
+});
+
+// ---------------------------------------------------------------------------
+// Absence is invalid: the acquisition owner and the public lifecycle
+// boundaries refuse a missing or unissued incarnation before any side effect.
+// ---------------------------------------------------------------------------
+
+const UNISSUED_INCARNATIONS = Object.freeze([undefined, null, 0, -1, 1.5, '1']);
+
+function acquisitionOptions(runtime, ownerIncarnation) {
+  return {
+    nodeId: NODE_ID,
+    messageRouter: buildRouter(),
+    cdcIntegrationService: new EventEmitter(),
+    systemTableCache: NodeService.getInstance().getSystemTableCache(),
+    createPartitionService: async () => null,
+    timeSource: runtime.nodeTimeSource,
+    ownerIncarnation,
+  };
+}
+
+function countMints(restorers) {
+  const mints = {stateMachines: 0, handlers: 0};
+  const createStateMachine = ReplicaHandlerSetup.createReplicaStateMachine;
+  const create = ReplicaHandlerSetup.create;
+  ReplicaHandlerSetup.createReplicaStateMachine = function(...args) {
+    mints.stateMachines += 1;
+    return createStateMachine.apply(this, args);
+  };
+  ReplicaHandlerSetup.create = function(...args) {
+    mints.handlers += 1;
+    return create.apply(this, args);
+  };
+  restorers.push(() => {
+    ReplicaHandlerSetup.createReplicaStateMachine = createStateMachine;
+    ReplicaHandlerSetup.create = create;
+  });
+  return mints;
+}
+
+test('F3 missing incarnation: the acquisition owner refuses it with a typed ' +
+  'error and mints no state machine, timer or handler', async (t) => {
+  const runtime = installNodeRuntime(t);
+  const mints = countMints(runtime.restorers);
+  const owner = new ReplicaLifecycleOwner();
+  for (const ownerIncarnation of UNISSUED_INCARNATIONS) {
+    const label = `incarnation ${String(ownerIncarnation)}`;
+    const options = acquisitionOptions(runtime, ownerIncarnation);
+    for (const [verb, call] of [
+      ['acquire', () => owner.acquire(options)],
+      ['acquireStateMachine', () => owner.acquireStateMachine(options)],
+      ['reacquire', () => owner.reacquire(ownerIncarnation)],
+      ['isEstablished', () => owner.isEstablished(ownerIncarnation)],
+    ]) {
+      t.throws(call, {code: REPLICA_LIFECYCLE_OWNER_INCARNATION_REQUIRED},
+        `${verb} refuses ${label}`);
+    }
+  }
+  t.same(mints, {stateMachines: 0, handlers: 0},
+    'no state machine and no handler was minted for a missing incarnation');
+  t.same([runtime.tracker.owners.size, runtime.tracker.armed(),
+    runtime.nodeTimeSource.pendingTimerCount()], [0, 0, 0],
+  'no timeout checker was armed');
+  t.equal(owner.record, null,
+    'two missing callers never share a record: nothing was recorded');
+
+  const recorded = owner.acquireStateMachine(
+    acquisitionOptions(runtime, BOOT_INCARNATION));
+  t.throws(() => ReplicaHandlerSetup.create({
+    ...acquisitionOptions(runtime, undefined),
+    replicaStateMachine: recorded,
+  }), {code: REPLICA_LIFECYCLE_OWNER_INCARNATION_REQUIRED},
+  'handing an owner to an acquisition without an incarnation is refused');
+  t.throws(() => owner.acquire(acquisitionOptions(runtime, undefined)),
+    {code: REPLICA_LIFECYCLE_OWNER_INCARNATION_REQUIRED},
+    'a recorded owner is never reacquired by a caller without an incarnation');
+  owner.release();
+});
+
+test('F3 public boundary: BootstrapService and NodeJoiningService require an ' +
+  'issued boot incarnation and fail closed before any side effect',
+async (t) => {
+  const runtime = installNodeRuntime(t);
+  const nodeService = NodeService.getInstance();
+  for (const bootIncarnation of UNISSUED_INCARNATIONS) {
+    const label = `incarnation ${String(bootIncarnation)}`;
+    t.throws(() => new BootstrapService({
+      nodeId: 'seed-node', nodeAddress: 'ws://localhost:9001',
+      nodeService, bootIncarnation,
+    }), {code: BOOT_INCARNATION_REQUIRED}, `BootstrapService refuses ${label}`);
+    t.throws(() => new NodeJoiningService({
+      nodeId: NODE_ID, nodeAddress: NODE_ADDRESS,
+      seedNodeAddress: SEED_ADDRESS, bootIncarnation,
+    }), {code: BOOT_INCARNATION_REQUIRED},
+    `NodeJoiningService refuses ${label}`);
+  }
+  await t.rejects(BootstrapService.bootstrapOrExit({
+    nodeId: 'seed-node', nodeAddress: 'ws://localhost:9001', nodeService,
+  }), {code: BOOT_INCARNATION_REQUIRED},
+  'the static seed entry point refuses a missing incarnation');
+  t.same([runtime.tracker.owners.size,
+    runtime.nodeTimeSource.pendingTimerCount(),
+    nodeService.getLifecycleStateMachine?.() ?? null],
+  [0, 0, null],
+  'no lifecycle owner, timer or node lifecycle state machine was created');
 });

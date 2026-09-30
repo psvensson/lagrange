@@ -1,10 +1,10 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {requireIssuedBootIncarnation} from './boot-incarnation-contract.js';
 import {
   createNodeJoiningRuntimeDependencyOwner,
   defineNodeJoiningRuntimeDependencyProperties,
   assignNodeJoiningDelegateBundleMethods,
   installNodeJoiningStatePublicationOwner,
-  normalizeBootIncarnationOption,
   normalizeSeedNodeAddresses,
 } from './node-joining-delegate-bundles.js';
 
@@ -63,6 +63,11 @@ const {
 
 class NodeJoiningOwnerConstruction extends EventEmitter {
   constructor(options = {}) {
+    // A node lifecycle owner is valid only for one explicitly established
+    // node incarnation, reserved by the boot incarnation owner: refuse its
+    // absence before any state machine, timer, handler or row exists.
+    const bootIncarnation = requireIssuedBootIncarnation(
+      options.bootIncarnation, NODE_JOINING_SERVICE_LITERAL.NODEJOININGSERVICE);
     super();
     const explicitDataDirProvided = Object.prototype.hasOwnProperty.call(
       options,
@@ -88,9 +93,9 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       options.expectedClusterId.length > 0 ?
       options.expectedClusterId :
       null;
-    // This boot's locally minted incarnation (rejoin-hints counter): every
-    // node state update carries it so receivers fence stale writers.
-    this.bootIncarnation = normalizeBootIncarnationOption(options);
+    // This boot's incarnation (boot incarnation owner): every node state
+    // update carries it so receivers fence stale writers.
+    this.bootIncarnation = bootIncarnation;
     this.wsPort = options.wsPort ?? null;
     this.dataDir = options.dataDir || STORAGE_DEFAULT.DATA_DIR;
     this.config = {...JOINING_DEFAULT, ...options.config};

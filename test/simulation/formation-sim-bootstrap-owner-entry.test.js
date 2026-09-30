@@ -19,6 +19,8 @@ import {FORMATION_OWNER} from
 import {
   FormationTurnAttribution,
 } from '../../src/diagnostics/formation-turn-attribution.js';
+import {reserveSimulatedBootIncarnation} from
+  './formation-sim-boot-incarnation.js';
 import {
   runSeedMessageGroupsScenario,
 } from './formation-sim-production-seed-host.js';
@@ -49,12 +51,14 @@ function observeOwnerEntries() {
 }
 
 async function measure(runScenario) {
+  // The boot lifecycle (and its incarnation) begins before the window opens.
+  const bootIncarnation = await reserveSimulatedBootIncarnation();
   const attribution = new FormationTurnAttribution();
   const observed = observeOwnerEntries();
   attribution.start();
   let run = null;
   try {
-    run = await runScenario();
+    run = await runScenario({bootIncarnation});
   } finally {
     observed.restore();
     attribution.stop();

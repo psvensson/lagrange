@@ -4,6 +4,8 @@ import {BootstrapReadinessState} from
   '../../src/bootstrap/bootstrap-readiness-state.js';
 import {BootstrapService} from
   '../../src/bootstrap/bootstrap-service.js';
+import {reserveBootIncarnation} from
+  '../../src/bootstrap/boot-incarnation-owner.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {
@@ -247,8 +249,14 @@ async function bootExampleNode(dataDir, options = {}) {
   const nodeAddress = `${EXAMPLE_RUNTIME.HOST}:0`;
   const advertisedNodeWsAddress =
     `ws://${EXAMPLE_RUNTIME.HOST}:${wsPort}`;
+  // One boot lifecycle, one incarnation: reserved durably by the boot
+  // incarnation owner over this node's data directory, as the runtime
+  // entrypoint does, and handed to the lifecycle owner unchanged.
+  const bootIncarnation = await reserveBootIncarnation(
+    dataDirectoryManager.getDataDir());
   const bootstrapService = new BootstrapService({
     advertisedNodeWsAddress,
+    bootIncarnation,
     config: {
       leadershipWaitInitialDelayMs:
         EXAMPLE_RUNTIME.LEADERSHIP_WAIT_INITIAL_DELAY_MS,

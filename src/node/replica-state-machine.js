@@ -6,6 +6,7 @@
  */
 
 import {resolveTimeSource} from '../time/time-source.js';
+import {isIssuedBootIncarnation} from '../bootstrap/boot-incarnation-contract.js';
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
@@ -108,15 +109,16 @@ const REPLICA_LIFECYCLE_OWNER_INCARNATION_FIELD = 'ownerIncarnation';
 /**
  * Stamp a replica lifecycle authority with the node boot incarnation that
  * owns it, read-only: an owner minted for incarnation G is never reused for
- * G+1 (ReplicaLifecycleOwner fences on it). 0 means pre-incarnation.
+ * G+1 (ReplicaLifecycleOwner fences on it). A library construction without
+ * an issued incarnation is stamped null: it is simply not acquirable.
  * @param {Object} target - ReplicaStateMachine or ReplicaHandler.
  * @param {number} [ownerIncarnation]
  */
 function defineReplicaLifecycleOwnerIncarnation(target, ownerIncarnation) {
   Object.defineProperty(target, REPLICA_LIFECYCLE_OWNER_INCARNATION_FIELD, {
-    value: Number.isSafeInteger(ownerIncarnation) && ownerIncarnation > 0 ?
+    value: isIssuedBootIncarnation(ownerIncarnation) ?
       ownerIncarnation :
-      0,
+      null,
     enumerable: true,
     writable: false,
     configurable: false,

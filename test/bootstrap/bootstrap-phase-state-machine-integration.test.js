@@ -22,7 +22,7 @@ function initializeTestEnvironment() {
 
 test('BootstrapService - uses NodeLifecycleStateMachine for phases', async (t) => {
   initializeTestEnvironment();
-  const bootstrap = new BootstrapService({nodeId: 'test-node'});
+  const bootstrap = new BootstrapService({bootIncarnation: 1, nodeId: 'test-node'});
 
   t.ok(
     bootstrap.lifecycleStateMachine,
@@ -42,7 +42,7 @@ test('BootstrapService - uses NodeLifecycleStateMachine for phases', async (t) =
 
 test('BootstrapService - out-of-order phase is silently rejected', async (t) => {
   initializeTestEnvironment();
-  const bootstrap = new BootstrapService({nodeId: 'test-node'});
+  const bootstrap = new BootstrapService({bootIncarnation: 1, nodeId: 'test-node'});
 
   // Attempting PARTITIONS before INFRASTRUCTURE should not transition
   await bootstrap.executePhase(
@@ -59,7 +59,7 @@ test('BootstrapService - out-of-order phase is silently rejected', async (t) => 
 
 test('BootstrapService - valid phase order transitions sub-phases', async (t) => {
   initializeTestEnvironment();
-  const bootstrap = new BootstrapService({nodeId: 'test-node'});
+  const bootstrap = new BootstrapService({bootIncarnation: 1, nodeId: 'test-node'});
 
   await bootstrap.executePhase(
     BOOTSTRAP_PHASE.INFRASTRUCTURE, async () => {},

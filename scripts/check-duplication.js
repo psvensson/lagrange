@@ -174,8 +174,10 @@ const RATCHET_TARGETS = [
     // 29624 -> 29578 after the active-node projection cases shared one
     // ready-node row factory and the bootstrap ready-nodes fixture shared
     // the incarnation fixture.
-    baselineCloneGroupCount: 772,
-    baselineDuplicatedLineCount: 29578,
+    // 2026-09-30: tightened 772/29578 -> 771/29548 after the replica
+    // lifecycle owner witness (F3) and the required boot incarnation contract.
+    baselineCloneGroupCount: 771,
+    baselineDuplicatedLineCount: 29548,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

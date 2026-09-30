@@ -9,6 +9,10 @@ import assert from 'node:assert';
 import {ReplicaHandlerSetup} from '../../../src/bootstrap/shared/replica-handler-setup.js';
 import {DependencyError} from '../../../src/bootstrap/bootstrap-errors.js';
 
+// The startup lifecycle owner's incarnation, as the boot incarnation owner
+// would have issued it.
+const TEST_BOOT_INCARNATION = 1;
+
 const TEST_NODE_ID = 'test-node';
 const TEST_FORWARDS_EXECUTOR_OUTCOME_EMITTER =
   'should forward optional executorOutcomeEmitter to ReplicaHandler';
@@ -185,6 +189,7 @@ describe('ReplicaHandlerSetup', () => {
             nodeId: TEST_NODE_ID,
             cdcIntegrationService: mockCdcIntegrationService,
             systemTableCache: mockSystemTableCache,
+            ownerIncarnation: TEST_BOOT_INCARNATION,
           });
         createdStateMachines.push(replicaStateMachine);
 
@@ -195,6 +200,7 @@ describe('ReplicaHandlerSetup', () => {
           systemTableCache: mockSystemTableCache,
           createPartitionService: mockCreatePartitionService,
           replicaStateMachine,
+          ownerIncarnation: TEST_BOOT_INCARNATION,
         });
 
         assert.strictEqual(

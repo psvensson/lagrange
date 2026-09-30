@@ -26,7 +26,7 @@ function teardownEnvironment() {
 test('BootstrapService partition CDC propagation requires topology owner',
   async (t) => {
     setupEnvironment();
-    const service = new BootstrapService({nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
 
     await assert.rejects(
       service.seedCacheHydrationPhase
@@ -49,7 +49,7 @@ test('BootstrapService delegates partition CDC propagation to topology owner',
   async (t) => {
     setupEnvironment();
     const calls = [];
-    const service = new BootstrapService({nodeId: 'node-a'});
+    const service = new BootstrapService({bootIncarnation: 1, nodeId: 'node-a'});
     service.latencyTopology = {
       cdcGroupPropagationService: {
         async propagateCDCEvent(payload) {

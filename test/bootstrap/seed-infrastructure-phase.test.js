@@ -109,6 +109,7 @@ test(
             },
           }),
           getNodeId: () => nodeId,
+          getBootIncarnation: () => 1,
           setNodeId(value) {
             nodeId = value;
           },
@@ -221,6 +222,7 @@ test(
             },
           }),
           getNodeId: () => nodeId,
+          getBootIncarnation: () => 1,
           setNodeId(value) {
             nodeId = value;
           },

@@ -129,7 +129,12 @@ Each statement maps to one of the three deployment concepts
   on `table:global.request_binding_audit`, and nothing else.
 
 The runner boots the real seed owners and an HTTP listener on an ephemeral
-loopback port. Lifecycle SQL runs through the production authenticated
+loopback port. Like the server entrypoint, it first reserves the node's boot
+incarnation through the boot incarnation owner (`reserveBootIncarnation`)
+over the node's data directory and passes it to `BootstrapService` as
+`bootIncarnation`, which is required: a node lifecycle owner is valid only
+for one explicitly established node incarnation, and its absence is never
+inferred. Lifecycle SQL runs through the production authenticated
 PostgreSQL adapter in-process - no separate PostgreSQL TCP listener is opened.
 The HTTP requests do cross the live node's REST listener and route only to a
 ready **Cell** (a running, replaceable component instance).

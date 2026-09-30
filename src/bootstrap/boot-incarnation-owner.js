@@ -4,10 +4,10 @@ import path from 'node:path';
 import {
   exactKeys,
   readCanonicalJson,
-  safeInteger,
   writeAtomicDurable,
 } from '../runtime/oci-host-agent-durable-files.js';
 import {readRejoinHints} from './rejoin-hints-durable-evidence.js';
+import {isIssuedBootIncarnation} from './boot-incarnation-contract.js';
 
 /**
  * The boot incarnation owner (invariant I9, owner decision F1): one durable,
@@ -82,7 +82,7 @@ function readOwnedReservation(file) {
   const state = readOwnedReservationState(file);
   if (!exactKeys(state, BOOT_INCARNATION_STATE_FIELDS) ||
       state.version !== BOOT_INCARNATION_STATE_VERSION ||
-      !safeInteger(state.reserved, 1)) {
+      !isIssuedBootIncarnation(state.reserved)) {
     throw bootIncarnationError(BOOT_INCARNATION_ERROR_CODE.STATE_UNREADABLE);
   }
   return state.reserved;
@@ -90,7 +90,9 @@ function readOwnedReservation(file) {
 
 async function readLegacyHintsFloor(dataDir) {
   const hints = await readRejoinHints(dataDir);
-  return safeInteger(hints?.bootIncarnation, 1) ? hints.bootIncarnation : 0;
+  return isIssuedBootIncarnation(hints?.bootIncarnation) ?
+    hints.bootIncarnation :
+    0;
 }
 
 /**
@@ -135,7 +137,7 @@ async function reserveBootIncarnation(dataDir, hooks = {}) {
 async function raiseBootIncarnationFloor(dataDir, floor) {
   const file = resolveBootIncarnationPath(dataDir);
   const issued = await readIssuedBootIncarnation(dataDir);
-  if (!safeInteger(floor, 1) || floor <= issued) return issued;
+  if (!isIssuedBootIncarnation(floor) || floor <= issued) return issued;
   writeAtomicDurable(file, {
     reserved: floor,
     version: BOOT_INCARNATION_STATE_VERSION,

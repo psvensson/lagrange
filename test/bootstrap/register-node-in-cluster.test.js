@@ -5,6 +5,8 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {BOOT_INCARNATION_REQUIRED} from
+  '../../src/bootstrap/boot-incarnation-contract.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {STARTUP_JOIN_MODE} from
   '../../src/bootstrap/rejoin-hints-constants.js';
@@ -115,30 +117,15 @@ test('registerNodeInCluster() - should create the canonical nodes row and upsert
     t.equal(endpointCall.rowData.status, ENDPOINT_STATUS.ACTIVE, 'should set status to active');
   });
 
-test('registerNodeInCluster() - refuses without a startup-minted incarnation ' +
-  'and writes no row', async (t) => {
-  const upsertCalls = [];
-  const service = new NodeJoiningService({
+test('registerNodeInCluster() - a joiner without a startup-minted ' +
+  'incarnation is refused at construction, so no row can be born', (t) => {
+  t.throws(() => new NodeJoiningService({
     nodeId: 'test-node-no-incarnation',
     nodeAddress: 'ws://localhost:9001',
     seedNodeAddress: 'ws://seed:8000',
-  });
-  service.cdcIntegrationService = {
-    sqlQueryEngine: {},
-    insertSystemTableRow(...args) {
-      return insertViaUpsert(this, args);
-    },
-    upsertSystemTableRow: async (tableName, rowData) => {
-      upsertCalls.push({tableName, rowData});
-      return {success: true};
-    },
-  };
-
-  await t.rejects(service.registerNodeInCluster(),
-    /positive boot incarnation/u,
-    'registration without this boot\'s identity fails closed');
-  t.notOk(upsertCalls.some((call) => call.tableName === TABLES.NODES),
-    'no NODES row is born without an incarnation');
+  }), {code: BOOT_INCARNATION_REQUIRED},
+  'the joiner fails closed before any registration can run');
+  t.end();
 });
 
 test('registerNodeInCluster() - should canonicalize raw node address to websocket endpoint', async (t) => {

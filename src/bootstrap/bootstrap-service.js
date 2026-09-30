@@ -30,6 +30,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {DataDirectoryManager as _DataDirectoryManager} from '../storage/data-directory-manager.js';
 import {NodeService} from '../node/node-service.js';
 import {ReplicaLifecycleOwner} from './shared/replica-handler-setup.js';
+import {requireIssuedBootIncarnation} from './boot-incarnation-contract.js';
 import {
   MessageGroupService as _MessageGroupService,
 } from '../message-group/message-group-service.js';
@@ -149,8 +150,16 @@ class BootstrapService extends EventEmitter {
    * Create a new BootstrapService.
    * @param {Object} options - Configuration options.
    * @param {Object} options.dataDirectoryManager - DataDirectoryManager instance.
+   * @param {number} options.bootIncarnation - Required: this boot's
+   *   incarnation, reserved by the boot incarnation owner
+   *   (reserveBootIncarnation). Absent or invalid -> BOOT_INCARNATION_REQUIRED.
    */
   constructor(options = {}) {
+    // A node lifecycle owner is valid only for one explicitly established
+    // node incarnation, reserved by the boot incarnation owner: refuse its
+    // absence before any state machine, timer, handler or row exists.
+    const bootIncarnation = requireIssuedBootIncarnation(
+      options.bootIncarnation, LOCAL_STR_BOOTSTRAPSERVICE);
     super();
     const startupWorkflowDataDir = resolveBootstrapWorkflowDataDir(options);
 
@@ -215,13 +224,10 @@ class BootstrapService extends EventEmitter {
         typeof options.clusterIncarnationFence === LOCAL_STR_OBJECT ?
         options.clusterIncarnationFence :
         null;
-    // This boot's locally minted incarnation (rejoin-hints counter), threaded
-    // into the IDENTIFY frame and node-state publications so receivers fence
-    // stale-incarnation (zombie) writers; 0 means pre-incarnation.
-    this.bootIncarnation = Number.isSafeInteger(options.bootIncarnation) &&
-      options.bootIncarnation > 0 ?
-      Math.floor(options.bootIncarnation) :
-      0;
+    // This boot's incarnation, reserved by the boot incarnation owner and
+    // threaded into the IDENTIFY frame and node-state publications so
+    // receivers fence stale-incarnation (zombie) writers.
+    this.bootIncarnation = bootIncarnation;
     this.dataDirectoryManager = options.dataDirectoryManager || null;
     this.workClassScheduler = options.workClassScheduler ||
       new WorkClassScheduler({
@@ -681,7 +687,8 @@ class BootstrapService extends EventEmitter {
   /**
    * Bootstrap and exit on failure.
    * This is the main entry point for seed node startup.
-   * @param {Object} options - Bootstrap options.
+   * @param {Object} options - Bootstrap options; bootIncarnation is required
+   *   (the constructor refuses its absence before any side effect).
    * @return {Promise<Object>} Bootstrap result.
    */
   static async bootstrapOrExit(options = {}) {

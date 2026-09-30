@@ -333,7 +333,7 @@ class SeedRegistrationPhase {
         nowMs: resolveHostedNodeClock(d)(),
         // Seed registration runs only on a virgin cluster (no prior endpoint
         // rows exist to replace): the rows are born at this boot.
-        bootIncarnation: d.getBootIncarnation?.() || 0,
+        bootIncarnation: d.getBootIncarnation(),
       });
 
     logger.debug(BOOTSTRAP_LOG_MSG.SERVICES_REGISTERED, {

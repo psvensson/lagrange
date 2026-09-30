@@ -10,6 +10,8 @@ import {mkdtemp, rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {test} from '../../src/test-helpers/tap.js';
+import {BOOT_INCARNATION_REQUIRED} from
+  '../../src/bootstrap/boot-incarnation-contract.js';
 import {
   buildBootstrapRejoinHintsSnapshot,
   buildRejoinHintsSnapshot,
@@ -159,16 +161,15 @@ test('the publication owner stamps the boot incarnation onto every node ' +
   );
 });
 
-test('a publication owner without an incarnation stamps no field',
+test('a publication owner without an issued incarnation is refused',
   async (t) => {
-    const owner = new NodeStatePublicationOwner({
-      nodeId: LOCAL_NODE_ID,
-      nodeAddress: LOCAL_NODE_ADDRESS,
-      delegates: {getNodeCapabilities: () => []},
-    });
-    t.equal(
-      owner.bootIncarnation,
-      0,
-      'pre-incarnation owners carry incarnation 0 (never stamped)',
-    );
+    for (const bootIncarnation of [undefined, 0, -1, 1.5]) {
+      t.throws(() => new NodeStatePublicationOwner({
+        nodeId: LOCAL_NODE_ID,
+        nodeAddress: LOCAL_NODE_ADDRESS,
+        bootIncarnation,
+        delegates: {getNodeCapabilities: () => []},
+      }), {code: BOOT_INCARNATION_REQUIRED},
+      `incarnation ${String(bootIncarnation)} is never defaulted`);
+    }
   });
