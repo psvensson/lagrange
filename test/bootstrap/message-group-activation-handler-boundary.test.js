@@ -324,11 +324,11 @@ async (t) => {
     'src/partition']) {
     walk(join(root, directory));
   }
-  // Remaining raw removals are not message-group replica handlers: node-level
-  // service handlers (fixed addresses), the partition cleanup loops (partition
-  // owner), and the shared exact-identity retirement itself.
+  // Remaining raw removals are not replica handlers: node-level service
+  // handlers (fixed addresses) and the shared exact-identity retirement
+  // itself. Seed cleanup is not a handler-removal authority (Removal-7): the
+  // exact retirement in partition.shutdown() is the one path.
   t.same(removalSites.sort(), [
-    'src/bootstrap/phases/seed-cleanup-handler.js',
     'src/node/message-group-service-handler.js',
     'src/node/replica-handler-runtime-methods.js',
     'src/node/replica-transport-handler-identity.js',
