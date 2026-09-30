@@ -24,6 +24,9 @@ const STATEMENT = /^\s*(select|insert|update|delete)\s+/iu;
 // The CDC owner writes publications with INSERT OR REPLACE (cdc-emitter):
 // an upsert by primary key.
 const INSERT_OR_REPLACE = /^\s*insert\s+or\s+replace\s+into\s+([a-z_]+)\s*\(([^)]*)\)/iu;
+// The rebalance coordinator creates operations with INSERT OR IGNORE: a row
+// whose key already exists is left as it is (SQLite's semantics).
+const INSERT_OR_IGNORE = /^\s*insert\s+or\s+ignore\s+into\s+([a-z_]+)\s*\(([^)]*)\)/iu;
 const SELECT_FROM = /\bfrom\s+([a-z_]+)/iu;
 const INSERT_INTO = /^\s*insert\s+into\s+([a-z_]+)\s*\(([^)]*)\)/iu;
 const UPDATE_SET = /^\s*update\s+([a-z_]+)\s+set\s+(.*?)\s+where\s+([a-z_]+)\s*=\s*\?/iu;
@@ -38,6 +41,8 @@ const KEY_FIELDS = Object.freeze({
   [SYSTEM_TABLE_NAME.SERVICES]: 'service_id',
   [SYSTEM_TABLE_NAME.REPLICA_OPERATIONS]: 'operation_id',
   [SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS]: 'publication_id',
+  // The coordinator reserves storage for an operation it creates.
+  [SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS]: 'reservation_id',
 });
 
 function tableOf(name) {
@@ -64,7 +69,8 @@ function selectRows(cache, sql, params) {
 
 function insertRow(cache, sql, params) {
   const upsert = INSERT_OR_REPLACE.exec(sql);
-  const match = upsert || INSERT_INTO.exec(sql);
+  const ignoring = INSERT_OR_IGNORE.exec(sql);
+  const match = upsert || ignoring || INSERT_INTO.exec(sql);
   const table = match ? tableOf(match[1]) : null;
   if (!table) return failure(`${UNKNOWN_TABLE_ERROR}${match ? match[1] : sql}`);
   const columns = arrayFilter(
@@ -73,6 +79,9 @@ function insertRow(cache, sql, params) {
   columns.forEach((column, index) => {
     row[stringToLowerCase(column)] = params[index];
   });
+  if (ignoring && cache.get(table, row[KEY_FIELDS[table]])) {
+    return {success: true, rows: [], affectedRows: 0};
+  }
   const replaces = upsert && cache.get(table, row[KEY_FIELDS[table]]);
   cache.applySystemTableChange(table,
     replaces ? CDC_OPERATION.UPDATE : CDC_OPERATION.INSERT, row);
