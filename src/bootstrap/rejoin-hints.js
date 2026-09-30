@@ -1,4 +1,4 @@
-import {writeAtomicDurableBytes} from
+import {writeAtomicDurableBytesAsync} from
   '../runtime/oci-host-agent-durable-files.js';
 import {join} from 'node:path';
 import {TABLES} from '../constants/index.js';
@@ -216,15 +216,16 @@ function resolveRejoinHintsPath(dataDir) {
 }
 
 // Hints are replaced through the repository's one durable atomic-replacement
-// owner (temp write, file fsync, rename, directory fsync), the same primitive
-// the boot incarnation owner uses: a crash or power loss leaves the previous
-// or the new hints, never a torn or empty file.
+// owner (temp write, file fsync, rename, directory fsync), the same steps the
+// boot incarnation owner uses: a crash or power loss leaves the previous or
+// the new hints, never a torn or empty file. The recurring (1s) writer uses
+// the asynchronous driver so its fsyncs never hold the event loop.
 async function persistRejoinHintsSnapshot(dataDir, snapshot) {
   const hintsPath = resolveRejoinHintsPath(dataDir);
   if (!hintsPath) {
     return null;
   }
-  writeAtomicDurableBytes(hintsPath, Buffer.from(
+  await writeAtomicDurableBytesAsync(hintsPath, Buffer.from(
     JSON.stringify(snapshot, null, JSON_INDENT_SPACES) + JSON_LINE_SUFFIX,
     UTF8_ENCODING,
   ));

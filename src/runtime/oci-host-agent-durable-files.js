@@ -158,42 +158,117 @@ function readCanonicalJson(file, errorCode) {
   }
 }
 
-// The one durable atomic replacement: write a fresh temporary file, fsync it,
-// rename it over the target, fsync the directory. A crash leaves the old or
-// the new bytes, never a torn file, and the new bytes survive power loss once
-// this returns.
+// The one durable atomic replacement: write a fresh temporary file beside the
+// target, fsync it, rename it over the target, fsync the directory. A crash
+// leaves the old or the new bytes, never a torn file, and the new bytes
+// survive power loss once this returns. The steps, the temporary naming, the
+// open flags and the cleanup rule are defined once below and executed by two
+// drivers: a synchronous one (bounded, boot-time and fault-injected callers)
+// and an asynchronous one that never holds the event loop across the writes
+// and fsyncs (recurring writers such as the rejoin hints).
+const ATOMIC_TEMPORARY_FLAGS = fs.constants.O_CREAT | fs.constants.O_EXCL |
+  fs.constants.O_WRONLY | NO_FOLLOW;
+const ATOMIC_TEMPORARY_SUFFIX = '.tmp';
+const ATOMIC_TEMPORARY_NONCE_BYTES = 12;
+
+function atomicReplacementPaths(file) {
+  const directory = path.dirname(file);
+  const nonce = randomBytes(ATOMIC_TEMPORARY_NONCE_BYTES).toString(ENCODING_HEX);
+  return {
+    directory,
+    temporary: path.join(directory,
+      `.${path.basename(file)}.${process.pid}.${nonce}${ATOMIC_TEMPORARY_SUFFIX}`),
+  };
+}
+
+// Cleanup rule: a temporary this writer created and did not rename is
+// removed when a step fails; the target keeps its previous bytes.
+function removeUnrenamedTemporarySync(temporary) {
+  fs.rmSync(temporary, {force: true});
+}
+
+async function removeUnrenamedTemporary(temporary) {
+  await fs.promises.rm(temporary, {force: true});
+}
+
 function writeAtomicDurable(file, value, hooks = {}) {
   writeAtomicDurableBytes(file, canonicalJsonBytes(value), hooks);
 }
 
 /**
- * Durably and atomically replace `file` with `bytes` (see writeAtomicDurable).
+ * Durably and atomically replace `file` with `bytes`, synchronously.
  * @param {string} file
  * @param {Buffer} bytes
- * @param {Object} [hooks] - Test seam: afterFileSync / afterDirectorySync.
+ * @param {Object} [hooks] - Test seam: afterFileSync / afterDirectorySync
+ *   (simulated process death: no cleanup runs for them).
  */
 function writeAtomicDurableBytes(file, bytes, hooks = {}) {
-  const directory = path.dirname(file);
-  const temporary = path.join(
-    directory,
-    `.${path.basename(file)}.${process.pid}.${randomBytes(12).toString('hex')}.tmp`,
-  );
-  const descriptor = fs.openSync(
-    temporary,
-    fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY |
-      NO_FOLLOW,
-    FILE_MODE,
-  );
+  const {directory, temporary} = atomicReplacementPaths(file);
+  const descriptor = fs.openSync(temporary, ATOMIC_TEMPORARY_FLAGS, FILE_MODE);
   try {
-    writeAll(descriptor, bytes);
-    fs.fsyncSync(descriptor);
-  } finally {
-    fs.closeSync(descriptor);
+    try {
+      writeAll(descriptor, bytes);
+      fs.fsyncSync(descriptor);
+    } finally {
+      fs.closeSync(descriptor);
+    }
+  } catch (error) {
+    removeUnrenamedTemporarySync(temporary);
+    throw error;
   }
   hooks.afterFileSync?.();
-  fs.renameSync(temporary, file);
+  try {
+    fs.renameSync(temporary, file);
+  } catch (error) {
+    removeUnrenamedTemporarySync(temporary);
+    throw error;
+  }
   fsyncDirectory(directory);
   hooks.afterDirectorySync?.();
+}
+
+async function writeAllAsync(handle, bytes) {
+  let offset = 0;
+  while (offset < bytes.length) {
+    const {bytesWritten} =
+      await handle.write(bytes, offset, bytes.length - offset);
+    offset += bytesWritten;
+  }
+}
+
+async function fsyncDirectoryAsync(directory) {
+  const handle = await fs.promises.open(directory, fs.constants.O_RDONLY);
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Durably and atomically replace `file` with `bytes` without blocking the
+ * event loop (same steps and guarantees as writeAtomicDurableBytes).
+ * @param {string} file
+ * @param {Buffer} bytes
+ * @return {Promise<void>}
+ */
+async function writeAtomicDurableBytesAsync(file, bytes) {
+  const {directory, temporary} = atomicReplacementPaths(file);
+  const handle = await fs.promises.open(
+    temporary, ATOMIC_TEMPORARY_FLAGS, FILE_MODE);
+  try {
+    try {
+      await writeAllAsync(handle, bytes);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fs.promises.rename(temporary, file);
+  } catch (error) {
+    await removeUnrenamedTemporary(temporary);
+    throw error;
+  }
+  await fsyncDirectoryAsync(directory);
 }
 
 function processIsAlive(pid) {
@@ -290,6 +365,6 @@ export {
   validHex256,
   validOwnerId,
   writeAtomicDurable,
-  writeAtomicDurableBytes,
+  writeAtomicDurableBytesAsync,
   writeExclusiveDurable,
 };

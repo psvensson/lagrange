@@ -558,61 +558,154 @@ test('B8: owner absent and corrupt hints still refuse the migration',
     });
   });
 
+// Instrument the asynchronous durable driver: every FileHandle it opens, its
+// writes and syncs, the rename and the temporary cleanup, in order.
+function instrumentAsyncDurableWrites({syncGate = null, failRename = false} = {}) {
+  const events = [];
+  const originals = {open: fsPromises.open, rename: fsPromises.rename,
+    rm: fsPromises.rm};
+  fsPromises.open = async (candidate, ...args) => {
+    const handle = await originals.open(candidate, ...args);
+    const target = String(candidate);
+    const write = handle.write.bind(handle);
+    const sync = handle.sync.bind(handle);
+    handle.write = (...writeArgs) => {
+      events.push(['write', target]);
+      return write(...writeArgs);
+    };
+    handle.sync = async () => {
+      events.push(['sync', target]);
+      if (syncGate) await syncGate.promise;
+      return sync();
+    };
+    return handle;
+  };
+  fsPromises.rename = async (from, to) => {
+    events.push(['rename', String(from), String(to)]);
+    if (failRename) throw new Error('injected rename failure');
+    return originals.rename(from, to);
+  };
+  fsPromises.rm = async (candidate, ...args) => {
+    events.push(['rm', String(candidate)]);
+    return originals.rm(candidate, ...args);
+  };
+  return {
+    events,
+    restore: () => Object.assign(fsPromises, originals),
+  };
+}
+
+function persistHintsAt(dataDir) {
+  return persistBootstrapRejoinHints({
+    dataDir, nodeId: NODE_ID, nodeAddress: 'node-f1:8080',
+    nodeRole: 'seed', peerAddresses: ['peer:8080'], bootIncarnation: 1,
+  });
+}
+
 test('B8: the hints writer replaces the file through the durable atomic ' +
   'primitive (temp write, fsync, rename, directory fsync)', async (t) => {
   await withDataDir(async (dataDir) => {
     const hintsPath = join(dataDir, REJOIN_HINTS_FILENAME);
-    const events = [];
-    const pathByDescriptor = new Map();
-    const originals = {
-      openSync: fs.openSync, writeSync: fs.writeSync,
-      fsyncSync: fs.fsyncSync, renameSync: fs.renameSync,
-    };
-    fs.openSync = (candidate, ...args) => {
-      const descriptor = originals.openSync(candidate, ...args);
-      pathByDescriptor.set(descriptor, String(candidate));
-      return descriptor;
-    };
-    fs.writeSync = (descriptor, ...args) => {
-      events.push(['write', pathByDescriptor.get(descriptor)]);
-      return originals.writeSync(descriptor, ...args);
-    };
-    fs.fsyncSync = (descriptor) => {
-      events.push(['fsync', pathByDescriptor.get(descriptor)]);
-      return originals.fsyncSync(descriptor);
-    };
-    fs.renameSync = (from, to) => {
-      events.push(['rename', String(from), String(to)]);
-      return originals.renameSync(from, to);
-    };
+    const probe = instrumentAsyncDurableWrites();
     try {
-      await persistBootstrapRejoinHints({
-        dataDir, nodeId: NODE_ID, nodeAddress: 'node-f1:8080',
-        nodeRole: 'seed', peerAddresses: ['peer:8080'], bootIncarnation: 1,
-      });
+      await persistHintsAt(dataDir);
     } finally {
-      Object.assign(fs, originals);
+      probe.restore();
     }
-    const rename = events.find(([kind]) => kind === 'rename');
+    const rename = probe.events.find(([kind]) => kind === 'rename');
     t.ok(rename && rename[2] === hintsPath,
       'the hints file is replaced by renaming a temporary file over it');
     const temporary = rename?.[1];
     t.ok(temporary && temporary !== hintsPath &&
       dirname(temporary) === dataDir, 'the temporary sits beside the target');
-    const order = events.map(([kind, first]) => {
+    const order = probe.events.map(([kind, first]) => {
       if (kind === 'rename') return 'rename';
       if (first === temporary) return `${kind}:temporary`;
       if (first === dataDir) return `${kind}:directory`;
       return `${kind}:other`;
     });
     const firstWrite = order.indexOf('write:temporary');
-    const fileSync = order.indexOf('fsync:temporary');
+    const fileSync = order.indexOf('sync:temporary');
     const renamed = order.indexOf('rename');
-    const directorySync = order.indexOf('fsync:directory');
+    const directorySync = order.indexOf('sync:directory');
     t.ok(firstWrite >= 0 && firstWrite < fileSync && fileSync < renamed &&
       renamed < directorySync,
-    `temp write -> file fsync -> rename -> directory fsync (${order})`);
+    `temp write -> file sync -> rename -> directory sync (${order})`);
     t.ok(JSON.parse(await readFile(hintsPath, 'utf8')).bootIncarnation === 1,
       'the replaced hints are readable');
+  });
+});
+
+test('B8: a failed hints replacement removes its temporary and leaves the ' +
+  'previous hints intact', async (t) => {
+  await withDataDir(async (dataDir) => {
+    const hintsPath = join(dataDir, REJOIN_HINTS_FILENAME);
+    await persistHintsAt(dataDir);
+    const previous = await readFile(hintsPath, 'utf8');
+    const probe = instrumentAsyncDurableWrites({failRename: true});
+    try {
+      await t.rejects(persistHintsAt(dataDir), /injected rename failure/u,
+        'the failed replacement surfaces its error');
+    } finally {
+      probe.restore();
+    }
+    const temporary = probe.events.find(([kind]) => kind === 'rename')?.[1];
+    t.ok(probe.events.some(([kind, candidate]) =>
+      kind === 'rm' && candidate === temporary),
+    'the unrenamed temporary is removed');
+    t.same(readdirSync(dataDir), [REJOIN_HINTS_FILENAME],
+      'no temporary is left beside the target');
+    t.equal(await readFile(hintsPath, 'utf8'), previous,
+      'the previous hints are intact');
+  });
+});
+
+test('B8: a hints persist in flight never holds the event loop', async (t) => {
+  await withDataDir(async (dataDir) => {
+    let releaseSync;
+    let reachSync;
+    const syncReached = new Promise((resolve) => {
+      reachSync = resolve;
+    });
+    const syncGate = {promise: new Promise((resolve) => {
+      releaseSync = resolve;
+    })};
+    const probe = instrumentAsyncDurableWrites({
+      syncGate: {get promise() {
+        reachSync();
+        return syncGate.promise;
+      }},
+    });
+    try {
+      const service = new RejoinHintsPersistenceService({
+        dataDir, nodeId: NODE_ID, nodeAddress: 'node-f1:8080',
+        nodeRole: 'seed', bootIncarnation: 1, logger: quietLogger,
+        getSystemTableCache: () => null,
+      });
+      let settled = false;
+      const persisting = service.persistNow().then((result) => {
+        settled = true;
+        return result;
+      });
+      const first = await Promise.race([
+        syncReached.then(() => 'file sync pending'),
+        persisting.then(() => 'persist finished'),
+      ]);
+      t.equal(first, 'file sync pending',
+        'the persist yields at its file sync instead of finishing inline');
+      let immediateRan = false;
+      await new Promise((resolve) => setImmediate(() => {
+        immediateRan = true;
+        resolve();
+      }));
+      t.ok(immediateRan && !settled,
+        'a setImmediate scheduled after persistNow() ran while the write ' +
+        'was still in flight');
+      releaseSync();
+      t.ok(await persisting, 'the persist completes once the sync returns');
+    } finally {
+      releaseSync?.();
+      probe.restore();
+    }
   });
 });
