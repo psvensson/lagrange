@@ -1,8 +1,11 @@
+import {LANDING_UNCOVERED_SOURCE_PATHS_CODE} from './landing-union-guard.js';
+
 const SCOPE_PATTERN = /scope-pressure|scope pressure/iu;
 const SUMMARY_PATTERN = /requires --summary|commit requires --summary/iu;
 const VERIFICATION_PATTERN = /verification|verifier|approval|fingerprint/iu;
 const AUDIT_PATTERN = /audit|preflight/iu;
 const CODE_SCOPE_GREW = 'scope-grew';
+const CODE_UNCOVERED_SOURCE_PATHS = 'uncovered-source-paths';
 const CATEGORY_SCOPE = 'scope';
 const REPAIR_RECORD_COVERED_SCOPE = 'record-covered-scope';
 const CODE_SUMMARY_REQUIRED = 'summary-required';
@@ -30,6 +33,19 @@ export function workflowSuccess(result) {
 
 export function workflowFailure(error) {
   const message = error instanceof Error ? error.message : String(error);
+  // Typed before any pattern: the landing union guard names the exact
+  // uncovered paths, and the repair is to record the covered scope.
+  if (error?.code === LANDING_UNCOVERED_SOURCE_PATHS_CODE) {
+    return errorShape(
+      CODE_UNCOVERED_SOURCE_PATHS, CATEGORY_SCOPE, message, false, {
+        code: REPAIR_RECORD_COVERED_SCOPE,
+        payload: {
+          paths: Array.isArray(error.uncoveredPaths) ? error.uncoveredPaths : [],
+          splitPlan: [],
+        },
+      },
+    );
+  }
   if (SCOPE_PATTERN.test(message)) {
     return errorShape(CODE_SCOPE_GREW, CATEGORY_SCOPE, message, false, {
       code: REPAIR_RECORD_COVERED_SCOPE,

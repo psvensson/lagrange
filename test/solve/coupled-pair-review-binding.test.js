@@ -134,6 +134,7 @@ tap.test(REGISTRY_DRIFT_TEST_NAME, (t) => {
     withContract: true,
     description: REGISTRY_DRIFT_DESCRIPTION,
   });
+  fixture.commitRegistryContext();
   t.throws(() => landQuestWorkflow(fixture.root, approvalArgs(
     fixture,
     requested.review.id,

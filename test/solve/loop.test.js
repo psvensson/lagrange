@@ -387,7 +387,11 @@ tap.test('auto-commit on quest finish (loop path)', async (t) => {
     run('config', 'user.name', 'Solver');
     run('config', 'commit.gpgsign', 'false');
     fs.writeFileSync(path.join(root, '.gitkeep'), '');
-    run('add', '-A');
+    // Only the keep file is tracked: the fixture oracle outside solve/ is
+    // measurement instrumentation the executor rewrites, and a tracked
+    // modified path outside the recorded attempt union would block the
+    // terminal landing (an untracked oracle is neither swept nor blocking).
+    run('add', '--', '.gitkeep');
     run('commit', '-m', 'init');
   }
 

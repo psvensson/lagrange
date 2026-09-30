@@ -1,0 +1,70 @@
+{
+  "id": "solver-land-recorded-attempt-union-guard",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Quest landing never commits source bytes that are not covered by a recorded source attempt: land refuses (typed BLOCKED, never verdict not-required) whenever any staged or working-tree path outside solve/ differs from the base commit but is absent from the recorded attempt union, and a refused attempt record (for example a scope-pressure blocked-scope gate-decision) with pending source bytes leaves the candidate un-landable until an attempt is honestly recorded and independently verified; the scope-safe commit is derived only from the recorded union, and a green doneWhen receipt alone never authorizes a source landing. Proven deterministically on the real landing preflight and commit path (test/solve) with the exact sequence that produced ce0e4942d on 2026-08-30 (receipt already green, attempt record refused by the scope guard, land run): red on HEAD (land commits the staged source with verdict not-required), green after (land blocks with a typed problem naming the uncovered paths; recording the attempt and a verifier approval then lands exactly the union).",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "docs/steering/workflow-guidelines/solver-quests.md",
+    "closesCL": [],
+    "parentQuest": "learner-promotion-proof-channel-wake",
+    "planDoc": "docs/steering/roadmap.md",
+    "draftedAtCommit": "7085090e22384c455e3a77ef8fd5dd49a5c141ac"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/solver-land-recorded-attempt-union-guard.receipt.json",
+      "requiredReceipts": [
+        "land-blocks-uncovered-source-paths",
+        "refused-attempt-record-leaves-candidate-unlandable",
+        "green-receipt-never-authorizes-source-landing",
+        "scope-safe-commit-equals-recorded-union",
+        "recorded-and-verified-union-lands-exactly",
+        "evidence-only-landing-unchanged",
+        "witness-deterministic"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-land-recorded-attempt-union-guard-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/solver-land-recorded-attempt-union-guard.receipt.json",
+          "requiredReceipts": [
+            "land-blocks-uncovered-source-paths",
+            "refused-attempt-record-leaves-candidate-unlandable",
+            "green-receipt-never-authorizes-source-landing",
+            "scope-safe-commit-equals-recorded-union",
+            "recorded-and-verified-union-lands-exactly",
+            "evidence-only-landing-unchanged",
+            "witness-deterministic"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-landing-owner",
+      "statement": "The landing owner (scripts/solve/operator-workflow.js land path, landing-preflight, handoff scope computation) stays the sole authority for what a landing commits; no caller, checkpoint, or evidence ingest may widen the committed set beyond the recorded attempt union."
+    },
+    {
+      "id": "fail-closed-typed",
+      "statement": "An uncovered source path is a typed BLOCKED problem naming the paths, never a silent verdict not-required and never an automatic attempt record; evidence-only quests (no source delta) keep their current not-required landing."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Reproduce the 2026-08-30 sequence (green receipt, attempt record refused by the scope guard, land) on the real landing path in test/solve with a temporary git repository fixture; red on HEAD, green after."
+    }
+  ]
+}

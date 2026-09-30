@@ -35,6 +35,11 @@ import {
   createReviewRequest,
 } from './review-request.js';
 import {loadVerifierVerdict} from './verifier-verdict.js';
+import {
+  LANDING_UNION_STATUS,
+  landingUnionGuard,
+  landingUnionGuardError,
+} from './landing-union-guard.js';
 
 const VERDICT_APPROVE = 'approve';
 const VERDICT_REJECT = 'reject';
@@ -321,7 +326,19 @@ export function landQuestWorkflow(root, args = {}) {
     throw new Error('land: Quest must be terminal before recording a landing verdict');
   }
   const state = verificationState(root, quest, log);
+  // Before any branch and before any commit: every dirty path outside solve/
+  // must be covered by a recorded attempt. A refused attempt record (for
+  // example a scope-pressure blocked-scope gate-decision) leaves its paths
+  // uncovered, and a green doneWhen receipt never authorizes a source
+  // landing — the typed block names the paths; nothing is committed and no
+  // verdict is recorded.
+  const unionGuard = landingUnionGuard(root, quest, log);
+  if (unionGuard.status === LANDING_UNION_STATUS.UNCOVERED) {
+    throw landingUnionGuardError(unionGuard);
+  }
   if (state.attempts.length === 0) {
+    // Evidence-only landing: no recorded source attempt and (guard above)
+    // no uncovered source delta, so no verifier is required.
     if (args.verifier || args.verdict || args.fingerprint || args.receipt ||
       args.review || args[VERDICT_FILE_ARGUMENT]) {
       throw new Error('land: this candidate has no source changes and needs no verifier');

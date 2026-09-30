@@ -76,8 +76,27 @@ function git(root, args) {
   }).trim();
 }
 
+const IMPORT_GRAPH_PATH =
+  'test-output/analysis/global-owner-debt-import-graph.json';
+const IMPORT_GRAPH_SEAL_PATH = 'test/shards/impact-graph-seal.json';
+const IMPORT_GRAPH_PRODUCER_SOURCE =
+  'import crypto from \'node:crypto\';\n' +
+  'import fs from \'node:fs\';\n' +
+  `const graphBytes = fs.readFileSync('${IMPORT_GRAPH_PATH}');\n` +
+  `const sealBytes = fs.readFileSync('${IMPORT_GRAPH_SEAL_PATH}');\n` +
+  'const digest = (bytes) => crypto.createHash(\'sha256\')' +
+    '.update(bytes).digest(\'hex\');\n' +
+  'process.stdout.write(JSON.stringify({\n' +
+  '  snapshotDigest: JSON.parse(graphBytes).snapshotDigest,\n' +
+  '  graphByteDigest: digest(graphBytes),\n' +
+  '  sealByteDigest: digest(sealBytes),\n' +
+  '}) + \'\\n\');\n';
+
+// `context.files` (relative path -> content) and `context.producerSource`
+// are tracked fixture context that must exist in the base commit: a dirty
+// tracked script outside the recorded attempt union would block the landing.
 function landingFixture(changedPath = 'scripts/demo.js', finalMetric = 0,
-  verificationTemplates = []) {
+  verificationTemplates = [], context = {}) {
   const root = tmp();
   git(root, ['init']);
   git(root, ['config', 'user.email', 'solver@example.com']);
@@ -90,8 +109,11 @@ function landingFixture(changedPath = 'scripts/demo.js', finalMetric = 0,
   const changedFile = path.join(root, changedPath);
   fs.mkdirSync(path.dirname(changedFile), {recursive: true});
   fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
-  fs.writeFileSync(changedFile, changedPath === 'package.json' ?
-    '{"version":1}\n' : 'export const value = 1;\n');
+  const initialContent = changedPath === 'package.json' ?
+    '{"version":1}\n' : 'export const value = 1;\n';
+  const finalContent = changedPath === 'package.json' ?
+    '{"version":2}\n' : 'export const value = 2;\n';
+  fs.writeFileSync(changedFile, finalContent);
   const metric = {probe: 'oracle', args: {file: oracle}};
   const quest = {
     id,
@@ -140,11 +162,26 @@ function landingFixture(changedPath = 'scripts/demo.js', finalMetric = 0,
     contracts: {},
     coupledPairs: {},
   }, null, 2)}\n`);
+  for (const [relative, content] of Object.entries(context.files || {})) {
+    fs.mkdirSync(path.dirname(path.join(root, relative)), {recursive: true});
+    fs.writeFileSync(path.join(root, relative), content);
+  }
+  const producerSource = context.producerSource || IMPORT_GRAPH_PRODUCER_SOURCE;
+  fs.writeFileSync(
+    path.join(root, 'scripts', 'generate-global-owner-debt-inventory.js'),
+    producerSource);
+  // Stamp the canonical import-graph triple over the FINAL tree the landing
+  // will present (the changed file already holds its candidate bytes), then
+  // restore the pre-change bytes for the base commit. The committed triple
+  // is therefore exactly the live triple after the candidate edit, so the
+  // working tree carries no dirty path outside the recorded candidate — the
+  // landing union guard refuses any such uncovered path before review.
+  stageCanonicalImportGraphTriple(root, producerSource);
+  fs.writeFileSync(changedFile, initialContent);
   git(root, ['add', '-A']);
   git(root, ['commit', '-m', 'base']);
   runStep(root, quest);
-  fs.writeFileSync(changedFile, changedPath === 'package.json' ?
-    '{"version":2}\n' : 'export const value = 2;\n');
+  fs.writeFileSync(changedFile, finalContent);
   fs.writeFileSync(oracle, JSON.stringify({metric: finalMetric, target: 0}));
   const content = git(root, [
     'diff', '--binary', '--full-index', '--no-ext-diff', 'HEAD', '--',
@@ -157,9 +194,6 @@ function landingFixture(changedPath = 'scripts/demo.js', finalMetric = 0,
     changeRef: `diff:${path.relative(root, artifact)}`,
     summary: 'change the landing fixture',
   });
-  // Re-stamp the canonical graph over the final working tree so the landing
-  // preflight's live producer-input comparison sees fresh digests.
-  stageCanonicalImportGraphTriple(root);
   return {root, id};
 }
 
@@ -175,23 +209,8 @@ function landingFixture(changedPath = 'scripts/demo.js', finalMetric = 0,
 // fixture.js): a receipt-printing stub producer plus a graph and seal
 // computed with the REAL imported digest helpers, so the canonical
 // comparison is genuine without dragging dependency-cruiser into a tmpdir.
-const IMPORT_GRAPH_PATH =
-  'test-output/analysis/global-owner-debt-import-graph.json';
-const IMPORT_GRAPH_SEAL_PATH = 'test/shards/impact-graph-seal.json';
-const IMPORT_GRAPH_PRODUCER_SOURCE =
-  'import crypto from \'node:crypto\';\n' +
-  'import fs from \'node:fs\';\n' +
-  `const graphBytes = fs.readFileSync('${IMPORT_GRAPH_PATH}');\n` +
-  `const sealBytes = fs.readFileSync('${IMPORT_GRAPH_SEAL_PATH}');\n` +
-  'const digest = (bytes) => crypto.createHash(\'sha256\')' +
-    '.update(bytes).digest(\'hex\');\n' +
-  'process.stdout.write(JSON.stringify({\n' +
-  '  snapshotDigest: JSON.parse(graphBytes).snapshotDigest,\n' +
-  '  graphByteDigest: digest(graphBytes),\n' +
-  '  sealByteDigest: digest(sealBytes),\n' +
-  '}) + \'\\n\');\n';
-
-function stageCanonicalImportGraphTriple(root) {
+function stageCanonicalImportGraphTriple(
+  root, producerSource = IMPORT_GRAPH_PRODUCER_SOURCE) {
   const files = listJavaScriptFiles(root);
   const producerInputs = listImportGraphInputFiles(root);
   const degrees = Object.fromEntries(
@@ -271,7 +290,7 @@ function stageCanonicalImportGraphTriple(root) {
   fs.mkdirSync(path.join(root, 'scripts'), {recursive: true});
   fs.writeFileSync(
     path.join(root, 'scripts', 'generate-global-owner-debt-inventory.js'),
-    IMPORT_GRAPH_PRODUCER_SOURCE,
+    producerSource,
   );
 }
 
@@ -1077,12 +1096,13 @@ tap.test('land refuses silent catches before minting a review id', (t) => {
     'check-guideline-silent-catch.js');
   fs.writeFileSync(checker,
     'process.stderr.write("fixture silent catch\\n");\nprocess.exitCode = 1;\n');
-  // The new checker script changes the live producer inputs; re-stamp the
-  // canonical graph so the preflight reaches the intended refusal stage.
+  // The new checker script changes the live producer inputs; re-stamping the
+  // canonical graph dirties the tracked seal, which no recorded attempt
+  // covers, so the landing union guard refuses before the review is minted.
   stageCanonicalImportGraphTriple(root);
 
   t.throws(() => landQuestWorkflow(root, {id}),
-    /canonical import-graph verification failed.*live producer inputs/isu,
+    /blocked-uncovered-source-paths.*impact-graph-seal\.json/isu,
     'an ambient-only checker mutation cannot enter the exact candidate review');
   t.equal(fs.existsSync(path.join(root, 'solve', 'state', 'reviews')), false,
     'silent-catch failure creates no immutable review artifact');
@@ -1141,8 +1161,11 @@ tap.test('land refuses import gaps before minting a review id', (t) => {
   fs.writeFileSync(imported, 'export const helper = true;\n');
   git(root, ['add', '-N', '--', 'scripts/helper.js']);
 
+  // The intent-to-add helper is a source path outside the recorded attempt
+  // union (the exact shape of the 2026-08-30 ce0e4942d sweep): the landing
+  // union guard names it and refuses before any review artifact exists.
   t.throws(() => landQuestWorkflow(root, {id}),
-    /canonical import-graph verification failed.*live producer inputs/isu,
+    /blocked-uncovered-source-paths.*scripts\/helper\.js/isu,
     'ambient-only importer/helper changes cannot enter the candidate review');
   t.equal(fs.existsSync(path.join(root, 'solve', 'state', 'reviews')), false,
     'an incomplete import boundary creates no immutable review artifact');
@@ -1162,15 +1185,17 @@ tap.test('landing preflight cache follows baseline and intrinsic inputs', (t) =>
     'if (baseline.trim() === \'[]\') process.exitCode = 1;',
     '',
   ].join('\n'));
-  // Re-stamp the canonical graph over the staged checker/baseline scripts so
-  // the preflight reaches the cache behavior under test.
+  // Re-stamping the canonical graph over the staged checker/baseline scripts
+  // dirties the tracked seal, which no recorded attempt covers: the landing
+  // union guard refuses before the review is minted, and it keeps refusing
+  // while the uncovered path stays dirty.
   stageCanonicalImportGraphTriple(root);
   t.throws(() => landQuestWorkflow(root, {id}),
-    /canonical import-graph verification failed.*live producer inputs/isu,
+    /blocked-uncovered-source-paths.*impact-graph-seal\.json/isu,
     'ambient checker-input drift cannot alter an immutable candidate review');
   fs.writeFileSync(baseline, '[]\n');
   t.throws(() => landQuestWorkflow(root, {id}),
-    /canonical import-graph verification failed.*live producer inputs/isu,
+    /blocked-uncovered-source-paths.*impact-graph-seal\.json/isu,
     'a second ambient mutation still cannot enter the candidate snapshot');
 
   fs.writeFileSync(baseline, '["allow"]\n');
@@ -1227,28 +1252,41 @@ tap.test('landing preflight cache follows baseline and intrinsic inputs', (t) =>
 });
 
 tap.test('inventory output lock is held through the final Git commit', (t) => {
-  const {root, id} = landingFixture();
-  fs.mkdirSync(path.join(root, 'src'), {recursive: true});
-  fs.mkdirSync(path.join(root, 'test'), {recursive: true});
   const outputs = [
-    path.join(root,
-      'solve/changes/global-owner-debt-inventory/inventory.json'),
-    path.join(root,
-      'solve/changes/priority-recovery-owner-inventory/inventory.json'),
+    'solve/changes/global-owner-debt-inventory/inventory.json',
+    'solve/changes/priority-recovery-owner-inventory/inventory.json',
   ];
-  for (const [index, name] of [
-    'generate-global-owner-debt-inventory.js',
-    'generate-priority-recovery-owner-inventory.js',
-  ].entries()) {
-    fs.writeFileSync(path.join(root, 'scripts', name), [
-      'const fs = require(\'node:fs\');',
-      'const path = require(\'node:path\');',
-      `fs.mkdirSync(path.dirname(${JSON.stringify(outputs[index])}), ` +
-        '{recursive: true});',
-      `fs.writeFileSync(${JSON.stringify(outputs[index])}, 'fresh\\n');`,
-      '',
-    ].join('\n'));
-  }
+  const inventoryWriter = (output) => [
+    `fs.mkdirSync(path.dirname(${JSON.stringify(output)}), ` +
+      '{recursive: true});',
+    `fs.writeFileSync(${JSON.stringify(output)}, 'fresh\\n');`,
+  ];
+  // The global inventory generator shares its path with the canonical
+  // import-graph producer, so the fixture producer keeps answering the
+  // graph flags and writes the inventory when run without arguments. Both
+  // generators are tracked base-commit context (the review snapshot is cut
+  // at the candidate base), never dirty source outside the recorded union.
+  const producerSource = [
+    'import path from \'node:path\';',
+    IMPORT_GRAPH_PRODUCER_SOURCE.replace(
+      'process.stdout.write(',
+      'if (process.argv.length > 2) process.stdout.write('),
+    'if (process.argv.length === 2) {',
+    ...inventoryWriter(outputs[0]).map((line) => `  ${line}`),
+    '}',
+    '',
+  ].join('\n');
+  const {root, id} = landingFixture('scripts/demo.js', 0, [], {
+    producerSource,
+    files: {
+      'scripts/generate-priority-recovery-owner-inventory.js': [
+        'const fs = require(\'node:fs\');',
+        'const path = require(\'node:path\');',
+        ...inventoryWriter(outputs[1]),
+        '',
+      ].join('\n'),
+    },
+  });
   const hook = path.join(root, '.git', 'hooks', 'pre-commit');
   fs.writeFileSync(hook, '#!/bin/sh\n' +
     'test -e solve/state/inventory-refresh/refresh.lock\n');

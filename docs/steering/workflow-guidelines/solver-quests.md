@@ -898,10 +898,25 @@ then `git commit -m "<quest>: <summary>"`. Do not push (see "Regular Commit
 The `handoff` command requires a terminal, a passing full audit, aggregate
 approval when source changed, and scope-pressure admission. It derives the in-scope
 set purely from the Quest's sealed `solve/` artifacts plus the source/test files
-named inside its own diffs, and lists every other dirty file as out-of-scope so
-unrelated work is never swept in. The `handoff` command is a dry run by default;
+named inside the change artifacts of its RECORDED attempts (the recorded
+attempt union) — never from a change artifact on disk that no attempt event
+references — and lists every other dirty file as out-of-scope so unrelated
+work is never swept in. The `handoff` command is a dry run by default;
 `--commit` executes the printed `git add`/`commit` for the in-scope paths only
 (it never pushes).
+
+Landing union guard (`scripts/solve/landing-union-guard.js`): before any
+branch and before any commit, a terminal `land` compares every path outside
+`solve/` that differs from HEAD in the index or working tree (staged,
+modified, intent-to-add) with the recorded attempt union. Any uncovered path
+is the typed BLOCKED problem `blocked-uncovered-source-paths` naming the paths
+— surfaced through the terminal audit, the commit gate, and `next` — with no
+commit, no verdict recorded, and no attempt recorded on the operator's behalf.
+An attempt record refused by the scope-pressure guard therefore leaves its
+staged paths uncovered until an attempt is honestly recorded and independently
+verified, and a green `doneWhen` receipt alone never authorizes a source
+landing (the 2026-08-30 ce0e4942d sweep). Evidence-only Quests, with no delta
+outside `solve/`, keep their `not-required` landing.
 
 ## Strategy Ladder
 
