@@ -12,6 +12,7 @@ import {classifyControlPlaneMutationResult} from
   '../control-plane/control-plane-mutation-outcome-classifier.js';
 import {durableRowVersion, nextLifecycleStateEntry} from
   '../node/replica-state-machine-lifecycle-observation.js';
+import {mintServiceRowCreatedAt} from '../node/service-row-incarnation.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_READ_LEADER_MODE,
@@ -41,6 +42,8 @@ const MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR = Object.freeze({
     'MessageGroupServiceRowOwner activation requires the replica lifecycle ' +
     'owner',
   LIFECYCLE_OWNER_CLOSED: 'MESSAGE_GROUP_ACTIVATION_LIFECYCLE_OWNER_CLOSED',
+  REGISTRATION_STATUS_STOPPED_REQUIRED:
+    'MESSAGE_GROUP_REGISTRATION_STATUS_STOPPED_REQUIRED',
 });
 const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   allowCoalescing: true,
@@ -343,7 +346,7 @@ class MessageGroupServiceRowOwner {
       nodeId,
       service = null,
       timestamp = Date.now(),
-      status = SERVICE_STATUS.ACTIVE,
+      status,
       extraFields = null,
     } = options;
 
@@ -384,6 +387,36 @@ class MessageGroupServiceRowOwner {
     };
   }
 
+  /**
+   * The row of one registration (a birth). Its durable incarnation is minted,
+   * never the raw clock: a replica removed and reborn under the same id in the
+   * same millisecond (or under a regressed clock) gets a distinct created_at,
+   * so a delayed removal of the old generation cannot match it (S-F1 rebirth).
+   * @param {Object} options - buildServiceRow options.
+   * @return {Object} The registration row.
+   */
+  static buildRegistrationRow(options = {}) {
+    return MessageGroupServiceRowOwner.buildServiceRow({
+      ...options,
+      timestamp: mintServiceRowCreatedAt(options.timestamp ?? Date.now()),
+    });
+  }
+
+  /**
+   * This owner bound to a replica's lifecycle owner (its ReplicaStateMachine,
+   * the lane its transport handler retires through), for the handler-bound
+   * activation.
+   * @param {Object} replicaStateMachine
+   * @return {MessageGroupServiceRowOwner}
+   */
+  forLifecycleOwner(replicaStateMachine) {
+    return new MessageGroupServiceRowOwner({
+      systemTableWriter: this.systemTableWriter,
+      replicaStateMachine,
+      now: this.now,
+    });
+  }
+
   buildDeferredUpdateOptions(serviceId) {
     return {
       ...SERVICE_ROW_UPDATE_OPTION,
@@ -401,7 +434,14 @@ class MessageGroupServiceRowOwner {
       );
     }
 
-    const row = MessageGroupServiceRowOwner.buildServiceRow({
+    // A registration is a birth: the row is born STOPPED and becomes ACTIVE
+    // only through activateReplica, bound to the exact transport handler.
+    if (options.status !== SERVICE_STATUS.STOPPED) {
+      throw messageGroupActivationError(options.replicaId,
+        MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR
+          .REGISTRATION_STATUS_STOPPED_REQUIRED);
+    }
+    const row = MessageGroupServiceRowOwner.buildRegistrationRow({
       ...options,
       timestamp: options.timestamp ?? this.now(),
     });

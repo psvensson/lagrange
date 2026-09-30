@@ -20,13 +20,17 @@ import {MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR} from
   '../../src/message-group/message-group-service-row-owner.js';
 import {activateMessageGroupServiceRows} from
   '../../src/bootstrap/shared/message-group-service-activation.js';
-import {
-  registerMessageGroupTransportHandler,
-  retireMessageGroupTransportHandler,
-} from '../../src/bootstrap/shared/message-group-transport-handler.js';
+import {retireMessageGroupTransportHandler} from
+  '../../src/bootstrap/shared/message-group-transport-handler.js';
 import {runSerializedReplicaMutation} from
   '../../src/node/replica-state-machine-serialization.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {
+  createGatedServicesRow,
+  createMessageGroupReplicaRuntime,
+  gate,
+  turns,
+} from '../test-helpers/message-group-activation-boundary-fixture.js';
 
 const NODE_ID = 'node-a';
 const GROUP_ID = 'mg-1';
@@ -60,76 +64,9 @@ function registeredRow(generation = 1, overrides = {}) {
   };
 }
 
-function gate() {
-  let release;
-  const held = new Promise((resolve) => {
-    release = resolve;
-  });
-  let reach;
-  const reached = new Promise((resolve) => {
-    reach = resolve;
-  });
-  return {release, held, reached, reach};
-}
-
-// The durable SERVICES row behind the exact-predicate activation CAS.
-// `holdNextRead` holds the next authoritative read; `holdNextCas` holds the
-// ACTIVE CAS once issued; `atCas` observes the world when the CAS is issued.
-function createDurable(initialRow, options = {}) {
-  let row = {...initialRow};
-  const casCalls = [];
-  let readGate = null;
-  let casGate = null;
-  return {
-    casCalls,
-    get row() {
-      return {...row};
-    },
-    holdNextRead() {
-      readGate = gate();
-      return readGate;
-    },
-    holdNextCas() {
-      casGate = gate();
-      return casGate;
-    },
-    async readAuthoritativeRows() {
-      const current = readGate;
-      readGate = null;
-      if (current) {
-        current.reach();
-        await current.held;
-      }
-      return {success: true, rows: [{...row}]};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      casCalls.push({whereClause, data, world: options.atCas?.()});
-      const current = casGate;
-      casGate = null;
-      if (current) {
-        current.reach();
-        await current.held;
-      }
-      const applied = Object.entries(whereClause)
-        .every(([column, value]) => (row[column] ?? null) === value);
-      if (applied) row = {...row, ...data};
-      return {success: true,
-        partitionResult: {affectedRows: applied ? 1 : 0}};
-    },
-  };
-}
-
 function createService(router, stateMachine, register = true) {
-  const service = {groupId: GROUP_ID, replicaId: REPLICA_ID,
-    unifiedAddress: ADDRESS, isLeaderReplica: () => false,
-    receiveMessage: () => ({acknowledged: true})};
-  if (register) {
-    // The production registration: records the exact handler identity and
-    // the replica's lifecycle owner on the service.
-    registerMessageGroupTransportHandler(service, {messageRouter: router,
-      address: ADDRESS, resolveLane: () => stateMachine});
-  }
-  return service;
+  return createMessageGroupReplicaRuntime({router, stateMachine,
+    address: ADDRESS, groupId: GROUP_ID, replicaId: REPLICA_ID, register});
 }
 
 function createWorld(initialRow = registeredRow(), options = {}) {
@@ -142,7 +79,7 @@ function createWorld(initialRow = registeredRow(), options = {}) {
   if (options.register === false) {
     service.transportHandler = () => ({acknowledged: true});
   }
-  const durable = createDurable(initialRow, {
+  const durable = createGatedServicesRow(initialRow, {
     atCas: () => router.getRegisteredHandler(ADDRESS) ===
       service.transportHandler,
   });
@@ -162,10 +99,6 @@ function createWorld(initialRow = registeredRow(), options = {}) {
     {messageGroup, messageRouter: router, address: ADDRESS,
       replicaId: REPLICA_ID});
   return {router, stateMachine, service, durable, activate, retire};
-}
-
-async function turns(count) {
-  for (let turn = 0; turn < count; turn += 1) await Promise.resolve();
 }
 
 test('MG N2 (1): the exact generation handler is registered -> ACTIVE',

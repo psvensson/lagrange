@@ -192,17 +192,20 @@ async (t) => {
   const lifecycle = (replicaId, status, timestamp) =>
     owner.updateReplicaStatus({groupId: 'mg-1', replicaId, nodeId: 'node-a',
       service: leader, status, timestamp});
+  // Registration mints its incarnation above the process high-water (S-F1
+  // rebirth), so this file's registration clocks only move forward.
   const stageStopped = async (replicaId) => {
     await owner.registerReplica({groupId: 'mg-1', replicaId,
-      nodeId: 'node-a', service: leader, timestamp: 100, status: 'stopped'});
-    await lifecycle(replicaId, 'active', 200);
-    return lifecycle(replicaId, 'stopped', 300);
+      nodeId: 'node-a', service: leader, timestamp: 1_100, status: 'stopped'});
+    await lifecycle(replicaId, 'active', 1_200);
+    return lifecycle(replicaId, 'stopped', 1_300);
   };
 
   // Staged STOPPED at generation G, then the role publisher fires while the
   // replica stops (raft_role + updated_at only).
   const stoppedRow = await stageStopped('mg-1-r1');
-  t.equal(stoppedRow.state_entered_at, 300, 'removal staging is generation G');
+  t.equal(stoppedRow.state_entered_at, 1_300,
+    'removal staging is generation G');
   await writer.updateSystemTableRow(TABLES.SERVICES,
     {service_id: 'mg-1-r1', updated_at: stoppedRow.updated_at},
     {raft_role: 'follower', updated_at: 999});
@@ -215,14 +218,14 @@ async (t) => {
   t.match(removal.whereClause, {service_id: 'mg-1-r1',
     service_type: SERVICE_TYPE.MESSAGE_GROUP, group_id: 'mg-1',
     node_id: 'node-a', replica_id: 'mg-1-r1', status: 'stopped',
-    created_at: 100, state_entered_at: 300},
+    created_at: 1_100, state_entered_at: 1_300},
   'removal is fenced by identity, source status and generation');
   t.notOk('updated_at' in removal.whereClause,
     'removal is never fenced by updated_at');
 
   // A real lifecycle transition (re-activation at G+1) invalidates G.
   const staleStopped = await stageStopped('mg-1-r2');
-  await lifecycle('mg-1-r2', 'active', 400);
+  await lifecycle('mg-1-r2', 'active', 1_400);
   const current = writer.store.durableRow(TABLES.SERVICES, 'mg-1-r2');
   await t.rejects(owner.removeReplica({groupId: 'mg-1', replicaId: 'mg-1-r2',
     nodeId: 'node-a', stoppedRow: staleStopped}),
@@ -247,9 +250,9 @@ test('MessageGroupServiceRowOwner lost registration INSERT resolves by ' +
   const owner = new MessageGroupServiceRowOwner({systemTableWriter: writer});
   const registered = await owner.registerReplica({groupId: 'mg-1',
     replicaId: 'mg-1-r1', nodeId: 'node-a',
-    service: {isLeaderReplica: () => true}, timestamp: 100,
+    service: {isLeaderReplica: () => true}, timestamp: 2_100,
     status: 'stopped'});
-  t.equal(registered.state_entered_at, 100,
+  t.equal(registered.state_entered_at, 2_100,
     'the lost INSERT is recognized by identity and generation G');
 });
 
@@ -285,4 +288,55 @@ test('MessageGroupServiceRowOwner stamps a strictly newer generation when ' +
   const regressed = await lifecycle('active', 400);
   t.ok(regressed.state_entered_at > restopped.state_entered_at,
     'reactivation at a regressed clock is strictly newer');
+});
+
+test('MessageGroupServiceRowOwner rebirth at the same or a regressed clock ' +
+  'mints a distinct incarnation; a delayed removal of the old generation ' +
+  'cannot delete the reborn row (S-F1 rebirth, D7)', async (t) => {
+  const writer = createLifecycleCdcService({services: []});
+  const owner = new MessageGroupServiceRowOwner({systemTableWriter: writer});
+  const register = (timestamp) => owner.registerReplica({groupId: 'mg-1',
+    replicaId: REPLICA_ID, nodeId: 'node-a', timestamp, status: 'stopped'});
+  const removal = (stoppedRow) => owner.removeReplica({groupId: 'mg-1',
+    replicaId: REPLICA_ID, nodeId: 'node-a', stoppedRow});
+
+  // G1 is born STOPPED and removed while still at its birth generation.
+  const g1 = await register(9_000);
+  t.equal(await removal(g1), true, 'G1 is removed at its birth generation');
+  // G2 is reborn under the same id in the same millisecond.
+  const g2 = await register(9_000);
+  t.ok(g2.created_at > g1.created_at,
+    'the same-millisecond rebirth has a strictly newer created_at');
+  t.ok(g2.state_entered_at > g1.state_entered_at,
+    'and a strictly newer lifecycle generation');
+  await t.rejects(removal(g1), {code: 'SERVICE_IDENTITY_CONFLICT'},
+    'a delayed/redriven G1 removal cannot match the reborn G2 row');
+  t.same(writer.store.durableRow(TABLES.SERVICES, REPLICA_ID), g2,
+    'the reborn G2 row survives');
+
+  // G3 is reborn under a regressed clock after G2 is removed.
+  t.equal(await removal(g2), true, 'G2 is removed at its birth generation');
+  const g3 = await register(8_000);
+  t.ok(g3.created_at > g2.created_at,
+    'a rebirth under a regressed clock is still strictly newer');
+  for (const stale of [g1, g2]) {
+    await t.rejects(removal(stale), {code: 'SERVICE_IDENTITY_CONFLICT'},
+      'no earlier generation\'s removal predicate matches G3');
+  }
+  t.same(writer.store.durableRow(TABLES.SERVICES, REPLICA_ID), g3,
+    'the G3 row survives every delayed removal');
+});
+
+test('MessageGroupServiceRowOwner registration is a STOPPED birth: an ' +
+  'ACTIVE or omitted status is refused before any write (D1)', async (t) => {
+  const writer = createLifecycleCdcService({services: []});
+  const owner = new MessageGroupServiceRowOwner({systemTableWriter: writer});
+  for (const status of ['active', undefined]) {
+    await t.rejects(owner.registerReplica({groupId: 'mg-1',
+      replicaId: REPLICA_ID, nodeId: 'node-a', timestamp: 9_500, status}),
+    {code: 'MESSAGE_GROUP_REGISTRATION_STATUS_STOPPED_REQUIRED'},
+    `status ${status} is refused`);
+  }
+  t.equal(writer.calls.length, 0, 'no row is written');
+  t.equal(writer.store.durableRow(TABLES.SERVICES, REPLICA_ID), null);
 });

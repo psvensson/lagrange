@@ -36,6 +36,7 @@ function buildOwner(OwnerClass, ownerOptions) {
 export function runRowAbsenceActivationDeferredScenario({
   OwnerClass,
   replicaOptions,
+  registrationOptions = null,
   ownerLabel,
   deferredCode,
   assertRegisteredRow,
@@ -56,7 +57,8 @@ export function runRowAbsenceActivationDeferredScenario({
     t.equal(calls.upserts.length, 0,
       'activation has no UPSERT compatibility escape hatch');
 
-    const row = await owner.registerReplica(replicaOptions);
+    const row = await owner.registerReplica(
+      registrationOptions || replicaOptions);
     t.equal(calls.inserts.length, 1,
       'canonical registration alone owns INSERT acquisition');
     t.equal(calls.upserts.length, 0,
