@@ -26,7 +26,6 @@ import {fileURLToPath} from 'node:url';
 
 import Database from 'better-sqlite3';
 
-import {BootstrapService} from '../../../src/bootstrap/bootstrap-service.js';
 import {CONFIG_KEY} from '../../../src/config/config-key-constants.js';
 import {ConfigurationManager} from
   '../../../src/config/configuration-manager.js';
@@ -47,6 +46,7 @@ import {RAFT_RS_SQL} from
 import {SQLiteLogAdapter} from '../../../src/raft/sqlite-log-adapter.js';
 import {
   cleanupTestEnvironment,
+  createVirginSeedBootstrapService,
   getPartitionServices,
   getUniquePort,
   gracefulShutdown,
@@ -279,7 +279,7 @@ test('seed bootstraps and serves a write on rs-raft by default',
     });
     const seedNodeId = '550e8400-e29b-41d4-a716-446655449961';
     const seedWsPort = getUniquePort();
-    const bootstrapService = new BootstrapService({
+    const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,

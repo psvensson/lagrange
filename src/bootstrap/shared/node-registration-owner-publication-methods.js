@@ -20,6 +20,18 @@ import {
 } from '../../control-plane/owner-contract-outcome.js';
 import {JOINING_LOG_MSG} from '../node-joining-constants.js';
 import {
+  ENDPOINT_INCARNATION_OUTCOME,
+  isEndpointIncarnationOutcomeCompleted,
+  mutateEndpointAtIncarnation,
+  readAuthoritativeEndpointRow,
+  stampEndpointIncarnation,
+} from '../../control-plane/owners/endpoint-incarnation-authority.js';
+import {
+  NODE_TERMINAL_TRANSITION_OUTCOME,
+  applyNodeTerminalTransition,
+  isNodeTerminalTransitionRefused,
+} from '../../control-plane/node-terminal-transition-fence.js';
+import {
   COLUMN,
   ENDPOINT_STATUS,
   SERVICE_STATUS,
@@ -184,6 +196,30 @@ function classifyJoinAdmissionMutationAcceptance(result) {
   };
 }
 
+const RESOLVED_JOIN_ADMISSION_WITHDRAWAL = Object.freeze({
+  accepted: true,
+  success: true,
+  withdrawalDeferred: false,
+  contractState: '',
+  nextAction: '',
+  outcome: NODE_TERMINAL_TRANSITION_OUTCOME.RESOLVED_BY_READBACK,
+  retryAfterMs: NULL_VALUE,
+});
+
+function buildRefusedJoinAdmissionWithdrawal(registeredNodeId, transition) {
+  return {
+    success: false,
+    accepted: false,
+    withdrawalDeferred: false,
+    registeredNodeId,
+    outcome: transition.outcome,
+    knownIncarnation: transition.knownIncarnation ?? null,
+    nodeEndpointWithdrawn: false,
+    metaEndpointCount: 0,
+    metaEndpointWithdrawnCount: 0,
+  };
+}
+
 class NodeRegistrationOwnerPublicationMethods {
   resolveNodeEndpointId() {
     return `ep-${this.nodeId}-ws`;
@@ -233,7 +269,9 @@ class NodeRegistrationOwnerPublicationMethods {
       transportType: TRANSPORT_TYPE.WEBSOCKET,
       address: canonicalWsAddress,
     });
-    return endpointData;
+    // The row as written: born at this boot's exact incarnation.
+    return stampEndpointIncarnation(endpointData,
+      this.getRegistrationBootIncarnation());
   }
 
   async registerMetaServiceEndpoints() {
@@ -244,7 +282,7 @@ class NodeRegistrationOwnerPublicationMethods {
       await registerBuiltInMetaServiceEndpoints({
         upsertRow: async (tableName, row) => {
           endpointRows.push(row);
-          return this.upsertSystemTableRowWithRetry(
+          const result = await this.upsertSystemTableRowWithRetry(
             tableName,
             row,
             {
@@ -252,11 +290,17 @@ class NodeRegistrationOwnerPublicationMethods {
                 JOIN_ADMISSION_PUBLICATION.META_SERVICE_ENDPOINT,
             },
           );
+          if (result?.success === false) {
+            throw new Error(
+              `Failed to register meta endpoint: ${result.error}`);
+          }
+          return result;
         },
         nodeId: this.nodeId,
         nodeAddress: this.nodeAddress,
         advertisedNodeWsAddress: this.advertisedNodeWsAddress,
         wsPort: this.delegates.getWsPort?.(),
+        bootIncarnation: this.getRegistrationBootIncarnation(),
       });
       return endpointRows;
     } catch (error) {
@@ -397,24 +441,6 @@ class NodeRegistrationOwnerPublicationMethods {
     };
   }
 
-  async upsertJoinPublicationRow(admissionTarget, rowData) {
-    const membershipPublicationRuntimeOwner =
-      this.getMembershipPublicationRuntimeOwner();
-    const joinTimeOptions = this.getJoinTimeUpsertOptions();
-    const retryOptions = {
-      ...joinTimeOptions,
-      controlPlaneWriteRetryOnRetry:
-        this.buildJoinAdmissionRetryLogger(
-          TABLES.NODES,
-          admissionTarget,
-        ),
-    };
-    return membershipPublicationRuntimeOwner.upsertJoinNode(
-      rowData,
-      retryOptions,
-    );
-  }
-
   async upsertJoinServiceRowWithRetry(rowData, options = {}) {
     const controlPlaneSystemTableGateway =
       this.getJoinAdmissionControlPlaneSystemTableGateway();
@@ -433,7 +459,7 @@ class NodeRegistrationOwnerPublicationMethods {
     return runRetryableControlPlaneWrite(
       () => controlPlaneSystemTableGateway.submitMutation(
         {
-          operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+          operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
           tableName: TABLES.SERVICES,
           row: rowData,
         },
@@ -496,6 +522,83 @@ class NodeRegistrationOwnerPublicationMethods {
     );
   }
 
+  // The final failed-join withdrawal mutation; the predicate is the exact
+  // node id + boot incarnation.
+  writeNodeWithdrawalAtIncarnation(whereClause, withdrawn) {
+    return this.updateJoinAdmissionSystemTableRowWithRetry(
+      TABLES.NODES,
+      whereClause,
+      withdrawn,
+      {admissionTarget: JOIN_ADMISSION_WITHDRAWAL_TARGET.NODE_MEMBERSHIP},
+    );
+  }
+
+  // Withdraw one endpoint row of this boot: the predicate carries the exact
+  // incarnation, so a replacement incarnation's endpoint is never touched;
+  // an unknown outcome is reread (this boot's withdrawn row or absence ->
+  // done; another incarnation -> stale, never retried against it).
+  async withdrawEndpointAtIncarnation(tableName, endpointId, data,
+    admissionTarget) {
+    const gateway = this.getJoinAdmissionControlPlaneSystemTableGateway();
+    const {[COLUMN.UPDATED_AT]: _updatedAt, ...destination} = data;
+    const outcome = await mutateEndpointAtIncarnation({
+      bootIncarnation: this.getRegistrationBootIncarnation(),
+      whereClause: {[COLUMN.ENDPOINT_ID]: endpointId},
+      destination,
+      write: (whereClause) => this.updateJoinAdmissionSystemTableRowWithRetry(
+        tableName, whereClause, data, {admissionTarget}),
+      observe: () => readAuthoritativeEndpointRow(gateway, tableName,
+        endpointId),
+    });
+    if (isEndpointIncarnationOutcomeCompleted(outcome.outcome)) {
+      return true;
+    }
+    this.delegates.getLogger().warn(LOG_FAILED_JOIN_ENDPOINT_WITHDRAWAL_FAILED,
+      {
+        nodeId: this.nodeId,
+        tableName,
+        endpointId,
+        outcome: outcome.outcome,
+        error: outcome.error?.message ?? null,
+      });
+    return false;
+  }
+
+  // The failed-join withdrawal of this node's own row, fenced by its exact
+  // registered boot incarnation in the final mutation; an unknown outcome is
+  // resolved by the NODES owner's readback, never assumed.
+  async withdrawNodeMembershipAtIncarnation(registeredNodeId, now) {
+    const withdrawn = {
+      [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
+      [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,
+      [COLUMN.LAST_HEARTBEAT]: now,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+      [COLUMN.UPDATED_AT]: now,
+    };
+    const transition = await applyNodeTerminalTransition({
+      gateway: this.getJoinAdmissionControlPlaneSystemTableGateway(),
+      nodeId: registeredNodeId,
+      bootIncarnation: this.delegates.getBootIncarnation?.(),
+      destination: {
+        [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
+        [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,
+      },
+      write: (whereClause) =>
+        this.writeNodeWithdrawalAtIncarnation(whereClause, withdrawn),
+    });
+    if (isNodeTerminalTransitionRefused(transition.outcome)) {
+      return {refused: true, transition};
+    }
+    if (transition.outcome ===
+        NODE_TERMINAL_TRANSITION_OUTCOME.RESOLVED_BY_READBACK) {
+      return {refused: false, transition,
+        acceptance: RESOLVED_JOIN_ADMISSION_WITHDRAWAL};
+    }
+    if (transition.error) throw transition.error;
+    return {refused: false, transition,
+      acceptance: classifyJoinAdmissionMutationAcceptance(transition.result)};
+  }
+
   async withdrawFailedJoinAdmission(options = {}) {
     const registeredNodeId =
       normalizeString(options.registeredNodeId) || this.nodeId;
@@ -503,47 +606,23 @@ class NodeRegistrationOwnerPublicationMethods {
       return {success: false, skipped: true};
     }
     const now = this.delegates.getNow()();
-    const nodeResult =
-      await this.updateJoinAdmissionSystemTableRowWithRetry(
-        TABLES.NODES,
-        {[COLUMN.NODE_ID]: registeredNodeId},
-        {
-          [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
-          [COLUMN.CONNECTION_STATE]: STATE.DISCONNECTED,
-          [COLUMN.LAST_HEARTBEAT]: now,
-          [COLUMN.READY_LEASE_EXPIRES_AT]: null,
-          [COLUMN.UPDATED_AT]: now,
-        },
-        {
-          admissionTarget:
-            JOIN_ADMISSION_WITHDRAWAL_TARGET.NODE_MEMBERSHIP,
-        },
+    const nodeWithdrawal =
+      await this.withdrawNodeMembershipAtIncarnation(registeredNodeId, now);
+    if (nodeWithdrawal.refused) {
+      // A replacement incarnation (or no provable incarnation) owns the row
+      // and its endpoints: this process withdraws nothing.
+      return buildRefusedJoinAdmissionWithdrawal(
+        registeredNodeId,
+        nodeWithdrawal.transition,
       );
-
-    const logger = this.delegates.getLogger();
-    let nodeEndpointWithdrawn = false;
-    let metaEndpointWithdrawnCount = 0;
-    try {
-      await this.updateJoinAdmissionSystemTableRowWithRetry(
-        TABLES.NODE_ENDPOINTS,
-        {[COLUMN.ENDPOINT_ID]: this.resolveNodeEndpointId()},
-        {
-          [COLUMN.STATUS]: ENDPOINT_STATUS.INACTIVE,
-          [COLUMN.UPDATED_AT]: now,
-        },
-        {
-          admissionTarget:
-            JOIN_ADMISSION_WITHDRAWAL_TARGET.NODE_ENDPOINT,
-        },
-      );
-      nodeEndpointWithdrawn = true;
-    } catch (endpointError) {
-      logger.warn(LOG_FAILED_JOIN_ENDPOINT_WITHDRAWAL_FAILED, {
-        nodeId: this.nodeId,
-        tableName: TABLES.NODE_ENDPOINTS,
-        error: endpointError.message,
-      });
     }
+
+    const nodeEndpointWithdrawn = await this.withdrawEndpointAtIncarnation(
+      TABLES.NODE_ENDPOINTS,
+      this.resolveNodeEndpointId(),
+      {[COLUMN.STATUS]: ENDPOINT_STATUS.INACTIVE, [COLUMN.UPDATED_AT]: now},
+      JOIN_ADMISSION_WITHDRAWAL_TARGET.NODE_ENDPOINT,
+    );
 
     // Withdrawal is best-effort: an UNAVAILABLE authoritative read yields
     // zero meta endpoint rows (same as the pre-typed-outcome bare-array
@@ -552,39 +631,25 @@ class NodeRegistrationOwnerPublicationMethods {
       await this.readAuthoritativeMetaEndpointRowsOutcome()
         .then((outcome) => outcome.rows)
         .catch(() => []);
+    let metaEndpointWithdrawnCount = 0;
     for (const metaEndpointRow of metaEndpointRows) {
       const endpointId = normalizeString(
         metaEndpointRow?.[COLUMN.ENDPOINT_ID],
       );
-      if (endpointId.length === 0) {
-        continue;
-      }
-      try {
-        await this.updateJoinAdmissionSystemTableRowWithRetry(
-          TABLES.SERVICE_ENDPOINTS,
-          {[COLUMN.ENDPOINT_ID]: endpointId},
-          {
-            [SERVICE_ENDPOINT_HEALTH_STATUS_COLUMN]: LOCAL_STR_UNHEALTHY,
-            [COLUMN.UPDATED_AT]: now,
-          },
-          {
-            admissionTarget:
-              JOIN_ADMISSION_WITHDRAWAL_TARGET.SERVICE_ENDPOINT,
-          },
-        );
+      if (endpointId.length > 0 && await this.withdrawEndpointAtIncarnation(
+        TABLES.SERVICE_ENDPOINTS,
+        endpointId,
+        {
+          [SERVICE_ENDPOINT_HEALTH_STATUS_COLUMN]: LOCAL_STR_UNHEALTHY,
+          [COLUMN.UPDATED_AT]: now,
+        },
+        JOIN_ADMISSION_WITHDRAWAL_TARGET.SERVICE_ENDPOINT,
+      )) {
         metaEndpointWithdrawnCount += 1;
-      } catch (endpointError) {
-        logger.warn(LOG_FAILED_JOIN_ENDPOINT_WITHDRAWAL_FAILED, {
-          nodeId: this.nodeId,
-          tableName: TABLES.SERVICE_ENDPOINTS,
-          endpointId,
-          error: endpointError.message,
-        });
       }
     }
 
-    const nodeMutationAcceptance =
-      classifyJoinAdmissionMutationAcceptance(nodeResult);
+    const nodeMutationAcceptance = nodeWithdrawal.acceptance;
     return {
       success: nodeMutationAcceptance.success,
       accepted: nodeMutationAcceptance.accepted,
@@ -620,27 +685,33 @@ class NodeRegistrationOwnerPublicationMethods {
         ),
     };
     if (tableName === TABLES.NODES) {
-      return membershipPublicationRuntimeOwner.upsertJoinNode(
-        rowData,
-        mutationOptions,
-      );
+      return this.registerJoinNodeRow(rowData, mutationOptions);
     }
-    if (tableName === TABLES.NODE_ENDPOINTS) {
-      return membershipPublicationRuntimeOwner.upsertJoinNodeEndpoint(
-        rowData,
-        mutationOptions,
-      );
-    }
-    if (tableName !== TABLES.SERVICE_ENDPOINTS) {
+    if (tableName !== TABLES.NODE_ENDPOINTS &&
+        tableName !== TABLES.SERVICE_ENDPOINTS) {
       throw new Error(
         `${NODE_REGISTRATION_ERROR.UNSUPPORTED_PUBLICATION_TABLE}: ` +
         `${tableName}`,
       );
     }
-    return membershipPublicationRuntimeOwner.upsertJoinServiceEndpoint(
-      rowData,
-      mutationOptions,
-    );
+    // Endpoint rows are born or advanced at this boot's exact incarnation;
+    // a newer incarnation's row is never replaced.
+    const endpointOutcome =
+      await membershipPublicationRuntimeOwner.writeJoinEndpointAtIncarnation(
+        tableName,
+        rowData,
+        this.getRegistrationBootIncarnation(),
+        mutationOptions,
+      );
+    const completed =
+      isEndpointIncarnationOutcomeCompleted(endpointOutcome.outcome) &&
+      endpointOutcome.outcome !== ENDPOINT_INCARNATION_OUTCOME.ALREADY_ABSENT;
+    if (!completed && endpointOutcome.error) throw endpointOutcome.error;
+    return {
+      success: completed,
+      outcome: endpointOutcome.outcome,
+      error: completed ? null : endpointOutcome.outcome,
+    };
   }
 
   getJoinTimeUpsertOptions() {

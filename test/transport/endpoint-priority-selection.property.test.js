@@ -18,12 +18,12 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
-  CDC_OPERATION,
   COLUMN,
   ENDPOINT_STATUS,
-  TABLES,
   TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
+import {publishRegisteredEndpoint} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 /**
  * Available transport types for testing.
@@ -124,11 +124,8 @@ function createEndpointRecord(nodeId, transportType, priority, status) {
  * @param {Object} endpoint - The endpoint record
  */
 function addEndpointToCache(cache, endpoint) {
-  cache.applySystemTableChange(
-    TABLES.NODE_ENDPOINTS,
-    CDC_OPERATION.INSERT,
-    endpoint,
-  );
+  // The node registers at its incarnation and publishes its endpoints at it.
+  publishRegisteredEndpoint(cache, endpoint);
 }
 
 /**

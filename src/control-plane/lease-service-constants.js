@@ -11,12 +11,10 @@ const LEASE_EMPTY_QUERY_PARAMS = Object.freeze([]);
 const LEASE_NOW = () => Date.now();
 
 const LEASE_CONFIG_KEY = Object.freeze({
-  READY_LEASE_MS: CONFIG_KEY.CONTROL_PLANE_READY_LEASE_MS,
   SWEEP_INTERVAL_MS: CONFIG_KEY.CONTROL_PLANE_LEASE_SWEEP_INTERVAL_MS,
 });
 
 const LEASE_DEFAULT = Object.freeze({
-  READY_LEASE_MS: TIME_MS.CONTROL_PLANE_READY_LEASE,
   SWEEP_INTERVAL_MS: TIME_MS.CONTROL_PLANE_LEASE_SWEEP_INTERVAL,
 });
 
@@ -41,6 +39,8 @@ const LEASE_LOG_MSG = Object.freeze({
     'Reaped stale failed-join node row: status driven to STOPPED',
   REAPER_ROW_STOP_FAILED:
     'Failed to drive stale failed-join node row to STOPPED',
+  REAPER_SKIPPED_OBSERVATION_SUPERSEDED:
+    'Skipped stale-row reap: the lease observation that authorized it was superseded',
   SWEEP_STALE_ROWS_REAPED: 'Reaped stale failed-join rows',
 });
 

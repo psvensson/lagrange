@@ -16,9 +16,12 @@ import {
   ENDPOINT_SYNC_SOURCE_QUERY,
 } from './endpoint-sync-constants.js';
 import {
+  SOURCE_NODE_INCARNATION_SQL,
   buildEndpointSourceQuery,
   normalizeEndpointRows,
 } from './endpoint-sync-source-query.js';
+import {selectCurrentEndpointRows} from
+  '../control-plane/owners/endpoint-incarnation-currentness.js';
 
 const LOCAL_STR_ENDPOINTSYNCSOURCECLIENT = 'EndpointSyncSourceClient';
 const LOCAL_STR_QUERY = 'query';
@@ -196,14 +199,18 @@ class EndpointSyncSourceClient {
     let lastError = null;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        const rows = await this._executeQueryOnce({
+        const read = (sql, params) => this._executeQueryOnce({
           adminStreamUrl: options.adminStreamUrl,
           adminAuthToken: options.adminAuthToken || null,
-          sql: query.sql,
-          params: query.params,
+          sql,
+          params,
           timeoutMs,
         });
-        return normalizeEndpointRows(rows);
+        const rows = await read(query.sql, query.params);
+        const nodeRows = await read(SOURCE_NODE_INCARNATION_SQL, []);
+        // Only the endpoint incarnation authority's current view is
+        // exported: a stale incarnation's endpoint is never advertised.
+        return normalizeEndpointRows(selectCurrentEndpointRows(rows, nodeRows));
       } catch (error) {
         lastError = error;
         if (attempt === maxRetries) {

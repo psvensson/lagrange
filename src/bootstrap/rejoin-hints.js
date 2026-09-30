@@ -80,7 +80,6 @@ const CONFLICTING_DURABLE_EVIDENCE_ERROR_MESSAGE =
   'cluster bootstrap';
 const REJOIN_HINTS_PERSIST_FAILED_LOG_MESSAGE =
   'Failed to persist cluster rejoin hints';
-const BOOT_INCARNATION_INCREMENT = 1;
 const UNKNOWN_AUTO_REJOIN_DECISION_STATE_ERROR_PREFIX =
   'Unknown auto-rejoin startup decision state: ';
 const UNKNOWN_AUTO_REJOIN_MEMBERSHIP_OUTCOME_STATE_ERROR_PREFIX =
@@ -98,12 +97,10 @@ function withClusterId(snapshot, clusterId) {
     snapshot;
 }
 
-// Attach the boot incarnation to one hints snapshot only when one is known:
-// the counter is minted at boot (previous persisted value + 1) and captured
-// by the persistence service, so the 1s cadence rewrites emit the SAME value
-// — the field increments exactly once per boot, never per write. An absent
-// incarnation leaves the field OFF the object entirely (pre-incarnation
-// hints files stay read-back compatible).
+// Attach the boot incarnation to one hints snapshot only when one is known.
+// The hints are a projection: the authority is the boot incarnation owner
+// (boot-incarnation-owner.js), which reserved the value durably before this
+// boot used it. An absent incarnation leaves the field OFF the object.
 function withBootIncarnation(snapshot, bootIncarnation) {
   return Number.isSafeInteger(bootIncarnation) && bootIncarnation > 0 ?
     {...snapshot, bootIncarnation} :
@@ -263,36 +260,6 @@ async function readPersistedLocalClusterId(dataDir) {
   return typeof clusterId === 'string' && clusterId.length > 0 ?
     clusterId :
     null;
-}
-
-/**
- * Read the boot incarnation persisted with the rejoin hints. The counter is
- * node-local and monotonic across boots: each boot reads the previous value
- * and mints the next one, so a zombie process from an earlier boot provably
- * carries a smaller incarnation than the current owner of the data dir.
- * @param {string} dataDir - Data directory holding the rejoin hints file.
- * @return {Promise<number>} The persisted boot incarnation, or 0 when
- *   absent (fresh node or pre-incarnation hints file).
- */
-async function readPersistedBootIncarnation(dataDir) {
-  const hints = await readRejoinHints(dataDir);
-  const bootIncarnation = hints?.bootIncarnation;
-  return Number.isSafeInteger(bootIncarnation) && bootIncarnation > 0 ?
-    bootIncarnation :
-    0;
-}
-
-/**
- * Mint this boot's incarnation: the previous persisted value plus one. The
- * result is captured once at boot and threaded into every hints write, so
- * the counter increments exactly once per boot even though the persistence
- * cadence rewrites the file every second.
- * @param {string} dataDir - Data directory holding the rejoin hints file.
- * @return {Promise<number>} The freshly minted boot incarnation (>= 1).
- */
-async function mintBootIncarnation(dataDir) {
-  const previous = await readPersistedBootIncarnation(dataDir);
-  return previous + BOOT_INCARNATION_INCREMENT;
 }
 
 function hintsMatchLocalIdentity(hints, nodeId, nodeAddress) {
@@ -686,9 +653,8 @@ class RejoinHintsPersistenceService {
     this.nodeId = options.nodeId || null;
     this.nodeAddress = options.nodeAddress || null;
     this.nodeRole = options.nodeRole || null;
-    // Captured once at boot (mintBootIncarnation) and held for the process
-    // lifetime: the 1s cadence rewrites the file with the SAME value, so
-    // the counter increments exactly once per boot.
+    // Reserved once per boot lifecycle by the boot incarnation owner and
+    // projected here unchanged: the 1s cadence never advances it.
     this.bootIncarnation = Number.isSafeInteger(options.bootIncarnation) &&
       options.bootIncarnation > 0 ?
       options.bootIncarnation :
@@ -778,9 +744,7 @@ export {
   buildBootstrapRejoinHintsSnapshot,
   buildRejoinHintsSnapshot,
   persistBootstrapRejoinHints,
-  mintBootIncarnation,
   probeRecoverablePeerAddress,
-  readPersistedBootIncarnation,
   readPersistedLocalClusterId,
   readPersistedLocalNodeId,
   readRejoinHints,

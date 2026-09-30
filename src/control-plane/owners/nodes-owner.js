@@ -40,10 +40,6 @@ class NodesOwner extends SystemMetadataOwnerBase {
     return this.insertRow(row, options);
   }
 
-  async upsertNode(row, options = {}) {
-    return this.upsertRow(row, options);
-  }
-
   async updateNode(nodeId, data, options = {}) {
     return this.updateByPrimaryKey(nodeId, data, options);
   }

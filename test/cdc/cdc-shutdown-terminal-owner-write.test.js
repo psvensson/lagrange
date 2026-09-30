@@ -456,7 +456,7 @@ test('(iv) shutdown lands while the CDC service holds its own retry delay: ' +
 test('(v) shutdown lands while a write waits for an engine that never ' +
   'arrived: the delay ends at once, terminal', async () => {
   const composed = composeSeedWriters({withEngine: false});
-  const box = track(composed.nodesOwner.upsertNode({
+  const box = track(composed.nodesOwner.insertNode({
     node_id: JOINER_NODE_ID,
     node_address: `ws://${JOINER_NODE_ID}`,
     status: NODE_STATUS.ACTIVE,
@@ -480,7 +480,7 @@ test('(vi) a write that arrives after shutdown began is refused before any ' +
   const composed = composeSeedWriters();
   // The mark lands first; the engine is still registered.
   composed.cdcIntegrationService.markShuttingDown();
-  const box = track(composed.nodesOwner.upsertNode({
+  const box = track(composed.nodesOwner.insertNode({
     node_id: JOINER_NODE_ID,
     node_address: `ws://${JOINER_NODE_ID}`,
     status: NODE_STATUS.ACTIVE,

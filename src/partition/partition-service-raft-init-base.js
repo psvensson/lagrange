@@ -387,10 +387,9 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       }
     });
     if (this.transport) {
-      this.transport.register(
-        this.unifiedAddress,
-        this.handleTransportMessage.bind(this),
-      );
+      // Kept as this replica's exact handler identity (owner decision N2).
+      this.transportHandler = this.handleTransportMessage.bind(this);
+      this.transport.register(this.unifiedAddress, this.transportHandler);
     }
     this.role = RaftRole.FOLLOWER;
     const config = ConfigurationManager.getInstance();

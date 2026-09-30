@@ -130,12 +130,21 @@ test('FAILED stays authoritative when its REMOVING write did not durably apply',
       },
     });
     const replicaId = 'replica_operations-p1-r6';
-    stateMachine._applyTransition(replicaId, ReplicaState.PENDING, {
+    // The FAILED generation is installed from its authoritative durable row
+    // (full identity + lifecycle generation); only such a replica has a
+    // lifecycle CAS to attempt.
+    stateMachine.registerReplicaSnapshot(replicaId, {
       partitionId: 'replica_operations-p1',
-    }, {persist: false});
-    stateMachine._applyTransition(replicaId, ReplicaState.FAILED, {
-      partitionId: 'replica_operations-p1',
-    }, {persist: false});
+      nodeId: 'test-node',
+      state: ReplicaState.FAILED,
+      serviceId: replicaId,
+      replicaIdentity: replicaId,
+      groupId: null,
+      createdAt: 100,
+      durableVersionColumn: 'state_entered_at',
+      durableVersion: 200,
+      authoritativeSnapshot: true,
+    });
 
     let refusal = null;
     try {

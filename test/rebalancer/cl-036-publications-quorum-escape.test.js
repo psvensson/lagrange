@@ -8,6 +8,8 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {withRegisteredIncarnations} from
+  '../test-helpers/endpoint-incarnation-fixture.js';
 
 // CL-036: control_plane_publications-p1 spread recovery wedged under rolling
 // restart because the critical-topology settling gate counted any
@@ -62,7 +64,7 @@ const serviceEndpoint = (nodeId) => ({
 });
 
 function createCache() {
-  const rows = {
+  const rows = withRegisteredIncarnations({
     nodes: [nodeRow(SEED, READY), nodeRow(NODE_B, READY), nodeRow(NODE_C, STALE)],
     partitions: [{partition_id: PARTITION_ID, table_id: TABLE_ID}],
     // Endpoint visibility is complete (the run4 wedge blocker was exclusively
@@ -77,7 +79,7 @@ function createCache() {
     services: [],
     tables: [],
     replica_operations: [],
-  };
+  });
   return {
     get: (t, key) =>
       (rows[t] || []).find((r) => r.partition_id === key || r.node_id === key) ||
