@@ -10,6 +10,15 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+### Fixed
+- Docker now preserves the complete npm-installed production dependency tree.
+  Package-internal pruning previously removed the SQL dialect parser modules
+  and prevented the `0.2.2` image from starting. An ordinary release-contract
+  regression now rejects post-install dependency mutations before tagging.
+- Solver and CI can execute the full proof explicitly when the change selector
+  requires it. Unknown scope still refuses, including when mixed with a release
+  change; hosted CI refuses early with a controlled-runner routing diagnostic.
+
 ## [0.2.2] — 2026-09-11
 
 This forward patch preserves the immutable `v0.2.1` tag after its release

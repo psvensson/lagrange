@@ -77,6 +77,7 @@ export const IMPACT_CONTRACTS_PATH = 'test/shards/impact-contracts.json';
 // proof the operator must run.
 export const REFUSAL_UNKNOWN_SCOPE = 'UNKNOWN_SCOPE';
 export const REFUSAL_RELEASE_PROOF_REQUIRED = 'RELEASE_PROOF_REQUIRED';
+export const ALLOW_RELEASE_PROOF_FLAG = '--allow-release-proof';
 
 // package.json is not semantically one subsystem. Editing `scripts` is dev
 // tooling; editing the runtime package surface or the dependency set changes

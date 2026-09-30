@@ -12,7 +12,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## top-level
 
-- `check` — `node scripts/check-fast-static.js && npm test`
+- `check` — `node scripts/check-fast-static.js && npm test -- --allow-release-proof`
 - `cli` — `node src/cli/bin/lagrange-admin.js`
 - `commands` — Print the curated Quest-first command quickstart.
 - `gate` — Run the rolling-restart statistical gate (scripts/rolling-restart-stat-gate.sh).

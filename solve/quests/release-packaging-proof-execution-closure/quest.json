@@ -1,0 +1,43 @@
+{
+  "schema": "solve-quest/2",
+  "id": "release-packaging-proof-execution-closure",
+  "class": "fix",
+  "epic": "release-process-simplification",
+  "statement": "Docker consumes the complete npm-owned production dependency tree without package-internal pruning, ordinary safety-spine tests reject post-install mutation, and the change-proof orchestrator provides an explicit full-proof execution handoff used by Solver and CI for known release-surface changes while unknown scope and invalid proof authority still refuse without execution.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/release-packaging-proof-execution-closure/evidence/receipt.json",
+      "requiredReceipts": [
+        "tagged-failure-and-red-packaging-regression",
+        "intact-dependency-owner-and-dialect-witnesses",
+        "red-green-full-proof-handoff-and-refusal-safety",
+        "independent-category-complete-review",
+        "static-and-full-release-proof"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-owner",
+      "statement": "npm owns installed package internals; the selector owns proof requirements; the orchestrator alone executes them. Do not reconstruct these decisions in Solver or workflow YAML."
+    },
+    {
+      "id": "explicit-full-proof",
+      "statement": "Keep ordinary modular refusal and side-effect-free explain/list modes. An explicit execution option may run check:release only for the authoritative RELEASE_PROOF_REQUIRED result. Unknown or invalid scope must refuse, including mixed changes."
+    },
+    {
+      "id": "bounded-scope",
+      "statement": "Own Docker packaging, the selector-to-executor-to-Solver/CI handoff, their tests, release/workflow documentation and generated metadata. Preserve SQL behavior, all existing test gates and publication credentials."
+    },
+    {
+      "id": "retained-predecessor-obligations",
+      "statement": "Retain the predecessor Docker red regression, both production SQL dialect witnesses, independent packaging review and required static/change proof. Do not claim a structural witness proves a built image."
+    },
+    {
+      "id": "forward-only-release",
+      "statement": "Never move existing tags or bypass gates. Publish the repaired exact commit, obtain exact-SHA CI and preflight, then ship the next 0.2 patch through the existing artifact publisher."
+    }
+  ],
+  "sealedAt": "59f3427c1557618c65f8dcd36d506826e8ffcbcf"
+}

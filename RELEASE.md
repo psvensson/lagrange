@@ -96,11 +96,28 @@ instead of frozen. A patch release for one fix follows the same steps.
 
 ## Per-head proof, once
 
-Each landed head is proven in full exactly once: the pre-push hook runs the
-full test corpus before the push and `ci.yml` runs the impact cone after it.
+Changes to shipped surfaces such as `Dockerfile` require the full proof rather
+than a modular cone. `npm test` reports that requirement without executing it;
+`npm test -- --allow-release-proof` executes the canonical `check:release`
+command for that typed requirement only. Solver landing and `npm run check`
+request this handoff. Unknown scope and invalid proof authority still refuse,
+even when the same change also touches a shipped surface; explain/list modes
+never execute a proof.
+
+For such a push, use the existing controlled-runner route: include
+`[ci:self-hosted]` in the reviewed head commit and publish with
+`npm run publish -- --runner self-hosted`. Hosted CI refuses the full corpus
+before spawning it, rather than running beyond its resource baseline. Pull
+requests never route fork code to a self-hosted runner. Ordinary changes keep
+their modular proof and default hosted route. This does not move a release tag
+or publish release artifacts; those remain owned by `release.yml`.
+
+The publisher proves the exact committed head before pushing; `ci.yml` proves
+the complete pushed range afterward. For ordinary changes CI runs the impact
+cone; a required full-proof handoff runs the full command instead.
 `npm run check:release` (the corpus plus the project-hardening acceptance)
-runs only inside `release.yml` on the tagged SHA, and on demand through
-`full-gate.yml`. Release-time re-runs of the corpus, local gate receipts and
+runs for a required full-proof handoff, inside `release.yml` on the tagged SHA,
+and on demand through `full-gate.yml`. Release-time local gate receipts and
 digest-bound release row Quests were removed on 2026-09-05.
 
 ## Formation health

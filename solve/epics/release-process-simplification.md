@@ -6,6 +6,8 @@ legacy: true
 roadmapRow: null
 graduatesTo: null
 quests:
+  - release-packaging-proof-execution-closure
+  - docker-runtime-sql-parser-dependency-closure
   - release-process-simplification-v2
   - release-process-simplification
 authorizes: []

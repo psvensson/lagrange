@@ -1,0 +1,15 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "tagged-failure-and-red-packaging-regression", "passed": true,
+      "detail": "Tagged run34560572256 at59f3427c1 failed actual Docker smoke with missing node-sql-parser/build/sqlite.js; all publication skipped. Actual Dockerfile regression red on pruning and preinstall manifest rewrites."},
+    {"id": "intact-dependency-owner-and-dialect-witnesses", "passed": true,
+      "detail": "Final npm ci owns complete production dependency tree. Complete builder/runtime allowlist in safety spine; existing SQLite and PostgreSQL production parser witnesses pass."},
+    {"id": "red-green-full-proof-handoff-and-refusal-safety", "passed": true,
+      "detail": "Disposable real selector npm tripwire proves explicit fixed full-proof dispatch, child failure propagation, and zero execution for mixed unknown, invalid spine, list, explain, hosted/missing/unknown Actions runner. Ordinary docs remain modular."},
+    {"id": "independent-category-complete-review", "passed": true,
+      "detail": "subagent:verify_authoritative_absence_final content APPROVE; aggregate755664cece46f7b56a329d54156805681d4fce24fa2fbba58b3eacae146db28c; independent focused735/735 and touched ESLint pass. Canonical full proof remains separately required."},
+    {"id": "static-and-full-release-proof", "passed": false}
+  ]
+}

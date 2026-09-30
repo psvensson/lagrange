@@ -28,6 +28,8 @@ function createChangeProofFixture({
     const env = {...process.env};
     delete env[checkBaseEnvironment];
     delete env[workspaceInjectionEnvironment];
+    delete env.RUNNER_ENVIRONMENT;
+    delete env.GITHUB_ACTIONS;
     if (preload) {
       env.NODE_OPTIONS = [env.NODE_OPTIONS, `--require=${preload}`]
         .filter(Boolean).join(' ');
@@ -92,12 +94,12 @@ function createChangeProofFixture({
     };
   }
 
-  function proofFor(changes, {env = fixtureEnv()} = {}) {
+  function proofFor(changes, {env = fixtureEnv(), args = []} = {}) {
     assert.ok(repo.startsWith(os.tmpdir()),
       'the fixture must never be a real checkout');
     fs.rmSync(sentinel, {force: true});
     writeChanges(changes);
-    const result = spawnSync(process.execPath, [ORCHESTRATOR],
+    const result = spawnSync(process.execPath, [ORCHESTRATOR, ...args],
       {cwd: repo, encoding: UTF8, env});
     const proof = resultWithInvocation(result);
     restoreFixture();

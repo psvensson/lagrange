@@ -54,6 +54,42 @@ const ACTIVE_RELEASE_SURFACES = [
 ];
 
 describe('project hardening contracts', () => {
+  it('copies the npm-owned production dependency tree without post-install pruning', async () => {
+    // v0.2.2 built an image after deleting node-sql-parser/build, despite
+    // production importing dialects from it. npm, not Docker, owns package
+    // internals. Pin the handoff instead of another list of files to retain.
+    const dockerfile = (await readFile('Dockerfile', UTF8))
+      .replace(/^\s*#.*$/gmu, '')
+      .replace(/\\\r?\n\s*/gu, ' ')
+      .replace(/[ \t]+/gu, ' ')
+      .trim();
+    const stages = dockerfile.split(/(?=^FROM )/gmu);
+    assert.equal(stages.length, 2, 'the dependency handoff has exactly two stages');
+    const [builder, runtime] = stages;
+    assert.match(builder, /^FROM \S+ AS builder\n/u);
+    assert.match(builder.trim(), /\nRUN npm ci --omit=dev --no-audit --no-fund$/u,
+      'npm must be the last writer of the builder dependency tree');
+    assert.deepEqual(builder.split('\n').map((line) => line.trim()).filter(Boolean), [
+      'FROM node:22-slim AS builder',
+      'WORKDIR /app',
+      'COPY package.json package-lock.json ./',
+      'RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++' +
+        ' && rm -rf /var/lib/apt/lists/*',
+      'RUN npm ci --omit=dev --no-audit --no-fund',
+    ], 'builder must install untouched manifest inputs without npm configuration overrides');
+    const runtimeInstructions = runtime.split('\n').map((line) => line.trim()).filter(Boolean);
+    assert.deepEqual(runtimeInstructions.map((line) => line.split(/\s/u)[0]), [
+      'FROM', 'WORKDIR', 'COPY', 'COPY', 'COPY',
+      'ARG', 'ARG', 'ARG', 'LABEL', 'EXPOSE', 'CMD',
+    ], 'runtime packaging must not add a second dependency mutation path');
+    assert.equal(runtimeInstructions[1], 'WORKDIR /app');
+    assert.deepEqual(runtimeInstructions.filter((line) => line.startsWith('COPY ')), [
+      'COPY --from=builder /app/node_modules ./node_modules',
+      'COPY package.json ./',
+      'COPY src/ ./src/',
+    ], 'copy the complete npm tree without overlays or selective package copies');
+  });
+
   it('keeps network defaults local and mutation enforcement active', () => {
     assert.equal(ADMIN_DEFAULT.HOST, '127.0.0.1');
     assert.equal(ADMIN_DEFAULT.ENFORCEMENT_MODE, 'enforce');
