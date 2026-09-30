@@ -51,6 +51,15 @@ function durableRowVersion(service) {
   return null;
 }
 
+// A new lifecycle state entry is strictly later than the generation it
+// supersedes, even when the clock is unchanged or regressed; otherwise a
+// delayed CAS or removal fenced on the superseded generation could match the
+// new state (same-state ABA). Every replica lifecycle owner stamps through this.
+function nextLifecycleStateEntry(observedNow, supersededVersion) {
+  return Number.isFinite(supersededVersion) ?
+    Math.max(observedNow, supersededVersion + 1) : observedNow;
+}
+
 function buildLifecycleIdentityPredicate(fields, version) {
   if (typeof fields.serviceId !== 'string' ||
       typeof fields.serviceType !== 'string' ||
@@ -246,6 +255,7 @@ export {
   buildReplicaLifecycleMutationPredicateFromState,
   durableRowVersion,
   isReplicaLifecycleMutationPredicate,
+  nextLifecycleStateEntry,
   installAuthoritativeReplicaLifecycleSnapshot,
   observeAuthoritativeReplicaLifecycle,
   readAuthoritativePartitionLeader,

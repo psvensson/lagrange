@@ -10,7 +10,7 @@ import {RAFT_ROLE} from '../raft/constants.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {classifyControlPlaneMutationResult} from
   '../control-plane/control-plane-mutation-outcome-classifier.js';
-import {durableRowVersion} from
+import {durableRowVersion, nextLifecycleStateEntry} from
   '../node/replica-state-machine-lifecycle-observation.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -233,8 +233,11 @@ function buildMessageGroupActivationPredicate(source) {
     created_at: source.created_at, [generation.column]: generation.value};
 }
 
+// Every MG lifecycle transition (ACTIVE and STOPPED staging) stamps a new
+// state entry strictly later than the source generation it supersedes.
 async function persistMessageGroupActivation(owner, source, options) {
-  const transitionAt = options.timestamp ?? owner.now();
+  const transitionAt = nextLifecycleStateEntry(
+    options.timestamp ?? owner.now(), durableRowVersion(source).value);
   const updates = {status: options.status,
     raft_role: resolveMessageGroupRaftRole(options.service),
     address: source.address, state_entered_at: transitionAt,

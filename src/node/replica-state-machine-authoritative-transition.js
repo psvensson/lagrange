@@ -5,6 +5,7 @@ import {
   buildReplicaLifecycleMutationPredicateFromRow,
   durableRowVersion,
   isReplicaLifecycleMutationPredicate,
+  nextLifecycleStateEntry,
   observeAuthoritativeReplicaLifecycle,
   rowMatchesReplicaLifecyclePredicate,
 } from './replica-state-machine-lifecycle-observation.js';
@@ -49,7 +50,8 @@ function expectedLifecycleDestination(sourceRow, newState, timestamp) {
       sourceRow?.service_id,
     );
   }
-  const destinationVersion = Math.max(timestamp, sourceVersion.value + 1);
+  const destinationVersion =
+    nextLifecycleStateEntry(timestamp, sourceVersion.value);
   // The destination is the lifecycle generation (identity + status +
   // previous_state + state_entered_at), never updated_at: role and heartbeat
   // writes advance updated_at on the same row without changing its lifecycle.

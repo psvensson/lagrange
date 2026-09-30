@@ -17,6 +17,7 @@ import {
 import {
   buildReplicaLifecycleMutationPredicateFromState,
   isReplicaLifecycleMutationPredicate,
+  nextLifecycleStateEntry,
   observeAuthoritativeReplicaLifecycle,
   readAuthoritativeReplicaLifecycle,
   resolveReplicaCreateGroupId,
@@ -127,8 +128,7 @@ function resolveTransitionTimestamp(stateMachine, existingState, context) {
     existingState.durableVersion : existingState?.stateEnteredAt;
   return {
     observedNow,
-    now: Number.isFinite(sourceVersion) ?
-      Math.max(observedNow, sourceVersion + 1) : observedNow,
+    now: nextLifecycleStateEntry(observedNow, sourceVersion),
   };
 }
 
