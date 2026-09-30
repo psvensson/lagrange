@@ -712,7 +712,9 @@ test('NodeJoiningService - MOVE_REPLICA seed registration preserves ' +
   const TEST_GROUP_ID = 'mg-1';
   const TEST_REPLICA_ID = 'mg-1-r0';
   const TEST_ASSIGNMENT_ID = '5ef301f9-6f73-4cb5-bb4e-8d73ef2a9ce7';
-  const TEST_REQUESTED_STATUS = SERVICE_STATUS.ACTIVE;
+  // A join registration is a birth under D1: the row is born STOPPED and its
+  // activation is the later handler-bound CAS, not this write.
+  const TEST_REQUESTED_STATUS = SERVICE_STATUS.STOPPED;
   let httpCalls = 0;
   let httpPayload = null;
   const upsertCalls = [];

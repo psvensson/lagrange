@@ -11,6 +11,7 @@ const {
   NodeService,
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
+  SERVICE_STATUS,
   TABLES,
   UNIFIED_SERVICE_TYPE,
   activateMessageGroupServiceRows,
@@ -273,7 +274,11 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
       groupId,
       replicaId,
       service,
-      options,
+      // A join registration is a birth: absent an explicit status the row is
+      // born STOPPED and becomes ACTIVE only through the handler-bound
+      // activation; an explicit non-STOPPED status stays refused by the row
+      // owner's guard.
+      {status: SERVICE_STATUS.STOPPED, ...options},
     );
   }
   hasPublishedLocalServiceEndpoints() {
