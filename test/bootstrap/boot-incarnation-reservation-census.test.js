@@ -35,10 +35,6 @@ const DEFAULT_SHAPES = Object.freeze({
 });
 
 const SITE_CLASS = Object.freeze({
-  // The owner's own "issued so far" watermark (0 = this data directory never
-  // issued one). It is a count the owner reads, never an incarnation handed
-  // to a lifecycle.
-  OWNER_ISSUED_WATERMARK: 'owner_issued_watermark',
   // A connection slot or a decoded remote error before/without the PEER's
   // identification: an observation of another node, not this node's
   // lifecycle incarnation.
@@ -46,8 +42,6 @@ const SITE_CLASS = Object.freeze({
 });
 
 const CLASSIFIED_SITES = Object.freeze({
-  'src/bootstrap/boot-incarnation-owner.js#else_zero':
-    {count: 1, siteClass: SITE_CLASS.OWNER_ISSUED_WATERMARK},
   'src/control-plane/control-plane-error-classification.js#normalizer':
     {count: 1, siteClass: SITE_CLASS.REMOTE_PEER_OBSERVATION},
   'src/transport/message-router-connection-authority.js#literal_zero':
@@ -135,6 +129,7 @@ test('no lifecycle path manufactures a default boot incarnation: every ' +
     'src/control-plane/heartbeat-service.js',
     'src/transport/message-router.js',
     'src/bootstrap/rejoin-hints.js',
+    OWNER_FILE,
   ]) {
     t.notOk(Object.keys(sites).some((site) =>
       site.startsWith(`${lifecycleOwner}#`)),

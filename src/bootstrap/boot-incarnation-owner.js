@@ -6,7 +6,8 @@ import {
   readCanonicalJson,
   writeAtomicDurable,
 } from '../runtime/oci-host-agent-durable-files.js';
-import {readRejoinHints} from './rejoin-hints-durable-evidence.js';
+import {readRejoinHintsOutcome} from './rejoin-hints-durable-evidence.js';
+import {DURABLE_EVIDENCE_STATE} from './rejoin-hints-constants.js';
 import {isIssuedBootIncarnation} from './boot-incarnation-contract.js';
 
 /**
@@ -38,6 +39,10 @@ const BOOT_INCARNATION_ERROR_CODE = Object.freeze({
   STATE_UNREADABLE: 'BOOT_INCARNATION_STATE_UNREADABLE',
 });
 const FILE_NOT_FOUND_ERROR = 'ENOENT';
+// "This data directory has issued nothing yet": a count, never an
+// incarnation handed to a lifecycle.
+const NOTHING_ISSUED = 0;
+const HINTS_COUNTER_FIELD = 'bootIncarnation';
 
 function bootIncarnationError(code, cause = null) {
   const error = new Error(`Boot incarnation owner: ${code}`);
@@ -78,7 +83,7 @@ function readOwnedReservationState(file) {
 }
 
 function readOwnedReservation(file) {
-  if (!stateFileExists(file)) return 0;
+  if (!stateFileExists(file)) return NOTHING_ISSUED;
   const state = readOwnedReservationState(file);
   if (!exactKeys(state, BOOT_INCARNATION_STATE_FIELDS) ||
       state.version !== BOOT_INCARNATION_STATE_VERSION ||
@@ -88,11 +93,31 @@ function readOwnedReservation(file) {
   return state.reserved;
 }
 
+// The legacy floor carried by the rejoin hints, from the hints reader's typed
+// outcome. ABSENT (no hints file, or hints written before incarnations
+// existed and carrying no counter) is a real "issued nothing": floor 0.
+// PRESENT but unreadable, unparseable, or carrying a counter the owner could
+// not have issued fails closed: a damaged projection may hide an incarnation
+// already issued, so it is never collapsed to "fresh".
 async function readLegacyHintsFloor(dataDir) {
-  const hints = await readRejoinHints(dataDir);
-  return isIssuedBootIncarnation(hints?.bootIncarnation) ?
-    hints.bootIncarnation :
-    0;
+  const hintsRead = await readRejoinHintsOutcome(dataDir);
+  if (hintsRead.state === DURABLE_EVIDENCE_STATE.MISSING) {
+    return NOTHING_ISSUED;
+  }
+  if (hintsRead.state !== DURABLE_EVIDENCE_STATE.READABLE) {
+    throw bootIncarnationError(BOOT_INCARNATION_ERROR_CODE.STATE_UNREADABLE);
+  }
+  return readHintsCounter(hintsRead.hints);
+}
+
+function readHintsCounter(hints) {
+  if (!Object.prototype.hasOwnProperty.call(hints, HINTS_COUNTER_FIELD)) {
+    return NOTHING_ISSUED;
+  }
+  if (!isIssuedBootIncarnation(hints[HINTS_COUNTER_FIELD])) {
+    throw bootIncarnationError(BOOT_INCARNATION_ERROR_CODE.STATE_UNREADABLE);
+  }
+  return hints[HINTS_COUNTER_FIELD];
 }
 
 /**
