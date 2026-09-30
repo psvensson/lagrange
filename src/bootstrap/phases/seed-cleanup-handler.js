@@ -19,10 +19,6 @@ import {
 import {
   NodeState,
 } from '../../node/node-lifecycle-state-machine.js';
-import {
-  ADDRESS,
-  ENTITY_TYPE,
-} from '../../constants/index.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
@@ -330,18 +326,10 @@ class SeedCleanupHandler {
         }
       }
 
-      const messageRouter = d.getMessageRouter();
-      if (messageRouter) {
-        for (const [replicaId, partition] of
-          d.getPartitionServices()) {
-          const address = partition?.getUnifiedAddress ?
-            partition.getUnifiedAddress() :
-            `${d.getNodeId()}${ADDRESS.SEPARATOR}` +
-            `${ENTITY_TYPE.PARTITION}` +
-            `${ADDRESS.SEPARATOR}${replicaId}`;
-          messageRouter.unregister(address);
-        }
-      }
+      // partition.shutdown() retired its exact handler through the replica
+      // lifecycle owner, and no successor can occupy the address before this
+      // point; a by-address removal here could only remove a successor's
+      // handler. Router shutdown is the node-lifetime backstop.
       d.getPartitionServices().clear();
       d.resetPartitionReplicas();
 
@@ -569,18 +557,13 @@ class SeedCleanupHandler {
       successLogMessage: BOOTSTRAP_LOG_MSG.PARTITION_CLEANED,
       failureLogMessage: BOOTSTRAP_LOG_MSG.PARTITION_CLEANUP_FAILED,
     });
+    // Each partition.shutdown() above retired its exact handler through the
+    // replica lifecycle owner, after the replica state machine closed and the
+    // executor stopped, so no successor can occupy the address before this
+    // point: cleanup is never a second handler-removal authority (a
+    // by-address removal could only remove a successor's handler). Router
+    // shutdown below is the node-lifetime backstop.
     const messageRouter = d.getMessageRouter();
-    if (messageRouter) {
-      for (const [replicaId, partition] of
-        d.getPartitionServices()) {
-        const address = partition?.getUnifiedAddress ?
-          partition.getUnifiedAddress() :
-          `${d.getNodeId()}${ADDRESS.SEPARATOR}` +
-          `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
-          `${replicaId}`;
-        messageRouter.unregister(address);
-      }
-    }
     d.getPartitionServices().clear();
     d.resetPartitionReplicas();
 
