@@ -1,5 +1,6 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {renderSqliteIdentifier} from './sqlite-identifier.js';
+import {attachRoutingDenialCause} from './query-execution-budget.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
@@ -294,6 +295,7 @@ const queryExecutorSqlCommandMethods = {
       if (result?.deferRetry === true) {
         error.deferRetry = true;
       }
+      attachRoutingDenialCause(error, result);
       if (Array.isArray(result?.participantFailures)) {
         error.participantFailures = result.participantFailures
           .filter((entry) => entry && typeof entry === LOCAL_STR_OBJECT)

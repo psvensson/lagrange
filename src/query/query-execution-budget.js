@@ -26,9 +26,70 @@ export function resolveParticipantBackpressureState(result = {}) {
   return Number.isFinite(result?.retryAfterMs) && result.retryAfterMs > 0;
 }
 
+/**
+ * Carry the routing denial cause onto an Error that reports a partition
+ * execution failure. It is an own property beside errorCode, retryAfterMs and
+ * deferRetry - never a message, a code or a class - so every string-matching
+ * consumer of these errors keeps matching exactly as it did, and an error
+ * with no routing denial behind it keeps main's exact shape.
+ *
+ * @param {Error} error - The error about to be thrown.
+ * @param {Object|null} result - The partition execution result it reports.
+ * @return {Error} That same error.
+ */
+export function attachRoutingDenialCause(error, result) {
+  const cause = normalizeParticipantFailureString(result?.routingDenialCause);
+  if (cause !== null && error && typeof error === 'object') {
+    error.routingDenialCause = cause;
+  }
+  return error;
+}
+
+/**
+ * The routing denial cause an error-like reports, wherever it carries it: on
+ * the error itself, or on the first participant failure that names one. The
+ * counterpart of `attachRoutingDenialCause`, so reading and writing the field
+ * stay in one place.
+ *
+ * @param {Object|null} errorLike - An Error or a partition execution result.
+ * @return {string|null} The typed cause, or null when none is stated.
+ */
+export function readRoutingDenialCause(errorLike) {
+  const direct = normalizeParticipantFailureString(
+    errorLike?.routingDenialCause,
+  );
+  if (direct !== null) {
+    return direct;
+  }
+  // The failed participants, under either of the two names the query path
+  // gives them: `participantFailures` on a distributed failure, and
+  // `failedPartitions` on a partition-callback dispatcher outcome.
+  const failures = Array.isArray(errorLike?.participantFailures) ?
+    errorLike.participantFailures :
+    (Array.isArray(errorLike?.failedPartitions) ?
+      errorLike.failedPartitions :
+      []);
+  for (let index = 0; index < failures.length; index += 1) {
+    const cause = normalizeParticipantFailureString(
+      failures[index]?.routingDenialCause,
+    );
+    if (cause !== null) {
+      return cause;
+    }
+  }
+  return null;
+}
+
 export function buildParticipantFailureEntry(result) {
   return {
     partitionId: result.partitionId,
+    // The cause of the routing denial this participant failure came out of,
+    // when one did. `Partition service not found` on a heartbeat write was
+    // exactly the participant failure the traced victim saw, and it could not
+    // be told from a partition whose service rows are genuinely absent.
+    routingDenialCause: normalizeParticipantFailureString(
+      result.routingDenialCause,
+    ),
     participantNodeId: normalizeParticipantFailureString(result.participantNodeId),
     participantAddress: normalizeParticipantFailureString(result.participantAddress),
     errorCode: normalizeParticipantFailureString(result.errorCode),
@@ -59,16 +120,24 @@ export function buildDistributedFailureSummary(failedResults) {
   };
 }
 
+// `routingDenialCause` is the typed routing reason of the last resolution
+// that found no candidate at all: `all_services_filtered_by_readiness` when
+// readiness denied every active addressed row, `no_service_rows` when the
+// partition has none. The message and the code are unchanged, so a caller
+// that matched on them keeps matching; a caller that wants to tell a
+// readiness freeze from a missing service now can.
 export function buildPartitionExecutionFailureResult({
   partitionId,
   failedTable,
   errorMessage,
   details = {},
+  routingDenialCause = null,
 }) {
   return {
     partitionId,
     success: false,
     error: errorMessage || ERRORS.QUERY_FAILED,
+    routingDenialCause: normalizeParticipantFailureString(routingDenialCause),
     errorCode: normalizeParticipantFailureString(
       details?.errorCode || details?.code,
     ),

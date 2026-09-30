@@ -248,7 +248,7 @@ class HeartbeatServiceLifecycleMethods {
             stats = await options.getStats();
           } catch (error) {
             if (!attempt.timedOut) {
-              this.recordFailure('stats', error.message);
+              this.recordFailure('stats', error.message, error);
             }
             return;
           }
@@ -260,7 +260,7 @@ class HeartbeatServiceLifecycleMethods {
           await this.sendHeartbeat(stats, options.capabilities);
         } catch (error) {
           if (!attempt.timedOut) {
-            this.recordFailure('register', error.message);
+            this.recordFailure('register', error.message, error);
           }
           return;
         }

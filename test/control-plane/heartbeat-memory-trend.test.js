@@ -753,6 +753,10 @@ test('HeartbeatService prefers node-state reporter for node heartbeats', async (
         lastFailureAtMs: null,
         lastFailureStage: null,
         lastFailureReason: null,
+        // A record with no failure in it yet says so explicitly rather than
+        // leaving the routing denial cause absent (quest
+        // readiness-admission-freeze-observed).
+        lastFailureRoutingDenialCause: 'unstated',
         publicationPath: 'node_state_reporter',
         targetAddress: 'seed-1/message-group/mg-1',
         targetNodeId: 'seed-1',

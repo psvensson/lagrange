@@ -1,0 +1,54 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "readiness-admission-freeze-observed",
+  "status": "pass",
+  "testFileDigests": {
+    "test/control-plane/readiness-admission-freeze-observed.test.js": "d95cb6c85c2f07f62f2c355e69a86d2bb3527179ae5b44fcfd92cc68ffd6c572",
+    "test/query/readiness-routing-denial-observability.test.js": "d6cd5839131b9d47763a5ae793f07f9cab975e91672f7f2ed40d379232803848"
+  },
+  "generatedAt": "2026-09-19T15:56:19.908Z",
+  "receipts": [
+    {
+      "id": "deferral-transition-names-the-failing-terms",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the planning owner names the failing terms of each deferral transition$\" test/control-plane/readiness-admission-freeze-observed.test.js",
+      "detail": "each transition names exactly the failed terms, the inherited age, and on return the time spent deferred",
+      "testFile": "test/control-plane/readiness-admission-freeze-observed.test.js"
+    },
+    {
+      "id": "steady-state-logs-nothing",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a steady state logs nothing and a flap states the suppressed reads$\" test/control-plane/readiness-admission-freeze-observed.test.js",
+      "detail": "no line for repeated reads in one state; a flap is bounded by state changes and every line states its suppressed count",
+      "testFile": "test/control-plane/readiness-admission-freeze-observed.test.js"
+    },
+    {
+      "id": "refused-publish-names-its-reason",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a refused publish names its refusal reason once per change$\" test/control-plane/readiness-admission-freeze-observed.test.js",
+      "detail": "one line per refusal reason, the next reason reports the suppressed identical refusals",
+      "testFile": "test/control-plane/readiness-admission-freeze-observed.test.js"
+    },
+    {
+      "id": "routing-denial-states-record-age-and-deferral",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the routing denial states each denied candidate's record age and deferral$\" test/query/readiness-routing-denial-observability.test.js",
+      "detail": "observedAgeMs and deferred on each denied candidate, every pre-existing field byte-identical to main's frozen payload",
+      "testFile": "test/query/readiness-routing-denial-observability.test.js"
+    },
+    {
+      "id": "filtered-by-readiness-cause-is-distinguishable",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the all-filtered-by-readiness error names a distinguishable cause$\" test/query/readiness-routing-denial-observability.test.js",
+      "detail": "same message, code and result shape as a missing partition service, distinct machine-readable cause, unchanged string-matching verdict",
+      "testFile": "test/query/readiness-routing-denial-observability.test.js"
+    },
+    {
+      "id": "decisions-unchanged",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every planning and routing decision matches the frozen oracle of main$\" test/control-plane/readiness-admission-freeze-observed.test.js",
+      "detail": "served records, object identities, build counts and routing outcomes digest to main's measured value",
+      "testFile": "test/control-plane/readiness-admission-freeze-observed.test.js"
+    }
+  ]
+}

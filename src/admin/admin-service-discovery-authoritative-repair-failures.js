@@ -77,6 +77,11 @@ function normalizeFirstFailedParticipant(participant, tableName = null) {
         isRetryableControlPlaneError(participant),
     failedTable:
       normalizeParticipantString(participant.failedTable, tableName),
+    // Carried, never read: the repair's own classification reads `message`,
+    // `error`, `code`, `errorCode`, `deferRetry` and `retryAfterMs` only, so
+    // the admission cause reaches an operator without reaching a decision.
+    routingDenialCause:
+      normalizeParticipantString(participant.routingDenialCause),
   };
 }
 

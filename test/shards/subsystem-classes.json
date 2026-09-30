@@ -7,13 +7,13 @@
     "bootstrap-membership": 252,
     "cdc-metadata": 56,
     "cli-tooling": 96,
-    "control-plane": 191,
+    "control-plane": 192,
     "convergence-topology": 91,
     "distributed-harness": 165,
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 237,
-    "query-sql": 159,
+    "query-sql": 160,
     "release-packaging": 11,
     "runtime-primitives": 22,
     "services-runtime": 169,
@@ -25,10 +25,10 @@
     "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2129,
-  "digest": "fnv1a32-5b7793ab",
+  "censusSize": 2131,
+  "digest": "fnv1a32-7ccf4168",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ae8dac22",
+  "observationDigest": "fnv1a32-fbebbcde",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -599,6 +599,7 @@
     "test/control-plane/publication-snapshot-build-sync-section-attribution.test.js": "control-plane",
     "test/control-plane/publications-catchup-leader-pinned-read.test.js": "control-plane",
     "test/control-plane/read-model-contract.test.js": "control-plane",
+    "test/control-plane/readiness-admission-freeze-observed.test.js": "control-plane",
     "test/control-plane/readiness-cycle-cut-dependency-guard.test.js": "control-plane",
     "test/control-plane/readiness-owner-authority-contract.test.js": "control-plane",
     "test/control-plane/readiness-per-change-reuse.test.js": "control-plane",
@@ -1323,6 +1324,7 @@
     "test/query/query-executor-system-table-leader-fail-open.test.js": "query-sql",
     "test/query/query-executor-warn-throttle.test.js": "query-sql",
     "test/query/query-executor.test.js": "query-sql",
+    "test/query/readiness-routing-denial-observability.test.js": "query-sql",
     "test/query/reduce-by-key.test.js": "query-sql",
     "test/query/reduce-continuation.test.js": "query-sql",
     "test/query/result-stream.test.js": "query-sql",
@@ -3354,6 +3356,13 @@
       "files": [
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/rebalancer-constants.js"
+      ]
+    },
+    "test/control-plane/readiness-admission-freeze-observed.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-service.js",
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/readiness-planning-snapshot-owner.js"
       ]
     },
     "test/control-plane/readiness-cycle-cut-dependency-guard.test.js": {
@@ -6301,6 +6310,25 @@
     "test/query/query-executor-durable-commit-witness.test.js": {
       "files": [
         "src/query/query-executor-partition-request-builders.js"
+      ]
+    },
+    "test/query/readiness-routing-denial-observability.test.js": {
+      "files": [
+        "src/admin/admin-service-discovery-authoritative-repair-failures.js",
+        "src/cdc/cdc-integration-service-shared.js",
+        "src/control-plane/control-plane-readiness-service.js",
+        "src/control-plane/eligibility-snapshot.js",
+        "src/control-plane/heartbeat-service-constants.js",
+        "src/control-plane/heartbeat-service.js",
+        "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/readiness-planning-snapshot-owner.js",
+        "src/query/distributed/distributed-write-coordinator.js",
+        "src/query/pg/postgres-wire-adapter.js",
+        "src/query/query-execution-budget.js"
+      ],
+      "directories": [
+        "src/cdc",
+        "src/query"
       ]
     },
     "test/query/retry-continuation-flow.test.js": {

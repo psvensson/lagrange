@@ -53,7 +53,10 @@ import {
 import {
   compactEligibilitySnapshot,
   evaluateEligibilityDecision,
+  resolveReadinessObservedAgeMs,
 } from '../control-plane/eligibility-snapshot.js';
+import {isDeferredReadinessPlanningSnapshot} from
+  '../control-plane/readiness-planning-version-contract.js';
 import {isRetryableControlPlaneError} from '../control-plane/control-plane-error-classification.js';
 import {PARTITION_SERVICE_ERROR_MSG} from '../partition/partition-service-constants.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
@@ -219,9 +222,15 @@ function resolveParticipantBackpressureState(result = {}) {
     Number.isFinite(result?.retryAfterMs) && result.retryAfterMs > 0
   );
 }
+// A true duplicate of the copy in query-execution-budget.js, kept as one by
+// this quest rather than merged: merging them is a behaviour-bearing refactor
+// of a shared contract and belongs to its own unit of work.
 function buildParticipantFailureEntry(result) {
   return {
     partitionId: result.partitionId,
+    routingDenialCause: normalizeParticipantFailureString(
+      result.routingDenialCause,
+    ),
     participantNodeId: normalizeParticipantFailureString(
       result.participantNodeId,
     ),
@@ -326,6 +335,7 @@ export const QUERY_EXECUTOR_SHARED = {
   buildPartitionServiceWitnessFingerprint,
   compactEligibilitySnapshot,
   evaluateEligibilityDecision,
+  isDeferredReadinessPlanningSnapshot,
   isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
   normalizeParticipantFailureString,
@@ -335,4 +345,5 @@ export const QUERY_EXECUTOR_SHARED = {
   resolveCanonicalPartitionLeaderObservation,
   resolveBootstrapLeaderSelection,
   resolveParticipantBackpressureState,
+  resolveReadinessObservedAgeMs,
 };

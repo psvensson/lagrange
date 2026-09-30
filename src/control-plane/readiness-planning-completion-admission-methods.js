@@ -32,8 +32,16 @@ import {
 import {
   readFormationBootstrapOwnerKey,
 } from './readiness-planning-formation-source.js';
+import {
+  READINESS_ADMISSION_TERM_BIT,
+  READINESS_PUBLICATION_REFUSAL_TERM_BIT,
+  noteReadinessAdmissionRead,
+  noteReadinessAdmissionTerms,
+  noteReadinessPublicationOutcome,
+} from './readiness-admission-transition-record.js';
 
 const DEFAULT_ROUTED_DIMENSION = 'serveEligible';
+const NO_ADMISSION_TERMS = 0;
 const INITIAL_BOOTSTRAP_RECAPTURE_LIMIT = 1;
 const MapConstructor = Map;
 const mapForEach = Function.call.bind(Map.prototype.forEach);
@@ -58,6 +66,59 @@ function stableFeedbackTokenFieldsEqual(previous, current) {
     previous.transportTopologyValid === current.transportTopologyValid &&
     current.readinessSnapshotGeneration ===
       previous.readinessSnapshotGeneration + 1;
+}
+
+// The terms of the reuse decision that a cheap comparison can settle. Every
+// one of them was already computed on this path before this quest; naming
+// them costs five comparisons of values the decision is about to use anyway,
+// and reads no source.
+function collectCheapReuseTermFailures(
+  token,
+  planningIdentity,
+  completed,
+  buildOptionsKey,
+  freshnessCurrent,
+) {
+  let failedTerms = NO_ADMISSION_TERMS;
+  if (token.generationSaturated) {
+    failedTerms |= READINESS_ADMISSION_TERM_BIT.generation_saturated;
+  }
+  if (token.transportTopologyValid === false) {
+    failedTerms |= READINESS_ADMISSION_TERM_BIT.transport_topology_invalid;
+  }
+  if (planningIdentity.saturated) {
+    failedTerms |= READINESS_ADMISSION_TERM_BIT.planning_identity_saturated;
+  }
+  if (completed.buildOptionsKey !== buildOptionsKey) {
+    failedTerms |= READINESS_ADMISSION_TERM_BIT.build_options_key_changed;
+  }
+  if (!freshnessCurrent) {
+    failedTerms |= READINESS_ADMISSION_TERM_BIT.freshness_not_current;
+  }
+  return failedTerms;
+}
+
+// The completion-currency terms, from the same five values the publish
+// decision is made of.
+function collectPublicationRefusalTerms(currency) {
+  const bit = READINESS_PUBLICATION_REFUSAL_TERM_BIT;
+  let refusalTerms = NO_ADMISSION_TERMS;
+  if (!currency.tokenCurrent) {
+    refusalTerms |= bit.completion_token_not_current;
+  }
+  if (!currency.transportTopologyValid) {
+    refusalTerms |= bit.transport_topology_invalid;
+  }
+  if (!currency.publicationGuardCurrent) {
+    refusalTerms |= bit.publication_guard_changed;
+  }
+  if (!currency.planningIdentityCurrent) {
+    refusalTerms |= bit.planning_identity_not_current;
+  }
+  if (!currency.sourceClassified) {
+    refusalTerms |= bit.source_change_unclassified;
+  }
+  return refusalTerms;
 }
 
 function isOwnedFeedbackTokenAdvance(previous, current) {
@@ -310,23 +371,70 @@ const readinessPlanningCompletionAdmissionMethods = {
   // Semantic compositions require equal typed planning identity plus the live
   // veto. The exact token remains diagnostic/stronger evidence. Unversioned
   // legacy compositions retain their prior exact-or-floored fallback.
+  isCompletedFreshnessCurrent(completed, token, currentPlanningIdentity) {
+    if (this.semanticPlanningEnabled) {
+      return planningIdentitiesEqual(
+        completed.planningIdentity,
+        currentPlanningIdentity,
+      );
+    }
+    return (completed.tokenStatus === TOKEN_STATUS.CURRENT &&
+      this.tokensEqual(completed.capturedToken, token)) ||
+      this.matchesCompletedSourceGeneration(completed);
+  },
+
+  // The same decision as before, and still the method the read path calls and
+  // the deferral-bounded audit observes. The order and the short-circuit are
+  // unchanged: the planning identity and the freshness term are read exactly
+  // once, as they were, and the live-evidence veto is consulted only when
+  // every cheaper term passed, so no source is read more often per decision.
+  // What is new is that the terms that failed are deposited for the read in
+  // flight on this variant, instead of collapsing into one boolean.
+  //
+  // `build_options_key_changed` is stated but unreachable from a read:
+  // `readCompleted` is keyed by `buildOptionsKey`, so a record it returns
+  // always carries that same key, and the one other caller
+  // (`handleStaleCompletion`, unversioned legacy compositions) passes the
+  // record it has just built. It is kept because the decision still states
+  // it; no input reaches it, so no test drives it.
   canReuseCompletedSnapshot(ownerKey, completed, token, buildOptionsKey) {
     const currentPlanningIdentity =
       this.readPlanningProjectionIdentity(ownerKey);
-    const freshnessCurrent = this.semanticPlanningEnabled ?
-      planningIdentitiesEqual(
-        completed.planningIdentity,
-        currentPlanningIdentity,
-      ) :
-      ((completed.tokenStatus === TOKEN_STATUS.CURRENT &&
-        this.tokensEqual(completed.capturedToken, token)) ||
-        this.matchesCompletedSourceGeneration(completed));
-    return !token.generationSaturated &&
-      token.transportTopologyValid !== false &&
-      !currentPlanningIdentity.saturated &&
-      completed.buildOptionsKey === buildOptionsKey &&
-      freshnessCurrent &&
+    const failedTerms = collectCheapReuseTermFailures(
+      token,
+      currentPlanningIdentity,
+      completed,
+      buildOptionsKey,
+      this.isCompletedFreshnessCurrent(completed, token,
+        currentPlanningIdentity),
+    );
+    const reusable = failedTerms === NO_ADMISSION_TERMS &&
       this.isCompletedSnapshotLive(ownerKey, completed);
+    noteReadinessAdmissionTerms(
+      this,
+      ownerKey,
+      buildOptionsKey,
+      reusable || failedTerms !== NO_ADMISSION_TERMS ?
+        failedTerms :
+        READINESS_ADMISSION_TERM_BIT.live_evidence_veto,
+    );
+    return reusable;
+  },
+
+  // State what this read served and why, and hand the answer straight back.
+  // `readinessPlanningTokenStatus` is the deferred snapshot's own marker: a
+  // built record never carries it, so it names the served state without
+  // touching either object.
+  noteAdmissionRead(admission, nowMs, failedTerms, completed, served) {
+    return noteReadinessAdmissionRead(
+      admission,
+      this,
+      nowMs,
+      failedTerms,
+      completed?.completedAtMs ?? null,
+      served,
+      served?.readinessPlanningTokenStatus === TOKEN_STATUS.STALE,
+    );
   },
 
   // Live profiling of the archived run
@@ -388,7 +496,13 @@ const readinessPlanningCompletionAdmissionMethods = {
       buildOptionsKey,
       snapshot,
     );
-    const currentSource = this.captureCurrentPlanningSource(ownerKey);
+    // The one clock read this capture already made, handed to the recorder
+    // rather than read again: the diagnostic adds no clock read of its own.
+    const observedAtMs = this.now();
+    const currentSource = this.captureCurrentPlanningSource(
+      ownerKey,
+      observedAtMs,
+    );
     const currentToken = currentSource.token;
     const tokenCurrent = this.isCompletionTokenCurrent(
       startSource.token,
@@ -406,9 +520,24 @@ const readinessPlanningCompletionAdmissionMethods = {
     const sourceClassified = !this.hasUnclassifiedSourceChange(
       currentSource.observation,
     );
+    // The same conjunction as before, read off the named terms: a refused
+    // publish now says which of them refused it, once per change of reason.
+    const refusalTerms = collectPublicationRefusalTerms({
+      tokenCurrent,
+      transportTopologyValid: currentToken.transportTopologyValid !== false,
+      publicationGuardCurrent,
+      planningIdentityCurrent,
+      sourceClassified,
+    });
+    noteReadinessPublicationOutcome(
+      this,
+      ownerKey,
+      buildOptionsKey,
+      refusalTerms,
+      observedAtMs,
+    );
     return objectFreeze({
-      current: tokenCurrent && currentToken.transportTopologyValid !== false &&
-        publicationGuardCurrent && planningIdentityCurrent && sourceClassified,
+      current: refusalTerms === NO_ADMISSION_TERMS,
       currentSource,
       currentToken,
       tokenCurrent,

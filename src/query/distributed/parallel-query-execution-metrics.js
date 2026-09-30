@@ -34,6 +34,7 @@ class PartitionQueryMetrics {
     this.deferRetry = false;
     this.participantNodeId = null;
     this.participantAddress = null;
+    this.routingDenialCause = null;
     this.backpressured = false;
     this.failedTable = null;
   }
@@ -76,6 +77,11 @@ class PartitionQueryMetrics {
       normalizeFailureString(diagnostics?.participantNodeId);
     this.participantAddress =
       normalizeFailureString(diagnostics?.participantAddress);
+    // The routing denial this partition's failure came out of, when one did,
+    // carried across this projection so the formatted metrics can still name
+    // it. Nothing here decides on it.
+    this.routingDenialCause =
+      normalizeFailureString(diagnostics?.routingDenialCause);
     this.backpressured = resolveFailureBackpressureState(diagnostics);
     this.failedTable = normalizeFailureString(diagnostics?.failedTable);
   }
@@ -201,6 +207,7 @@ function formatQueryExecutionMetrics(metrics) {
       partitionId: metric.partitionId,
       participantNodeId: metric.participantNodeId,
       participantAddress: metric.participantAddress,
+      routingDenialCause: metric.routingDenialCause,
       errorCode: metric.errorCode,
       error: metric.error,
       durationMs: metric.latencyMs,

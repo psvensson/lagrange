@@ -25,7 +25,9 @@ import {
   HEARTBEAT_FAILURE_WARN_THRESHOLD,
   HEARTBEAT_LOG_MSG,
   HEARTBEAT_QUIET_MODE_BYPASS_REASON,
+  HEARTBEAT_ROUTING_DENIAL_CAUSE_UNSTATED,
 } from './heartbeat-service-constants.js';
+import {readRoutingDenialCause} from '../query/query-execution-budget.js';
 import {
   advanceMemoryTrendState,
   buildNodeHeartbeatWriteDecision,
@@ -564,7 +566,7 @@ class HeartbeatServicePublicationMethods {
    * @param {string} stage - Failure stage.
    * @param {string} errorMessage - Error message.
    * @private
-  */ recordFailure(stage, errorMessage) {
+  */ recordFailure(stage, errorMessage, failure = null) {
     this.heartbeatConsecutiveFailures++;
     const failedAtMs = this.now();
     this.heartbeatPublicationDiagnostics.lastFailureAt = normalizeHeartbeatPublicationTimestamp(
@@ -573,11 +575,23 @@ class HeartbeatServicePublicationMethods {
     this.heartbeatPublicationDiagnostics.lastFailureAtMs = failedAtMs;
     this.heartbeatPublicationDiagnostics.lastFailureStage = stage;
     this.heartbeatPublicationDiagnostics.lastFailureReason = errorMessage;
+    // WHICH routing denial this failure came out of, when it came out of one.
+    // The traced victim's heartbeat write failed while every candidate was
+    // filtered by controlPlaneRecoveryEligible readiness, and this line said
+    // only `Partition service not found` - the same words a partition with no
+    // service rows produces. Purely additive: nothing below reads it, the
+    // retry cadence, the backoff, the consecutive-failure count and the
+    // escalation threshold are untouched, and no message text moves.
+    const routingDenialCause = readRoutingDenialCause(failure) ||
+      HEARTBEAT_ROUTING_DENIAL_CAUSE_UNSTATED;
+    this.heartbeatPublicationDiagnostics.lastFailureRoutingDenialCause =
+      routingDenialCause;
     this.heartbeatPublicationDiagnostics.consecutiveFailures = this.heartbeatConsecutiveFailures;
     const logData = {
       nodeId: this.nodeId,
       stage,
       error: errorMessage,
+      routingDenialCause,
       consecutiveFailures: this.heartbeatConsecutiveFailures,
     };
     if (this.heartbeatConsecutiveFailures >= HEARTBEAT_FAILURE_WARN_THRESHOLD) {

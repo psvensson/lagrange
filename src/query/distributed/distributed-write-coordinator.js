@@ -8,6 +8,7 @@ import {
   QUERY_LOG_MSG,
   QUERY_SUBSYSTEM,
 } from '../query-constants.js';
+import {readRoutingDenialCause} from '../query-execution-budget.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
@@ -40,6 +41,7 @@ function buildParticipantFailureLogContext(plan, participantFailures) {
       partitionId: entry.partitionId,
       participantNodeId: entry.participantNodeId,
       participantAddress: entry.participantAddress,
+      routingDenialCause: entry.routingDenialCause,
       errorCode: entry.errorCode,
       error: entry.error,
       failedTable: entry.failedTable,
@@ -258,6 +260,12 @@ class DistributedWriteCoordinator {
             typeof result.participantAddress === 'string' ?
               result.participantAddress :
               null,
+        // The routing denial this participant's failure came out of, when one
+        // did: `Partition service not found` on a write cannot otherwise be
+        // told from a partition whose service rows are genuinely absent. A
+        // participant result reports it either on itself or on its own
+        // participant failures, so it is read through its one owner.
+        routingDenialCause: readRoutingDenialCause(result),
         errorCode:
             typeof result.errorCode === 'string' ?
               result.errorCode :
@@ -415,6 +423,7 @@ class DistributedWriteCoordinator {
           typeof error?.participantAddress === LOCAL_STR_STRING ?
             error.participantAddress :
             null,
+        routingDenialCause: readRoutingDenialCause(error),
         failedTable:
           typeof error?.failedTable === LOCAL_STR_STRING ?
             error.failedTable :
