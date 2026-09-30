@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2668281,
-        "sha256": "a6d86ee8ac8592923ed06f85a397bc1290a943eec52cafad0f2760512b07cfa9"
+        "bytes": 2668347,
+        "sha256": "851a79487ea8968bbf5bf3b1413e857a6f5ffd7afad70aebb766e8355559f9f5"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "636d3cfd26d7e895e1816bbd1a699757fb1f0e0f766f4428afa0415b11a2561c"
+        "sha256": "71fb76f50c1277ecf19401afe0b9771944e8c25ddde97283c88d10ca63b533b8"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "391d8078d9151187b8a3a234557ba1c8241a754d905ff657057fd0a2b67b79de"
+    "inputDigest": "cafcbfcef47c685f6788995f4c50bca639e355f67aaa475f30b13db465115af7"
   },
   "reconciliation": {
     "complexity": {
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "636d3cfd26d7e895e1816bbd1a699757fb1f0e0f766f4428afa0415b11a2561c"
+          "sha256": "71fb76f50c1277ecf19401afe0b9771944e8c25ddde97283c88d10ca63b533b8"
         },
         "cloneGroups": 765,
         "duplicatedLines": 29388,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2668281,
-        "sha256": "a6d86ee8ac8592923ed06f85a397bc1290a943eec52cafad0f2760512b07cfa9"
+        "bytes": 2668347,
+        "sha256": "851a79487ea8968bbf5bf3b1413e857a6f5ffd7afad70aebb766e8355559f9f5"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "8774be3184b481e84a53059fb25be0b0f9636bbf864aa5e5941f848d4d3320b3",
+      "sourceDigest": "a1cf8fe0d37c85164360e77ede8c774027438b8429d8d6d0357418f773424470",
       "moduleCount": 5116,
-      "edgeCount": 24869,
+      "edgeCount": 24870,
       "unresolvedCount": 35
     }
   },
@@ -444,7 +444,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 48,
-      "importOut": 371,
+      "importOut": 372,
       "score": 392.9,
       "topPaths": [
         "test/integration/move-replica-handoff.integration.test.js",
