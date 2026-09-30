@@ -252,3 +252,37 @@ test('MessageGroupServiceRowOwner lost registration INSERT resolves by ' +
   t.equal(registered.state_entered_at, 100,
     'the lost INSERT is recognized by identity and generation G');
 });
+
+test('MessageGroupServiceRowOwner stamps a strictly newer generation when ' +
+  'the clock is unchanged or regressed (S-F1)', async (t) => {
+  const writer = createLifecycleCdcService({services: []});
+  const owner = new MessageGroupServiceRowOwner({systemTableWriter: writer});
+  const leader = {isLeaderReplica: () => true};
+  const lifecycle = (status, timestamp) =>
+    owner.updateReplicaStatus({groupId: 'mg-1', replicaId: REPLICA_ID,
+      nodeId: 'node-a', service: leader, status, timestamp});
+  await owner.registerReplica({groupId: 'mg-1', replicaId: REPLICA_ID,
+    nodeId: 'node-a', service: leader, timestamp: 500, status: 'stopped'});
+  const firstActive = await lifecycle('active', 500);
+  t.ok(firstActive.state_entered_at > 500,
+    'activation at the same clock enters a strictly newer generation');
+  const priorStopped = await lifecycle('stopped', 500);
+  t.ok(priorStopped.state_entered_at > firstActive.state_entered_at,
+    'STOPPED staging at the same clock is strictly newer');
+  const reactivated = await lifecycle('active', 500);
+  t.ok(reactivated.state_entered_at > priorStopped.state_entered_at,
+    'reactivation at the same clock is strictly newer');
+  const restopped = await lifecycle('stopped', 500);
+  t.ok(restopped.state_entered_at > reactivated.state_entered_at,
+    'second STOPPED staging at the same clock is strictly newer');
+  const current = writer.store.durableRow(TABLES.SERVICES, REPLICA_ID);
+  await t.rejects(owner.removeReplica({groupId: 'mg-1', replicaId: REPLICA_ID,
+    nodeId: 'node-a', stoppedRow: priorStopped}),
+  {code: 'SERVICE_IDENTITY_CONFLICT'},
+  'delayed removal debt of the prior STOPPED generation cannot match');
+  t.same(writer.store.durableRow(TABLES.SERVICES, REPLICA_ID), current,
+    'the newer STOPPED generation survives the delayed removal');
+  const regressed = await lifecycle('active', 400);
+  t.ok(regressed.state_entered_at > restopped.state_entered_at,
+    'reactivation at a regressed clock is strictly newer');
+});
