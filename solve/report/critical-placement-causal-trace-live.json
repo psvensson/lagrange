@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-02T11:43:29.710Z",
+  "generatedAt": "2026-09-04T09:12:16.227Z",
   "cluster": {
     "seed": "550e8400-e29b-41d4-a716-446655440100",
     "joiners": [
@@ -74,7 +74,7 @@
   },
   "ledger": {
     "partitionId": "replica_operations-p1",
-    "sampleCount": 151,
+    "sampleCount": 155,
     "firstSample": {
       "atMs": 0,
       "placement": {
@@ -97,26 +97,26 @@
           "status": "removed",
           "workflow_step": "REMOVED",
           "target_node_id": "550e8400-e29b-41d4-a716-446655440101",
-          "created_at": 1788349421456,
-          "completed_at": 1788349441412
+          "created_at": 1788513147845,
+          "completed_at": 1788513169436
         },
         {
-          "operation_id": "a143605f-b37f-4b0a-b4df-bd52d659cc0c",
+          "operation_id": "f7129fd6-2fea-4d9a-91e7-e2a5016795b5",
           "type": "ADD",
           "status": "active",
           "workflow_step": "ACTIVE",
           "target_node_id": "550e8400-e29b-41d4-a716-446655440102",
-          "created_at": 1788349441520,
-          "completed_at": 1788349445400
+          "created_at": 1788513170043,
+          "completed_at": 1788513175152
         },
         {
-          "operation_id": "058d5692-47b9-44ae-b341-b8faf49cd877",
+          "operation_id": "1be528a5-bfcd-40cb-bcfe-d7d28b7382b2",
           "type": "REMOVE",
           "status": "removed",
           "workflow_step": "REMOVED",
           "target_node_id": "550e8400-e29b-41d4-a716-446655440100",
-          "created_at": 1788349446041,
-          "completed_at": 1788349446743
+          "created_at": 1788513176236,
+          "completed_at": 1788513177600
         }
       ],
       "serviceRows": [
@@ -147,7 +147,7 @@
       ]
     },
     "lastSample": {
-      "atMs": 89614,
+      "atMs": 89174,
       "placement": {
         "partitionId": "replica_operations-p1",
         "evidenceState": "known_converged",
@@ -168,26 +168,26 @@
           "status": "removed",
           "workflow_step": "REMOVED",
           "target_node_id": "550e8400-e29b-41d4-a716-446655440101",
-          "created_at": 1788349421456,
-          "completed_at": 1788349441412
+          "created_at": 1788513147845,
+          "completed_at": 1788513169436
         },
         {
-          "operation_id": "a143605f-b37f-4b0a-b4df-bd52d659cc0c",
+          "operation_id": "f7129fd6-2fea-4d9a-91e7-e2a5016795b5",
           "type": "ADD",
           "status": "active",
           "workflow_step": "ACTIVE",
           "target_node_id": "550e8400-e29b-41d4-a716-446655440102",
-          "created_at": 1788349441520,
-          "completed_at": 1788349445400
+          "created_at": 1788513170043,
+          "completed_at": 1788513175152
         },
         {
-          "operation_id": "058d5692-47b9-44ae-b341-b8faf49cd877",
+          "operation_id": "1be528a5-bfcd-40cb-bcfe-d7d28b7382b2",
           "type": "REMOVE",
           "status": "removed",
           "workflow_step": "REMOVED",
           "target_node_id": "550e8400-e29b-41d4-a716-446655440100",
-          "created_at": 1788349446041,
-          "completed_at": 1788349446743
+          "created_at": 1788513176236,
+          "completed_at": 1788513177600
         }
       ],
       "serviceRows": [
@@ -269,7 +269,7 @@
       {
         "stage": "stabilized",
         "reached": true,
-        "firstReachedAtMs": 88380,
+        "firstReachedAtMs": 87839,
         "owner": "src/bootstrap/critical-placement-convergence.js (across samples)"
       }
     ],
@@ -302,7 +302,7 @@
   ],
   "critical": {
     "partitionId": "artifact_payload_chunks-p1",
-    "sampleCount": 151,
+    "sampleCount": 155,
     "firstSample": {
       "atMs": 0,
       "placement": {
@@ -339,7 +339,7 @@
       ]
     },
     "lastSample": {
-      "atMs": 89614,
+      "atMs": 89174,
       "placement": {
         "partitionId": "artifact_payload_chunks-p1",
         "evidenceState": "known_not_converged",
@@ -434,7 +434,7 @@
   },
   "control": {
     "partitionId": null,
-    "sampleCount": 151,
+    "sampleCount": 155,
     "firstSample": {
       "atMs": 0,
       "placement": {
@@ -450,7 +450,7 @@
       "serviceRows": []
     },
     "lastSample": {
-      "atMs": 89614,
+      "atMs": 89174,
       "placement": {
         "partitionId": null,
         "evidenceState": "unknown",
@@ -541,17 +541,8 @@
   },
   "activeProbe": {
     "ran": true,
-    "success": true,
-    "moves": [
-      {
-        "operation": "replace",
-        "nodeId": "550e8400-e29b-41d4-a716-446655440102",
-        "skipped": true,
-        "reason": "budget_exceeded",
-        "admissionReason": "operation_ledger_quorum_concentrated",
-        "admissionDecisionType": "deferred"
-      }
-    ]
+    "success": false,
+    "moves": []
   },
   "firstMissingTransitionAnswer": {
     "finding": "operation_recorded",
@@ -559,7 +550,7 @@
     "detail": "first missing transition enters operation_recorded",
     "predicate": {
       "addLikeOperationsRecordedForTracedPartition": false,
-      "sampleCount": 151,
+      "sampleCount": 155,
       "traceBudgetMs": 90000,
       "holdTimelineStates": 1,
       "holdEngagedStates": 1,
@@ -567,17 +558,8 @@
       "holdEngagedAtTraceEnd": true,
       "activeProbeOutcome": {
         "ran": true,
-        "success": true,
-        "moves": [
-          {
-            "operation": "replace",
-            "nodeId": "550e8400-e29b-41d4-a716-446655440102",
-            "skipped": true,
-            "reason": "budget_exceeded",
-            "admissionReason": "operation_ledger_quorum_concentrated",
-            "admissionDecisionType": "deferred"
-          }
-        ]
+        "success": false,
+        "moves": []
       }
     }
   }

@@ -1,0 +1,56 @@
+{
+  "id": "readiness-planning-snapshot-liveness",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 3,
+  "statement": "For every current authoritative readiness planning generation, the ReadinessPlanningSnapshotOwner either publishes a completed snapshot for that generation or explicitly supersedes it with a newer generation, so continuous source churn never leaves its consumers (the critical-topology settling gate and routing readiness) indefinitely served by planning_snapshot_refresh_pending. The planning owner holds the single definition of generation currency (generation/token, rebuild admission, completed snapshot, completed-snapshot reuse, supersession); consumers never decide freshness themselves and callers never mint planning generations. Invariants: (SAFETY) a completed snapshot is never reused after a semantic dependency of its generation changed — a mutation that ignores generation mismatches must red; (LIVENESS) if the authoritative planning state stops changing at generation G then, within bounded owner work and without any wall-clock timeout as the bound, the completed snapshot's generation == G and planning_snapshot_refresh_pending clears; (SUPERSESSION) during continuing churn each obsolete build may be superseded, but the owner mints no additional semantic generation without an authoritative cause — a mutation that rotates the generation continuously must red; (OWNERSHIP) the topology settling gate and routing consume the owner's readiness contract and do not independently judge snapshot freshness; (ENGAGEMENT) under production-shaped post-formation churn on the seed (five nodes, moving clock) the seed's own completed snapshot becomes and stays reusable between authoritative changes, with a red-on-revert proof; (LIVE) on the local docker formation fixture the seed's critical-topology settling gate stops reporting node_ready_lease_incomplete for nodes whose readiness facts are unchanged, and routing no longer reports all_services_filtered_by_readiness for the seed, against the 601x / 175x settle-waits measured on GCP e9774db2e and locally. Scope owns ONLY the ReadinessPlanningSnapshotOwner generation/admission/reuse contract and its single clock-domain input for generation semantics; it does NOT own the critical placement planner, storage_reservation_reconcile, the projection-readiness evidence owner (A3, closed), routing policy, or the settling gate's consumption policy.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/evidence/gcp-baseline-e9774db2e-readiness-profile.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "e9774db2e22f66190a1b55c25850cff96f70cdec"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/readiness-planning-snapshot-liveness.receipt.json",
+      "requiredReceipts": [
+        "SAFETY-stale-generation-never-reused",
+        "LIVENESS-stable-generation-becomes-reusable-within-bounded-owner-work",
+        "SUPERSESSION-continuing-churn-mints-no-generation-without-authoritative-cause",
+        "OWNERSHIP-single-generation-currency-consumers-do-not-judge-freshness",
+        "ENGAGEMENT-seed-completed-snapshot-reusable-under-production-shaped-churn-red-on-revert",
+        "LIVE-local-formation-settling-gate-and-routing-no-longer-starved-by-refresh-pending"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "readiness-planning-snapshot-liveness-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/readiness-planning-snapshot-liveness.receipt.json",
+          "requiredReceipts": [
+            "SAFETY-stale-generation-never-reused",
+            "LIVENESS-stable-generation-becomes-reusable-within-bounded-owner-work",
+            "SUPERSESSION-continuing-churn-mints-no-generation-without-authoritative-cause",
+            "OWNERSHIP-single-generation-currency-consumers-do-not-judge-freshness",
+            "ENGAGEMENT-seed-completed-snapshot-reusable-under-production-shaped-churn-red-on-revert",
+            "LIVE-local-formation-settling-gate-and-routing-no-longer-starved-by-refresh-pending"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
