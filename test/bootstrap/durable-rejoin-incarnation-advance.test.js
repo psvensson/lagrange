@@ -190,3 +190,27 @@ test('a zombie boot cannot advance over a newer registered incarnation',
     t.equal(durable.current()[COLUMN.BOOT_INCARNATION], THIS_BOOT + 1,
       'the newer registration is untouched');
   });
+
+test('N4: a repeated same-boot durable-rejoin registration is CURRENT and ' +
+  'issues no NODES write', async (t) => {
+  const durable = createDurableNodes(previousBootRow());
+  const nodeWrites = [];
+  const update = durable.gateway.updateSystemTableRow;
+  durable.gateway.updateSystemTableRow = (tableName, ...rest) => {
+    if (tableName === TABLES.NODES) nodeWrites.push(rest);
+    return update(tableName, ...rest);
+  };
+  const owner = createRejoiningOwner(durable);
+  await owner.registerNodeInCluster();
+  t.equal(nodeWrites.length, 1, 'the first registration advances once');
+  const registered = JSON.stringify(durable.current());
+
+  // The registration retry loop re-enters later in the same boot.
+  owner.delegates.getNow = () => () => NOW + 5_000;
+  const again = await owner.registerNodeInCluster();
+  t.equal(again?.reusedExistingMembership, true);
+  t.equal(nodeWrites.length, 1,
+    'the same-boot re-entry issues no NODES write');
+  t.equal(JSON.stringify(durable.current()), registered,
+    'the durable row is byte-for-byte unchanged');
+});
