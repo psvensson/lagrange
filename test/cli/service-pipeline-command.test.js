@@ -80,6 +80,16 @@ async function withProject(fn) {
   }
 }
 
+async function markProjectBuilt(project) {
+  const manifestPath = path.join(
+    project, '.lagrange', 'deployment', 'manifest.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  manifest.artifact.digest = `sha256:${'a'.repeat(64)}`;
+  manifest.artifact.size_bytes = 1;
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  return path.join(project, '.lagrange', 'a'.repeat(64));
+}
+
 function recordingDependencies() {
   const calls = [];
   const output = [];
@@ -241,10 +251,10 @@ async () => withProject(async (project) => {
     ['generate', project], recordingDependencies().dependencies),
   SUCCESS_EXIT_CODE);
 
+  const expectedArtifactPath = await markProjectBuilt(project);
   const {calls, dependencies, output, errors} = recordingDependencies();
   const exit = await runServicePipelineCommand(
-    ['deploy', project, '--layout', '/tmp/fake-layout',
-      '--idempotency-key', 'deploy-test-1'],
+    ['deploy', project, '--idempotency-key', 'deploy-test-1'],
     dependencies);
   assert.equal(exit, SUCCESS_EXIT_CODE, errors.join('\n'));
 
@@ -265,7 +275,7 @@ async () => withProject(async (project) => {
   const install = calls[0].payload;
   assert.equal(install.manifest.name, 'account-summary');
   assert.deepEqual(install.artifact_source, {
-    kind: 'local_oci_layout', location: '/tmp/fake-layout',
+    kind: 'local_oci_layout', location: expectedArtifactPath,
   });
   assert.equal(install.idempotency_key, 'deploy-test-1');
 
@@ -305,17 +315,34 @@ async () => withProject(async (project) => {
   assert.equal(summary.packageId, packageId);
 }));
 
+test('deploy requires build output and never asks for an artifact path',
+  async () => withProject(async (project) => {
+    assert.equal(await runServicePipelineCommand(
+      ['generate', project], recordingDependencies().dependencies),
+    SUCCESS_EXIT_CODE);
+
+    const {calls, dependencies, output, errors} = recordingDependencies();
+    const exit = await runServicePipelineCommand(
+      ['deploy', project, '--idempotency-key', 'deploy-before-build'],
+      dependencies);
+
+    assert.equal(exit, FAILURE_EXIT_CODE);
+    assert.equal(output.length, 0);
+    assert.deepEqual(calls, []);
+    assert.match(errors.at(-1), /built service artifact/iu);
+  }));
+
 test('deploy fails closed when the lifecycle grammar rejects and emits ' +
   'no success output',
 async () => withProject(async (project) => {
   assert.equal(await runServicePipelineCommand(
     ['generate', project], recordingDependencies().dependencies),
   SUCCESS_EXIT_CODE);
+  await markProjectBuilt(project);
   const output = [];
   const errors = [];
   const exit = await runServicePipelineCommand(
-    ['deploy', project, '--layout', '/tmp/fake-layout',
-      '--idempotency-key', 'deploy-test-2'],
+    ['deploy', project, '--idempotency-key', 'deploy-test-2'],
     {
       createSqlClient: () => ({
         async execute(statement) {
@@ -357,10 +384,9 @@ async () => {
     ['build'],
     ['deploy', 'project'],
     ['deploy', 'project', '--layout', '/tmp/x'],
-    ['deploy', 'project', '--idempotency-key', 'k'],
-    ['deploy', 'project', '--layout', '/tmp/x', '--idempotency-key', '  '],
-    ['deploy', 'project', '--layout', '/tmp/x', '--idempotency-key', 'k',
-      '--unknown'],
+    ['deploy', 'project', '--idempotency-key', '  '],
+    ['deploy', 'project', '--idempotency-key', 'k', '--layout', '/tmp/x'],
+    ['deploy', 'project', '--idempotency-key', 'k', '--unknown'],
     ['generate', 'project', 'extra'],
   ];
   for (const argv of attacks) {

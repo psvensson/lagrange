@@ -22,6 +22,23 @@ This example shows both halves of the answer:
 One command builds the component, boots a local seed node, runs the
 deployment SQL, sends authenticated requests, and shuts everything down.
 
+### Read the small file first
+
+[`service.js`](service.js) is the developer-facing example. It is intentionally
+tiny. [`run-js-request-binding-deployment.js`](run-js-request-binding-deployment.js)
+is the proof harness that compiles the component, installs it, creates the
+table, sends requests, and verifies the denial path.
+
+Two details in `service.js` matter:
+
+- table slot `0` is a capability handle granted by deployment policy, not a
+  database table ID chosen by the service;
+- slot `1` is deliberately ungranted so the `"deny"` request can prove that
+  an undeclared table access is rejected by the host before it changes state.
+
+The service keeps no durable process memory. Every value that must survive Cell
+replacement is read from or written to the declared table through those slots.
+
 ## How plain JavaScript becomes a sandboxed component
 
 Three tools and terms, briefly:
@@ -60,10 +77,8 @@ flowchart LR
   classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
 ```
 
-Unlike the older JavaScript-envelope callback rehearsal in
-[`distributed-sql`](../distributed-sql/README.md), the artifact deployed here
-is a real WebAssembly component: the node executes it exactly as it executes
-the WAT-built component in
+The artifact deployed here is a real WebAssembly component: the node executes
+it exactly as it executes the WAT-built component in
 [`request-binding-deployment`](../request-binding-deployment/README.md).
 
 [`service.js`](service.js) imports the host interface directly:

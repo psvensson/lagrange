@@ -6,6 +6,29 @@ WASM component plus the immutable deployment records the runtime needs.
 
 > Colocated in source. Distributed in execution.
 
+## One service API
+
+Lagrange has one service programming model. WASM is the supported execution
+provider today; planned OCI execution is a provider underneath the same model,
+not a second application API.
+
+Provider choice may change packaging, isolation, and the final runtime adapter.
+It must not change Artifact / Binding / Cell semantics, handlers, distributed
+operations, `call()`, partition-local `run()`, `emit()`, reduction, routing,
+budgets, retry classification, or invocation identity. Language SDKs may be
+idiomatic, but they project this same contract.
+
+The normal developer workflow is therefore provider-neutral:
+
+```bash
+lagrange service generate .
+lagrange service build .
+lagrange service deploy . --idempotency-key <key>
+```
+
+Build owns provider-specific packaging. Deploy discovers the built artifact
+from the project; developers do not pass internal artifact-layout paths.
+
 ## Recommended source model
 
 A scaffolded project starts with:
@@ -23,7 +46,7 @@ account-summary/
   test/handler.test.js      host-side tests; no WASM required
   authoring/                guest-safe descriptor helpers
   runtime-types.d.ts        generated editor types
-  .lagrange/                generated entry, records, component, OCI layout
+  .lagrange/                generated build and deployment files
 ```
 
 The four source helpers are:
@@ -64,9 +87,11 @@ Object keys are identities. The compiler derives durable request and call
 Binding names from `accountSummary` and `summarizeAccountActivity`. Source code
 does not contain package IDs, manifest digests, or Binding-name strings.
 
-The pre-v2 compiler currently permits multiple HTTP handlers but exactly one
-distributed operation per component. That restriction is enforced rather than
-hidden behind generated tags.
+The current default target, `service-cell`, permits multiple HTTP handlers but
+requires exactly one distributed operation per component. A handler may declare
+no calls, as the example's health endpoint does; the component still needs its
+operation. The v2 interface work in the tree should not be confused with this
+default authoring path.
 
 ## HTTP handlers
 
@@ -112,8 +137,11 @@ not an unbounded streaming scan.
 
 ## Partition functions
 
-`run(rows, arguments, context)` executes once per selected partition on the
-node hosting that partition's leader replica.
+`run(rows, arguments, context)` is dispatched for each selected partition to
+the node hosting that partition's leader replica. This is not ordinary SQL
+replica preference: the call path requires the input batch to be read locally
+on that host. Failure and retry rules are in [execution semantics](execution-semantics.md).
+A shard here is one partition's task, not a separate deployment unit.
 
 ```js
 function summarizeRun(rows, {accountId}, {emit}) {
@@ -173,6 +201,42 @@ The coordinator calls the reducer only after every expected shard slot is
 present, fresh, bounded, and disjoint. It publishes one atomic result snapshot.
 The guarantee is exactly-once visibility, not exactly-once execution.
 
+## Worked example
+
+Suppose the fixed selector reads these small batches, and the request supplies
+`accountId: 202`. The numbers below illustrate the two functions above; they
+are not the larger demo's fixture or a performance result.
+
+| Partition | id | account_id | amount_cents |
+| --- | ---: | ---: | ---: |
+| A | 101 | 202 | 1000 |
+| A | 102 | 202 | 2000 |
+| A | 103 | 999 | 9000 |
+| B | 201 | 202 | 500 |
+
+`run()` on A discards account 999 and emits `count:101 = 2` and
+`total:101 = 3000`. On B it emits `count:201 = 1` and `total:201 = 500`.
+The reducer receives these four pairs, not the four input rows:
+
+```json
+[["count:101", 2], ["total:101", 3000], ["count:201", 1], ["total:201", 500]]
+```
+
+It returns:
+
+```json
+{"accountId":202,"transactions":3,"totalCents":3500}
+```
+
+The key suffix is the lowest matching row ID. With unique row IDs owned by
+disjoint partitions, the suffixes cannot overlap. Emitting just `total` on both
+partitions would fail; there is no implicit sum-by-key operation.
+
+A partition with no matching rows emits nothing but must still complete its
+slot. Missing work is not equivalent to a valid empty contribution. Also note
+that all four rows were selected before filtering: passing `accountId` did not
+prune partitions or change SQL.
+
 ## Generated deployment contract
 
 Run:
@@ -180,7 +244,7 @@ Run:
 ```bash
 lagrange service generate .
 lagrange service build .
-lagrange service deploy . --layout .lagrange/oci --idempotency-key <key>
+lagrange service deploy . --idempotency-key <key>
 ```
 
 `generate` normalizes the source and produces:
@@ -194,8 +258,10 @@ lagrange service deploy . --layout .lagrange/oci --idempotency-key <key>
 - editor typings.
 
 `build` componentizes the generated entry and creates the local OCI layout used
-as installation input. `deploy` replays the generated records through the
-existing authenticated lifecycle SQL owners.
+as installation input. OCI is packaging here, not managed container execution.
+`deploy` replays the generated records through the existing authenticated
+lifecycle SQL owners. The deployed code runs as a WASI component, not a Node.js
+process; only the supplied host interfaces are available.
 
 Artifact, Binding, and Cell remain useful runtime terms:
 
@@ -249,7 +315,7 @@ Strong candidates:
 
 - large input, bounded result;
 - shard-local filtering or policy;
-- top-K, counts, sums, scoring, or validation;
+- counts, sums, scoring, or validation expressible with numeric partials;
 - several sequential round trips against the same partition key; and
 - application-owned fan-out and reduction.
 
@@ -261,6 +327,11 @@ Weak candidates:
 - cross-partition snapshot transactions;
 - structured partials or streaming exchange; and
 - deep nested call graphs.
+
+These are workload shapes, not proof of a speedup over SQL. Selectors still
+have to fit the current single-table, fixed-statement contract. Structured
+records, sketches, and top-K lists do not fit the numeric partial interface
+without a suitable bounded encoding.
 
 The [account-summary example](../examples/call-binding-account-summary/README.md)
 is the current source-level reference. The

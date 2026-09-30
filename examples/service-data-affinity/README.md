@@ -31,6 +31,24 @@ ways:
 All three paths use the same ranking formula and return the same ordered top
 ten.
 
+### Read the workload separately from the experiment
+
+This directory contains more harness code than application policy. That is
+intentional: the demo has to boot five nodes, establish a PostgreSQL baseline,
+load 100,000 ratings, wait for partition movement, collect placement evidence,
+and write a reproducible report.
+
+Start with these files:
+
+- [`movie-ranking.js`](movie-ranking.js) - the ranking policy itself;
+- [`run-comparison.js`](run-comparison.js) - the small top-level orchestrator
+  that requires result parity and keeps unlike latency measurements separate;
+- [`run-affinity-demo.js`](run-affinity-demo.js) - the larger Lagrange proof
+  harness that builds the topology and records transfer/placement evidence.
+
+Do not read the size of `run-affinity-demo.js` as application API complexity.
+Most of it exists to make the experiment controlled and falsifiable.
+
 For a line-by-line before-and-after application walkthrough, read
 [Rewrite A Hot Path For Lagrange](../../docs/tutorials/rewrite-a-hot-path.md).
 For the runnable public call path this demo's shape graduated into, see
@@ -299,8 +317,8 @@ This demo proves the data-local execution, bounded-reduction, and placement
 shape, but it is **not yet the public service-authoring path**.
 
 It drives the internal placement substrate directly: the harness writes a
-`service_definitions` row for a kernel-internal `native_js` query-loop module
-and pins two replicas so the disjoint-shard arithmetic is reproducible.
+`service_definitions` row for an internal query-loop module and pins two
+replicas so the disjoint-shard arithmetic is reproducible.
 
 That direct write is demo scaffolding against a migration-input table. It is
 not how externally authored services are deployed.

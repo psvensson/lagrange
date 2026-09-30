@@ -1,3 +1,15 @@
+/**
+ * Top-level orchestrator for the MovieLens comparison.
+ *
+ * This file intentionally does not compute a PostgreSQL-vs-Lagrange speedup.
+ * The two demos use different local topologies and runtime stacks, so a raw
+ * latency ratio would look precise while answering the wrong question.
+ *
+ * What this orchestrator does require is stronger and simpler:
+ *   - identical ranked results;
+ *   - explicit transfer-shape evidence; and
+ *   - explicit placement evidence for the data-local service path.
+ */
 import {existsSync, realpathSync} from 'node:fs';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
@@ -14,6 +26,8 @@ const REPORT_DIR = resolve('test-output/reports');
 const REPORT_SCENARIO = 'movielens-three-way-affinity-demo-live';
 const SCORE_EPSILON = 1e-9;
 
+// Scores cross two independent implementations, so compare numeric results
+// with a tiny tolerance while requiring movie order and identity to match.
 function rankingsEqual(left, right) {
   return left.length === right.length && left.every((row, index) =>
     Number(row.movieId) === Number(right[index]?.movieId) &&
@@ -21,6 +35,9 @@ function rankingsEqual(left, right) {
       SCORE_EPSILON);
 }
 
+// Keep correctness, transfer shape, and placement as separate observations.
+// They are the claims this local experiment can support without pretending
+// the two runtime topologies form a controlled latency benchmark.
 function buildComparison(postgres, lagrange) {
   const postgresRanking = postgres.topMovies.map((row) => ({
     movieId: Number(row.movieId),
@@ -89,6 +106,9 @@ async function writeComparisonReport(comparison, error = null) {
   return path;
 }
 
+// Run the conventional baseline first, then the Lagrange phases. Failure
+// evidence is written even when the comparison aborts so a red run remains
+// diagnosable instead of disappearing behind one thrown exception.
 async function runComparison({
   downloadRatingsFn = downloadRatings,
   runAffinityDemoFn = runAffinityDemo,

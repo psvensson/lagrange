@@ -1,5 +1,14 @@
 #!/usr/bin/env node
 
+/**
+ * Compatibility proof harness for the ordinary app/ image.
+ *
+ * Build the application once, run that exact image against stock PostgreSQL and
+ * Lagrange, require identical /rankings results, then verify that bad password
+ * and bad-CA connections fail closed. The harness is Lagrange-aware so the
+ * application does not have to be.
+ */
+
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
@@ -16,7 +25,7 @@ import {promisify} from 'node:util';
 
 import Database from 'better-sqlite3';
 
-import {RUNTIME_KIND} from '../../src/constants/runtime.js';
+import {SQL_ENGINE_RUNTIME_KIND} from '../../src/constants/runtime.js';
 import {
   META_SERVICE_ID,
   META_SERVICE_RUNTIME_REF,
@@ -178,7 +187,7 @@ function createSqlRequestExecutor(database, observedRequests) {
 function createLagrangeDefinition() {
   return {
     serviceId: META_SERVICE_ID.POSTGRES_WIRE,
-    runtimeKind: RUNTIME_KIND.NATIVE_JS,
+    runtimeKind: SQL_ENGINE_RUNTIME_KIND,
     runtimeRef: META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
     runtimeConfig: JSON.stringify({
       host: LAGRANGE_RUNTIME.HOST,

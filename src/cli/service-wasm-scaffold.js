@@ -294,7 +294,7 @@ function packageJson(serviceName) {
 function readme(serviceName) {
   return `# ${serviceName}
 
-A code-first Lagrange WASM service, authored with
+A code-first Lagrange service, authored with
 [\`defineService()\`](authoring/define-service.js),
 [\`distributed()\`](authoring/distributed-operation.js), and
 [\`http.post()\`](authoring/request-handler.js) in
@@ -322,7 +322,7 @@ npm test
 \`\`\`sh
 lagrange service generate .
 lagrange service build .
-lagrange service deploy . --layout .lagrange/oci --idempotency-key <key>
+lagrange service deploy . --idempotency-key <key>
 \`\`\`
 
 \`generate\` compiles \`lagrange.service.js\` into the generated component

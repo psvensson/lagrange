@@ -32,13 +32,22 @@ The rows used by a data-local operation must live in Lagrange partitions.
 
 ## Public service path
 
-The deployment model is Artifact / Binding / Cell. Recommended authoring:
-**Code-first JavaScript service compiler** - the
-compiled artifact is not a WebAssembly binary or component.
+The deployment model is [Artifact / Binding / Cell](vocabulary.md#service-deployment-hierarchy).
+Recommended authoring: **Code-first JavaScript service compiler**.
+Managed WASM execution: **Genuine WASI component Cell**.
+
+Lagrange exposes one service API across execution providers. Provider choice may
+change packaging, isolation, and the final runtime adapter; it must not create a
+second Artifact / Binding / Cell model or change handler, distributed-call,
+`run`, `emit`, reduction, routing, budget, retry, or invocation-identity
+semantics.
+
 Binding source kinds are publicly invocable: `request`, `call`; accepted
 `change`, `time`, `once`, `boot`, `pushdown` kinds
 may be declared but have no public invocation adapter.
-Managed OCI activation and OCI callback invocation remains unsupported.
+Managed OCI activation remains unsupported. When OCI execution is implemented,
+it must project the same service API rather than introduce a provider-specific
+programming model.
 
 | Call property | Current state |
 | --- | --- |
@@ -67,14 +76,13 @@ Supported lifecycle SQL:
 - `CREATE BINDING $1;`
 - `CALL BINDING $1;`
 
-| Runtime | External installation | Managed execution | Callback path |
-| --- | --- | --- | --- |
-| `native_js` | Unsupported | Kernel-internal only | Internal supported path |
-| `wasm_component` | External install through lifecycle SQL | Genuine WASI component Cell | Legacy JavaScript-envelope rehearsal |
-| `oci_container` | Unsupported | Descriptor and in-memory lifecycle scaffold only | Unsupported |
+| Execution provider | External installation | Managed execution |
+| --- | --- | --- |
+| `wasm_component` | External install through lifecycle SQL | Genuine WASI component Cell |
+| `oci_container` | Unsupported | Descriptor and in-memory lifecycle scaffold only |
 
-The callback column is a legacy/internal execution axis, not an alternative
-public service model. Managed OCI activation remains unsupported.
+WASM is the current supported execution provider. OCI remains a future provider;
+its packaging and isolation differ, but its application semantics do not.
 
 ## Embedded application sessions
 
@@ -133,7 +141,7 @@ Snapshot recovery is replica repair, not a user backup or PITR product.
 | Evidence | Current state |
 | --- | --- |
 | Code-first public service demo | Single-node, two-partition functional proof |
-| Multi-node data-local comparison | Internal native_js service path |
+| Multi-node data-local comparison | Internal measurement path |
 | SQLite snapshot live rebuild | Five-node certification window |
 | Public-path scale benchmark | Not available |
 
@@ -154,7 +162,7 @@ turning evidence into a product claim.
 | Service execution | A call selects one bounded shard batch; the public path does not stream or page an unbounded partition scan. |
 | Service execution | Coordinated partial values are finite numbers and their keys must be disjoint across shards. |
 | Service portability | Managed OCI container activation is unsupported; the recommended service path is a WASI component. |
-| PostgreSQL compatibility | Password authentication and TLS are implemed, but SCRAM and arbitrary PostgreSQL or ORM compatibility are not claimed. |
+| PostgreSQL compatibility | Password authentication and TLS are implemented, but SCRAM and arbitrary PostgreSQL or ORM compatibility are not claimed. |
 | Security | Node-to-node transport is plain WebSocket without cryptographic peer authentication; deploy it only on a trusted private network. |
 | Operations | Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x. |
 

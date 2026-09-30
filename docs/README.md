@@ -4,6 +4,8 @@ Use the shortest path that answers the question in front of you.
 
 ## Decide whether to evaluate it
 
+- [Related systems](related-systems.md) - familiar architectural ideas,
+  external references, and where each analogy stops
 - [Evaluating Lagrange](evaluate.md) - what it is, what changes in an existing
   system, current evidence, hard limits, and the pilot decision gate
 - [Current capabilities and limitations](current-capabilities-and-limitations.md)
@@ -33,8 +35,8 @@ Use the shortest path that answers the question in front of you.
   consistency, partial failure, movement, and budgets
 - [Building and deploying a service](service-deployment-guide.md) - scaffold,
   generate, build, deploy, and the advanced runtime contract
-- [Vocabulary](vocabulary.md) - exact relationships between services, Artifacts,
-  Bindings, Cells, tables, partitions, and replicas
+- [Vocabulary](vocabulary.md) - source-level terms, WASM/WASI/WIT, and the
+  relationships between Artifacts, Bindings, Cells, partitions, and replicas
 
 ## Measure a workload
 

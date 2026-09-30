@@ -7,6 +7,9 @@ import test from 'node:test';
 import {checkCurrentCapabilities} from
   '../../scripts/check-current-capabilities.js';
 
+import {generate, renderCurrentCapabilitiesDocument} from
+  '../../scripts/generate-current-capabilities-doc.js';
+
 const TEMP_PREFIX = 'current-capabilities-';
 const FIXTURE_PATHS = Object.freeze([
   'architecture/process-partitioning.md',
@@ -47,4 +50,27 @@ test('current capabilities detect a stale generated document', () => {
   } finally {
     fs.rmSync(fixtureRoot, {recursive: true, force: true});
   }
+});
+
+test('generated public service status exposes one runtime-neutral API', () => {
+  const document = generate();
+  assert.match(
+    document, /Managed WASM execution: \*\*Genuine WASI component Cell\*\*/u,
+  );
+  assert.match(document, /one service API across execution providers/iu);
+  assert.match(document, /Execution provider/iu);
+  assert.doesNotMatch(document, /native_js|JavaScript-envelope|legacy callback/iu);
+});
+
+test('managed WASM summary follows the portability status', () => {
+  const capabilities = JSON.parse(fs.readFileSync(
+    'docs/current-capabilities.json', 'utf8',
+  ));
+  const portability = JSON.parse(fs.readFileSync(
+    'docs/service-portability-capabilities.json', 'utf8',
+  ));
+  portability.runtimes.wasm_component.managedExecution = 'unsupported';
+  const document = renderCurrentCapabilitiesDocument(capabilities, portability);
+  assert.match(document, /Managed WASM execution: \*\*Unsupported\*\*/u);
+  assert.doesNotMatch(document, /Managed WASM execution: \*\*Genuine/u);
 });

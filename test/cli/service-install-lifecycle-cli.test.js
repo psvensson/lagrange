@@ -213,7 +213,6 @@ describe('service lifecycle CLI contract', () => {
     for (const command of [
       'init <directory>',
       'install <manifest-file>',
-      'dev-install <project-directory>',
       'list',
       'status <service-name>',
       'remove <service-name>',
@@ -235,7 +234,6 @@ describe('service lifecycle CLI contract', () => {
     const imports = collectImports(ast);
 
     assert.deepEqual(imports.static.sort(), [
-      './service-project-scaffold.js',
       './service-wasm-scaffold.js',
     ]);
     assert.deepEqual(imports.dynamic.sort(), [

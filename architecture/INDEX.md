@@ -23,35 +23,49 @@ flowchart LR
   classDef ext fill:#f1f5f9,stroke:#475569,color:#0f172a
 ```
 
-The rows selected for a shard are read from that host's local partition
-replica. The exchange carries emitted partials and the final result. Writes
-still use the partition leader and Raft quorum.
+For a distributed call, a shard is one selected partition's task. Its `run()`
+executes on the partition leader's host and reads that host's local SQLite
+replica. Reduction runs on the holder of the invocation's reduce lease, not on
+every data replica. The exchange carries emitted partials and the final result;
+replication and coordination still generate their own network traffic.
 
-## Product architecture
+This call path reads user tables; it does not make the service functions part
+of Raft's replicated state-machine execution. Cells are disposable execution
+instances, not per-service consensus groups. Durable service state belongs in
+ordinary replicated tables. See [Vocabulary](../docs/vocabulary.md).
 
-Read these first:
+Do not conflate three mechanisms: distributed calls require leader-local input;
+ordinary SQL reads may select other eligible replicas; placement affinity
+changes where service instances live over time. The latter two do not replace
+the call path's locality requirement.
+
+## Current architecture
+
+Start with the [programming model](../docs/native-programming-model.md) and
+[execution semantics](../docs/execution-semantics.md) for what an application
+can rely on. Then read the implementation in this order:
 
 1. [The Lagrange System Model](system-model.md) - tables, partitions, replicas,
    Artifacts, Bindings, Cells, and durable-state ownership.
-2. [Process: Request Routing](process-request-routing.md) - how SQL and service
-   work find the current target.
-3. [Process: Data Affinity](process-data-affinity.md) - how observed access and
-   activation leases pull compute toward data.
-4. [Process: Replication](process-replication.md) - commit, propagation,
+2. [Process: Request Routing](process-request-routing.md) - ordinary SQL,
+   HTTP requests, and leader-local distributed calls.
+3. [Process: Replication](process-replication.md) - commit, propagation,
    snapshot recovery, and replica repair.
-5. [PostgreSQL Locking Reads](postgres-locking-reads.md) - planned Phase 0.3
-   `SELECT ... FOR UPDATE` ownership across PG parsing, SqlCore, distributed
-   transactions, and partition participants.
-6. [Live Query Data Plane](live-query-data-plane.md) - target contract for
-   push-backed query observation with no polling for distributed change
-   detection.
-7. [Process: Rebalancing](process-rebalancing.md) - continuous placement and
+4. [Process: Data Affinity](process-data-affinity.md) - observed-access
+   placement, read preference, and call-host activation leases.
+5. [Process: Rebalancing](process-rebalancing.md) - continuous placement and
    movement safety.
 
-For the developer-visible contract, read
-[Execution Semantics](../docs/execution-semantics.md). For status rather than
-architecture, read
+The [related-systems guide](../docs/related-systems.md) provides external
+reference points. For implementation status rather than architecture, use
 [Current Capabilities And Limitations](../docs/current-capabilities-and-limitations.md).
+
+## Planned designs, not current guarantees
+
+[PostgreSQL Locking Reads](postgres-locking-reads.md) describes the planned
+Phase 0.3 `SELECT ... FOR UPDATE` contract. [Live Query Data Plane](live-query-data-plane.md)
+describes the target for general push-backed query observation. Their presence
+in this index does not mean those product contracts are already supported.
 
 ## By question
 
@@ -63,7 +77,7 @@ architecture, read
 | How are reads and writes routed? | [Request routing](process-request-routing.md) |
 | How will PostgreSQL `SELECT ... FOR UPDATE` become a real distributed locking read? | [PostgreSQL locking reads](postgres-locking-reads.md) |
 | How should a query result stay current after remote writes? | [Live query data plane](live-query-data-plane.md) |
-| How does one service call fan out and reduce? | [Minimal deployment surface](minimal-deployment-surface.md) and [query runtime](query-runtime.md) |
+| How does one service call fan out and reduce? | [Execution semantics](../docs/execution-semantics.md), then [minimal deployment surface](minimal-deployment-surface.md) |
 | How is missing compute activated on a data host? | [Data affinity](process-data-affinity.md) |
 | What moves after failures, splits, or load changes? | [Rebalancing](process-rebalancing.md) |
 | How do nodes form a cluster? | [Bootstrap](bootstrap.md) |

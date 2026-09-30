@@ -1,12 +1,32 @@
 # Examples
 
-Seven runnable examples, ordered story-first: the distributed call path
+Six runnable examples, ordered story-first: the distributed call path
 leads, the service front doors follow, then the measured comparison
-study, the compatibility and operations rungs, and finally the legacy
-callback surface kept as a historical artifact. Each directory has its
+study and the compatibility and operations rungs. Each directory has its
 own README with step-by-step commands, a plain-language introduction to
 the problem it addresses, and references for every concept beyond basic
 programming.
+
+## How to read these examples
+
+Most directories contain two very different kinds of code:
+
+- **Authored workload** - the small service, component, callback, or application
+  a developer would actually own.
+- **Runner / proof harness** - the larger program that boots disposable nodes,
+  creates schema, installs artifacts, injects failures, and asserts the result.
+
+Read the authored workload first. The runner is deliberately explicit because
+it proves that the example used the real runtime path; its size is not the size
+of the application-facing API. Each README calls out which file is the workload
+and which files exist only to make the proof reproducible.
+
+When evaluating an example, keep four questions separate:
+
+1. What code did the application author write?
+2. Where does that code execute, and where does durable state live?
+3. What crosses the network or coordination boundary?
+4. What does the example prove, and what does it intentionally not prove?
 
 ## The Problem Lagrange Works On
 
@@ -117,7 +137,6 @@ flowchart TD
   Q1 -- "What does data-local<br/>execution measurably buy?" --> DA["service-data-affinity<br/><i>MovieLens three-way comparison</i>"]:::data
   Q1 -- "Can my existing app<br/>connect unchanged?" --> SP["service-portability<br/><i>compatibility, no rewrite</i>"]:::svc
   Q1 -- "How do I expose services<br/>in Kubernetes?" --> K8["kubernetes-endpoint-sync-controller"]:::svc
-  Q1 -- "What did the pre-Binding<br/>surface look like? (legacy)" --> DS["distributed-sql<br/><i>historical callback surface</i>"]:::data
 
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
@@ -201,9 +220,9 @@ and a replicated Lagrange service applying shard-local ranking policy with
 bounded top-N reduction - and shows placement converging toward the data.
 
 Answers: **what can disappear when a hot path is rewritten for partition-local
-work and bounded reduction?** Its honest boundary: the demo drives a
-kernel-internal `native_js` query-loop module through scaffolding. The
-public successor to that internal module is the call path shown in
+work and bounded reduction?** Its honest boundary: the comparison harness
+exercises internal placement machinery to measure the execution shape. The
+developer-facing service path is the call model shown in
 [call-binding-account-summary](call-binding-account-summary/README.md).
 
 - **You'll need**: Docker for PostgreSQL and internet access for the first
@@ -231,21 +250,3 @@ a Lagrange cluster to Kubernetes-native networking.
 
 - **You'll need**: nothing for rendering the chart (`helm template`); a
   running Lagrange node plus Kubernetes credentials for the live modes.
-
-### [distributed-sql/](distributed-sql/README.md) - legacy
-
-The **legacy callback surface**, kept deliberately as a historical
-artifact (compatibility-and-internals territory - read it after the
-examples above, not before). Copyable `partition_callback` modules run
-against a live node by a manifest-driven runner. It predates Artifacts
-and Bindings; its partition-local mechanics are worth studying, but
-services are not deployed this way today, and its sixth example is a
-JavaScript-envelope lifecycle rehearsal, *not* a real WebAssembly
-component.
-[Current Capabilities And Limitations](../docs/current-capabilities-and-limitations.md)
-is the status authority.
-
-- **You'll need**: a running Lagrange node (`npm start` from the repository
-  root).
-- The per-example `index.js` files are callback modules loaded by the runner,
-  not standalone programs; `node index.js` does nothing on its own.

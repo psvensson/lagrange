@@ -1,3 +1,15 @@
+/**
+ * Intentionally ordinary PostgreSQL application used by the portability proof.
+ *
+ * Nothing in this file imports Lagrange code or knows which database is behind
+ * the PostgreSQL wire connection. The harness runs this exact application image
+ * first against PostgreSQL and then against Lagrange, changing only environment
+ * variables for connection, credentials, and TLS.
+ *
+ * The tiny table is recreated per request only to keep the example deterministic
+ * while exercising DDL, transactions, parameters, ordering, and row decoding.
+ * That is test-fixture behavior, not a production schema-management pattern.
+ */
 import {createServer} from 'node:http';
 import {readFileSync} from 'node:fs';
 
@@ -77,6 +89,8 @@ function parsePort(value, name) {
   return parsed;
 }
 
+// Keep TLS policy in the application, exactly as an existing PostgreSQL client
+// would. The Lagrange stage uses verify-full with the demo CA and server name.
 function buildSslConfiguration() {
   const mode = process.env.DB_TLS_MODE || TLS_MODE.DISABLE;
   if (mode === TLS_MODE.DISABLE) return false;
@@ -129,9 +143,13 @@ function parseMinimumScore(body) {
   return value;
 }
 
+// This function is the compatibility slice under test. Every statement is
+// deliberately conventional PostgreSQL client code; there is no Lagrange API.
 async function executePortableRanking(pool, minimumScore) {
   const client = await pool.connect();
   try {
+    // Reset the tiny fixture so both database stages see identical input.
+    // Real applications would normally manage schema outside a request path.
     await client.query(PORTABLE_SQL.BEGIN);
     await client.query(PORTABLE_SQL.DROP_TABLE);
     await client.query(PORTABLE_SQL.CREATE_TABLE);
@@ -160,6 +178,8 @@ async function executePortableRanking(pool, minimumScore) {
   }
 }
 
+// One pool and one HTTP handler are reused unchanged in both stages of the
+// proof. Only the DB_* environment values differ.
 const pool = createPool();
 const server = createServer(async (request, response) => {
   if (request.url === '/health' && request.method === 'GET') {

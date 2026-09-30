@@ -33,22 +33,25 @@ one Node.js `pg` slice. It is not a blanket compatibility claim.
 
 This stage does not prove the Lagrange service model or reduce data movement.
 
-### 2. Deploy one request-shaped WASM service
+### 2. Test service deployment and request routing
 
-Package a small endpoint as a code-first service without introducing a
-distributed operation yet.
+Build and deploy the [account-summary component](../examples/call-binding-account-summary/README.md),
+then call `GET /accounts/health`. The health handler makes no distributed call,
+so you can inspect installation, authentication, and request routing separately
+from the expensive operation.
 
-This stage proves:
+The current default `service-cell` build requires exactly one distributed
+operation per component. A no-call handler is supported; removing every
+operation to make a request-only component is not this documented workflow.
+Keep the summary operation declared while testing the health route.
 
-- the `lagrange service init -> generate -> build -> deploy` workflow;
-- immutable component installation;
-- request routing;
-- Basic-authenticated HTTP ingress;
-- declared table and outbound-call capabilities; and
-- Cell activation and replacement.
+At this stage, verify the build and deployment records, immutable component
+installation, Basic-authenticated HTTP ingress, and ready service instances
+(Cells). One successful health request does not prove replacement, recovery, or
+authorization denial; those need their own checks.
 
-If the endpoint still issues the same queries and receives the same results,
-its data movement has not changed. This is a lifecycle and isolation step.
+This is a deployment step, not the data-local optimization. A WASI component
+also does not automatically provide the Node.js APIs of an existing service.
 
 ### 3. Extract one data-heavy operation
 
@@ -86,8 +89,10 @@ product gaps, not documentation details.
 
 ## Data loading
 
-There is no supported PostgreSQL-to-Lagrange migration or CDC product surface
-today. Plan data movement explicitly.
+There is no supported PostgreSQL-to-Lagrange migration or change data capture
+(CDC) ingestion product surface today. Internal system-table CDC feeds
+Lagrange's own metadata caches; it is not an external database connector.
+Plan data movement explicitly.
 
 A controlled pilot normally needs:
 
