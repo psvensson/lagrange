@@ -28,7 +28,7 @@
   "censusSize": 2236,
   "digest": "fnv1a32-3a9574c3",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-605450a4",
+  "observationDigest": "fnv1a32-2d00aabe",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -11529,7 +11529,8 @@
         "README.md",
         "architecture/overview.md",
         "package-lock.json",
-        "package.json"
+        "package.json",
+        "scripts/checks/no-legacy-consensus-reference-audit.js"
       ],
       "directories": [
         "architecture",

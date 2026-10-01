@@ -135,6 +135,7 @@ const STATIC_AUDIT_SCRIPTS = Object.freeze([
   'audit:closure-ledger',
   'audit:no-kiro',
   'audit:no-legacy-naming',
+  'audit:no-legacy-consensus-references',
   'audit:impact-contracts',
   'audit:shards',
   'audit:guidelines',
