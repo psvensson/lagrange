@@ -114,8 +114,6 @@ const {
   PLAYBACK_SCOPE_NODE,
   PORTS,
   PlaybackRecorder,
-  RAFT_PROVIDER_DEFAULTS,
-  RAFT_PROVIDER_ENV_KEY,
   REQUEST_CELL_AUTH,
   REUSE_CONTAINER_NAME_PREFIX,
   REUSE_DATA_DIRNAME,
@@ -552,9 +550,6 @@ class ClusterLifecycleBase {
       // which forces the reuse recreate so the matching bind is picked up.
       env[NODE_LOG_FILE_ENV_VAR] = nodeLogContainerFilePath();
     }
-    env[RAFT_PROVIDER_ENV_KEY] = String(
-      this._config.raftProvider || RAFT_PROVIDER_DEFAULTS.provider,
-    );
     if (this._config?.memoryLeak?.captureHeapArtifacts === true) {
       const nearLimitCount =
         Number.isInteger(
