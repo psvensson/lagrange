@@ -4,8 +4,6 @@
  * machine (the system-table cache).
  * Requirements: 6.1, 6.2, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4
  */
-import {CONFIG_KEY} from '../config/config-constants.js';
-import {ConfigurationManager} from '../config/configuration-manager.js';
 import {RAFT_ELECTION_TIMING} from '../raft/constants.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {computeReplicaElectionTimeouts} from
@@ -20,42 +18,6 @@ import {isMessageGroupCommandType} from
   './message-group-committed-command-admission.js';
 import {MESSAGE_GROUP_SERVICE_LITERAL} from
   './message-group-service-runtime-support.js';
-
-/**
- * The replica's timing at initialization: the configured heartbeat and
- * election window, with this replica's election jitter applied.
- * @param {Object} service - The message-group replica.
- * @return {Object} {heartbeatMs, baseElectionMinMs, baseElectionMaxMs,
- *   electionMinMs, electionMaxMs, tickIntervalMs}.
- */
-function resolveMessageGroupRaftTiming(service) {
-  const config = ConfigurationManager.getInstance();
-  const heartbeatMs =
-    config.get(CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS) ||
-    RAFT_ELECTION_TIMING.HEARTBEAT_DEFAULT_MS;
-  const baseElectionMinMs =
-    config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS) ||
-    RAFT_ELECTION_TIMING.ELECTION_MIN_DEFAULT_MS;
-  const baseElectionMaxMs =
-    config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS) ||
-    RAFT_ELECTION_TIMING.ELECTION_MAX_DEFAULT_MS;
-  const tickIntervalMs = config.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS);
-  const {electionMinMs, electionMaxMs} = computeReplicaElectionTimeouts({
-    replicaId: service.replicaId,
-    replicaIds: service.replicaIds,
-    baseElectionMinMs,
-    baseElectionMaxMs,
-    electionJitterPerReplicaMs: RAFT_ELECTION_TIMING.JITTER_PER_REPLICA_MS,
-  });
-  return {
-    heartbeatMs,
-    baseElectionMinMs,
-    baseElectionMaxMs,
-    electionMinMs,
-    electionMaxMs,
-    tickIntervalMs: Number.isFinite(tickIntervalMs) ? tickIntervalMs : null,
-  };
-}
 
 function isValidTimingConfig(timingConfig, hasTickInterval) {
   const tickIntervalMs = timingConfig.tickIntervalMs;
@@ -242,4 +204,4 @@ function assignRaftTiming(serviceClass) {
   });
 }
 
-export {assignRaftTiming, resolveMessageGroupRaftTiming};
+export {assignRaftTiming};

@@ -53,6 +53,13 @@ const WASM_SERVICE_ERROR_MSG = Object.freeze({
   SESSION_SIZE_LIMIT_EXCEEDED: 'Session context size limit exceeded',
   SERVICE_SIZE_LIMIT_EXCEEDED: 'Service total context size limit exceeded',
   SERVICE_NOT_READY: 'WASM service group is not ready',
+  MISSING_DB_PATH: 'WASM service replica requires its durable database path',
+  IN_MEMORY_DB_PATH_REFUSED:
+    'WASM service replica refuses an in-memory consensus database',
+  CONSENSUS_INIT_REFUSED: 'WASM service consensus port refused to open',
+  PROPOSAL_REFUSED: 'WASM service proposal refused by its consensus port',
+  UNKNOWN_COMMITTED_COMMAND: 'WASM service committed an unknown command type',
+  REPLICA_ID_REQUIRED: 'WASM service replica requires its replicaId',
   MODULE_NOT_AVAILABLE: 'WASM module not available on any node',
   RUN_EXPORT_NOT_FOUND:
     'run_export function not found in module exports',
@@ -110,6 +117,15 @@ const WASM_SERVICE_LOG_MSG = Object.freeze({
   DEFINITION_REJECTED: 'Service definition rejected',
   ENTRY_COMMITTED: 'Raft entry committed and applied',
   WRITE_REJECTED_SIZE_LIMIT: 'Write rejected due to size limit',
+  ASYNC_PROPOSAL_FAILED: 'Async WASM service write proposal failed',
+  PERSIST_ROLE_FAILED: 'Failed to persist WASM service replica role',
+  PERSIST_LEADER_FAILED: 'Failed to persist WASM service leader node',
+});
+
+// A committed value crosses the consensus log as base64 text: the proposal
+// codec is JSON, which a Buffer does not survive.
+const WASM_SERVICE_VALUE_ENCODING = Object.freeze({
+  BASE64: 'base64',
 });
 
 const WASM_SERVICE_EXECUTOR_TYPE = 'wasm_service';
@@ -161,6 +177,7 @@ export {
   WASM_SERVICE_COMMAND_TYPE,
   WASM_SERVICE_COMMAND_REFUSAL,
   WASM_SERVICE_LOG_MSG,
+  WASM_SERVICE_VALUE_ENCODING,
   WASM_SERVICE_EXECUTOR_TYPE,
   SQL_ENGINE_PROFILE,
   WASM_SERVICE_PROTOCOL,

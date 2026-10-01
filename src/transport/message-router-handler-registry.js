@@ -80,7 +80,8 @@ class MessageRouterHandlerRegistry {
   /**
    * Validate that an address follows the unified format.
    * Format: ${nodeId}/${entityType}/${entityId}
-   * Valid entityTypes: message-group, partition, lifecycle, service
+   * Valid entityTypes: message-group, partition, lifecycle, service,
+   * bootstrap, wasm_service
    * Requirements: 1.1, 1.3
    * @param {string} address - Address to validate.
    * @return {boolean} True if address is valid.

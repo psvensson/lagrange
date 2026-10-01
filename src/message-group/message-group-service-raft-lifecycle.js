@@ -17,6 +17,7 @@ import {
   takeGroupAdmissionsInFlight,
 } from '../raft/raft-rs-group-membership-admission.js';
 import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
+import {resolveReplicaRaftTiming} from '../raft/replica-raft-timing.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   MESSAGE_GROUP_SERVICE_LOG_MSG,
@@ -30,8 +31,6 @@ import {
 } from './message-group-consensus-port.js';
 import {MESSAGE_GROUP_SERVICE_LITERAL} from
   './message-group-service-runtime-support.js';
-import {resolveMessageGroupRaftTiming} from
-  './message-group-service-raft-timing.js';
 
 const RETIRED_REPLICA_STATUSES = Object.freeze(new Set([
   ReplicaStatus.FAILED,
@@ -184,7 +183,7 @@ function assignRaftLifecycle(serviceClass) {
           replicaCount: this.replicaIds.length,
         },
       );
-      this.raftTimingConfig = resolveMessageGroupRaftTiming(this);
+      this.raftTimingConfig = resolveReplicaRaftTiming(this);
       try {
         await this.openConsensus();
       } catch (error) {

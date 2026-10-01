@@ -1,5 +1,8 @@
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   WasmServiceLifecycle,
   REPLICA_LIFECYCLE_STATE,
@@ -16,6 +19,9 @@ import {NodeService} from
   '../../src/node/node-service.js';
 import {AddressManager} from
   '../../src/address/address-manager.js';
+
+// Each test's replicas get durable database paths in their own directory.
+let scratchDirectory = null;
 
 /**
  * Initialize singletons required by WasmServiceReplica.
@@ -34,16 +40,20 @@ function initEnv() {
 
   const logging = LoggingService.getInstance();
   logging.initialize({level: 'error'});
+  scratchDirectory = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wasm-service-lifecycle-'));
 }
 
 /**
- * Tear down singletons.
+ * Tear down singletons and the test's replica database directory.
  */
 function cleanEnv() {
   NodeService.resetInstance();
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   AddressManager.resetInstance();
+  fs.rmSync(scratchDirectory, {recursive: true, force: true});
+  scratchDirectory = null;
 }
 
 /**
@@ -73,7 +83,8 @@ function makeReplicaConfig(overrides = {}) {
   return {
     replicaId: 'svc-1-r1',
     replicaIds: ['svc-1-r1'],
-    dbPath: ':memory:',
+    dbPath: path.join(scratchDirectory,
+      `${overrides.replicaId ?? 'svc-1-r1'}.db`),
     transport: null,
     ...overrides,
   };
@@ -171,7 +182,6 @@ describe('WasmServiceLifecycle', () => {
       assert.strictEqual(
         lifecycle.activeReplicas.get('svc-1'), replica,
       );
-      replica.kvStore.close();
     });
 
     it('should return the created replica', () => {
@@ -183,7 +193,6 @@ describe('WasmServiceLifecycle', () => {
       assert.equal(
         replica.serviceDefinitionId, 'svc-1',
       );
-      replica.kvStore.close();
     });
 
     it('should pass serviceDefinitionId to replica', () => {
@@ -197,7 +206,6 @@ describe('WasmServiceLifecycle', () => {
       assert.strictEqual(
         lifecycle.activeReplicas.get('svc-abc'), replica,
       );
-      replica.kvStore.close();
     });
 
     it('should pass replicaId from config', () => {
@@ -206,7 +214,6 @@ describe('WasmServiceLifecycle', () => {
       const cfg = makeReplicaConfig({replicaId: 'r-99'});
       const replica = lifecycle.createReplica(def, cfg);
       assert.equal(replica.replicaId, 'r-99');
-      replica.kvStore.close();
     });
 
     it('should pass readConsistency from definition', () => {
@@ -217,7 +224,6 @@ describe('WasmServiceLifecycle', () => {
       const cfg = makeReplicaConfig();
       const replica = lifecycle.createReplica(def, cfg);
       assert.equal(replica.readConsistency, 'eventual');
-      replica.kvStore.close();
     });
 
     it('should create multiple replicas for different ' +
@@ -238,8 +244,6 @@ describe('WasmServiceLifecycle', () => {
       assert.strictEqual(
         lifecycle.activeReplicas.get('svc-b'), r2,
       );
-      r1.kvStore.close();
-      r2.kvStore.close();
     });
   });
 
@@ -252,7 +256,6 @@ describe('WasmServiceLifecycle', () => {
       assert.equal(result.started, true);
       assert.equal(typeof result.port, 'number');
       assert.ok(result.port >= 30000);
-      lifecycle.activeReplicas.get('svc-1').kvStore.close();
     });
 
     it('should set portAllocation on the replica', () => {
@@ -262,7 +265,6 @@ describe('WasmServiceLifecycle', () => {
       const result = lifecycle.startReplica('svc-1');
       const replica = lifecycle.getReplica('svc-1');
       assert.equal(replica.portAllocation, result.port);
-      replica.kvStore.close();
     });
 
     it('should return null for unknown serviceId', () => {
@@ -290,7 +292,6 @@ describe('WasmServiceLifecycle', () => {
         });
         assert.equal(checkedId, 'fn-42');
         assert.equal(checkedVersion, 'v2');
-        lifecycle.getReplica('svc-1').kvStore.close();
       });
 
     it('fails closed when module is unavailable', () => {
@@ -311,7 +312,6 @@ describe('WasmServiceLifecycle', () => {
       assert.equal(result.diagnostic.serviceId, 'svc-1');
       assert.equal(result.diagnostic.handlerFunctionId, 'fn-missing');
       assert.equal(result.diagnostic.code, 'module_unavailable');
-      lifecycle.getReplica('svc-1').kvStore.close();
     });
 
     it('fails closed when module mirror is missing', () => {
@@ -325,7 +325,6 @@ describe('WasmServiceLifecycle', () => {
 
       assert.equal(result.started, false);
       assert.equal(result.diagnostic.code, 'module_mirror_missing');
-      lifecycle.getReplica('svc-1').kvStore.close();
     });
 
     it('records and clears startup diagnostics', () => {
@@ -346,7 +345,6 @@ describe('WasmServiceLifecycle', () => {
         moduleVersion: 'v1',
       });
       assert.equal(lifecycle.getStartDiagnostic('svc-1'), null);
-      lifecycle.getReplica('svc-1').kvStore.close();
     });
 
     it('should build endpoint when serviceDefinition ' +
@@ -366,7 +364,6 @@ describe('WasmServiceLifecycle', () => {
         result.endpoint.node_id, 'test-node',
       );
       assert.equal(result.endpoint.port, result.port);
-      lifecycle.getReplica('svc-1').kvStore.close();
     });
 
     it('should return null endpoint when no ' +
@@ -377,7 +374,6 @@ describe('WasmServiceLifecycle', () => {
       );
       const result = lifecycle.startReplica('svc-1');
       assert.equal(result.endpoint, null);
-      lifecycle.getReplica('svc-1').kvStore.close();
     });
 
     it('should allocate different ports for different ' +
@@ -394,8 +390,6 @@ describe('WasmServiceLifecycle', () => {
       const r1 = lifecycle.startReplica('svc-a');
       const r2 = lifecycle.startReplica('svc-b');
       assert.notEqual(r1.port, r2.port);
-      lifecycle.getReplica('svc-a').kvStore.close();
-      lifecycle.getReplica('svc-b').kvStore.close();
     });
   });
 
@@ -459,7 +453,6 @@ describe('WasmServiceLifecycle', () => {
       );
       const found = lifecycle.getReplica('svc-1');
       assert.strictEqual(found, created);
-      created.kvStore.close();
     });
 
     it('should return null for unknown serviceId', () => {
@@ -490,8 +483,6 @@ describe('WasmServiceLifecycle', () => {
       assert.equal(replicas.size, 2);
       assert.ok(replicas.has('svc-a'));
       assert.ok(replicas.has('svc-b'));
-      replicas.get('svc-a').kvStore.close();
-      replicas.get('svc-b').kvStore.close();
     });
   });
 
