@@ -1,5 +1,5 @@
 // The zero-reference ratchet for the retired consensus runtime (quest
-// zero-liferaft-active-runtime). The scope is fixed and pinned here, its one
+// consensus-cutover quest). The scope is fixed and pinned here, its one
 // exclusion is the historical solve/ record, and every surface it names is
 // shown red on a seeded reference, in a filename and in content, in any case.
 
