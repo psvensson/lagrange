@@ -109,9 +109,12 @@ function classifyReplaceOwnerPhase(inputs) {
 
 const SESSION_BY_OWNER = new WeakMap();
 
-// The session clock is the clock the durable step entries are stamped with.
-function sessionClockNowMs() {
-  return Date.now();
+// The session clock is the owner's timeout-check clock (its injected
+// TimeSource when one is present, else Date.now()): the clock the durable
+// step entries are stamped with, and the one a deterministic host drives.
+function sessionClockNowMs(owner) {
+  return typeof owner?.resolveTimeoutCheckNowMs === 'function' ?
+    owner.resolveTimeoutCheckNowMs() : Date.now();
 }
 
 /**
@@ -122,7 +125,7 @@ function sessionClockNowMs() {
  */
 function startReplaceOwnerSession(owner, restartClass) {
   SESSION_BY_OWNER.set(owner, {
-    startedAtMs: sessionClockNowMs(),
+    startedAtMs: sessionClockNowMs(owner),
     restartClass,
     rebuiltOperationIds: new Set(),
   });

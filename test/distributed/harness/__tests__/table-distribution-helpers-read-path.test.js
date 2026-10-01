@@ -288,6 +288,11 @@ test('table-distribution-helpers falls back to an alternate snapshot node ' +
 test('table-distribution-helpers keeps timed-out create mutations ' +
   'single-flight across the full benchmark node set', async () => {
   const createCalls = [];
+  // The create budget is deadline-bound (deadline - Date.now()); on a frozen
+  // clock it is exactly the configured budget, never a millisecond short.
+  const originalDateNow = Date.now;
+  const fakeNow = originalDateNow();
+  Date.now = () => fakeNow;
   const fallbackNodes = Array.from({length: 6}, (_value, index) => {
     const nodeId = 'node-' + String(index + 2);
     const visibilityNode = index === 5;
@@ -350,17 +355,21 @@ test('table-distribution-helpers keeps timed-out create mutations ' +
     },
   };
 
-  const ensured = await ensureBenchmarkPartitioningTable(seedNode, {
-    tableName: 'benchmark_events',
-    requirePartitionVisibility: true,
-    queryNodes: fallbackNodes,
-  });
+  try {
+    const ensured = await ensureBenchmarkPartitioningTable(seedNode, {
+      tableName: 'benchmark_events',
+      requirePartitionVisibility: true,
+      queryNodes: fallbackNodes,
+    });
 
-  assert.equal(ensured.tableId, 'tbl-benchmark-events-meaningful');
-  assert.deepEqual(createCalls, [{
-    nodeId: 'seed-1',
-    timeoutMs: TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
-  }]);
+    assert.equal(ensured.tableId, 'tbl-benchmark-events-meaningful');
+    assert.deepEqual(createCalls, [{
+      nodeId: 'seed-1',
+      timeoutMs: TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
+    }]);
+  } finally {
+    Date.now = originalDateNow;
+  }
 });
 
 test('table-distribution-helpers reroutes a timed-out create mutation once ' +
@@ -673,6 +682,10 @@ test('table-distribution-helpers retries benchmark table bootstrap on ' +
 test('table-distribution-helpers fails over create mutations only ' +
   'for reachability-shaped bootstrap errors', async () => {
   const createTimeoutBudgets = [];
+  // Deadline-bound budgets are asserted exactly, so the clock is frozen.
+  const originalDateNow = Date.now;
+  const fakeNow = originalDateNow();
+  Date.now = () => fakeNow;
   const seedNode = {
     id: 'seed-1',
     async queryWithTimeout(sql, _params, options = {}) {
@@ -708,27 +721,35 @@ test('table-distribution-helpers fails over create mutations only ' +
     },
   };
 
-  const ensured = await ensureBenchmarkPartitioningTable(seedNode, {
-    tableName: 'benchmark_events',
-    queryNodes: [alternateNode],
-  });
+  try {
+    const ensured = await ensureBenchmarkPartitioningTable(seedNode, {
+      tableName: 'benchmark_events',
+      queryNodes: [alternateNode],
+    });
 
-  assert.equal(ensured.tableId, 'tbl-benchmark-events-budget');
-  assert.equal(createTimeoutBudgets.length, 2);
-  assert.equal(createTimeoutBudgets[0].nodeId, 'seed-1');
-  assert.equal(
-    createTimeoutBudgets[0].timeoutMs,
-    TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
-  );
-  assert.equal(createTimeoutBudgets[1].nodeId, 'node-2');
-  assert.equal(
-    createTimeoutBudgets[1].timeoutMs,
-    TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
-  );
+    assert.equal(ensured.tableId, 'tbl-benchmark-events-budget');
+    assert.equal(createTimeoutBudgets.length, 2);
+    assert.equal(createTimeoutBudgets[0].nodeId, 'seed-1');
+    assert.equal(
+      createTimeoutBudgets[0].timeoutMs,
+      TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
+    );
+    assert.equal(createTimeoutBudgets[1].nodeId, 'node-2');
+    assert.equal(
+      createTimeoutBudgets[1].timeoutMs,
+      TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
+    );
+  } finally {
+    Date.now = originalDateNow;
+  }
 });
 
 test('table-distribution-helpers reroutes pre-execution control-plane ' +
   'mutation defers to another benchmark query node', async () => {
+  // Deadline-bound budgets are asserted exactly, so the clock is frozen.
+  const originalDateNow = Date.now;
+  const fakeNow = originalDateNow();
+  Date.now = () => fakeNow;
   const createTimeoutBudgets = [];
   const seedNode = {
     id: 'seed-1',
@@ -795,24 +816,28 @@ test('table-distribution-helpers reroutes pre-execution control-plane ' +
     },
   };
 
-  const ensured = await ensureBenchmarkPartitioningTable(seedNode, {
-    tableName: 'benchmark_events',
-    requirePartitionVisibility: true,
-    queryNodes: [alternateNode],
-  });
+  try {
+    const ensured = await ensureBenchmarkPartitioningTable(seedNode, {
+      tableName: 'benchmark_events',
+      requirePartitionVisibility: true,
+      queryNodes: [alternateNode],
+    });
 
-  assert.equal(ensured.tableId, 'tbl-benchmark-events-deferred');
-  assert.equal(createTimeoutBudgets.length, 2);
-  assert.equal(createTimeoutBudgets[0].nodeId, 'seed-1');
-  assert.equal(
-    createTimeoutBudgets[0].timeoutMs,
-    TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
-  );
-  assert.equal(createTimeoutBudgets[1].nodeId, 'node-2');
-  assert.equal(
-    createTimeoutBudgets[1].timeoutMs,
-    TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
-  );
+    assert.equal(ensured.tableId, 'tbl-benchmark-events-deferred');
+    assert.equal(createTimeoutBudgets.length, 2);
+    assert.equal(createTimeoutBudgets[0].nodeId, 'seed-1');
+    assert.equal(
+      createTimeoutBudgets[0].timeoutMs,
+      TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
+    );
+    assert.equal(createTimeoutBudgets[1].nodeId, 'node-2');
+    assert.equal(
+      createTimeoutBudgets[1].timeoutMs,
+      TEST_MULTI_NODE_CREATE_TIMEOUT_MS,
+    );
+  } finally {
+    Date.now = originalDateNow;
+  }
 });
 
 test('table-distribution-helpers retries retryable snapshot-read defers until ' +

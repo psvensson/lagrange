@@ -27,3 +27,24 @@ quest's focused sets and the lab changed cone never ran.
   ~58 ms each.
 - Proposed quest: memoize the resolved peer address per replica and invalidate on services-row CDC; witness
   the per-bootstrap resolution count and the virgin-seed bootstrap time against base.
+
+## Owner decision: admin control snapshot vs. the single membership owner (release proof 4)
+
+`test/admin/admin-control-snapshot.test.js` fails 5 leaf assertions on main
+because 64ca50428 changed the membership read contract in
+`src/control-plane/active-node-publication-snapshots.js` (published membership
+is read from PUBLISHED rows only; an OPEN or ACK_PENDING row never counts) while
+the admin control-snapshot consumer tests still expect the ack-pending fallback
+("retain the durable published membership while the latest epoch is
+ack-pending", "fallback publication observation should still restore strict
+snapshot node coverage", "default snapshots should use the locally observed
+open membership"). Both readings are defensible and the choice is the owner's:
+
+- (a) keep the single-owner contract and move the admin consumer tests to it
+  (ack-pending membership is exposed only as a separate, non-authoritative
+  observation), or
+- (b) restore the ack-pending fallback for admin control snapshots only.
+
+Until decided, the full release proof stays red on this file. See
+`release-proof-4-classification-2026-09-30.md`.
+
