@@ -62,7 +62,6 @@ import {
   SCENARIO_FILTER_ALL,
   buildDistributedExecutionMetadata,
   buildReportMetadata,
-  resolveRunRaftProvider,
 } from './run-report-metadata.js';
 
 const LIVE_LOG_PREFIX = '[live-log] ';
@@ -791,14 +790,11 @@ function normalizeFiniteNumber(value) {
 
 function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) {
   const gateConfig = resolveBenchmarkGateConfig(config);
-  const currentProvider = resolveRunRaftProvider(config);
   const baseResult = {
     enabled: gateConfig.enabled,
     status: BENCHMARK_GATE_STATUS.SKIPPED,
     reason: BENCHMARK_GATE_SKIP_REASON.DISABLED,
     settings: gateConfig,
-    currentProvider,
-    baselineProvider: gateConfig.baselineProvider,
     comparedScenarioCount: 0,
     failedScenarioCount: 0,
     mitigatedScenarioCount: 0,
@@ -833,10 +829,7 @@ function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) 
     };
   }
 
-  const baselineIndex = buildHistoricalBaselineIndex(
-    historyReports,
-    gateConfig.baselineProvider,
-  );
+  const baselineIndex = buildHistoricalBaselineIndex(historyReports);
 
   let failedScenarioCount = 0;
   let mitigatedScenarioCount = 0;
@@ -1242,7 +1235,6 @@ async function main() {
     runStatusContext.base = {
       ...runStatusContext.base,
       scenarioFilter: String(args.scenario || RUNNER_STAGE_SCENARIO_FILTER_ALL),
-      raftProvider: resolveRunRaftProvider(runConfig),
       ...buildDistributedExecutionMetadata(),
       scenarioCount: scenarios.length,
       scenarioNames: scenarios.map((scenario) => scenario.name),
