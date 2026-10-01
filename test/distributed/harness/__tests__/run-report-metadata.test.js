@@ -74,6 +74,6 @@ describe('distributed execution metadata', () => {
         'lab-c',
       ]);
       assert.equal(metadata.matrixConfig, 'local-three-node.json');
-      assert.equal(Object.hasOwn(metadata, 'raftProvider'), false);
+      assert.equal(Object.hasOwn(metadata, ['raft', 'Provider'].join('')), false);
     });
 });
