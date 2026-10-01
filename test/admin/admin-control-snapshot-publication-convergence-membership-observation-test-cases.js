@@ -461,7 +461,139 @@ test('AdminControlSnapshot prefers published membership observation over newer o
   );
 });
 
-test('AdminControlSnapshot falls back to durable published membership from ack-pending convergence when published observation is unavailable', async (t) => {
+test('AdminControlSnapshot keeps the older PUBLISHED epoch authoritative while a newer epoch is ack-pending', async (t) => {
+  const snapshot = new AdminControlSnapshot({
+    nodeId: 'node-1',
+    nowFn: () => 1000,
+  });
+
+  const activeNodeViews = snapshot.resolveControlSnapshotNodeViews(
+    [
+      {
+        node_id: 'node-1',
+        status: 'active',
+        connection_state: 'ready',
+        ready_lease_expires_at: 2000,
+      },
+      {
+        node_id: 'node-2',
+        status: 'active',
+        connection_state: 'ready',
+        ready_lease_expires_at: 2000,
+      },
+      {
+        node_id: 'node-3',
+        status: 'active',
+        connection_state: 'ready',
+        ready_lease_expires_at: 2000,
+      },
+    ],
+    [
+      {
+        service_id: 'svc-1',
+        node_id: 'node-1',
+        status: 'active',
+      },
+      {
+        service_id: 'svc-2',
+        node_id: 'node-2',
+        status: 'active',
+      },
+      {
+        service_id: 'svc-3',
+        node_id: 'node-3',
+        status: 'active',
+      },
+    ],
+    [
+      {
+        endpoint_id: 'node-1-ws',
+        node_id: 'node-1',
+        transport_type: 'ws',
+        status: 'active',
+        address: 'ws://node-1:8082',
+      },
+      {
+        endpoint_id: 'node-2-ws',
+        node_id: 'node-2',
+        transport_type: 'ws',
+        status: 'active',
+        address: 'ws://node-2:8082',
+      },
+      {
+        endpoint_id: 'node-3-ws',
+        node_id: 'node-3',
+        transport_type: 'ws',
+        status: 'active',
+        address: 'ws://node-3:8082',
+      },
+    ],
+    {
+      publishedMembershipObservation: {
+        publicationEpoch: 13,
+        status: 'PUBLISHED',
+        publishedActiveNodeIds: ['node-1', 'node-2'],
+      },
+      publicationConvergence: {
+        publicationEpoch: 14,
+        status: 'ACK_PENDING',
+        publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+        requiredAckNodeIds: ['node-1', 'node-2', 'node-3'],
+        acknowledgedNodeIds: ['node-1', 'node-2'],
+      },
+      readinessByNodeId: {
+        'node-1': {
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+        'node-2': {
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+        'node-3': {
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+      },
+    },
+  );
+
+  t.same(
+    activeNodeViews.authoritativeActiveNodeIds,
+    ['node-1', 'node-2'],
+    'the older PUBLISHED epoch stays the published baseline; the ack-pending epoch never counts as published',
+  );
+  t.same(
+    activeNodeViews.publishedActiveNodeIds,
+    ['node-1', 'node-2'],
+    'published membership is derived only from the PUBLISHED epoch',
+  );
+  t.equal(
+    activeNodeViews.publishedMembershipAvailable,
+    true,
+    'the published baseline from the PUBLISHED epoch stays available',
+  );
+  t.same(
+    activeNodeViews.projectedActiveNodeIds,
+    ['node-1', 'node-2', 'node-3'],
+    'control snapshots should still expose the wider local projection separately',
+  );
+  t.same(
+    activeNodeViews.membershipFreeze.retainedPublishedNodeIds,
+    ['node-1', 'node-2'],
+    'the publication freeze retains only PUBLISHED members, never the pending cohort',
+  );
+  t.same(
+    activeNodeViews.membershipFreeze.unconfirmedProjectedNodeIds,
+    ['node-3'],
+    'the newly projected node stays unconfirmed until the pending epoch publishes',
+  );
+});
+
+test('AdminControlSnapshot never manufactures a published membership baseline from a pending epoch alone', async (t) => {
   const snapshot = new AdminControlSnapshot({
     nodeId: 'node-1',
     nowFn: () => 1000,
@@ -558,18 +690,28 @@ test('AdminControlSnapshot falls back to durable published membership from ack-p
 
   t.same(
     activeNodeViews.authoritativeActiveNodeIds,
-    ['node-1', 'node-2'],
-    'control snapshots should retain the durable published membership while the latest epoch is ack-pending',
+    [],
+    'an ACK_PENDING epoch is pending state, never published state',
+  );
+  t.equal(
+    activeNodeViews.publishedActiveNodeIds,
+    null,
+    'without a PUBLISHED epoch there is no published membership to read',
+  );
+  t.equal(
+    activeNodeViews.publishedMembershipAvailable,
+    false,
+    'a pending epoch must not manufacture a published baseline',
+  );
+  t.same(
+    activeNodeViews.authoritativeSource,
+    'unpublished',
+    'the authority source stays explicitly unpublished while publication is pending',
   );
   t.same(
     activeNodeViews.projectedActiveNodeIds,
     ['node-1', 'node-2', 'node-3'],
-    'control snapshots should still expose the wider local projection separately',
-  );
-  t.equal(
-    activeNodeViews.publishedMembershipAvailable,
-    true,
-    'control snapshots should preserve published-membership availability from ack-pending convergence when the durable set is known',
+    'the local projection stays available separately from the absent published truth',
   );
 });
 
@@ -879,7 +1021,7 @@ test('AdminControlSnapshot uses repaired publication rows when publication servi
   );
 });
 
-test('AdminControlSnapshot falls back to repaired publication rows when publication services return null without acknowledging from the read path', async (t) => {
+test('AdminControlSnapshot reads pending publication rows without acknowledging them or restoring published coverage', async (t) => {
   let acknowledgedPublicationRow = null;
   const snapshot = new AdminControlSnapshot({
     nodeId: 'node-2',
@@ -965,8 +1107,34 @@ test('AdminControlSnapshot falls back to repaired publication rows when publicat
   );
   t.same(
     result.nodes,
-    ['node-1', 'node-2'],
-    'fallback publication observation should still restore strict snapshot node coverage',
+    ['node-1'],
+    'the acknowledged pending member stays observable as projection, not published coverage',
+  );
+  const activeNodeViews = result.controlPlaneDiagnostics.activeNodeViews;
+  t.same(
+    activeNodeViews.authoritativeActiveNodeIds,
+    [],
+    'an OPEN epoch is pending state and never becomes the durable published membership',
+  );
+  t.same(
+    activeNodeViews.publishedActiveNodeIds,
+    [],
+    'with no PUBLISHED epoch the published baseline reads as published-nobody',
+  );
+  t.equal(
+    activeNodeViews.publishedMembershipAvailable,
+    false,
+    'a pending epoch must not manufacture a published baseline',
+  );
+  t.same(
+    result.controlPlaneDiagnostics.publicationConvergence.status,
+    'OPEN',
+    'the pending publication stays visible as pending convergence debt',
+  );
+  t.same(
+    result.controlPlaneDiagnostics.publicationConvergence.pendingAckNodeIds,
+    ['node-2'],
+    'the pending acknowledgement debt stays visible separately from published truth',
   );
   t.equal(
     result.controlPlaneDiagnostics.publishedMembershipObservation

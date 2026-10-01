@@ -117,8 +117,8 @@ export function registerAdminControlSnapshotTailTests({
 
       t.same(
         result.nodes,
-        ['node-1', 'node-2', 'node-3'],
-        'default snapshots should use the locally observed open membership without authoritative recovery',
+        ['node-1'],
+        'with only a pending publication row, projected coverage stays separate from published truth',
       );
       t.same(
         publishedReadOptions,
@@ -136,28 +136,24 @@ export function registerAdminControlSnapshotTailTests({
         },
         'default snapshot diagnostics should expose the unavailable durable published membership locally',
       );
-      t.same(
+      t.match(
         result.controlPlaneDiagnostics.activeNodeViews,
         {
-          authoritativeSource: 'published_membership',
-          authoritativeActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-          projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
-          locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
-          suspectedOrTransitioningNodeIds: [],
+          authoritativeSource: 'unpublished',
+          authoritativeActiveNodeIds: [],
           membershipFreeze: {
             active: false,
             reasonCode: null,
-            retainedPublishedNodeIds: ['node-1', 'node-2', 'node-3'],
-            missingProjectedNodeIds: [],
+            retainedPublishedNodeIds: [],
             unconfirmedProjectedNodeIds: [],
           },
-          effectiveSource: 'published_membership',
-          effectiveActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+          effectiveSource: 'projected',
+          effectiveActiveNodeIds: ['node-1'],
           projectedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-          publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-          publishedMembershipAvailable: true,
+          publishedActiveNodeIds: [],
+          publishedMembershipAvailable: false,
         },
-        'default snapshots should advertise only local membership availability after recovery stays local',
+        'a pending publication never advertises a published baseline; only the local projection remains',
       );
     });
 
