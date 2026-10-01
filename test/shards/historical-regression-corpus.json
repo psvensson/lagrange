@@ -101,7 +101,6 @@
         "src/partition/partition-service-core-base.js",
         "src/partition/partition-service-raft-init-base.js",
         "src/partition/partition-service-table-bootstrap.js",
-        "src/raft/liferaft.js",
         "src/raft/snapshot-catchup-constants.js",
         "src/raft/snapshot-catchup.js",
         "src/raft/snapshot-install.js",
