@@ -1,7 +1,7 @@
 /**
- * SQLiteLogAdapter - SQLite-backed log storage for liferaft.
+ * SQLiteLogAdapter - SQLite-backed consensus log storage.
  * Used by PartitionService for durable data storage.
- * Implements the liferaft Log interface for persistence.
+ * Implements the persistent log operations used by Lagrange consensus and snapshot owners.
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 12.1, 12.2, 12.3, 12.4, 12.5
  */
 
@@ -44,9 +44,9 @@ const LOCAL_STR_COMMITTED_TRUNCATION_REFUSED =
 import {resolveTimeSource} from '../time/time-source.js';
 
 /**
- * SQLite log adapter for liferaft.
+ * SQLite log adapter for consensus persistence.
  * Used by PartitionService for durable data storage.
- * Implements the liferaft Log interface with both sync and async methods.
+ * Implements the consensus log interface with both sync and async methods.
  */
 class SQLiteLogAdapter {
   /**
@@ -210,13 +210,13 @@ class SQLiteLogAdapter {
   }
 
   // ============================================================
-  // Liferaft Log Interface Methods (sync versions)
+  // Consensus Log Interface Methods (sync versions)
   // Requirements: 12.2, 12.3, 12.4, 12.5
   // ============================================================
 
   /**
    * Get the last log entry info.
-   * Required by liferaft for log consistency checks.
+   * Required by consensus owners for log consistency checks.
    * Requirements: 12.2
    * @return {Object} {index, term, committedIndex}
    */
@@ -336,7 +336,7 @@ class SQLiteLogAdapter {
 
   /**
    * Check if a log entry exists at the given index.
-   * Required by liferaft for log consistency checks.
+   * Required by consensus owners for log consistency checks.
    * Requirements: 12.2
    * @param {number} index - Log index to check
    * @return {boolean} True if entry exists
@@ -360,7 +360,7 @@ class SQLiteLogAdapter {
 
   /**
    * Save a command to the log.
-   * Required by liferaft for command replication.
+   * Required by consensus owners for command replication.
    * Requirements: 12.2
    * @param {Object} command - Command to save
    * @param {number} term - Term to save with
@@ -412,7 +412,7 @@ class SQLiteLogAdapter {
 
   /**
    * Acknowledge a command from a follower.
-   * Required by liferaft for quorum tracking.
+   * Required by consensus owners for quorum tracking.
    * Requirements: 12.2
    * @param {number} index - Index of entry
    * @param {string} address - Address of follower
@@ -468,7 +468,7 @@ class SQLiteLogAdapter {
 
   /**
    * Get uncommitted entries up to index.
-   * Required by liferaft for commit processing.
+   * Required by consensus owners for commit processing.
    * Requirements: 12.2
    * @param {number} index - Max index
    * @param {number} _term - Term (unused)
@@ -494,7 +494,7 @@ class SQLiteLogAdapter {
 
   /**
    * Commit an entry.
-   * Required by liferaft for commit processing.
+   * Required by consensus owners for commit processing.
    * Requirements: 12.2
    * @param {number} index - Index to commit
    * @return {Object} Committed entry
@@ -540,7 +540,7 @@ class SQLiteLogAdapter {
 
   /**
    * Get the last entry.
-   * Required by liferaft for log consistency.
+   * Required by consensus owners for log consistency.
    * Requirements: 12.2
    * @return {Object} Last entry or default
    */
@@ -573,7 +573,7 @@ class SQLiteLogAdapter {
 
   /**
    * Remove all entries after index.
-   * Required by liferaft for log truncation.
+   * Required by consensus owners for log truncation.
    * Requirements: 12.2
    * @param {number} index - Index to remove after
    */
