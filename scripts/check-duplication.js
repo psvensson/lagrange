@@ -69,8 +69,10 @@ const RATCHET_TARGETS = [
     // distributed UPDATE/DELETE mutation-result owner (checker hint).
     // 2026-09-29: tightened 55/1760 -> 54/1731 after the seed and joiner
     // runtime-service handler setup converged on one guarded initializer.
-    baselineCloneGroupCount: 54,
-    baselineDuplicatedLineCount: 1731,
+    // 2026-10-01: tightened 54/1731 -> 52/1652 after the WASM replica moved
+    // onto its operation port and the legacy replica base was deleted.
+    baselineCloneGroupCount: 52,
+    baselineDuplicatedLineCount: 1652,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
