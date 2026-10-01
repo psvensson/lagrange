@@ -139,18 +139,22 @@ export const DISPOSITION_RULES = Object.freeze([
   ['test/raft/leadership-transfer-single-path.test.js', M, RAFT,
     'single-path leadership-transfer invariant kept on the rs-raft port; ' +
     'legacy-port construction and refusal cases removed'],
-  [/^test\/closure\/CL-04[012]\.repro\.test\.js$/, D, RAFT,
-    'repro of a legacy-runtime protocol defect; rs-raft election/log safety in ' +
-    'test/raft/raft-rs-backend/election-safety.test.js. BLOCKED (Phase J): each is the ' +
-    'registered evidence of an invariant in architecture/contracts/invariants.json, a ' +
-    'fixed safety-spine line in test/shards/safety-pregate.txt and a developer-smoke ' +
-    'manifest entry; election-safety.test.js does not prove one-vote-per-term or the ' +
-    'empty-log election restriction, so deletion waits on an owner decision to retarget ' +
-    'that registered evidence onto raft-rs'],
-  // dt6-bulk-transfer-budget is also a knownDetector of a historical-regression-corpus
-  // case (test/shards/historical-regression-corpus.json); its deletion waits on that
-  // registry owner (Phase J).
-  [/^test\/convergence\/dt6-(bulk-transfer-budget|candidacy-reluctance-drain-stepdown|directed-election-heartbeat-clobber|fine-drive-midchurn-safety|leadership-migration-network|raft-election-network|real-raft-network)\.test\.js$/,
+  [/^test\/closure\/CL-04[012]\.repro\.test\.js$/, M, RAFT,
+    'retargeted at the same registered paths onto real raft-rs operation ports ' +
+    '(test/test-helpers/raft-rs-network-host.js), owner decision Phase K: CL-040 ' +
+    'committed-entry agreement after partition + heal; CL-041 one leader per term ' +
+    'under same-term concurrent candidacies; CL-042 the election restriction against ' +
+    'an empty-log higher-term candidate under the production group tuning (pre_vote ' +
+    'and check_quorum off, so term inflation and a leader step-down stay reachable ' +
+    'availability costs - not claimed prevented)'],
+  ['test/convergence/dt6-bulk-transfer-budget.test.js', D, 'deterministic testing tier',
+    'legacy batching-runtime specific; deleted per owner decision (Phase K). The ' +
+    'historical-regression case raft-snapshot-bulk-transfer keeps its two ' +
+    'backend-neutral detectors (test/raft/snapshot-transfer-protocol.test.js, ' +
+    'test/transport/bulk-transfer-lane-isolation.test.js); rs-raft snapshot/catch-up ' +
+    'completeness stays the recorded R5 release blocker - this deletion certifies ' +
+    'nothing about catch-up'],
+  [/^test\/convergence\/dt6-(candidacy-reluctance-drain-stepdown|directed-election-heartbeat-clobber|fine-drive-midchurn-safety|leadership-migration-network|raft-election-network|real-raft-network)\.test\.js$/,
     D, 'deterministic testing tier',
     'exercises legacy-runtime election/timer behaviour; rs-raft elections are ' +
     'covered by test/raft/raft-rs-backend and cannot be seeded (O2)'],

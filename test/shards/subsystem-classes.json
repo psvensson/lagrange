@@ -8,7 +8,7 @@
     "cdc-metadata": 58,
     "cli-tooling": 96,
     "control-plane": 204,
-    "convergence-topology": 92,
+    "convergence-topology": 91,
     "distributed-harness": 167,
     "examples-e2e": 7,
     "pgwire-compat": 17,
@@ -25,10 +25,10 @@
     "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2218,
-  "digest": "fnv1a32-b8e29e7a",
+  "censusSize": 2217,
+  "digest": "fnv1a32-c319e64e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-dcae23d5",
+  "observationDigest": "fnv1a32-fb607866",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -693,7 +693,6 @@
     "test/convergence/dt4-full-chain-scenario.test.js": "convergence-topology",
     "test/convergence/dt5-pct-search.test.js": "convergence-topology",
     "test/convergence/dt6-authoritative-observation-watermark.test.js": "convergence-topology",
-    "test/convergence/dt6-bulk-transfer-budget.test.js": "convergence-topology",
     "test/convergence/dt6-candidacy-reluctance-drain-stepdown.test.js": "convergence-topology",
     "test/convergence/dt6-control-plane-migration-network.test.js": "convergence-topology",
     "test/convergence/dt6-cpu-saturation-frequency-threshold.test.js": "convergence-topology",
@@ -3291,7 +3290,31 @@
     "test/closure/CL-040.repro.test.js": {
       "files": [
         "src/diagnostics/formation-turn-attribution.js",
-        "test/distributed/harness/raft-network-host.js"
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/closure/CL-041.repro.test.js": {
+      "files": [
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/closure/CL-042.repro.test.js": {
+      "files": [
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
     "test/compatibility/pgwire-client-compat.test.js": {
@@ -4321,12 +4344,6 @@
         "src/cache/read-only-system-table-cache.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "test/convergence/dt6-authoritative-observation-causal-time-test-cases.js"
-      ]
-    },
-    "test/convergence/dt6-bulk-transfer-budget.test.js": {
-      "files": [
-        "src/diagnostics/formation-turn-attribution.js",
-        "test/distributed/harness/raft-network-host.js"
       ]
     },
     "test/convergence/dt6-candidacy-reluctance-drain-stepdown.test.js": {
@@ -8755,7 +8772,6 @@
         "src/admin/static/playback-viewer.html",
         "src/entrypoint-runtime-provenance.js",
         "src/raft/committed-prefix-divergence.js",
-        "src/raft/in-memory-log-adapter.js",
         "src/raft/remote-peer-representation.js",
         "src/raft/virtual-tick.js",
         "test/distributed/config/local.json",

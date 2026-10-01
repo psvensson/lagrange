@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2201,
+    "ordinary": 2200,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2218,
-  "digest": "fnv1a32-b1b40dd8",
+  "censusSize": 2217,
+  "digest": "fnv1a32-4b590759",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -673,7 +673,6 @@
     "test/convergence/dt4-full-chain-scenario.test.js": "ordinary",
     "test/convergence/dt5-pct-search.test.js": "ordinary",
     "test/convergence/dt6-authoritative-observation-watermark.test.js": "ordinary",
-    "test/convergence/dt6-bulk-transfer-budget.test.js": "ordinary",
     "test/convergence/dt6-candidacy-reluctance-drain-stepdown.test.js": "ordinary",
     "test/convergence/dt6-control-plane-migration-network.test.js": "ordinary",
     "test/convergence/dt6-cpu-saturation-frequency-threshold.test.js": "ordinary",

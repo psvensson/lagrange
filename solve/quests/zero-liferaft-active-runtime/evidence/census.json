@@ -24,8 +24,8 @@
     "ACTIVE_CONFIG/preserve-as-backend-neutral": 6,
     "ACTIVE_DOC/migrate": 8,
     "ACTIVE_DOC/preserve-as-backend-neutral": 2,
-    "ACTIVE_TEST/delete": 93,
-    "ACTIVE_TEST/migrate": 106,
+    "ACTIVE_TEST/delete": 90,
+    "ACTIVE_TEST/migrate": 109,
     "DEAD_CODE/delete": 28,
     "DEAD_CODE/migrate": 2,
     "HISTORICAL_SOLVE_EVIDENCE": 187,
@@ -3212,9 +3212,9 @@
         "legacy-consumer-module",
         "legacy-implementation"
       ],
-      "disposition": "delete",
+      "disposition": "migrate",
       "owner": "src/raft (rs-raft operation port owner)",
-      "reason": "repro of a legacy-runtime protocol defect; rs-raft election/log safety in test/raft/raft-rs-backend/election-safety.test.js. BLOCKED (Phase J): each is the registered evidence of an invariant in architecture/contracts/invariants.json, a fixed safety-spine line in test/shards/safety-pregate.txt and a developer-smoke manifest entry; election-safety.test.js does not prove one-vote-per-term or the empty-log election restriction, so deletion waits on an owner decision to retarget that registered evidence onto raft-rs"
+      "reason": "retargeted at the same registered paths onto real raft-rs operation ports (test/test-helpers/raft-rs-network-host.js), owner decision Phase K: CL-040 committed-entry agreement after partition + heal; CL-041 one leader per term under same-term concurrent candidacies; CL-042 the election restriction against an empty-log higher-term candidate under the production group tuning (pre_vote and check_quorum off, so term inflation and a leader step-down stay reachable availability costs - not claimed prevented)"
     },
     {
       "path": "test/closure/CL-041.repro.test.js",
@@ -3224,9 +3224,9 @@
         "legacy-consumer-module",
         "legacy-implementation"
       ],
-      "disposition": "delete",
+      "disposition": "migrate",
       "owner": "src/raft (rs-raft operation port owner)",
-      "reason": "repro of a legacy-runtime protocol defect; rs-raft election/log safety in test/raft/raft-rs-backend/election-safety.test.js. BLOCKED (Phase J): each is the registered evidence of an invariant in architecture/contracts/invariants.json, a fixed safety-spine line in test/shards/safety-pregate.txt and a developer-smoke manifest entry; election-safety.test.js does not prove one-vote-per-term or the empty-log election restriction, so deletion waits on an owner decision to retarget that registered evidence onto raft-rs"
+      "reason": "retargeted at the same registered paths onto real raft-rs operation ports (test/test-helpers/raft-rs-network-host.js), owner decision Phase K: CL-040 committed-entry agreement after partition + heal; CL-041 one leader per term under same-term concurrent candidacies; CL-042 the election restriction against an empty-log higher-term candidate under the production group tuning (pre_vote and check_quorum off, so term inflation and a leader step-down stay reachable availability costs - not claimed prevented)"
     },
     {
       "path": "test/closure/CL-042.repro.test.js",
@@ -3236,9 +3236,9 @@
         "legacy-consumer-module",
         "legacy-implementation"
       ],
-      "disposition": "delete",
+      "disposition": "migrate",
       "owner": "src/raft (rs-raft operation port owner)",
-      "reason": "repro of a legacy-runtime protocol defect; rs-raft election/log safety in test/raft/raft-rs-backend/election-safety.test.js. BLOCKED (Phase J): each is the registered evidence of an invariant in architecture/contracts/invariants.json, a fixed safety-spine line in test/shards/safety-pregate.txt and a developer-smoke manifest entry; election-safety.test.js does not prove one-vote-per-term or the empty-log election restriction, so deletion waits on an owner decision to retarget that registered evidence onto raft-rs"
+      "reason": "retargeted at the same registered paths onto real raft-rs operation ports (test/test-helpers/raft-rs-network-host.js), owner decision Phase K: CL-040 committed-entry agreement after partition + heal; CL-041 one leader per term under same-term concurrent candidacies; CL-042 the election restriction against an empty-log higher-term candidate under the production group tuning (pre_vote and check_quorum off, so term inflation and a leader step-down stay reachable availability costs - not claimed prevented)"
     },
     {
       "path": "test/config/code-path-uniqueness.property.test.js",
@@ -3306,7 +3306,7 @@
       ],
       "disposition": "delete",
       "owner": "deterministic testing tier",
-      "reason": "exercises legacy-runtime election/timer behaviour; rs-raft elections are covered by test/raft/raft-rs-backend and cannot be seeded (O2)"
+      "reason": "legacy batching-runtime specific; deleted per owner decision (Phase K). The historical-regression case raft-snapshot-bulk-transfer keeps its two backend-neutral detectors (test/raft/snapshot-transfer-protocol.test.js, test/transport/bulk-transfer-lane-isolation.test.js); rs-raft snapshot/catch-up completeness stays the recorded R5 release blocker - this deletion certifies nothing about catch-up"
     },
     {
       "path": "test/convergence/dt6-candidacy-reluctance-drain-stepdown.test.js",

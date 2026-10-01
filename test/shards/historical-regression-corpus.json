@@ -128,7 +128,6 @@
         "src/transport/message-router.js"
       ],
       "knownDetectors": [
-        "test/convergence/dt6-bulk-transfer-budget.test.js",
         "test/raft/snapshot-transfer-protocol.test.js",
         "test/transport/bulk-transfer-lane-isolation.test.js"
       ],

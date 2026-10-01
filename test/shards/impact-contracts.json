@@ -329,8 +329,9 @@
     "CL-041": {
       "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
       "owners": [
-        "src/raft/liferaft.js",
-        "src/raft/in-memory-log-adapter.js"
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-group-constants.js"
       ],
       "tests": [
         "test/closure/CL-041.repro.test.js"
@@ -339,18 +340,20 @@
     "CL-040": {
       "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
       "owners": [
-        "src/raft/liferaft.js",
-        "src/raft/in-memory-log-adapter.js"
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-group-constants.js"
       ],
       "tests": [
         "test/closure/CL-040.repro.test.js"
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the log adapters never masquerade an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
-        "src/raft/liferaft.js",
-        "src/raft/in-memory-log-adapter.js"
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-group-constants.js"
       ],
       "tests": [
         "test/closure/CL-042.repro.test.js"
