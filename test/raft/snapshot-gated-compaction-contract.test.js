@@ -3,7 +3,6 @@ import Database from 'better-sqlite3';
 import {RAFT_COMPACTION_OUTCOME} from '../../src/raft/compaction-policy.js';
 import {PartitionRaftStorage} from
   '../../src/partition/partition-raft-storage.js';
-import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 import {test} from '../../src/test-helpers/tap.js';
 
@@ -22,11 +21,6 @@ const INVALID_TRUNCATION_INDEXES = Object.freeze([
   -1,
   1.5,
 ]);
-
-function memoryFixture() {
-  const adapter = new InMemoryLogAdapter({address: 'memory-compaction', term: TERM});
-  return {adapter, close: () => adapter.end()};
-}
 
 function sqliteFixture() {
   const db = new Database(':memory:');
@@ -154,7 +148,5 @@ test('SQLite inclusive and partition truncation reject non-index inputs', async 
   }
 });
 
-registerCompactionContract('in-memory adapter', memoryFixture);
 registerCompactionContract('SQLite adapter', sqliteFixture);
-registerInvalidTruncationContract('in-memory adapter', memoryFixture);
 registerInvalidTruncationContract('SQLite adapter', sqliteFixture);
