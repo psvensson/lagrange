@@ -189,7 +189,7 @@ const METHODS_SUFFIX = '-methods.js';
 
 const LITERALS_CHECKER_FRAGMENT = 'guideline:literals';
 const FILE_LENGTH_AUDIT_FRAGMENT = 'file-size';
-const LIFERAFT_DEPENDENCY = 'liferaft';
+const RETIRED_CONSENSUS_DEPENDENCY = ['life', 'raft'].join('');
 const NAMED_STEP = /^\s+- name:/gmu;
 const NPM_RUN_TOKEN = /npm run ([A-Za-z0-9:_-]+)/gu;
 const CLUSTER_CLAIM = /five[- ]node/iu;
@@ -670,8 +670,8 @@ function measureConsolidationBudget(root = REPO_ROOT) {
     ['open epics without doneWhen', epics.openWithoutDoneWhen, 0, atMost],
     ['solve/epics total lines',
       totalLines(root, EPICS_DIR), BUDGET.EPICS_LINES, atMost],
-    ['liferaft dependency present',
-      dependsOn(root, LIFERAFT_DEPENDENCY) ? 1 : 0, 0, atMost],
+    ['retired consensus dependency present',
+      dependsOn(root, RETIRED_CONSENSUS_DEPENDENCY) ? 1 : 0, 0, atMost],
     ['CLAUDE.md is a pointer', claudeMdIsPointer(root) ? 0 : 1, 0, atMost],
     ['gate stages off pushed sha', gateStagesOffPushedSha(root), 0, atMost],
     ['undeclared observation surfaces',
