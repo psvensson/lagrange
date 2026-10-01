@@ -30,7 +30,6 @@ import {
   RAFT_RS_ELECTION_REFUSAL,
   RAFT_RS_ELECTION_SETTING,
 } from '../../../src/raft/raft-rs-election-safety-constants.js';
-import LifeRaft from '../../../src/raft/liferaft.js';
 import {
   recommendedElectionSettings,
 } from '../../../src/raft/raft-rs-election-safety.js';
@@ -46,9 +45,9 @@ import {
 // never restates the vendored path.
 const BINDING_SOURCE = raftRsBindingPaths().forkSource;
 const RAFT_RS_NODE_STATE = Object.freeze({
-  LEADER: LifeRaft.LEADER,
-  CANDIDATE: LifeRaft.CANDIDATE,
-  FOLLOWER: LifeRaft.FOLLOWER,
+  LEADER: 'leader',
+  CANDIDATE: 'candidate',
+  FOLLOWER: 'follower',
   PRE_CANDIDATE: 'raft-rs-pre-candidate',
 });
 const RAFT_RS_CORE_ROLE_STATE = Object.freeze({
