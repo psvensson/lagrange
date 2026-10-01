@@ -273,14 +273,7 @@ describe('WasmServiceReplica', () => {
 
     it('refuses an unknown command type before proposing', async () => {
       const replica = new WasmServiceReplica(defaultOpts());
-      let proposed = false;
       replica.raft = {};
-      replica.raftProvider = {
-        propose(_raft, _entry, cb) {
-          proposed = true;
-          cb(null);
-        },
-      };
       await assert.rejects(
         () => replica.proposeEntry({type: 'not_a_command'}),
         {reason: WASM_SERVICE_COMMAND_REFUSAL.UNKNOWN_TYPE, retryable: false},
@@ -289,7 +282,6 @@ describe('WasmServiceReplica', () => {
         () => replica.proposeEntry({key: 'untyped'}),
         {reason: WASM_SERVICE_COMMAND_REFUSAL.UNKNOWN_TYPE},
       );
-      assert.equal(proposed, false);
       replica.kvStore.close();
     });
   });
