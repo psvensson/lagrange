@@ -28,7 +28,7 @@
   "censusSize": 2236,
   "digest": "fnv1a32-3a9574c3",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2d00aabe",
+  "observationDigest": "fnv1a32-b9d0c219",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8754,6 +8754,7 @@
         "src/raft/raft-replica-base-constants.js",
         "src/raft/raft-replica-base-runtime-helpers.js",
         "src/raft/raft-replica-base.js",
+        "src/wasm-service/wasm-service-committed-command-admission.js",
         "src/wasm-service/wasm-service-constants.js",
         "src/wasm-service/wasm-service-replica.js",
         "test/test-helpers/boot-incarnation-fixture.js"
@@ -12876,7 +12877,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/config/configuration-manager.js",
         "src/logging/logging-service.js",
-        "src/node/node-service.js"
+        "src/node/node-service.js",
+        "src/wasm-service/wasm-service-committed-command-admission.js"
       ]
     },
     "test/workflow/durable-workflow-coordinator.test.js": {

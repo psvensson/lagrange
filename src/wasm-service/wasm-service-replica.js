@@ -28,26 +28,21 @@ import {
   WASM_SERVICE_ERROR_MSG,
   WASM_SERVICE_DEFAULT,
   WRITE_CONSISTENCY_MODE,
+  WASM_SERVICE_COMMAND_TYPE,
 } from './wasm-service-constants.js';
+import {
+  admitWasmServiceCommand,
+  wasmServiceCommandRefusalError,
+} from './wasm-service-committed-command-admission.js';
 
 const LOCAL_STR_STRING = 'string';
 
-// Entry type scalar values
-const ENTRY_TYPE_KV_SET = 'kv_set';
-const ENTRY_TYPE_KV_DELETE = 'kv_delete';
-const ENTRY_TYPE_KV_DELETE_SESSION = 'kv_delete_session';
-const ENTRY_TYPE_TIMER_STATE = 'timer_state';
 
 /**
  * Entry type constants for committed Raft log entries.
  * @enum {string}
  */
-const ENTRY_TYPE = Object.freeze({
-  KV_SET: ENTRY_TYPE_KV_SET,
-  KV_DELETE: ENTRY_TYPE_KV_DELETE,
-  KV_DELETE_SESSION: ENTRY_TYPE_KV_DELETE_SESSION,
-  TIMER_STATE: ENTRY_TYPE_TIMER_STATE,
-});
+const ENTRY_TYPE = WASM_SERVICE_COMMAND_TYPE;
 
 // Message operation scalar values
 const MESSAGE_OP_READ = 'read';
@@ -534,6 +529,10 @@ class WasmServiceReplica extends RaftReplicaBase {
    * @return {Promise<void>}
    */
   proposeEntry(entry) {
+    const admission = admitWasmServiceCommand(entry);
+    if (!admission.admitted) {
+      return Promise.reject(wasmServiceCommandRefusalError(admission));
+    }
     if (!this.raft) {
       return Promise.reject(
         new Error(WASM_SERVICE_ERROR_MSG.SERVICE_NOT_READY),

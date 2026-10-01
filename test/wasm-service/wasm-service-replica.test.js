@@ -6,6 +6,8 @@ import {
   ENTRY_TYPE,
   MESSAGE_OP,
 } from '../../src/wasm-service/wasm-service-replica.js';
+import {WASM_SERVICE_COMMAND_REFUSAL} from
+  '../../src/wasm-service/wasm-service-committed-command-admission.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -231,7 +233,7 @@ describe('WasmServiceReplica', () => {
     it('should reject when raft is null', async () => {
       const replica = new WasmServiceReplica(defaultOpts());
       await assert.rejects(
-        () => replica.proposeEntry({type: 'test'}),
+        () => replica.proposeEntry({type: ENTRY_TYPE.KV_SET, key: 'k'}),
         {message: WASM_SERVICE_ERROR_MSG.SERVICE_NOT_READY},
       );
       replica.kvStore.close();
@@ -263,11 +265,33 @@ describe('WasmServiceReplica', () => {
           },
         };
         await assert.rejects(
-          () => replica.proposeEntry({type: 'test'}),
+          () => replica.proposeEntry({type: ENTRY_TYPE.KV_SET, key: 'k'}),
           {message: 'raft error'},
         );
         replica.kvStore.close();
       });
+
+    it('refuses an unknown command type before proposing', async () => {
+      const replica = new WasmServiceReplica(defaultOpts());
+      let proposed = false;
+      replica.raft = {};
+      replica.raftProvider = {
+        propose(_raft, _entry, cb) {
+          proposed = true;
+          cb(null);
+        },
+      };
+      await assert.rejects(
+        () => replica.proposeEntry({type: 'not_a_command'}),
+        {reason: WASM_SERVICE_COMMAND_REFUSAL.UNKNOWN_TYPE, retryable: false},
+      );
+      await assert.rejects(
+        () => replica.proposeEntry({key: 'untyped'}),
+        {reason: WASM_SERVICE_COMMAND_REFUSAL.UNKNOWN_TYPE},
+      );
+      assert.equal(proposed, false);
+      replica.kvStore.close();
+    });
   });
 
   describe('applyCommittedEntry', () => {

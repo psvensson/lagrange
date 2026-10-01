@@ -63,6 +63,20 @@ const WASM_SERVICE_ERROR_MSG = Object.freeze({
     'run_export signature does not match required runtime' +
     ' contract (2-3 params)',
   PORT_EXHAUSTED: 'No ports available for allocation',
+  COMMAND_TYPE_REFUSED: 'WASM service command type refused',
+});
+
+// The committed command vocabulary of a WASM service group's consensus log
+// (design R4): the only types its committed apply dispatches.
+const WASM_SERVICE_COMMAND_TYPE = Object.freeze({
+  KV_SET: 'kv_set',
+  KV_DELETE: 'kv_delete',
+  KV_DELETE_SESSION: 'kv_delete_session',
+  TIMER_STATE: 'timer_state',
+});
+
+const WASM_SERVICE_COMMAND_REFUSAL = Object.freeze({
+  UNKNOWN_TYPE: 'wasm_service_command_type_unknown',
 });
 
 const WASM_SERVICE_LOG_MSG = Object.freeze({
@@ -144,6 +158,8 @@ export {
   DEFAULT_SAFETY_INTERVAL_MS,
   DEFAULT_RESOURCE_BUDGET,
   WASM_SERVICE_ERROR_MSG,
+  WASM_SERVICE_COMMAND_TYPE,
+  WASM_SERVICE_COMMAND_REFUSAL,
   WASM_SERVICE_LOG_MSG,
   WASM_SERVICE_EXECUTOR_TYPE,
   SQL_ENGINE_PROFILE,
