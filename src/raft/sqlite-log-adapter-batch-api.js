@@ -3,7 +3,7 @@ function recoverCommittedIndex(adapter) {
 }
 
 /**
- * Install the SQLite-only batch operations consumed by the Lagrange Liferaft
+ * Install the SQLite-only batch operations consumed by Lagrange consensus
  * wrapper. Keeping them on the adapter preserves its single-writer ownership
  * of _raft_log and _raft_state.
  * @param {Function} SQLiteLogAdapter
