@@ -421,7 +421,7 @@ const operationCreationAdmissionMethods = {
     persistenceOptions,
   ) {
     const admittedObservation = move?.operationCreationAdmission || null;
-    let operationCreationAdmission = null;
+    let operationCreationAdmission;
     const inheritedBeforeAttempt = persistenceOptions?.beforeAttempt;
     const effectBoundaryOptions =
       admittedObservation || typeof inheritedBeforeAttempt === 'function' ?
