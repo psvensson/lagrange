@@ -34,6 +34,7 @@ import {TimerManager} from './timer-manager.js';
 import {routeRead} from './read-router.js';
 import {
   assertDurableDbPath,
+  assertFoundingReplicaSet,
   closeWasmServiceConsensus,
   openWasmServiceConsensusPort,
   openWasmServiceDatabase,
@@ -104,9 +105,10 @@ class WasmServiceReplica extends EventEmitter {
     if (!options.replicaId) {
       throw new Error(WASM_SERVICE_ERROR_MSG.REPLICA_ID_REQUIRED);
     }
+    assertFoundingReplicaSet(options.replicaId, options.replicaIds);
     this.replicaId = options.replicaId;
     this.nodeId = options.nodeId;
-    this.replicaIds = options.replicaIds || [options.replicaId];
+    this.replicaIds = [...options.replicaIds];
     this.transport = options.transport || null;
     this.dbPath = options.dbPath;
     this.entityType = SERVICE_TYPE.WASM_SERVICE;

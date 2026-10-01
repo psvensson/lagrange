@@ -56,6 +56,30 @@ function assertNoWriteProperties(obj, label) {
 
 // --- Contract method names that RuntimeDriver exposes ---
 
+/**
+ * The WASM driver's injected lifecycle seam, answering its contract with
+ * results only: a consensus replica runs only on a lifecycle.
+ * @return {Object} The lifecycle.
+ */
+function makeResultOnlyWasmLifecycle() {
+  const replicas = new Map();
+  return {
+    createReplica(definition) {
+      replicas.set(definition.serviceId, {serviceId: definition.serviceId});
+    },
+    async startReplica() {
+      return {started: true, endpoint: null};
+    },
+    async stopReplica(serviceId) {
+      replicas.delete(serviceId);
+      return {stopped: true};
+    },
+    getReplica(serviceId) {
+      return replicas.get(serviceId) ?? null;
+    },
+  };
+}
+
 const CONTRACT_METHODS = [
   'validateDescriptor',
   'prepare',
@@ -208,7 +232,9 @@ describe('WasmComponentDriver returns results only, no writes', () => {
   const replicaCtx = {serviceId};
 
   beforeEach(() => {
-    driver = new WasmComponentDriver();
+    driver = new WasmComponentDriver({
+      wasmServiceLifecycle: makeResultOnlyWasmLifecycle(),
+    });
   });
 
   it('prepare returns status only, no SQL or partition', async () => {
@@ -327,7 +353,9 @@ describe('Driver results never contain SQL or partition refs', () => {
 
   it('WasmComponentDriver full lifecycle results are clean',
     async () => {
-      const driver = new WasmComponentDriver();
+      const driver = new WasmComponentDriver({
+        wasmServiceLifecycle: makeResultOnlyWasmLifecycle(),
+      });
       const serviceId = 'clean-wasm';
       const def = {
         serviceId,

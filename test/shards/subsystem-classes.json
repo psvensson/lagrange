@@ -28,7 +28,7 @@
   "censusSize": 2230,
   "digest": "fnv1a32-2634b2bb",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-598deadc",
+  "observationDigest": "fnv1a32-f31430f5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -10241,8 +10241,10 @@
     },
     "test/runtime/runtime-startup-wiring.test.js": {
       "files": [
+        "src/config/configuration-manager.js",
         "src/lagrange-runtime-startup.js",
-        "src/runtime/runtime-startup-wiring.js"
+        "src/runtime/runtime-driver.js",
+        "src/storage/data-directory-manager.js"
       ]
     },
     "test/runtime/runtime-telemetry-dimensions.test.js": {

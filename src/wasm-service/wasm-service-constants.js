@@ -61,6 +61,14 @@ const WASM_SERVICE_ERROR_MSG = Object.freeze({
   PROPOSAL_REFUSED: 'WASM service proposal refused by its consensus port',
   UNKNOWN_COMMITTED_COMMAND: 'WASM service committed an unknown command type',
   REPLICA_ID_REQUIRED: 'WASM service replica requires its replicaId',
+  REPLICA_SET_REQUIRED:
+    'WASM service replica requires its explicit founding replica set',
+  REPLICA_SET_INVALID:
+    'WASM service founding replica set must hold distinct replica ids',
+  REPLICA_NOT_IN_SET:
+    'WASM service replica is not a member of its founding replica set',
+  PORT_ALLOCATOR_UNAVAILABLE:
+    'WASM service port allocator has no owner on this node',
   MODULE_NOT_AVAILABLE: 'WASM module not available on any node',
   RUN_EXPORT_NOT_FOUND:
     'run_export function not found in module exports',
@@ -85,6 +93,14 @@ const WASM_SERVICE_COMMAND_TYPE = Object.freeze({
 
 const WASM_SERVICE_COMMAND_REFUSAL = Object.freeze({
   UNKNOWN_TYPE: 'wasm_service_command_type_unknown',
+});
+
+// Typed refusals of a replica's founding identity: its explicit replica set
+// is the group's founding voters and is never inferred from one replica.
+const WASM_SERVICE_FOUNDING_REFUSAL = Object.freeze({
+  REPLICA_SET_REQUIRED: 'wasm_service_replica_set_required',
+  REPLICA_SET_INVALID: 'wasm_service_replica_set_invalid',
+  REPLICA_NOT_IN_SET: 'wasm_service_replica_not_in_set',
 });
 
 const WASM_SERVICE_LOG_MSG = Object.freeze({
@@ -177,6 +193,7 @@ export {
   WASM_SERVICE_ERROR_MSG,
   WASM_SERVICE_COMMAND_TYPE,
   WASM_SERVICE_COMMAND_REFUSAL,
+  WASM_SERVICE_FOUNDING_REFUSAL,
   WASM_SERVICE_LOG_MSG,
   WASM_SERVICE_VALUE_ENCODING,
   WASM_SERVICE_EXECUTOR_TYPE,

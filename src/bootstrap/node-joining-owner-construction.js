@@ -57,6 +57,7 @@ const {
   buildMembershipOwnerOutcome,
   createJoiningPhaseOwners,
   createRuntimeStartupWiring,
+  createWasmServiceNodeDependencies,
   resolveMembershipJoinIntentType,
   uuidv4,
 } = NODE_JOINING_SERVICE_SHARED;
@@ -212,6 +213,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     this.rebalanceCoordinator = null; // Unified runtime ownership wiring.
     const runtimeWiring = createRuntimeStartupWiring({
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
+      wasmServiceDependencies: createWasmServiceNodeDependencies(this),
     });
     this.runtimeDependencyOwner = createNodeJoiningRuntimeDependencyOwner({
       service: this,

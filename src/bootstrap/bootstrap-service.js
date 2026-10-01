@@ -51,7 +51,10 @@ import {
 import {HEARTBEAT_STATE} from '../control-plane/heartbeat-service-constants.js';
 import {DEFAULT_NODE_CAPABILITIES} from '../control-plane/control-plane-constants.js';
 import {LEASE_STATE} from '../control-plane/lease-service-constants.js';
-import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
+import {
+  createRuntimeStartupWiring,
+  createWasmServiceNodeDependencies,
+} from '../runtime/runtime-startup-wiring.js';
 import {
   WorkClassScheduler,
 } from '../runtime/work-class-scheduler.js';
@@ -282,6 +285,7 @@ class BootstrapService extends EventEmitter {
     // Unified runtime ownership wiring.
     const runtimeWiring = createRuntimeStartupWiring({
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
+      wasmServiceDependencies: createWasmServiceNodeDependencies(this),
     });
     const self = this;
     this.runtimeDependencyOwner = {

@@ -54,9 +54,9 @@ function makeMockLifecycle(overrides = {}) {
       replicas.set(def.serviceId, replica);
       return replica;
     }),
-    startReplica: overrides.startReplica ?? ((serviceId) => {
+    startReplica: overrides.startReplica ?? (async (serviceId) => {
       if (!replicas.has(serviceId)) return null;
-      return {port: 9090, endpoint: null};
+      return {started: true, port: 9090, endpoint: null};
     }),
     stopReplica: overrides.stopReplica ?? (async (serviceId) => {
       replicas.delete(serviceId);
@@ -73,7 +73,9 @@ describe('WasmComponentDriver', () => {
   let driver;
 
   beforeEach(() => {
-    driver = new WasmComponentDriver();
+    driver = new WasmComponentDriver({
+      wasmServiceLifecycle: makeMockLifecycle(),
+    });
   });
 
   describe('constructor', () => {
@@ -203,12 +205,17 @@ describe('WasmComponentDriver', () => {
   });
 
   describe('prepare', () => {
-    it('should succeed without lifecycle (standalone)',
+    it('refuses a consensus replica typed without its lifecycle',
       async () => {
-        const result = await driver.prepare(
-          makeDefinition(), {},
+        const bareDriver = new WasmComponentDriver();
+        const result = await bareDriver.prepare(
+          makeDefinition(PLACED_REPLICA), {},
         );
-        assert.equal(result.status, PREPARE_STATUS.READY);
+        assert.equal(result.status, PREPARE_STATUS.FAILED);
+        assert.equal(result.error,
+          WASM_COMPONENT_ERROR.CONSENSUS_LIFECYCLE_REQUIRED);
+        const started = await bareDriver.start(makeReplicaContext());
+        assert.equal(started.status, START_STATUS.FAILED);
       });
 
     it('creates the placed replica through the owned lifecycle',
@@ -248,6 +255,22 @@ describe('WasmComponentDriver', () => {
         ));
       });
 
+    it('projects a typed founding refusal of the lifecycle',
+      async () => {
+        const ownedDriver = new WasmComponentDriver({
+          wasmServiceLifecycle: makeMockLifecycle({
+            createReplica: () => {
+              const error = new Error('no founding set');
+              error.code = 'wasm_service_replica_set_required';
+              throw error;
+            },
+          }),
+        });
+        const result = await ownedDriver.prepare(makeDefinition(), {});
+        assert.equal(result.status, PREPARE_STATUS.FAILED);
+        assert.match(result.error, /^wasm_service_replica_set_required/);
+      });
+
     it('should throw DriverValidationError for invalid def',
       async () => {
         await assert.rejects(
@@ -275,7 +298,7 @@ describe('WasmComponentDriver', () => {
       await driver.prepare(makeDefinition(), {});
     });
 
-    it('should start a prepared service (standalone)',
+    it('should start a prepared service through its lifecycle',
       async () => {
         const result = await driver.start(
           makeReplicaContext(),
@@ -302,37 +325,42 @@ describe('WasmComponentDriver', () => {
         assert.equal(result.status, START_STATUS.RUNNING);
       });
 
-    it('should include endpoint intent when configured ' +
-      '(standalone)', async () => {
-      const result = await driver.start(makeReplicaContext({
-        endpointHost: '127.0.0.1',
-        endpointPort: 8081,
-        endpointProtocol: 'http',
-      }));
-      assert.equal(result.status, START_STATUS.RUNNING);
-      assert.deepStrictEqual(result.endpointIntent, {
-        host: '127.0.0.1',
-        port: 8081,
-        protocol: 'http',
-      });
-    });
-
-    it('should default protocol to ws (standalone)',
+    it('should include the lifecycle port in its endpoint intent',
       async () => {
         const result = await driver.start(makeReplicaContext({
           endpointHost: '127.0.0.1',
-          endpointPort: 8081,
+          endpointProtocol: 'http',
+        }));
+        assert.equal(result.status, START_STATUS.RUNNING);
+        assert.deepStrictEqual(result.endpointIntent, {
+          host: '127.0.0.1',
+          port: 9090,
+          protocol: 'http',
+        });
+      });
+
+    it('should default protocol to ws',
+      async () => {
+        const result = await driver.start(makeReplicaContext({
+          endpointHost: '127.0.0.1',
         }));
         assert.equal(result.endpointIntent.protocol, 'ws');
       });
 
-    it('should not include endpoint without host/port ' +
-      '(standalone)', async () => {
-      const result = await driver.start(
-        makeReplicaContext(),
-      );
-      assert.equal(result.endpointIntent, undefined);
-    });
+    it('should not include endpoint without a lifecycle port',
+      async () => {
+        const portless = new WasmComponentDriver({
+          wasmServiceLifecycle: makeMockLifecycle({
+            startReplica: async () => ({started: true, endpoint: null}),
+          }),
+        });
+        await portless.prepare(makeDefinition(), {});
+        const result = await portless.start(
+          makeReplicaContext(),
+        );
+        assert.equal(result.status, START_STATUS.RUNNING);
+        assert.equal(result.endpointIntent, undefined);
+      });
 
     it('should throw for null replicaContext', async () => {
       await assert.rejects(

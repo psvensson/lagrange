@@ -21,7 +21,10 @@ import {
 import {createRaftRsOperationPort} from '../raft/raft-rs-operation-port.js';
 import {resolveReplicaRaftTiming} from '../raft/replica-raft-timing.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
-import {WASM_SERVICE_ERROR_MSG} from './wasm-service-constants.js';
+import {
+  WASM_SERVICE_ERROR_MSG,
+  WASM_SERVICE_FOUNDING_REFUSAL,
+} from './wasm-service-constants.js';
 
 const LOCAL_STR_STRING = 'string';
 const SQLITE_MEMORY_PATH = ':memory:';
@@ -36,6 +39,49 @@ function assertDurableDbPath(dbPath) {
   }
   if (dbPath === SQLITE_MEMORY_PATH) {
     throw new Error(WASM_SERVICE_ERROR_MSG.IN_MEMORY_DB_PATH_REFUSED);
+  }
+}
+
+/**
+ * A typed founding-identity refusal.
+ * @param {string} code - Its WASM_SERVICE_FOUNDING_REFUSAL code.
+ * @param {string} message - Its message.
+ * @return {Error} The error, carrying the code.
+ */
+function foundingRefusal(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+/**
+ * @param {*} value - A candidate replica identity.
+ * @return {boolean} Whether it is a non-empty identity string.
+ */
+function isReplicaIdentity(value) {
+  return typeof value === LOCAL_STR_STRING && value.length > 0;
+}
+
+/**
+ * Refuse a replica without its explicit founding replica set: the distinct
+ * replica identities founding the group, the replica itself among them.
+ * Nothing infers a one-member group from the local identity.
+ * @param {string} replicaId - The founding replica's identity.
+ * @param {Array<string>} replicaIds - The founding replica set.
+ */
+function assertFoundingReplicaSet(replicaId, replicaIds) {
+  if (!Array.isArray(replicaIds) || replicaIds.length === 0) {
+    throw foundingRefusal(WASM_SERVICE_FOUNDING_REFUSAL.REPLICA_SET_REQUIRED,
+      WASM_SERVICE_ERROR_MSG.REPLICA_SET_REQUIRED);
+  }
+  const identities = new Set(replicaIds.filter(isReplicaIdentity));
+  if (identities.size !== replicaIds.length) {
+    throw foundingRefusal(WASM_SERVICE_FOUNDING_REFUSAL.REPLICA_SET_INVALID,
+      WASM_SERVICE_ERROR_MSG.REPLICA_SET_INVALID);
+  }
+  if (!identities.has(replicaId)) {
+    throw foundingRefusal(WASM_SERVICE_FOUNDING_REFUSAL.REPLICA_NOT_IN_SET,
+      WASM_SERVICE_ERROR_MSG.REPLICA_NOT_IN_SET);
   }
 }
 
@@ -172,6 +218,7 @@ async function closeWasmServiceConsensus(replica) {
 
 export {
   assertDurableDbPath,
+  assertFoundingReplicaSet,
   closeWasmServiceConsensus,
   openWasmServiceConsensusPort,
   openWasmServiceDatabase,
