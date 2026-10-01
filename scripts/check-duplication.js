@@ -182,8 +182,11 @@ const RATCHET_TARGETS = [
     // tree (Track A boot incarnation + Track B handler identity).
     // 2026-09-30: tightened duplicated lines 29402 -> 29388 after the
     // rejoin-hints recovered-peer decision match became one constant.
-    baselineCloneGroupCount: 765,
-    baselineDuplicatedLineCount: 29388,
+    // 2026-10-01: tightened 765/29388 -> 728/27645 after the legacy replica
+    // base, its packet-routing and backpressure tests, and the census-delete
+    // group tests were deleted.
+    baselineCloneGroupCount: 728,
+    baselineDuplicatedLineCount: 27645,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
