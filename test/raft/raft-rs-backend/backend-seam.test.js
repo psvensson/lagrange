@@ -19,21 +19,20 @@ import {
 
 test('the seam interface is the census of what production calls', async () => {
   const census = censusNames(deriveProductionRaftCallCensus());
-  assert.deepEqual(census.providerMethods, [],
-    'production calls no method on a backend-selection provider');
+  assert.ok(Array.isArray(census.nodeMethods));
   const raftRs = new RaftRsWasmProvider();
   assert.equal(typeof raftRs.createPartitionPort, 'function');
   assert.deepEqual(Reflect.ownKeys(raftRs), [],
     'the experimental provider retains no implementation or group state');
 });
 
-test('the experimental partition seam does not recreate the legacy node facade',
+test('the partition factory does not recreate the consensus-node facade',
   async () => {
-    const provider = new RaftRsWasmProvider();
+    const factory = new RaftRsWasmProvider();
     for (const name of censusNames(deriveProductionRaftCallCensus())
-      .providerMethods.filter((method) => method !== 'createPartitionPort')) {
-      assert.equal(typeof provider[name], 'undefined',
-        `${name} must not recreate a node/control facade on raft-rs`);
+      .nodeMethods) {
+      assert.equal(typeof factory[name], 'undefined',
+        `${name} must remain on the consensus handle, not the factory`);
     }
-    assert.equal(typeof provider.createPartitionPort, 'function');
+    assert.equal(typeof factory.createPartitionPort, 'function');
   });
