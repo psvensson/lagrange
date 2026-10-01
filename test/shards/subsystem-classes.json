@@ -8,7 +8,7 @@
     "cdc-metadata": 58,
     "cli-tooling": 96,
     "control-plane": 204,
-    "convergence-topology": 91,
+    "convergence-topology": 83,
     "distributed-harness": 167,
     "examples-e2e": 7,
     "pgwire-compat": 17,
@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 141,
     "solver-tooling": 7,
-    "storage-partition": 148,
-    "storage-raft": 113,
+    "storage-partition": 145,
+    "storage-raft": 103,
     "test-infrastructure": 138,
     "transactions": 15,
-    "transport-messaging": 92,
+    "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2213,
-  "digest": "fnv1a32-b473c72c",
+  "censusSize": 2190,
+  "digest": "fnv1a32-2de26f00",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-1e45af92",
+  "observationDigest": "fnv1a32-2e3455ac",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -689,19 +689,13 @@
     "test/convergence/dt-placement-affinity-tier1b-kernel.test.js": "convergence-topology",
     "test/convergence/dt-priority-partition-spread-cold-boot-network.test.js": "convergence-topology",
     "test/convergence/dt-priority-recovery-followup-stabilization-phi.test.js": "convergence-topology",
-    "test/convergence/dt4-freeze-leadership-scenario.test.js": "convergence-topology",
-    "test/convergence/dt4-full-chain-scenario.test.js": "convergence-topology",
     "test/convergence/dt5-pct-search.test.js": "convergence-topology",
     "test/convergence/dt6-authoritative-observation-watermark.test.js": "convergence-topology",
-    "test/convergence/dt6-candidacy-reluctance-drain-stepdown.test.js": "convergence-topology",
     "test/convergence/dt6-control-plane-migration-network.test.js": "convergence-topology",
     "test/convergence/dt6-cpu-saturation-frequency-threshold.test.js": "convergence-topology",
     "test/convergence/dt6-cpu-saturation-missed-budget-spike.test.js": "convergence-topology",
-    "test/convergence/dt6-directed-election-heartbeat-clobber.test.js": "convergence-topology",
-    "test/convergence/dt6-fine-drive-midchurn-safety.test.js": "convergence-topology",
     "test/convergence/dt6-formation-ledger-quorum-spread-first.test.js": "convergence-topology",
     "test/convergence/dt6-formation-ledger-spread-completion-self-move-interlock-deadlock.test.js": "convergence-topology",
-    "test/convergence/dt6-leadership-migration-network.test.js": "convergence-topology",
     "test/convergence/dt6-learner-promotion-progress-proof.test.js": "convergence-topology",
     "test/convergence/dt6-learner-promotion-proof-channel-wake.test.js": "convergence-topology",
     "test/convergence/dt6-ledger-leader-durability-fitness.test.js": "convergence-topology",
@@ -720,8 +714,6 @@
     "test/convergence/dt6-publication-persist-pipeline-network.test.js": "convergence-topology",
     "test/convergence/dt6-publication-quorum-failback-network.test.js": "convergence-topology",
     "test/convergence/dt6-publication-readiness-deficit-network.test.js": "convergence-topology",
-    "test/convergence/dt6-raft-election-network.test.js": "convergence-topology",
-    "test/convergence/dt6-real-raft-network.test.js": "convergence-topology",
     "test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js": "convergence-topology",
     "test/convergence/dt6-rebalancer-timeout-detection-network.test.js": "convergence-topology",
     "test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js": "convergence-topology",
@@ -1062,8 +1054,6 @@
     "test/message-group/message-group-target-resolver.test.js": "transport-messaging",
     "test/message-group/metadata-cache-removal.test.js": "transport-messaging",
     "test/message-group/no-silent-delivery-failures.property.test.js": "transport-messaging",
-    "test/message-group/packet-round-trip-preservation.property.test.js": "transport-messaging",
-    "test/message-group/raft-node-write-preservation.property.test.js": "transport-messaging",
     "test/message-group/raft-packet-detection.property.test.js": "transport-messaging",
     "test/message-group/raft-response-address-validation.test.js": "transport-messaging",
     "test/message-group/retry-exponential-backoff.property.test.js": "transport-messaging",
@@ -1195,13 +1185,10 @@
     "test/partition/partition-cdc-generator.test.js": "storage-partition",
     "test/partition/partition-cdc-parameterized-insert-or-ignore.test.js": "storage-partition",
     "test/partition/partition-consensus-hold-log.test.js": "storage-partition",
-    "test/partition/partition-coordinator.test.js": "storage-partition",
     "test/partition/partition-descriptor-epoch-contract.test.js": "storage-partition",
     "test/partition/partition-leader-row-publication-integrity.test.js": "storage-partition",
     "test/partition/partition-legacy-consensus-state.test.js": "storage-partition",
-    "test/partition/partition-packet-round-trip.property.test.js": "storage-partition",
     "test/partition/partition-port-refusal-outcomes.test.js": "storage-partition",
-    "test/partition/partition-raft-node-write-preservation.property.test.js": "storage-partition",
     "test/partition/partition-raft-storage.test.js": "storage-partition",
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": "storage-partition",
     "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js": "storage-partition",
@@ -1429,23 +1416,16 @@
     "test/raft/authoritative-row-mutation-helper.test.js": "storage-raft",
     "test/raft/authoritative-row-mutation-outcome-classifier.test.js": "storage-raft",
     "test/raft/bulk-transfer-socket-adapter.test.js": "storage-raft",
-    "test/raft/election-jitter-seed.test.js": "storage-raft",
     "test/raft/leader-activation-gate.test.js": "storage-raft",
     "test/raft/leader-activation-scheduler.test.js": "storage-raft",
     "test/raft/leadership-transfer-single-path.test.js": "storage-raft",
     "test/raft/learner-promotion-progress-proof-contract.test.js": "storage-raft",
-    "test/raft/liferaft-append-fail-recovery.test.js": "storage-raft",
-    "test/raft/liferaft-catchup-batching.test.js": "storage-raft",
-    "test/raft/liferaft-deterministic-construction.test.js": "storage-raft",
-    "test/raft/liferaft-formation-attribution-interaction.test.js": "storage-raft",
-    "test/raft/liferaft-protocol-task-lineage.test.js": "storage-raft",
     "test/raft/message-group-readiness-delivery-priority.test.js": "storage-raft",
     "test/raft/peer-address-resolver.property.test.js": "storage-raft",
     "test/raft/peer-address-resolver.test.js": "storage-raft",
     "test/raft/raft-cleanup-verification.test.js": "storage-raft",
     "test/raft/raft-id-mapper.test.js": "storage-raft",
     "test/raft/raft-log-write-owner.test.js": "storage-raft",
-    "test/raft/raft-protocol-task-tracker.test.js": "storage-raft",
     "test/raft/raft-rs-backend/admission-redrive-chain.test.js": "storage-raft",
     "test/raft/raft-rs-backend/admission-redrive.test.js": "storage-raft",
     "test/raft/raft-rs-backend/backend-seam.test.js": "storage-raft",
@@ -1503,7 +1483,6 @@
     "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": "storage-raft",
     "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js": "storage-raft",
-    "test/raft/remote-peer-representation.test.js": "storage-raft",
     "test/raft/replica-voter-readiness.test.js": "storage-raft",
     "test/raft/shared-raft-detection-consistency.property.test.js": "storage-raft",
     "test/raft/snapshot-boundary-observability.test.js": "storage-raft",
@@ -1532,8 +1511,6 @@
     "test/raft/sqlite-log-adapter-round-trip.property.test.js": "storage-raft",
     "test/raft/sqlite-schema-migration.test.js": "storage-raft",
     "test/raft/sqlite-storage-round-trip.property.test.js": "storage-raft",
-    "test/raft/transport-adapter-message-delivery.property.test.js": "storage-raft",
-    "test/raft/virtual-tick.test.js": "storage-raft",
     "test/random/dt5-jitter-seam.test.js": "runtime-primitives",
     "test/random/random-source.test.js": "runtime-primitives",
     "test/rebalancer/add-workflow-step-progression.property.test.js": "placement-rebalance",
@@ -4322,11 +4299,6 @@
         "src/rebalancer/unified-rebalancer-follow-up-shared.js"
       ]
     },
-    "test/convergence/dt4-full-chain-scenario.test.js": {
-      "files": [
-        "src/control-plane/membership-publication-coordinator-reconcile.js"
-      ]
-    },
     "test/convergence/dt5-pct-search.test.js": {
       "files": [
         "test/distributed/harness/pct-search.js"
@@ -4340,12 +4312,6 @@
         "src/cache/read-only-system-table-cache.js",
         "src/control-plane/control-plane-system-table-gateway.js",
         "test/convergence/dt6-authoritative-observation-causal-time-test-cases.js"
-      ]
-    },
-    "test/convergence/dt6-candidacy-reluctance-drain-stepdown.test.js": {
-      "files": [
-        "src/diagnostics/formation-turn-attribution.js",
-        "test/distributed/harness/raft-network-host.js"
       ]
     },
     "test/convergence/dt6-control-plane-migration-network.test.js": {
@@ -4366,18 +4332,6 @@
         "src/rebalancer/operation-workflow-recovery-reconcile-shared.js"
       ]
     },
-    "test/convergence/dt6-directed-election-heartbeat-clobber.test.js": {
-      "files": [
-        "src/diagnostics/formation-turn-attribution.js",
-        "test/distributed/harness/raft-network-host.js"
-      ]
-    },
-    "test/convergence/dt6-fine-drive-midchurn-safety.test.js": {
-      "files": [
-        "src/diagnostics/formation-turn-attribution.js",
-        "test/distributed/harness/raft-network-host.js"
-      ]
-    },
     "test/convergence/dt6-formation-ledger-quorum-spread-first.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -4389,12 +4343,6 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "test/rebalancer/committed-membership-fixture.js"
-      ]
-    },
-    "test/convergence/dt6-leadership-migration-network.test.js": {
-      "files": [
-        "src/diagnostics/formation-turn-attribution.js",
-        "test/distributed/harness/raft-network-host.js"
       ]
     },
     "test/convergence/dt6-learner-promotion-progress-proof.test.js": {
@@ -4541,19 +4489,6 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/publication-active-gate-handoff-contract.js",
         "src/diagnostics/formation-turn-attribution.js"
-      ]
-    },
-    "test/convergence/dt6-raft-election-network.test.js": {
-      "files": [
-        "src/diagnostics/formation-turn-attribution.js",
-        "test/distributed/harness/raft-network-host.js",
-        "test/distributed/harness/virtual-network.js"
-      ]
-    },
-    "test/convergence/dt6-real-raft-network.test.js": {
-      "files": [
-        "src/diagnostics/formation-turn-attribution.js",
-        "test/distributed/harness/pct-search.js"
       ]
     },
     "test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js": {
@@ -7473,11 +7408,6 @@
         "src/raft/raft-rs-runtime-tuning.js"
       ]
     },
-    "test/partition/partition-coordinator.test.js": {
-      "files": [
-        "src/partition/partition-coordinator.js"
-      ]
-    },
     "test/partition/partition-legacy-consensus-state.test.js": {
       "files": [
         "src/partition/partition-raft-storage.js"
@@ -8088,11 +8018,6 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
-    "test/raft/election-jitter-seed.test.js": {
-      "directories": [
-        "data"
-      ]
-    },
     "test/raft/leadership-transfer-single-path.test.js": {
       "files": [
         "src/node/replica-handler-leader-handoff-methods.js",
@@ -8106,44 +8031,6 @@
       ],
       "directories": [
         "src"
-      ]
-    },
-    "test/raft/liferaft-append-fail-recovery.test.js": {
-      "directories": [
-        "data"
-      ]
-    },
-    "test/raft/liferaft-catchup-batching.test.js": {
-      "files": [
-        "test/raft/liferaft-catchup-batching.test.js"
-      ],
-      "directories": [
-        "data",
-        "src"
-      ]
-    },
-    "test/raft/liferaft-deterministic-construction.test.js": {
-      "directories": [
-        "data"
-      ]
-    },
-    "test/raft/liferaft-formation-attribution-interaction.test.js": {
-      "files": [
-        "src/diagnostics/formation-diagnostics-contract.js",
-        "src/diagnostics/formation-turn-attribution.js",
-        "src/diagnostics/raft-churn-sync-sections.js",
-        "src/diagnostics/raft-formation-attribution.js",
-        "src/raft/liferaft.js",
-        "test/shards/impact-contracts.json"
-      ],
-      "directories": [
-        "solve/quests/formation-raft-protocol-attribution-interaction",
-        "src"
-      ]
-    },
-    "test/raft/liferaft-protocol-task-lineage.test.js": {
-      "files": [
-        "src/diagnostics/formation-diagnostics-contract.js"
       ]
     },
     "test/raft/raft-cleanup-verification.test.js": {
