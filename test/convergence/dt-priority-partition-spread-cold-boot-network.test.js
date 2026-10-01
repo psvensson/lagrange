@@ -49,6 +49,7 @@ const ADDRESS_PORT = 9000;
 
 const RAFT_TEST_PARTITION_ID = 'priority-spread-election-p1';
 const DORMANT_ELECTION_MIN_MS = 100_000;
+const RAFT_TEST_SEED = 0;
 
 function partitionIdFor(tableId) {
   return `${tableId}-p1`;
@@ -150,7 +151,7 @@ t.test(
     const net = createVirtualNetwork();
     const consensus = connectRaftRsNetwork(net, NODE_IDS, {
       partitionId: RAFT_TEST_PARTITION_ID,
-      seed: ZERO,
+      seed: RAFT_TEST_SEED,
       electionMinMs: DORMANT_ELECTION_MIN_MS,
     });
     t.teardown(() => consensus.dispose());
