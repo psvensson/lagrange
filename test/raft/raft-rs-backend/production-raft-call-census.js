@@ -16,10 +16,6 @@ import {KEYS} from 'eslint-visitor-keys';
 
 const CENSUS = Object.freeze({
   SOURCE_ROOT: 'src',
-  // The earlier contained spike is not the production seam; it drives
-  // raft-logic's own shell and would pollute the contract with that shell's
-  // vocabulary.
-  EXCLUDED_PREFIX: 'src/raft/spike/',
   FILE_SUFFIX: '.js',
   NODE_HOLDER: 'raft',
   NODE_IDENTIFIERS: Object.freeze(['raft', 'raftNode']),
@@ -214,9 +210,6 @@ function deriveProductionRaftCallCensus() {
     path.join(repositoryRoot, CENSUS.SOURCE_ROOT), []);
   for (const absolute of files) {
     const relative = repositoryRelative(absolute);
-    if (relative.startsWith(CENSUS.EXCLUDED_PREFIX)) {
-      continue;
-    }
     const tree = parseSource(fs.readFileSync(absolute, CENSUS.UTF8));
     walk(tree, (node, parent) => {
       if (node.type === NODE_TYPE.MEMBER) {

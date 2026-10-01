@@ -71,8 +71,10 @@ const RATCHET_TARGETS = [
     // runtime-service handler setup converged on one guarded initializer.
     // 2026-10-01: tightened 54/1731 -> 52/1652 after the WASM replica moved
     // onto its operation port and the legacy replica base was deleted.
-    baselineCloneGroupCount: 52,
-    baselineDuplicatedLineCount: 1652,
+    // 2026-10-01: tightened 52/1652 -> 51/1624 after the spike, provider
+    // selection and migration tooling were deleted (checker hint).
+    baselineCloneGroupCount: 51,
+    baselineDuplicatedLineCount: 1624,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },

@@ -19,16 +19,16 @@
     "services-runtime": 141,
     "solver-tooling": 7,
     "storage-partition": 148,
-    "storage-raft": 117,
+    "storage-raft": 113,
     "test-infrastructure": 138,
     "transactions": 15,
     "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2217,
-  "digest": "fnv1a32-c319e64e",
+  "censusSize": 2213,
+  "digest": "fnv1a32-b473c72c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-fb607866",
+  "observationDigest": "fnv1a32-1e45af92",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1446,7 +1446,6 @@
     "test/raft/raft-id-mapper.test.js": "storage-raft",
     "test/raft/raft-log-write-owner.test.js": "storage-raft",
     "test/raft/raft-protocol-task-tracker.test.js": "storage-raft",
-    "test/raft/raft-provider-control.test.js": "storage-raft",
     "test/raft/raft-rs-backend/admission-redrive-chain.test.js": "storage-raft",
     "test/raft/raft-rs-backend/admission-redrive.test.js": "storage-raft",
     "test/raft/raft-rs-backend/backend-seam.test.js": "storage-raft",
@@ -1526,9 +1525,6 @@
     "test/raft/snapshot-recorded-gaps.test.js": "storage-raft",
     "test/raft/snapshot-retention-sweep.test.js": "storage-raft",
     "test/raft/snapshot-transfer-protocol.test.js": "storage-raft",
-    "test/raft/spike/raft-logic-spike-adapter.test.js": "storage-raft",
-    "test/raft/spike/raft-logic-spike-cluster.test.js": "storage-raft",
-    "test/raft/spike/raft-provider-control.test.js": "storage-raft",
     "test/raft/sqlite-log-adapter-committed-truncation-guard.test.js": "storage-raft",
     "test/raft/sqlite-log-adapter-committed-watermark.test.js": "storage-raft",
     "test/raft/sqlite-log-adapter-committed-write-paths.test.js": "storage-raft",
@@ -8182,11 +8178,6 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
-    "test/raft/raft-rs-backend/backend-seam.test.js": {
-      "directories": [
-        "src/raft/spike"
-      ]
-    },
     "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js": {
       "files": [
         "src/config/configuration-manager.js",
@@ -8766,9 +8757,6 @@
         "Dockerfile",
         "package-lock.json",
         "package.json",
-        "scripts/run-raft-migration-benchmarks.js",
-        "scripts/run-raft-migration-rollback-drill.js",
-        "scripts/run-raft-migration-stage-gate.js",
         "src/admin/static/playback-viewer.html",
         "src/entrypoint-runtime-provenance.js",
         "src/raft/committed-prefix-divergence.js",
@@ -8780,7 +8768,6 @@
       "directories": [
         "src",
         "src/raft",
-        "src/raft/spike",
         "test/distributed/config",
         "test/distributed/harness"
       ]

@@ -293,21 +293,7 @@ Use these values with `--scenario`:
 5. `seven-node-table-partition-distribution` (`local-benchmark-7node.json`)
 6. `seven-node-postgres-baseline-partition-split` (`local-benchmark-7node-partition-split.json`)
 
-## Benchmark And Migration Pipelines
-
-Run standardized migration flows:
-
-```bash
-npm run migration:raft:benchmarks
-npm run migration:raft:rollback-drill
-npm run migration:raft:stage:dev
-npm run migration:raft:stage:canary
-npm run migration:raft:stage:limited
-```
-
-Reports are written under:
-
-`solve/specs/raft-logic-migration/reports/`
+## Benchmark Tuning
 
 Benchmark tuning notes (in `benchmark` config block):
 
