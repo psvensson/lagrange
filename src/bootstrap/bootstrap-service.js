@@ -186,7 +186,7 @@ class BootstrapService extends EventEmitter {
         options.routerFactory :
         undefined;
     // The node's randomness, when it owns one. Consensus draws its election
-    // timing from here; unsupplied, liferaft keeps Math.random exactly as
+    // timing from here; unsupplied, production consensus keeps its platform randomness as
     // production does.
     this.randomSource =
       options.randomSource &&
