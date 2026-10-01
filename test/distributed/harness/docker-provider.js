@@ -78,13 +78,16 @@ const STORAGE_USAGE_ARGUMENT_SEPARATOR = '--';
 const STORAGE_USAGE_FIELD_SEPARATOR = '\t';
 const STORAGE_USAGE_BYTE_COUNT_PATTERN = /^(?:0|[1-9]\d*)$/u;
 const STORAGE_LIMIT_PATTERN = /(?:^|,)size=(\d+)(?:,|$)/u;
-const BUILD_SOURCE_DIRECTORY = 'src';
+const BUILD_CONTEXT_DIRECTORIES = Object.freeze([
+  'src',
+  'vendor/raft-rs-wasm',
+]);
 const CONTAINER_COMMAND_FIELD = 'Cmd';
 const CONTAINER_ENTRYPOINT_FIELD = 'Entrypoint';
 const HOST_NETWORK_MODE = 'host';
 // dockerode already receives an explicit allowlist. Sending .dockerignore in
-// that tar makes its broad `**` rule remove the recursively requested src
-// directory before the daemon can apply the later negations.
+// that tar makes its broad `**` rule remove recursively requested directories
+// before the daemon can apply the later negations.
 const BUILD_CONTEXT_STATIC_ENTRIES = Object.freeze([
   'package-lock.json',
   'package.json',
@@ -115,11 +118,9 @@ function buildImageContext(contextPath, dockerfile) {
     ...BUILD_CONTEXT_STATIC_ENTRIES,
     dockerfile,
   ];
-  appendBuildContextDirectoryFiles(
-    requested,
-    contextPath,
-    BUILD_SOURCE_DIRECTORY,
-  );
+  for (const directory of BUILD_CONTEXT_DIRECTORIES) {
+    appendBuildContextDirectoryFiles(requested, contextPath, directory);
+  }
   const entries = Array.from(new Set(
     requested.filter(
       (entry) => typeof entry === 'string' && entry.length > ZERO,
