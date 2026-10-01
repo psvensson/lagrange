@@ -478,7 +478,7 @@ class RebalanceCoordinatorOperationCreation {
    * founding cohort (deferred until its bootstrap topology) is stamped
    * GENESIS by its provisioner instead.
    *
-   * Message-group operations (liferaft, out of O1) keep the services-row
+   * Message-group operations (separate consensus path, out of O1) keep the services-row
    * cohort and fail closed when it is missing.
    *
    * @param {Object} context
