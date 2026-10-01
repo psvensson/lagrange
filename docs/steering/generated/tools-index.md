@@ -75,7 +75,8 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:hold-engagement-owner` — `node scripts/check-hold-engagement-owner.js`
 - `audit:impact-contracts` — `node scripts/checks/impact-contract-registry.js`
 - `audit:no-kiro` — `node scripts/check-no-kiro-refs.js`
-- `audit:no-legacy-consensus-references` — `node scripts/checks/no-legacy-consensus-reference-audit.js`
+- `audit:no-legacy-consensus-references` — `node scripts/checks/no-legacy-consensus-reference-ratchet.js`
+- `audit:no-legacy-consensus-references:strict` — `node scripts/checks/no-legacy-consensus-reference-audit.js`
 - `audit:no-legacy-naming` — `node scripts/check-no-legacy-naming.js`
 - `audit:no-ordinal-files` — `node scripts/check-no-ordinal-files.js`
 - `audit:operation-progress-authority` — `node scripts/check-operation-progress-authority.js`
@@ -299,4 +300,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-197 scripts indexed; 36 have a curated description, 161 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+198 scripts indexed; 36 have a curated description, 162 fall back to their raw command. Improve coverage in the two sources named in the header comment.

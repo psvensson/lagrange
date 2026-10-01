@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
- * Zero-reference ratchet for the retired consensus runtime (quest
- * zero-liferaft-active-runtime, constraint fixed-zero-reference-scope).
+ * Strict zero-reference audit for the retired consensus runtime (the
+ * consensus-cutover Quest's constraint fixed-zero-reference-scope).
  *
  * Every git-visible file on a fixed active surface is scanned, by filename and
  * by content, case-insensitively, for the retired runtime, its package scope
  * and process-level provider selection. The scope is a pinned constant and its
- * one exclusion is the historical solve record: there is no allowlist, no
- * baseline and no flag that widens either. The target is zero; any reference
- * exits red.
+ * one exclusion is the historical solve record: there is no allowlist and no
+ * flag that widens either. The target is zero; any reference exits red. This
+ * command is the strict-zero proof; no-legacy-consensus-reference-ratchet.js
+ * reuses this scanner with a one-way count baseline for incremental commits.
  *
  * The retired names are assembled from fragments so this checker never makes
  * its own target permanently non-zero.

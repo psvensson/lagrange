@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1963,
+    "unit": 1964,
     "integration": 73,
     "bootstrap": 193,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2236,
-  "digest": "fnv1a32-d75ac474",
+  "censusSize": 2237,
+  "digest": "fnv1a32-0d7a0a6a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1981,6 +1981,7 @@
     "test/scripts/model-tlc-output-tail.test.js": "unit",
     "test/scripts/no-external-llm-guards.test.js": "unit",
     "test/scripts/no-legacy-consensus-reference-audit.test.js": "unit",
+    "test/scripts/no-legacy-consensus-reference-ratchet.test.js": "unit",
     "test/scripts/observation-census.test.js": "unit",
     "test/scripts/pre-push-hook-control-flow.test.js": "unit",
     "test/scripts/pre-push-stage-manifest.test.js": "unit",

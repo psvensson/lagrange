@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 148,
     "storage-raft": 136,
-    "test-infrastructure": 137,
+    "test-infrastructure": 138,
     "transactions": 15,
     "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2236,
-  "digest": "fnv1a32-3a9574c3",
+  "censusSize": 2237,
+  "digest": "fnv1a32-971cf3cb",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b9d0c219",
+  "observationDigest": "fnv1a32-e504aba0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2000,6 +2000,7 @@
     "test/scripts/model-tlc-output-tail.test.js": "test-infrastructure",
     "test/scripts/no-external-llm-guards.test.js": "test-infrastructure",
     "test/scripts/no-legacy-consensus-reference-audit.test.js": "test-infrastructure",
+    "test/scripts/no-legacy-consensus-reference-ratchet.test.js": "test-infrastructure",
     "test/scripts/observation-census.test.js": "test-infrastructure",
     "test/scripts/pre-push-hook-control-flow.test.js": "test-infrastructure",
     "test/scripts/pre-push-stage-manifest.test.js": "test-infrastructure",
@@ -11540,6 +11541,26 @@
         "solve",
         "src",
         "src/raft",
+        "test",
+        "test/distributed"
+      ]
+    },
+    "test/scripts/no-legacy-consensus-reference-ratchet.test.js": {
+      "files": [
+        "Dockerfile",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/git-process-environment.js",
+        "scripts/checks/no-legacy-consensus-reference-audit.js",
+        "scripts/checks/no-legacy-consensus-reference-baseline.json",
+        "scripts/checks/no-legacy-consensus-reference-ratchet.js"
+      ],
+      "directories": [
+        "architecture",
+        "examples",
+        "scripts",
+        "solve",
+        "src",
         "test",
         "test/distributed"
       ]
