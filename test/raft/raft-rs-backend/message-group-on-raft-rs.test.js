@@ -1,5 +1,5 @@
 // Message groups run on the rs-raft operation port (quest
-// zero-liferaft-active-runtime; design R3 §1).
+// consensus-cutover quest; design R3 §1).
 //
 // Real MessageGroupService replicas built by production construction, each
 // with its own durable database file and its own services cache, exchange
