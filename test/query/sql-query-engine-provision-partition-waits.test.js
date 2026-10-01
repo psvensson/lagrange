@@ -6,6 +6,12 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+// Hardware-relative budget scaling: CI's ordinary lane runs on a slower host
+// (LAGRANGE_TEST_MACHINE_FACTOR=3) whose event-loop scheduling can stretch a
+// tight real-clock wait past a reference-machine budget (doctrine:
+// hardware-relative-convergence-budget; same class e53854c9e repaired).
+import {scaleByMachineFactor} from
+  '../integration/helpers/test-machine-factor.js';
 import {
   OPERATION_OWNER_TURN_POLICY,
 } from '../../src/rebalancer/operation-owner-turn-policy.js';
@@ -1100,7 +1106,7 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
         }
       },
     },
-    tablePartitionProvisioningTimeoutMs: 30,
+    tablePartitionProvisioningTimeoutMs: scaleByMachineFactor(30),
     tablePartitionProvisioningPollIntervalMs: 1,
   });
   engine.queryExecutor.isRoutablePartitionService = (service) =>

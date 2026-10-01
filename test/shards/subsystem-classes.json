@@ -28,7 +28,7 @@
   "censusSize": 2284,
   "digest": "fnv1a32-d7a28763",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-08501cfd",
+  "observationDigest": "fnv1a32-d24b38da",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7964,11 +7964,21 @@
         "src/query/cancellation-token.js"
       ]
     },
+    "test/query/sql-query-engine-managed-split-children.test.js": {
+      "files": [
+        "test/integration/helpers/test-machine-factor.js"
+      ]
+    },
     "test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js": {
       "files": [
         "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
         "src/rebalancer/rebalance-coordinator-operation-creation-admission.js",
         "src/rebalancer/rebalance-coordinator-operation-creation.js"
+      ]
+    },
+    "test/query/sql-query-engine-provision-partition-waits.test.js": {
+      "files": [
+        "test/integration/helpers/test-machine-factor.js"
       ]
     },
     "test/query/sql-query-engine-system-table-local-read.test.js": {
