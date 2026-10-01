@@ -1,6 +1,6 @@
 /**
  * Raft-safety invariant (CL-040/041/042 class): committed entries are permanent
- * and MUST NEVER be truncated. Base liferaft's conflict truncation calls
+ * and MUST NEVER be truncated. Conflict truncation calls
  * removeEntriesAfter UNGUARDED; a truncation whose floor falls below
  * committedIndex therefore deleted committed entries and produced the
  * replica_operations-p1 log HOLE observed live (durable committedIndex advanced
@@ -41,7 +41,7 @@ test('removeEntriesAfter committed-prefix truncation guard', async (t) => {
         t.equal(adapter.getCommittedIndex(), 228, 'committed watermark at 228');
         t.equal(adapter.getLastInfo().index, 228, 'log head at 228 before');
 
-        // The exact live call: base liferaft asked to truncate after 191,
+        // The exact live call asked to truncate after 191,
         // 37 entries below the committed watermark.
         adapter.removeEntriesAfter(191);
 
