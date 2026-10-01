@@ -21,7 +21,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2687696,
-        "sha256": "cc7d7dac30af767e5abc8371c92a2a594f4dcd445e9b9621331a19f8ff960169"
+        "sha256": "b1b69c81b457a61ebe0e6aa5b041481ba0b4eb471c9b5d29af653404c3dd94bd"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "67ab98ee3225c68ff557a4e20c9fe0b5ad6fb7f1f8f8cfd36c32445869ca7fbb"
+        "sha256": "f63b308b392aed9e41eb8a3e3d336747df25f1c6f3c658b0899b31bb186e4f48"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "c17b36435fe1741bd97a5444a628f168362ffae3df8c84920f8ce7c49df0e0be"
+    "inputDigest": "7a9f8b98431560fd158b4f472d7e4eb34509060b421c3457fdd43a4e29aeca04"
   },
   "reconciliation": {
     "complexity": {
@@ -130,12 +130,12 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "67ab98ee3225c68ff557a4e20c9fe0b5ad6fb7f1f8f8cfd36c32445869ca7fbb"
+          "sha256": "f63b308b392aed9e41eb8a3e3d336747df25f1c6f3c658b0899b31bb186e4f48"
         },
         "cloneGroups": 765,
-        "duplicatedLines": 29389,
+        "duplicatedLines": 29385,
         "sourceCloneTouches": 1530,
-        "sourceDuplicatedLineTouches": 58778,
+        "sourceDuplicatedLineTouches": 58770,
         "nonzeroSourceCount": 492,
         "touchMultiplicity": 2
       }
@@ -168,14 +168,14 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2687696,
-        "sha256": "cc7d7dac30af767e5abc8371c92a2a594f4dcd445e9b9621331a19f8ff960169"
+        "sha256": "b1b69c81b457a61ebe0e6aa5b041481ba0b4eb471c9b5d29af653404c3dd94bd"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "50e4636720610644743a6849569f4d4c97f373ab526a49e347463578eecfd9d2",
+      "sourceDigest": "4fb3281f6d173d6061d2d84d11566f70a5929b15f2b2e0bd78f4ab18bf80d8ca",
       "moduleCount": 5149,
       "edgeCount": 25042,
       "unresolvedCount": 36
@@ -185,7 +185,7 @@
     "sourceSignalCount": 2596,
     "assignedSignalCount": 2596,
     "uniqueAssignmentCount": 2596,
-    "digest": "1ff28f873f33b948d8582d9618fcfb5a26561e8a602c514f96136f7cf6840155"
+    "digest": "8fff3fecc90afbceb84da2a9c785c39ec81ee691c759f892b15b501ff8106eb2"
   },
   "signalCounts": {
     "cognitive": 156,
@@ -243,13 +243,13 @@
       "complexity": 56,
       "cognitive": 0,
       "oversizedFiles": 5,
-      "duplicatedLines": 12782,
+      "duplicatedLines": 12774,
       "cloneTouches": 301,
       "cycleGroups": 0,
       "lintExclusions": 15,
       "importIn": 198,
       "importOut": 695,
-      "score": 1539.6,
+      "score": 1547.6,
       "topPaths": [
         "test/rebalancer/unified-rebalancer-triggers-priority-cohort.test.js",
         "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
@@ -3851,7 +3851,7 @@
           },
           {
             "path": "test/rebalancer/coordinator-created-operation-progress-remote-handoff-create-operation-test-cases.js",
-            "duplicatedLines": 588,
+            "duplicatedLines": 500,
             "oversizedLines": 0,
             "lintExclusions": 0,
             "structuralScore": 50
@@ -3879,11 +3879,11 @@
           }
         ],
         "baseline": {
-          "score": 1539.6,
+          "score": 1547.6,
           "complexity": 56,
           "cognitive": 0,
           "oversizedFiles": 5,
-          "duplicatedLines": 12782,
+          "duplicatedLines": 12774,
           "lintExclusions": 15
         },
         "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"

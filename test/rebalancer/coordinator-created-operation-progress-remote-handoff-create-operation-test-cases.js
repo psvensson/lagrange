@@ -21,6 +21,7 @@ import {
 } from './test-helpers.js';
 import {
   createRecentIntentPolicyCoordinator,
+  createRemoteHandoffCoordinator,
   RECENT_INTENT_NON_PRIORITY_OPERATION_ID,
   RECENT_INTENT_NON_PRIORITY_PARTITION_ID,
   RECENT_INTENT_POLICY_TARGET_NODE_ID,
@@ -38,17 +39,7 @@ import {
   REMOTE_HANDOFF_TEST_INITIAL_NOW_MS,
   REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS,
 } from './coordinator-created-operation-progress-remote-handoff-fixture-builders.js';
-
-function createAllowAllStorageAdmissionService() {
-  return {
-    async checkAdd() {
-      return {allowed: true, decisionType: 'admitted'};
-    },
-    async checkReplace() {
-      return {allowed: true, decisionType: 'admitted'};
-    },
-  };
-}
+import {createAllowAllStorageAdmissionService} from './test-helpers.js';
 
 export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
   test,
@@ -120,80 +111,23 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
     };
 
     let deliveryAttempt = 0;
-    const coordinator = new RebalanceCoordinator({
-      nodeId: 'node-source',
-      systemTableCache: {
-        get() {
-          return null;
-        },
-        getAll() {
-          return [];
-        },
-        filter() {
-          return [];
-        },
-      },
-      cdcIntegrationService: {
-        async waitForCacheUpdate() {},
-        async executeAuthoritativeSystemTableRead(
-          tableName,
-          sql,
-          params,
-        ) {
-          return authoritativeRead(tableName, sql, params);
-        },
-      },
-      controlPlaneSystemTableGateway: {
-        async readRows(tableName, sql, params = []) {
-          return authoritativeRead(tableName, sql, params);
-        },
-        async readAuthoritativeRows(tableName, sql, params = []) {
-          return authoritativeRead(tableName, sql, params);
-        },
-        async executeQuery(sql, params = []) {
-          return executeQuery(sql, params);
-        },
-      },
-      sqlQueryEngine: {
-        async executeQuery(sql, params = []) {
-          return executeQuery(sql, params);
-        },
-      },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {minReplicaCount: 1};
-        },
-      },
-      storageAccountingService: {
-        estimateReplicaBytes() {
-          return 1024;
-        },
-      },
-      storageAdmissionService: createAllowAllStorageAdmissionService(),
-      messageRouter: {
-        async deliver(target, payload) {
-          deliveries.push({target, payload});
-          deliveryAttempt += 1;
-          if (deliveryAttempt === 1) {
-            const error = new Error('connection unavailable');
-            error.deferRetry = true;
-            error.retryAfterMs = 250;
-            throw error;
-          }
-          return {acknowledged: true};
-        },
-      },
-      controlPlaneReadinessService: createMockControlPlaneReadinessService(),
-      transactionCoordinator: createMockTransactionCoordinator(),
-      setTimeoutFn(fn, delayMs) {
-        const handle = {fn, delayMs};
-        deferredTimers.push(handle);
-        return handle;
-      },
-      clearTimeoutFn() {},
-      enableTimeouts: false,
+    const deliver = async (target, payload) => {
+      deliveries.push({target, payload});
+      deliveryAttempt += 1;
+      if (deliveryAttempt === 1) {
+        const error = new Error('connection unavailable');
+        error.deferRetry = true;
+        error.retryAfterMs = 250;
+        throw error;
+      }
+      return {acknowledged: true};
+    };
+    const coordinator = createRemoteHandoffCoordinator({
+      authoritativeRead,
+      deferredTimers,
+      deliver,
+      executeQuery,
     });
-    coordinator.initialize();
 
     try {
       const operation = await coordinator.createOperation({
