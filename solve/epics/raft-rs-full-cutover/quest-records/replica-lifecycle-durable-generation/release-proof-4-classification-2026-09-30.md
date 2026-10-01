@@ -40,3 +40,17 @@ handoff / replace-owner / dt6 and the virtual-clock convergence tests, all
 green. Its one concern, the same one-millisecond flake in the untouched
 subtest 8 of the read-path test, is fixed in the same change (clock frozen).
 
+## Release proof 5 (full-gate run 36802845874 on main 154628eed, 2026-10-01 01:48–03:21 UTC)
+
+The log of this run is complete (checkout through the exclusive lane). The
+static suite, the model contracts and every lane of `test:all` are green
+except two files, so the three repairs above held on the runner:
+
+| Red on the runner | Class | Disposition |
+| --- | --- | --- |
+| `test/admin/admin-control-snapshot.test.js` (ordinary lane; fails identically on the standalone retry) | contract change with stale consumer tests (above) | OWNER DECISION, see `followups-2026-09-30.md` |
+| `test/simulation/formation-sim-charged-seed-host.test.js` (ordinary lane; the strict assertion passes, the process never exits, killed at 600 s on both runs) | inherited | lab item; it blocks `record_proof` as surely as the admin file does |
+
+`record_proof` skipped, so 154628eed carries no `release-full-v1` proof. The
+hardening tail did not run (`test:all` failed first).
+
