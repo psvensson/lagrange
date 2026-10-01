@@ -64,12 +64,10 @@
     "enabled": false,
     "maxThroughputRegressionRatio": 0.1,
     "minimumThroughputRatioSutToBaseline": 0.1,
-    "baselineProvider": "liferaft",
     "parityMismatchPolicy": "warn",
     "failIfBaselineMissing": false,
     "approvedMitigationId": null
   },
-  "raftProvider": "liferaft",
   "memoryLeak": {
     "enabled": false,
     "failOnDetection": false,
