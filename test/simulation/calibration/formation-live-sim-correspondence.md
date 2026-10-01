@@ -124,8 +124,11 @@ node per group, fully meshed within each group.
 
 ### Who owns each decision
 
-`test/simulation/formation-sim-raft-cohort.js` constructs `new LifeRaft(...)`
-directly. It is not the production `PartitionService` replica lifecycle.
+The simulator measured here built each group's consensus objects directly in
+its raft cohort, since replaced by
+`test/simulation/formation-sim-consensus-cohort.js`, which builds raft-rs
+operation ports through the production backend seam. It was not the
+production `PartitionService` replica lifecycle.
 
 | decision | owner in the simulator |
 | --- | --- |
