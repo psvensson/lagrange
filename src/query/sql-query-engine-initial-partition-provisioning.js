@@ -18,9 +18,8 @@ import {
 import {
   buildProvisioningCompletionSummary,
 } from './provisioning-completion-summary.js';
-import {
-  shouldRetainDurableSchemaPlanningOperations,
-} from './durable-schema-planning-retention.js';
+import {shouldRetainDurableSchemaPlanningOperations} from
+  './durable-schema-planning-retention.js';
 import {buildSchemaProvisioningChildIntent} from
   './schema-provisioning-child-intent.js';
 
@@ -343,7 +342,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
             nodeId: targetNodeId,
             controlPlaneMutationWorkClass:
               CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
-            ...childIntent,
+            operationIntentId: childIntent.operationIntentId,
+            replicaIntentId: childIntent.replicaIntentId,
           });
       } catch (error) {
         if (!this.isProvisioningAdmissionDeniedError(error)) {
@@ -476,7 +476,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           // bootstrap cohort is stamped, then skip the redundant local trigger.
           deferDispatchUntilBootstrapTopology: true,
           emitOperationCreated: false,
-          ...childIntent,
+          operationIntentId: childIntent.operationIntentId,
+          replicaIntentId: childIntent.replicaIntentId,
           parentWorkflowFenceToken:
             context?.schemaOwnerFenceToken ?? null,
         });
