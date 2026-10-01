@@ -584,7 +584,7 @@ class SQLiteLogAdapter {
     // Raft-safety invariant (CL-040/041/042 class): committed entries are
     // permanent and MUST NEVER be truncated — deleting a committed entry
     // destroys agreed history and, cluster-wide across a quorum, is the
-    // cardinal Raft safety violation. Base liferaft's conflict truncation
+    // cardinal Raft safety violation. Conflict truncation
     // (index.js) calls this UNGUARDED; a truncation whose floor falls below
     // committedIndex therefore silently deleted committed entries and produced
     // the replica_operations-p1 log HOLE (committedIndex advanced to 228 while
@@ -597,8 +597,8 @@ class SQLiteLogAdapter {
     // index >= committedIndex and the clamp does nothing); it only bites the
     // anomalous case, where refusing to delete committed history is the correct
     // Raft response, not obeying it. truncateConflictingSameIndexTail already
-    // guards its own call (liferaft.js), but the invariant belongs at the
-    // adapter so EVERY caller — including base liferaft — is covered.
+    // may guard individual callers, but the invariant belongs at the
+    // adapter so EVERY caller is covered.
     if (!isValidRaftLogIndex(index)) {
       return;
     }
@@ -676,7 +676,7 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return 0;
     }
-    // CL-018: liferaft reads committedIndex on every packet build; a
+    // CL-018: consensus callers read committedIndex frequently; a
     // sqlite SELECT per read is measurable on a saturated seed. The
     // SQLiteLogAdapter is the only writer class, but more than one facade can
     // hold an adapter over the same database. Mutation paths refresh this
@@ -693,7 +693,7 @@ class SQLiteLogAdapter {
   }
 
   /**
-   * Liferaft reads committedIndex as a property on the log adapter.
+   * Consensus compatibility callers read committedIndex as a log-adapter property.
    * Keep it synchronized with persisted raft state.
    * @return {number} Committed index.
    */
@@ -781,7 +781,7 @@ class SQLiteLogAdapter {
 
   /**
    * End/cleanup the log adapter.
-   * Called by liferaft when the node is ended.
+   * Called when the consensus/storage owner is ended.
    * For SQLite, we don't close the database here as it's managed externally.
    */
   end() {
