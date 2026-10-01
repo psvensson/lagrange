@@ -28,6 +28,12 @@ import {ConfigurationManager} from
 import {LoggingService} from '../../../src/logging/logging-service.js';
 import {NodeService} from '../../../src/node/node-service.js';
 import {SystemTableCache} from '../../../src/cache/system-table-cache.js';
+import {
+  COLUMN,
+  SERVICE_STATUS,
+  SERVICE_TYPE,
+  TABLES,
+} from '../../../src/constants/index.js';
 import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../../src/raft/raft-operation-port-constants.js';
@@ -82,8 +88,24 @@ function waitFor(predicate, boundMs = BUDGET_MS) {
   });
 }
 
+// The node's services rows place each replica on this node, as placement
+// publishes them: peer addresses resolve from that authority alone.
+function createPlacedNodeCache() {
+  const cache = new SystemTableCache();
+  for (const replicaId of REPLICAS) {
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      [COLUMN.SERVICE_ID]: replicaId,
+      [COLUMN.NODE_ID]: NODE_ID,
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    });
+  }
+  return cache;
+}
+
 async function createServiceHost() {
   configure();
+  const nodeCache = createPlacedNodeCache();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'wasm-rs-witness-'));
   const router = new MessageRouter({
     bootIncarnation: TEST_BOOT_INCARNATION,
@@ -103,7 +125,7 @@ async function createServiceHost() {
       transport: router,
       serviceDefinitionId: SERVICE_ID,
       dbPath: dbFileOf(replicaId),
-      systemTableCache: new SystemTableCache(),
+      systemTableCache: nodeCache,
     });
     live.set(replicaId, replica);
     await replica.initialize();

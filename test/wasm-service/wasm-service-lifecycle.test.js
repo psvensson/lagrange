@@ -19,8 +19,10 @@ import {NodeService} from
   '../../src/node/node-service.js';
 import {AddressManager} from
   '../../src/address/address-manager.js';
+import {DataDirectoryManager} from
+  '../../src/storage/data-directory-manager.js';
 
-// Each test's replicas get durable database paths in their own directory.
+// Each test's data directory owns its replicas' durable database paths.
 let scratchDirectory = null;
 
 /**
@@ -31,17 +33,20 @@ function initEnv() {
   LoggingService.resetInstance();
   NodeService.resetInstance();
   AddressManager.resetInstance();
+  DataDirectoryManager.resetInstance();
+  scratchDirectory = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wasm-service-lifecycle-'));
 
   const config = ConfigurationManager.getInstance();
   config.initialize({
     node: {id: 'test-node'},
     logging: {level: 'error'},
+    storage: {dataDir: scratchDirectory},
   });
 
   const logging = LoggingService.getInstance();
   logging.initialize({level: 'error'});
-  scratchDirectory = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'wasm-service-lifecycle-'));
+  DataDirectoryManager.getInstance().initialize();
 }
 
 /**
@@ -52,6 +57,7 @@ function cleanEnv() {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   AddressManager.resetInstance();
+  DataDirectoryManager.resetInstance();
   fs.rmSync(scratchDirectory, {recursive: true, force: true});
   scratchDirectory = null;
 }
@@ -83,9 +89,6 @@ function makeReplicaConfig(overrides = {}) {
   return {
     replicaId: 'svc-1-r1',
     replicaIds: ['svc-1-r1'],
-    dbPath: path.join(scratchDirectory,
-      `${overrides.replicaId ?? 'svc-1-r1'}.db`),
-    transport: null,
     ...overrides,
   };
 }
@@ -193,6 +196,21 @@ describe('WasmServiceLifecycle', () => {
       assert.equal(
         replica.serviceDefinitionId, 'svc-1',
       );
+    });
+
+    it('derives the durable path from the data directory owner', () => {
+      const lifecycle = makeLifecycle();
+      const replica = lifecycle.createReplica(
+        makeServiceDef(),
+        makeReplicaConfig({dbPath: path.join(os.tmpdir(), 'caller.db')}),
+      );
+      const ownedPath = DataDirectoryManager.getInstance()
+        .getWasmServiceDbPath('svc-1', 'svc-1-r1');
+      assert.equal(replica.dbPath, ownedPath);
+      assert.equal(ownedPath, path.join(
+        scratchDirectory, 'wasm-services', 'svc-1', 'svc-1-r1.db',
+      ));
+      assert.equal(fs.existsSync(path.dirname(ownedPath)), true);
     });
 
     it('should pass serviceDefinitionId to replica', () => {

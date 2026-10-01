@@ -55,12 +55,13 @@ function consensusInitRefusedError(replica, answer) {
 
 /**
  * The address of a replica identity: the node its services row places it
- * on; before the group's location converged (no row yet), the bootstrap
- * hint is this replica's own node. Resolved on every send, so a row that
- * appears later is used at once.
+ * on. A peer without a placing row is unresolved - the port records the
+ * failed delivery and resolves again on the next send, so a row that
+ * appears later is used at once. Nothing guesses a peer's node.
  * @param {Object} replica - The WASM service replica.
  * @param {string} replicaIdentity - The identity to place.
  * @return {string} Its unified address.
+ * @throws {Error} When no services row places the peer.
  */
 function resolveWasmServicePeerAddress(replica, replicaIdentity) {
   if (replicaIdentity === replica.replicaId) {
@@ -69,8 +70,13 @@ function resolveWasmServicePeerAddress(replica, replicaIdentity) {
   const row = replica.systemTableCache?.get(TABLES.SERVICES, replicaIdentity);
   const placedNodeId = row && !isPartitionCleanupServiceRow(row) ?
     row[COLUMN.NODE_ID] : null;
+  if (!placedNodeId) {
+    throw new Error(
+      `${WASM_SERVICE_ERROR_MSG.PEER_UNPLACED}: ${replicaIdentity}`,
+    );
+  }
   return replica.addressManager.format(
-    placedNodeId || replica.nodeId,
+    placedNodeId,
     SERVICE_TYPE.WASM_SERVICE,
     replicaIdentity,
   );

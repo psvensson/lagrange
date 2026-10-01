@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2642740,
-        "sha256": "d0037c4e008db4213a576c675c61412a2cc617e81eb2302d5c17d299165ed105"
+        "bytes": 2642902,
+        "sha256": "a603a6b1927aeaf5b75611338cd195e579743db07dd6d10f6d56feb7208457bb"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "6c6f09f9e03113e6b1f5f427e4e971beb1cd95eecdaa57bcf719b4b5ba7f1008"
+        "sha256": "7b85c819c84ca4a8f3f7078d6f297b833c77670f935b54e46a8faa4610c96361"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "b061ca3bc07859c070c9f125d6e2400c4ecf909853f164b15943b46a69c2546c"
+        "sha256": "dbbd79c075b31eda6b1046b96531f91fae5f32de6fb52e6d72960069e374f182"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "2ad3adc2596c4c99e63549271ab4f82548fef645c5b044c666d1a3f99b735346"
+    "inputDigest": "987e99728af860999520ec2944989d7bd27696717d335260a5930fa3fa204907"
   },
   "reconciliation": {
     "complexity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "6c6f09f9e03113e6b1f5f427e4e971beb1cd95eecdaa57bcf719b4b5ba7f1008"
+          "sha256": "7b85c819c84ca4a8f3f7078d6f297b833c77670f935b54e46a8faa4610c96361"
         },
         "cloneGroups": 52,
         "duplicatedLines": 1652,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "b061ca3bc07859c070c9f125d6e2400c4ecf909853f164b15943b46a69c2546c"
+          "sha256": "dbbd79c075b31eda6b1046b96531f91fae5f32de6fb52e6d72960069e374f182"
         },
         "cloneGroups": 728,
         "duplicatedLines": 27645,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2642740,
-        "sha256": "d0037c4e008db4213a576c675c61412a2cc617e81eb2302d5c17d299165ed105"
+        "bytes": 2642902,
+        "sha256": "a603a6b1927aeaf5b75611338cd195e579743db07dd6d10f6d56feb7208457bb"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "b33fdcc9b093509c3fa2348ebf4d7d499e23c080c903906971a114a114dad205",
+      "sourceDigest": "714e30ae5c1c71d7b5487344e149a61067060e7d9987e6cb389bd708132f3b3c",
       "moduleCount": 5060,
-      "edgeCount": 24686,
+      "edgeCount": 24689,
       "unresolvedCount": 35
     }
   },
@@ -1616,7 +1616,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 1,
-      "importOut": 83,
+      "importOut": 84,
       "score": 41.6,
       "topPaths": [
         "test/raft/helpers/raft-follower-append-starvation-relief-scenarios.js",

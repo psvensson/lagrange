@@ -11,6 +11,7 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {DataDirectoryManager} from '../storage/data-directory-manager.js';
 import {WasmServiceReplica} from './wasm-service-replica.js';
 import {buildEndpointRecord} from './service-endpoint-builder.js';
 import {
@@ -68,8 +69,13 @@ class WasmServiceLifecycle {
    * @param {Object} options.messageRouter - MessageRouter
    *   instance for replica transport.
    * @param {string} options.nodeId - ID of the hosting node.
+   * @param {DataDirectoryManager} [options.dataDirectoryManager] - The
+   *   owner of every replica's durable database path; the node's own data
+   *   directory unless the composition root supplies one.
    */
   constructor(options = {}) {
+    this.dataDirectoryManager = options.dataDirectoryManager ||
+      DataDirectoryManager.getInstance();
     this.portAllocator = options.portAllocator;
     this.moduleMirror = options.moduleMirror;
     this.messageRouter = options.messageRouter;
@@ -109,18 +115,24 @@ class WasmServiceLifecycle {
    * @param {Object} serviceDefinition - Service definition
    *   with serviceId, handlerFunctionId, readConsistency,
    *   writeConsistency, safetyIntervalMs fields.
-   * @param {Object} replicaConfig - Replica configuration
-   *   with replicaId, replicaIds, dbPath, transport fields.
+   * @param {Object} replicaConfig - The replica's founding identity:
+   *   replicaId and replicaIds. Its durable database path is the data
+   *   directory's, never the caller's.
    * @return {WasmServiceReplica} The created replica.
    */
   createReplica(serviceDefinition, replicaConfig) {
+    const serviceId = serviceDefinition.serviceId;
+    const dbPath = this.dataDirectoryManager.getWasmServiceDbPath(
+      serviceId, replicaConfig.replicaId,
+    );
+    this.dataDirectoryManager.ensureWasmServiceDirExists(serviceId);
     const replica = new WasmServiceReplica({
       replicaId: replicaConfig.replicaId,
       nodeId: this.nodeId,
       replicaIds: replicaConfig.replicaIds,
-      transport: replicaConfig.transport || this.messageRouter,
-      serviceDefinitionId: serviceDefinition.serviceId,
-      dbPath: replicaConfig.dbPath,
+      transport: this.messageRouter,
+      serviceDefinitionId: serviceId,
+      dbPath,
       readConsistency: serviceDefinition.readConsistency,
       writeConsistency: serviceDefinition.writeConsistency,
       safetyIntervalMs: serviceDefinition.safetyIntervalMs,
@@ -129,12 +141,10 @@ class WasmServiceLifecycle {
       leaderNodeUpdateWriter: this.leaderNodeUpdateWriter,
     });
 
-    this.activeReplicas.set(
-      serviceDefinition.serviceId, replica,
-    );
+    this.activeReplicas.set(serviceId, replica);
 
     this.logger.info(WASM_SERVICE_LOG_MSG.REPLICA_CREATED, {
-      serviceId: serviceDefinition.serviceId,
+      serviceId,
       replicaId: replicaConfig.replicaId,
       nodeId: this.nodeId,
     });

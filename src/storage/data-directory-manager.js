@@ -171,6 +171,39 @@ class DataDirectoryManager {
   }
 
   /**
+   * Get the durable consensus database path of a WASM service replica: one
+   * file per replica, owned by this data directory.
+   * Pattern: {data-dir}/wasm-services/{service-id}/{replica-id}.db
+   * @param {string} serviceId - Service ID (the consensus group).
+   * @param {string} replicaId - Replica ID.
+   * @return {string} The database file path.
+   */
+  getWasmServiceDbPath(serviceId, replicaId) {
+    if (!serviceId || !replicaId) {
+      throw new Error(STORAGE_ERROR_MSG.MISSING_WASM_SERVICE_REPLICA_ID);
+    }
+    return path.join(
+      this.getDataDir(),
+      STORAGE_DEFAULT.WASM_SERVICES_DIRNAME,
+      serviceId,
+      `${replicaId}${STORAGE_DEFAULT.DB_EXT}`,
+    );
+  }
+
+  /**
+   * Ensure the directory of a WASM service's replica databases exists.
+   * @param {string} serviceId - Service ID.
+   */
+  ensureWasmServiceDirExists(serviceId) {
+    if (!serviceId) {
+      throw new Error(STORAGE_ERROR_MSG.MISSING_WASM_SERVICE_REPLICA_ID);
+    }
+    this.ensureDirectoryExists(path.join(
+      this.getDataDir(), STORAGE_DEFAULT.WASM_SERVICES_DIRNAME, serviceId,
+    ));
+  }
+
+  /**
    * Check if the manager has been initialized.
    * @return {boolean} True if initialized.
    */

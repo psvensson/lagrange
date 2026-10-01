@@ -28,7 +28,7 @@
   "censusSize": 2230,
   "digest": "fnv1a32-2634b2bb",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2e42c213",
+  "observationDigest": "fnv1a32-598deadc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -12873,6 +12873,7 @@
         "src/config/configuration-manager.js",
         "src/logging/logging-service.js",
         "src/node/node-service.js",
+        "src/storage/data-directory-manager.js",
         "src/wasm-service/module-mirror.js",
         "src/wasm-service/port-allocator.js"
       ]

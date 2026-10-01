@@ -57,6 +57,7 @@ const WASM_SERVICE_ERROR_MSG = Object.freeze({
   IN_MEMORY_DB_PATH_REFUSED:
     'WASM service replica refuses an in-memory consensus database',
   CONSENSUS_INIT_REFUSED: 'WASM service consensus port refused to open',
+  PEER_UNPLACED: 'WASM service peer has no services row placement',
   PROPOSAL_REFUSED: 'WASM service proposal refused by its consensus port',
   UNKNOWN_COMMITTED_COMMAND: 'WASM service committed an unknown command type',
   REPLICA_ID_REQUIRED: 'WASM service replica requires its replicaId',
