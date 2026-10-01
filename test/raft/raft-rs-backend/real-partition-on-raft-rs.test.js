@@ -109,7 +109,7 @@ function durableRecordOf(dbFile) {
 /**
  * Hostile, divergent service rows: each replica's cache says something
  * different about who belongs, and one of them calls the joiner a member
- * while it is still syncing - the liferaft shape where a SYNCING row doubles
+ * while it is still syncing - the historical shape where a SYNCING row doubles
  * as a voter. A replica nobody ever created is invented in a third cache.
  * @param {string} replicaId - Whose cache.
  * @param {number} round - The settle round, so the rows keep moving.
