@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2213,
+    "ordinary": 2210,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2230,
-  "digest": "fnv1a32-3d22cac7",
+  "censusSize": 2227,
+  "digest": "fnv1a32-8cfec141",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1422,8 +1422,6 @@
     "test/raft/learner-promotion-progress-proof-contract.test.js": "ordinary",
     "test/raft/liferaft-append-fail-recovery.test.js": "ordinary",
     "test/raft/liferaft-catchup-batching.test.js": "ordinary",
-    "test/raft/liferaft-committed-entry-conflict.test.js": "ordinary",
-    "test/raft/liferaft-committed-prefix-conflict-livelock.test.js": "ordinary",
     "test/raft/liferaft-deterministic-construction.test.js": "ordinary",
     "test/raft/liferaft-follower-match-index.test.js": "ordinary",
     "test/raft/liferaft-formation-attribution-interaction.test.js": "ordinary",
@@ -1436,7 +1434,6 @@
     "test/raft/raft-id-mapper.test.js": "ordinary",
     "test/raft/raft-log-write-owner.test.js": "ordinary",
     "test/raft/raft-protocol-task-tracker.test.js": "ordinary",
-    "test/raft/raft-provider-contract.test.js": "ordinary",
     "test/raft/raft-provider-control.test.js": "ordinary",
     "test/raft/raft-rs-backend/admission-redrive-chain.test.js": "ordinary",
     "test/raft/raft-rs-backend/admission-redrive.test.js": "ordinary",

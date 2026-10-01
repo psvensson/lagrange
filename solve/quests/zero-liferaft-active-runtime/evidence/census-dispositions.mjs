@@ -131,8 +131,11 @@ export const DISPOSITION_RULES = Object.freeze([
     D, RAFT,
     'contract of the deleted in-memory adapter; rs-raft durable log covered by ' +
     'test/raft/raft-rs-backend/durable-store-committed-entries.test.js'],
-  [/^test\/raft\/(raft-group(\.property)?|raft-replica-base|raft-provider-contract|raft-provider-control|raft-timing-utils|raft-transport-backpressure-mute|remote-peer-representation|virtual-tick|raft-packet-round-trip\.property|raft-packet-routing\.property|leadership-transfer-single-path|election-jitter-seed|raft-protocol-task-tracker)\.test\.js$/,
+  [/^test\/raft\/(raft-group(\.property)?|raft-replica-base|raft-provider-contract|raft-provider-control|raft-timing-utils|raft-transport-backpressure-mute|remote-peer-representation|virtual-tick|raft-packet-round-trip\.property|raft-packet-routing\.property|election-jitter-seed|raft-protocol-task-tracker)\.test\.js$/,
     D, RAFT, 'tests of deleted legacy modules'],
+  ['test/raft/leadership-transfer-single-path.test.js', M, RAFT,
+    'single-path leadership-transfer invariant kept on the rs-raft port; ' +
+    'legacy-port construction and refusal cases removed'],
   [/^test\/closure\/CL-04[012]\.repro\.test\.js$/, D, RAFT,
     'repro of a legacy-runtime protocol defect; rs-raft election/log safety in ' +
     'test/raft/raft-rs-backend/election-safety.test.js'],

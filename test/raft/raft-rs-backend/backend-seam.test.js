@@ -4,13 +4,13 @@
 // a typed refusal (single-path-partition-cutover.test.js). What remains here
 // is measured from `src`, not from a literal this file owns:
 //   1. the seam's interface, derived by parsing `src` - the production call
-//      census - and compared against what each backend actually exposes;
+//      census - is empty: production holds no backend-selection provider and
+//      calls none, while the rs-raft partition factory keeps no state;
 //   2. that the rs-raft provider recreates no legacy node facade.
 
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {LiferaftProvider} from '../../../src/raft/liferaft-provider.js';
 import {RaftRsWasmProvider} from '../../../src/raft/raft-rs-provider.js';
 import {
   censusNames,
@@ -19,12 +19,8 @@ import {
 
 test('the seam interface is the census of what production calls', async () => {
   const census = censusNames(deriveProductionRaftCallCensus());
-  assert.ok(census.providerMethods.length > 0);
-  const liferaft = new LiferaftProvider();
-  for (const name of census.providerMethods) {
-    assert.equal(typeof liferaft[name], 'function',
-      `liferaft must serve ${name}, which production calls on the seam`);
-  }
+  assert.deepEqual(census.providerMethods, [],
+    'production calls no method on a backend-selection provider');
   const raftRs = new RaftRsWasmProvider();
   assert.equal(typeof raftRs.createPartitionPort, 'function');
   assert.deepEqual(Reflect.ownKeys(raftRs), [],

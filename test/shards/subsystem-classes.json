@@ -19,16 +19,16 @@
     "services-runtime": 141,
     "solver-tooling": 7,
     "storage-partition": 148,
-    "storage-raft": 129,
+    "storage-raft": 126,
     "test-infrastructure": 138,
     "transactions": 15,
     "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2230,
-  "digest": "fnv1a32-2634b2bb",
+  "censusSize": 2227,
+  "digest": "fnv1a32-b5cbcc2e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f31430f5",
+  "observationDigest": "fnv1a32-bd739c85",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1442,8 +1442,6 @@
     "test/raft/learner-promotion-progress-proof-contract.test.js": "storage-raft",
     "test/raft/liferaft-append-fail-recovery.test.js": "storage-raft",
     "test/raft/liferaft-catchup-batching.test.js": "storage-raft",
-    "test/raft/liferaft-committed-entry-conflict.test.js": "storage-raft",
-    "test/raft/liferaft-committed-prefix-conflict-livelock.test.js": "storage-raft",
     "test/raft/liferaft-deterministic-construction.test.js": "storage-raft",
     "test/raft/liferaft-follower-match-index.test.js": "storage-raft",
     "test/raft/liferaft-formation-attribution-interaction.test.js": "storage-raft",
@@ -1456,7 +1454,6 @@
     "test/raft/raft-id-mapper.test.js": "storage-raft",
     "test/raft/raft-log-write-owner.test.js": "storage-raft",
     "test/raft/raft-protocol-task-tracker.test.js": "storage-raft",
-    "test/raft/raft-provider-contract.test.js": "storage-raft",
     "test/raft/raft-provider-control.test.js": "storage-raft",
     "test/raft/raft-rs-backend/admission-redrive-chain.test.js": "storage-raft",
     "test/raft/raft-rs-backend/admission-redrive.test.js": "storage-raft",
@@ -8080,7 +8077,6 @@
         "src/node/replica-handler-leader-handoff-methods.js",
         "src/partition/partition-service-leadership-transfer.js",
         "src/raft/raft-committed-membership-stamp.js",
-        "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
@@ -8103,16 +8099,6 @@
       "directories": [
         "data",
         "src"
-      ]
-    },
-    "test/raft/liferaft-committed-entry-conflict.test.js": {
-      "directories": [
-        "data"
-      ]
-    },
-    "test/raft/liferaft-committed-prefix-conflict-livelock.test.js": {
-      "directories": [
-        "data"
       ]
     },
     "test/raft/liferaft-deterministic-construction.test.js": {
@@ -8570,8 +8556,8 @@
     },
     "test/raft/raft-rs-backend/peer-identity.test.js": {
       "files": [
-        "src/raft/liferaft-provider.js",
         "src/raft/raft-rs-host-contract.js",
+        "src/raft/raft-rs-peer-delivery.js",
         "src/raft/raft-rs-peer-identity.js"
       ]
     },

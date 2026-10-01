@@ -24,8 +24,8 @@
     "ACTIVE_CONFIG/preserve-as-backend-neutral": 6,
     "ACTIVE_DOC/migrate": 8,
     "ACTIVE_DOC/preserve-as-backend-neutral": 2,
-    "ACTIVE_TEST/delete": 94,
-    "ACTIVE_TEST/migrate": 105,
+    "ACTIVE_TEST/delete": 93,
+    "ACTIVE_TEST/migrate": 106,
     "DEAD_CODE/delete": 28,
     "DEAD_CODE/migrate": 2,
     "HISTORICAL_SOLVE_EVIDENCE": 187,
@@ -4300,9 +4300,9 @@
         "legacy-implementation",
         "provider-selection"
       ],
-      "disposition": "delete",
+      "disposition": "migrate",
       "owner": "src/raft (rs-raft operation port owner)",
-      "reason": "tests of deleted legacy modules"
+      "reason": "single-path leadership-transfer invariant kept on the rs-raft port; legacy-port construction and refusal cases removed"
     },
     {
       "path": "test/raft/liferaft-append-fail-recovery.test.js",
