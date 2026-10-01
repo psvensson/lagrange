@@ -184,7 +184,7 @@ rest. **The simulator has removed the seed concentration that caused the live
 problem**, by construction.
 
 Q1b is therefore not started. Per the stated rule, the first missing arrow is
-not a LifeRaft callback: it is
+not a consensus-runtime callback: it is
 
 ```
 cold bootstrap declaration
@@ -210,7 +210,7 @@ thing to test.
 The metered oracle captured at `22420f874` is marked
 `purpose: substrate_regression_only`, `formationCorrespondence: false`, and
 names the composition it measured: `legacySyntheticFormationComposition` -
-six cohorts keyed from table ids, one LifeRaft per node per group.
+six cohorts keyed from table ids, one raft-rs operation port per node per group.
 
 It is **valid for the sealed legacy substrate composition** and **not
 authoritative for production-composed formation**. It was not invalidated and
