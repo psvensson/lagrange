@@ -1,6 +1,6 @@
 // A mechanical census of what production asks of a Raft node and of the
-// provider seam today, derived from `src` by parsing it - never from a
-// convenience API and never from a hand-kept list.
+// consensus-handle surface today, derived from `src` by parsing it - never
+// from a convenience API and never from a hand-kept list.
 //
 // The census is the evidence behind the minimum backend contract: a backend
 // that does not answer everything in here cannot host today's partition
@@ -19,8 +19,6 @@ const CENSUS = Object.freeze({
   FILE_SUFFIX: '.js',
   NODE_HOLDER: 'raft',
   NODE_IDENTIFIERS: Object.freeze(['raft', 'raftNode']),
-  PROVIDER_HOLDER: 'raftProvider',
-  PROVIDER_IDENTIFIERS: Object.freeze(['raftProvider']),
   // `<receiver>.raft` only counts when the receiver is one that actually
   // holds a node. `DEFAULT_CONFIG.raft.*` is a configuration namespace that
   // happens to be called raft, and it is not part of the seam.
@@ -119,18 +117,11 @@ function walk(node, visit, parent) {
 // `raft`, `raftNode`, `this.raft`, `service.raft`, `partitionService.raft`:
 // every spelling production uses for the handle it holds.
 function holderForName(name) {
-  if (CENSUS.NODE_IDENTIFIERS.includes(name)) {
-    return CENSUS.NODE_HOLDER;
-  }
-  return CENSUS.PROVIDER_IDENTIFIERS.includes(name) ?
-    CENSUS.PROVIDER_HOLDER : null;
+  return CENSUS.NODE_IDENTIFIERS.includes(name) ? CENSUS.NODE_HOLDER : null;
 }
 
 function holderForProperty(name) {
-  if (name === CENSUS.NODE_HOLDER) {
-    return CENSUS.NODE_HOLDER;
-  }
-  return name === CENSUS.PROVIDER_HOLDER ? CENSUS.PROVIDER_HOLDER : null;
+  return name === CENSUS.NODE_HOLDER ? CENSUS.NODE_HOLDER : null;
 }
 
 function holderKind(objectNode) {
@@ -160,7 +151,6 @@ function emptyCensus() {
     nodeMethods: {},
     nodeProperties: {},
     nodeEvents: {},
-    providerMethods: {},
   };
 }
 
@@ -186,12 +176,6 @@ function visitMember(node, parent, census, file) {
   const name = node.property.name;
   const site = `${file}:${node.loc.start.line}`;
   const called = parent?.type === NODE_TYPE.CALL && parent.callee === node;
-  if (kind === CENSUS.PROVIDER_HOLDER) {
-    if (called) {
-      record(census.providerMethods, name, site);
-    }
-    return;
-  }
   if (!called) {
     record(census.nodeProperties, name, site);
     return;
@@ -202,7 +186,7 @@ function visitMember(node, parent, census, file) {
 /**
  * Derive the census from the current contents of `src`.
  * @return {{nodeMethods: Object, nodeProperties: Object,
- *   nodeEvents: Object, providerMethods: Object}}
+ *   nodeEvents: Object}}
  */
 function deriveProductionRaftCallCensus() {
   const census = emptyCensus();
@@ -225,7 +209,7 @@ function deriveProductionRaftCallCensus() {
  * document records and the shape a contract can be compared against.
  * @param {Object} census
  * @return {{nodeMethods: Array<string>, nodeProperties: Array<string>,
- *   nodeEvents: Array<string>, providerMethods: Array<string>}}
+ *   nodeEvents: Array<string>}}
  */
 function censusNames(census) {
   const names = (bucket) => Object.keys(bucket).sort();
@@ -233,7 +217,6 @@ function censusNames(census) {
     nodeMethods: names(census.nodeMethods),
     nodeProperties: names(census.nodeProperties),
     nodeEvents: names(census.nodeEvents),
-    providerMethods: names(census.providerMethods),
   };
 }
 
