@@ -1,6 +1,6 @@
 /**
  * Helpers for converting SQLite-stored raft log payloads into the canonical
- * entry shape consumed by liferaft.
+ * entry shape consumed by the consensus log owners.
  */
 
 
