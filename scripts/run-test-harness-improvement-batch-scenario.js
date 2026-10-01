@@ -103,9 +103,10 @@ const CHECKS = [
     ok: () => fs.existsSync('src/test-helpers/managed-timers.js'),
   },
   {
-    id: 'dt-determinism-runtime-tripwire-and-liferaft-seam',
+    id: 'dt-determinism-runtime-tripwire-and-consensus-seam',
     ok: () => fs.existsSync('test/distributed/harness/determinism-tripwire.js') &&
-      fileContains('src/raft/liferaft.js', 'timeSource'),
+      fs.existsSync('test/test-helpers/raft-rs-network-host.js') &&
+      fs.existsSync('src/raft/raft-rs-operation-port.js'),
   },
   {
     id: 'repro-tier-routes-to-dt6',
