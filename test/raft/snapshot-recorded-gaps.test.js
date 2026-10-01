@@ -7,10 +7,7 @@ import Database from 'better-sqlite3';
 
 import {test} from '../../src/test-helpers/tap.js';
 
-import LifeRaft from '../../src/raft/liferaft.js';
-import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
-import {RAFT_ERROR_CODE} from '../../src/raft/constants.js';
 import {requestSnapshotInstall} from '../../src/raft/snapshot-install.js';
 import {
   RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
@@ -43,18 +40,20 @@ import {TEST_BOOT_INCARNATION} from
   '../test-helpers/boot-incarnation-fixture.js';
 
 // S4 recorded-gap guards (quest raft-snapshot-compacted-follower-catchup):
-// five previously-untested lines pinned — (1) the wrong-term-at-boundary
-// refusal in liferaft's validateCommittedPrevLogIdentity boundary branch,
-// plus its deliberate no-dispatch livelock disposition against a full-log
-// leader; (2) the committed-truncation witness TRIP inside
-// (boundary, committedIndex]; (3) stale target-sidecar deletion in
-// swapStagingIntoReplica; (4) the explicit per-socket maxPayload on the
-// bulk dial; (5) stale-staging cleanup at transfer accept.
+// previously-untested lines pinned - (2) the committed-truncation witness TRIP
+// inside (boundary, committedIndex]; (3) stale target-sidecar deletion in
+// swapStagingIntoReplica; (4) the explicit per-socket maxPayload on the bulk
+// dial; (5) stale-staging cleanup at transfer accept.
+//
+// Gap (1), the wrong-term-at-boundary refusal and its no-dispatch disposition,
+// drove the retired runtime's follower and leader and is deleted with it.
+// Log matching at a snapshot boundary belongs to raft-rs, whose snapshot
+// catch-up is an open release-blocking frontier of epic raft-rs-full-cutover
+// R5 ("snapshot/restart/catch-up under rs-raft durable state").
 
 const PARTITION_ID = 'sql_transactions-p1';
 const STATE_TABLE = 'sql_transactions';
 const TERM = 4;
-const WRONG_TERM = 9;
 const SEALED_EPOCH = 7;
 const ENTRY_COUNT = 3;
 const IDENTITY = Object.freeze({
@@ -62,11 +61,6 @@ const IDENTITY = Object.freeze({
   raftGroupId: PARTITION_ID,
   entity: Object.freeze({kind: 'partition', id: STATE_TABLE}),
   membershipEpoch: SEALED_EPOCH,
-});
-const HUGE_TIMERS = Object.freeze({
-  'heartbeat': '10s',
-  'election min': '20s',
-  'election max': '30s',
 });
 
 async function createSealedGenerationFixture() {
@@ -110,81 +104,6 @@ async function createInstalledReplicaFixture() {
       generation.close();
     }};
 }
-
-test('gap 1: wrong-term-at-boundary is a typed refusal with NO dispatch',
-  async (t) => {
-    const fixture = await createInstalledReplicaFixture();
-    const adapter = fixture.adapter;
-    const follower = new LifeRaft('node-f/partition/sql_transactions-p1-r2', {
-      ...HUGE_TIMERS,
-      'Log': function SQLiteLogFactory() {
-        return adapter;
-      },
-    });
-    const leaderDecisions = [];
-    const leader = new LifeRaft('node-l/partition/sql_transactions-p1-r1', {
-      ...HUGE_TIMERS,
-      'Log': InMemoryLogAdapter,
-      'onSnapshotCatchupNeeded': (decision) => leaderDecisions.push(decision),
-    });
-    try {
-      // Full-log leader: entries 1..boundary+2 with a DIVERGENT term at the
-      // boundary index (unreachable for honest committed history — this is
-      // the corruption/forgery disposition).
-      for (let index = 1; index <= fixture.boundaryIndex + 2; index += 1) {
-        await leader.log.saveCommand({type: 'entry', index}, WRONG_TERM, index);
-      }
-      await leader.log.commit(fixture.boundaryIndex + 2);
-      leader.change({state: LifeRaft.LEADER, term: WRONG_TERM});
-
-      const followerOutgoing = [];
-      follower.message = (_who, packet) => {
-        followerOutgoing.push(packet);
-        return follower;
-      };
-      const followerIncoming = follower.listeners('data')[0];
-      const followerWrites = [];
-      await followerIncoming({
-        type: 'append',
-        term: WRONG_TERM,
-        state: LifeRaft.LEADER,
-        address: leader.address,
-        leader: leader.address,
-        last: {
-          index: fixture.boundaryIndex,
-          term: WRONG_TERM,
-          committedIndex: fixture.boundaryIndex,
-        },
-        data: [],
-      }, (packet) => followerWrites.push(packet ?? null));
-      await new Promise((resolve) => setImmediate(resolve));
-
-      const refusals = followerOutgoing.filter(
-        (packet) => packet?.type === 'append fail' &&
-          packet?.data?.code === RAFT_ERROR_CODE.COMMITTED_ENTRY_CONFLICT);
-      t.equal(refusals.length, 1,
-        'the boundary-term divergence is refused with the typed conflict');
-      t.equal(refusals[0].data.index, fixture.boundaryIndex,
-        'the refusal names the boundary index');
-      const info = await follower.log.getLastInfo();
-      t.same({index: info.index, term: info.term},
-        {index: fixture.boundaryIndex, term: TERM},
-        'the installed boundary identity is untouched by the attack');
-
-      // Disposition: feed the REAL refusal to the full-log leader — its
-      // boundary is 0, so the livelock settles with NO catch-up dispatch.
-      const leaderIncoming = leader.listeners('data')[0];
-      await leaderIncoming(refusals[0], () => {});
-      t.same(leaderDecisions, [],
-        'the full-log leader never emits a catch-up decision (no dispatch)');
-      t.equal(leader._lastSnapshotCatchupDecision, undefined,
-        'no decision is recorded on the leader instance either');
-    } finally {
-      follower.end();
-      leader.end();
-      fixture.close();
-    }
-  });
 
 test('gap 2: the truncation witness TRIPS inside (boundary, committedIndex]',
   async (t) => {

@@ -121,7 +121,10 @@ export const DISPOSITION_RULES = Object.freeze([
     'virtual-network host of the legacy runtime',
     'test/test-helpers/raft-rs-network-host.js'],
   ['test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js',
-    M, HARNESS, 'receipt/classification cases kept; legacy-quorum replay cases removed'],
+    M, HARNESS, 'receipt/classification cases kept; the run13 quorum replay is retargeted ' +
+    'onto real raft-rs ports (port campaign elects the acceptor; the stopped replica ' +
+    'reopens from its own SQLite file and catches up) with its acknowledged-write, ' +
+    'recovery-barrier and visibility assertions unchanged'],
   ['test/scripts/distributed-matrix-cli.test.js', M, 'scripts', 'no provider selector flag'],
 
   // ---- legacy-only tests ----------------------------------------------------
@@ -138,21 +141,46 @@ export const DISPOSITION_RULES = Object.freeze([
     'legacy-port construction and refusal cases removed'],
   [/^test\/closure\/CL-04[012]\.repro\.test\.js$/, D, RAFT,
     'repro of a legacy-runtime protocol defect; rs-raft election/log safety in ' +
-    'test/raft/raft-rs-backend/election-safety.test.js'],
+    'test/raft/raft-rs-backend/election-safety.test.js. BLOCKED (Phase J): each is the ' +
+    'registered evidence of an invariant in architecture/contracts/invariants.json, a ' +
+    'fixed safety-spine line in test/shards/safety-pregate.txt and a developer-smoke ' +
+    'manifest entry; election-safety.test.js does not prove one-vote-per-term or the ' +
+    'empty-log election restriction, so deletion waits on an owner decision to retarget ' +
+    'that registered evidence onto raft-rs'],
+  // dt6-bulk-transfer-budget is also a knownDetector of a historical-regression-corpus
+  // case (test/shards/historical-regression-corpus.json); its deletion waits on that
+  // registry owner (Phase J).
   [/^test\/convergence\/dt6-(bulk-transfer-budget|candidacy-reluctance-drain-stepdown|directed-election-heartbeat-clobber|fine-drive-midchurn-safety|leadership-migration-network|raft-election-network|real-raft-network)\.test\.js$/,
     D, 'deterministic testing tier',
     'exercises legacy-runtime election/timer behaviour; rs-raft elections are ' +
     'covered by test/raft/raft-rs-backend and cannot be seeded (O2)'],
   [/^test\/convergence\/dt4-(freeze-leadership|full-chain)-scenario\.test\.js$/, D,
     'deterministic testing tier', 'legacy runtime election timer on a virtual tick'],
-  [/^test\/convergence\/(dt6-(control-plane-migration-network|publication-ack-recovery-gate-network|publication-failback-network|publication-failback-pct-search|publication-quorum-failback-network)|dt-priority-partition-spread-cold-boot-network)\.test\.js$/,
+  [/^test\/convergence\/(dt6-(control-plane-migration-network|publication-ack-recovery-gate-network|publication-failback-network|publication-quorum-failback-network)|dt-priority-partition-spread-cold-boot-network)\.test\.js$/,
     M, 'deterministic testing tier',
     'control-plane invariant retargeted onto the rs-raft network host'],
+  ['test/convergence/dt6-publication-failback-pct-search.test.js', M,
+    'deterministic testing tier',
+    'retargeted onto the rs-raft network host with determinism NARROWED to the semantic ' +
+    'outcome (same terminal leaders, versions and convergence/agreement verdicts, zero ' +
+    'divergence); exact schedule replay is NOT claimed and this is not equivalent to it: ' +
+    'raft-rs draws its election timeout from an unseedable platform RNG (open decision O2; ' +
+    'R17 release-blocking finding under the R5 hardening owner)'],
   ['test/convergence/dt-movielens-raft-peer-cohort-pruning-election.test.js', M, PART,
     'partition port test double renamed; comments reworded'],
   [/^test\/raft\/snapshot-gated-compaction-(catchup|malformed-index)\.test\.js$/, D,
     RAFT, 'drives the legacy node append-entries handler end to end'],
-  [/^test\/raft\/(snapshot-catchup-dispatch|snapshot-compaction-catchup-integration|snapshot-recorded-gaps|snapshot-gated-compaction-contract)\.test\.js$/,
+  [/^test\/raft\/(snapshot-catchup-dispatch|snapshot-recorded-gaps)\.test\.js$/,
+    M, 'snapshot/catch-up owner',
+    'legacy-leader cases deleted (dispatch b1, b2, absent callback, boundary-0 gap, ' +
+    'non-boundary batch; recorded gap 1): they drove the retired runtime append-fail ' +
+    'handler. Backend-neutral invariants kept: the dispatcher, checkpoint and transfer ' +
+    'cases and recorded gaps 2-5 in these files; rs-raft durable log, apply and restart in ' +
+    'test/raft/raft-rs-backend/durable-store-committed-entries.test.js and ' +
+    'restart-from-durable-record.test.js. NOT certified: no src/raft/raft-rs-*.js consumes ' +
+    'the catch-up decision or handles a snapshot message, so leader-side catch-up is a ' +
+    'release-blocking R5 frontier (snapshot/restart/catch-up under rs-raft durable state)'],
+  [/^test\/raft\/(snapshot-compaction-catchup-integration|snapshot-gated-compaction-contract)\.test\.js$/,
     M, 'snapshot/catch-up owner',
     'snapshot invariants kept; legacy-runtime driving removed'],
   [/^test\/(raft\/(snapshot-checkpoint-sqlite-payload|snapshot-dispatcher-wiring|sqlite-log-adapter-committed-truncation-guard|append-ack-packet-detection|append-fail-packet-detection)|raft\/helpers\/raft-follower-append-starvation-relief-scenarios)\.(test\.)?js$/,

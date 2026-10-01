@@ -19,16 +19,16 @@
     "services-runtime": 141,
     "solver-tooling": 7,
     "storage-partition": 148,
-    "storage-raft": 126,
+    "storage-raft": 117,
     "test-infrastructure": 138,
     "transactions": 15,
     "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2227,
-  "digest": "fnv1a32-b5cbcc2e",
+  "censusSize": 2218,
+  "digest": "fnv1a32-b8e29e7a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-635fe80b",
+  "observationDigest": "fnv1a32-dcae23d5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1430,12 +1430,7 @@
     "test/raft/authoritative-row-mutation-helper.test.js": "storage-raft",
     "test/raft/authoritative-row-mutation-outcome-classifier.test.js": "storage-raft",
     "test/raft/bulk-transfer-socket-adapter.test.js": "storage-raft",
-    "test/raft/committed-entry-immutability-contract.test.js": "storage-raft",
-    "test/raft/committed-entry-immutability.property.test.js": "storage-raft",
     "test/raft/election-jitter-seed.test.js": "storage-raft",
-    "test/raft/in-memory-log-adapter-committed-clamp.test.js": "storage-raft",
-    "test/raft/in-memory-log-adapter-contract.test.js": "storage-raft",
-    "test/raft/in-memory-storage-round-trip.property.test.js": "storage-raft",
     "test/raft/leader-activation-gate.test.js": "storage-raft",
     "test/raft/leader-activation-scheduler.test.js": "storage-raft",
     "test/raft/leadership-transfer-single-path.test.js": "storage-raft",
@@ -1443,10 +1438,8 @@
     "test/raft/liferaft-append-fail-recovery.test.js": "storage-raft",
     "test/raft/liferaft-catchup-batching.test.js": "storage-raft",
     "test/raft/liferaft-deterministic-construction.test.js": "storage-raft",
-    "test/raft/liferaft-follower-match-index.test.js": "storage-raft",
     "test/raft/liferaft-formation-attribution-interaction.test.js": "storage-raft",
     "test/raft/liferaft-protocol-task-lineage.test.js": "storage-raft",
-    "test/raft/log-truncation-correctness.property.test.js": "storage-raft",
     "test/raft/message-group-readiness-delivery-priority.test.js": "storage-raft",
     "test/raft/peer-address-resolver.property.test.js": "storage-raft",
     "test/raft/peer-address-resolver.test.js": "storage-raft",
@@ -1525,9 +1518,7 @@
     "test/raft/snapshot-checkpoint-sqlite-payload.test.js": "storage-raft",
     "test/raft/snapshot-compaction-catchup-integration.test.js": "storage-raft",
     "test/raft/snapshot-dispatcher-wiring.test.js": "storage-raft",
-    "test/raft/snapshot-gated-compaction-catchup.test.js": "storage-raft",
     "test/raft/snapshot-gated-compaction-contract.test.js": "storage-raft",
-    "test/raft/snapshot-gated-compaction-malformed-index.test.js": "storage-raft",
     "test/raft/snapshot-install-restart-states.test.js": "storage-raft",
     "test/raft/snapshot-install-transition.test.js": "storage-raft",
     "test/raft/snapshot-multichunk-transfer.test.js": "storage-raft",
@@ -4503,7 +4494,11 @@
         "src/control-plane/membership-publication-planning-evidence.js",
         "src/control-plane/membership-publication-row-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
-        "test/distributed/harness/raft-network-host.js"
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
     "test/convergence/dt6-publication-persist-pipeline-network.test.js": {
@@ -6286,13 +6281,18 @@
         "src/diagnostics/formation-turn-attribution.js",
         "src/partition/partition-write-kernel.js",
         "src/query/distributed/distributed-write-coordinator.js",
+        "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
         "test/distributed/config/local.json",
         "test/partition/partition-service-test-support.js",
         "test/query/query-executor-test-support.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -8769,11 +8769,6 @@
         "test/distributed/harness"
       ]
     },
-    "test/raft/snapshot-catchup-dispatch.test.js": {
-      "directories": [
-        "data"
-      ]
-    },
     "test/raft/snapshot-compaction-catchup-integration.test.js": {
       "files": [
         "src/partition/partition-raft-storage.js"
@@ -8788,19 +8783,9 @@
         "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
-    "test/raft/snapshot-gated-compaction-catchup.test.js": {
-      "directories": [
-        "data"
-      ]
-    },
     "test/raft/snapshot-gated-compaction-contract.test.js": {
       "files": [
         "src/partition/partition-raft-storage.js"
-      ]
-    },
-    "test/raft/snapshot-gated-compaction-malformed-index.test.js": {
-      "directories": [
-        "data"
       ]
     },
     "test/raft/snapshot-proof-gated-compaction.test.js": {
@@ -8811,9 +8796,6 @@
     "test/raft/snapshot-recorded-gaps.test.js": {
       "files": [
         "test/test-helpers/boot-incarnation-fixture.js"
-      ],
-      "directories": [
-        "data"
       ]
     },
     "test/rebalancer/add-workflow-step-progression.property.test.js": {

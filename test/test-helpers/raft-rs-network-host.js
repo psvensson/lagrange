@@ -19,7 +19,13 @@
  * RNG, so no seed can choose that draw. The seed chooses each replica's
  * election window instead - the per-replica timing input production already
  * varies (replica-election-timeouts.js) - and the windows are disjoint, so the
- * seed alone decides which live replica times out first.
+ * seed alone decides which live replica times out first. A scenario that
+ * elects its leader explicitly passes one `electionMinMs` window for every
+ * replica instead and asks the chosen replica's port to campaign.
+ *
+ * A stopped replica's node is down on the network, so nothing reaches or
+ * leaves its port; a restart closes that port and its database and reopens
+ * the replica from its own SQLite file, so it resumes from durable state only.
  */
 
 import {PartitionNodeCluster} from
@@ -61,21 +67,40 @@ function seededElectionTimings(ids, seed) {
   }));
 }
 
+/**
+ * One explicit election window for every replica: none times out first.
+ * @param {Array<string>} ids - The replicas.
+ * @param {number} electionMinMs - The shared window's lower bound.
+ * @return {Map<string, Object>} replica -> its timing request.
+ */
+function sharedElectionTimings(ids, electionMinMs) {
+  const timing = Object.freeze({
+    heartbeatMs: HEARTBEAT_MS,
+    electionMinMs,
+    electionMaxMs: electionMinMs * WINDOW_GROWTH,
+    tickIntervalMs: TICK_INTERVAL_MS,
+  });
+  return new Map(ids.map((id) => [id, timing]));
+}
+
 /** A partition's real operation ports, connected by a VirtualNetwork. */
 class RaftRsNetworkHost {
   /**
    * @param {Object} net - A VirtualNetwork.
    * @param {Array<string>} ids - The partition's replicas.
-   * @param {Object} options - {partitionId, seed, linkDelayMs}.
+   * @param {Object} options - {partitionId, seed, linkDelayMs,
+   *   electionMinMs}.
    */
-  constructor(net, ids, {partitionId, seed,
+  constructor(net, ids, {partitionId, seed, electionMinMs,
     linkDelayMs = DEFAULT_LINK_DELAY_MS}) {
     this.net = net;
     this.ids = [...ids];
     this.linkDelayMs = linkDelayMs;
     this.listeners = new Map(this.ids.map((id) => [id, new Set()]));
     this.committed = new Map(this.ids.map((id) => [id, []]));
-    const timings = seededElectionTimings(this.ids, seed);
+    const timings = electionMinMs === undefined ?
+      seededElectionTimings(this.ids, seed) :
+      sharedElectionTimings(this.ids, electionMinMs);
     for (const id of this.ids) {
       net.registerNode(id, (message) => this.receive(id, message));
     }
@@ -190,6 +215,34 @@ class RaftRsNetworkHost {
   }
 
   /**
+   * Ask a replica's port to campaign.
+   * @param {string} id - The replica.
+   * @return {Object} The port's named outcome.
+   */
+  campaign(id) {
+    return this.cluster.node(id).campaign();
+  }
+
+  /**
+   * Take a replica's node down: nothing reaches or leaves its port.
+   * @param {string} id - The replica.
+   */
+  stop(id) {
+    this.net.killNode(id);
+  }
+
+  /**
+   * Reopen a stopped replica from its own SQLite file and bring its node
+   * back up; the reopened port schedules its own ticks again.
+   * @param {string} id - The replica.
+   */
+  restart(id) {
+    this.cluster.restart(id);
+    this.net.startNode(id);
+    this.cluster.node(id).startScheduling();
+  }
+
+  /**
    * Propose a command through a replica's port.
    * @param {string} id - The proposing replica.
    * @param {*} command - A JSON value.
@@ -226,7 +279,8 @@ class RaftRsNetworkHost {
  * Register the replicas on the network and build their real ports.
  * @param {Object} net - A VirtualNetwork.
  * @param {Array<string>} ids - The partition's replicas.
- * @param {Object} options - {partitionId, seed, linkDelayMs}.
+ * @param {Object} options - {partitionId, seed, linkDelayMs,
+ *   electionMinMs}.
  * @return {RaftRsNetworkHost} The connected partition (call start()).
  */
 function connectRaftRsNetwork(net, ids, options) {
