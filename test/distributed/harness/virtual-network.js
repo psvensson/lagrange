@@ -292,8 +292,8 @@ function createVirtualNetwork(options = {}) {
   }
 
   // --- networkTimeSource: a per-node DT4 TimeSource backed by this network's queue ----
-  // The bridge that lets a REAL state machine seamed on a TimeSource (a LifeRaft node via
-  // VirtualTick, the owner driver, the lease) run ON the multi-node substrate: its timers
+  // The bridge that lets a REAL state machine seamed on a TimeSource run ON the
+  // multi-node substrate: its timers
   // become node-owned TIMER events on the SAME global queue as cross-node messages, so the
   // drain loop advances them together and the injected scheduler can reorder a co-due timer
   // against a co-due message — the cross-node delivery race on a real machine's real clock.
@@ -301,7 +301,7 @@ function createVirtualNetwork(options = {}) {
   // clearInterval) and its firing/re-arm/clamp semantics; the one difference is that delays
   // are floored to whole ms (normalizeDelayMs, the same convention the network uses for
   // message delays) rather than kept fractional — byte-identical for the integer-ms durations
-  // a real subsystem uses (liferaft routes every duration through `ms(...)` -> an integer).
+  // a real subsystem uses.
 
   function scheduleAdapterTimer(nodeId, fn, ms, args, repeating) {
     // Diagnostic-only provenance for one predicate-selected enqueue. No stack
@@ -389,8 +389,8 @@ function createVirtualNetwork(options = {}) {
 
   /**
    * A DT4 TimeSource bound to one node, scheduling on this network's queue. Pass it as a
-   * subsystem's `timeSource` (e.g. `new LifeRaft(id, {timeSource: net.networkTimeSource(id)})`)
-   * to host the real machine on the network. now() follows global virtual time while the node
+   * subsystem's `timeSource` to host the real machine on the network. now() follows
+   * global virtual time while the node
    * runs and freezes at the node's last activity once it is stopped (the per-node-clock
    * contract), so a stopped node's hosted machine sees a frozen clock.
    * @param {string} nodeId - must already be registered.
