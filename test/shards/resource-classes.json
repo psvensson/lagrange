@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2220,
+    "ordinary": 2217,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2237,
-  "digest": "fnv1a32-def78a1e",
+  "censusSize": 2234,
+  "digest": "fnv1a32-1dce8b6b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1433,8 +1433,6 @@
     "test/raft/peer-address-resolver.property.test.js": "ordinary",
     "test/raft/peer-address-resolver.test.js": "ordinary",
     "test/raft/raft-cleanup-verification.test.js": "ordinary",
-    "test/raft/raft-group.property.test.js": "ordinary",
-    "test/raft/raft-group.test.js": "ordinary",
     "test/raft/raft-id-mapper.test.js": "ordinary",
     "test/raft/raft-log-write-owner.test.js": "ordinary",
     "test/raft/raft-packet-round-trip.property.test.js": "ordinary",
@@ -1500,7 +1498,6 @@
     "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": "ordinary",
     "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js": "ordinary",
     "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js": "ordinary",
-    "test/raft/raft-timing-utils.test.js": "ordinary",
     "test/raft/raft-transport-backpressure-mute.test.js": "ordinary",
     "test/raft/remote-peer-representation.test.js": "ordinary",
     "test/raft/replica-voter-readiness.test.js": "ordinary",
