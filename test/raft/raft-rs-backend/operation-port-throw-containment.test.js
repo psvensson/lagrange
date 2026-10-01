@@ -23,8 +23,8 @@ import {
   RAFT_EVENT,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {RaftRsWasmProvider} from '../../../src/raft/raft-rs-provider.js';
 import * as runtimeConstants from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
@@ -59,21 +59,21 @@ function lonePort(groupId, {deferElection}) {
   const db = new Database(IN_MEMORY);
   const replicaId = `${groupId}-r1`;
   const port = new RaftRsWasmProvider().createPartitionPort({
-    [RAFT_PARTITION_NODE_REQUEST.GROUP_ID]: groupId,
-    [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: replicaId,
-    [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: `containment://${replicaId}`,
-    [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: [replicaId],
-    [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+    [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: groupId,
+    [RAFT_OPERATION_PORT_REQUEST.PEER_ID]: replicaId,
+    [RAFT_OPERATION_PORT_REQUEST.PEER_ADDRESS]: `containment://${replicaId}`,
+    [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS]: [replicaId],
+    [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
       genesisStamp([replicaId]),
-    [RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE]: db,
-    [RAFT_PARTITION_NODE_REQUEST.TIMING]: TIMING,
-    [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]: {},
-    [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: deferElection,
-    [RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER]: () => undefined,
-    [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: (peer) =>
+    [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: db,
+    [RAFT_OPERATION_PORT_REQUEST.TIMING]: TIMING,
+    [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: {},
+    [RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION]: deferElection,
+    [RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER]: () => undefined,
+    [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]: (peer) =>
       `containment://${peer}`,
-    [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
-    [RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
+    [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
+    [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
   });
   return {
     port,

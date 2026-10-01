@@ -1,0 +1,16 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "zero-liferaft-active-runtime",
+  "status": "fail",
+  "testFileDigests": {},
+  "generatedAt": "2026-10-01T05:30:37.626Z",
+  "receipts": [
+    {
+      "id": "active-reachability-census-classified",
+      "passed": false,
+      "command": "not yet measured",
+      "detail": "Active filename and content hits have not yet received a complete disposition.",
+      "testFile": null
+    }
+  ]
+}

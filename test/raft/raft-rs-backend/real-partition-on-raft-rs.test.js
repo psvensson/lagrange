@@ -21,8 +21,8 @@ import Database from 'better-sqlite3';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {
-  RAFT_PARTITION_NODE_REQUEST,
-} from '../../../src/raft/raft-provider-contract-constants.js';
+  RAFT_OPERATION_PORT_REQUEST,
+} from '../../../src/raft/raft-operation-port-request.js';
 import {decodeCommittedProposal} from
   '../../../src/raft/raft-rs-proposal-codec.js';
 import {RAFT_RS_ENTRY_TYPE} from
@@ -447,8 +447,8 @@ test('the partition request names the durable storage the group runs on, ' +
   'and no backend reads a service row to find it', async () => {
   // The field set is the contract owner's. A backend that needed something
   // absent from it would have to change this list.
-  assert.ok(Object.values(RAFT_PARTITION_NODE_REQUEST)
-    .includes(RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE),
+  assert.ok(Object.values(RAFT_OPERATION_PORT_REQUEST)
+    .includes(RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE),
   'the durable storage handle is a declared requirement, not a lookup');
   const cluster = formedPartition();
   try {

@@ -146,6 +146,7 @@ class SeedMessageGroupsPhase {
       replicaIds: options.replicaIds,
       peerAddresses: options.peerAddresses,
       transport: d.getMessageRouter(),
+      dbPath: d.resolveMessageGroupDbPath(options.groupId, options.replicaId),
       deferElection: Boolean(options.deferElection),
       // The replica is hosted by this node: this node's clock, and this
       // node's runtime for its node-local cache.

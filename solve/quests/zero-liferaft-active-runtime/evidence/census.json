@@ -1,0 +1,5629 @@
+{
+  "schema": "zero-liferaft-census/1",
+  "quest": "zero-liferaft-active-runtime",
+  "sealedCommit": "0023e74ae4a0ab1df199ca8557a14c45fc4e6340",
+  "tokenClasses": {
+    "legacy-implementation": "liferaft|markwylde",
+    "provider-selection": "raft[-_]?provider",
+    "spike-and-rollback": "raft[-_]logic|rollback[-_]drill|migration[-_]rollback|raft-migration",
+    "legacy-consumer-module": "raft-group(\\.js|-constants)|\\bRaftGroup\\b|raft-replica-base|RaftReplicaBase|in-memory-log-adapter|InMemoryLogAdapter|raft-timing-utils|src/worker/|\\.\\./worker/|system-cache-proxy"
+  },
+  "retiredTokenSource": "liferaft|markwylde|raft[-_]?provider",
+  "productionEntrypoints": [
+    "src/index.js",
+    "src/public-api.js",
+    "src/sea-entry.js",
+    "src/cli/bin/lagrange-admin.js",
+    "src/threading/service-worker.js",
+    "src/runtime/wasi-component-cell-worker.js"
+  ],
+  "productionClosureSize": 1592,
+  "summary": {
+    "ACTIVE_CONFIG/delete": 5,
+    "ACTIVE_CONFIG/migrate": 29,
+    "ACTIVE_CONFIG/preserve-as-backend-neutral": 6,
+    "ACTIVE_DOC/migrate": 8,
+    "ACTIVE_DOC/preserve-as-backend-neutral": 2,
+    "ACTIVE_TEST/delete": 94,
+    "ACTIVE_TEST/migrate": 105,
+    "DEAD_CODE/delete": 28,
+    "DEAD_CODE/migrate": 2,
+    "HISTORICAL_SOLVE_EVIDENCE": 187,
+    "PRODUCTION_REACHABLE/delete": 18,
+    "PRODUCTION_REACHABLE/migrate": 33
+  },
+  "entries": [
+    {
+      "path": "architecture/overview.md",
+      "category": "ACTIVE_DOC",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "architecture/current docs",
+      "reason": "current architecture states one consensus implementation"
+    },
+    {
+      "path": "architecture/process-replication.md",
+      "category": "ACTIVE_DOC",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "architecture/current docs",
+      "reason": "current architecture states one consensus implementation"
+    },
+    {
+      "path": "architecture/runtime-components.md",
+      "category": "ACTIVE_DOC",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "architecture/current docs",
+      "reason": "current architecture states one consensus implementation"
+    },
+    {
+      "path": "architecture/runtime-lifecycle.md",
+      "category": "ACTIVE_DOC",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "migrate",
+      "owner": "architecture/current docs",
+      "reason": "current architecture states one consensus implementation"
+    },
+    {
+      "path": "docs/deterministic-directed-testing-plan.md",
+      "category": "ACTIVE_DOC",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "architecture/current docs",
+      "reason": "current doc reworded"
+    },
+    {
+      "path": "docs/deterministic-repro-tier.md",
+      "category": "ACTIVE_DOC",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "architecture/current docs",
+      "reason": "current doc reworded"
+    },
+    {
+      "path": "docs/development/home-lab.md",
+      "category": "ACTIVE_DOC",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "architecture/current docs",
+      "reason": "current doc reworded"
+    },
+    {
+      "path": "docs/steering/generated/tools-index.md",
+      "category": "ACTIVE_DOC",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "npm run steering:generate",
+      "reason": "regenerated after the scripts are removed"
+    },
+    {
+      "path": "handover/replica-lifecycle-2026-09-29/investigations/mg-envelope-progress.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "handover/replica-lifecycle-2026-09-29/progress.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "models/local-leader-tenure-claim/abstract-protocol.md",
+      "category": "ACTIVE_DOC",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "preserve-as-backend-neutral",
+      "owner": "models",
+      "reason": "abstract protocol prose; names no runtime to construct"
+    },
+    {
+      "path": "package-lock.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "package manifest",
+      "reason": "legacy dependency, spike dependency and migration scripts removed"
+    },
+    {
+      "path": "package.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "package manifest",
+      "reason": "legacy dependency, spike dependency and migration scripts removed"
+    },
+    {
+      "path": "scripts/analyze-latent-blockers.js",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "scripts",
+      "reason": "reference to the retired runtime removed or reworded"
+    },
+    {
+      "path": "scripts/build-sea.js",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "migrate",
+      "owner": "SEA packaging",
+      "reason": "the Replica Worker bundle is removed with the worker path"
+    },
+    {
+      "path": "scripts/census/unwired-event-census.mjs",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "scripts",
+      "reason": "reference to the retired runtime removed or reworded"
+    },
+    {
+      "path": "scripts/check-documentation-current-state.js",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "preserve-as-backend-neutral",
+      "owner": "scripts",
+      "reason": "names the historical solve/specs report path only"
+    },
+    {
+      "path": "scripts/check-guideline-decision-boundaries-baseline.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "guideline ratchets",
+      "reason": "entries of deleted files tightened through owned commands"
+    },
+    {
+      "path": "scripts/check-guideline-hot-path-diagnostics.js",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "scripts",
+      "reason": "reference to the retired runtime removed or reworded"
+    },
+    {
+      "path": "scripts/check-guideline-silent-catch-baseline.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "guideline ratchets",
+      "reason": "entries of deleted files tightened through owned commands"
+    },
+    {
+      "path": "scripts/check-no-kiro-refs.js",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "preserve-as-backend-neutral",
+      "owner": "scripts",
+      "reason": "names the historical solve/specs report path only"
+    },
+    {
+      "path": "scripts/checks/apparatus-release-consolidation-budget.js",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "scripts",
+      "reason": "reference to the retired runtime removed or reworded"
+    },
+    {
+      "path": "scripts/checks/attribution-authority-probe.js",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "scripts",
+      "reason": "reference to the retired runtime removed or reworded"
+    },
+    {
+      "path": "scripts/checks/formation-sim-peer-raft-authority.js",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "scripts",
+      "reason": "reference to the retired runtime removed or reworded"
+    },
+    {
+      "path": "scripts/quest-evidence/raft-rs-experimental-partition-backend.js",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "scripts/quest-evidence",
+      "reason": "unwired evidence harness of the retired seam"
+    },
+    {
+      "path": "scripts/run-raft-logic-investigation-spike.js",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "scripts",
+      "reason": "spike/migration/rollback tooling of the retired provider choice"
+    },
+    {
+      "path": "scripts/run-raft-migration-benchmarks.js",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "scripts",
+      "reason": "spike/migration/rollback tooling of the retired provider choice"
+    },
+    {
+      "path": "scripts/run-raft-migration-rollback-drill.js",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "scripts",
+      "reason": "spike/migration/rollback tooling of the retired provider choice"
+    },
+    {
+      "path": "scripts/run-raft-migration-stage-gate.js",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "scripts",
+      "reason": "spike/migration/rollback tooling of the retired provider choice"
+    },
+    {
+      "path": "scripts/run-test-harness-improvement-batch-scenario.js",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "scripts",
+      "reason": "reference to the retired runtime removed or reworded"
+    },
+    {
+      "path": "solve/changes/global-owner-debt-inventory/inventory.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/epics/apparatus-release-consolidation.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/ci-vm-admission-baseline.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/epics/convergence-timeout-leadership-settle.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/core-architecture-convergence.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/core-architecture-convergence/HANDOVER-rs-raft-hard-cutover-2026-09-23.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/core-architecture-convergence/certification-matrix.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/core-architecture-convergence/design.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/epics/core-architecture-convergence/q0-adversarial-verification.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/core-architecture-convergence/rs-raft-readiness-baseline.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/formation-seed-decoupling.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/epics/formation-seed-decoupling/HANDOVER-raft-rs-2026-09-21.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/formation-seed-decoupling/binding-direction-raft-rs-experimental-backend-2026-09-21.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/formation-seed-decoupling/design.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/formation-seed-decoupling/evidence/model-reduction-reconnaissance-2026-09-20/README.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/formation-seed-decoupling/evidence/model-reduction-reconnaissance-2026-09-20/transition-state.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/formation-seed-decoupling/evidence/model-reduction-reconnaissance-2026-09-20/version-domains.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/formation-seed-decoupling/evidence/raft-backend-evaluation-verification-2026-09-21/round-1.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/epics/formation-seed-decoupling/evidence/raft-backend-evaluation-verification-2026-09-21/round-2.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/epics/formation-seed-decoupling/evidence/raft-backend-evaluation-verification-2026-09-21/round-3.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/epics/formation-seed-decoupling/owner-decision-raft-backend-evaluation-2026-09-20.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/epics/formation-seed-decoupling/simulator-production-footprint-audit-2026-09-19.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/latent-convergence-blocker-census.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/measured-storage-path.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/census-legacy-consumers-outside-partitions-2026-09-23.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/census-rs-raft-default-2026-09-23.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/census-snapshot-catchup-ownership-2026-09-23.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/design-committed-membership-bootstrap-read-2026-09-25.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/design-f1-step-down-port-2026-09-25.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/design-r2-committed-membership-2026-09-23.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/design-r3-r4-message-groups-worker-wasm-2026-09-23.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/findings-2026-09-23.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/investigation-cutover-seed-regressions-2026-09-24.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/investigation-formation-lane-regressions-2026-09-23.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/cutover-seed-parity/finding-a2-join-slo-step-down-rs-raft.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/cutover-seed-parity/finding-readiness-lapsed-member-and-planning-oscillation.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/cutover-seed-parity/findings-round-2.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/cutover-seed-parity/verification-round-2.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/f1-step-down-port/coverage-model-amendment-1.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/f1-step-down-port/coverage-model.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/f1-step-down-port/evidence-transfer-leadership.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/f1-step-down-port/finding-slo-residual-remove-safety.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/f1-step-down-port/synthesis-static-investigation.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/f1-step-down-port/verification-round-1.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/f1-step-down-port/verification-round-2.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/f1-step-down-port/verification-round-3.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/f1-step-down-port/verification-round-4.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/raft-rs-single-path-partition-cutover/design-f6-session-transaction-isolation.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/raft-rs-single-path-partition-cutover/design.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/raft-rs-single-path-partition-cutover/verification-round-1.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/raft-rs-single-path-partition-cutover/verification-round-2.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/raft-rs-single-path-partition-cutover/verification-round-3.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/raft-rs-single-path-partition-cutover/verification-round-4.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/raft-rs-single-path-partition-cutover/verification-round-5.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/raft-rs-single-path-partition-cutover/verification-round-6.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/replace-source-removal-owner/committed-read-challenger-a.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/replace-source-removal-owner/committed-read-challenger-b.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/replica-lifecycle-durable-generation/authority-census.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/replica-lifecycle-durable-generation/changed-src-ledger.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ]
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/replica-lifecycle-durable-generation/followups-2026-09-30.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ]
+    },
+    {
+      "path": "solve/epics/slow-rejoiner-progress-or-evict.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/epics/solve-v2.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/epics/solve-v2/migration-report.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/oracle/raft-rs-full-cutover.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/core-convergence-rs-raft-readiness-baseline/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/dt-drain-safety-overremoval-hunt/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-barrier-spread-release-oscillation/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-calibration-run/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-contracts-registration/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-ledger-leader-local-persistence-wedge/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-ledger-over-target-surplus-drain-coupled-removal/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-ledger-self-move-blocks-cluster-ops/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-production-interaction-attribution-authority/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-production-interaction-attribution-authority/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-raft-protocol-attribution-interaction/evidence/receipt.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-raft-protocol-attribution-interaction/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-raft-protocol-attribution-interaction/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-sim-calibrated/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-sim-charged-production-seed-host/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-sim-live-correspondence/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-sim-production-replica-composition/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/quests/formation-sim/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/learner-promotion-progress-proof/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/learner-promotion-progress-proof/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ]
+    },
+    {
+      "path": "solve/quests/learner-promotion-proof-channel-wake/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/learner-promotion-proof-channel-witness-determinism/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/quests/learner-promotion-proof-channel-witness-determinism/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/local-leadership-tenure-bound-safety-evidence/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/quests/minimal-deployment-request-cell-runtime-readiness-migration/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ]
+    },
+    {
+      "path": "solve/quests/movielens-nodes-priority-recovery-escape/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/movielens-raft-peer-cohort-pruning-election-liveness/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/movielens-raft-peer-cohort-pruning-election-liveness/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/public-path-multinode-baseline/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/quests/publication-recovery-snapshot-starvation-relief/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-candidacy-reluctance-drain-source/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-candidacy-reluctance-drain-source/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-committed-prefix-conflict-livelock/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-committed-prefix-conflict-livelock/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-follower-append-sqlite-starvation-relief/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-rs-experimental-partition-backend/evidence/interface-reduction-table.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-rs-experimental-partition-backend/evidence/receipt.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-rs-experimental-partition-backend/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-rs-experimental-partition-backend/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-rs-operation-port-boundary/design.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-rs-operation-port-boundary/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-rs-single-path-partition-cutover/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-rs-single-path-partition-cutover/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-snapshot-atomic-install/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-snapshot-checkpoint-format/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-snapshot-checkpoint-format/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-snapshot-compacted-follower-catchup/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/raft-snapshot-gated-compaction/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/replica-lifecycle-durable-generation/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/rolling-restart-acknowledged-write-durability-visibility/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/rolling-restart-core-stability/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/quests/rolling-restart-run4-drain-residual/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/runtime-service-handoff-budget-rearm-reentry/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/seed-replica-production-scheduling-defaults/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/seed-replica-production-scheduling-defaults/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/solve-v2-phase-1-weight/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/quests/solve-v2-phase-1/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/quests/standing-invariant-coverage-worklist/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ]
+    },
+    {
+      "path": "solve/quests/terminal-write-refusal-retry-ownership/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/test-harness-improvement-batch/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/three-node-rebalance-lane-fit/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/quests/voter-readiness-owner-migration-partition-raft-aliases/log.ndjson",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ]
+    },
+    {
+      "path": "solve/quests/voter-readiness-owner-migration-partition-raft-aliases/quest.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ]
+    },
+    {
+      "path": "solve/specs/hlc-cross-leader-monotonicity/design.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/hlc-cross-leader-monotonicity/tasks.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-009.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-013.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-015.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-018.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-020.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ]
+    },
+    {
+      "path": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-023.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-038.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-039.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-040.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-041.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-042.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-043.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/proximity-spray-cdc-propagation-overlay/ws0.5-reliability-substrate.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/ARCHIVED.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T15-19-04-155Z/benchmark-3node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T15-19-04-155Z/benchmark-5node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T15-19-04-155Z/benchmark-summary.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T15-34-42-733Z/benchmark-3node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T15-34-42-733Z/benchmark-5node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T15-34-42-733Z/benchmark-summary.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T15-38-44-919Z/benchmark-3node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T15-38-44-919Z/benchmark-5node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T15-38-44-919Z/benchmark-summary.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-05-19-986Z/benchmark-3node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-05-19-986Z/benchmark-5node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-05-19-986Z/benchmark-summary.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-06-59-127Z/benchmark-3node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-06-59-127Z/benchmark-5node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-06-59-127Z/benchmark-summary.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-09-38-512Z/benchmark-3node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-09-38-512Z/benchmark-5node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-09-38-512Z/benchmark-summary.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-13-25-382Z/benchmark-3node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-13-25-382Z/benchmark-5node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-13-25-382Z/benchmark-summary.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-17-56-909Z/benchmark-3node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-17-56-909Z/benchmark-5node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-17-56-909Z/benchmark-summary.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-20-51-658Z/benchmark-3node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-20-51-658Z/benchmark-5node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-20-51-658Z/benchmark-summary.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/2026-02-18T16-20-51-658Z/optimization-report.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/latest-summary.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/benchmarks/manual-3node-check.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/throughput-probing/2026-02-18T15-42-42-647Z/probe-3node.config.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/throughput-probing/2026-02-18T15-42-42-647Z/probe-3node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/throughput-probing/2026-02-18T15-42-42-647Z/probe-5node-noreuse.config.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/throughput-probing/2026-02-18T15-42-42-647Z/probe-5node-noreuse.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/throughput-probing/2026-02-18T15-42-42-647Z/probe-5node.config.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-logic-migration/reports/throughput-probing/2026-02-18T15-42-42-647Z/probe-5node.report.json",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-snapshot-transfer-install/bulk-transfer-design.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-snapshot-transfer-install/checkpoint-format-design.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/raft-snapshot-transfer-install/compacted-follower-catchup-design.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "solve/specs/standing-invariant-closure/ws0-expressibility-audit.md",
+      "category": "HISTORICAL_SOLVE_EVIDENCE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ]
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "owning module",
+      "reason": "comment-only reference to the retired runtime reworded"
+    },
+    {
+      "path": "src/bootstrap/shared/hosted-replica-authorities.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "owning module",
+      "reason": "comment-only reference to the retired runtime reworded"
+    },
+    {
+      "path": "src/bootstrap/shared/snapshot-catchup-wiring.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "owning module",
+      "reason": "comment-only reference to the retired runtime reworded"
+    },
+    {
+      "path": "src/cache/system-cache-proxy.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "worker-only system cache proxy, unreachable (F10)"
+    },
+    {
+      "path": "src/diagnostics/raft-formation-attribution.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "owning module",
+      "reason": "comment-only reference to the retired runtime reworded"
+    },
+    {
+      "path": "src/lagrange-runtime-startup.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "runtime startup",
+      "reason": "one implementation initialised without selection"
+    },
+    {
+      "path": "src/message-group/message-group-operation-ledger.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "MessageGroupService runs on the raft-rs operation port"
+    },
+    {
+      "path": "src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "MessageGroupService runs on the raft-rs operation port"
+    },
+    {
+      "path": "src/message-group/message-group-service-cdc-replication-runtime-methods.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "MessageGroupService runs on the raft-rs operation port"
+    },
+    {
+      "path": "src/message-group/message-group-service-inbound-ingress-runtime-methods.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "MessageGroupService runs on the raft-rs operation port"
+    },
+    {
+      "path": "src/message-group/message-group-service-leadership-state-runtime-methods.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "MessageGroupService runs on the raft-rs operation port"
+    },
+    {
+      "path": "src/message-group/message-group-service-outbound-dispatch-runtime-methods.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "MessageGroupService runs on the raft-rs operation port"
+    },
+    {
+      "path": "src/message-group/message-group-service-raft-lifecycle.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "MessageGroupService runs on the raft-rs operation port"
+    },
+    {
+      "path": "src/message-group/message-group-service-raft-timing.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "MessageGroupService runs on the raft-rs operation port"
+    },
+    {
+      "path": "src/message-group/message-group-service-runtime-support.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "MessageGroupService runs on the raft-rs operation port"
+    },
+    {
+      "path": "src/message-group/message-group-service-state.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "MessageGroupService runs on the raft-rs operation port"
+    },
+    {
+      "path": "src/message-group/message-group-service.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "MessageGroupService runs on the raft-rs operation port"
+    },
+    {
+      "path": "src/partition/partition-coordinator-constants.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "src/partition",
+      "reason": "constants of the dead coordinator"
+    },
+    {
+      "path": "src/partition/partition-coordinator.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "src/partition",
+      "reason": "dead RaftGroup orchestrator: no production importer"
+    },
+    {
+      "path": "src/partition/partition-service-constants.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "retired vocabulary, selection option and native-packet branch removed"
+    },
+    {
+      "path": "src/partition/partition-service-core-base.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "retired vocabulary, selection option and native-packet branch removed"
+    },
+    {
+      "path": "src/partition/partition-service-entry-apply-base.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "retired vocabulary, selection option and native-packet branch removed"
+    },
+    {
+      "path": "src/partition/partition-service-raft-init-base.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "retired vocabulary, selection option and native-packet branch removed"
+    },
+    {
+      "path": "src/partition/partition-service-shared.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "retired vocabulary, selection option and native-packet branch removed"
+    },
+    {
+      "path": "src/raft/committed-prefix-divergence.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "imported only by the legacy follower data path"
+    },
+    {
+      "path": "src/raft/in-memory-log-adapter.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy in-memory log adapter"
+    },
+    {
+      "path": "src/raft/learner-promotion-progress.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "comment-only reference to the retired runtime reworded"
+    },
+    {
+      "path": "src/raft/liferaft-commit-scheduler.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [
+        "legacy-implementation"
+      ],
+      "contentTokens": [],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy consensus implementation"
+    },
+    {
+      "path": "src/raft/liferaft-follower-batch.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [
+        "legacy-implementation"
+      ],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy consensus implementation"
+    },
+    {
+      "path": "src/raft/liferaft-incoming-data.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [
+        "legacy-implementation"
+      ],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy consensus implementation"
+    },
+    {
+      "path": "src/raft/liferaft-provider.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy consensus implementation"
+    },
+    {
+      "path": "src/raft/liferaft-timing-api.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [
+        "legacy-implementation"
+      ],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy consensus implementation"
+    },
+    {
+      "path": "src/raft/liferaft.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [
+        "legacy-implementation"
+      ],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy consensus implementation"
+    },
+    {
+      "path": "src/raft/raft-group-constants.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy RaftGroup object model; message groups move to the port"
+    },
+    {
+      "path": "src/raft/raft-group.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy RaftGroup object model; message groups move to the port"
+    },
+    {
+      "path": "src/raft/raft-packet-utils.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "comment-only reference to the retired runtime reworded"
+    },
+    {
+      "path": "src/raft/raft-peer-backpressure-mute.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy per-peer packet mute; the runtime records peer delivery"
+    },
+    {
+      "path": "src/raft/raft-provider-contract-constants.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [
+        "provider-selection"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "provider vocabulary; the port request keys are rehomed",
+      "replacement": "src/raft/raft-operation-port-request.js"
+    },
+    {
+      "path": "src/raft/raft-provider-contract.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [
+        "provider-selection"
+      ],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "provider contract of the retired selection"
+    },
+    {
+      "path": "src/raft/raft-provider-control-constants.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [
+        "provider-selection"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "process-level provider selection"
+    },
+    {
+      "path": "src/raft/raft-provider-control.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [
+        "provider-selection"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "process-level provider selection"
+    },
+    {
+      "path": "src/raft/raft-replica-base-constants.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "owner decision 6: RaftReplicaBase is deleted, not inherited"
+    },
+    {
+      "path": "src/raft/raft-replica-base-runtime-helpers.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "owner decision 6: RaftReplicaBase is deleted, not inherited"
+    },
+    {
+      "path": "src/raft/raft-replica-base.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "owner decision 6: RaftReplicaBase is deleted, not inherited"
+    },
+    {
+      "path": "src/raft/raft-rs-durable-store-constants.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "comment-only reference to the retired runtime reworded"
+    },
+    {
+      "path": "src/raft/raft-rs-membership-projection.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "comment-only reference to the retired runtime reworded"
+    },
+    {
+      "path": "src/raft/raft-rs-operation-port.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner"
+    },
+    {
+      "path": "src/raft/raft-timing-utils.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy timer mutation; the port owns tick configuration"
+    },
+    {
+      "path": "src/raft/remote-peer-representation.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "imported only by the legacy runtime"
+    },
+    {
+      "path": "src/raft/snapshot-catchup-constants.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "comment-only reference to the retired runtime reworded"
+    },
+    {
+      "path": "src/raft/snapshot-catchup.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "comment-only reference to the retired runtime reworded"
+    },
+    {
+      "path": "src/raft/spike/raft-logic-id-mapper.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "raft-logic spike and its provider control"
+    },
+    {
+      "path": "src/raft/spike/raft-logic-spike-adapter.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "raft-logic spike and its provider control"
+    },
+    {
+      "path": "src/raft/spike/raft-logic-spike-cluster.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "raft-logic spike and its provider control"
+    },
+    {
+      "path": "src/raft/spike/raft-logic-spike-constants.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "raft-logic spike and its provider control"
+    },
+    {
+      "path": "src/raft/spike/raft-provider-control.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "provider-selection"
+      ],
+      "contentTokens": [
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "raft-logic spike and its provider control"
+    },
+    {
+      "path": "src/raft/sqlite-log-adapter-batch-api.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "snapshot/catch-up owner",
+      "reason": "snapshot-install staging format; comments reworded, ownership recorded"
+    },
+    {
+      "path": "src/raft/sqlite-log-adapter-callback-api.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "snapshot/catch-up owner",
+      "reason": "snapshot-install staging format; comments reworded, ownership recorded"
+    },
+    {
+      "path": "src/raft/sqlite-log-adapter.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "snapshot/catch-up owner",
+      "reason": "snapshot-install staging format; comments reworded, ownership recorded"
+    },
+    {
+      "path": "src/raft/sqlite-log-entry-shape.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "snapshot/catch-up owner",
+      "reason": "snapshot-install staging format; comments reworded, ownership recorded"
+    },
+    {
+      "path": "src/raft/virtual-tick.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "imported only by the legacy runtime"
+    },
+    {
+      "path": "src/rebalancer/rebalance-coordinator-operation-creation.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "owning module",
+      "reason": "comment-only reference to the retired runtime reworded"
+    },
+    {
+      "path": "src/time/time-source.js",
+      "category": "PRODUCTION_REACHABLE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "owning module",
+      "reason": "comment-only reference to the retired runtime reworded"
+    },
+    {
+      "path": "src/wasm-service/wasm-service-replica.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/wasm-service (owner decision 6)",
+      "reason": "WasmServiceReplica built on the operation port"
+    },
+    {
+      "path": "src/worker/message-group-worker-service-cdc-methods.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/message-group-worker-service-message-methods.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/message-group-worker-service-runtime-methods.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/message-group-worker-service.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/partition-worker-cdc-forwarding.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/partition-worker-service-snapshots.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/partition-worker-service.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/replica-worker-base.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/replica-worker-manager-pool-routing.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/replica-worker-manager-progress.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/replica-worker-manager-replica-creation.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/replica-worker-manager.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/replica-worker.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/sqlite-system-cache.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/worker-constants.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/worker-message-bridge.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "src/worker/worker-raft-runtime-defaults.js",
+      "category": "DEAD_CODE",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "dead worker consensus path: no production constructor reaches it"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-sequence.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "bootstrap",
+      "reason": "comment reworded; message group built with a durable store"
+    },
+    {
+      "path": "test/bootstrap/message-groups-first-bootstrap-order.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "migrate",
+      "owner": "src/constants ENTITY_TYPE",
+      "reason": "backend-neutral transport/bootstrap invariant; re-pointed off worker-constants"
+    },
+    {
+      "path": "test/bootstrap/production-scheduling-defaults.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "bootstrap",
+      "reason": "comment reworded; message group built with a durable store"
+    },
+    {
+      "path": "test/cache/system-cache-key-descriptor.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests the worker-only sqlite-system-cache"
+    },
+    {
+      "path": "test/cache/system-cache-proxy-created-selection.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker cache proxy"
+    },
+    {
+      "path": "test/cache/system-cache-proxy-health-selection.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker cache proxy"
+    },
+    {
+      "path": "test/cache/system-cache-proxy-no-displace.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker cache proxy"
+    },
+    {
+      "path": "test/cache/system-cache-proxy-no-retry.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker cache proxy"
+    },
+    {
+      "path": "test/cache/system-cache-proxy-partition-ignored.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker cache proxy"
+    },
+    {
+      "path": "test/cache/system-cache-proxy-removal-reselection.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker cache proxy"
+    },
+    {
+      "path": "test/cache/system-cache-proxy-replica-selection.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker cache proxy"
+    },
+    {
+      "path": "test/cache/system-cache-proxy-statelessness.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker cache proxy"
+    },
+    {
+      "path": "test/closure/CL-040.repro.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "repro of a legacy-runtime protocol defect; rs-raft election/log safety in test/raft/raft-rs-backend/election-safety.test.js"
+    },
+    {
+      "path": "test/closure/CL-041.repro.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "repro of a legacy-runtime protocol defect; rs-raft election/log safety in test/raft/raft-rs-backend/election-safety.test.js"
+    },
+    {
+      "path": "test/closure/CL-042.repro.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "repro of a legacy-runtime protocol defect; rs-raft election/log safety in test/raft/raft-rs-backend/election-safety.test.js"
+    },
+    {
+      "path": "test/config/code-path-uniqueness.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "config tests",
+      "reason": "comment reworded"
+    },
+    {
+      "path": "test/convergence/dt-movielens-raft-peer-cohort-pruning-election.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "partition port test double renamed; comments reworded"
+    },
+    {
+      "path": "test/convergence/dt-priority-partition-spread-cold-boot-network.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "deterministic testing tier",
+      "reason": "control-plane invariant retargeted onto the rs-raft network host"
+    },
+    {
+      "path": "test/convergence/dt4-freeze-leadership-scenario.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "deterministic testing tier",
+      "reason": "legacy runtime election timer on a virtual tick"
+    },
+    {
+      "path": "test/convergence/dt4-full-chain-scenario.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "deterministic testing tier",
+      "reason": "legacy runtime election timer on a virtual tick"
+    },
+    {
+      "path": "test/convergence/dt6-bulk-transfer-budget.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "deterministic testing tier",
+      "reason": "exercises legacy-runtime election/timer behaviour; rs-raft elections are covered by test/raft/raft-rs-backend and cannot be seeded (O2)"
+    },
+    {
+      "path": "test/convergence/dt6-candidacy-reluctance-drain-stepdown.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "deterministic testing tier",
+      "reason": "exercises legacy-runtime election/timer behaviour; rs-raft elections are covered by test/raft/raft-rs-backend and cannot be seeded (O2)"
+    },
+    {
+      "path": "test/convergence/dt6-control-plane-migration-network.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "deterministic testing tier",
+      "reason": "control-plane invariant retargeted onto the rs-raft network host"
+    },
+    {
+      "path": "test/convergence/dt6-directed-election-heartbeat-clobber.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "delete",
+      "owner": "deterministic testing tier",
+      "reason": "exercises legacy-runtime election/timer behaviour; rs-raft elections are covered by test/raft/raft-rs-backend and cannot be seeded (O2)"
+    },
+    {
+      "path": "test/convergence/dt6-fine-drive-midchurn-safety.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "deterministic testing tier",
+      "reason": "exercises legacy-runtime election/timer behaviour; rs-raft elections are covered by test/raft/raft-rs-backend and cannot be seeded (O2)"
+    },
+    {
+      "path": "test/convergence/dt6-leadership-migration-network.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "deterministic testing tier",
+      "reason": "exercises legacy-runtime election/timer behaviour; rs-raft elections are covered by test/raft/raft-rs-backend and cannot be seeded (O2)"
+    },
+    {
+      "path": "test/convergence/dt6-publication-ack-recovery-gate-network.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "deterministic testing tier",
+      "reason": "control-plane invariant retargeted onto the rs-raft network host"
+    },
+    {
+      "path": "test/convergence/dt6-publication-failback-network.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "deterministic testing tier",
+      "reason": "control-plane invariant retargeted onto the rs-raft network host"
+    },
+    {
+      "path": "test/convergence/dt6-publication-failback-pct-search.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "deterministic testing tier",
+      "reason": "control-plane invariant retargeted onto the rs-raft network host"
+    },
+    {
+      "path": "test/convergence/dt6-publication-quorum-failback-network.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "deterministic testing tier",
+      "reason": "control-plane invariant retargeted onto the rs-raft network host"
+    },
+    {
+      "path": "test/convergence/dt6-raft-election-network.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "deterministic testing tier",
+      "reason": "exercises legacy-runtime election/timer behaviour; rs-raft elections are covered by test/raft/raft-rs-backend and cannot be seeded (O2)"
+    },
+    {
+      "path": "test/convergence/dt6-real-raft-network.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "deterministic testing tier",
+      "reason": "exercises legacy-runtime election/timer behaviour; rs-raft elections are covered by test/raft/raft-rs-backend and cannot be seeded (O2)"
+    },
+    {
+      "path": "test/diagnostics/formation-attribution-semantics.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "diagnostics",
+      "reason": "legacy-node attribution case removed"
+    },
+    {
+      "path": "test/distributed/README.local.md",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "harness readme without rollback drill"
+    },
+    {
+      "path": "test/distributed/config/local-benchmark-3node-timeout180.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "distributed configs without provider setting"
+    },
+    {
+      "path": "test/distributed/config/local-benchmark-3node-timeout600.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "distributed configs without provider setting"
+    },
+    {
+      "path": "test/distributed/config/local-benchmark-3node.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "distributed configs without provider setting"
+    },
+    {
+      "path": "test/distributed/config/local-benchmark-5node.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "distributed configs without provider setting"
+    },
+    {
+      "path": "test/distributed/config/local-benchmark-7node-partition-split-low-throughput.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "distributed configs without provider setting"
+    },
+    {
+      "path": "test/distributed/config/local-benchmark-7node-partition-split.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "distributed configs without provider setting"
+    },
+    {
+      "path": "test/distributed/config/local-benchmark-7node.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "distributed configs without provider setting"
+    },
+    {
+      "path": "test/distributed/config/local-benchmark.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "distributed configs without provider setting"
+    },
+    {
+      "path": "test/distributed/config/local-poison-row-ab.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "distributed configs without provider setting"
+    },
+    {
+      "path": "test/distributed/harness/__tests__/cluster-control-plane-quiescence-lifecycle-test-cases.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "harness tests without provider setting"
+    },
+    {
+      "path": "test/distributed/harness/__tests__/cluster-lifecycle-active-wait-suite.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "harness tests without provider setting"
+    },
+    {
+      "path": "test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "harness tests without provider setting"
+    },
+    {
+      "path": "test/distributed/harness/__tests__/cluster-test-helpers.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "harness tests without provider setting"
+    },
+    {
+      "path": "test/distributed/harness/__tests__/config-parser.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "harness tests without provider setting"
+    },
+    {
+      "path": "test/distributed/harness/__tests__/report-writer.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "harness tests without provider setting"
+    },
+    {
+      "path": "test/distributed/harness/__tests__/run-report-metadata.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "harness tests without provider setting"
+    },
+    {
+      "path": "test/distributed/harness/__tests__/run.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "harness tests without provider setting"
+    },
+    {
+      "path": "test/distributed/harness/cluster-base-layer.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "no provider setting; one implementation"
+    },
+    {
+      "path": "test/distributed/harness/cluster-class-lifecycle-base.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "no provider setting; one implementation"
+    },
+    {
+      "path": "test/distributed/harness/config-parser.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "no provider setting; one implementation"
+    },
+    {
+      "path": "test/distributed/harness/constants.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "no provider setting; one implementation"
+    },
+    {
+      "path": "test/distributed/harness/raft-network-host.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "test/distributed harness",
+      "reason": "virtual-network host of the legacy runtime",
+      "replacement": "test/distributed/harness/raft-rs-network-host.js"
+    },
+    {
+      "path": "test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "receipt/classification cases kept; legacy-quorum replay cases removed"
+    },
+    {
+      "path": "test/distributed/harness/virtual-network.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "no provider setting; one implementation"
+    },
+    {
+      "path": "test/distributed/run-report-metadata.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "no provider setting; one implementation"
+    },
+    {
+      "path": "test/distributed/run-runtime-helpers.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "no provider setting; one implementation"
+    },
+    {
+      "path": "test/distributed/run.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/distributed harness",
+      "reason": "no provider setting; one implementation"
+    },
+    {
+      "path": "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "message group engaged through the operation port"
+    },
+    {
+      "path": "test/integration/cross-worker-cdc.integration.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "worker CDC integration test"
+    },
+    {
+      "path": "test/integration/multi-worker-raft.integration.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "worker consensus integration test"
+    },
+    {
+      "path": "test/integration/node-join-replica-activation.integration.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "message group engaged through the operation port"
+    },
+    {
+      "path": "test/message-group/cdc-non-leader-propagation-tail-more-test-cases.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "message-group tests run on the operation port"
+    },
+    {
+      "path": "test/message-group/cdc-non-leader-propagation-tail-test-cases.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "message-group tests run on the operation port"
+    },
+    {
+      "path": "test/message-group/cdc-non-leader-propagation.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "message-group tests run on the operation port"
+    },
+    {
+      "path": "test/message-group/error-message-consistency.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "message-group tests run on the operation port"
+    },
+    {
+      "path": "test/message-group/message-group-service-lifecycle-and-ledger.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "message-group tests run on the operation port"
+    },
+    {
+      "path": "test/message-group/message-group-service-raft-replication-and-cdc.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "message-group tests run on the operation port"
+    },
+    {
+      "path": "test/message-group/message-group-service-strict-cdc-forward-routing.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "message-group tests run on the operation port"
+    },
+    {
+      "path": "test/message-group/message-group-service-strict-cdc-join-convergence.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "message-group tests run on the operation port"
+    },
+    {
+      "path": "test/message-group/message-group-service.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "message-group tests run on the operation port"
+    },
+    {
+      "path": "test/message-group/packet-round-trip-preservation.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "consensus transport ingress",
+      "reason": "simulates the legacy node write()/native-packet ingress that is removed; the semantic envelope path is covered by test/partition/raft-rs-transport-demux.test.js"
+    },
+    {
+      "path": "test/message-group/raft-node-write-preservation.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "consensus transport ingress",
+      "reason": "simulates the legacy node write()/native-packet ingress that is removed; the semantic envelope path is covered by test/partition/raft-rs-transport-demux.test.js"
+    },
+    {
+      "path": "test/message-group/raft-response-address-validation.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/message-group (R3)",
+      "reason": "message-group tests run on the operation port"
+    },
+    {
+      "path": "test/partition/complete-peer-list.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/partition-admission-redrive-wakes.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/partition-coordinator.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "src/partition",
+      "reason": "tests the dead coordinator"
+    },
+    {
+      "path": "test/partition/partition-packet-round-trip.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "consensus transport ingress",
+      "reason": "simulates the legacy node write()/native-packet ingress that is removed; the semantic envelope path is covered by test/partition/raft-rs-transport-demux.test.js"
+    },
+    {
+      "path": "test/partition/partition-port-refusal-outcomes.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/partition-raft-node-write-preservation.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "consensus transport ingress",
+      "reason": "simulates the legacy node write()/native-packet ingress that is removed; the semantic envelope path is covered by test/partition/raft-rs-transport-demux.test.js"
+    },
+    {
+      "path": "test/partition/partition-retiring-row-peer-retirement.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/partition-service-learner-promotion.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/partition-service-raft-noop-cdc-placement.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/partition-service-raft-transition-evidence.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/partition-service-role-metadata-publication.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/partition-service-size-split-transport.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/partition-service-test-support.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/partition-service-transactions-query-routing.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/partition-service-write-commit.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/partition-service.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/partition-write-leadership-transfer-committed.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/partition-write-typed-releases.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/partition/raft-message-delivery.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "transport",
+      "reason": "router delivery invariant retargeted to the rs-raft envelope"
+    },
+    {
+      "path": "test/partition/raft-rs-transport-demux.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/partition",
+      "reason": "port test double renamed; native-packet cases removed; comments reworded"
+    },
+    {
+      "path": "test/raft/append-ack-packet-detection.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "owning module",
+      "reason": "comment or retired-guard reference reworded"
+    },
+    {
+      "path": "test/raft/append-fail-packet-detection.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "owning module",
+      "reason": "comment or retired-guard reference reworded"
+    },
+    {
+      "path": "test/raft/committed-entry-immutability-contract.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "contract of the deleted in-memory adapter; rs-raft durable log covered by test/raft/raft-rs-backend/durable-store-committed-entries.test.js"
+    },
+    {
+      "path": "test/raft/committed-entry-immutability.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "contract of the deleted in-memory adapter; rs-raft durable log covered by test/raft/raft-rs-backend/durable-store-committed-entries.test.js"
+    },
+    {
+      "path": "test/raft/election-jitter-seed.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "tests of deleted legacy modules"
+    },
+    {
+      "path": "test/raft/helpers/raft-follower-append-starvation-relief-scenarios.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "owning module",
+      "reason": "comment or retired-guard reference reworded"
+    },
+    {
+      "path": "test/raft/in-memory-log-adapter-committed-clamp.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "contract of the deleted in-memory adapter; rs-raft durable log covered by test/raft/raft-rs-backend/durable-store-committed-entries.test.js"
+    },
+    {
+      "path": "test/raft/in-memory-log-adapter-contract.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "contract of the deleted in-memory adapter; rs-raft durable log covered by test/raft/raft-rs-backend/durable-store-committed-entries.test.js"
+    },
+    {
+      "path": "test/raft/in-memory-storage-round-trip.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "contract of the deleted in-memory adapter; rs-raft durable log covered by test/raft/raft-rs-backend/durable-store-committed-entries.test.js"
+    },
+    {
+      "path": "test/raft/leader-election-completion.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "worker-process property over native packets"
+    },
+    {
+      "path": "test/raft/leadership-transfer-single-path.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "tests of deleted legacy modules"
+    },
+    {
+      "path": "test/raft/liferaft-append-fail-recovery.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-implementation"
+      ],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy runtime behaviour"
+    },
+    {
+      "path": "test/raft/liferaft-catchup-batching.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-implementation"
+      ],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy runtime behaviour"
+    },
+    {
+      "path": "test/raft/liferaft-committed-entry-conflict.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-implementation"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy runtime behaviour"
+    },
+    {
+      "path": "test/raft/liferaft-committed-prefix-conflict-livelock.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-implementation"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy runtime behaviour"
+    },
+    {
+      "path": "test/raft/liferaft-deterministic-construction.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-implementation"
+      ],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy runtime behaviour"
+    },
+    {
+      "path": "test/raft/liferaft-follower-match-index.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-implementation"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy runtime behaviour"
+    },
+    {
+      "path": "test/raft/liferaft-formation-attribution-interaction.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-implementation"
+      ],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy runtime behaviour"
+    },
+    {
+      "path": "test/raft/liferaft-protocol-task-lineage.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-implementation"
+      ],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "legacy runtime behaviour"
+    },
+    {
+      "path": "test/raft/log-truncation-correctness.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "contract of the deleted in-memory adapter; rs-raft durable log covered by test/raft/raft-rs-backend/durable-store-committed-entries.test.js"
+    },
+    {
+      "path": "test/raft/raft-group.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "tests of deleted legacy modules"
+    },
+    {
+      "path": "test/raft/raft-group.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "tests of deleted legacy modules"
+    },
+    {
+      "path": "test/raft/raft-packet-round-trip.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "tests of deleted legacy modules"
+    },
+    {
+      "path": "test/raft/raft-packet-routing.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "tests of deleted legacy modules"
+    },
+    {
+      "path": "test/raft/raft-protocol-task-tracker.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "tests of deleted legacy modules"
+    },
+    {
+      "path": "test/raft/raft-provider-contract.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "provider-selection"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "tests of deleted legacy modules"
+    },
+    {
+      "path": "test/raft/raft-provider-control.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "provider-selection"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "tests of deleted legacy modules"
+    },
+    {
+      "path": "test/raft/raft-replica-base.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "tests of deleted legacy modules"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/backend-seam.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/committed-membership-census.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/conf-state-authority.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/election-safety.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-anchors.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-model.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/participation-gate.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/partition-construction-seam.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/partition-node-cluster.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/peer-identity.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/production-raft-call-census.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/stampless-opening-refusal.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/transfer-leadership-drain-oracle-harness.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/transfer-leadership-driver.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "request keys from the neutral owner; legacy comparison cases removed"
+    },
+    {
+      "path": "test/raft/raft-timing-utils.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "legacy-consumer-module"
+      ],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "tests of deleted legacy modules"
+    },
+    {
+      "path": "test/raft/raft-transport-backpressure-mute.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "tests of deleted legacy modules"
+    },
+    {
+      "path": "test/raft/remote-peer-representation.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "tests of deleted legacy modules"
+    },
+    {
+      "path": "test/raft/snapshot-catchup-dispatch.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "snapshot/catch-up owner",
+      "reason": "snapshot invariants kept; legacy-runtime driving removed"
+    },
+    {
+      "path": "test/raft/snapshot-checkpoint-sqlite-payload.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "owning module",
+      "reason": "comment or retired-guard reference reworded"
+    },
+    {
+      "path": "test/raft/snapshot-compaction-catchup-integration.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "snapshot/catch-up owner",
+      "reason": "snapshot invariants kept; legacy-runtime driving removed"
+    },
+    {
+      "path": "test/raft/snapshot-dispatcher-wiring.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "owning module",
+      "reason": "comment or retired-guard reference reworded"
+    },
+    {
+      "path": "test/raft/snapshot-gated-compaction-catchup.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "drives the legacy node append-entries handler end to end"
+    },
+    {
+      "path": "test/raft/snapshot-gated-compaction-contract.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "migrate",
+      "owner": "snapshot/catch-up owner",
+      "reason": "snapshot invariants kept; legacy-runtime driving removed"
+    },
+    {
+      "path": "test/raft/snapshot-gated-compaction-malformed-index.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "drives the legacy node append-entries handler end to end"
+    },
+    {
+      "path": "test/raft/snapshot-recorded-gaps.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "snapshot/catch-up owner",
+      "reason": "snapshot invariants kept; legacy-runtime driving removed"
+    },
+    {
+      "path": "test/raft/spike/raft-logic-spike-adapter.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "spike and provider control tests"
+    },
+    {
+      "path": "test/raft/spike/raft-logic-spike-cluster.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "spike-and-rollback"
+      ],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "spike and provider control tests"
+    },
+    {
+      "path": "test/raft/spike/raft-provider-control.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [
+        "provider-selection"
+      ],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "spike and provider control tests"
+    },
+    {
+      "path": "test/raft/sqlite-log-adapter-committed-truncation-guard.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "owning module",
+      "reason": "comment or retired-guard reference reworded"
+    },
+    {
+      "path": "test/raft/transport-adapter-message-delivery.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "consensus transport ingress",
+      "reason": "simulates the legacy node write()/native-packet ingress that is removed; the semantic envelope path is covered by test/partition/raft-rs-transport-demux.test.js"
+    },
+    {
+      "path": "test/raft/virtual-tick.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "src/raft (rs-raft operation port owner)",
+      "reason": "tests of deleted legacy modules"
+    },
+    {
+      "path": "test/rebalancer/replace-real-group-harness.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "rebalancer tests",
+      "reason": "request keys from the neutral owner"
+    },
+    {
+      "path": "test/scripts/apparatus-release-consolidation-budget.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "scripts",
+      "reason": "legacy dependency fixture/trigger reworded"
+    },
+    {
+      "path": "test/scripts/distributed-matrix-cli.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "scripts",
+      "reason": "no provider selector flag"
+    },
+    {
+      "path": "test/scripts/static-audit-input-triggers.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "scripts",
+      "reason": "legacy dependency fixture/trigger reworded"
+    },
+    {
+      "path": "test/shards/historical-regression-corpus.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "npm run test:metadata:refresh",
+      "reason": "regenerated after deletions"
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "npm run test:metadata:refresh",
+      "reason": "regenerated after deletions"
+    },
+    {
+      "path": "test/shards/impact-coverage.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "npm run test:metadata:refresh",
+      "reason": "regenerated after deletions"
+    },
+    {
+      "path": "test/shards/primary-classes.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "npm run test:metadata:refresh",
+      "reason": "regenerated after deletions"
+    },
+    {
+      "path": "test/shards/resource-classes.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "npm run test:metadata:refresh",
+      "reason": "regenerated after deletions"
+    },
+    {
+      "path": "test/shards/safety-spine.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "migrate",
+      "owner": "npm run test:metadata:refresh",
+      "reason": "regenerated after deletions"
+    },
+    {
+      "path": "test/shards/selection-golden-corpus.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "npm run test:metadata:refresh",
+      "reason": "regenerated after deletions"
+    },
+    {
+      "path": "test/shards/subsystem-classes.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation",
+        "provider-selection",
+        "spike-and-rollback"
+      ],
+      "disposition": "migrate",
+      "owner": "npm run test:metadata:refresh",
+      "reason": "regenerated after deletions"
+    },
+    {
+      "path": "test/simulation/calibration/formation-live-sim-correspondence.md",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "test/simulation formation simulator",
+      "reason": "calibration prose reworded"
+    },
+    {
+      "path": "test/simulation/calibration/formation-sim-metered-oracle.json",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "test/simulation formation simulator",
+      "reason": "calibration prose reworded"
+    },
+    {
+      "path": "test/simulation/formation-attribution-provenance.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "test/simulation formation simulator",
+      "reason": "legacy-runtime expectations removed"
+    },
+    {
+      "path": "test/simulation/formation-sim-peer-raft-authority.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "test/simulation formation simulator",
+      "reason": "legacy-runtime cohort and peer authority"
+    },
+    {
+      "path": "test/simulation/formation-sim-production-seed-host.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "test/simulation formation simulator",
+      "reason": "legacy runtime counting and cohort removed"
+    },
+    {
+      "path": "test/simulation/formation-sim-raft-cohort.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "test/simulation formation simulator",
+      "reason": "legacy-runtime cohort and peer authority"
+    },
+    {
+      "path": "test/simulation/formation-sim-runner.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "test/simulation formation simulator",
+      "reason": "legacy runtime counting and cohort removed"
+    },
+    {
+      "path": "test/simulation/formation-sim-runner.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-implementation"
+      ],
+      "disposition": "migrate",
+      "owner": "test/simulation formation simulator",
+      "reason": "legacy-runtime expectations removed"
+    },
+    {
+      "path": "test/transport/handler-registration.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "migrate",
+      "owner": "src/constants ENTITY_TYPE",
+      "reason": "backend-neutral transport/bootstrap invariant; re-pointed off worker-constants"
+    },
+    {
+      "path": "test/transport/loopback-connection.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "migrate",
+      "owner": "src/constants ENTITY_TYPE",
+      "reason": "backend-neutral transport/bootstrap invariant; re-pointed off worker-constants"
+    },
+    {
+      "path": "test/transport/uniform-message-routing.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "migrate",
+      "owner": "src/constants ENTITY_TYPE",
+      "reason": "backend-neutral transport/bootstrap invariant; re-pointed off worker-constants"
+    },
+    {
+      "path": "test/wasm-service/wasm-service-replica.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "provider-selection"
+      ],
+      "disposition": "migrate",
+      "owner": "src/wasm-service",
+      "reason": "rewritten on the operation port (owner decision 6)"
+    },
+    {
+      "path": "test/worker/cdc-replication-round-trip.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/cdc-subscription-exclusivity.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/crash-cleanup.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/create-replica-timeout-response.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/cross-worker-raft-consensus.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/health-status-tracking.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/lifecycle-operation-handling.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/manager-based-registration.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/message-based-interaction.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/message-group-worker-service.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/partition-worker-service.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/raft-transport-worker-integration.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/raft-transport-worker-integration.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module",
+        "legacy-implementation"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/replica-worker-base.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/replica-worker-base.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/replica-worker-manager.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/replica-worker.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/seed-cache-bootstrap-restriction.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/seed-cache-raft-replication.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/sqlite-system-cache-isolation.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/sqlite-system-cache-queryability.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/sqlite-system-cache.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/unified-address-format.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/worker-event-constants.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/worker-message-bridge.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/worker-message-bridge.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/worker-process-isolation.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "test/worker/worker-spawning.property.test.js",
+      "category": "ACTIVE_TEST",
+      "nameTokens": [],
+      "contentTokens": [
+        "legacy-consumer-module"
+      ],
+      "disposition": "delete",
+      "owner": "owner decision 5 (R4a)",
+      "reason": "tests of the deleted worker path"
+    },
+    {
+      "path": "vendor/raft-rs-wasm/BUILD.md",
+      "category": "ACTIVE_DOC",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "preserve-as-backend-neutral",
+      "owner": "vendor/raft-rs-wasm",
+      "reason": "binding provenance names its upstream crate; not an active runtime"
+    },
+    {
+      "path": "vendor/raft-rs-wasm/Cargo.toml",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "preserve-as-backend-neutral",
+      "owner": "vendor/raft-rs-wasm",
+      "reason": "binding provenance names its upstream crate; not an active runtime"
+    },
+    {
+      "path": "vendor/raft-rs-wasm/artifact-digest.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "preserve-as-backend-neutral",
+      "owner": "vendor/raft-rs-wasm",
+      "reason": "binding provenance names its upstream crate; not an active runtime"
+    },
+    {
+      "path": "vendor/raft-rs-wasm/pkg/package.json",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "preserve-as-backend-neutral",
+      "owner": "vendor/raft-rs-wasm",
+      "reason": "binding provenance names its upstream crate; not an active runtime"
+    },
+    {
+      "path": "vendor/raft-rs-wasm/src/lib.rs",
+      "category": "ACTIVE_CONFIG",
+      "nameTokens": [],
+      "contentTokens": [
+        "spike-and-rollback"
+      ],
+      "disposition": "preserve-as-backend-neutral",
+      "owner": "vendor/raft-rs-wasm",
+      "reason": "binding provenance names its upstream crate; not an active runtime"
+    }
+  ]
+}

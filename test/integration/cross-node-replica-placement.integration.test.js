@@ -41,6 +41,7 @@ import {createLifecycleCdcServiceForCache} from
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 // Port counter for unique ports per test
 let integrationPortCounter = 25000;
@@ -253,7 +254,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         });
         await resources.bootstrapRouter.initialize({startServer: true});
 
-        resources.messageGroup = new MessageGroupService({
+        resources.messageGroup = new MessageGroupService(withTestDbPath({
           groupId: 'mg-test-1',
           replicaId: 'mg-test-1-r1',
           nodeId: seedNodeId,
@@ -261,7 +262,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           peerAddresses: [`${seedNodeId}/message-group/mg-test-1-r1`],
           transport: resources.bootstrapRouter,
           systemTableCache,
-        });
+        }));
 
         const mgAddress = `${seedNodeId}/message-group/mg-test-1-r1`;
         resources.bootstrapRouter.register(mgAddress, (envelope) => {
@@ -539,14 +540,14 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
       });
       await resources.router.initialize({startServer: true});
 
-      resources.messageGroup = new MessageGroupService({
+      resources.messageGroup = new MessageGroupService(withTestDbPath({
         groupId: 'mg-route-test',
         replicaId: 'mg-route-test-r1',
         nodeId,
         replicaIds: ['mg-route-test-r1'],
         peerAddresses: [`${nodeId}/message-group/mg-route-test-r1`],
         transport: resources.router,
-      });
+      }));
 
       const mgAddress = `${nodeId}/message-group/mg-route-test-r1`;
       resources.router.register(mgAddress, (envelope) => {

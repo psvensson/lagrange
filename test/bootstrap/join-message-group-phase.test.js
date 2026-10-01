@@ -5,13 +5,22 @@ import {
 import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from '../../src/bootstrap/message-group-assignment.js';
+import {JOINING_LOG_MSG} from '../../src/bootstrap/node-joining-constants.js';
 
-const silentLogger = {
-  debug: () => {},
-  info: () => {},
-  warn: () => {},
-  error: () => {},
-};
+const JOINED_REPLICA_TERM = 7;
+
+function recordingLogger() {
+  const info = [];
+  return {
+    info,
+    logger: {
+      debug: () => {},
+      info: (message, payload) => info.push({message, payload}),
+      warn: () => {},
+      error: () => {},
+    },
+  };
+}
 
 test(
   'JoinMessageGroupRuntimeOwner queues join replicas with deferred elections',
@@ -19,6 +28,7 @@ test(
     const queuedReplicas = [];
     const messageGroupServices = new Map();
     const registerCalls = [];
+    const log = recordingLogger();
     const owner = new JoinMessageGroupRuntimeOwner({
       nodeId: 'joining-node-1',
       delegates: {
@@ -28,7 +38,7 @@ test(
             assignmentId: 'assignment-1',
           },
         }),
-        getLogger: () => silentLogger,
+        getLogger: () => log.logger,
         getMessageRouter: () => ({}),
         getMessageGroupServices: () => messageGroupServices,
         queueJoinServiceReplica: (descriptor, options) => {
@@ -39,10 +49,14 @@ test(
           serviceId,
         }),
         triggerJoinReconciler: async () => {
+          // A message-group replica reports its term through its own
+          // accessor; its consensus port exposes no legacy object fields.
           messageGroupServices.set('mg-1-r2', {
             role: 'follower',
             isLeader: false,
-            raft: {state: 'follower', term: 1},
+            leaderId: null,
+            raft: Object.freeze({}),
+            getCurrentTerm: () => JOINED_REPLICA_TERM,
           });
         },
         registerMessageGroupService: async (groupId, replicaId, service, options) => {
@@ -80,5 +94,11 @@ test(
       replicaId: 'mg-1-r2',
       options: {status: 'stopped'},
     }, 'handoff stages STOPPED before the separate exact activation CAS');
+    const initialized = log.info.find((entry) =>
+      entry.message === JOINING_LOG_MSG.JOIN_SERVICE_INITIALIZED);
+    t.equal(initialized?.payload.raftTerm, JOINED_REPLICA_TERM,
+      'the initialized replica\'s term is read through its own accessor');
+    t.notOk('raftState' in (initialized?.payload ?? {}),
+      'no legacy core-state field is read off the consensus port');
   },
 );

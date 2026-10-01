@@ -200,4 +200,26 @@ function getPartitionDbPath(dataDir, partitionId, replicaId) {
   );
 }
 
-export {DataDirectoryManager, getPartitionDbPath};
+/**
+ * Get the durable consensus database path of a message-group replica: one
+ * file per replica, as a partition replica has. Seed and joining nodes place
+ * their replicas by this one layout.
+ * Pattern: {data-dir}/message-groups/{group-id}/{replica-id}.db
+ * @param {string} dataDir - Base data directory.
+ * @param {string} groupId - Message group ID.
+ * @param {string} replicaId - Replica ID.
+ * @return {string} The database file path.
+ */
+function getMessageGroupDbPath(dataDir, groupId, replicaId) {
+  if (!dataDir || !groupId || !replicaId) {
+    throw new Error(STORAGE_ERROR_MSG.MISSING_MESSAGE_GROUP_REPLICA_ID);
+  }
+  return path.join(
+    dataDir,
+    STORAGE_DEFAULT.MESSAGE_GROUPS_DIRNAME,
+    groupId,
+    `${replicaId}${STORAGE_DEFAULT.DB_EXT}`,
+  );
+}
+
+export {DataDirectoryManager, getMessageGroupDbPath, getPartitionDbPath};

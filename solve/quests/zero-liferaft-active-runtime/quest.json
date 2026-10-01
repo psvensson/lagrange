@@ -1,0 +1,67 @@
+{
+  "schema": "solve-quest/2",
+  "id": "zero-liferaft-active-runtime",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Remove every production-reachable legacy consensus runtime and every active accommodation surface, leaving the raft-rs semantic operation port and runtime owner as Lagrange's only consensus implementation. MessageGroupService must construct the raft-rs port with durable local consensus state, derive committed membership from ConfState, publish role and leader from semantic status/events, propose and apply commands through the port, and restart without losing term, vote, or configuration. Every live RaftGroup and RaftReplicaBase consumer must either migrate to that boundary or be deleted when unreachable; process-level provider selection, distributed-harness provider vocabulary, migration/spike rollback tooling, the legacy dependency and implementation, legacy-only tests, and current documentation must be removed. A fixed-scope checker must reject case-insensitive legacy implementation references in filenames and contents across active surfaces while excluding only historical solve evidence. Before another five-node run, focused witnesses must prove message-group formation, proposal/commit, membership, restart, any retained generic/WASM consensus path, and zero active references.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/zero-liferaft-active-runtime/evidence/receipt.json",
+      "requiredReceipts": [
+        "active-reachability-census-classified",
+        "message-group-constructs-only-the-raft-rs-operation-port",
+        "message-group-proposal-commits-and-applies-through-raft-rs",
+        "message-group-membership-comes-from-committed-conf-state",
+        "message-group-role-and-leader-publication-comes-from-raft-rs",
+        "message-group-restart-preserves-term-vote-and-configuration",
+        "generic-worker-and-wasm-consensus-paths-are-migrated-or-deleted",
+        "process-and-harness-provider-selection-is-absent",
+        "legacy-dependency-and-implementation-are-absent",
+        "zero-reference-ratchet-covers-fixed-active-surfaces",
+        "focused-rs-raft-tests-and-static-ratchets-pass"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "census-before-deletion",
+      "statement": "Classify current filename and content hits as production-reachable, active test, active config, active doc, dead code, or historical solve evidence before deleting implementation files. Every non-historical category receives an explicit migrate, preserve-as-backend-neutral, or delete disposition."
+    },
+    {
+      "id": "one-consensus-runtime",
+      "statement": "No production constructor, option, environment variable, default, fallback, provider control, compatibility adapter, spike, rollback path, or harness setting may select an alternate consensus implementation. Unavailability is explicit; the old runtime is never restored as fallback."
+    },
+    {
+      "id": "message-group-semantic-port",
+      "statement": "MessageGroupService uses the existing frozen raft-rs semantic operation port and private runtime owner. It does not expose a RawNode, imitate the old object/event API, translate through native legacy packets, or construct a second general Raft abstraction."
+    },
+    {
+      "id": "durable-message-group-consensus",
+      "statement": "Message-group term, vote, log, ConfState, and applied progress use owned durable local storage and survive restart. Membership authority is committed ConfState; role and leader publication consume semantic raft-rs status/events."
+    },
+    {
+      "id": "preserve-real-invariants",
+      "statement": "Helpers and tests are deleted only when legacy-specific. Backend-neutral safety, snapshot, membership, election, commit, and lifecycle invariants that raft-rs still needs are renamed or rehomed under their actual semantic owner and retargeted to the raft-rs path."
+    },
+    {
+      "id": "fixed-zero-reference-scope",
+      "statement": "The terminal checker recursively scans filenames and contents in src, test, scripts, examples, architecture, current docs, package manifests, Dockerfiles, and distributed harness surfaces. Its only exclusion is a fixed explicit historical solve evidence boundary that cannot silently expand."
+    },
+    {
+      "id": "no-five-node-run",
+      "statement": "This Quest performs no five-node rerun. The next distributed smoke begins only after all local/static receipts are green and independently verified."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "Source changes land only after an independent verifier attacks alternate constructors, legacy fallback or renamed behavior, stale durable-state reuse, observer-as-membership authority, native packet compatibility, provider selection residue, dead-path misclassification, ratchet exclusions, and test stand-ins instead of production engagement."
+    }
+  ],
+  "verificationTemplates": [
+    "recovery-replay",
+    "owner-interaction",
+    "harness-fidelity",
+    "admission-gating"
+  ],
+  "sealedAt": "0023e74ae4a0ab1df199ca8557a14c45fc4e6340"
+}

@@ -619,14 +619,14 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         getSleep: () => this.sleep,
         getMessageRouter: () => this.messageRouter,
         getMessageGroupServices: () => this.messageGroupServices,
+        getDataDir: () => this.dataDir,
         getJoinMessageGroupReplicas: () => this.joinMessageGroupReplicas,
         pushJoinMessageGroupReplica: (replica) => {
           this.joinMessageGroupReplicas.push(replica);
         },
         removeJoinMessageGroupReplica: (replica) => {
-          this.joinMessageGroupReplicas = this.joinMessageGroupReplicas.filter(
-            (s) => s !== replica,
-          );
+          this.joinMessageGroupReplicas =
+            this.joinMessageGroupReplicas.filter((s) => s !== replica);
         },
         resetJoinMessageGroupReplicas: () => {
           this.joinMessageGroupReplicas = [];

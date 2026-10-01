@@ -216,8 +216,8 @@ test('Property 4: Peer list includes self', async (t) => {
 /**
  * Property 4: Peer list enables Raft group formation.
  *
- * When a partition is initialized with a complete peer list, it should be able
- * to join all peers via liferaft's join() method.
+ * When a partition is initialized with a complete peer list, every replica
+ * opens its consensus port over a bootstrap configuration naming all peers.
  *
  * **Validates: Requirements 4.1, 4.2**
  */

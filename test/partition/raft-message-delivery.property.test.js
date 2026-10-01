@@ -79,7 +79,7 @@ const raftPacketArbitrary = fc.record({
  *        deliver them to peer replicas regardless of node placement
  * - 3.3: WHEN replicas are co-located on the same node THEN the Message_Router
  *        SHALL route messages correctly between them
- * - 6.2: WHEN liferaft calls the write() method THEN the system SHALL deliver
+ * - 6.2: WHEN the consensus port sends to a peer THEN the system SHALL deliver
  *        messages via Message_Router
  * - 6.4: WHEN receiving Raft messages THEN the Message_Router SHALL route them
  *        to the correct replica handler

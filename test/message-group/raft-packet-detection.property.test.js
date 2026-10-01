@@ -11,7 +11,7 @@ import fc from 'fast-check';
 import {
   isRaftPacket,
   RAFT_PACKET_TYPES,
-} from '../../src/message-group/message-group-service.js';
+} from '../../src/raft/raft-packet-utils.js';
 
 /**
  * Feature: simplified-raft-transport

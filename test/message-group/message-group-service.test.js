@@ -5,8 +5,10 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  createControllableMessageGroupService,
   createTestTransport,
   registerMessageGroupServiceLifecycleHooks,
+  reportingConsensusPort,
   setTestPortBase,
 } from './message-group-service-test-support.js';
 import {
@@ -28,10 +30,10 @@ import {
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
-import LifeRaft from '@markwylde/liferaft';
-import {
-  RAFT_EVENT,
-} from '../../src/raft/constants.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../src/raft/raft-operation-port-request.js';
+import {RAFT_RS_TRANSPORT_PROTOCOL} from '../../src/raft/raft-rs-ingress-constants.js';
 import {
   ControlPlaneField,
   ControlPlaneMessageType,
@@ -44,15 +46,32 @@ import {
 import {
   PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {ControllableConsensusPort} from
+  '../test-helpers/controllable-consensus-port.js';
 
 setTestPortBase(24000);
 registerMessageGroupServiceLifecycleHooks();
+
+const SCHEDULING_STARTED = 'start';
+
+// A raft-rs semantic envelope from the group's first replica (its payload is
+// opaque to the replica: the port steps it).
+function consensusEnvelope(groupId) {
+  return {
+    protocol: RAFT_RS_TRANSPORT_PROTOCOL,
+    groupId,
+    from: '1',
+    to: '2',
+    message: {msgType: 'MsgHeartbeat', term: '1'},
+  };
+}
 
 test('MessageGroupService - constructor requires groupId', async (t) => {
   const {router, cleanup} = await createTestTransport();
   try {
     t.throws(
-      () => new MessageGroupService({replicaId: 'r1', transport: router}),
+      () => new MessageGroupService(withTestDbPath({replicaId: 'r1', transport: router})),
       /requires groupId/,
       'Should throw without groupId',
     );
@@ -65,7 +84,7 @@ test('MessageGroupService - constructor requires replicaId', async (t) => {
   const {router, cleanup} = await createTestTransport();
   try {
     t.throws(
-      () => new MessageGroupService({groupId: 'mg-1', transport: router}),
+      () => new MessageGroupService(withTestDbPath({groupId: 'mg-1', transport: router})),
       /requires replicaId/,
       'Should throw without replicaId',
     );
@@ -76,7 +95,7 @@ test('MessageGroupService - constructor requires replicaId', async (t) => {
 
 test('MessageGroupService - constructor requires transport', async (t) => {
   t.throws(
-    () => new MessageGroupService({groupId: 'mg-1', replicaId: 'r1'}),
+    () => new MessageGroupService(withTestDbPath({groupId: 'mg-1', replicaId: 'r1'})),
     /requires transport.*WebSocket transport is mandatory/,
     'Should throw without transport',
   );
@@ -92,11 +111,11 @@ test('MessageGroupService - constructor requires WebSocket-based transport', asy
   };
 
   t.throws(
-    () => new MessageGroupService({
+    () => new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'r1',
       transport: invalidTransport,
-    }),
+    })),
     /requires WebSocket-based transport/,
     'Should throw with non-WebSocket transport',
   );
@@ -105,13 +124,13 @@ test('MessageGroupService - constructor requires WebSocket-based transport', asy
 test('MessageGroupService - constructor initializes correctly', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       replicaIds: ['mg-1-r1', 'mg-1-r2', 'mg-1-r3'],
       transport: router,
-    });
+    }));
 
     t.equal(service.groupId, 'mg-1', 'Should set groupId');
     t.equal(service.replicaId, 'mg-1-r1', 'Should set replicaId');
@@ -126,12 +145,12 @@ test('MessageGroupService - constructor initializes correctly', async (t) => {
 test('MessageGroupService - initialize becomes leader for single replica', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
-    });
+    }));
 
     await service.initialize();
 
@@ -148,17 +167,18 @@ test('MessageGroupService - initialize becomes leader for single replica', async
 test('MessageGroupService - follower demotion clears stale self leader id', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const port = new ControllableConsensusPort();
+    const service = createControllableMessageGroupService({
       groupId: 'mg-demotion-clear',
       replicaId: 'mg-demotion-clear-r1',
       nodeId,
       transport: router,
-    });
+    }, port);
 
     await service.initialize();
     t.equal(service.leaderId, service.replicaId, 'single replica should start as self leader');
 
-    service.raft.emit(RAFT_EVENT.FOLLOWER);
+    port.setRole(RAFT_ROLE.FOLLOWER);
 
     t.equal(service.isLeader, false, 'follower event should clear leader flag');
     t.equal(service.leaderId, null, 'follower event should clear stale self leader id');
@@ -174,7 +194,8 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: 'mg-join-existing',
         replicaId: 'mg-join-existing-r2',
         nodeId,
@@ -183,18 +204,27 @@ test(
         transport: router,
         deferElection: true,
         isJoiningExistingGroup: true,
-      });
+      }, port);
 
       await service.initialize();
       t.equal(service.role, RaftRole.FOLLOWER, 'joining replica should start as follower');
+      t.equal(
+        port.request[RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION],
+        true,
+        'a joining replica opens its port without scheduling',
+      );
 
-      service.raft.emit(RAFT_EVENT.CANDIDATE);
+      port.setRole(RAFT_ROLE.CANDIDATE);
 
       t.equal(
         service.role,
         RaftRole.FOLLOWER,
         'joining replica should ignore candidate transitions while join suppression is active',
       );
+      t.notOk(
+        port.schedulingCalls.includes(SCHEDULING_STARTED),
+        'join suppression never starts the port scheduling',
+      );
 
       await service.shutdown();
     } finally {
@@ -204,76 +234,13 @@ test(
 );
 
 test(
-  'MessageGroupService - joining existing group rejects vote requests and stays timer-suppressed',
-  async (t) => {
-    const {router, nodeId, cleanup} = await createTestTransport();
-    const deliveries = [];
-    const originalDeliver = router.deliver.bind(router);
-    router.deliver = async (targetAddress, payload, options) => {
-      deliveries.push({targetAddress, payload, options});
-      return originalDeliver(targetAddress, payload, options)
-        .catch(() => ({acknowledged: true}));
-    };
-
-    try {
-      const service = new MessageGroupService({
-        groupId: 'mg-join-vote',
-        replicaId: 'mg-join-vote-r2',
-        nodeId,
-        replicaIds: ['mg-join-vote-r1', 'mg-join-vote-r2'],
-        peerAddresses: ['seed-node-1/message-group/mg-join-vote-r1'],
-        transport: router,
-        deferElection: true,
-        isJoiningExistingGroup: true,
-      });
-
-      await service.initialize();
-      const heartbeatActiveBefore = service.raft?.timers?.active('heartbeat');
-      t.notOk(
-        heartbeatActiveBefore,
-        'joining replica should start without an active heartbeat timer',
-      );
-
-      await service.receiveMessage({
-        type: 'vote',
-        term: 1,
-        address: 'seed-node-1/message-group/mg-join-vote-r1',
-        leader: '',
-        last: {
-          index: 0,
-          term: 0,
-          committedIndex: 0,
-        },
-      });
-
-      const voteResponse = deliveries.find((entry) => {
-        return entry.payload?.type === 'voted';
-      });
-      t.ok(voteResponse, 'joining replica should respond to vote requests');
-      t.equal(
-        voteResponse?.payload?.data?.granted,
-        false,
-        'joining replica should deny votes until join suppression is released',
-      );
-      t.notOk(
-        service.raft?.timers?.active('heartbeat'),
-        'joining replica should keep heartbeat timers suppressed after vote traffic',
-      );
-
-      await service.shutdown();
-    } finally {
-      router.deliver = originalDeliver;
-      await cleanup();
-    }
-  },
-);
-
-test(
-  'MessageGroupService - joining existing group keeps append traffic from rearming timers',
+  'MessageGroupService - joining existing group keeps inbound consensus traffic from ' +
+    'starting scheduling',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: 'mg-join-append',
         replicaId: 'mg-join-append-r2',
         nodeId,
@@ -282,25 +249,17 @@ test(
         transport: router,
         deferElection: true,
         isJoiningExistingGroup: true,
-      });
+      }, port);
 
       await service.initialize();
-      await service.receiveMessage({
-        type: 'append',
-        term: 1,
-        address: 'seed-node-1/message-group/mg-join-append-r1',
-        leader: 'seed-node-1/message-group/mg-join-append-r1',
-        last: {
-          index: 0,
-          term: 0,
-          committedIndex: 0,
-        },
-      });
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      const envelope = consensusEnvelope('mg-join-append');
+      const result = await service.receiveMessage({payload: envelope});
 
+      t.same(result, {acknowledged: true}, 'the consensus envelope is acknowledged');
+      t.same(port.steps, [envelope], 'the envelope is stepped into the port unchanged');
       t.notOk(
-        service.raft?.timers?.active('heartbeat'),
-        'joining replica should not rearm heartbeat timers from append traffic',
+        port.schedulingCalls.includes(SCHEDULING_STARTED),
+        'joining replica should not start scheduling from inbound consensus traffic',
       );
 
       await service.shutdown();
@@ -315,7 +274,8 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: 'mg-join-release',
         replicaId: 'mg-join-release-r2',
         nodeId,
@@ -324,7 +284,7 @@ test(
         transport: router,
         deferElection: true,
         isJoiningExistingGroup: true,
-      });
+      }, port);
 
       await service.initialize();
       service.completeJoinConvergence();
@@ -339,12 +299,13 @@ test(
         true,
         'join completion should start the election timer for the moved replica',
       );
-      t.ok(
-        service.raft?.timers?.active('heartbeat'),
-        'join completion should restore heartbeat timers for normal raft participation',
+      t.equal(
+        port.schedulingCalls.at(-1),
+        SCHEDULING_STARTED,
+        'join completion should start the port scheduling for normal raft participation',
       );
 
-      service.raft.emit(RAFT_EVENT.CANDIDATE);
+      port.setRole(RAFT_ROLE.CANDIDATE);
       t.equal(
         service.role,
         RaftRole.CANDIDATE,
@@ -363,7 +324,8 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: 'mg-self-hosted-release',
         replicaId: 'mg-self-hosted-release-r1',
         nodeId,
@@ -380,7 +342,7 @@ test(
         transport: router,
         deferElection: true,
         deferElectionUntilJoinConvergence: true,
-      });
+      }, port);
 
       await service.initialize();
 
@@ -388,6 +350,10 @@ test(
         service.electionStarted,
         false,
         'self-hosted follower elections should remain suppressed during join',
+      );
+      t.notOk(
+        port.schedulingCalls.includes(SCHEDULING_STARTED),
+        'the deferred port does not schedule during join',
       );
 
       service.completeJoinConvergence();
@@ -402,9 +368,10 @@ test(
         true,
         'join convergence should start follower election timers for normal failover',
       );
-      t.ok(
-        service.raft?.timers?.active('heartbeat'),
-        'join convergence should restore heartbeat timers for self-hosted followers',
+      t.equal(
+        port.schedulingCalls.at(-1),
+        SCHEDULING_STARTED,
+        'join convergence should start the port scheduling for self-hosted followers',
       );
 
       await service.shutdown();
@@ -415,11 +382,12 @@ test(
 );
 
 test(
-  'MessageGroupService - deferred self-hosted followers stay timer-suppressed until join convergence',
+  'MessageGroupService - deferred self-hosted followers stay unscheduled until join convergence',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: 'mg-self-hosted-suppressed',
         replicaId: 'mg-self-hosted-suppressed-r1',
         nodeId,
@@ -436,28 +404,17 @@ test(
         transport: router,
         deferElection: true,
         deferElectionUntilJoinConvergence: true,
-      });
+      }, port);
 
       await service.initialize();
-      await service.receiveMessage({
-        type: 'append',
-        term: 1,
-        address: `${nodeId}/message-group/mg-self-hosted-suppressed-r0`,
-        leader: `${nodeId}/message-group/mg-self-hosted-suppressed-r0`,
-        last: {
-          index: 0,
-          term: 0,
-          committedIndex: 0,
-        },
-      });
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await service.receiveMessage({payload: consensusEnvelope('mg-self-hosted-suppressed')});
 
       t.notOk(
-        service.raft?.timers?.active('heartbeat'),
-        'append traffic should not rearm timers for deferred self-hosted followers',
+        port.schedulingCalls.includes(SCHEDULING_STARTED),
+        'inbound consensus traffic should not start scheduling for deferred self-hosted followers',
       );
 
-      service.raft.emit(RAFT_EVENT.CANDIDATE);
+      port.setRole(RAFT_ROLE.CANDIDATE);
       t.equal(
         service.role,
         RaftRole.FOLLOWER,
@@ -476,7 +433,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-strict-repair',
         replicaId: 'mg-strict-repair-r3',
         nodeId,
@@ -486,7 +443,7 @@ test(
           'mg-strict-repair-r3',
         ],
         transport: router,
-      });
+      }));
 
       let repairContext = null;
       service.maybeRepairAuthoritativeForwardTopology = async (context = {}) => {
@@ -529,7 +486,7 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
       const readCalls = [];
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-forward-topology-workload',
         replicaId: 'mg-forward-topology-workload-r2',
         nodeId,
@@ -573,7 +530,7 @@ test(
           setSystemTableCache() {},
           setMessageRouter() {},
         },
-      });
+      }));
 
       service.applyAuthoritativeForwardTopologyRows = async () => 0;
       service.reconcileAuthoritativeForwardServiceRows = async () => 0;
@@ -608,11 +565,11 @@ test(
 );
 
 test(
-  'MessageGroupService - live leader routing uses current raft peer addresses before cache echo',
+  'MessageGroupService - live leader routing uses current consensus peer addresses before cache echo',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-live-leader-address',
         replicaId: 'mg-live-leader-address-r3',
         nodeId,
@@ -622,14 +579,13 @@ test(
           'mg-live-leader-address-r3',
         ],
         transport: router,
-      });
+      }));
 
       service.leaderId = 'peer-node-a/message-group/mg-live-leader-address-r1';
-      service.raft = {
-        nodes: [
-          {address: 'peer-node-a/message-group/mg-live-leader-address-r1'},
-        ],
-      };
+      service.raft = reportingConsensusPort({peers: [{
+        address: 'peer-node-a/message-group/mg-live-leader-address-r1',
+        replicaIdentity: 'mg-live-leader-address-r1',
+      }]});
 
       const target = service.resolveLiveLeaderForwardTarget();
 
@@ -648,7 +604,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-strict-ready-gate',
         replicaId: 'mg-strict-ready-gate-r3',
         nodeId,
@@ -658,17 +614,16 @@ test(
           'mg-strict-ready-gate-r3',
         ],
         transport: router,
-      });
+      }));
 
       router.getConnectionState = (targetNodeId) => {
         return targetNodeId === 'peer-node-a' ? STATE.CONNECTED : STATE.CONNECTED;
       };
       service.leaderId = 'mg-strict-ready-gate-r1';
-      service.raft = {
-        nodes: [
-          {address: 'peer-node-a/message-group/mg-strict-ready-gate-r1'},
-        ],
-      };
+      service.raft = reportingConsensusPort({peers: [{
+        address: 'peer-node-a/message-group/mg-strict-ready-gate-r1',
+        replicaIdentity: 'mg-strict-ready-gate-r1',
+      }]});
       service.systemTableCache.applySystemTableChange(
         TABLES.NODES,
         CDC_OPERATION.UPSERT,
@@ -702,7 +657,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-strict-cache-ready-gate',
         replicaId: 'mg-strict-cache-ready-gate-r3',
         nodeId,
@@ -712,7 +667,7 @@ test(
           'mg-strict-cache-ready-gate-r3',
         ],
         transport: router,
-      });
+      }));
 
       service.initialized = true;
       router.getConnectionState = (targetNodeId) => {
@@ -773,7 +728,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-join-strict-connected',
         replicaId: 'mg-join-strict-connected-r1',
         nodeId,
@@ -783,7 +738,7 @@ test(
           'mg-join-strict-connected-r3',
         ],
         transport: router,
-      });
+      }));
 
       service.initialized = true;
       service.isJoiningExistingGroup = true;
@@ -845,7 +800,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-move-self-target',
         replicaId: 'mg-move-self-target-r1',
         nodeId,
@@ -855,7 +810,7 @@ test(
           'mg-move-self-target-r3',
         ],
         transport: router,
-      });
+      }));
 
       service.isJoiningExistingGroup = true;
       router.getConnectionState = () => STATE.CONNECTED;
@@ -919,7 +874,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-move-bootstrap-ingress',
         replicaId: 'mg-move-bootstrap-ingress-r1',
         nodeId,
@@ -934,7 +889,7 @@ test(
           'seed-node/message-group/mg-move-bootstrap-ingress-r3',
         ],
         transport: router,
-      });
+      }));
 
       service.initialized = true;
       service.isJoiningExistingGroup = true;
@@ -990,7 +945,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-join-live-hint',
         replicaId: 'mg-join-live-hint-r2',
         nodeId,
@@ -1005,11 +960,11 @@ test(
           'seed-node/message-group/mg-join-live-hint-r3',
         ],
         transport: router,
-      });
+      }));
 
       service.initialized = true;
       service.isJoiningExistingGroup = true;
-      service.raft = {state: LifeRaft.FOLLOWER};
+      service.raft = reportingConsensusPort({role: RAFT_ROLE.FOLLOWER});
       service.leaderId = 'mg-join-live-hint-r1';
       router.getConnectionState = (targetNodeId) => {
         return targetNodeId === 'seed-node' ? STATE.CONNECTED : null;
@@ -1050,12 +1005,12 @@ test(
       setServiceNodeResolver() {},
     };
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r2',
       nodeId: 'node-local',
       transport,
-    });
+    }));
     const forwarded = [];
 
     service.resolveMetadataIngressForwardSelection = async () => ({

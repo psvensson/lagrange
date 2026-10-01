@@ -1,10 +1,10 @@
 // The F4 packet: one run of the formation cone, frozen at the formation-
 // complete boundary, then torn down and measured again.
 //
-// Nothing here decides an owner. It runs the same E chain the peer-authority
-// probe runs, reads what the accounting owner recorded, classifies every
-// unowned turn by the proof its creation site carries, and then proves the
-// scenario reached rest after the seal.
+// Nothing here decides an owner. It runs the production-composed seed chain,
+// reads what the accounting owner recorded, classifies every unowned turn by
+// the proof its creation site carries, counts the consensus ports production
+// built, and then proves the scenario reached rest after the seal.
 import {
   FORMATION, FORMATION_END_REASON, SEALED, TEARDOWN, createRecorder, digestOf,
   fileOf, installHook, installOwnerCallObserver, readStrict, summarizeOwners,
@@ -13,9 +13,10 @@ import {
 import {
   FormationTurnAttribution,
 } from '../../src/diagnostics/formation-turn-attribution.js';
-import {
-  observePeerRaftAuthority,
-} from './formation-sim-peer-raft-authority.js';
+import {MessageGroupService} from
+  '../../src/message-group/message-group-service.js';
+import {PartitionServiceCoreBase} from
+  '../../src/partition/partition-service-core-base.js';
 import {
   runSeedHandoffScenario,
 } from './formation-sim-production-seed-host.js';
@@ -28,6 +29,33 @@ const ENTRY = 'entry';
 const UNATTRIBUTED = 'unattributed';
 const LINEAGE_DEPTH = 8;
 
+// Every consensus runtime is one raft-rs operation port per replica service,
+// built through that service's own createOperationPort, so a port is counted
+// where its service builds it. A port's peers are raft ids in its registry,
+// never objects: there is no peer population to observe.
+function observeConsensusPorts() {
+  const ports = {messageGroup: ZERO, partition: ZERO};
+  const restorers = [];
+  const countOn = (prototype, population) => {
+    const realCreate = prototype.createOperationPort;
+    prototype.createOperationPort = function(request) {
+      ports[population] += 1;
+      return realCreate.call(this, request);
+    };
+    restorers.push(() => {
+      prototype.createOperationPort = realCreate;
+    });
+  };
+  countOn(MessageGroupService.prototype, 'messageGroup');
+  countOn(PartitionServiceCoreBase.prototype, 'partition');
+  return {
+    ports: () => ({...ports}),
+    restore: () => {
+      for (const restore of restorers.reverse()) restore();
+    },
+  };
+}
+
 /**
  * Run the census and return the frozen packet.
  * @return {Promise<Object>}
@@ -39,7 +67,7 @@ async function runFormationAttributionCensus() {
     hookFactory: installHook(recorder, held),
   });
   held.attribution = attribution;
-  const peers = observePeerRaftAuthority();
+  const consensus = observeConsensusPorts();
   const restoreOwnerCalls = installOwnerCallObserver(recorder);
   let mark = null;
   let snapshot = null;
@@ -66,9 +94,9 @@ async function runFormationAttributionCensus() {
     restoreOwnerCalls();
     attribution.stop();
   }
-  const census = peers.census();
-  peers.restore();
-  return buildPacket({attribution, census, mark, recorder, run, snapshot});
+  const consensusPorts = consensus.ports();
+  consensus.restore();
+  return buildPacket({consensusPorts, mark, recorder, run, snapshot});
 }
 
 function countOwnerCalls(recorder, kind) {
@@ -133,7 +161,7 @@ function sealedOwnedDetail(recorder) {
   return rows;
 }
 
-function buildPacket({census, mark, recorder, run, snapshot}) {
+function buildPacket({consensusPorts, mark, recorder, run, snapshot}) {
   const unowned = summarizeUnowned(recorder.segments);
   const strict = readStrict(run.strictReport);
   const owned = countSegments(recorder, FORMATION,
@@ -166,13 +194,8 @@ function buildPacket({census, mark, recorder, run, snapshot}) {
     overlapDurationUs: snapshot.overlapDurationUs,
     partitionDeltaUs: snapshot.partitionDeltaUs,
 
-    ownerAddressCount: census.ownerAddressCount,
-    peerObjectCount: census.peerObjectCount,
-    peerAddressCount: census.peerAddressCount,
-    rsRaftPortCount: census.rsRaftPortCount,
+    consensusPorts,
     consensusComposition: mark.composition,
-    runtimesInPeerSlots: census.runtimesInPeerSlots,
-    authorityBreaches: census.authorityBreaches,
 
     strictViolations: strict.violations,
     strictSubstitutions: strict.substitutions,

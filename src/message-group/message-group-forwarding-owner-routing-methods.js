@@ -34,7 +34,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
     }
 
     let address =
-      service.resolveLivePeerAddressFromRaftNodes(leaderServiceId) ||
+      service.resolveLivePeerAddressFromConsensus(leaderServiceId) ||
       service.resolvePeerAddressFromCache(leaderServiceId);
     if ((typeof address !== 'string' || address.length === 0) &&
         service.shouldAllowJoinConvergenceStrictTargeting()) {
@@ -76,32 +76,20 @@ class MessageGroupForwardingOwnerRoutingMethods {
     return candidate;
   }
 
-  resolveLivePeerAddressFromRaftNodes(peerId) {
+  // The address this replica's own consensus configuration places a peer
+  // at: the runtime's resolution of a configured voter or learner.
+  resolveLivePeerAddressFromConsensus(peerId) {
     const service = this.service;
-    if (typeof peerId !== 'string' ||
-        peerId.length === 0 ||
-        !service.raft ||
-        !Array.isArray(service.raft.nodes)) {
+    if (typeof peerId !== 'string' || peerId.length === 0 || !service.raft) {
       return null;
     }
-
-    for (const node of service.raft.nodes) {
-      const address = node?.address;
-      if (typeof address !== 'string' || address.length === 0) {
-        continue;
-      }
-      try {
-        const parsed = service.addressManager.parse(address);
-        if (parsed.serviceType === ENTITY_TYPE.MESSAGE_GROUP &&
-            parsed.serviceId === peerId) {
-          return address;
-        }
-      } catch (_error) {
-        // Ignore non-unified or stale addresses; callers can fall back to cache.
-      }
-    }
-
-    return null;
+    const peers = service.raft.readStatus()?.peers;
+    const peer = Array.isArray(peers) ?
+      peers.find((candidate) => candidate?.replicaIdentity === peerId) :
+      undefined;
+    return typeof peer?.address === 'string' && peer.address.length > 0 ?
+      peer.address :
+      null;
   }
 
   resolveCDCForwardSelection(logContext = {}) {

@@ -13,6 +13,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 // Port counter for unique ports per test
 let testPortCounter = 27000;
@@ -69,12 +70,12 @@ test('Property 3: Error Message Consistency - delivery error message', async (t)
       async (groupId, replicaId, targetService, payload) => {
         const {router, nodeId, cleanup} = await createTestTransport();
         try {
-          const service = new MessageGroupService({
+          const service = new MessageGroupService(withTestDbPath({
             groupId,
             replicaId,
             nodeId,
             transport: router,
-          });
+          }));
 
           await service.initialize();
 
@@ -122,8 +123,8 @@ test('Property 3: Error Message Consistency - delivery error message', async (t)
  * Constructor should reject non-WebSocket transports with clear error message.
  * Validates: Requirements 4.2
  *
- * Note: With liferaft integration, Raft consensus is handled internally by the library.
- * The transport validation now happens at construction time, not during elections.
+ * Note: Raft consensus runs in the replica's raft-rs runtime, so the
+ * transport validation happens at construction time, not during elections.
  */
 test('Property 3: Error Message Consistency - constructor transport validation', async (t) => {
   await fc.assert(
@@ -134,12 +135,12 @@ test('Property 3: Error Message Consistency - constructor transport validation',
         // Test with null transport
         let errorMessage = '';
         try {
-          new MessageGroupService({
+          new MessageGroupService(withTestDbPath({
             groupId,
             replicaId,
             nodeId: 'test-node',
             transport: null,
-          });
+          }));
         } catch (error) {
           errorMessage = error.message;
         }
@@ -177,13 +178,13 @@ test('Property 3: Error Message Consistency - errors contain WebSocket transport
       async (groupId, replicaId) => {
         const {router, nodeId, cleanup} = await createTestTransport();
         try {
-          const service = new MessageGroupService({
+          const service = new MessageGroupService(withTestDbPath({
             groupId,
             replicaId,
             nodeId,
             replicaIds: [replicaId],
             transport: router,
-          });
+          }));
 
           await service.initialize();
 

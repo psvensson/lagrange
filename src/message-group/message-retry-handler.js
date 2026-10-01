@@ -23,6 +23,7 @@ const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_DELIVERY_ATTEMPT_FAILED = 'Delivery attempt failed';
 const LOCAL_STR_SWITCHING_TO_ALTERNATIVE_REPLICA = 'Switching to alternative replica';
 const LOCAL_STR_MAX_RETRIES_EXCEEDED = 'Max retries exceeded';
+const LOCAL_STR_NON_RETRYABLE_FAILURE = 'Delivery failed with a non-retryable error';
 const LOCAL_STR_MAXRETRIESEXCEEDED = 'maxRetriesExceeded';
 const LOCAL_STR_FAILED_TO_GET_ALTERNATIVE_REPLICAS = 'Failed to get alternative replicas';
 const LOCAL_STR_FUNCTION = 'function';
@@ -65,6 +66,10 @@ class MessageRetryHandler extends EventEmitter {
    * @param {number} options.backoffMultiplier - Exponential backoff multiplier.
    * @param {number} options.jitterFactor - Jitter factor (0.0-1.0).
    * @param {Function} options.getAlternativeReplicas - Function to get alternative replicas.
+   * @param {Object} [options.timeSource] - The clock retry delays wait on and
+   *   attempts are stamped by ({now, setTimeout}); unsupplied, the host clock.
+   * @param {Object} [options.logger] - The logger; unsupplied, this
+   *   subsystem's own.
    */
   constructor(options = {}) {
     super();
@@ -91,14 +96,15 @@ class MessageRetryHandler extends EventEmitter {
     // DT5 seam: backoff jitter draws from a RandomSource (default RealRandomSource
     // = Math.random, byte-identical) so a seed determines retry scheduling.
     this.randomSource = resolveRandomSource(options);
+    this.timeSource = options.timeSource || null;
 
     // Function to get alternative replicas for a target
     this.getAlternativeReplicas = options.getAlternativeReplicas || null;
 
     // Logging
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(LOCAL_STR_MESSAGE_RETRY_HANDLER) : console;
+    this.logger = options.logger || (loggingService.isInitialized() ?
+      loggingService.forSubsystem(LOCAL_STR_MESSAGE_RETRY_HANDLER) : console);
 
     // Statistics
     this.stats = {
@@ -135,17 +141,46 @@ class MessageRetryHandler extends EventEmitter {
   }
 
   /**
+   * The delay before the retry that follows `attempt` failed attempts: the
+   * call's own policy when it supplies one, else the configured backoff.
+   * @param {Object} options - The call's retry options.
+   * @param {number} attempt - Failed attempts so far (>= 1).
+   * @param {Error|null} lastError - The last attempt's failure.
+   * @return {number} Delay in milliseconds.
+   * @private
+   */
+  resolveRetryDelay(options, attempt, lastError) {
+    if (typeof options.retryDelayMs !== LOCAL_STR_FUNCTION) {
+      return this.calculateDelay(attempt);
+    }
+    const delay = Math.floor(options.retryDelayMs(attempt, lastError));
+    return Number.isFinite(delay) && delay > 0 ? delay : 0;
+  }
+
+  /**
    * Execute a delivery function with exponential backoff retry.
-   * @param {Function} deliveryFn - Async function that attempts delivery.
+   * @param {Function} deliveryFn - Async function that attempts delivery:
+   *   (target, message, attempt) with the 0-based attempt.
    * @param {Object} options - Retry options.
    * @param {string} options.targetAddress - Target service address.
    * @param {string} options.messageId - Message ID for tracking.
    * @param {Object} options.message - Message payload.
-   * @return {Promise<Object>} Retry result with status and diagnostics.
+   * @param {number} [options.maxAttempts] - This call's attempt budget
+   *   (default maxRetries + 1).
+   * @param {Function} [options.retryDelayMs] - (failedAttempts, lastError)
+   *   => the delay before the next attempt (default calculateDelay).
+   * @param {Function} [options.isRetryable] - (error) => false ends the
+   *   call at once with FAILED (default: every failure is retried).
+   * @param {Function} [options.onRetry] - ({attempt, delay, error, target})
+   *   before each retry's delay; attempt counts the failed attempts.
+   * @return {Promise<Object>} Retry result with status and diagnostics; a
+   *   failed result carries the last failure as lastError.
    */
   async executeWithRetry(deliveryFn, options = {}) {
     const {targetAddress, messageId, message} = options;
     const retryId = uuidv4();
+    const maxRetries = Number.isInteger(options.maxAttempts) &&
+      options.maxAttempts > 0 ? options.maxAttempts - 1 : this.maxRetries;
 
     let currentTarget = targetAddress;
     let lastError = null;
@@ -156,15 +191,16 @@ class MessageRetryHandler extends EventEmitter {
       retryId,
       messageId,
       targetAddress,
-      maxRetries: this.maxRetries,
+      maxRetries,
     });
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       this.stats.totalAttempts++;
 
       // Calculate and apply delay (skip for first attempt)
+      let delay = 0;
       if (attempt > 0) {
-        const delay = this.calculateDelay(attempt);
+        delay = this.resolveRetryDelay(options, attempt, lastError);
         this.stats.retriesPerformed++;
 
         this.logger.debug(LOCAL_STR_RETRYING_AFTER_DELAY, {
@@ -174,20 +210,28 @@ class MessageRetryHandler extends EventEmitter {
           delay,
           currentTarget,
         });
+        options.onRetry?.({
+          attempt,
+          delay,
+          error: lastError,
+          target: currentTarget,
+        });
 
-        await this.sleep(delay);
+        if (delay > 0) {
+          await this.sleep(delay);
+        }
       }
 
       const attemptRecord = {
         attempt,
         target: currentTarget,
-        timestamp: Date.now(),
-        delay: attempt > 0 ? this.calculateDelay(attempt) : 0,
+        timestamp: this.timeSource ? this.timeSource.now() : Date.now(),
+        delay,
       };
 
       try {
         // Attempt delivery
-        const result = await deliveryFn(currentTarget, message);
+        const result = await deliveryFn(currentTarget, message, attempt);
 
         if (result && (result.acknowledged || result.success)) {
           attemptRecord.status = LOCAL_STR_SUCCESS;
@@ -240,8 +284,19 @@ class MessageRetryHandler extends EventEmitter {
 
       attemptHistory.push(attemptRecord);
 
+      if (options.isRetryable && options.isRetryable(lastError) === false) {
+        return this.failWithoutRetry({
+          retryId,
+          messageId,
+          targetAddress,
+          currentTarget,
+          lastError,
+          attemptHistory,
+        });
+      }
+
       // Try alternative replica if available and not last attempt
-      if (attempt < this.maxRetries && this.getAlternativeReplicas) {
+      if (attempt < maxRetries && this.getAlternativeReplicas) {
         const alternative = await this.selectAlternativeReplica(
           targetAddress,
           triedTargets,
@@ -284,7 +339,39 @@ class MessageRetryHandler extends EventEmitter {
       status: RetryStatus.MAX_RETRIES_EXCEEDED,
       messageId,
       targetAddress,
-      error: `Failed after ${this.maxRetries + 1} attempts: ${lastError?.message}`,
+      error: `Failed after ${maxRetries + 1} attempts: ${lastError?.message}`,
+      lastError,
+      diagnostics,
+    };
+  }
+
+  /**
+   * End a call whose last failure the caller classified non-retryable:
+   * no further attempt is made, and the stop is logged and counted.
+   * @param {Object} context - {retryId, messageId, targetAddress,
+   *   currentTarget, lastError, attemptHistory}.
+   * @return {Object} The FAILED result carrying the failure as lastError.
+   * @private
+   */
+  failWithoutRetry(context) {
+    const {messageId, targetAddress, lastError, attemptHistory} = context;
+    this.stats.failedDeliveries++;
+    const diagnostics = {
+      retryId: context.retryId,
+      messageId,
+      originalTarget: targetAddress,
+      lastTarget: context.currentTarget,
+      totalAttempts: attemptHistory.length,
+      lastError: lastError?.message || 'Unknown error',
+      attemptHistory,
+    };
+    this.logger.warn(LOCAL_STR_NON_RETRYABLE_FAILURE, diagnostics);
+    return {
+      status: RetryStatus.FAILED,
+      messageId,
+      targetAddress,
+      error: lastError?.message,
+      lastError,
       diagnostics,
     };
   }
@@ -406,6 +493,9 @@ class MessageRetryHandler extends EventEmitter {
    * @private
    */
   sleep(ms) {
+    if (this.timeSource) {
+      return new Promise((resolve) => this.timeSource.setTimeout(resolve, ms));
+    }
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

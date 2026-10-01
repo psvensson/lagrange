@@ -33,7 +33,6 @@
     "test/raft/raft-log-write-owner.test.js",
 
     "test/partition/partition-transition-projection.test.js",
-    "test/worker/sqlite-system-cache.test.js",
 
     "test/query/pg-translate.test.js",
     "test/query/sql-query-engine-create-table-quorum.test.js",
@@ -48,7 +47,6 @@
     "test/control-plane/failure-class-registry.test.js",
 
     "test/transport/message-router-api.property.test.js",
-    "test/worker/worker-message-bridge.test.js",
 
     "test/service/request-cell-call-bridge.test.js",
 
