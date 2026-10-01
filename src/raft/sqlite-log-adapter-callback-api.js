@@ -200,7 +200,7 @@ const sqliteLogAdapterCallbackMethods = {
   },
 
   /**
-   * Get entry info before a given entry (liferaft append packets).
+   * Get entry info before a given entry for append-message compatibility.
    * @param {Object} entry - Entry to get before.
    * @return {Object} {index, term, committedIndex}
    */
@@ -217,7 +217,7 @@ const sqliteLogAdapterCallbackMethods = {
    * Get the entry before a given entry. Boundary-aware since
    * raft-snapshot-atomic-install: when the previous entry is compacted, the
    * snapshot boundary is the exact prev-log identity — degrading to
-   * {index: 0} would make liferaft SKIP the prev-log consistency check
+   * {index: 0} would make a compatibility caller skip the prev-log consistency check
    * entirely (packet.last.index === 0 escape), silently disabling it.
    * @param {Object} entry - Entry to get before.
    * @return {Object} Previous entry or default.
@@ -266,7 +266,7 @@ const sqliteLogAdapterCallbackMethods = {
   },
 
   /**
-   * Get entries after index (liferaft replication).
+   * Get entries after index for replication compatibility.
    * @param {number} index - Index to get after.
    * @return {Array} Entries after index.
    */
