@@ -292,6 +292,15 @@ function withOwnerHandoffState(Base) {
           ),
         );
 
+        // A wake the target ACKed without a registered handler is a dropped
+        // wake, never a woken owner: the transport outcome fails closed on
+        // it (not DELIVERED), so the dropped-wake lane is chosen before the
+        // generic not-delivered branch can raise it as an unacknowledged
+        // message.
+        if (response?.noHandler === true) {
+          return this.handleDroppedNoHandlerWake(operation, options);
+        }
+
         if (!isDeliveredTransportDeliveryOutcome(response)) {
           const handoffError = response?.error || response;
           if (
@@ -309,10 +318,6 @@ function withOwnerHandoffState(Base) {
               REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
             ),
           );
-        }
-
-        if (response?.noHandler === true) {
-          return this.handleDroppedNoHandlerWake(operation, options);
         }
 
         this.resetCreatedOperationHandoffRetryAttempts(operation.operationId);

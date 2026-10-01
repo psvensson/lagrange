@@ -28,7 +28,7 @@
   "censusSize": 2284,
   "digest": "fnv1a32-d7a28763",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9174f642",
+  "observationDigest": "fnv1a32-7b81b401",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -6465,6 +6465,11 @@
         "wit"
       ]
     },
+    "test/integration/benchmark-replica-instability-admission.integration.test.js": {
+      "files": [
+        "test/test-helpers/boot-incarnation-fixture.js"
+      ]
+    },
     "test/integration/benchmark-system-table-read-path.integration.test.js": {
       "files": [
         "Dockerfile",
@@ -6562,7 +6567,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "test/node/replica-handler-bootstrap-stamps.js",
-        "test/test-helpers/lifecycle-state-store.js"
+        "test/test-helpers/lifecycle-state-store.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/integration/cross-worker-cdc.integration.test.js": {
@@ -6871,8 +6877,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "test/node/replica-handler-bootstrap-stamps.js",
-        "test/test-helpers/lifecycle-state-store.js",
-        "test/test-helpers/replica-handler-identity-fixture.js"
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": {

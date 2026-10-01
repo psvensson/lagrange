@@ -31,7 +31,7 @@ function nextCausalTimestamp(systemTableCache, tableName) {
   );
 }
 
-test('Admin CDC propagation', async (t) => {
+test('Admin CDC propagation', {timeout: 120000}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
   });

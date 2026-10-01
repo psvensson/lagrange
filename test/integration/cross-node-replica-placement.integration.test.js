@@ -757,6 +757,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         mock.replicaId = options.replicaId;
         mock.initialize = async () => {};
         mock.shutdown = async () => {};
+        // The exact transport handler the durable ACTIVE is bound to (N2, S-F2).
         return bindRegisteredReplicaHandler(mock, options);
       },
       dataDir: mkdtempSync(joinPath(tmpdir(), 'lagrange-itest-data-')),

@@ -30,10 +30,12 @@ import {
   initializeTestEnvironment,
 } from './helpers/cluster-test-helpers.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {
+  bindRegisteredReplicaHandler,
+  createIdentityTransport,
+} from '../test-helpers/replica-handler-identity-fixture.js';
 import {createLifecycleCdcServiceForCache} from
   '../test-helpers/lifecycle-state-store.js';
-import {bindRegisteredReplicaHandler} from
-  '../test-helpers/replica-handler-identity-fixture.js';
 
 function createMockCDCService(cache) {
   return createLifecycleCdcServiceForCache(cache);
@@ -132,9 +134,13 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
           dbPath: options.dbPath,
           suppressLifecycleLogs: true,
           onInitializationStage: options.onInitializationStage,
+          // The exact transport handler the durable ACTIVE is bound to (N2,
+          // S-F2), retired through the executor's lifecycle owner.
+          transport: createIdentityTransport(),
+          resolveHandlerRetirementLane: options.resolveHandlerRetirementLane,
         }));
         await service.initialize();
-        return bindRegisteredReplicaHandler(service, options);
+        return service;
       },
     });
     handler.initialize();
@@ -208,10 +214,11 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
         systemTableCache: cache,
         cdcIntegrationService,
         dataDir: tempDir,
-        createPartitionService: async () => ({
+        createPartitionService: async (options) => bindRegisteredReplicaHandler({
+          replicaId: options.replicaId,
           async shutdown() {},
           async syncFromLeader() {},
-        }),
+        }, options),
         executorOutcomeEmitter,
       });
       handler.initialize();

@@ -132,6 +132,16 @@ const DRAIN_SETTLING_STATES = Object.freeze(new Set([
 ]));
 
 class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusReconcile {
+  constructor(options) {
+    super(options);
+    // DT6 seam: optional TimeSource so the timeout-check orchestration can
+    // run on a virtual clock (default null -> resolveTimeoutCheckNowMs falls
+    // back to Date.now(), byte-identical). Assigned at the seam's own level
+    // so every constructor above it in the owner chain (the REPLACE-owner
+    // session start among them) already reads the injected clock.
+    this.timeSource = options?.timeSource || null;
+  }
+
   isPriorityRecoveryTimeoutVisibilityOperation(operation) {
     const partitionId = operation?.partitionId || null;
     const partitionClassification = classifySystemPartition({partitionId});
