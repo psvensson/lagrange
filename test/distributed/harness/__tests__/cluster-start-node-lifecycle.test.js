@@ -20,7 +20,6 @@ import {
   NodeHandle,
   NODE_ROLES,
   PORTS,
-  RAFT_PROVIDER_DEFAULTS,
   REQUEST_CELL_AUTH,
 } from './cluster-test-helpers.js';
 
@@ -468,9 +467,7 @@ test('Unit: _startNode recreates legacy shell reusable container',
           'TRANSPORT_WS_HOST=0.0.0.0',
           'ADMIN_WS_HOST=0.0.0.0',
           'ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true',
-          ...REQUEST_CELL_AUTH_ENV_LINES,
-          `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
-        ],
+          ...REQUEST_CELL_AUTH_ENV_LINES,        ],
         Labels: buildReuseLabels(),
         Entrypoint: ['sh', '-lc'],
         Cmd: [LEGACY_REUSE_START_COMMAND],
@@ -542,9 +539,7 @@ test('Unit: _startNode recreates reusable container on data bind mismatch',
           'TRANSPORT_WS_HOST=0.0.0.0',
           'ADMIN_WS_HOST=0.0.0.0',
           'ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true',
-          ...REQUEST_CELL_AUTH_ENV_LINES,
-          `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
-        ],
+          ...REQUEST_CELL_AUTH_ENV_LINES,        ],
         Labels: buildReuseLabels(),
         Entrypoint: REUSE_IMAGE_ENTRYPOINT,
         Cmd: REUSE_IMAGE_CMD,
@@ -614,9 +609,7 @@ test('Unit: _startNode recreates reusable container on image identity mismatch',
           'TRANSPORT_WS_HOST=0.0.0.0',
           'ADMIN_WS_HOST=0.0.0.0',
           'ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true',
-          ...REQUEST_CELL_AUTH_ENV_LINES,
-          `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
-        ],
+          ...REQUEST_CELL_AUTH_ENV_LINES,        ],
         Labels: buildReuseLabels(),
         Entrypoint: REUSE_IMAGE_ENTRYPOINT,
         Cmd: REUSE_IMAGE_CMD,
@@ -685,9 +678,7 @@ test('Unit: _startNode recreates reusable joiner container on timeout env mismat
           'TRANSPORT_WS_HOST=0.0.0.0',
           'ADMIN_WS_HOST=0.0.0.0',
           'ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true',
-          ...REQUEST_CELL_AUTH_ENV_LINES,
-          `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
-          `${CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS}=10.0.0.1:8080`,
+          ...REQUEST_CELL_AUTH_ENV_LINES,          `${CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS}=10.0.0.1:8080`,
           `${ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS}=10000`,
           `${ENTRYPOINT_ENV.JOINING_LEADERSHIP_WAIT_TIMEOUT_MS}=30000`,
         ],
@@ -1185,37 +1176,6 @@ test('Unit: _startNode reconnects reusable container with hostname alias',
     assert.strictEqual(node.containerId, 'existing-container-id');
     assert.strictEqual(node.ip, '10.0.0.55');
   });
-
-test('Unit: _startNode propagates configured raft provider env', async () => {
-  const cluster = createCluster({
-    size: 1,
-    docker: {socketPath: '/var/run/docker.sock'},
-    image: 'distributed-db:test',
-    raftProvider: 'raft_logic',
-  });
-
-  cluster._networkName = 'test-net';
-
-  let capturedCreateOptions = null;
-  const provider = cluster._providers[0];
-  provider.createContainer = async (options) => {
-    capturedCreateOptions = options;
-    return {
-      containerId: 'container-raft-provider',
-      ip: '10.0.0.30',
-      name: options.name,
-    };
-  };
-
-  await cluster._startNode('provider-node', NODE_ROLES.SEED, null, 0);
-
-  const env = capturedCreateOptions.env;
-  assert.strictEqual(
-    env[RAFT_PROVIDER_DEFAULTS.envKey],
-    'raft_logic',
-    'configured raft provider should be passed to node container',
-  );
-});
 
 /**
  * Unit: startup failure error reporting with logs (Req 3.4)
