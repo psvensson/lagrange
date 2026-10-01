@@ -28,7 +28,7 @@
   "censusSize": 2190,
   "digest": "fnv1a32-2de26f00",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2e3455ac",
+  "observationDigest": "fnv1a32-0294f1f6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -12016,7 +12016,7 @@
         "RELEASE.md",
         "package-lock.json",
         "package.json",
-        "src/raft/liferaft.js",
+        "src/raft/raft-rs-operation-port.js",
         "test/manifests/proof-obligations.json"
       ]
     },
