@@ -1,5 +1,5 @@
 /**
- * Callback-oriented liferaft compatibility methods for SQLiteLogAdapter.
+ * Callback-oriented consensus log methods for SQLiteLogAdapter.
  * Log mutations remain owned by sqlite-log-adapter.js; this module contains
  * read-only log queries and _raft_state compatibility accessors only.
  */
