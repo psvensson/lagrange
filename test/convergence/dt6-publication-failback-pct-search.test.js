@@ -45,7 +45,7 @@ import {
 // committed published version of 2, and committed raft log entries agree at every index (no
 // same-index/different-term divergence — the CL-040 check).
 //
-// DETERMINISM IS NARROWED TO THE SEMANTIC OUTCOME (owner decision, Quest zero-liferaft-active-runtime
+// DETERMINISM IS NARROWED TO THE SEMANTIC OUTCOME (owner decision, the consensus cutover quest
 // Phase J): raft-rs draws its randomized election timeout from the platform RNG, which no seed can
 // choose (open decision O2; R17 release-blocking finding under the R5 hardening owner). The seed fixes
 // every owned timing input (each replica's election window, the PCT priorities), so a replayed seed
