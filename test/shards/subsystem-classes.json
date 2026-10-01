@@ -28,7 +28,7 @@
   "censusSize": 2190,
   "digest": "fnv1a32-2de26f00",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-0294f1f6",
+  "observationDigest": "fnv1a32-69e9fa77",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4290,7 +4290,12 @@
     "test/convergence/dt-priority-partition-spread-cold-boot-network.test.js": {
       "files": [
         "src/control-plane/membership-publication-priority-partition-summary.js",
-        "src/diagnostics/formation-turn-attribution.js"
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
     "test/convergence/dt-priority-recovery-followup-stabilization-phi.test.js": {
@@ -4318,7 +4323,12 @@
       "files": [
         "src/control-plane/membership-publication-coordinator-reconcile.js",
         "src/diagnostics/formation-turn-attribution.js",
-        "test/distributed/harness/raft-network-host.js"
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js",
+        "test/test-helpers/raft-rs-network-host.js"
       ]
     },
     "test/convergence/dt6-cpu-saturation-frequency-threshold.test.js": {
@@ -4446,7 +4456,12 @@
         "src/control-plane/membership-publication-planning-evidence.js",
         "src/control-plane/membership-publication-row-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
-        "test/distributed/harness/raft-network-host.js"
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js",
+        "test/test-helpers/raft-rs-network-host.js"
       ]
     },
     "test/convergence/dt6-publication-failback-pct-search.test.js": {
@@ -4551,7 +4566,6 @@
         "scripts/run-test-files.js",
         "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/membership-publication-coordinator-reconcile.js",
-        "test/convergence/dt4-full-chain-scenario.test.js",
         "test/convergence/dt6-control-plane-migration-network.test.js",
         "test/convergence/dt6-publication-ack-recovery-gate-network.test.js",
         "test/convergence/dt6-publication-failback-network.test.js",
@@ -8646,9 +8660,6 @@
         "package.json",
         "src/admin/static/playback-viewer.html",
         "src/entrypoint-runtime-provenance.js",
-        "src/raft/committed-prefix-divergence.js",
-        "src/raft/remote-peer-representation.js",
-        "src/raft/virtual-tick.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/config-parser.js"
       ],
@@ -8662,9 +8673,6 @@
     "test/raft/snapshot-compaction-catchup-integration.test.js": {
       "files": [
         "src/partition/partition-raft-storage.js"
-      ],
-      "directories": [
-        "data"
       ]
     },
     "test/raft/snapshot-dispatcher-wiring.test.js": {
@@ -10191,7 +10199,6 @@
         "test/closure/CL-042.repro.test.js",
         "test/compatibility/pgwire-client-compat.test.js",
         "test/control-plane/owner-outcome-contract.test.js",
-        "test/convergence/dt6-fine-drive-midchurn-safety.test.js",
         "test/convergence/dt6-publication-failback-pct-search.test.js",
         "test/convergence/dt6-publication-quorum-failback-network.test.js",
         "test/manifests/developer-smoke-proof-manifest.json",
@@ -12547,8 +12554,7 @@
     },
     "test/test-helpers/port-allocator.test.js": {
       "files": [
-        "test/integration/node-joining-rebalance.integration.test.js",
-        "test/message-group/packet-round-trip-preservation.property.test.js"
+        "test/integration/node-joining-rebalance.integration.test.js"
       ],
       "env": [
         "TEST_FILE_ID"
