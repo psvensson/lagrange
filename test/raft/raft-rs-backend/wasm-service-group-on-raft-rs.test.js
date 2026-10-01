@@ -1,5 +1,5 @@
 // The WASM service consensus group runs on the rs-raft operation port and
-// the worker consensus path is gone (quest zero-liferaft-active-runtime;
+// the worker consensus path is gone (consensus-cutover quest;
 // design R4 §2(a), §2(b), owner decisions 5 and 6).
 //
 // Three real WasmServiceReplica instances, each with its own durable file,
