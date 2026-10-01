@@ -20,6 +20,7 @@
  */
 
 import {RUNTIME_KIND, RUNTIME_FIELD} from '../constants/runtime.js';
+import {FIELD} from '../constants/fields.js';
 import {CancellationToken} from '../query/cancellation-token.js';
 import {
   RuntimeDriver,
@@ -68,8 +69,6 @@ const WASM_COMPONENT_ERROR = Object.freeze({
   NOT_PREPARED:
     'driver has not been prepared for this service',
   NOT_STARTED: 'service is not running',
-  LIFECYCLE_NOT_OBJECT:
-    'wasmLifecycle must be a non-null object',
   CREATE_REPLICA_FAILED: 'failed to create WASM replica',
   START_REPLICA_FAILED: 'failed to start WASM replica',
   START_REPLICA_NO_RESULT:
@@ -217,9 +216,9 @@ async function resolveRuntimeAccessTables(replicaContext) {
  * unified RuntimeDriver contract.
  *
  * Usage:
- *   const driver = new WasmComponentDriver();
+ *   const driver = new WasmComponentDriver({wasmServiceLifecycle});
  *   const validation = driver.validateDescriptor(definition);
- *   await driver.prepare(definition, {wasmLifecycle, replicaConfig});
+ *   await driver.prepare(definition, context);
  *   await driver.start(replicaContext);
  *   const health = await driver.health(replicaContext);
  *   await driver.stop(replicaContext);
@@ -245,13 +244,17 @@ class WasmComponentDriver extends RuntimeDriver {
     this._running = new Set();
 
     /**
-     * WasmServiceLifecycle reference keyed by serviceId.
-     * Stored per-service so different services can use
-     * different lifecycle instances if needed.
+     * The WasmServiceLifecycle of each service whose consensus replica
+     * this driver created.
      * @type {Map<string, Object>}
      * @private
      */
     this._lifecycles = new Map();
+
+    // The runtime composition root's lifecycle: it alone creates consensus
+    // replicas, on the storage its data directory owns. A prepare context
+    // cannot supply another.
+    this._wasmServiceLifecycle = options.wasmServiceLifecycle || null;
 
     this._artifactLoader = options.artifactLoader || null;
     this._componentRuntime =
@@ -315,14 +318,14 @@ class WasmComponentDriver extends RuntimeDriver {
   /**
    * Prepare runtime artifacts for a wasm_component service.
    *
-   * Optionally delegates to WasmServiceLifecycle.createReplica
-   * when a lifecycle instance is provided in context.
+   * Delegates to the composition root's WasmServiceLifecycle,
+   * when one is wired, to create the placed consensus replica.
    *
    * Idempotent: re-preparing an already-prepared service
    * updates the stored definition.
    *
    * @param {Object} definition - The service definition.
-   * @param {Object} context - Optional {wasmLifecycle, replicaConfig}.
+   * @param {Object} context - Optional prepare context.
    * @return {Promise<{status: string, error?: string}>}
    */
   async prepare(definition, context) {
@@ -350,7 +353,7 @@ class WasmComponentDriver extends RuntimeDriver {
       return this.#prepareRequestCell(definition, serviceId);
     }
 
-    return this.#prepareLegacyReplica(definition, context, serviceId);
+    return this.#prepareConsensusReplica(definition, serviceId);
   }
 
   async #prepareRequestCell(definition, serviceId) {
@@ -388,19 +391,14 @@ class WasmComponentDriver extends RuntimeDriver {
     }
   }
 
-  #prepareLegacyReplica(definition, context, serviceId) {
-    const wasmLifecycle = context?.wasmLifecycle;
-    if (wasmLifecycle) {
-      if (typeof wasmLifecycle !== 'object') {
-        throw new DriverLifecycleError(
-          this.kind, DRIVER_ACTION.PREPARE,
-          WASM_COMPONENT_ERROR.LIFECYCLE_NOT_OBJECT,
-        );
-      }
-
-      const replicaConfig = context.replicaConfig;
+  #prepareConsensusReplica(definition, serviceId) {
+    const lifecycle = this._wasmServiceLifecycle;
+    if (lifecycle) {
       try {
-        wasmLifecycle.createReplica(definition, replicaConfig);
+        lifecycle.createReplica(definition, {
+          replicaId: definition[FIELD.REPLICA_ID],
+          replicaIds: definition[FIELD.REPLICA_IDS],
+        });
       } catch (cause) {
         return buildDriverStatusResult(
           PREPARE_STATUS.FAILED,
@@ -408,7 +406,7 @@ class WasmComponentDriver extends RuntimeDriver {
             `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
         );
       }
-      this._lifecycles.set(serviceId, wasmLifecycle);
+      this._lifecycles.set(serviceId, lifecycle);
     }
 
     this._prepared.set(serviceId, definition);

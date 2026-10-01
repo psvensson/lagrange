@@ -32,6 +32,9 @@ function makeDefinition(overrides = {}) {
   };
 }
 
+// The placed replica's founding identity, as the definition carries it.
+const PLACED_REPLICA = Object.freeze({replicaId: 'r1', replicaIds: ['r1']});
+
 function makeReplicaContext(overrides = {}) {
   return {
     serviceId: 'svc-wasm-1',
@@ -208,19 +211,24 @@ describe('WasmComponentDriver', () => {
         assert.equal(result.status, PREPARE_STATUS.READY);
       });
 
-    it('should succeed with lifecycle and replicaConfig',
+    it('creates the placed replica through the owned lifecycle',
       async () => {
+        const configs = [];
         const lifecycle = makeMockLifecycle();
-        const result = await driver.prepare(
-          makeDefinition(),
-          {wasmLifecycle: lifecycle, replicaConfig: {
-            replicaId: 'r1',
-            replicaIds: ['r1'],
-            dbPath: '/tmp/test.db',
-          }},
+        const create = lifecycle.createReplica;
+        lifecycle.createReplica = (def, cfg) => {
+          configs.push(cfg);
+          return create(def, cfg);
+        };
+        const ownedDriver = new WasmComponentDriver({
+          wasmServiceLifecycle: lifecycle,
+        });
+        const result = await ownedDriver.prepare(
+          makeDefinition(PLACED_REPLICA), {},
         );
         assert.equal(result.status, PREPARE_STATUS.READY);
         assert.ok(lifecycle._replicas.has('svc-wasm-1'));
+        assert.deepEqual(configs, [{replicaId: 'r1', replicaIds: ['r1']}]);
       });
 
     it('should return failed when createReplica throws',
@@ -230,10 +238,10 @@ describe('WasmComponentDriver', () => {
             throw new Error('module not found');
           },
         });
-        const result = await driver.prepare(
-          makeDefinition(),
-          {wasmLifecycle: lifecycle, replicaConfig: {}},
-        );
+        const ownedDriver = new WasmComponentDriver({
+          wasmServiceLifecycle: lifecycle,
+        });
+        const result = await ownedDriver.prepare(makeDefinition(), {});
         assert.equal(result.status, PREPARE_STATUS.FAILED);
         assert.ok(result.error.includes(
           WASM_COMPONENT_ERROR.CREATE_REPLICA_FAILED,
@@ -251,22 +259,6 @@ describe('WasmComponentDriver', () => {
         );
       });
 
-    it('should throw DriverLifecycleError for non-object ' +
-      'lifecycle', async () => {
-      await assert.rejects(
-        () => driver.prepare(
-          makeDefinition(),
-          {wasmLifecycle: 'not-object'},
-        ),
-        (err) => {
-          assert.ok(err instanceof DriverLifecycleError);
-          assert.ok(err.message.includes(
-            WASM_COMPONENT_ERROR.LIFECYCLE_NOT_OBJECT,
-          ));
-          return true;
-        },
-      );
-    });
 
     it('should be idempotent (re-prepare updates definition)',
       async () => {
@@ -368,14 +360,12 @@ describe('WasmComponentDriver', () => {
     it('should start with lifecycle and return endpoint ' +
       'intent from port', async () => {
       const lifecycle = makeMockLifecycle();
-      const freshDriver = new WasmComponentDriver();
+      const freshDriver = new WasmComponentDriver({
+        wasmServiceLifecycle: lifecycle,
+      });
       await freshDriver.prepare(
-        makeDefinition(),
-        {wasmLifecycle: lifecycle, replicaConfig: {
-          replicaId: 'r1',
-          replicaIds: ['r1'],
-          dbPath: '/tmp/test.db',
-        }},
+        makeDefinition(PLACED_REPLICA),
+        {},
       );
       const result = await freshDriver.start(
         makeReplicaContext({address: '10.0.0.1'}),
@@ -397,10 +387,12 @@ describe('WasmComponentDriver', () => {
             throw new Error('port exhausted');
           },
         });
-        const freshDriver = new WasmComponentDriver();
+        const freshDriver = new WasmComponentDriver({
+          wasmServiceLifecycle: lifecycle,
+        });
         await freshDriver.prepare(
           makeDefinition(),
-          {wasmLifecycle: lifecycle, replicaConfig: {}},
+          {},
         );
         const result = await freshDriver.start(
           makeReplicaContext(),
@@ -423,10 +415,12 @@ describe('WasmComponentDriver', () => {
             diagnostic: {code: 'module_unavailable'},
           }),
         });
-        const freshDriver = new WasmComponentDriver();
+        const freshDriver = new WasmComponentDriver({
+          wasmServiceLifecycle: lifecycle,
+        });
         await freshDriver.prepare(
           makeDefinition(),
-          {wasmLifecycle: lifecycle, replicaConfig: {}},
+          {},
         );
 
         const result = await freshDriver.start(
@@ -489,14 +483,12 @@ describe('WasmComponentDriver', () => {
     it('should delegate to lifecycle.stopReplica',
       async () => {
         const lifecycle = makeMockLifecycle();
-        const freshDriver = new WasmComponentDriver();
+        const freshDriver = new WasmComponentDriver({
+          wasmServiceLifecycle: lifecycle,
+        });
         await freshDriver.prepare(
-          makeDefinition(),
-          {wasmLifecycle: lifecycle, replicaConfig: {
-            replicaId: 'r1',
-            replicaIds: ['r1'],
-            dbPath: '/tmp/test.db',
-          }},
+          makeDefinition(PLACED_REPLICA),
+          {},
         );
         await freshDriver.start(makeReplicaContext());
         await freshDriver.stop(makeReplicaContext());
@@ -515,10 +507,12 @@ describe('WasmComponentDriver', () => {
           throw new Error('shutdown timeout');
         },
       });
-      const freshDriver = new WasmComponentDriver();
+      const freshDriver = new WasmComponentDriver({
+        wasmServiceLifecycle: lifecycle,
+      });
       await freshDriver.prepare(
         makeDefinition(),
-        {wasmLifecycle: lifecycle, replicaConfig: {}},
+        {},
       );
       await freshDriver.start(makeReplicaContext());
       await assert.rejects(
@@ -583,14 +577,12 @@ describe('WasmComponentDriver', () => {
     it('should return healthy with lifecycle when replica ' +
       'exists', async () => {
       const lifecycle = makeMockLifecycle();
-      const freshDriver = new WasmComponentDriver();
+      const freshDriver = new WasmComponentDriver({
+        wasmServiceLifecycle: lifecycle,
+      });
       await freshDriver.prepare(
-        makeDefinition(),
-        {wasmLifecycle: lifecycle, replicaConfig: {
-          replicaId: 'r1',
-          replicaIds: ['r1'],
-          dbPath: '/tmp/test.db',
-        }},
+        makeDefinition(PLACED_REPLICA),
+        {},
       );
       await freshDriver.start(makeReplicaContext());
       const result = await freshDriver.health(
@@ -605,10 +597,12 @@ describe('WasmComponentDriver', () => {
         createReplica: () => {},
         getReplica: () => null,
       });
-      const freshDriver = new WasmComponentDriver();
+      const freshDriver = new WasmComponentDriver({
+        wasmServiceLifecycle: lifecycle,
+      });
       await freshDriver.prepare(
         makeDefinition(),
-        {wasmLifecycle: lifecycle, replicaConfig: {}},
+        {},
       );
       await freshDriver.start(makeReplicaContext());
       const result = await freshDriver.health(
@@ -771,15 +765,13 @@ describe('WasmComponentDriver', () => {
     it('should complete full lifecycle with mock lifecycle',
       async () => {
         const lifecycle = makeMockLifecycle();
-        const freshDriver = new WasmComponentDriver();
+        const freshDriver = new WasmComponentDriver({
+          wasmServiceLifecycle: lifecycle,
+        });
 
         const prep = await freshDriver.prepare(
-          makeDefinition(),
-          {wasmLifecycle: lifecycle, replicaConfig: {
-            replicaId: 'r1',
-            replicaIds: ['r1'],
-            dbPath: '/tmp/test.db',
-          }},
+          makeDefinition(PLACED_REPLICA),
+          {},
         );
         assert.equal(prep.status, PREPARE_STATUS.READY);
 
