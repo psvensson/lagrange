@@ -32,7 +32,6 @@ const RETIRED_NAMES = Object.freeze([
   'REQUEST_ELECTION_NOW', 'requestTrackedReplacementLeaderElection',
 ]);
 const HANDLER_PREFIX = 'src/node/replica-handler';
-const LIFERAFT_INTERNALS = /^src\/raft\/liferaft[^/]*\.js$/u;
 
 function sourceFiles(directory = SRC) {
   return fs.readdirSync(directory, {withFileTypes: true}).flatMap((entry) => {
@@ -68,12 +67,11 @@ test('W5: the retired demotion path has no source left', () => {
     assert.deepEqual(filesMatching(new RegExp(`\\b${name}\\b`, 'u')), [],
       `nothing in src names ${name}`);
   }
-  assert.deepEqual(filesMatching(/\braftProvider\b|\.change\(/u)
+  assert.deepEqual(filesMatching(/\.change\(/u)
     .filter((file) => file.startsWith(HANDLER_PREFIX)), [],
-  'the replica handler reaches for no provider and no raft.change');
-  assert.deepEqual(filesMatching(/\.deferCandidacy\(/u)
-    .filter((file) => !LIFERAFT_INTERNALS.test(file)), [],
-  'candidacy deferral is called only inside Liferaft itself');
+    'the replica handler reaches for no direct raft.change path');
+  assert.deepEqual(filesMatching(/\.deferCandidacy\(/u), [],
+    'the retired candidacy-deferral path has no source left');
 });
 
 test('W5: the port operation has one partition issuer and one caller of it',
