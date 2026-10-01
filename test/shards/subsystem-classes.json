@@ -28,7 +28,7 @@
   "censusSize": 2227,
   "digest": "fnv1a32-b5cbcc2e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-bd739c85",
+  "observationDigest": "fnv1a32-635fe80b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4481,7 +4481,11 @@
         "src/control-plane/membership-publication-planning-evidence.js",
         "src/control-plane/membership-publication-row-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
-        "test/distributed/harness/raft-network-host.js"
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
     "test/convergence/dt6-publication-failback-network.test.js": {
@@ -4516,7 +4520,11 @@
         "src/control-plane/membership-publication-planning-evidence.js",
         "src/control-plane/membership-publication-row-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
-        "test/distributed/harness/raft-network-host.js"
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
     "test/convergence/dt6-publication-readiness-deficit-network.test.js": {

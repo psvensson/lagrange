@@ -182,9 +182,9 @@ class PartitionNodeCluster {
       // driver keeps the decoded command, applied only once its transaction
       // commits.
       [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: ({command,
-        effects}) => {
+        index, term, effects}) => {
         if (this.applyFor) {
-          this.applyFor(replicaId, command);
+          this.applyFor(replicaId, command, {index, term, effects});
         }
         effects.afterCommit.push(() =>
           replicaOf().appliedCommands.push(command));

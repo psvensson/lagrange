@@ -187,8 +187,10 @@ const RATCHET_TARGETS = [
     // 2026-10-01: tightened 765/29388 -> 728/27645 after the legacy replica
     // base, its packet-routing and backpressure tests, and the census-delete
     // group tests were deleted.
-    baselineCloneGroupCount: 728,
-    baselineDuplicatedLineCount: 27645,
+    // 2026-10-01: tightened 728/27645 -> 726/27594 after the dt6 publication
+    // network tests moved onto the raft-rs network host.
+    baselineCloneGroupCount: 726,
+    baselineDuplicatedLineCount: 27594,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

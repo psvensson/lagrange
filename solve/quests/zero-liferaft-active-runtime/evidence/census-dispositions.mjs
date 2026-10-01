@@ -119,7 +119,7 @@ export const DISPOSITION_RULES = Object.freeze([
   ['test/distributed/README.local.md', M, HARNESS, 'harness readme without rollback drill'],
   ['test/distributed/harness/raft-network-host.js', D, HARNESS,
     'virtual-network host of the legacy runtime',
-    'test/distributed/harness/raft-rs-network-host.js'],
+    'test/test-helpers/raft-rs-network-host.js'],
   ['test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js',
     M, HARNESS, 'receipt/classification cases kept; legacy-quorum replay cases removed'],
   ['test/scripts/distributed-matrix-cli.test.js', M, 'scripts', 'no provider selector flag'],

@@ -3715,7 +3715,7 @@
       "disposition": "delete",
       "owner": "test/distributed harness",
       "reason": "virtual-network host of the legacy runtime",
-      "replacement": "test/distributed/harness/raft-rs-network-host.js"
+      "replacement": "test/test-helpers/raft-rs-network-host.js"
     },
     {
       "path": "test/distributed/harness/rolling-restart-acknowledged-write-durability-visibility.test.js",

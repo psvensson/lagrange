@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2639927,
-        "sha256": "6891ee1ed35b05b6d7e945480147062a8f02b3ebed229e2657f2af55cffd86c0"
+        "bytes": 2639823,
+        "sha256": "d82956e0eb00db43923db32f81e6ac6a749aa989dda3353d7600977622117278"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "ca55fc68eaeaf69788f9b61619e76a6b7e615db312e12ffdd3c13e9b6e336453"
+        "sha256": "2e157f84fc7ce2ce652170b996a94b334b48aac56f74adf600dc3679198677d6"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "0645a18c5e180504fb7102a1a96fd8f18ee3b125b101a5b6f593c9a7d51e1700"
+        "sha256": "f1eb2e68a5a236276f7585af06da0dc5e5a76d17e3b35b54ed337cadd01b3f60"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "b95ebc84f21a4547ae38274bd7769de627cc02fee2b2012de6cd0f64a1af186e"
+    "inputDigest": "10e9eadec987f89c585de0f0d242dcc7e7a993fff48d9578b02abdef9892b597"
   },
   "reconciliation": {
     "complexity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "ca55fc68eaeaf69788f9b61619e76a6b7e615db312e12ffdd3c13e9b6e336453"
+          "sha256": "2e157f84fc7ce2ce652170b996a94b334b48aac56f74adf600dc3679198677d6"
         },
         "cloneGroups": 52,
         "duplicatedLines": 1652,
@@ -130,13 +130,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "0645a18c5e180504fb7102a1a96fd8f18ee3b125b101a5b6f593c9a7d51e1700"
+          "sha256": "f1eb2e68a5a236276f7585af06da0dc5e5a76d17e3b35b54ed337cadd01b3f60"
         },
-        "cloneGroups": 728,
-        "duplicatedLines": 27645,
-        "sourceCloneTouches": 1456,
-        "sourceDuplicatedLineTouches": 55290,
-        "nonzeroSourceCount": 461,
+        "cloneGroups": 726,
+        "duplicatedLines": 27594,
+        "sourceCloneTouches": 1452,
+        "sourceDuplicatedLineTouches": 55188,
+        "nonzeroSourceCount": 460,
         "touchMultiplicity": 2
       }
     ],
@@ -167,35 +167,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2639927,
-        "sha256": "6891ee1ed35b05b6d7e945480147062a8f02b3ebed229e2657f2af55cffd86c0"
+        "bytes": 2639823,
+        "sha256": "d82956e0eb00db43923db32f81e6ac6a749aa989dda3353d7600977622117278"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "773774d9cc5dafeee8afbc5a407e8232d1edae32d864889553895e4e0b0cf123",
-      "moduleCount": 5054,
-      "edgeCount": 24667,
+      "sourceDigest": "f153fc34141bb7cb8614495456a518ac744bacaef2a038e92835f9a15c8ad5d5",
+      "moduleCount": 5055,
+      "edgeCount": 24663,
       "unresolvedCount": 35
     }
   },
   "assignment": {
-    "sourceSignalCount": 2549,
-    "assignedSignalCount": 2549,
-    "uniqueAssignmentCount": 2549,
-    "digest": "5bb97759b8fd9fafd56c7ed59e231520a3340597f11d574ff58e8f2470f0c5a9"
+    "sourceSignalCount": 2548,
+    "assignedSignalCount": 2548,
+    "uniqueAssignmentCount": 2548,
+    "digest": "b2315f199c90e3078c6c70138e4f10eb3379195dcec414c814470138cbffe268"
   },
   "signalCounts": {
     "cognitive": 153,
     "complexity": 1781,
-    "duplication": 528,
+    "duplication": 527,
     "fileSize": 48,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1307,
+    "filesWithDebt": 1306,
     "rankedBoundaryCount": 117,
     "semanticBoundaryCount": 21,
     "fallbackBoundaryCount": 96,
@@ -1571,34 +1571,6 @@
       ]
     },
     {
-      "key": "area:test/convergence",
-      "owner": null,
-      "boundary": "test/convergence",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/convergence"
-      ],
-      "fileCount": 9,
-      "signalCount": 10,
-      "complexity": 7,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 148,
-      "cloneTouches": 6,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 2,
-      "importOut": 77,
-      "score": 42.8,
-      "topPaths": [
-        "test/convergence/dt-priority-recovery-followup-stabilization-phi.test.js",
-        "test/convergence/dt6-publication-quorum-failback-network.test.js",
-        "test/convergence/dt6-publication-ack-recovery-gate-network.test.js",
-        "test/convergence/baseline-discovered-regressions.test.js",
-        "test/convergence/deterministic-convergence-harness.test.js"
-      ]
-    },
-    {
       "key": "area:test/raft",
       "owner": null,
       "boundary": "test/raft",
@@ -1680,6 +1652,34 @@
         "test/cli/core/live-query-pause-resume.property.test.js",
         "test/cli/views/logs-sorting-correctness.property.test.js",
         "test/cli/core/cache-query-methods-completeness.property.test.js"
+      ]
+    },
+    {
+      "key": "area:test/convergence",
+      "owner": null,
+      "boundary": "test/convergence",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/convergence"
+      ],
+      "fileCount": 8,
+      "signalCount": 9,
+      "complexity": 7,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 46,
+      "cloneTouches": 2,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 2,
+      "importOut": 60,
+      "score": 32.6,
+      "topPaths": [
+        "test/convergence/dt-priority-recovery-followup-stabilization-phi.test.js",
+        "test/convergence/baseline-discovered-regressions.test.js",
+        "test/convergence/deterministic-convergence-harness.test.js",
+        "test/convergence/dt-ledger-completion-continuity-discriminator.test.js",
+        "test/convergence/dt6-learner-promotion-fixture.js"
       ]
     },
     {
