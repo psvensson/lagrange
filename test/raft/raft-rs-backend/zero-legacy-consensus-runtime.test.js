@@ -1,5 +1,5 @@
 // The retired consensus runtime is gone from every active surface (quest
-// zero-liferaft-active-runtime). Each assertion reads a real artifact: the
+// consensus-cutover quest). Each assertion reads a real artifact: the
 // package manifests, the source tree, the process dry-run report and the
 // distributed harness's own config merge. The retired vocabulary is
 // assembled from fragments so this witness never spells it.
