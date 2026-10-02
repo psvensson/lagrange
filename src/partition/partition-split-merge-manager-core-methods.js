@@ -8,7 +8,6 @@ import {
 } from '../control-plane/pressure-governor.js';
 import {
   copyDenseOwnDataArray,
-  copyDenseOwnDataRecordArray,
 } from '../utils/strict-own-data.js';
 import {KeyRange} from './key-range-manager.js';
 import {compareRoutingKeys} from './split-key-comparator.js';
@@ -47,9 +46,11 @@ const isProxy = nodeUtilTypes.isProxy.bind(nodeUtilTypes);
 const numberIsSafeInteger = Number.isSafeInteger;
 const objectDefineProperty = Object.defineProperty;
 const objectGetPrototypeOf = Object.getPrototypeOf;
+const objectCreate = Object.create;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
 const reflectApply = Reflect.apply;
+const reflectOwnKeys = Reflect.ownKeys;
 const RangeErrorCtor = RangeError;
 const TypeErrorCtor = TypeError;
 
@@ -142,6 +143,40 @@ function compareEvaluationTableIds(left, right) {
   return left < right ? -1 : 1;
 }
 
+function copyEvaluationPartitionRow(partition) {
+  if (!partition ||
+      typeof partition !== LOCAL_STR_OBJECT ||
+      isProxy(partition)) {
+    throw new TypeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
+  }
+  let keys;
+  try {
+    keys = reflectOwnKeys(partition);
+  } catch {
+    throw new TypeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
+  }
+  const copy = objectCreate(null);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (typeof key !== LOCAL_STR_STRING) {
+      continue;
+    }
+    const descriptor = objectGetOwnPropertyDescriptor(partition, key);
+    if (!descriptor ||
+        descriptor.enumerable !== true ||
+        !objectHasOwn(descriptor, LOCAL_STR_DESCRIPTOR_VALUE)) {
+      continue;
+    }
+    objectDefineProperty(copy, key, {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: descriptor.value,
+    });
+  }
+  return copy;
+}
+
 function cloneEvaluationPartitionRows(partitions) {
   const length = readBoundedCanonicalArrayLength(
     partitions,
@@ -155,9 +190,13 @@ function cloneEvaluationPartitionRows(partitions) {
     }
     throw new RangeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
   }
-  const rows = copyDenseOwnDataRecordArray(partitions);
-  if (rows === null) {
+  const source = copyDenseOwnDataArray(partitions);
+  if (source === null) {
     throw new TypeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
+  }
+  const rows = [];
+  for (let index = 0; index < length; index += 1) {
+    appendOwnArrayValue(rows, copyEvaluationPartitionRow(source[index]));
   }
   return rows;
 }
