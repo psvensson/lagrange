@@ -50,7 +50,7 @@
     },
     {
       "id": "controlled-negatives",
-      "statement": "The v5 proof runs its new witnesses against the exact rejected v4 candidate and requires right-reason reds for finite-extreme canonicalization, falsey table-ID validation, prototype pollution and isolated Object intrinsic controls before installing the v5 candidate."
+      "statement": "The v5 proof runs the new witnesses against the exact rejected v4 candidate. Finite-extreme canonicalization and falsey/non-own table-ID handling must be right-reason red there. The prototype-pollution and isolated Object-intrinsic findings were harness gaps in already-safe production behavior, so their closure is non-vacuous execution at the real consumers, not an invented red requirement."
     },
     {
       "id": "source-change-independent-verification",
