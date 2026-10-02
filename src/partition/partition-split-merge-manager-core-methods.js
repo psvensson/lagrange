@@ -749,4 +749,7 @@ function createPartitionSplitMergeManagerCoreMethods() {
   return methods;
 }
 
-export {createPartitionSplitMergeManagerCoreMethods};
+export {
+  cloneStringArray,
+  createPartitionSplitMergeManagerCoreMethods,
+};
