@@ -4,7 +4,7 @@
 // ConfState, a learner added, caught up, promoted, and the old voter removed -
 // with hostile service-cache rows rewritten underneath the whole run.
 //
-// Every peer here is what `provider.createPartitionPort(request)` returned for
+// Every peer here is what `createRaftRsOperationPort(request)` returned for
 // a request in the contract owner's own field names. No test value is an
 // oracle: what is compared against is either the core's own report or the
 // bytes on disk read through a SEPARATE read-only SQLite connection, and the
@@ -185,7 +185,7 @@ test('a fresh partition on the raft-rs backend starts from the membership ' +
   'its own durable record holds', async () => {
   const cluster = formedPartition();
   try {
-    // 1. Every founding replica is a frozen operation port the provider built.
+    // 1. Every founding replica is a frozen raft-rs operation port.
     for (const replicaId of FOUNDING) {
       const port = cluster.node(replicaId);
       assert.equal(Object.isFrozen(port), true);
