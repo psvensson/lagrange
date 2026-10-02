@@ -1,4 +1,5 @@
 name: quest-seal-bootstrap
+# preservation-fast-path active
 
 on:
   push:
