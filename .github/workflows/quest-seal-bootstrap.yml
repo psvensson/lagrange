@@ -12,9 +12,9 @@ permissions:
 
 jobs:
   seal:
-    name: seal partition-key ordering quest
+    name: regenerate metadata and seal partition-key ordering quest
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout exact feature branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -27,6 +27,10 @@ jobs:
         shell: bash
         run: npm ci
 
+      - name: Refresh generated test metadata
+        shell: bash
+        run: npm run -s test:metadata:refresh
+
       - name: Seal Quest on the exact checkout
         shell: bash
         run: |
@@ -38,17 +42,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          allowed='^(solve/quests/partition-key-ordering-owner-completion/(quest\.json|log\.ndjson)|test/shards/(primary-classes\.json|resource-classes\.json|subsystem-classes\.json|impact-graph-seal\.json))$'
           changed="$(git status --porcelain | awk '{print $2}' | sort)"
-          expected="$(printf '%s\n' \
-            solve/quests/partition-key-ordering-owner-completion/log.ndjson \
-            solve/quests/partition-key-ordering-owner-completion/quest.json | sort)"
-          if [ "$changed" != "$expected" ]; then
-            echo "Unexpected Solver mutation set:"
-            printf '%s\n' "$changed"
+          printf '%s\n' "$changed"
+          test -n "$changed"
+          printf '%s\n' "$changed" | grep -Fx solve/quests/partition-key-ordering-owner-completion/quest.json >/dev/null
+          printf '%s\n' "$changed" | grep -Fx solve/quests/partition-key-ordering-owner-completion/log.ndjson >/dev/null
+          unexpected="$(printf '%s\n' "$changed" | grep -Ev "$allowed" || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Unexpected mutation set:"
+            printf '%s\n' "$unexpected"
             exit 1
           fi
 
-      - name: Commit exact Solver seal
+      - name: Commit exact generated metadata and Solver seal
         shell: bash
         run: |
           set -euo pipefail
@@ -56,6 +63,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- \
             solve/quests/partition-key-ordering-owner-completion/quest.json \
-            solve/quests/partition-key-ordering-owner-completion/log.ndjson
+            solve/quests/partition-key-ordering-owner-completion/log.ndjson \
+            test/shards/primary-classes.json \
+            test/shards/resource-classes.json \
+            test/shards/subsystem-classes.json \
+            test/shards/impact-graph-seal.json
           git commit -m "quest: seal partition-key ordering owner completion"
           git push origin HEAD:refs/heads/quest/0-3-queryable-core-foundation
