@@ -28,7 +28,7 @@
   "censusSize": 2284,
   "digest": "fnv1a32-d7a28763",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d24b38da",
+  "observationDigest": "fnv1a32-da766683",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7682,6 +7682,11 @@
       "files": [
         "src/config/configuration-manager.js",
         "src/partition/partition-service.js"
+      ]
+    },
+    "test/partition/routing-key-comparator.test.js": {
+      "directories": [
+        "test"
       ]
     },
     "test/partition/split-cutover-owner-delegation.test.js": {
