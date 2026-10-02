@@ -32,6 +32,19 @@ The discriminator was the exact integer `9007199254740993` (2^53 + 1).
 6. Binding an already-rounded Number into `INTEGER` cannot recover the lost
    bit; safe-integer reads faithfully return the rounded integer that was
    actually bound.
+7. Parser shape is type-incomplete for large literals: small unquoted `500`
+   is a Number and quoted `'500'` is a string, but both unquoted
+   `9007199254740993` and quoted `'9007199254740993'` become the same
+   string-shaped literal node. The declared partition-column SQL type is
+   therefore required to interpret a large literal correctly.
+8. A Buffer written through the current `TEXT`-affinity partitions-column
+   shape remains SQLite storage class BLOB and returns byte-for-byte as a
+   Buffer (measured `00ff0180`). BLOB does not require text/base64 coercion
+   merely because the declared affinity is TEXT.
+9. Tested REAL values (`0.1`, max finite double, minimum positive double)
+   round-trip as the same JavaScript Number. Negative zero does not:
+   SQLite returns `+0`. If signed zero matters to routing, REAL needs an
+   explicit canonical policy rather than accidental SQLite behavior.
 
 Consequence: changing the system-table columns from TEXT to INTEGER is not an
 A2 solution by itself. Exactness needs an end-to-end representation contract at
@@ -64,9 +77,14 @@ INTEGER boundary from user data need safe-integer mode before converting it to
 canonical decimal text.
 
 This does **not** imply exposing BigInt through the public application API.
-Today that API rejects BigInt. Exact SQL literals are already preserved as
-decimal text, and a parameter may remain a string until the declared key type
-authorizes integer interpretation.
+Today that API rejects BigInt. Exact positive SQL literals are already
+preserved as decimal text, and a parameter may remain a string until the
+declared key type authorizes integer interpretation. However both
+`PartitionResolver.extractLiteralValue()` and
+`DistributedWriteCoordinator.extractKeyValue()` currently implement unary
+`+` / `-` with `Number(operand)`, so a signed exact integer above 2^53 is
+rounded during routing. A2 must own that conversion rather than fixing storage
+alone.
 
 The remaining question is where typed interpretation belongs so SQL TEXT
 `'9007199254740993'` and SQL INTEGER `9007199254740993` can never collapse
@@ -81,16 +99,20 @@ partition key is TEXT.
 
 ### BLOB keys
 
-A1 still recognizes Buffer keys, but this recon has not yet measured BLOB
-system-table persistence, cache/CDC round-trip, or canonical wire encoding.
-A2 must measure this before choosing a single boundary encoding.
+A Buffer survives direct SQLite persistence through the current TEXT-affinity
+boundary column as storage class BLOB and returns byte-for-byte as a Buffer.
+A2 still needs the distributed half of the proof: gateway/CDC/cache/restart
+must preserve that storage class and bytes before Buffer can be declared a
+supported persisted boundary type.
 
 ### REAL keys
 
 Finite JavaScript numbers have an exact IEEE-754 value even when their decimal
-spelling varies. A2 must decide whether REAL partition keys are supported in
-0.3 and, if so, define a canonical representation/order rather than inheriting
-SQLite affinity formatting accidentally.
+spelling varies. The measured ordinary values round-trip unchanged, but
+negative zero is canonicalized to positive zero by SQLite. A2 must decide
+whether REAL partition keys are supported in 0.3 and whether `-0` is
+semantically equal to `+0`; otherwise the type must be refused rather than
+inheriting that policy accidentally.
 
 ## Migration / old-row pressure
 
@@ -116,12 +138,13 @@ migration rule.
 ## Measurements still required before A2 can seal
 
 1. Parameter routing for INTEGER/TEXT keys through pgwire and the embedded
-   application API, including exact decimal strings above 2^53.
+   application API, including exact decimal strings above 2^53 and signed
+   unary forms.
 2. Split median selection for a real INTEGER primary key with values above
    2^53, with and without better-sqlite3 safe-integer reads.
-3. BLOB boundary persistence through the partitions table, CDC/cache and
-   restart.
-4. REAL boundary canonicalization if REAL partition keys remain supported.
+3. BLOB boundary persistence through the full control-plane
+   gateway/CDC/cache/restart path (the direct SQLite leg is now measured).
+4. REAL routing around `-0` if REAL partition keys remain supported.
 5. Restart/upgrade proof through the existing partitions-table migration owner,
    including one recoverable legacy row and one deliberately unrecoverable row.
 
