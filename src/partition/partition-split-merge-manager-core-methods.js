@@ -33,10 +33,11 @@ const arraySort = Array.prototype.sort;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
 const reflectApply = Reflect.apply;
+const reflectDefineProperty = Reflect.defineProperty;
 const TypeErrorCtor = TypeError;
 
 function cloneStringArray(values) {
-  if (!Array.isArray(values)) {
+  if (!arrayIsArray(values)) {
     return [];
   }
   const cloned = [];
@@ -93,7 +94,12 @@ function cloneEvaluationPartitionRows(partitions) {
   for (let index = 0; index < length; index += 1) {
     const partition = readOwnDataValue(partitions, index);
     if (partition && typeof partition === LOCAL_STR_OBJECT) {
-      rows[rows.length] = partition;
+      reflectDefineProperty(rows, rows.length, {
+        configurable: true,
+        enumerable: true,
+        writable: true,
+        value: partition,
+      });
     }
   }
   return rows;
@@ -240,12 +246,25 @@ class PartitionSplitMergeManagerCoreMethods {
   async loadEvaluationPartitions() {
     if (typeof this.listPartitions === LOCAL_STR_FUNCTION) {
       const partitions = await this.listPartitions();
-      return Array.isArray(partitions) ? partitions : [];
+      return arrayIsArray(partitions) ? partitions : [];
     }
     if (!this.keyRangeManager) {
       return [];
     }
     return this.keyRangeManager.getAllPartitions();
+  }
+
+  /**
+   * Copy an evaluation partition list through own array data properties only.
+   * This is the boundary between an externally supplied list and the
+   * split/merge owner: iterators, inherited numeric slots and accessors are not
+   * evaluation authority.
+   * @param {*} partitions
+   * @return {Array<Object>}
+   * @private
+   */
+  normalizeEvaluationPartitions(partitions) {
+    return cloneEvaluationPartitionRows(partitions);
   }
 
   /**
@@ -298,7 +317,11 @@ class PartitionSplitMergeManagerCoreMethods {
     if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
       return null;
     }
-    return partition.partition_key_start ?? partition.partitionKeyStart ?? null;
+    const snakeCaseKey = readOwnDataValue(partition, 'partition_key_start');
+    if (snakeCaseKey !== undefined && snakeCaseKey !== null) {
+      return snakeCaseKey;
+    }
+    return readOwnDataValue(partition, 'partitionKeyStart') ?? null;
   }
 
   /**
@@ -311,7 +334,11 @@ class PartitionSplitMergeManagerCoreMethods {
     if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
       return null;
     }
-    return partition.partition_key_end ?? partition.partitionKeyEnd ?? null;
+    const snakeCaseKey = readOwnDataValue(partition, 'partition_key_end');
+    if (snakeCaseKey !== undefined && snakeCaseKey !== null) {
+      return snakeCaseKey;
+    }
+    return readOwnDataValue(partition, 'partitionKeyEnd') ?? null;
   }
 
   /**
