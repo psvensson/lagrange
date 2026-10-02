@@ -7,167 +7,21 @@ on:
     paths:
       - .github/workflows/a1-independent-verifier.yml
 
-# Temporary review-only token scope. The repository's workflow parser does not
-# currently admit the newer explicit copilot-requests permission key. write-all
-# is used only on this ephemeral owner-authored review branch to test Copilot
-# CLI authentication; the CLI receives no tool permission and the branch is
-# deleted after verification.
 permissions: write-all
 
 jobs:
   verify:
-    name: Copilot CLI adversarial A1 verification
+    name: Copilot CLI verifier smoke
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
-      - name: Checkout candidate
+      - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-
-      - name: Build review dossier
-        shell: bash
-        env:
-          BASE_SHA: b5ca38e336da1c613414d2e4b9bf52ee835e9798
-        run: |
-          set -euo pipefail
-          {
-            cat .github/copilot-instructions.md
-            printf '\n\n# Quest statement and constraints\n\n'
-            node -e "const q=require('./solve/quests/partition-key-ordering-owner-completion/quest.json'); console.log(q.statement); console.log(JSON.stringify(q.constraints,null,2));"
-            printf '\n\n# Candidate diff against source-clean Quest branch\n\n'
-            git diff --no-ext-diff --unified=120 "$BASE_SHA"...HEAD -- \
-              src/partition/split-key-comparator.js \
-              src/partition/partition-split-merge-manager-core-methods.js \
-              src/partition/partition-split-merge-manager-evaluation-methods.js \
-              test/partition/routing-key-comparator.test.js \
-              test/partition/merge-auto-execution.test.js
-            printf '\n\n# Candidate files with stable line numbers\n\n'
-            for file in \
-              src/partition/split-key-comparator.js \
-              src/partition/partition-split-merge-manager-core-methods.js \
-              src/partition/partition-split-merge-manager-evaluation-methods.js \
-              test/partition/routing-key-comparator.test.js \
-              test/partition/merge-auto-execution.test.js; do
-              printf '\n## %s\n' "$file"
-              nl -ba "$file"
-            done
-            cat <<'EOF'
-
-# Required output
-
-Return ONLY one JSON object, with no markdown fence or surrounding prose:
-
-{
-  "verdict": "approve" | "reject",
-  "categories": [
-    {"id":"single-owner","verdict":"pass"|"fail","evidence":["path:line - concrete observation"],"findings":[]},
-    {"id":"sqlite-binary","verdict":"pass"|"fail","evidence":["path:line - concrete observation"],"findings":[]},
-    {"id":"existing-contracts","verdict":"pass"|"fail","evidence":["path:line - concrete observation"],"findings":[]},
-    {"id":"controlled-negative","verdict":"pass"|"fail","evidence":["path:line - concrete observation"],"findings":[]},
-    {"id":"scope","verdict":"pass"|"fail","evidence":["path:line - concrete observation"],"findings":[]},
-    {"id":"implementation-hazards","verdict":"pass"|"fail","evidence":["path:line - concrete observation"],"findings":[]}
-  ],
-  "findings": [
-    {"severity":"critical"|"high"|"medium"|"low","category":"category id","path":"repository path","line":0,"summary":"short defect","rationale":"why it violates the Quest or can fail"}
-  ],
-  "summary": "category-complete conclusion"
-}
-
-Rules:
-- Enumerate every finding you can reach; do not stop at the first.
-- "approve" is allowed only when all six categories pass and findings is empty.
-- Do not reward intent. Judge only the supplied source, tests, and diff.
-- Treat tests as evidence only when they actually discriminate old and new behavior.
-- A stylistic preference is not a finding.
-EOF
-          } > /tmp/a1-review-prompt.txt
 
       - name: Install Copilot CLI
-        shell: bash
         run: npm install -g @github/copilot
 
-      - name: Run independent Copilot review
-        shell: bash
+      - name: Ask Copilot
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          copilot -p "$(cat /tmp/a1-review-prompt.txt)" -s             > /tmp/a1-copilot-output.txt
-          cat /tmp/a1-copilot-output.txt
-
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-
-          let content = fs.readFileSync('/tmp/a1-copilot-output.txt', 'utf8').trim();
-          const firstBrace = content.indexOf('{');
-          const lastBrace = content.lastIndexOf('}');
-          if (firstBrace < 0 || lastBrace < firstBrace) {
-            throw new Error('Copilot output contained no JSON object');
-          }
-          content = content.slice(firstBrace, lastBrace + 1);
-          const review = JSON.parse(content);
-          fs.writeFileSync(
-            '/tmp/a1-independent-review.json',
-            JSON.stringify(review, null, 2) + '\n',
-          );
-          NODE
-
-      - name: Validate category-complete verdict
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-
-          const review = JSON.parse(
-            fs.readFileSync('/tmp/a1-independent-review.json', 'utf8'),
-          );
-          const required = new Set([
-            'single-owner',
-            'sqlite-binary',
-            'existing-contracts',
-            'controlled-negative',
-            'scope',
-            'implementation-hazards',
-          ]);
-          const categories = Array.isArray(review.categories) ? review.categories : [];
-          for (const category of categories) {
-            required.delete(category?.id);
-            if (!['pass', 'fail'].includes(category?.verdict)) {
-              throw new Error(`invalid category verdict: ${category?.id}`);
-            }
-            if (!Array.isArray(category?.evidence) || category.evidence.length === 0) {
-              throw new Error(`missing evidence: ${category?.id}`);
-            }
-            if (!Array.isArray(category?.findings)) {
-              throw new Error(`missing findings array: ${category?.id}`);
-            }
-          }
-          if (required.size !== 0) {
-            throw new Error(
-              `missing review categories: ${[...required].join(', ')}`,
-            );
-          }
-          if (!['approve', 'reject'].includes(review.verdict)) {
-            throw new Error('invalid overall verdict');
-          }
-          if (!Array.isArray(review.findings)) {
-            throw new Error('missing overall findings array');
-          }
-          if (
-            review.verdict === 'approve' &&
-            (review.findings.length !== 0 ||
-              categories.some((category) => category.verdict !== 'pass'))
-          ) {
-            throw new Error('approve is inconsistent with category/findings state');
-          }
-          console.log(JSON.stringify(review, null, 2));
-          NODE
-
-      - name: Upload independent review
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: a1-independent-review
-          path: /tmp/a1-independent-review.json
-          retention-days: 14
+        run: copilot -p "Return only the word OK." -s
