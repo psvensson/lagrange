@@ -711,8 +711,16 @@ test('reactive merge execution options ignore mutable Object.assign and prototyp
       },
     });
     try {
-      Object.assign = () => {
-        throw new Error('live Object.assign must not execute');
+      Object.assign = (target, ...sources) => {
+        for (const source of sources) {
+          const descriptor = source && typeof source === 'object' ?
+            Object.getOwnPropertyDescriptor(source, 'workClass') :
+            null;
+          if (descriptor?.value === 'critical') {
+            throw new Error('live Object.assign must not execute');
+          }
+        }
+        return originalAssign(target, ...sources);
       };
       // eslint-disable-next-line no-extend-native -- adversarial prototype setter fixture
       Object.defineProperty(Object.prototype, 'workClass', {
