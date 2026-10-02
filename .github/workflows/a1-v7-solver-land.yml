@@ -32,16 +32,16 @@ jobs:
           done
       - name: Record Solver attempt
         run: |
-          node scripts/solve.js note partition-key-ordering-owner-completion-v7 --attempt --summary "A1-v7 immutable candidate e813ae541051f1d9ebfb5adfd34f5ce180bfe4df accepted by independent review; exact-head final proof run 37046137427."
+          node scripts/solve.js note --id partition-key-ordering-owner-completion-v7 --attempt "A1-v7 immutable candidate e813ae541051f1d9ebfb5adfd34f5ce180bfe4df accepted by independent review; exact-head final proof run 37046137427."
       - name: Record independent approval
         run: |
-          node scripts/solve.js note partition-key-ordering-owner-completion-v7 --verification --verifier subagent:copilot --verdict approve --summary "ACCEPT on immutable e813ae541051f1d9ebfb5adfd34f5ce180bfe4df after exact-head metadata stability, fingerprints, controlled negatives, v6/v7 closure, focused behavior, complexity, file-size, ESLint and guideline guards."
+          node scripts/solve.js note --id partition-key-ordering-owner-completion-v7 --verification "ACCEPT on immutable e813ae541051f1d9ebfb5adfd34f5ce180bfe4df after exact-head metadata stability, fingerprints, controlled negatives, v6/v7 closure, focused behavior, complexity, file-size, ESLint and guideline guards." --verifier subagent:copilot --verdict approve
       - name: Probe sealed Quest
         run: |
-          node scripts/solve.js probe partition-key-ordering-owner-completion-v7
+          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v7
       - name: Solver land
         run: |
-          node scripts/solve.js land partition-key-ordering-owner-completion-v7 --summary "A1-v7 partition-key ordering owner completion: immutable accepted candidate landed for 0.3 queryable core."
+          node scripts/solve.js land --id partition-key-ordering-owner-completion-v7
       - name: Push Solver landing commit to authoritative PR branch
         shell: bash
         run: |
