@@ -15,6 +15,7 @@ const EXPECTED_RELEASE_AUTHORITY = 'transaction_resolution';
 const EXPECTED_WAKE_OWNER = 'none_no_waiters';
 const MISSING_POLICY_SCALAR_PROBLEMS = 8;
 const SCRIPT_NEWLINE = '\n';
+const stringIncludes = Function.call.bind(String.prototype.includes);
 const REQUIRED_TRANSITIONS = Object.freeze([
   'acquire',
   'same_transaction_reacquire',
@@ -82,8 +83,8 @@ function countPolicyProblems(policy) {
 const policy = readJson(POLICY_PATH);
 const architecture = readText(ARCHITECTURE_PATH);
 let metric = countPolicyProblems(policy);
-if (!architecture.includes(ARCHITECTURE_MARKER) ||
-    !architecture.includes(POLICY_PATH)) {
+if (!stringIncludes(architecture, ARCHITECTURE_MARKER) ||
+    !stringIncludes(architecture, POLICY_PATH)) {
   metric += 1;
 }
 process.stdout.write(String(metric) + SCRIPT_NEWLINE);
