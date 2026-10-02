@@ -27,6 +27,7 @@ const SPLIT_METADATA_FIELD = Object.freeze({
   SPLIT_KEY: 'splitKey',
   TARGET_PARTITION_IDS: 'targetPartitionIds',
   LENGTH: 'length',
+  DESCRIPTOR_VALUE: 'value',
   LEFT_INDEX: '0',
   RIGHT_INDEX: '1',
   VALUE: 'value',
