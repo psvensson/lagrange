@@ -1,7 +1,4 @@
-name: quest-a1-v3-seal-and-attempt
-# retry after v3 lint repair
-# generated-state producers run once; generated-only commit skips duplicate pre-commit regeneration
-# retry after Reflect intrinsic witness
+name: quest-a1-v4-seal-and-attempt
 
 on:
   push:
@@ -15,7 +12,6 @@ permissions:
 
 jobs:
   prove:
-    name: seal A1-v3 and prove hardened candidate
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -44,25 +40,19 @@ jobs:
           npm run -s test:metadata:refresh
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- \
-            solve/changes/global-owner-debt-inventory/inventory.json \
-            solve/changes/priority-recovery-owner-inventory/inventory.json \
-            test/shards/primary-classes.json \
-            test/shards/resource-classes.json \
-            test/shards/subsystem-classes.json \
-            test/shards/impact-graph-seal.json
+          git add --             solve/changes/global-owner-debt-inventory/inventory.json             solve/changes/priority-recovery-owner-inventory/inventory.json             test/shards/primary-classes.json             test/shards/resource-classes.json             test/shards/subsystem-classes.json             test/shards/impact-graph-seal.json
           if ! git diff --cached --quiet; then
-            LAGRANGE_SKIP_PRECOMMIT=1 git commit -m "test: refresh generated state for A1-v3 seal"
+            LAGRANGE_SKIP_PRECOMMIT=1 git commit -m "test: refresh generated state for A1-v4 seal"
           fi
 
-      - name: Record v2 category-complete rejection and seal v3
+      - name: Record v3 review rejection and seal v4
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v2             --verification "REJECT: category-complete Copilot reviews PR #78/#79 found token-only structural ownership checks, broad mismatch acceptance, unsupported same-type String coercion, mutable intrinsic lookup, and the now-repaired adjacency witness gap."             --verifier subagent:github-copilot-pr78-pr79             --verdict reject
-          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v2             --superseded "Category-complete independent review found hostile-input and verifier-fidelity defects outside the sealed v2 predicate; preserve v2 and continue as v3."             --by partition-key-ordering-owner-completion-v3
-          node scripts/solve.js start --id partition-key-ordering-owner-completion-v3
-          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v3
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v3             --verification "REJECT: category-complete Copilot PR #84 reviewed the exact v3 candidate fingerprints and found pre-validation same-reference equality accepting unsupported/non-finite keys plus a vacuous Array.isArray witness while split-target destructuring still consumed Array iteration."             --verifier subagent:github-copilot-pr84             --verdict reject
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v3             --superseded "Independent category-complete review found two adversarial gaps outside the immutable v3 predicate; preserve v3 and continue as v4."             --by partition-key-ordering-owner-completion-v4
+          node scripts/solve.js start --id partition-key-ordering-owner-completion-v4
+          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v4
 
       - name: Baseline scoped guardrails
         shell: bash
@@ -78,43 +68,43 @@ jobs:
           node scripts/check-runtime-grammar-contracts.js "${files[@]}"
           node scripts/check-file-size-thresholds.js
 
-      - name: Install v3 witnesses and prove sealed source red
+      - name: Install v4 witnesses and prove sealed source red
         shell: bash
         run: |
           set -euo pipefail
-          evidence=solve/quests/partition-key-ordering-owner-completion-v3/evidence
+          evidence=solve/quests/partition-key-ordering-owner-completion-v4/evidence
           cp "$evidence/candidate-test-routing-key-comparator.test.js"             test/partition/routing-key-comparator.test.js
           cp "$evidence/candidate-test-merge-auto-execution.test.js"             test/partition/merge-auto-execution.test.js
 
           set +e
-          node --test test/partition/routing-key-comparator.test.js             > /tmp/a1-v3-routing-red.log 2>&1
+          node --test test/partition/routing-key-comparator.test.js             > /tmp/a1-v4-routing-red.log 2>&1
           routing_status=$?
-          node test/partition/merge-auto-execution.test.js             > /tmp/a1-v3-merge-red.log 2>&1
+          node test/partition/merge-auto-execution.test.js             > /tmp/a1-v4-merge-red.log 2>&1
           merge_status=$?
-          node scripts/checks/partition-key-ordering-owner-completion-v3.js             > /tmp/a1-v3-probe-red.log 2>&1
+          node scripts/checks/partition-key-ordering-owner-completion-v4.js             > /tmp/a1-v4-probe-red.log 2>&1
           probe_status=$?
           set -e
 
-          cat /tmp/a1-v3-routing-red.log
-          cat /tmp/a1-v3-merge-red.log
-          cat /tmp/a1-v3-probe-red.log
+          cat /tmp/a1-v4-routing-red.log
+          cat /tmp/a1-v4-merge-red.log
+          cat /tmp/a1-v4-probe-red.log
           test "$routing_status" -ne 0
           test "$merge_status" -ne 0
           test "$probe_status" -ne 0
-          grep -E "not ok.*text routing order matches SQLite BINARY"             /tmp/a1-v3-routing-red.log >/dev/null
-          grep -E "not ok.*routing comparator uses module-captured intrinsics|not ok.*unsupported same-type objects"             /tmp/a1-v3-routing-red.log >/dev/null
-          grep -E "not ok.*adjacency delegates mixed-key refusal"             /tmp/a1-v3-merge-red.log >/dev/null
+          grep -E "not ok.*unsupported identical and non-finite keys validate before equality"             /tmp/a1-v4-routing-red.log >/dev/null
+          grep -E "not ok.*routing comparator uses module-captured intrinsics"             /tmp/a1-v4-routing-red.log >/dev/null
+          grep -E "not ok.*adjacency delegates mixed-key refusal"             /tmp/a1-v4-merge-red.log >/dev/null
 
-      - name: Install hardened source candidate
+      - name: Install v4 source candidate
         shell: bash
         run: |
           set -euo pipefail
-          evidence=solve/quests/partition-key-ordering-owner-completion-v3/evidence
+          evidence=solve/quests/partition-key-ordering-owner-completion-v4/evidence
           cp "$evidence/candidate-src-split-key-comparator.js"             src/partition/split-key-comparator.js
           cp "$evidence/candidate-src-split-merge-core.js"             src/partition/partition-split-merge-manager-core-methods.js
           cp "$evidence/candidate-src-split-merge-evaluation.js"             src/partition/partition-split-merge-manager-evaluation-methods.js
 
-      - name: Prove hardened candidate green
+      - name: Prove v4 candidate green
         shell: bash
         run: |
           set -euo pipefail
@@ -122,8 +112,8 @@ jobs:
           node test/partition/split-key-comparator.test.js
           node test/partition/merge-auto-execution.test.js
           node test/partition/partition-split-merge-manager.test.js
-          node scripts/checks/partition-key-ordering-owner-completion-v3.js
-          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v3
+          node scripts/checks/partition-key-ordering-owner-completion-v4.js
+          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v4
 
       - name: Candidate guardrails
         shell: bash
@@ -141,13 +131,13 @@ jobs:
           npx eslint "${files[@]}"             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js
           git diff --check
 
-      - name: Record v3 content-bound attempt
+      - name: Record v4 content-bound attempt
         shell: bash
         run: |
           set -euo pipefail
           candidate_hashes="$(sha256sum             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js | tr '\n' ';')"
-          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v3             --finding "A1-v3 GitHub Actions run ${GITHUB_RUN_ID}: SQLite-BINARY/non-BMP ordering, exact typed refusal, unsupported-object non-coercion, mutable-intrinsic independence and isolated adjacency delegation are red on sealed source and green on the exact hardened candidate. Candidate sha256: ${candidate_hashes}"             --kind evidence             --evidence "github-actions:${GITHUB_RUN_ID}"
-          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v3             --attempt "A1-v3 hardened candidate closes all category-complete v2 review findings; focused tests, controlled negatives, doneWhen and scoped guardrails are green in GitHub Actions run ${GITHUB_RUN_ID}."
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v4             --finding "A1-v4 GitHub Actions run ${GITHUB_RUN_ID}: same-reference/non-finite refusal and iterator-independent split-target routing join the previously proven SQLite/owner/intrinsic controls; all are red on sealed source and green on the exact candidate. Candidate sha256: ${candidate_hashes}"             --kind evidence             --evidence "github-actions:${GITHUB_RUN_ID}"
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v4             --attempt "A1-v4 closes the two category-complete v3 review findings; controlled negatives, focused tests, doneWhen and scoped guardrails are green in GitHub Actions run ${GITHUB_RUN_ID}."
 
       - name: Restore product tree and preserve Solver records
         shell: bash
@@ -158,7 +148,7 @@ jobs:
           git restore --             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js
 
           changed="$(git status --porcelain | awk '{print $2}' | sort)"
-          expected="$(printf '%s\n'             solve/quests/partition-key-ordering-owner-completion-v2/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v3/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v3/quest.json | sort)"
+          expected="$(printf '%s\n'             solve/quests/partition-key-ordering-owner-completion-v3/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v4/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v4/quest.json | sort)"
           if [ "$changed" != "$expected" ]; then
             echo "Unexpected post-attempt mutation set:"
             printf '%s\n' "$changed"
@@ -174,6 +164,6 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add --             solve/quests/partition-key-ordering-owner-completion-v2/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v3/quest.json             solve/quests/partition-key-ordering-owner-completion-v3/log.ndjson
-          git commit -m "quest: seal and record hardened A1-v3 attempt"
+          git add --             solve/quests/partition-key-ordering-owner-completion-v3/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v4/quest.json             solve/quests/partition-key-ordering-owner-completion-v4/log.ndjson
+          git commit -m "quest: seal and record A1-v4 attempt"
           git push origin HEAD:refs/heads/"$BRANCH"
