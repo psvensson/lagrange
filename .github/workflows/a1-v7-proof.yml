@@ -134,7 +134,7 @@ jobs:
             src/partition/partition-split-merge-manager-evaluation-methods.js
       - name: Ambient intrinsic guard
         if: steps.refresh.outputs.refreshed != 'true'
-        run: npm run audit:guideline:ambient-intrinsics
+        run: node scripts/check-guideline-ambient-intrinsics.js scripts/checks/partition-key-ordering-owner-completion-v7.js
       - name: File-size admission
         if: steps.refresh.outputs.refreshed != 'true'
         run: npm run audit:file-size
