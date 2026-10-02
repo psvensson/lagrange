@@ -1,0 +1,22 @@
+name: a1-v7-seal-baseline
+on:
+  push:
+    branches:
+      - review/a1-v7-seal-baseline
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Measure sealed v7 predicate
+        run: node scripts/checks/partition-key-ordering-owner-completion-v7.js
