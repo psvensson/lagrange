@@ -26,6 +26,14 @@ const RETIRED = new RegExp(
   [RETIRED_RUNTIME, RETIRED_SCOPE, RETIRED_SELECTION].join('|'), 'i');
 const RETIRED_DEPENDENCY = new RegExp(
   [RETIRED_RUNTIME, RETIRED_SCOPE, RETIRED_SPIKE_DEPENDENCY].join('|'), 'i');
+const RETIRED_ACCOMMODATION = Object.freeze([
+  'src/transport/router-delivery-manager.js',
+  'src/raft/sqlite-log-adapter-callback-api.js',
+  'src/raft/raft-rs-provider.js',
+  'test/transport/router-delivery-manager.test.js',
+  'test/transport/raft-delivery-path.property.test.js',
+  'test/transport/pending-response-round-trip.property.test.js',
+]);
 const RETIRED_IMPLEMENTATION = Object.freeze([
   'src/raft/committed-prefix-divergence.js',
   'src/raft/in-memory-log-adapter.js',
@@ -116,6 +124,28 @@ test('legacy dependency and implementation are absent', () => {
       RETIRED_DEPENDENCY.test(specifier) || RETIRED.test(specifier)), [],
     `${relative} imports no retired consensus module`);
   }
+});
+
+test('retired compatibility shells cannot reappear under neutral names', () => {
+  for (const relative of RETIRED_ACCOMMODATION) {
+    assert.equal(fs.existsSync(path.join(ROOT, relative)), false,
+      `${relative} is deleted`);
+  }
+
+  const packetUtils = read('src/raft/raft-packet-utils.js');
+  assert.match(packetUtils, /isRaftRsTransportEnvelope/,
+    'transport classification is owned by the raft-rs envelope');
+  assert.doesNotMatch(packetUtils, /\bisRaftPacket\b|\bRAFT_PACKET_TYPES?\b/,
+    'transport has no retired native-packet classifier');
+
+  const constants = read('src/raft/constants.js');
+  assert.doesNotMatch(constants, /\bRAFT_PACKET_TYPE\b|\bRAFT_PACKET_TYPES\b/,
+    'delivery policy has no retired native packet vocabulary');
+
+  const sqliteAdapter = read('src/raft/sqlite-log-adapter.js');
+  assert.doesNotMatch(sqliteAdapter,
+    /sqlite-log-adapter-callback-api|getLastEntryCallback|getVotedFor|setVotedFor/,
+    'SQLite consensus storage has no callback compatibility facade');
 });
 
 test('process and harness provider selection is absent', () => {
