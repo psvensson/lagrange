@@ -704,11 +704,15 @@ test('reactive merge execution options ignore mutable Object.assign and prototyp
   });
 
 
-test('merge evaluation rejects accessor-backed partition boundary rows without invoking getters',
+test('merge adjacency ignores partition-key accessors and inherited key fields',
   async (t) => {
     let keyAccessorCalls = 0;
     const left = buildPartitionRow('users-p1', null, 'm');
     const right = buildPartitionRow('users-p2', 'm', null);
+    const leftEnd = left.partition_key_end;
+    const rightStart = right.partition_key_start;
+    Reflect.deleteProperty(left, 'partition_key_end');
+    Reflect.deleteProperty(right, 'partition_key_start');
     Object.defineProperty(left, 'partition_key_end', {
       configurable: true,
       enumerable: true,
@@ -717,20 +721,51 @@ test('merge evaluation rejects accessor-backed partition boundary rows without i
         return 'wrong-left-end';
       },
     });
+    Object.defineProperty(right, 'partition_key_start', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        keyAccessorCalls += 1;
+        return 'wrong-right-start';
+      },
+    });
+    Object.defineProperty(left, 'partitionKeyEnd', {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: leftEnd,
+    });
+    Object.defineProperty(right, 'partitionKeyStart', {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: rightStart,
+    });
+    const inherited = Object.create({partition_key_start: 'inherited'});
+    inherited.partition_id = 'inherited-p1';
+    inherited.table_id = 'tbl-users';
+    inherited.partition_key_end = null;
     const {manager} = buildManager({
       listPartitions: () => [left, right],
       executeMergeCandidate: null,
     });
-    await t.rejects(manager.evaluateAllPartitions(), TypeError);
-    t.equal(keyAccessorCalls, 0, 'boundary getter is never invoked');
+    const results = await manager.evaluateAllPartitions();
+    t.same(results.mergeCandidates, [
+      {leftId: 'users-p1', rightId: 'users-p2'},
+    ]);
+    t.equal(keyAccessorCalls, 0, 'partition-key accessors are never invoked');
+    t.equal(manager.getPartitionStartKey(inherited), null,
+      'inherited partition-key fields are not accepted');
     manager.shutdown();
     t.end();
   });
 
-test('merge evaluation rejects accessor/custom-prototype partition IDs without traps',
+test('evaluation partition IDs ignore accessors and inherited fields',
   async (t) => {
     let idAccessorCalls = 0;
     const left = buildPartitionRow('users-p1', null, 'm');
+    const right = buildPartitionRow('users-p2', 'm', null);
+    Reflect.deleteProperty(left, 'partition_id');
     Object.defineProperty(left, 'partition_id', {
       configurable: true,
       enumerable: true,
@@ -739,16 +774,24 @@ test('merge evaluation rejects accessor/custom-prototype partition IDs without t
         return 'wrong-left-id';
       },
     });
+    left.partitionId = 'users-p1';
     const inheritedRight = Object.assign(
       Object.create({partition_id: 'wrong-inherited-id'}),
-      buildPartitionRow('users-p2', 'm', null),
+      right,
     );
+    Reflect.deleteProperty(inheritedRight, 'partition_id');
+    inheritedRight.partitionId = 'users-p2';
     const {manager} = buildManager({
       listPartitions: () => [left, inheritedRight],
       executeMergeCandidate: null,
     });
-    await t.rejects(manager.evaluateAllPartitions(), TypeError);
-    t.equal(idAccessorCalls, 0, 'partition-ID getter is never invoked');
+    const results = await manager.evaluateAllPartitions();
+    t.same(results.mergeCandidates, [
+      {leftId: 'users-p1', rightId: 'users-p2'},
+    ]);
+    t.equal(idAccessorCalls, 0, 'partition-ID accessors are never invoked');
+    t.equal(manager.getPartitionId(inheritedRight), 'users-p2',
+      'inherited partition IDs are not evaluation authority');
     manager.shutdown();
     t.end();
   });
