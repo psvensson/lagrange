@@ -9,26 +9,26 @@
     "cli-tooling": 96,
     "control-plane": 204,
     "convergence-topology": 83,
-    "distributed-harness": 167,
+    "distributed-harness": 169,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 255,
-    "query-sql": 161,
-    "release-packaging": 12,
+    "placement-rebalance": 256,
+    "query-sql": 164,
+    "release-packaging": 14,
     "runtime-primitives": 22,
-    "services-runtime": 141,
+    "services-runtime": 144,
     "solver-tooling": 7,
     "storage-partition": 144,
     "storage-raft": 100,
-    "test-infrastructure": 138,
+    "test-infrastructure": 139,
     "transactions": 15,
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2182,
-  "digest": "fnv1a32-0e6e9ffc",
+  "censusSize": 2194,
+  "digest": "fnv1a32-7940dee5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-406b32d2",
+  "observationDigest": "fnv1a32-c2eb9efb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -833,6 +833,7 @@
     "test/distributed/harness/__tests__/disk-full-under-load-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/distributed-failure-analyzer-load-metrics-fallback.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/distributed-matrix-plan.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/docker-build-context.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/docker-provider.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/examples-catalog-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/failure-bundle-dominant-reason-denoise.test.js": "distributed-harness",
@@ -887,6 +888,7 @@
     "test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/progress-wait.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/publication-evidence-replay.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": "distributed-harness",
@@ -968,6 +970,7 @@
     "test/integration/benchmark-system-table-read-path.integration.test.js": "query-sql",
     "test/integration/benchmark-table-create-timeout-diagnostics.integration.test.js": "convergence-topology",
     "test/integration/bidirectional-websocket.integration.test.js": "transport-messaging",
+    "test/integration/call-cell-public-outcome-adversarial.integration.test.js": "services-runtime",
     "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js": "cdc-metadata",
     "test/integration/cdc-propagation.integration.test.js": "cdc-metadata",
     "test/integration/cdc-subscription-catchup.integration.test.js": "cdc-metadata",
@@ -1003,6 +1006,10 @@
     "test/integration/pgwire-bootstrap.integration.test.js": "pgwire-compat",
     "test/integration/pgwire-rebalance.integration.test.js": "pgwire-compat",
     "test/integration/preflight-critical-path-hops.integration.test.js": "control-plane",
+    "test/integration/public-application-database-multinode.integration.test.js": "query-sql",
+    "test/integration/public-application-database-transaction-facade.integration.test.js": "query-sql",
+    "test/integration/public-binding-cell-invocation-seam.integration.test.js": "services-runtime",
+    "test/integration/public-consumer-contract-ratchet.integration.test.js": "query-sql",
     "test/integration/raft-leader-election.integration.test.js": "storage-raft",
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "cdc-metadata",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "transport-messaging",
@@ -1510,6 +1517,7 @@
     "test/random/random-source.test.js": "runtime-primitives",
     "test/rebalancer/add-workflow-step-progression.property.test.js": "placement-rebalance",
     "test/rebalancer/admission-real-size-estimates.test.js": "placement-rebalance",
+    "test/rebalancer/application-write-formation-authority.test.js": "placement-rebalance",
     "test/rebalancer/assignment-epoch-fencing.test.js": "placement-rebalance",
     "test/rebalancer/assignment-epoch-manager.test.js": "placement-rebalance",
     "test/rebalancer/assignment-epoch.test.js": "placement-rebalance",
@@ -1754,9 +1762,11 @@
     "test/rebalancer/unified-rebalancer-triggers-system-partition-defer.test.js": "placement-rebalance",
     "test/rebalancer/unified-rebalancer.test.js": "placement-rebalance",
     "test/rebalancer/user-table-leader-placement-cure.test.js": "placement-rebalance",
+    "test/release/embedded-node-worker-contract.test.js": "release-packaging",
     "test/release/project-hardening-contracts.test.js": "release-packaging",
     "test/release/public-api-boot-incarnation-contract.test.js": "release-packaging",
     "test/release/public-api-side-effect-boundary.test.js": "release-packaging",
+    "test/release/public-consumer-contract-ratchet.test.js": "release-packaging",
     "test/release/release-pipeline-proof-reuse.test.js": "release-packaging",
     "test/release/version-single-source.test.js": "release-packaging",
     "test/runtime/call-cell-reduce-coordinator.test.js": "services-runtime",
@@ -2004,6 +2014,7 @@
     "test/service/call-cell-batch-executor.test.js": "services-runtime",
     "test/service/call-cell-invoker-parallel.test.js": "services-runtime",
     "test/service/call-cell-invoker.test.js": "services-runtime",
+    "test/service/call-cell-public-outcome.test.js": "services-runtime",
     "test/service/call-cell-routing-contract.test.js": "services-runtime",
     "test/service/call-cell-statement-adapter.test.js": "services-runtime",
     "test/service/call-shard-dispatch-pool.test.js": "services-runtime",
@@ -2062,6 +2073,7 @@
     "test/storage/sqlite-store.test.js": "storage-partition",
     "test/test-helpers/managed-timers.test.js": "test-infrastructure",
     "test/test-helpers/port-allocator.test.js": "test-infrastructure",
+    "test/test-helpers/topology-leak-check.test.js": "test-infrastructure",
     "test/threading/service-thread-manager.test.js": "services-runtime",
     "test/time/dt4-seam-collapse.test.js": "runtime-primitives",
     "test/time/pct-scheduler.test.js": "runtime-primitives",
@@ -4659,8 +4671,6 @@
     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -4749,8 +4759,6 @@
     "test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4771,8 +4779,6 @@
     "test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4793,8 +4799,6 @@
     "test/distributed/harness/__tests__/cluster-active-gate-selected-transport-closed-owner-recovery-projection.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4815,8 +4819,6 @@
     "test/distributed/harness/__tests__/cluster-active-gate-startup-readiness-admin-availability.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4837,8 +4839,6 @@
     "test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4859,8 +4859,6 @@
     "test/distributed/harness/__tests__/cluster-active-wait-bounded-diagnostics-retention.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -4871,8 +4869,6 @@
     "test/distributed/harness/__tests__/cluster-active-wait-readiness-failure.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
@@ -4884,8 +4880,6 @@
     "test/distributed/harness/__tests__/cluster-active-wait-snapshot-retention.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
@@ -4897,8 +4891,6 @@
     "test/distributed/harness/__tests__/cluster-bootstrap-api-wait.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4919,8 +4911,6 @@
     "test/distributed/harness/__tests__/cluster-control-snapshot-owner-recovery-late-floor.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-constants.js",
         "src/admin/static/playback-viewer.html",
@@ -4943,8 +4933,6 @@
     "test/distributed/harness/__tests__/cluster-control-snapshot-repair-pressure.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4965,8 +4953,6 @@
     "test/distributed/harness/__tests__/cluster-lifecycle-active-wait-suite.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -4987,8 +4973,6 @@
     "test/distributed/harness/__tests__/cluster-load-readiness-no-progress-elapsed-budget.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5009,8 +4993,6 @@
     "test/distributed/harness/__tests__/cluster-load-readiness-stable-window-forward-dating.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
@@ -5022,8 +5004,6 @@
     "test/distributed/harness/__tests__/cluster-log-incarnation-restart-order.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5044,8 +5024,6 @@
     "test/distributed/harness/__tests__/cluster-node-handle-query.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5066,8 +5044,6 @@
     "test/distributed/harness/__tests__/cluster-partition-env.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5088,8 +5064,6 @@
     "test/distributed/harness/__tests__/cluster-probe-active-state-readiness.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5110,8 +5084,6 @@
     "test/distributed/harness/__tests__/cluster-probe-control-snapshot-coverage.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5132,8 +5104,6 @@
     "test/distributed/harness/__tests__/cluster-probe-load-publication-gate.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5154,8 +5124,6 @@
     "test/distributed/harness/__tests__/cluster-probe-startup-snapshot-projection.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5176,8 +5144,6 @@
     "test/distributed/harness/__tests__/cluster-publication-membership-count.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5198,8 +5164,6 @@
     "test/distributed/harness/__tests__/cluster-quiescence-observer-cohort.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5220,8 +5184,6 @@
     "test/distributed/harness/__tests__/cluster-restart-recovery-held.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5242,8 +5204,6 @@
     "test/distributed/harness/__tests__/cluster-runtime-environment-allowlist.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5264,8 +5224,6 @@
     "test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5287,8 +5245,6 @@
     "test/distributed/harness/__tests__/cluster-stop-load-config-readiness.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5309,8 +5265,6 @@
     "test/distributed/harness/__tests__/cluster.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5402,18 +5356,24 @@
         "test/distributed/config"
       ]
     },
+    "test/distributed/harness/__tests__/docker-build-context.test.js": {
+      "files": [
+        "Dockerfile",
+        "package-lock.json",
+        "package.json"
+      ],
+      "directories": [
+        "test/distributed/harness/__tests__"
+      ]
+    },
     "test/distributed/harness/__tests__/docker-provider.test.js": {
       "files": [
         "Dockerfile",
         "package-lock.json",
         "package.json",
         "src/admin/static/playback-viewer.html",
-        "src/index.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/container-memory-working-set.js"
-      ],
-      "directories": [
-        "src"
       ]
     },
     "test/distributed/harness/__tests__/examples-catalog-scenario.test.js": {
@@ -5539,8 +5499,6 @@
     "test/distributed/harness/__tests__/logging-publication-queue-source-identity.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-control-snapshot.js",
         "src/admin/static/playback-viewer.html",
@@ -5571,8 +5529,6 @@
     "test/distributed/harness/__tests__/memory-soak-enforcement-oracle.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5616,8 +5572,6 @@
     "test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5840,6 +5794,20 @@
         "examples/call-binding-account-summary"
       ]
     },
+    "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/scenarios/table-bootstrap-core-helpers.js",
+        "test/distributed/scenarios/table-distribution-helpers-distribution-query.js",
+        "test/distributed/scenarios/table-distribution-helpers-load-node-planning.js",
+        "test/raft/raft-rs-backend/single-path-partition-cutover.test.js"
+      ],
+      "directories": [
+        "examples/call-binding-account-summary"
+      ]
+    },
     "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js": {
       "files": [
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5882,8 +5850,6 @@
     "test/distributed/harness/__tests__/restart-recovery-handoff-failure-barrier.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5930,8 +5896,6 @@
       "files": [
         ".dockerignore",
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -6084,8 +6048,6 @@
     "test/distributed/harness/__tests__/startup-runtime-handoff-readiness-projection.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
@@ -6178,8 +6140,6 @@
     "test/distributed/harness/__tests__/unexpected-node-exit-sweep.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -6254,8 +6214,6 @@
     "test/distributed/harness/transaction-recovery-poison-row-live-contract.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/static/playback-viewer.html",
         "src/query/query-constants.js",
         "src/utils/canonical-json-data.js",
@@ -6393,8 +6351,6 @@
     "test/helm/lagrange-node-admin-default-deny.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "src/admin/static/playback-viewer.html",
         "src/cli/USER_GUIDE.md",
         "src/cli/cli-constants.js",
@@ -6451,6 +6407,25 @@
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js"
+      ]
+    },
+    "test/integration/call-cell-public-outcome-adversarial.integration.test.js": {
+      "files": [
+        "src/bootstrap/shared/call-cell-invocation-setup.js",
+        "src/bootstrap/shared/runtime-service-handler-setup.js",
+        "src/config/configuration-manager.js",
+        "src/constants/unified-service-lifecycle.js",
+        "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/runtime/call-cell-driver-invoke.js",
+        "src/runtime/pgwire-credential-verifier.js",
+        "src/runtime/pgwire-runtime-module.js",
+        "src/runtime/wasi-component-cell-runtime.js",
+        "test/integration/helpers/call-cell-guest-componentizer.js",
+        "test/wasm-service/fixtures/call-cell-world/guest.js"
+      ],
+      "directories": [
+        "src",
+        "wit"
       ]
     },
     "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js": {
@@ -6770,6 +6745,40 @@
       ],
       "env": [
         "LAGRANGE_TEST_MACHINE_FACTOR"
+      ]
+    },
+    "test/integration/public-application-database-multinode.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/query/application-database.js",
+        "test/integration/helpers/embedded-node-worker.js"
+      ]
+    },
+    "test/integration/public-application-database-transaction-facade.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "test/integration/helpers/embedded-node-worker.js"
+      ]
+    },
+    "test/integration/public-binding-cell-invocation-seam.integration.test.js": {
+      "files": [
+        "src/control-plane/owners/deployment-binding-contract.js",
+        "src/embedded-lagrange.js",
+        "src/service/call-cell-batch-executor.js",
+        "src/service/service-local-oci-layout-builder.js",
+        "test/integration/helpers/public-binding-consumer.js",
+        "test/integration/helpers/public-binding-seam-harness.js",
+        "test/wasm-service/fixtures/call-cell-world/guest.js"
+      ],
+      "directories": [
+        "src",
+        "wit"
+      ]
+    },
+    "test/integration/public-consumer-contract-ratchet.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "test/integration/helpers/embedded-node-worker.js"
       ]
     },
     "test/integration/raft-leader-election.integration.test.js": {
@@ -7740,7 +7749,8 @@
       "files": [
         "src/query/application-database-error.js",
         "src/query/application-database.js",
-        "src/query/application-runtime-generation.js"
+        "src/query/application-runtime-generation.js",
+        "src/test-helpers/topology-leak-check.js"
       ]
     },
     "test/query/callback-context.test.js": {
@@ -7979,10 +7989,21 @@
         "src/query/cancellation-token.js"
       ]
     },
+    "test/query/sql-query-engine-managed-split-children.test.js": {
+      "files": [
+        "test/integration/helpers/test-machine-factor.js"
+      ]
+    },
     "test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js": {
       "files": [
         "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation-admission.js",
         "src/rebalancer/rebalance-coordinator-operation-creation.js"
+      ]
+    },
+    "test/query/sql-query-engine-provision-partition-waits.test.js": {
+      "files": [
+        "test/integration/helpers/test-machine-factor.js"
       ]
     },
     "test/query/sql-query-engine-system-table-local-read.test.js": {
@@ -8403,9 +8424,6 @@
       ]
     },
     "test/raft/raft-rs-backend/operation-port-regression.test.js": {
-      "files": [
-        "src/raft/raft-rs-provider.js"
-      ],
       "directories": [
         "test/raft/raft-rs-backend"
       ]
@@ -8700,6 +8718,19 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/rebalance-coordinator.js"
+      ]
+    },
+    "test/rebalancer/application-write-formation-authority.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/readiness-planning-version-contract.js",
+        "src/query/sql-query-engine-initial-partition-provisioning.js",
+        "src/rebalancer/provisioning-admission-policy.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-repository.js"
+      ],
+      "directories": [
+        "src"
       ]
     },
     "test/rebalancer/assignment-epoch-fencing.test.js": {
@@ -9447,6 +9478,7 @@
         "src/rebalancer/move-planner-move-calculation-methods.js",
         "src/rebalancer/operation-workflow-dispatch-epoch-gate.js",
         "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation-admission.js",
         "src/rebalancer/rebalance-coordinator-operation-creation.js",
         "src/rebalancer/rebalance-coordinator-owner-delegation-methods.js",
         "src/rebalancer/rebalance-coordinator-shared.js",
@@ -9785,6 +9817,14 @@
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
+    "test/release/embedded-node-worker-contract.test.js": {
+      "files": [
+        "src/public-api.js"
+      ],
+      "directories": [
+        "test/integration/helpers"
+      ]
+    },
     "test/release/project-hardening-contracts.test.js": {
       "files": [
         ".github/workflows/ci.yml",
@@ -9822,6 +9862,15 @@
     "test/release/public-api-side-effect-boundary.test.js": {
       "files": [
         "package.json"
+      ]
+    },
+    "test/release/public-consumer-contract-ratchet.test.js": {
+      "files": [
+        "test/integration/public-application-database-transaction-facade.integration.test.js",
+        "test/integration/public-consumer-contract-ratchet.integration.test.js",
+        "test/query/application-database.test.js",
+        "test/release/embedded-node-worker-contract.test.js",
+        "test/release/public-api-side-effect-boundary.test.js"
       ]
     },
     "test/release/release-pipeline-proof-reuse.test.js": {
@@ -11284,6 +11333,7 @@
         ".github/workflows/full-corpus-canary.yml",
         ".gitignore",
         "data/formation-health/trend.ndjson",
+        "examples/service-data-affinity/download-movielens.js",
         "package-lock.json",
         "package.json",
         "scripts/checks/push-gate-corpus-worktree.js",
@@ -11596,6 +11646,7 @@
         ".taprc",
         "CHANGELOG.md",
         "docs/development/solver-runbook.md",
+        "examples/service-data-affinity/download-movielens.js",
         "package-lock.json",
         "package.json",
         "scripts/check-subsystem.js",
@@ -12044,8 +12095,6 @@
     "test/scripts/stop-distributed-harness-containers.test.js": {
       "files": [
         "Dockerfile",
-        "package-lock.json",
-        "package.json",
         "scripts/rerun-failed-distributed-scenarios.sh",
         "scripts/run-all-distributed-scenarios.sh",
         "src/admin/static/playback-viewer.html",
@@ -12179,6 +12228,11 @@
     "test/service/call-cell-invoker.test.js": {
       "files": [
         "src/service/call-cell-invoker.js"
+      ]
+    },
+    "test/service/call-cell-public-outcome.test.js": {
+      "files": [
+        "src/service/service-lifecycle-command-contract.js"
       ]
     },
     "test/service/call-cell-statement-adapter.test.js": {
