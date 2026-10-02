@@ -1,0 +1,55 @@
+name: quest-seal-bootstrap
+
+on:
+  push:
+    branches:
+      - quest/0-3-queryable-core-foundation
+    paths:
+      - .github/workflows/quest-seal-bootstrap.yml
+
+permissions:
+  contents: write
+
+jobs:
+  seal:
+    name: seal partition-key ordering quest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact feature branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: quest/0-3-queryable-core-foundation
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Seal Quest on the exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/solve.js start --id partition-key-ordering-owner-completion
+          node scripts/solve.js probe --id partition-key-ordering-owner-completion
+
+      - name: Refuse unexpected mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git status --porcelain | awk '{print $2}' | sort)"
+          expected="$(printf '%s\n' \
+            solve/quests/partition-key-ordering-owner-completion/log.ndjson \
+            solve/quests/partition-key-ordering-owner-completion/quest.json | sort)"
+          if [ "$changed" != "$expected" ]; then
+            echo "Unexpected Solver mutation set:"
+            printf '%s\n' "$changed"
+            exit 1
+          fi
+
+      - name: Commit exact Solver seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --             solve/quests/partition-key-ordering-owner-completion/quest.json             solve/quests/partition-key-ordering-owner-completion/log.ndjson
+          git commit -m "quest: seal partition-key ordering owner completion"
+          git push origin HEAD:refs/heads/quest/0-3-queryable-core-foundation
