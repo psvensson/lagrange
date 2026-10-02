@@ -1,5 +1,6 @@
 # exact-head semantic reproof after generated metadata refresh
 name: a1-v7-proof
+# final generated-state-current proof trigger
 
 on:
   push:
