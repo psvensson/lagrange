@@ -578,6 +578,33 @@ test('merge evaluation rejects proxy lists and rows before descriptor traps', as
   t.end();
 });
 
+test('requestEvaluation rejects proxy nested context arrays without traps', (t) => {
+  let trapCalls = 0;
+  const reasonCodes = new Proxy(['write_activity'], {
+    get() {
+      trapCalls += 1;
+      throw new Error('nested reasonCodes get trap executed');
+    },
+    getOwnPropertyDescriptor() {
+      trapCalls += 1;
+      throw new Error('nested reasonCodes descriptor trap executed');
+    },
+  });
+  const {manager} = buildManager({executeMergeCandidate: null});
+  manager.requestEvaluation({
+    reasonCodes,
+    partitionIds: ['users-p1'],
+  });
+  t.same(manager.requestedEvaluation?.reasonCodes, [],
+    'proxy nested reason codes are discarded');
+  t.same(manager.requestedEvaluation?.partitionIds, ['users-p1'],
+    'safe nested partition IDs survive canonicalization');
+  t.equal(trapCalls, 0,
+    'nested proxy array is rejected before any trap can execute');
+  manager.shutdown();
+  t.end();
+});
+
 test('merge evaluation rejects proxy request context without invoking traps', async (t) => {
   let trapCalls = 0;
   const context = new Proxy({
