@@ -16,8 +16,16 @@ import {
   PARTITION_TRANSITION_STATE,
   SPLIT_MERGE_REASON,
 } from '../../src/partition/partition-constants.js';
+import {
+  PARTITION_SERVICE_ERROR_MSG,
+} from '../../src/partition/partition-service-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+
+const SQLITE_BINARY_EARLIER_KEY = '\uE000';
+const UTF16_EARLIER_BUT_SQLITE_LATER_KEY = '\u{10000}';
+const EXPECTED_ADJACENCY_MISMATCH =
+  PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch('number', 'string');
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -76,6 +84,102 @@ test('merge auto-execution - eligible adjacent pair executes through the ' +
 
   manager.shutdown();
 });
+
+
+test('merge sort table IDs ignore mutable String and reject coercion', (t) => {
+  const {manager} = buildManager({executeMergeCandidate: null});
+  const rows = [
+    {...buildPartitionRow('b-p1', null, null), table_id: 'table-b'},
+    {...buildPartitionRow('a-p1', null, null), table_id: 'table-a'},
+  ];
+  const OriginalString = globalThis.String;
+  try {
+    globalThis.String = () => 'corrupted';
+    t.same(
+      manager.sortEvaluationPartitions(rows).map((row) => row.partition_id),
+      ['a-p1', 'b-p1'],
+      'primitive table IDs sort without consulting mutable String',
+    );
+  } finally {
+    globalThis.String = OriginalString;
+  }
+
+  let coercionCalls = 0;
+  const hostileTableId = {
+    [Symbol.toPrimitive]() {
+      coercionCalls += 1;
+      throw new Error('table ID coercion executed');
+    },
+  };
+  const hostileRows = [
+    {...buildPartitionRow('bad-p1', null, null), table_id: hostileTableId},
+    {...buildPartitionRow('good-p1', null, null), table_id: 'table-a'},
+  ];
+  t.throws(
+    () => manager.sortEvaluationPartitions(hostileRows),
+    TypeError,
+    'non-string table IDs fail closed',
+  );
+  const sameHostileRows = [
+    {...buildPartitionRow('bad-p1', null, null), table_id: hostileTableId},
+    {...buildPartitionRow('bad-p2', 'm', null), table_id: hostileTableId},
+  ];
+  t.throws(
+    () => manager.sortEvaluationPartitions(sameHostileRows),
+    TypeError,
+    'same-reference non-string table IDs validate before equality',
+  );
+  t.equal(coercionCalls, 0, 'table ID comparison never coerces hostile metadata');
+  manager.shutdown();
+  t.end();
+});
+
+test('merge auto-execution - adjacency sorting uses SQLite BINARY key order',
+  async (t) => {
+    const {manager} = buildManager({
+      listPartitions: () => [
+        buildPartitionRow(
+          'users-p3',
+          UTF16_EARLIER_BUT_SQLITE_LATER_KEY,
+          null,
+        ),
+        buildPartitionRow('users-p1', null, SQLITE_BINARY_EARLIER_KEY),
+        buildPartitionRow(
+          'users-p2',
+          SQLITE_BINARY_EARLIER_KEY,
+          UTF16_EARLIER_BUT_SQLITE_LATER_KEY,
+        ),
+      ],
+      executeMergeCandidate: null,
+    });
+
+    const results = await manager.evaluateAllPartitions();
+    t.same(results.mergeCandidates, [
+      {leftId: 'users-p1', rightId: 'users-p2'},
+      {leftId: 'users-p2', rightId: 'users-p3'},
+    ]);
+
+    manager.shutdown();
+  });
+
+test('merge auto-execution - adjacency delegates mixed-key refusal to routing owner',
+  async (t) => {
+    const {manager} = buildManager({
+      listPartitions: () => [
+        buildPartitionRow('users-p1', null, 1000),
+        buildPartitionRow('users-p2', 'abc', null),
+      ],
+      executeMergeCandidate: null,
+    });
+
+    await t.rejects(
+      manager.evaluateAllPartitions(),
+      {message: EXPECTED_ADJACENCY_MISMATCH},
+      'mixed boundary types must fail closed through the partition-key order owner',
+    );
+
+    manager.shutdown();
+  });
 
 test('merge auto-execution - bounded per evaluation; overflow candidates ' +
     'are deferred with backpressure', async (t) => {
