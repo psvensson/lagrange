@@ -6,6 +6,7 @@ on:
       - quest/0-3-queryable-core-foundation
     paths:
       - .github/workflows/a1-v7-seal.yml
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -28,6 +29,11 @@ jobs:
         run: node scripts/solve.js start --id partition-key-ordering-owner-completion-v7 --json
       - name: Commit seal record
         run: |
+          # This run is authoritative only if the branch has not moved since checkout.
+          test "$(git ls-remote origin refs/heads/quest/0-3-queryable-core-foundation | cut -f1)" = "$(git rev-parse HEAD)" || {
+            echo "::error::authoritative branch moved during seal; rerun on the new head"
+            exit 1
+          }
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
