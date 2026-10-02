@@ -22,6 +22,8 @@ const LOCAL_STR_EXECUTED = 'executed';
 const LOCAL_STR_DEFERRED = 'deferred';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_SPLIT_PLAN = 'split_plan';
+const arrayIsArray = Array.isArray;
+const arrayPush = Function.call.bind(Array.prototype.push);
 
 const OperationState = SPLIT_MERGE_STATE;
 const REACTIVE_WRITE_ACTIVITY_EXECUTION_OPTIONS = Object.freeze({
@@ -132,7 +134,7 @@ class PartitionSplitMergeManagerTransitionMethods {
 
     const outcome = this.classifyManagedSplitExecution(execution);
     if (outcome === LOCAL_STR_EXECUTED) {
-      results.executedMerges.push(execution);
+      arrayPush(results.executedMerges, execution);
       this.emit(SPLIT_MERGE_EVENT.MERGE_COMPLETED, execution);
       return;
     }
@@ -163,7 +165,7 @@ class PartitionSplitMergeManagerTransitionMethods {
         execution?.nextAttemptAt ||
         null,
     });
-    results.mergeDeferred.push({
+    arrayPush(results.mergeDeferred, {
       leftId: candidate.leftId,
       rightId: candidate.rightId,
       reason: execution?.state || PARTITION_TRANSITION_STATE.DEFERRED,
@@ -190,7 +192,7 @@ class PartitionSplitMergeManagerTransitionMethods {
       state: execution.state || null,
       workflowId: execution.workflowId || null,
     });
-    results.mergeErrors.push({
+    arrayPush(results.mergeErrors, {
       leftId: candidate.leftId,
       rightId: candidate.rightId,
       error,
@@ -339,7 +341,7 @@ class PartitionSplitMergeManagerTransitionMethods {
 
     const outcome = this.classifyManagedSplitExecution(execution);
     if (outcome === LOCAL_STR_EXECUTED) {
-      results.executedSplits.push(execution);
+      arrayPush(results.executedSplits, execution);
       return;
     }
 
@@ -357,13 +359,13 @@ class PartitionSplitMergeManagerTransitionMethods {
           execution?.nextAttemptAt ||
           null,
         admissionDecisionType: execution?.admission?.decisionType || null,
-        admissionBlockingReasons: Array.isArray(
+        admissionBlockingReasons: arrayIsArray(
           execution?.admission?.blockingReasons,
         ) ?
           execution.admission.blockingReasons :
           [],
       });
-      results.splitDeferred.push({
+      arrayPush(results.splitDeferred, {
         partitionId,
         reason: deferredReason,
         execution,
@@ -383,7 +385,7 @@ class PartitionSplitMergeManagerTransitionMethods {
       state: execution.state || null,
       workflowId: execution.workflowId || null,
     });
-    results.splitErrors.push({
+    arrayPush(results.splitErrors, {
       partitionId,
       error,
       state: execution.state || null,
