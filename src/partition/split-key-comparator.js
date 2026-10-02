@@ -199,6 +199,25 @@ function compareNumberWithTextEncodedNumber(a, b, aType, bType) {
   return null;
 }
 
+function resolvePresentRoutingKeyType(value) {
+  return isAbsentKey(value) ? null : resolveSplitKeyType(value);
+}
+
+function throwRoutingKeyTypeMismatch(a, b, aType, bType) {
+  throw new ErrorCtor(
+    PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch(
+      aType || typeof a,
+      bType || typeof b,
+    ),
+  );
+}
+
+function assertRoutingKeySupported(value, absent, valueType, peer, peerType) {
+  if (!absent && valueType === null) {
+    throwRoutingKeyTypeMismatch(value, peer, valueType, peerType);
+  }
+}
+
 /**
  * Routing order for partition keys: the one comparator behind
  * KeyRange.compareKeys, PartitionResolver.compareValues and
@@ -219,26 +238,14 @@ function compareNumberWithTextEncodedNumber(a, b, aType, bType) {
 export function compareRoutingKeys(a, b) {
   const aAbsent = isAbsentKey(a);
   const bAbsent = isAbsentKey(b);
-  const aType = aAbsent ? null : resolveSplitKeyType(a);
-  const bType = bAbsent ? null : resolveSplitKeyType(b);
-  if ((!aAbsent && aType === null) ||
-      (!bAbsent && bType === null)) {
-    throw new ErrorCtor(
-      PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch(
-        aType || typeof a,
-        bType || typeof b,
-      ),
-    );
-  }
+  const aType = resolvePresentRoutingKeyType(a);
+  const bType = resolvePresentRoutingKeyType(b);
+  assertRoutingKeySupported(a, aAbsent, aType, b, bType);
+  assertRoutingKeySupported(b, bAbsent, bType, a, aType);
   const absentOrder = compareAbsentKeys(a, b);
   if (absentOrder !== null) return absentOrder;
   if (aType === bType) return compareWithinType(aType, a, b);
   const numericOrder = compareNumberWithTextEncodedNumber(a, b, aType, bType);
   if (numericOrder !== null) return numericOrder;
-  throw new ErrorCtor(
-    PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch(
-      aType || typeof a,
-      bType || typeof b,
-    ),
-  );
+  return throwRoutingKeyTypeMismatch(a, b, aType, bType);
 }
