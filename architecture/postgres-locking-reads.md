@@ -113,12 +113,15 @@ one owner per concern:
 - no session-local lock map, local mutex, benchmark retry loop, or node-local
   cache is reservation authority.
 
-A conflict on **any** participant aborts the locking operation's transaction
-and drives whole-transaction rollback. Reservations already acquired on earlier
-participants are therefore released through that rollback rather than retained
-while the transaction waits for another participant. The Phase 0.3 slice has
-no hold-and-wait state, no waiter queue, and consequently no wait-for graph or
-deadlock detector.
+A conflict on **any** participant has two explicit owned transitions. First, the
+participant refuses the reservation and reports
+`locking_read_reservation_conflict`. Second, the
+`DistributedTransactionCoordinator` owns the terminal conflict-abort transition:
+it rolls back the whole transaction, waits for rollback/release acknowledgement
+from every already-enlisted participant, and only then reports
+`transaction_aborted` with the reservation conflict as its cause. Earlier
+reservations therefore cannot remain held after the caller observes terminal
+abort.
 
 Reservation lifetime is transaction-owned rather than TTL-owned. A participant
 must not expire an unresolved reservation merely because its local clock
