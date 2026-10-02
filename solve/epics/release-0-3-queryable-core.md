@@ -9,6 +9,7 @@ doneWhen:
     file: solve/oracle/release-0-3-queryable-core.json
 quests:
   - partition-key-ordering-owner-completion
+  - partition-key-ordering-owner-completion-v2
 authorizes:
   - architecture
   - docs/development/agpl-feature-map.md
@@ -165,10 +166,10 @@ looks complete.
 2. **One ordering owner before more routing features.** PK narrowing, compound
    keys and ordered indexes consume the key/tuple order. They do not grow local
    comparison helpers.
-3. **Persisted representation is a separate decision from comparison.** Q1
-   closes current comparison-owner divergence. Q2 decides how type and exact
+3. **Persisted representation is a separate decision from comparison.** A1
+   closes current comparison-owner divergence. A2 decides how type and exact
    boundary values survive persistence/upgrade. Do not hide a storage-format
-   migration inside Q1.
+   migration inside A1.
 4. **Indexes are access paths in 0.3.** Rejecting or losing an index may make a
    query slower, never wrong. Global uniqueness remains outside 0.3.
 5. **Locking reads use transaction owners.** PG wire cannot own locks; a parser
@@ -188,8 +189,12 @@ looks complete.
 Executable detail is in
 `solve/specs/release-0-3-queryable-core/tasks.md`.
 
-The first source Quest is
-`partition-key-ordering-owner-completion`. It is intentionally small and
+The first source Quest was initially sealed as
+`partition-key-ordering-owner-completion`; Copilot's pre-seal review found
+that its doneWhen checker could admit incomplete UTF-8/BINARY semantics. That
+sealed Quest is superseded rather than mutating its predicate in place.
+The active A1 Quest is
+`partition-key-ordering-owner-completion-v2`. It is intentionally small and
 safe beside rs-raft closeout: finish the existing comparison owner's current
 boundary, remove the merge-adjacency duplicate, and prove SQLite-compatible
 string ordering while preserving the already-landed numeric/TEXT and typed

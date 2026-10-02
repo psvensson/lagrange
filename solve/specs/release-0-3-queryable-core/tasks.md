@@ -44,9 +44,15 @@ against the resulting exact head.
 
 ## Stage A — query access foundation
 
-### A1 — `partition-key-ordering-owner-completion` — CREATE NOW
+### A1 — `partition-key-ordering-owner-completion-v2` — ACTIVE
 
 **Roadmap:** `RM-0.3-qs-typed-key-ordering`.
+
+This supersedes the initially sealed
+`partition-key-ordering-owner-completion` Quest. The original probe is kept
+immutable as historical evidence; v2 incorporates the independent review
+finding that UTF-8/BINARY order needs a non-BMP discriminator and exact typed
+refusal checking.
 
 **Current falsifier:** current main still has both a locale-sensitive string
 order in `compareRoutingKeys` and a raw
