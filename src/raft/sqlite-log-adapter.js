@@ -22,13 +22,16 @@ import {
   VIRGIN_BOUNDARY,
 } from './snapshot-boundary.js';
 import {
-  installSQLiteLogAdapterCallbackApi,
-  SQLITE_RAFT_STATE_KEY,
-  SQLITE_RAFT_STATE_UPSERT_SQL,
-} from './sqlite-log-adapter-callback-api.js';
+  installSQLiteLogAdapterQueryApi,
+} from './sqlite-log-adapter-query-api.js';
 import {
   installSQLiteLogAdapterBatchApi,
 } from './sqlite-log-adapter-batch-api.js';
+
+const SQLITE_RAFT_STATE_UPSERT_SQL =
+  'INSERT INTO _raft_state (key, value) VALUES (?, ?) ' +
+  'ON CONFLICT(key) DO UPDATE SET value = excluded.value';
+const SQLITE_RAFT_COMMITTED_INDEX_KEY = 'committedIndex';
 
 const LOCAL_STR_DATABASE_INSTANCE_IS_REQUIRED = 'Database instance is required';
 const LOCAL_STR_LEGACY_RAFT_LOG_SCHEMA_DETECTED_MANUAL_M = 'Legacy raft log schema detected; manual migration required';
@@ -723,60 +726,8 @@ class SQLiteLogAdapter {
     }
     this.db.prepare(
       SQLITE_RAFT_STATE_UPSERT_SQL,
-    ).run(SQLITE_RAFT_STATE_KEY.COMMITTED_INDEX, String(index));
+    ).run(SQLITE_RAFT_COMMITTED_INDEX_KEY, String(index));
     this._committedIndexCache = index;
-  }
-
-  /**
-   * Append entries to the log.
-   * Requirements: 4.3
-   * @param {Array} entries - Log entries to append
-   * @param {Function} callback - Completion callback
-   */
-  append(entries, callback) {
-    if (!this.isOpen()) {
-      callback(null);
-      return;
-    }
-    try {
-      // Use INSERT OR REPLACE to handle duplicate indices gracefully
-      // This can happen during Raft log replication when entries are re-sent
-      const insertMany = this.db.transaction((entries) => {
-        for (const entry of entries) {
-          this.persistEntry(entry);
-        }
-      });
-
-      insertMany(entries);
-      callback(null);
-    } catch (error) {
-      callback(error);
-    }
-  }
-
-  /**
-   * Truncate log from a specific index.
-   * Requirements: 4.4
-   * @param {number} fromIndex - Index to truncate from
-   * @param {Function} callback - Completion callback
-   */
-  truncateFrom(fromIndex, callback) {
-    if (!this.isOpen()) {
-      callback(null);
-      return;
-    }
-    try {
-      if (!isValidRaftLogIndex(fromIndex)) {
-        callback(null);
-        return;
-      }
-      const safeIndex = this.safeInclusiveTruncationIndex(fromIndex);
-      this.db.prepare(LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX)
-        .run(safeIndex);
-      callback(null);
-    } catch (error) {
-      callback(error);
-    }
   }
 
   /**
@@ -790,7 +741,7 @@ class SQLiteLogAdapter {
   }
 }
 
-installSQLiteLogAdapterCallbackApi(SQLiteLogAdapter);
+installSQLiteLogAdapterQueryApi(SQLiteLogAdapter);
 installSQLiteLogAdapterBatchApi(SQLiteLogAdapter);
 installSnapshotCompactionApi(SQLiteLogAdapter);
 
