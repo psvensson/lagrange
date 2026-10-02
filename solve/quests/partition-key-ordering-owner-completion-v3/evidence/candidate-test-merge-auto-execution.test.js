@@ -86,6 +86,44 @@ test('merge auto-execution - eligible adjacent pair executes through the ' +
 });
 
 
+test('merge sort table IDs ignore mutable String and reject coercion', (t) => {
+  const {manager} = buildManager({executeMergeCandidate: null});
+  const rows = [
+    {...buildPartitionRow('b-p1', null, null), table_id: 'table-b'},
+    {...buildPartitionRow('a-p1', null, null), table_id: 'table-a'},
+  ];
+  const OriginalString = globalThis.String;
+  try {
+    globalThis.String = () => 'corrupted';
+    t.same(
+      manager.sortEvaluationPartitions(rows).map((row) => row.partition_id),
+      ['a-p1', 'b-p1'],
+      'primitive table IDs sort without consulting mutable String',
+    );
+  } finally {
+    globalThis.String = OriginalString;
+  }
+
+  let coercionCalls = 0;
+  const hostileTableId = {
+    [Symbol.toPrimitive]() {
+      coercionCalls += 1;
+      throw new Error('table ID coercion executed');
+    },
+  };
+  const hostileRows = [
+    {...buildPartitionRow('bad-p1', null, null), table_id: hostileTableId},
+    {...buildPartitionRow('good-p1', null, null), table_id: 'table-a'},
+  ];
+  t.throws(
+    () => manager.sortEvaluationPartitions(hostileRows),
+    TypeError,
+    'non-string table IDs fail closed',
+  );
+  t.equal(coercionCalls, 0, 'table ID comparison never coerces hostile metadata');
+  manager.shutdown();
+});
+
 test('merge auto-execution - adjacency sorting uses SQLite BINARY key order',
   async (t) => {
     const {manager} = buildManager({
