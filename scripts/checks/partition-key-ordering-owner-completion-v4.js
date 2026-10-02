@@ -23,6 +23,7 @@ const TARGET_DESTRUCTURING_PATTERN=/const\s*\[\s*leftPartitionId\s*,\s*rightPart
 const DIRECT_MUTABLE_INTRINSIC_PATTERN=/(?:\b(?:Buffer\.(?:compare|from|isBuffer)|Number\.isFinite|Array\.isArray|Object\.(?:getOwnPropertyDescriptor|hasOwn))\s*\(|\bnew\s+Error\s*\()/u;
 const TARGET_INDEX_OWNER_PATTERN=/readOwnDataValue\(metadata,\s*'targetPartitionIds'\)[\s\S]*?arrayIsArray\(targetPartitionIds\)[\s\S]*?objectGetOwnPropertyDescriptor\(targetPartitionIds,\s*'length'\)[\s\S]*?readOwnDataValue\(targetPartitionIds,\s*'0'\)[\s\S]*?readOwnDataValue\(targetPartitionIds,\s*'1'\)/u;
 const TABLE_ID_STRING_COERCION_PATTERN=/function\s+compareEvaluationTableIds\([^)]*\)[\s\S]*?\bString\s*\(/u;
+const TABLE_ID_EARLY_EQUALITY_PATTERN=/function\s+compareEvaluationTableIds\([^)]*\)\s*\{\s*if\s*\(\s*left\s*===\s*right\s*\)/u;
 const TABLE_ID_PRIMITIVE_GUARD_PATTERN=/function\s+compareEvaluationTableIds\([^)]*\)[\s\S]*?typeof\s+left\s*!==\s*LOCAL_STR_STRING[\s\S]*?typeof\s+right\s*!==\s*LOCAL_STR_STRING/u;
 const SORT_OWNER_PATTERN=/sortEvaluationPartitions\(partitions\)[\s\S]*?return\s+compareRoutingKeys\(\s*this\.getPartitionStartKey\(left\),\s*this\.getPartitionStartKey\(right\),\s*\);/u;
 const ADJACENCY_OWNER_PATTERN=/!this\.keyRangeManager\s*&&\s*compareRoutingKeys\(\s*this\.getPartitionEndKey\(leftPartition\),\s*this\.getPartitionStartKey\(rightPartition\),\s*\)\s*!==\s*0/u;
@@ -158,6 +159,7 @@ function structuralProblemCount(){
   if(!regExpTest(TARGET_INDEX_OWNER_PATTERN,comparatorSource))problems+=1;
   if(regExpTest(DIRECT_MUTABLE_INTRINSIC_PATTERN,comparatorSource))problems+=1;
   if(regExpTest(TABLE_ID_STRING_COERCION_PATTERN,mergeCoreSource))problems+=1;
+  if(regExpTest(TABLE_ID_EARLY_EQUALITY_PATTERN,mergeCoreSource))problems+=1;
   if(!regExpTest(TABLE_ID_PRIMITIVE_GUARD_PATTERN,mergeCoreSource))problems+=1;
   if(regExpTest(DUPLICATE_METHOD_PATTERN,mergeCoreSource))problems+=1;
   if(regExpTest(DUPLICATE_METHOD_PATTERN,mergeEvaluationSource))problems+=1;
