@@ -34,7 +34,7 @@ const DUPLICATE_METHOD_PATTERN = /\bcomparePartitionKeys\s*\(/u;
 const UNSUPPORTED_FALLBACK_PATTERN =
   /aType\s*===\s*null\s*&&\s*bType\s*===\s*null/u;
 const DIRECT_MUTABLE_INTRINSIC_PATTERN =
-  /\b(?:Buffer\.(?:compare|from|isBuffer)|Number\.isFinite)\s*\(/u;
+  /(?:\b(?:Buffer\.(?:compare|from|isBuffer)|Number\.isFinite)\s*\(|\bnew\s+Error\s*\()/u;
 const SORT_OWNER_PATTERN =
   /sortEvaluationPartitions\(partitions\)[\s\S]*?return\s+compareRoutingKeys\(\s*this\.getPartitionStartKey\(left\),\s*this\.getPartitionStartKey\(right\),\s*\);/u;
 const ADJACENCY_OWNER_PATTERN =
@@ -104,11 +104,13 @@ function intrinsicStabilityProblemCount() {
   const originalNumber = globalThis.Number;
   const originalNumberIsFinite = originalNumber.isFinite;
   const originalRegExpTest = RegExp.prototype.test;
+  const originalError = globalThis.Error;
   const leftBuffer = bufferFrom('a');
   const rightBuffer = bufferFrom('b');
   let textOrder = null;
   let numericTextOrder = null;
   let bufferOrder = null;
+  let mixedMessage = null;
   let threw = false;
 
   try {
@@ -121,11 +123,21 @@ function intrinsicStabilityProblemCount() {
     originalNumber.isFinite = () => false;
     globalThis.Number = () => NaN;
     RegExp.prototype.test = () => false;
+    globalThis.Error = class CorruptedError extends originalError {
+      constructor() {
+        super('corrupted mutable Error');
+      }
+    };
 
     textOrder = compareRoutingKeys('a', 'b');
     numericTextOrder =
       compareRoutingKeys(RIGHT_NUMERIC_KEY, STORED_NUMERIC_BOUNDARY);
     bufferOrder = compareRoutingKeys(leftBuffer, rightBuffer);
+    try {
+      compareRoutingKeys(RIGHT_NUMERIC_KEY, NON_NUMERIC_BOUNDARY);
+    } catch (error) {
+      mixedMessage = error?.message || null;
+    }
   } catch (_error) {
     threw = true;
   } finally {
@@ -133,6 +145,7 @@ function intrinsicStabilityProblemCount() {
     Buffer.from = originalBufferFrom;
     Buffer.isBuffer = originalBufferIsBuffer;
     RegExp.prototype.test = originalRegExpTest;
+    globalThis.Error = originalError;
     originalNumber.isFinite = originalNumberIsFinite;
     globalThis.Number = originalNumber;
     globalThis.String = originalString;
@@ -143,6 +156,7 @@ function intrinsicStabilityProblemCount() {
   if (!(textOrder < 0)) problems += 1;
   if (!(numericTextOrder > 0)) problems += 1;
   if (!(bufferOrder < 0)) problems += 1;
+  if (mixedMessage !== EXPECTED_NUMBER_STRING_MISMATCH) problems += 1;
   return problems;
 }
 
