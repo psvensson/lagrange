@@ -25,9 +25,6 @@ import {
   installSQLiteLogAdapterQueryApi,
 } from './sqlite-log-adapter-query-api.js';
 import {
-  installSQLiteLogAdapterBatchApi,
-} from './sqlite-log-adapter-batch-api.js';
-import {
   SQLITE_RAFT_STATE_KEY,
   SQLITE_RAFT_STATE_UPSERT_SQL,
 } from './sqlite-raft-state-constants.js';
@@ -742,7 +739,6 @@ class SQLiteLogAdapter {
 }
 
 installSQLiteLogAdapterQueryApi(SQLiteLogAdapter);
-installSQLiteLogAdapterBatchApi(SQLiteLogAdapter);
 installSnapshotCompactionApi(SQLiteLogAdapter);
 
 export {SQLiteLogAdapter};
