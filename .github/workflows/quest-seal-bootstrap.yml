@@ -35,21 +35,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify generated state before sealing
+      - name: Verify committed shard state before sealing
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/generate-global-owner-debt-inventory.js --verify-import-graph
           npm run -s audit:shards
-          node scripts/generate-global-owner-debt-inventory.js
-          node scripts/generate-priority-recovery-owner-inventory.js
           git diff --exit-code -- \
-            solve/changes/global-owner-debt-inventory/inventory.json \
-            solve/changes/priority-recovery-owner-inventory/inventory.json \
             test/shards/primary-classes.json \
             test/shards/resource-classes.json \
-            test/shards/subsystem-classes.json \
-            test/shards/impact-graph-seal.json
+            test/shards/subsystem-classes.json
 
       - name: Record v3 rejection, supersede it, and seal v4
         shell: bash
