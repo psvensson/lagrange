@@ -24,7 +24,7 @@ import {
   PARTITION_SERVICE_OPERATION,
 } from '../partition/partition-service-constants.js';
 
-import {SQLITE_RAFT_STATE_KEY} from './sqlite-log-adapter-callback-api.js';
+import {SQLITE_RAFT_STATE_KEY} from './sqlite-raft-state-constants.js';
 import {readSnapshotBoundary} from './snapshot-boundary.js';
 import {
   RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
