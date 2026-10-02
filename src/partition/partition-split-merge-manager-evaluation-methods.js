@@ -12,13 +12,22 @@ const LOCAL_STR_WORKFLOW_EXECUTION = 'workflow_execution';
 const LOCAL_STR_OBJECT = 'object';
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayIsArray = Array.isArray;
-const arrayPush = Function.call.bind(Array.prototype.push);
+const objectDefineProperty = Object.defineProperty;
 
 /**
  * Resolve one results-list length for evaluation summary diagnostics.
  * @param {*} value
  * @return {number}
  */
+function appendOwnArrayValue(array, value) {
+  objectDefineProperty(array, array.length, {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value,
+  });
+}
+
 function countResultList(value) {
   return arrayIsArray(value) ? value.length : 0;
 }
@@ -129,11 +138,12 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         }
         for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
           const value = values[valueIndex];
-          const normalizedValue = String(value || '');
+          const normalizedValue =
+            typeof value === 'string' ? value : '';
           if (!normalizedValue || arrayIncludes(target, normalizedValue)) {
             continue;
           }
-          arrayPush(target, normalizedValue);
+          appendOwnArrayValue(target, normalizedValue);
         }
       };
       const appendContext = (context) => {
@@ -396,7 +406,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
                   partitionId,
                   targetNodeId,
                 });
-              arrayPush(results.splitCandidates, partitionId);
+              appendOwnArrayValue(results.splitCandidates, partitionId);
             } else {
               this.logger.warn(
                 SPLIT_MERGE_LOG_MSG.SPLIT_DEFERRED_CAPACITY, {
@@ -404,7 +414,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
                   targetNodeId,
                   reason: preflight.reason,
                 });
-              arrayPush(results.splitDeferred, {
+              appendOwnArrayValue(results.splitDeferred, {
                 partitionId,
                 reason: preflight.reason,
                 admissionResult: preflight.admissionResult,
@@ -415,7 +425,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
               });
             }
           } else {
-            arrayPush(results.splitCandidates, partitionId);
+            appendOwnArrayValue(results.splitCandidates, partitionId);
           }
         }
 
@@ -437,7 +447,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
                   this.maxAutoExecuteSplitsPerEvaluation,
               },
             );
-            arrayPush(results.splitDeferred, {
+            appendOwnArrayValue(results.splitDeferred, {
               partitionId,
               reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
             });
@@ -466,7 +476,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
               error: error.message,
               phase: LOCAL_STR_WORKFLOW_EXECUTION,
             });
-            arrayPush(results.splitErrors, {
+            appendOwnArrayValue(results.splitErrors, {
               partitionId,
               error: error.message,
             });
@@ -516,7 +526,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           if (this.evaluateMergeCriteria(
             leftId, rightId, leftMetrics, rightMetrics, policy,
           )) {
-            arrayPush(results.mergeCandidates, {leftId, rightId});
+            appendOwnArrayValue(results.mergeCandidates, {leftId, rightId});
             this.logger.debug(
               SPLIT_MERGE_LOG_MSG.MERGE_ELIGIBLE_UNDER_PRESSURE, {
                 leftId,
@@ -587,7 +597,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
                 this.maxAutoExecuteMergesPerEvaluation,
             },
           );
-          arrayPush(results.mergeDeferred, {
+          appendOwnArrayValue(results.mergeDeferred, {
             leftId: candidate.leftId,
             rightId: candidate.rightId,
             reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
@@ -614,7 +624,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
             error: error.message,
             phase: LOCAL_STR_WORKFLOW_EXECUTION,
           });
-          arrayPush(results.mergeErrors, {
+          appendOwnArrayValue(results.mergeErrors, {
             leftId: candidate.leftId,
             rightId: candidate.rightId,
             error: error.message,
