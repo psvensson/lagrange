@@ -42,29 +42,24 @@ function cloneStringArray(values) {
   return cloned;
 }
 
-function compareEvaluationTableIds(left, right) {
+function compareAbsentEvaluationTableIds(left, right) {
   const leftAbsent = left === null || left === undefined;
   const rightAbsent = right === null || right === undefined;
-  if (leftAbsent || rightAbsent) {
-    if (leftAbsent && rightAbsent) {
-      return 0;
-    }
-    return leftAbsent ? -1 : 1;
-  }
+  if (leftAbsent && rightAbsent) return 0;
+  if (leftAbsent) return -1;
+  if (rightAbsent) return 1;
+  return null;
+}
+
+function compareEvaluationTableIds(left, right) {
+  const absentOrder = compareAbsentEvaluationTableIds(left, right);
+  if (absentOrder !== null) return absentOrder;
   if (typeof left !== LOCAL_STR_STRING ||
       typeof right !== LOCAL_STR_STRING) {
     throw new TypeErrorCtor(INVALID_EVALUATION_TABLE_ID);
   }
-  if (left === right) {
-    return 0;
-  }
-  if (left < right) {
-    return -1;
-  }
-  if (left > right) {
-    return 1;
-  }
-  return 0;
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
 }
 
 class PartitionSplitMergeManagerCoreMethods {
