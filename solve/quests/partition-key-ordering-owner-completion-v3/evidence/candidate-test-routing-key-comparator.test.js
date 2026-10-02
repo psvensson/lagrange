@@ -156,7 +156,7 @@ test('routing comparator uses module-captured intrinsics', () => {
     originalNumber.isFinite = () => false;
     globalThis.Number = () => Number.NaN;
     Array.isArray = () => false;
-    Object.defineProperty(RegExp.prototype, 'test', {
+    Reflect.defineProperty(RegExp.prototype, 'test', {
       configurable: true,
       writable: true,
       value: () => false,
@@ -181,7 +181,7 @@ test('routing comparator uses module-captured intrinsics', () => {
     Buffer.compare = originalBufferCompare;
     Buffer.from = originalBufferFrom;
     Buffer.isBuffer = originalBufferIsBuffer;
-    Object.defineProperty(
+    Reflect.defineProperty(
       RegExp.prototype,
       'test',
       originalRegExpTestDescriptor,
