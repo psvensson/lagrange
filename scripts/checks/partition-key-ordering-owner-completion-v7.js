@@ -15,50 +15,62 @@ function managerForProbe() {
   });
 }
 
-function tableIdValidationProblems(manager) {
+function buildProbeRow(partitionId, startKey, endKey) {
+  return {
+    partition_id: partitionId,
+    table_id: 'table-a',
+    partition_key_start: startKey,
+    partition_key_end: endKey,
+  };
+}
+
+async function tableIdValidationProblems() {
   let problems = 0;
   for (const invalidTableId of [false, 0, Object('boxed-table')]) {
-    const invalid = {
-      partition_id: 'invalid',
-      table_id: invalidTableId,
-      partition_key_start: null,
-      partition_key_end: null,
-    };
-    const absent = {
-      partition_id: 'absent',
-      partition_key_start: null,
-      partition_key_end: null,
-    };
-    for (const rows of [[absent, invalid], [invalid, absent]]) {
-      try {
-        manager.sortEvaluationPartitions(rows);
-        problems += 1;
-      } catch (error) {
-        if (!(error instanceof TypeError)) problems += 1;
+    for (const absentKind of ['missing', 'null', 'undefined']) {
+      const invalid = {
+        ...buildProbeRow('invalid', null, null),
+        table_id: invalidTableId,
+      };
+      const absent = buildProbeRow('absent', null, null);
+      if (absentKind === 'missing') {
+        Reflect.deleteProperty(absent, 'table_id');
+      } else {
+        absent.table_id = absentKind === 'null' ? null : undefined;
+      }
+      for (const rows of [[absent, invalid], [invalid, absent]]) {
+        const manager = managerForProbe();
+        manager.listPartitions = () => rows;
+        try {
+          await manager.evaluateAllPartitions();
+          process.stderr.write(
+            'table-id-validation-before-' + absentKind +
+            ': predecessor accepted invalid table ID\n',
+          );
+          problems += 1;
+        } catch (error) {
+          if (!(error instanceof TypeError)) problems += 1;
+        } finally {
+          manager.shutdown();
+        }
       }
     }
   }
   return problems;
 }
 
-function arrayIntrinsicProblems(manager) {
+async function arrayIntrinsicProblems() {
   const rows = [
-    {
-      partition_id: 'b',
-      table_id: 'table-b',
-      partition_key_start: null,
-      partition_key_end: null,
-    },
-    {
-      partition_id: 'a',
-      table_id: 'table-a',
-      partition_key_start: null,
-      partition_key_end: null,
-    },
+    buildProbeRow('b', 'm', null),
+    buildProbeRow('a', null, 'm'),
   ];
   const priorIterator = Object.getOwnPropertyDescriptor(rows, Symbol.iterator);
   const priorSort = Array.prototype.sort;
+  const priorIsArray = Array.isArray;
+  const priorApply = Reflect.apply;
   let problems = 0;
+  const manager = managerForProbe();
+  manager.listPartitions = () => rows;
   try {
     Object.defineProperty(rows, Symbol.iterator, {
       configurable: true,
@@ -69,35 +81,150 @@ function arrayIntrinsicProblems(manager) {
     Array.prototype.sort = () => {
       throw new Error('live Array.prototype.sort executed');
     };
-    const ordered = manager.sortEvaluationPartitions(rows);
-    if (ordered.length !== 2 ||
-        ordered[0]?.partition_id !== 'a' ||
-        ordered[1]?.partition_id !== 'b') {
+    Array.isArray = () => false;
+    Reflect.apply = () => {
+      throw new Error('live Reflect.apply executed');
+    };
+    const results = await manager.evaluateAllPartitions();
+    if (results.mergeCandidates.length !== 1 ||
+        results.mergeCandidates[0]?.leftId !== 'a' ||
+        results.mergeCandidates[0]?.rightId !== 'b') {
       problems += 1;
     }
-  } catch {
+  } catch (error) {
+    process.stderr.write(
+      'evaluation-array-intrinsic-isolation: ' +
+      String(error?.message || error) + '\n',
+    );
     problems += 1;
   } finally {
+    Reflect.apply = priorApply;
+    Array.isArray = priorIsArray;
     Array.prototype.sort = priorSort;
     if (priorIterator) {
       Object.defineProperty(rows, Symbol.iterator, priorIterator);
     } else {
       Reflect.deleteProperty(rows, Symbol.iterator);
     }
+    manager.shutdown();
   }
   return problems;
 }
 
-const manager = managerForProbe();
-let metric = 0;
-try {
-  metric += tableIdValidationProblems(manager);
-  metric += arrayIntrinsicProblems(manager);
-} finally {
-  manager.shutdown();
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
+function copySetterProblems() {
+  const rows = [
+    buildProbeRow('a', null, 'm'),
+    buildProbeRow('b', 'm', null),
+  ];
+  const manager = managerForProbe();
+  const priorPrototypeIndex =
+    Object.getOwnPropertyDescriptor(Array.prototype, '0');
+  const priorDefineProperty = Reflect.defineProperty;
+  let inheritedSetterCalls = 0;
+  let problems = 0;
+  try {
+    Object.defineProperty(Array.prototype, '0', {
+      configurable: true,
+      set() {
+        inheritedSetterCalls += 1;
+      },
+    });
+    Reflect.defineProperty = () => {
+      throw new Error('live Reflect.defineProperty executed');
+    };
+    const copied = manager.normalizeEvaluationPartitions(rows);
+    if (inheritedSetterCalls !== 0 ||
+        copied.length !== 2 ||
+        copied[0] !== rows[0] ||
+        copied[1] !== rows[1]) {
+      problems += 1;
+    }
+  } catch (error) {
+    process.stderr.write(
+      'evaluation-array-own-slot-copy: ' +
+      String(error?.message || error) + '\n',
+    );
+    problems += 1;
+  } finally {
+    Reflect.defineProperty = priorDefineProperty;
+    if (priorPrototypeIndex) {
+      Object.defineProperty(Array.prototype, '0', priorPrototypeIndex);
+    } else {
+      Reflect.deleteProperty(Array.prototype, '0');
+    }
+    manager.shutdown();
+  }
+  return problems;
 }
+
+async function rowFieldOwnDataProblems() {
+  let accessorCalls = 0;
+  let problems = 0;
+  const left = {
+    table_id: 'table-a',
+    partitionId: 'a',
+    partitionKeyStart: null,
+    partitionKeyEnd: 'm',
+  };
+  Object.defineProperty(left, 'partition_id', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      accessorCalls += 1;
+      return 'wrong-accessor-id';
+    },
+  });
+  Object.defineProperty(left, 'partition_key_end', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      accessorCalls += 1;
+      return 'wrong-accessor-end';
+    },
+  });
+
+  const right = Object.assign(
+    Object.create({
+      partition_id: 'wrong-inherited-id',
+      partition_key_start: 'wrong-inherited-start',
+    }),
+    {
+      partitionId: 'b',
+      table_id: 'table-a',
+      partitionKeyStart: 'm',
+      partitionKeyEnd: null,
+    },
+  );
+
+  const manager = managerForProbe();
+  manager.listPartitions = () => [right, left];
+  try {
+    const results = await manager.evaluateAllPartitions();
+    if (accessorCalls !== 0 ||
+        results.mergeCandidates.length !== 1 ||
+        results.mergeCandidates[0]?.leftId !== 'a' ||
+        results.mergeCandidates[0]?.rightId !== 'b') {
+      problems += 1;
+    }
+  } catch (error) {
+    process.stderr.write(
+      'evaluation-row-own-data-fields: ' +
+      String(error?.message || error) + '\n',
+    );
+    problems += 1;
+  } finally {
+    manager.shutdown();
+  }
+  return problems;
+}
+
+let metric = 0;
+metric += await tableIdValidationProblems();
+metric += await arrayIntrinsicProblems();
+metric += copySetterProblems();
+metric += await rowFieldOwnDataProblems();
+ConfigurationManager.resetInstance();
+LoggingService.resetInstance();
 
 if (metric !== 0) {
   process.stderr.write(
