@@ -316,6 +316,46 @@ class SystemTableCacheObservationMethods {
     return this.listeners.delete(listener);
   }
 
+  /**
+   * Register an apply-time (synchronous) change listener: it observes each
+   * accepted table mutation inside the turn that applied it, with the
+   * identical payload the deferred change notification later carries.
+   *
+   * Only consumers whose decision depends on never observing an applied
+   * revision ahead of its own derived state should use this channel; the
+   * deferred `onCacheChange` channel remains the default. A mutation is
+   * delivered to both channels (at-least-once), so duplicate-tolerant,
+   * revision-keyed handling is a consumer obligation.
+   * @param {Function} listener (tableName, operation, record, metadata)
+   */
+  onCacheApplyChange(listener) {
+    if (typeof listener !== 'function') {
+      throw new Error(CACHE_ERROR_MSG.LISTENER_REQUIRED);
+    }
+    this.applyListeners.add(listener);
+  }
+
+  offCacheApplyChange(listener) {
+    return this.applyListeners.delete(listener);
+  }
+
+  notifyApplyListeners(tableName, operation, record, metadata) {
+    if (this.applyListeners.size === 0) {
+      return;
+    }
+    const normalizedMetadata =
+      metadata && typeof metadata === 'object' ? metadata : null;
+    for (const listener of this.applyListeners) {
+      try {
+        listener(tableName, operation, record, normalizedMetadata);
+      } catch (error) {
+        this.logger.warn(CACHE_LOG_MSG.CACHE_LISTENER_ERROR, {
+          error: error.message,
+        });
+      }
+    }
+  }
+
   notifyListeners(tableName, operation, record, metadata) {
     if (this.listeners.size === 0) {
       return;

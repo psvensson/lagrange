@@ -431,6 +431,55 @@ const controlPlaneReadinessSnapshotStoreMethods = {
   },
 
   /**
+   * Classify one already-applied cache change into the readiness-planning
+   * semantic generation state, in the turn that applied it. This is the
+   * planning-source classification step of handleCacheChange alone: the
+   * revision key makes the later deferred re-delivery a no-op duplicate,
+   * and liveness/capacity semantic recording plus readiness invalidation
+   * stay owned by the deferred change notification.
+   * @param {string} tableName
+   * @param {string|null} operation
+   * @param {Object|null} record
+   * @param {Object|null} metadata
+   * @private
+   */
+  classifyCacheChangeForPlanning(tableName, operation, record, metadata) {
+    const owner = this.readinessPlanningSnapshotOwner;
+    if (!owner) return;
+    let planningSourceError = null;
+    owner.beginCacheChangeTransaction();
+    try {
+      try {
+        const sourceRevision = readOwnDataValue(
+          metadata,
+          'tableMutationRevision',
+        );
+        owner.recordTableChange(tableName, operation, record, sourceRevision);
+      } catch (error) {
+        // Fail closed exactly like the deferred path: an unclassifiable
+        // change keeps the planning identity saturated rather than advancing
+        // the frontier past an unobserved mutation.
+        planningSourceError = planningSourceError || error;
+      }
+    } finally {
+      try {
+        owner.commitCacheChangeTransaction();
+      } catch (error) {
+        // The next classification observes the outstanding revision and
+        // re-derives; nothing to unroll that the revision key does not.
+        planningSourceError = planningSourceError || error;
+      } finally {
+        if (planningSourceError) {
+          this.reportReadinessPlanningSourceObserverFailure(
+            planningSourceError,
+            tableName,
+          );
+        }
+      }
+    }
+  },
+
+  /**
    * Build one stable single-flight key for readiness evaluations.
    * @param {string} nodeId
    * @param {Object} [options]
@@ -472,6 +521,38 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       this.handleCacheChange(tableName, operation, record, metadata);
     };
     this.systemTableCache.onCacheChange(this.cacheChangeListener);
+    if (typeof this.systemTableCache.onCacheApplyChange === 'function') {
+      // Apply-time semantic classification: the readiness-planning identity
+      // must never report an already-applied source revision as unclassified
+      // pending the deferred notification turn. The classification is
+      // revision-keyed and idempotent, so the deferred delivery below
+      // re-observes the same revision as a duplicate and changes nothing.
+      // The apply channel intentionally carries the classification step
+      // only: liveness/capacity semantic recording and readiness
+      // invalidation remain owned by the deferred change notification.
+      this.cacheApplyChangeListener =
+        (tableName, operation, record, metadata) => {
+          this.classifyCacheChangeForPlanning(tableName, operation, record,
+            metadata);
+        };
+      this.systemTableCache.onCacheApplyChange(this.cacheApplyChangeListener);
+    }
+  },
+
+  /**
+   * Unsubscribe the apply-time classification listener from one cache and
+   * forget it.
+   * @param {Object|null|undefined} systemTableCache
+   * @private
+   */
+  detachCacheApplyChangeListener(systemTableCache) {
+    if (
+      this.cacheApplyChangeListener &&
+      typeof systemTableCache?.offCacheApplyChange === 'function'
+    ) {
+      systemTableCache.offCacheApplyChange(this.cacheApplyChangeListener);
+    }
+    this.cacheApplyChangeListener = null;
   },
 
   /**

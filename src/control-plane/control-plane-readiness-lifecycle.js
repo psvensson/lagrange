@@ -26,6 +26,7 @@ const controlPlaneReadinessLifecycleMethods = {
       this.systemTableCache.offCacheChange(this.cacheChangeListener);
     }
     this.cacheChangeListener = null;
+    this.detachCacheApplyChangeListener(this.systemTableCache);
     this.shutdownReadinessPlanningOwner();
     this.lastReadinessSnapshotByNodeId.clear();
     this.lastReadinessSnapshotAtMsByNodeId.clear();

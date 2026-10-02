@@ -192,6 +192,16 @@ class SystemTableCache {
     // same-key mutations without being blocked by unrelated table traffic.
     this.mutationVersionByTableKey = new Map();
     this.listeners = new Set();
+    // Apply-time (synchronous) change listeners. They observe each accepted
+    // apply in the turn that applied it, with the identical
+    // (tableName, operation, record, metadata) payload the deferred
+    // change notification later carries. The readiness-planning semantic
+    // classification consumes this channel so a planning-identity read
+    // never reports an already-applied source change as unclassified
+    // pending a notification turn; every other consumer keeps the
+    // deferred channel. Delivery into both channels is at-least-once and
+    // revision-keyed consumers arbitrate duplicates.
+    this.applyListeners = new Set();
     this.logger = LoggingService.getInstance().forSubsystem(CACHE_SUBSYSTEM.CACHE);
     this.currentEpoch = CACHE_DEFAULT.INITIAL_EPOCH;
     // The cache's own timestamp authority: the mutation watermark below is
@@ -518,11 +528,25 @@ class SystemTableCache {
       this.lastAppliedAtMsByTableName.set(tableName, this.timeSource.now());
       this.lastAppliedCauseIdByTableName.set(tableName, causeId);
       const tableMutationRevision = this.recordTableMutation(tableName, key);
+      // One immutable per-apply snapshot shared by both channels: the
+      // apply-time (synchronous) listeners and the existing deferred change
+      // notification observe identical payload without a second clone.
+      const appliedChangeRecord = this.deepClone(recordForNotification);
+      const appliedChangeMetadata = Object.freeze({
+        causeId,
+        tableMutationRevision,
+      });
+      this.notifyApplyListeners(
+        tableName,
+        operation,
+        appliedChangeRecord,
+        appliedChangeMetadata,
+      );
       this.notifyListeners(
         tableName,
         operation,
-        this.deepClone(recordForNotification),
-        Object.freeze({causeId, tableMutationRevision}),
+        appliedChangeRecord,
+        appliedChangeMetadata,
       );
     }
   }

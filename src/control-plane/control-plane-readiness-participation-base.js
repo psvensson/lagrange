@@ -506,6 +506,7 @@ class ControlPlaneReadinessParticipationBase {
         previousSystemTableCache.offCacheChange(this.cacheChangeListener);
       }
       this.cacheChangeListener = null;
+      this.detachCacheApplyChangeListener(previousSystemTableCache);
       // CL-019: snapshots and memos built from the previous cache must not
       // survive a cache swap as trusted reuse candidates — the new cache's
       // change events never covered them.
