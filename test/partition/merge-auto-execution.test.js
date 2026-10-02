@@ -255,26 +255,33 @@ test('merge table ID reads capture Object.hasOwn', (t) => {
 test('merge table ID validation happens before absent ordering',
   async (t) => {
     for (const invalidTableId of [false, 0, Object('boxed-table')]) {
-      for (const invalidFirst of [false, true]) {
-        const invalidRow = {
-          ...buildPartitionRow('invalid-p1', null, null),
-          table_id: invalidTableId,
-        };
-        const absentRow = buildPartitionRow('absent-p1', null, null);
-        Reflect.deleteProperty(absentRow, 'table_id');
-        const rows = invalidFirst ?
-          [invalidRow, absentRow] :
-          [absentRow, invalidRow];
-        const {manager} = buildManager({
-          listPartitions: () => rows,
-          executeMergeCandidate: null,
-        });
-        await t.rejects(
-          manager.evaluateAllPartitions(),
-          TypeError,
-          'invalid non-absent table ID is rejected before absent ordering',
-        );
-        manager.shutdown();
+      for (const absentKind of ['missing', 'null', 'undefined']) {
+        for (const invalidFirst of [false, true]) {
+          const invalidRow = {
+            ...buildPartitionRow('invalid-p1', null, null),
+            table_id: invalidTableId,
+          };
+          const absentRow = buildPartitionRow('absent-p1', null, null);
+          if (absentKind === 'missing') {
+            Reflect.deleteProperty(absentRow, 'table_id');
+          } else {
+            absentRow.table_id = absentKind === 'null' ? null : undefined;
+          }
+          const rows = invalidFirst ?
+            [invalidRow, absentRow] :
+            [absentRow, invalidRow];
+          const {manager} = buildManager({
+            listPartitions: () => rows,
+            executeMergeCandidate: null,
+          });
+          await t.rejects(
+            manager.evaluateAllPartitions(),
+            TypeError,
+            'invalid non-absent table ID is rejected before ' +
+              absentKind + ' ordering',
+          );
+          manager.shutdown();
+        }
       }
     }
     t.end();
@@ -481,6 +488,45 @@ test('merge adjacency ignores partition-key accessors and inherited key fields',
     t.equal(keyAccessorCalls, 0, 'partition-key accessors are never invoked');
     t.equal(manager.getPartitionStartKey(inherited), null,
       'inherited partition-key fields are not accepted');
+    manager.shutdown();
+    t.end();
+  });
+
+test('evaluation partition IDs ignore accessors and inherited fields',
+  async (t) => {
+    let idAccessorCalls = 0;
+    const left = buildPartitionRow('users-p1', null, 'm');
+    const right = buildPartitionRow('users-p2', 'm', null);
+
+    Reflect.deleteProperty(left, 'partition_id');
+    Object.defineProperty(left, 'partition_id', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        idAccessorCalls += 1;
+        return 'wrong-left-id';
+      },
+    });
+    left.partitionId = 'users-p1';
+
+    const inheritedRight = Object.assign(
+      Object.create({partition_id: 'wrong-inherited-id'}),
+      right,
+    );
+    Reflect.deleteProperty(inheritedRight, 'partition_id');
+    inheritedRight.partitionId = 'users-p2';
+
+    const {manager} = buildManager({
+      listPartitions: () => [left, inheritedRight],
+      executeMergeCandidate: null,
+    });
+    const results = await manager.evaluateAllPartitions();
+    t.same(results.mergeCandidates, [
+      {leftId: 'users-p1', rightId: 'users-p2'},
+    ]);
+    t.equal(idAccessorCalls, 0, 'partition-ID accessors are never invoked');
+    t.equal(manager.getPartitionId(inheritedRight), 'users-p2',
+      'inherited partition IDs are not evaluation authority');
     manager.shutdown();
     t.end();
   });
