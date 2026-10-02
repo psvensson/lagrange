@@ -23,6 +23,7 @@ const COMPARISON_RESULT = Object.freeze({
 });
 const SUPPORTED_KEY_TYPE_LIST = 'number/string/buffer';
 const TEXT_ENCODING = 'utf8';
+const errorCtor = Error;
 const bufferCompare = Buffer.compare.bind(Buffer);
 const bufferFrom = Buffer.from.bind(Buffer);
 const bufferIsBuffer = Buffer.isBuffer.bind(Buffer);
@@ -62,7 +63,7 @@ function compareBinaryText(left, right) {
 export function compareSplitKey(value, splitKey) {
   const splitKeyType = resolveSplitKeyType(splitKey);
   if (splitKeyType === null) {
-    throw new Error(
+    throw new errorCtor(
       PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch(
         typeof splitKey,
         SUPPORTED_KEY_TYPE_LIST,
@@ -73,7 +74,7 @@ export function compareSplitKey(value, splitKey) {
   // resolver handles them before comparison); they never reach here.
   const valueType = resolveSplitKeyType(value);
   if (valueType === null || valueType !== splitKeyType) {
-    throw new Error(
+    throw new errorCtor(
       PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch(
         valueType || typeof value,
         splitKeyType,
@@ -175,7 +176,7 @@ export function compareRoutingKeys(a, b) {
   if (aType !== null && aType === bType) return compareWithinType(aType, a, b);
   const numericOrder = compareNumberWithTextEncodedNumber(a, b, aType, bType);
   if (numericOrder !== null) return numericOrder;
-  throw new Error(
+  throw new errorCtor(
     PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch(
       aType || typeof a,
       bType || typeof b,
