@@ -26,7 +26,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          node --input-type=module <<'NODE' | tee a2-boundary-recon-output.jsonl
+          node --input-type=module <<'NODE' | tee a2-boundary-recon-output-v2.jsonl
           import Database from 'better-sqlite3';
           import {SQLParser} from './src/query/sql-parser.js';
 
@@ -48,6 +48,25 @@ jobs:
               dialect,
               intended,
               where: ast.where,
+            }));
+          }
+
+          for (const [label, expression] of [
+            ['small-unquoted', '500'],
+            ['small-quoted', "'500'"],
+            ['large-unquoted', intended],
+            ['large-quoted', "'" + intended + "'"],
+          ]) {
+            const ast = new SQLParser(
+              'SELECT * FROM items WHERE id = ' + expression,
+              {dialect: 'sqlite'},
+            ).parse();
+            console.log(JSON.stringify({
+              observation: 'parser-literal-shape',
+              label,
+              value: ast.where?.right?.value,
+              jsType: typeof ast.where?.right?.value,
+              node: ast.where?.right,
             }));
           }
 
@@ -99,6 +118,37 @@ jobs:
             }));
           }
 
+          const blob = Buffer.from([0x00, 0xff, 0x01, 0x80]);
+          db.exec('CREATE TABLE t_blob_affinity (v TEXT);');
+          db.prepare('INSERT INTO t_blob_affinity (v) VALUES (?)').run(blob);
+          const blobRow = db.prepare(
+            'SELECT v, typeof(v) AS storage_type FROM t_blob_affinity',
+          ).get();
+          console.log(JSON.stringify({
+            observation: 'sqlite-blob-through-text-affinity',
+            storageType: blobRow.storage_type,
+            jsType: typeof blobRow.v,
+            isBuffer: Buffer.isBuffer(blobRow.v),
+            hex: Buffer.isBuffer(blobRow.v) ? blobRow.v.toString('hex') : null,
+            rendered: Buffer.isBuffer(blobRow.v) ? null : String(blobRow.v),
+          }));
+
+          db.exec('CREATE TABLE t_real (v REAL);');
+          for (const value of [0.1, Number.MAX_VALUE, Number.MIN_VALUE, -0]) {
+            db.exec('DELETE FROM t_real');
+            db.prepare('INSERT INTO t_real (v) VALUES (?)').run(value);
+            const row = db.prepare(
+              'SELECT v, typeof(v) AS storage_type FROM t_real',
+            ).get();
+            console.log(JSON.stringify({
+              observation: 'sqlite-real-roundtrip',
+              input: Object.is(value, -0) ? '-0' : String(value),
+              output: Object.is(row.v, -0) ? '-0' : String(row.v),
+              same: Object.is(value, row.v),
+              storageType: row.storage_type,
+            }));
+          }
+
           db.close();
           NODE
 
@@ -108,6 +158,6 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add a2-boundary-recon-output.jsonl
+          git add a2-boundary-recon-output-v2.jsonl
           git commit -m "recon: record A2 boundary measurements [a2-recon-recorded]"
           git push origin HEAD:recon/a2-boundary-representation-2026-10-02
