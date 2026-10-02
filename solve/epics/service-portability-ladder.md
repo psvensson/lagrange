@@ -10,7 +10,6 @@ quests:
   - oci-container-driver-live-activation-engine-translation
   - oci-container-driver-live-activation-owner-handoff
   - oci-container-driver-live-activation-production-engagement
-  - oci-container-driver-live-activation
 authorizes:
   - src/runtime
   - architecture/oci-runtime-host-contract.md
