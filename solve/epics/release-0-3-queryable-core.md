@@ -8,8 +8,7 @@ doneWhen:
   args:
     file: solve/oracle/release-0-3-queryable-core.json
 quests:
-  - partition-key-ordering-owner-completion-v2
-  - partition-key-ordering-owner-completion-v3
+  - partition-key-ordering-owner-completion-v4
 authorizes:
   - architecture
   - docs/development/agpl-feature-map.md
@@ -200,10 +199,18 @@ was too broad, and the comparator still resolved mutable intrinsics at call
 time. Its adjacency controlled negative was repaired and preserved before the
 Quest was superseded.
 
+A1-v3 then closed those reviewed gaps and reached its sealed metric, focused
+proofs and guardrails, but category-complete review found two remaining
+adversarial holes outside its immutable predicate: unsupported identical values
+could bypass validation through the early equality shortcut, and split-target
+destructuring still consumed mutable Array iteration while its Array.isArray
+witness was vacuous.
+
 The active A1 Quest is now
-`partition-key-ordering-owner-completion-v3`. It keeps the already-proven
-SQLite-BINARY and adjacency behavior while requiring actual owner expressions,
-exact typed refusal before coercion, and module-captured intrinsic independence.
+`partition-key-ordering-owner-completion-v4`. It preserves the proven v3
+ordering/owner behavior while requiring validation before equality and
+iterator-independent split-target selection with an engaged Array-intrinsic
+control.
 
 After that, the safe-before-cutover access foundation proceeds through persisted
 boundary representation, declared PK consumption, compound-PK narrowing, local
