@@ -6,7 +6,6 @@
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_COMMAND = 'command';
-const LOCAL_STR_RESPONSES = 'responses';
 const LOCAL_STR_COMMITTED = 'committed';
 
 /**
@@ -19,7 +18,6 @@ function isCanonicalLogEntryShape(entry) {
     typeof entry === LOCAL_STR_OBJECT &&
     (
       Object.prototype.hasOwnProperty.call(entry, LOCAL_STR_COMMAND) ||
-      Object.prototype.hasOwnProperty.call(entry, LOCAL_STR_RESPONSES) ||
       Object.prototype.hasOwnProperty.call(entry, LOCAL_STR_COMMITTED)
     );
 }
@@ -53,9 +51,6 @@ function normalizeLogEntry(entry, fallback = {}) {
     committed: hasCanonicalShape ?
       entry.committed === true :
       Number.isFinite(index) && index <= committedIndex,
-    responses: hasCanonicalShape && Array.isArray(entry.responses) ?
-      entry.responses.map((response) => ({...response})) :
-      [],
     command: hasCanonicalShape ? entry.command : entry,
   };
 }
