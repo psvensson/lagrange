@@ -44,7 +44,7 @@ against the resulting exact head.
 
 ## Stage A — query access foundation
 
-### A1 — `partition-key-ordering-owner-completion-v6` — ACTIVE
+### A1 — `partition-key-ordering-owner-completion-v7` — ACTIVE
 
 **Roadmap:** `RM-0.3-qs-typed-key-ordering`.
 
@@ -61,11 +61,19 @@ items: numeric comparison returned raw subtraction magnitudes (and could
 overflow to Infinity from finite extremes); falsey non-string table IDs were
 normalized to absence before validation; enumerable Object/Array prototype
 pollution lacked an explicit fixture; and Object.getOwnPropertyDescriptor /
-Object.hasOwn controls were combined. V5 closed those four findings and reached
-a sealed 18 → 0 candidate. A newer category-complete PR #87 review then found
-one last hostile-input case: invalid/non-finite keys paired with null/undefined
-could return from absent-bound ordering before validation. V6 closes exactly
-that invalid-versus-absent gap while preserving all v5 behavior.
+Object.hasOwn controls were combined. V5 closed those four findings. PR #87
+then found invalid/non-finite keys paired with null/undefined could return from
+absent-bound ordering before validation; v6 closed that routing gap.
+
+Exact-head PR #88 review of v6 found three further split/merge-consumer defects:
+merge table IDs could order against an absent peer before the non-absent value
+was validated, the live evaluation path still depended on mutable array
+iteration/sort behavior, and the comparator refactor increased the complexity
+ratchet. V7 owns those findings plus the follow-up exact live-path audit:
+evaluation partition arrays, IDs, and start/end keys are own-data-only;
+iterator/Array/Reflect intrinsics used by this path are captured; missing,
+own-null, and own-undefined table-ID peers are distinguished in both
+directions; and no new complexity debt is admitted.
 
 **Current falsifier:** current main still has both a locale-sensitive string
 order in `compareRoutingKeys` and a raw
