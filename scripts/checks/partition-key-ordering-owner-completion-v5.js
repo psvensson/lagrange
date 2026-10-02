@@ -48,7 +48,7 @@ const CANONICAL_NUMERIC_PATTERN =
 const FALSY_TABLE_ID_NORMALIZATION_PATTERN =
   /partition\.table_id\s*\|\|\s*partition\.tableId\s*\|\|\s*null/u;
 const TABLE_ID_OWN_DATA_PATTERN =
-  /getPartitionTableId\(partition\)[\s\S]*?readOwnDataValue\(partition,\s*LOCAL_STR_TABLE_ID_SNAKE\)[\s\S]*?readOwnDataValue\(partition,\s*LOCAL_STR_TABLE_ID_CAMEL\)/u;
+  /getPartitionTableId\(partition\)[\s\S]*?readOwnDataValue\(\s*partition,\s*LOCAL_STR_TABLE_ID_SNAKE,?\s*\)[\s\S]*?readOwnDataValue\(\s*partition,\s*LOCAL_STR_TABLE_ID_CAMEL,?\s*\)/u;
 const SORT_OWNER_PATTERN =
   /sortEvaluationPartitions\(partitions\)[\s\S]*?compareRoutingKeys\(\s*this\.getPartitionStartKey\(left\),\s*this\.getPartitionStartKey\(right\),\s*\)/u;
 const ADJACENCY_OWNER_PATTERN =
