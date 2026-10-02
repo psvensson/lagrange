@@ -27,11 +27,11 @@ import {
 import {
   installSQLiteLogAdapterBatchApi,
 } from './sqlite-log-adapter-batch-api.js';
+import {
+  SQLITE_RAFT_STATE_KEY,
+  SQLITE_RAFT_STATE_UPSERT_SQL,
+} from './sqlite-raft-state-constants.js';
 
-const SQLITE_RAFT_STATE_UPSERT_SQL =
-  'INSERT INTO _raft_state (key, value) VALUES (?, ?) ' +
-  'ON CONFLICT(key) DO UPDATE SET value = excluded.value';
-const SQLITE_RAFT_COMMITTED_INDEX_KEY = 'committedIndex';
 
 const LOCAL_STR_DATABASE_INSTANCE_IS_REQUIRED = 'Database instance is required';
 const LOCAL_STR_LEGACY_RAFT_LOG_SCHEMA_DETECTED_MANUAL_M = 'Legacy raft log schema detected; manual migration required';
@@ -726,7 +726,7 @@ class SQLiteLogAdapter {
     }
     this.db.prepare(
       SQLITE_RAFT_STATE_UPSERT_SQL,
-    ).run(SQLITE_RAFT_COMMITTED_INDEX_KEY, String(index));
+    ).run(SQLITE_RAFT_STATE_KEY.COMMITTED_INDEX, String(index));
     this._committedIndexCache = index;
   }
 
