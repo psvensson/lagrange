@@ -1,0 +1,64 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-key-ordering-owner-completion-v7",
+  "statement": "Partition-key ordering closes the final hostile split/merge consumer gaps without new guardrail debt: every non-absent merge table ID is validated as a primitive string before absent ordering; evaluation partition arrays are consumed from own array data properties without iterator semantics and sorted through an Array.prototype.sort intrinsic captured at module load; compareRoutingKeys preserves all v6 routing semantics while returning below the complexity ratchet; and all v6/v5 SQLite-BINARY, numeric/TEXT, typed refusal, own-data metadata, prototype-pollution and consumer-ownership behavior remains unchanged.",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "roadmapRow": "RM-0.3-qs-typed-key-ordering",
+    "specRef": "solve/specs/release-0-3-queryable-core/tasks.md#A1",
+    "planDoc": "solve/epics/release-0-3-queryable-core.md"
+  },
+  "verificationTemplates": [
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/partition-key-ordering-owner-completion-v7.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "supersedes-reviewed-v6",
+      "statement": "Supersedes sealed partition-key-ordering-owner-completion-v6 after exact-head Copilot review PR #88 rejected v6 for absent-peer table-ID validation, live array iterator/sort dependence in the actual merge path, and a new compareRoutingKeys complexity-ratchet violation. Preserve v6 predicate and evidence unchanged."
+    },
+    {
+      "id": "validate-table-id-before-absence",
+      "statement": "For merge evaluation table IDs, null/undefined may remain absent sentinels, but every non-absent peer is validated as a primitive string before any absent-order result can return. Invalid values fail closed in both operand directions without coercion."
+    },
+    {
+      "id": "iterator-free-evaluation-array",
+      "statement": "The split/merge evaluation partition list is consumed from own array data properties only. A hostile own Symbol.iterator, inherited indices, accessors or holes cannot replace or synthesize partition rows."
+    },
+    {
+      "id": "captured-sort-intrinsic",
+      "statement": "Replacing Array.prototype.sort after module load cannot change or disable merge adjacency ordering; the sort intrinsic used by the owner is captured before hostile mutation."
+    },
+    {
+      "id": "complexity-ratchet",
+      "statement": "The A1 candidate introduces no complexity-ratchet debt. compareRoutingKeys stays behaviorally identical to v6 while validation is factored below the repository threshold rather than waived or baselined."
+    },
+    {
+      "id": "preserve-v6-v5",
+      "statement": "Preserve invalid-versus-absent routing refusal, canonical finite -1/0/1 comparator results, SQLite BINARY UTF-8 including non-BMP, numeric/TEXT compatibility, same-reference invalid refusal, own-data iterator-free split metadata, own-data coercion-free table IDs including falsey values, prototype-pollution defenses, captured intrinsics and actual KeyRange/PartitionResolver/QueryGroup/split-merge owner expressions."
+    },
+    {
+      "id": "controlled-negatives",
+      "statement": "Table-ID invalid-versus-absent and partition-list iterator/sort witnesses must fail for the exact rejected v6 mechanism and pass only after the v7 repair; combined controls do not substitute for isolated witnesses where isolation is practical."
+    },
+    {
+      "id": "a2-boundary",
+      "statement": "Persisted key type metadata, exact large-integer boundary representation, parser/bind precision, encoding migration and old-boundary revalidation remain A2."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "Any v7 src/ candidate requires category-complete independent verification newer than its last attempt, covering both sealed verificationTemplates and exact candidate fingerprints."
+    },
+    {
+      "id": "rs-raft-isolation",
+      "statement": "No Raft runtime, consensus transport, lifecycle, membership or formation behavior changes."
+    }
+  ]
+}
