@@ -1,0 +1,31 @@
+name: b1-v2-seal-baseline
+on:
+  push:
+    branches:
+      - review/b1-v2-seal-baseline
+permissions:
+  contents: write
+concurrency:
+  group: b1-v2-seal-baseline
+  cancel-in-progress: true
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Seal B1-v2 against pre-repair policy
+        run: |
+          node scripts/solve.js start --id locking-read-wait-policy-seal-v2
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -- solve/quests/locking-read-wait-policy-seal-v2
+          git commit -m "0.3 B1-v2: seal semantic consistency predicate"
+          git push origin HEAD:review/b1-v2-seal-baseline
