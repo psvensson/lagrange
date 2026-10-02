@@ -69,7 +69,7 @@ test('W5: the retired demotion path has no source left', () => {
   }
   assert.deepEqual(filesMatching(/\.change\(/u)
     .filter((file) => file.startsWith(HANDLER_PREFIX)), [],
-    'the replica handler reaches for no direct raft.change path');
+  'the replica handler reaches for no direct raft.change path');
   assert.deepEqual(filesMatching(/\.deferCandidacy\(/u), [],
     'the retired candidacy-deferral path has no source left');
 });
