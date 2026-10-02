@@ -8,7 +8,7 @@ doneWhen:
   args:
     file: solve/oracle/release-0-3-queryable-core.json
 quests:
-  - partition-key-ordering-owner-completion-v4
+  - partition-key-ordering-owner-completion-v5
 authorizes:
   - architecture
   - docs/development/agpl-feature-map.md
@@ -206,11 +206,19 @@ could bypass validation through the early equality shortcut, and split-target
 destructuring still consumed mutable Array iteration while its Array.isArray
 witness was vacuous.
 
+A1-v4 then consolidated the v3 review findings and reached a sealed 34 → 0
+attempt with focused proofs and guardrails. Final category-complete Copilot
+review on PR #86 still found two production gaps (raw numeric subtraction could
+return noncanonical/non-finite comparator results for finite inputs, and falsey
+non-string table IDs could be normalized to absence) plus two verification
+gaps (no explicit enumerable prototype-pollution fixture and combined rather
+than isolated Object intrinsic controls).
+
 The active A1 Quest is now
-`partition-key-ordering-owner-completion-v4`. It preserves the proven v3
-ordering/owner behavior while requiring validation before equality and
-iterator-independent split-target selection with an engaged Array-intrinsic
-control.
+`partition-key-ordering-owner-completion-v5`. It preserves every v4-proven
+ordering/ownership property while requiring canonical -1/0/1 comparator
+results, own-data table-ID reads that preserve falsey values for validation,
+explicit prototype-pollution fixtures, and isolated Object intrinsic controls.
 
 After that, the safe-before-cutover access foundation proceeds through persisted
 boundary representation, declared PK consumption, compound-PK narrowing, local
