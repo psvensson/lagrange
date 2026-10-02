@@ -19,6 +19,7 @@ import {
   STORAGE_CAPACITY_DEFAULT,
 } from '../rebalancer/storage-capacity-constants.js';
 import {
+  cloneStringArray as cloneEvaluationContextStringArray,
   createPartitionSplitMergeManagerCoreMethods,
 } from './partition-split-merge-manager-core-methods.js';
 import {
@@ -41,26 +42,6 @@ const DEFAULT_EVALUATION_TRIGGER = 'direct_call';
 const REACTIVE_EVALUATION_TRIGGER = 'reactive_request';
 const PERIODIC_EVALUATION_TRIGGER = 'periodic_timer';
 const REACTIVE_PRESSURE_BYPASS_REASON_WRITE_ACTIVITY = 'write_activity';
-/**
- * Clone one list of string-like values into a stable diagnostics array.
- * @param {Array<*>} values
- * @return {Array<string>}
- */
-function cloneStringArray(values) {
-  if (!Array.isArray(values)) {
-    return [];
-  }
-  const cloned = [];
-  for (const value of values) {
-    const normalizedValue = String(value || '');
-    if (!normalizedValue || cloned.includes(normalizedValue)) {
-      continue;
-    }
-    cloned.push(normalizedValue);
-  }
-  return cloned;
-}
-
 /**
  * PartitionSplitMergeManager handles automatic partition splitting and merging
  * based on storage and traffic thresholds.
@@ -178,7 +159,7 @@ Object.assign(
   createPartitionSplitMergeManagerCoreMethods(),
   createPartitionSplitMergeManagerTransitionMethods(),
   createPartitionSplitMergeManagerEvaluationMethods({
-    cloneStringArray,
+    cloneStringArray: cloneEvaluationContextStringArray,
     operationState: OperationState,
     defaultEvaluationTrigger: DEFAULT_EVALUATION_TRIGGER,
     periodicEvaluationTrigger: PERIODIC_EVALUATION_TRIGGER,
