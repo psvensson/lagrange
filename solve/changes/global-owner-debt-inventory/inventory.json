@@ -5,13 +5,13 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 423921,
-        "sha256": "cd3b27243b1776c1b1e0dafcdab09598a0549f962afe0bcd4e328d79a1c9ece6"
+        "bytes": 423715,
+        "sha256": "e72d35beca1eee076f6eb14dadf2aab229c50a349e7279600ffb05e64da6cec1"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
-        "bytes": 35768,
-        "sha256": "e0ddb636ea27aba29a92e9ca8c431b8d7647575d9616c237d0a6e724970c9150"
+        "bytes": 36005,
+        "sha256": "5d20aa1aa46351a9ac0c8237b1f2d476460fabf005e1e5a3161baf5a2f3294b6"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2690505,
-        "sha256": "bcaa755eed9ddc861707008480474d83a5ec9a98563bd97eb76b363238dd1d75"
+        "bytes": 2690904,
+        "sha256": "159fe12f02eb12425dfd1b1bc52fbde9ab02c48d60b55b095d067ac9362a8347"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "09c630fd856ce740f69d6eb67f15537f34ca8ea900bb3f1e47e218e5589b54a9"
+        "sha256": "e23e04e76f422e460e506ba6daa3cf9d906b162bdb68e4146be0cd0733516c2a"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "d64bb115d285b9d4a6535c2933036aca55e9c853fdf73a4fe590106c9e9106be"
+        "sha256": "f60c2370709d8828fcc8a378ac5d895c516bdd27d953de1e3ccbdb54aa16b66f"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,28 +62,28 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "21656672879e21433884ca8c8183c78cf195dfb4087ca3efff41898e0f93d63f"
+    "inputDigest": "1ce564bc44b02768c30006f7aeed82d0e5cd96fb5e2d938bbd01b7940061ea6e"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 423921,
-        "sha256": "cd3b27243b1776c1b1e0dafcdab09598a0549f962afe0bcd4e328d79a1c9ece6"
+        "bytes": 423715,
+        "sha256": "e72d35beca1eee076f6eb14dadf2aab229c50a349e7279600ffb05e64da6cec1"
       },
-      "declaredCount": 1796,
-      "observedCount": 1796,
-      "assignedCount": 1796
+      "declaredCount": 1795,
+      "observedCount": 1795,
+      "assignedCount": 1795
     },
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
-        "bytes": 35768,
-        "sha256": "e0ddb636ea27aba29a92e9ca8c431b8d7647575d9616c237d0a6e724970c9150"
+        "bytes": 36005,
+        "sha256": "5d20aa1aa46351a9ac0c8237b1f2d476460fabf005e1e5a3161baf5a2f3294b6"
       },
-      "declaredCount": 155,
-      "observedCount": 155,
-      "assignedCount": 155
+      "declaredCount": 156,
+      "observedCount": 156,
+      "assignedCount": 156
     },
     "fileSize": {
       "authority": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "09c630fd856ce740f69d6eb67f15537f34ca8ea900bb3f1e47e218e5589b54a9"
+          "sha256": "e23e04e76f422e460e506ba6daa3cf9d906b162bdb68e4146be0cd0733516c2a"
         },
         "cloneGroups": 53,
         "duplicatedLines": 1695,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "d64bb115d285b9d4a6535c2933036aca55e9c853fdf73a4fe590106c9e9106be"
+          "sha256": "f60c2370709d8828fcc8a378ac5d895c516bdd27d953de1e3ccbdb54aa16b66f"
         },
         "cloneGroups": 765,
         "duplicatedLines": 29385,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2690505,
-        "sha256": "bcaa755eed9ddc861707008480474d83a5ec9a98563bd97eb76b363238dd1d75"
+        "bytes": 2690904,
+        "sha256": "159fe12f02eb12425dfd1b1bc52fbde9ab02c48d60b55b095d067ac9362a8347"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "7870e9300ce45bd7ed2991b98db58cc4ca5a1c7865f609a9c611a0773da85ced",
-      "moduleCount": 5155,
-      "edgeCount": 25065,
+      "sourceDigest": "7688d0a2d6760a77792c45f52ea71ce7cb5eab0f4ec87abf6c87262910e6e5b0",
+      "moduleCount": 5156,
+      "edgeCount": 25068,
       "unresolvedCount": 36
     }
   },
@@ -185,11 +185,11 @@
     "sourceSignalCount": 2596,
     "assignedSignalCount": 2596,
     "uniqueAssignmentCount": 2596,
-    "digest": "2211824ce41947f6523830282f8fa03188d5111d31bd9f20281b97f49d97f109"
+    "digest": "282a38fe44abfeb185d87d76152ef93b7afa4ab952ff96d6fd4fd1f5b6f8838f"
   },
   "signalCounts": {
-    "cognitive": 155,
-    "complexity": 1796,
+    "cognitive": 156,
+    "complexity": 1795,
     "duplication": 559,
     "fileSize": 47,
     "lintExclusion": 39
@@ -854,18 +854,18 @@
       "ownerAreas": [
         "src/partition"
       ],
-      "fileCount": 18,
-      "signalCount": 31,
-      "complexity": 25,
+      "fileCount": 17,
+      "signalCount": 30,
+      "complexity": 24,
       "cognitive": 4,
       "oversizedFiles": 0,
       "duplicatedLines": 50,
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 67,
-      "importOut": 100,
-      "score": 137,
+      "importIn": 54,
+      "importOut": 99,
+      "score": 133,
       "topPaths": [
         "src/partition/partition-sql-parser.js",
         "src/partition/managed-split-workflow-state-methods.js",
@@ -1282,7 +1282,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 631,
+      "importIn": 632,
       "importOut": 43,
       "score": 56,
       "topPaths": [
@@ -1655,6 +1655,34 @@
       ]
     },
     {
+      "key": "area:scripts/checks",
+      "owner": null,
+      "boundary": "scripts/checks",
+      "classification": "tool-owner-area",
+      "ownerAreas": [
+        "scripts/checks"
+      ],
+      "fileCount": 8,
+      "signalCount": 8,
+      "complexity": 0,
+      "cognitive": 4,
+      "oversizedFiles": 0,
+      "duplicatedLines": 106,
+      "cloneTouches": 4,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 19,
+      "importOut": 30,
+      "score": 42.6,
+      "topPaths": [
+        "scripts/checks/impact-proof-cone-inputs.js",
+        "scripts/checks/partition-key-ordering-owner-completion-v7.js",
+        "scripts/checks/raft-rs-operation-boundary-audit.js",
+        "scripts/checks/test-primary-classification.js",
+        "scripts/checks/partition-key-ordering-owner-completion-v2.js"
+      ]
+    },
+    {
       "key": "area:src/wasm-service",
       "owner": null,
       "boundary": "src/wasm-service",
@@ -1680,34 +1708,6 @@
         "src/wasm-service/wasm-service-models.js",
         "src/wasm-service/wasm-service-replica.js",
         "src/wasm-service/manifest-runtime-validator.js"
-      ]
-    },
-    {
-      "key": "area:scripts/checks",
-      "owner": null,
-      "boundary": "scripts/checks",
-      "classification": "tool-owner-area",
-      "ownerAreas": [
-        "scripts/checks"
-      ],
-      "fileCount": 7,
-      "signalCount": 7,
-      "complexity": 0,
-      "cognitive": 3,
-      "oversizedFiles": 0,
-      "duplicatedLines": 106,
-      "cloneTouches": 4,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 19,
-      "importOut": 27,
-      "score": 34.6,
-      "topPaths": [
-        "scripts/checks/impact-proof-cone-inputs.js",
-        "scripts/checks/raft-rs-operation-boundary-audit.js",
-        "scripts/checks/test-primary-classification.js",
-        "scripts/checks/partition-key-ordering-owner-completion-v2.js",
-        "scripts/checks/partition-key-ordering-owner-completion.js"
       ]
     },
     {
