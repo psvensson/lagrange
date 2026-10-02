@@ -59,55 +59,96 @@ async function tableIdValidationProblems() {
   return problems;
 }
 
-async function arrayIntrinsicProblems() {
+async function runEvaluationIntrinsicCase(label, mutate, restore) {
   const rows = [
     buildProbeRow('b', 'm', null),
     buildProbeRow('a', null, 'm'),
   ];
-  const priorIterator = Object.getOwnPropertyDescriptor(rows, Symbol.iterator);
-  const priorSort = Array.prototype.sort;
-  const priorIsArray = Array.isArray;
-  const priorApply = Reflect.apply;
-  let problems = 0;
   const manager = managerForProbe();
   manager.listPartitions = () => rows;
+  let problems = 0;
   try {
-    Object.defineProperty(rows, Symbol.iterator, {
-      configurable: true,
-      value() {
-        throw new Error('partition iterator executed');
-      },
-    });
-    Array.prototype.sort = () => {
-      throw new Error('live Array.prototype.sort executed');
-    };
-    Array.isArray = () => false;
-    Reflect.apply = () => {
-      throw new Error('live Reflect.apply executed');
-    };
+    mutate(rows);
     const results = await manager.evaluateAllPartitions();
     if (results.mergeCandidates.length !== 1 ||
         results.mergeCandidates[0]?.leftId !== 'a' ||
         results.mergeCandidates[0]?.rightId !== 'b') {
+      process.stderr.write(label + ': wrong merge candidate result\n');
       problems += 1;
     }
   } catch (error) {
     process.stderr.write(
-      'evaluation-array-intrinsic-isolation: ' +
-      String(error?.message || error) + '\n',
+      label + ': ' + String(error?.message || error) + '\n',
     );
     problems += 1;
   } finally {
-    Reflect.apply = priorApply;
-    Array.isArray = priorIsArray;
-    Array.prototype.sort = priorSort;
-    if (priorIterator) {
-      Object.defineProperty(rows, Symbol.iterator, priorIterator);
-    } else {
-      Reflect.deleteProperty(rows, Symbol.iterator);
-    }
+    restore(rows);
     manager.shutdown();
   }
+  return problems;
+}
+
+async function arrayIntrinsicProblems() {
+  let problems = 0;
+
+  let priorIterator;
+  problems += await runEvaluationIntrinsicCase(
+    'evaluation-array-iterator-isolation',
+    (rows) => {
+      priorIterator = Object.getOwnPropertyDescriptor(rows, Symbol.iterator);
+      Object.defineProperty(rows, Symbol.iterator, {
+        configurable: true,
+        value() {
+          throw new Error('partition iterator executed');
+        },
+      });
+    },
+    (rows) => {
+      if (priorIterator) {
+        Object.defineProperty(rows, Symbol.iterator, priorIterator);
+      } else {
+        Reflect.deleteProperty(rows, Symbol.iterator);
+      }
+    },
+  );
+
+  const priorIsArray = Array.isArray;
+  problems += await runEvaluationIntrinsicCase(
+    'evaluation-array-isarray-capture',
+    () => {
+      Array.isArray = () => false;
+    },
+    () => {
+      Array.isArray = priorIsArray;
+    },
+  );
+
+  const priorSort = Array.prototype.sort;
+  problems += await runEvaluationIntrinsicCase(
+    'evaluation-array-sort-capture',
+    () => {
+      Array.prototype.sort = () => {
+        throw new Error('live Array.prototype.sort executed');
+      };
+    },
+    () => {
+      Array.prototype.sort = priorSort;
+    },
+  );
+
+  const priorApply = Reflect.apply;
+  problems += await runEvaluationIntrinsicCase(
+    'evaluation-reflect-apply-capture',
+    () => {
+      Reflect.apply = () => {
+        throw new Error('live Reflect.apply executed');
+      };
+    },
+    () => {
+      Reflect.apply = priorApply;
+    },
+  );
+
   return problems;
 }
 
