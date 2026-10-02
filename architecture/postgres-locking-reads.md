@@ -86,3 +86,53 @@ benchmark must not claim that TiDB `FOR UPDATE` and Lagrange ordinary snapshot
 reads use equivalent locking mechanisms. Once this capability lands, Scenario A
 should add a contention profile that exercises the public PostgreSQL locking-read
 path directly.
+
+
+## Sealed Phase 0.3 wait/conflict policy
+
+The machine-readable owner/transition table is
+`solve/specs/release-0-3-queryable-core/locking-read-wait-policy.json`.
+It is the Phase 0.3 authority for conflict, release, timeout, cancellation,
+crash, and recovery behavior.
+
+The initial locking-read slice is deliberately **fail-fast**, not blocking.
+When a partition transaction participant finds a reservation owned by another
+transaction it returns a typed reservation-conflict refusal immediately. It
+does not enqueue the requester, poll for release, or create a wake-up
+obligation. PG wire transports that outcome and remains transport-only.
+
+This choice matches the transaction model already present in Lagrange and keeps
+one owner per concern:
+
+- the partition transaction participant owns durable/replicated reservation
+  acquire, idempotent same-transaction reacquire, conflict detection, and the
+  participant-side effect of release;
+- `DistributedTransactionCoordinator` owns transaction lifetime, participant
+  enlistment, timeout/cancellation resolution, whole-transaction rollback,
+  commit decision, and recovery re-drive;
+- no session-local lock map, local mutex, benchmark retry loop, or node-local
+  cache is reservation authority.
+
+A conflict on **any** participant aborts the locking operation's transaction
+and drives whole-transaction rollback. Reservations already acquired on earlier
+participants are therefore released through that rollback rather than retained
+while the transaction waits for another participant. The Phase 0.3 slice has
+no hold-and-wait state, no waiter queue, and consequently no wait-for graph or
+deadlock detector.
+
+Reservation lifetime is transaction-owned rather than TTL-owned. A participant
+must not expire an unresolved reservation merely because its local clock
+advances. Commit, rollback, transaction timeout, explicit cancellation, or
+recovery resolution is what authorizes release. If a participant crashes,
+durable reservation state remains unresolved state for transaction recovery;
+restart must neither erase it nor invent a terminal outcome.
+
+The observable failures remain typed and distinct: reservation contention,
+transaction timeout, cancellation, and transaction abort must not collapse into
+one generic retry result. This lets callers decide whether and when to retry
+without moving retry correctness into PG wire.
+
+Blocking wait semantics, `NOWAIT`, `SKIP LOCKED`, and additional PostgreSQL
+row-lock strengths are not silently layered on this policy. Introducing a
+waiter queue or wake-up owner requires a superseding policy because it would
+change the deadlock and recovery model.
