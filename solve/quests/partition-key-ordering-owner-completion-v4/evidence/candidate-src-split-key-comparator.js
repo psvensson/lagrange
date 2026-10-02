@@ -25,6 +25,8 @@ const SUPPORTED_KEY_TYPE_LIST = 'number/string/buffer';
 const TEXT_ENCODING = 'utf8';
 const ErrorCtor = Error;
 const arrayIsArray = Array.isArray;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
 const bufferCompare = Buffer.compare.bind(Buffer);
 const bufferFrom = Buffer.from.bind(Buffer);
 const bufferIsBuffer = Buffer.isBuffer.bind(Buffer);
@@ -50,6 +52,11 @@ function compareBinaryText(left, right) {
     bufferFrom(left, TEXT_ENCODING),
     bufferFrom(right, TEXT_ENCODING),
   );
+}
+
+function compareNumbers(left, right) {
+  const delta = left - right;
+  return delta === 0 ? COMPARISON_RESULT.EQUAL : delta;
 }
 
 /**
@@ -86,30 +93,56 @@ export function compareSplitKey(value, splitKey) {
     return bufferCompare(value, splitKey);
   }
   if (splitKeyType === SPLIT_KEY_TYPE.NUMBER) {
-    return value - splitKey;
+    return compareNumbers(value, splitKey);
   }
   return compareBinaryText(value, splitKey);
 }
 
+function readOwnDataValue(record, key) {
+  if (record === null || typeof record !== 'object') {
+    return undefined;
+  }
+  const descriptor = objectGetOwnPropertyDescriptor(record, key);
+  if (!descriptor || !objectHasOwn(descriptor, 'value')) {
+    return undefined;
+  }
+  return descriptor.value;
+}
+
+function readTargetPartitionIds(metadata) {
+  const targetPartitionIds = readOwnDataValue(metadata, 'targetPartitionIds');
+  if (!arrayIsArray(targetPartitionIds)) {
+    return {leftPartitionId: undefined, rightPartitionId: undefined};
+  }
+  const lengthDescriptor =
+    objectGetOwnPropertyDescriptor(targetPartitionIds, 'length');
+  if (!lengthDescriptor ||
+      !objectHasOwn(lengthDescriptor, 'value') ||
+      lengthDescriptor.value < 2) {
+    return {leftPartitionId: undefined, rightPartitionId: undefined};
+  }
+  return {
+    leftPartitionId: readOwnDataValue(targetPartitionIds, '0'),
+    rightPartitionId: readOwnDataValue(targetPartitionIds, '1'),
+  };
+}
+
 /**
  * Resolve the child partition ID for one partition-key value through the
- * typed comparator.
+ * typed comparator. Split metadata is consumed from own data properties only;
+ * inherited/accessor fields and iterator behavior are not routing authority.
  * @param {*} value - Primary-key value.
  * @param {Object} metadata - Split metadata (splitKey, targetPartitionIds).
  * @return {string} Target child partition ID.
  */
 export function resolveSplitTargetPartitionId(value, metadata = {}) {
-  const targetPartitionIds = metadata?.targetPartitionIds;
-  const leftPartitionId = arrayIsArray(targetPartitionIds) ?
-    targetPartitionIds[0] :
-    undefined;
-  const rightPartitionId = arrayIsArray(targetPartitionIds) ?
-    targetPartitionIds[1] :
-    undefined;
+  const {leftPartitionId, rightPartitionId} =
+    readTargetPartitionIds(metadata);
   if (value === null || value === void 0) {
     return rightPartitionId;
   }
-  return compareSplitKey(value, metadata.splitKey) < COMPARISON_RESULT.EQUAL ?
+  const splitKey = readOwnDataValue(metadata, 'splitKey');
+  return compareSplitKey(value, splitKey) < COMPARISON_RESULT.EQUAL ?
     leftPartitionId :
     rightPartitionId;
 }
@@ -126,7 +159,7 @@ function isTextEncodedNumber(value) {
 
 function compareWithinType(keyType, a, b) {
   if (keyType === SPLIT_KEY_TYPE.BUFFER) return bufferCompare(a, b);
-  if (keyType === SPLIT_KEY_TYPE.NUMBER) return a - b;
+  if (keyType === SPLIT_KEY_TYPE.NUMBER) return compareNumbers(a, b);
   return compareBinaryText(a, b);
 }
 
@@ -145,10 +178,10 @@ function compareAbsentKeys(a, b) {
 
 function compareNumberWithTextEncodedNumber(a, b, aType, bType) {
   if (aType === SPLIT_KEY_TYPE.NUMBER && isTextEncodedNumber(b)) {
-    return a - numberFrom(b);
+    return compareNumbers(a, numberFrom(b));
   }
   if (bType === SPLIT_KEY_TYPE.NUMBER && isTextEncodedNumber(a)) {
-    return numberFrom(a) - b;
+    return compareNumbers(numberFrom(a), b);
   }
   return null;
 }
