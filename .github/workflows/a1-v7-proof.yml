@@ -61,6 +61,8 @@ jobs:
             src/partition/split-key-comparator.js \
             src/partition/partition-split-merge-manager-core-methods.js \
             src/partition/partition-split-merge-manager-evaluation-methods.js \
+            src/partition/partition-split-merge-manager-transition-methods.js \
+            src/partition/partition-split-merge-manager-transition-methods.js \
             test/partition/routing-key-comparator.test.js \
             test/partition/merge-auto-execution.test.js \
             scripts/checks/partition-key-ordering-owner-completion-v7.js
