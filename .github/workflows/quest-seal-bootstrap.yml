@@ -1,5 +1,4 @@
-name: quest-a1-v5-seal-and-attempt
-# retry after v5 owner-expression probe fix
+name: quest-a1-v6-seal-and-attempt
 
 on:
   push:
@@ -14,7 +13,7 @@ permissions:
 jobs:
   prove:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - name: Checkout exact event SHA
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -42,21 +41,21 @@ jobs:
             test/shards/resource-classes.json \
             test/shards/subsystem-classes.json
 
-      - name: Record final v4 rejection, supersede it, and seal v5
+      - name: Record category-complete v5 rejection, supersede it, and seal v6
         shell: bash
         run: |
           set -euo pipefail
           node scripts/solve.js note \
-            --id partition-key-ordering-owner-completion-v4 \
-            --verification "REJECT: final category-complete Copilot PR #86 review of exact v4 candidate head 0b8689a7fc25a51c175670d6e2c8e479d8cffa1a found raw numeric subtraction returning noncanonical/non-finite derived results, falsey non-string table IDs normalized to absence, missing enumerable Object/Array prototype-pollution coverage, and combined rather than isolated Object descriptor/hasOwn controls." \
-            --verifier subagent:github-copilot-pr86 \
+            --id partition-key-ordering-owner-completion-v5 \
+            --verification "REJECT: newer category-complete Copilot PR #87 review of exact v5 candidate head 15989254e712fa066e49f220705edd1021df72b4 found one production defect: compareRoutingKeys applied absent-bound ordering before validating the non-absent peer, so unsupported/non-finite values paired with null/undefined could bypass typed refusal. This newer category-complete rejection governs over the earlier lightweight ACCEPT on the same candidate." \
+            --verifier subagent:github-copilot-pr87-category-complete \
             --verdict reject
           node scripts/solve.js note \
-            --id partition-key-ordering-owner-completion-v4 \
-            --superseded "Final category-complete review found two production and two verifier gaps outside the immutable v4 predicate; preserve v4 and continue as v5." \
-            --by partition-key-ordering-owner-completion-v5
-          node scripts/solve.js start --id partition-key-ordering-owner-completion-v5
-          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v5
+            --id partition-key-ordering-owner-completion-v5 \
+            --superseded "Category-complete PR #87 review found the invalid-versus-absent validation gap outside v5's immutable predicate; preserve v5 and continue as v6." \
+            --by partition-key-ordering-owner-completion-v6
+          node scripts/solve.js start --id partition-key-ordering-owner-completion-v6
+          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v6
 
       - name: Baseline scoped guardrails
         shell: bash
@@ -72,64 +71,51 @@ jobs:
           node scripts/check-runtime-grammar-contracts.js "${files[@]}"
           node scripts/check-file-size-thresholds.js
 
-      - name: Install v5 witnesses
+      - name: Install v6 witnesses
         shell: bash
         run: |
           set -euo pipefail
-          evidence=solve/quests/partition-key-ordering-owner-completion-v5/evidence
+          evidence=solve/quests/partition-key-ordering-owner-completion-v6/evidence
           cp "$evidence/candidate-test-routing-key-comparator.test.js" \
             test/partition/routing-key-comparator.test.js
           cp "$evidence/candidate-test-merge-auto-execution.test.js" \
             test/partition/merge-auto-execution.test.js
 
-      - name: Prove exact rejected v4 candidate against v5 findings
+      - name: Prove exact rejected v5 candidate red only at invalid-absent gap
         shell: bash
         run: |
           set -euo pipefail
-          v4=solve/quests/partition-key-ordering-owner-completion-v4/evidence
-          cp "$v4/candidate-src-split-key-comparator.js" \
+          v5=solve/quests/partition-key-ordering-owner-completion-v5/evidence
+          cp "$v5/candidate-src-split-key-comparator.js" \
             src/partition/split-key-comparator.js
-          cp "$v4/candidate-src-split-merge-core.js" \
+          cp "$v5/candidate-src-split-merge-core.js" \
             src/partition/partition-split-merge-manager-core-methods.js
-          cp "$v4/candidate-src-split-merge-evaluation.js" \
+          cp "$v5/candidate-src-split-merge-evaluation.js" \
             src/partition/partition-split-merge-manager-evaluation-methods.js
+
+          node scripts/checks/partition-key-ordering-owner-completion-v5.js
 
           set +e
           node --test test/partition/routing-key-comparator.test.js \
-            > /tmp/a1-v5-routing-v4-red.log 2>&1
+            > /tmp/a1-v6-routing-v5-red.log 2>&1
           routing_status=$?
-          node test/partition/merge-auto-execution.test.js \
-            > /tmp/a1-v5-merge-v4-red.log 2>&1
-          merge_status=$?
-          node scripts/checks/partition-key-ordering-owner-completion-v5.js \
-            > /tmp/a1-v5-probe-v4-red.log 2>&1
+          node scripts/checks/partition-key-ordering-owner-completion-v6.js \
+            > /tmp/a1-v6-probe-v5-red.log 2>&1
           probe_status=$?
           set -e
 
-          cat /tmp/a1-v5-routing-v4-red.log
-          cat /tmp/a1-v5-merge-v4-red.log
-          cat /tmp/a1-v5-probe-v4-red.log
-
+          cat /tmp/a1-v6-routing-v5-red.log
+          cat /tmp/a1-v6-probe-v5-red.log
           test "$routing_status" -ne 0
-          test "$merge_status" -ne 0
           test "$probe_status" -ne 0
-          grep -E "not ok.*finite numeric comparisons return canonical finite comparator values" \
-            /tmp/a1-v5-routing-v4-red.log >/dev/null
-          grep -E "not ok.*merge table IDs preserve falsey values" \
-            /tmp/a1-v5-merge-v4-red.log >/dev/null
+          grep -E "not ok.*invalid keys cannot bypass validation through absent-bound ordering" \
+            /tmp/a1-v6-routing-v5-red.log >/dev/null
 
-          grep -E "ok [0-9]+ - split target routing captures Object.getOwnPropertyDescriptor" \
-            /tmp/a1-v5-routing-v4-red.log >/dev/null
-          grep -E "ok [0-9]+ - split target routing captures Object.hasOwn" \
-            /tmp/a1-v5-routing-v4-red.log >/dev/null
-          grep -E "ok [0-9]+ - split metadata ignores enumerable Object and Array prototype pollution" \
-            /tmp/a1-v5-routing-v4-red.log >/dev/null
-
-      - name: Install v5 source candidate
+      - name: Install v6 source candidate
         shell: bash
         run: |
           set -euo pipefail
-          evidence=solve/quests/partition-key-ordering-owner-completion-v5/evidence
+          evidence=solve/quests/partition-key-ordering-owner-completion-v6/evidence
           cp "$evidence/candidate-src-split-key-comparator.js" \
             src/partition/split-key-comparator.js
           cp "$evidence/candidate-src-split-merge-core.js" \
@@ -137,7 +123,7 @@ jobs:
           cp "$evidence/candidate-src-split-merge-evaluation.js" \
             src/partition/partition-split-merge-manager-evaluation-methods.js
 
-      - name: Prove v5 candidate green
+      - name: Prove v6 candidate green
         shell: bash
         run: |
           set -euo pipefail
@@ -146,7 +132,8 @@ jobs:
           node test/partition/merge-auto-execution.test.js
           node test/partition/partition-split-merge-manager.test.js
           node scripts/checks/partition-key-ordering-owner-completion-v5.js
-          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v5
+          node scripts/checks/partition-key-ordering-owner-completion-v6.js
+          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v6
 
       - name: Candidate guardrails
         shell: bash
@@ -166,7 +153,7 @@ jobs:
             test/partition/merge-auto-execution.test.js
           git diff --check
 
-      - name: Record v5 content-bound attempt
+      - name: Record v6 content-bound attempt
         shell: bash
         run: |
           set -euo pipefail
@@ -177,13 +164,13 @@ jobs:
             test/partition/routing-key-comparator.test.js \
             test/partition/merge-auto-execution.test.js | tr '\n' ';')"
           node scripts/solve.js note \
-            --id partition-key-ordering-owner-completion-v5 \
-            --finding "A1-v5 GitHub Actions run ${GITHUB_RUN_ID}: exact rejected v4 candidate is right-reason red for canonical finite numeric results and falsey/non-own table-ID handling; new prototype-pollution and isolated Object-intrinsic witnesses are engaged at their real consumers; exact v5 candidate is green. Candidate sha256: ${candidate_hashes}" \
+            --id partition-key-ordering-owner-completion-v6 \
+            --finding "A1-v6 GitHub Actions run ${GITHUB_RUN_ID}: exact rejected v5 candidate keeps v5 probe green but is right-reason red at invalid-versus-absent validation; exact v6 candidate makes the new witness plus both v5/v6 probes green. Candidate sha256: ${candidate_hashes}" \
             --kind evidence \
             --evidence "github-actions:${GITHUB_RUN_ID}"
           node scripts/solve.js note \
-            --id partition-key-ordering-owner-completion-v5 \
-            --attempt "A1-v5 closes final PR #86 findings: canonical finite -1/0/1 numeric comparison, own-data table-ID reads preserving falsey values for validation, explicit Object/Array prototype-pollution coverage, and isolated Object intrinsic controls; focused tests, doneWhen and guardrails green in GitHub Actions run ${GITHUB_RUN_ID}."
+            --id partition-key-ordering-owner-completion-v6 \
+            --attempt "A1-v6 preserves the entire v5 candidate and validates every non-absent operand before absent-bound ordering; focused tests, v5/v6 doneWhen probes and guardrails are green in GitHub Actions run ${GITHUB_RUN_ID}."
 
       - name: Restore product tree and preserve Solver records
         shell: bash
@@ -200,9 +187,9 @@ jobs:
 
           changed="$(git status --porcelain | awk '{print $2}' | sort)"
           expected="$(printf '%s\n' \
-            solve/quests/partition-key-ordering-owner-completion-v4/log.ndjson \
             solve/quests/partition-key-ordering-owner-completion-v5/log.ndjson \
-            solve/quests/partition-key-ordering-owner-completion-v5/quest.json | sort)"
+            solve/quests/partition-key-ordering-owner-completion-v6/log.ndjson \
+            solve/quests/partition-key-ordering-owner-completion-v6/quest.json | sort)"
           if [ "$changed" != "$expected" ]; then
             echo "Unexpected post-attempt mutation set:"
             printf '%s\n' "$changed"
@@ -219,8 +206,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- \
-            solve/quests/partition-key-ordering-owner-completion-v4/log.ndjson \
-            solve/quests/partition-key-ordering-owner-completion-v5/quest.json \
-            solve/quests/partition-key-ordering-owner-completion-v5/log.ndjson
-          git commit -m "quest: seal and record A1-v5 attempt"
+            solve/quests/partition-key-ordering-owner-completion-v5/log.ndjson \
+            solve/quests/partition-key-ordering-owner-completion-v6/quest.json \
+            solve/quests/partition-key-ordering-owner-completion-v6/log.ndjson
+          git commit -m "quest: seal and record A1-v6 attempt"
           git push origin HEAD:refs/heads/"$BRANCH"
