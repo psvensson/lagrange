@@ -194,8 +194,13 @@ function cloneEvaluationPartitionRows(partitions) {
   if (source === null) {
     throw new TypeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
   }
+  return source;
+}
+
+function canonicalizeEvaluationPartitionRows(partitions) {
+  const source = cloneEvaluationPartitionRows(partitions);
   const rows = [];
-  for (let index = 0; index < length; index += 1) {
+  for (let index = 0; index < source.length; index += 1) {
     appendOwnArrayValue(rows, copyEvaluationPartitionRow(source[index]));
   }
   return rows;
@@ -366,6 +371,19 @@ class PartitionSplitMergeManagerCoreMethods {
   }
 
   /**
+   * Canonicalize evaluation rows after the sealed array-copy boundary.
+   * The public/helper seam preserves row identity; the live evaluator uses
+   * null-prototype own-data copies so later awaits cannot observe hostile
+   * accessors, inherited fields, proxies, or source mutation.
+   * @param {*} partitions
+   * @return {Array<Object>}
+   * @private
+   */
+  canonicalizeEvaluationPartitions(partitions) {
+    return canonicalizeEvaluationPartitionRows(partitions);
+  }
+
+  /**
    * Normalize a partition identifier from either a string or row object.
    * @param {string|Object} partition - Partition descriptor.
    * @return {string|null} Partition ID.
@@ -474,7 +492,7 @@ class PartitionSplitMergeManagerCoreMethods {
    * @private
    */
   sortEvaluationPartitions(partitions) {
-    const rows = cloneEvaluationPartitionRows(partitions);
+    const rows = canonicalizeEvaluationPartitionRows(partitions);
     return sortArrayWithCapturedIntrinsic(rows, (left, right) => {
       const tableOrder = compareEvaluationTableIds(
         this.getPartitionTableId(left),
