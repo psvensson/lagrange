@@ -1,0 +1,33 @@
+name: request-copilot-pr83
+
+on:
+  push:
+    branches:
+      - ops/request-copilot-pr83
+    paths:
+      - .github/workflows/request-copilot-pr83.yml
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  request:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Request Copilot review of exact clean A1-v3 head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          expected="4da70b209e6e51d16e4a4c6f9e976445dfaf471a"
+          actual="$(gh pr view 83 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
+          if [ "$actual" != "$expected" ]; then
+            echo "PR #83 head changed: expected $expected, got $actual"
+            exit 1
+          fi
+          gh pr edit 83 --repo psvensson/lagrange --add-reviewer @copilot
+          gh pr view 83 --repo psvensson/lagrange \
+            --json number,state,isDraft,headRefOid,url,reviewRequests
