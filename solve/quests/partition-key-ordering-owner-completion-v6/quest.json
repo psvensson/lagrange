@@ -1,0 +1,56 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-key-ordering-owner-completion-v6",
+  "statement": "Partition-key routing validates every non-absent operand before applying absent-bound ordering: null/undefined remain valid unbounded sentinels, but unsupported, boxed, exotic, boolean, Symbol and non-finite values paired with an absent key fail closed through the typed mismatch owner; all A1-v5 canonical -1/0/1 ordering, SQLite-BINARY UTF-8, numeric/TEXT compatibility, own-data metadata/table-ID hardening, prototype-pollution defenses, mutable-intrinsic capture and actual consumer ownership remain unchanged.",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "roadmapRow": "RM-0.3-qs-typed-key-ordering",
+    "specRef": "solve/specs/release-0-3-queryable-core/tasks.md#A1",
+    "planDoc": "solve/epics/release-0-3-queryable-core.md"
+  },
+  "verificationTemplates": [
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/partition-key-ordering-owner-completion-v6.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "supersedes-reviewed-v5",
+      "statement": "Supersedes sealed partition-key-ordering-owner-completion-v5 after the newer category-complete Copilot review on PR #87 rejected the exact v5 candidate: compareRoutingKeys applied absent-key ordering before validating the non-absent peer, allowing invalid/non-finite values such as NaN or Symbol to bypass typed refusal when paired with null/undefined. The earlier lightweight ACCEPT is non-governing; preserve v5 predicate and evidence unchanged."
+    },
+    {
+      "id": "validate-non-absent-before-absent-order",
+      "statement": "For compareRoutingKeys, every operand that is not null/undefined is type-resolved and invalid/non-finite values are refused before an absent-key ordering can return. Both directions are covered: invalid vs absent and absent vs invalid."
+    },
+    {
+      "id": "preserve-valid-absent-semantics",
+      "statement": "Null/undefined remain valid unbounded range sentinels. Two absent keys compare equal; absent versus any supported finite number/primitive string/Buffer sorts left; the supported value versus absent sorts right."
+    },
+    {
+      "id": "preserve-v5",
+      "statement": "The exact accepted parts of v5 remain intact: canonical finite -1/0/1 results, SQLite BINARY UTF-8 ordering, numeric/TEXT compatibility, validation before same-reference equality, own-data iterator-free split metadata, own-data coercion-free merge table IDs, explicit prototype-pollution defenses, isolated mutable-intrinsic controls, and actual KeyRange/PartitionResolver/QueryGroup/split-merge owner expressions."
+    },
+    {
+      "id": "controlled-negative",
+      "statement": "The v6 witness is run against the exact rejected v5 candidate and must fail at the named invalid-versus-absent assertion while v5's existing focused suite remains otherwise green. The v6 candidate must then make the witness and both v5/v6 doneWhen probes green."
+    },
+    {
+      "id": "a2-boundary",
+      "statement": "Persisted key type metadata, exact large-integer boundary representation, parser/bind precision, encoding migration and old-boundary revalidation remain A2."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "Any v6 src/ candidate requires a category-complete independent verification newer than its last attempt, covering both sealed verificationTemplates and exact candidate fingerprints."
+    },
+    {
+      "id": "rs-raft-isolation",
+      "statement": "No Raft runtime, consensus transport, lifecycle, membership or formation behavior changes."
+    }
+  ]
+}
