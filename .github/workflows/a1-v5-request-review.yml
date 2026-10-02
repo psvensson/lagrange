@@ -1,0 +1,33 @@
+name: a1-v5-request-independent-review
+
+on:
+  push:
+    branches:
+      - review/a1-v4-partition-key-ordering-final
+    paths:
+      - .github/workflows/a1-v5-request-review.yml
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  request:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Request exact-head Copilot review
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          reviewed_sha="15989254e712fa066e49f220705edd1021df72b4"
+          actual_sha="$(gh pr view 87 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
+          if [ "$actual_sha" != "$reviewed_sha" ]; then
+            echo "PR #87 head changed: expected $reviewed_sha, got $actual_sha"
+            exit 1
+          fi
+          gh pr edit 87 --repo psvensson/lagrange --add-reviewer @copilot
+          gh pr view 87 --repo psvensson/lagrange \
+            --json number,state,isDraft,headRefOid,url,reviewRequests
