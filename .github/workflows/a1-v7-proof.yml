@@ -63,7 +63,6 @@ jobs:
             src/partition/partition-split-merge-manager-core-methods.js \
             src/partition/partition-split-merge-manager-evaluation-methods.js \
             src/partition/partition-split-merge-manager-transition-methods.js \
-            src/partition/partition-split-merge-manager-transition-methods.js \
             test/partition/routing-key-comparator.test.js \
             test/partition/merge-auto-execution.test.js \
             scripts/checks/partition-key-ordering-owner-completion-v7.js
@@ -134,7 +133,8 @@ jobs:
           npm run test:complexity:scoped -- \
             src/partition/split-key-comparator.js \
             src/partition/partition-split-merge-manager-core-methods.js \
-            src/partition/partition-split-merge-manager-evaluation-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js \
+            src/partition/partition-split-merge-manager-transition-methods.js
       - name: Ambient intrinsic guard
         if: steps.refresh.outputs.refreshed != 'true'
         run: node scripts/check-guideline-ambient-intrinsics.js scripts/checks/partition-key-ordering-owner-completion-v7.js
