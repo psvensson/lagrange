@@ -1,4 +1,4 @@
-name: quest-a1-v2-attempt
+name: quest-a1-v2-request-independent-review
 
 on:
   push:
@@ -8,153 +8,20 @@ on:
       - .github/workflows/quest-seal-bootstrap.yml
 
 permissions:
-  contents: write
+  contents: read
+  pull-requests: write
 
 jobs:
-  attempt:
-    name: prove A1-v2 candidate and record attempt only
+  request:
+    name: request Copilot review of exact A1-v2 candidate
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 5
     steps:
-      - name: Checkout exact event SHA
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-          persist-credentials: true
-
-      - name: Set up Node 22
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: "22"
-          package-manager-cache: false
-
-      - name: Install repository dependencies
-        shell: bash
-        run: npm ci
-
-      - name: Confirm sealed A1-v2 baseline is red
-        shell: bash
-        run: |
-          set -euo pipefail
-          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v2
-          set +e
-          node scripts/checks/partition-key-ordering-owner-completion-v2.js
-          status=$?
-          set -e
-          if [ "$status" -eq 0 ]; then
-            echo "A1-v2 baseline unexpectedly green before candidate installation"
-            exit 1
-          fi
-
-      - name: Baseline scoped guardrails
-        shell: bash
-        run: |
-          set -euo pipefail
-          files=(
-            src/partition/split-key-comparator.js
-            src/partition/partition-split-merge-manager-core-methods.js
-            src/partition/partition-split-merge-manager-evaluation-methods.js
-          )
-          npm run -s test:metrics:scoped -- "${files[@]}"
-          node scripts/check-guideline-literals.js "${files[@]}"
-          node scripts/check-runtime-grammar-contracts.js "${files[@]}"
-          node scripts/check-file-size-thresholds.js
-
-      - name: Install witnesses and prove controlled negative
-        shell: bash
-        run: |
-          set -euo pipefail
-          evidence=solve/quests/partition-key-ordering-owner-completion-v2/evidence
-          cp "$evidence/candidate-test-routing-key-comparator.test.js"             test/partition/routing-key-comparator.test.js
-          cp "$evidence/candidate-test-merge-auto-execution.test.js"             test/partition/merge-auto-execution.test.js
-
-          set +e
-          node --test test/partition/routing-key-comparator.test.js             > /tmp/a1-v2-routing-red.log 2>&1
-          routing_status=$?
-          node test/partition/merge-auto-execution.test.js             > /tmp/a1-v2-merge-red.log 2>&1
-          merge_status=$?
-          set -e
-
-          cat /tmp/a1-v2-routing-red.log
-          cat /tmp/a1-v2-merge-red.log
-
-          if [ "$routing_status" -eq 0 ] || [ "$merge_status" -eq 0 ]; then
-            echo "A1-v2 controlled negative unexpectedly green"
-            exit 1
-          fi
-          grep -E "not ok.*text routing order matches SQLite BINARY"             /tmp/a1-v2-routing-red.log >/dev/null
-          grep -E "not ok.*adjacency sorting uses SQLite BINARY key order"             /tmp/a1-v2-merge-red.log >/dev/null
-
-      - name: Install exact candidate
-        shell: bash
-        run: |
-          set -euo pipefail
-          evidence=solve/quests/partition-key-ordering-owner-completion-v2/evidence
-          cp "$evidence/candidate-src-split-key-comparator.js"             src/partition/split-key-comparator.js
-          cp "$evidence/candidate-src-split-merge-core.js"             src/partition/partition-split-merge-manager-core-methods.js
-          cp "$evidence/candidate-src-split-merge-evaluation.js"             src/partition/partition-split-merge-manager-evaluation-methods.js
-
-      - name: Prove green candidate
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --test test/partition/routing-key-comparator.test.js
-          node test/partition/split-key-comparator.test.js
-          node test/partition/merge-auto-execution.test.js
-          node test/partition/partition-split-merge-manager.test.js
-          node scripts/checks/partition-key-ordering-owner-completion-v2.js
-          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v2
-
-      - name: Candidate scoped guardrails
-        shell: bash
-        run: |
-          set -euo pipefail
-          files=(
-            src/partition/split-key-comparator.js
-            src/partition/partition-split-merge-manager-core-methods.js
-            src/partition/partition-split-merge-manager-evaluation-methods.js
-          )
-          npm run -s test:metrics:scoped -- "${files[@]}"
-          node scripts/check-guideline-literals.js "${files[@]}"
-          node scripts/check-runtime-grammar-contracts.js "${files[@]}"
-          node scripts/check-file-size-thresholds.js
-          npx eslint             "${files[@]}"             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js
-          git diff --check
-
-      - name: Record content-bound evidence and attempt while diff is live
-        shell: bash
-        run: |
-          set -euo pipefail
-          candidate_hashes="$(sha256sum             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js | tr '\n' ';')"
-          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v2             --finding "A1-v2 controlled negative on GitHub Actions run ${GITHUB_RUN_ID}: real SQLite BINARY including U+E000/U+10000 and merge-adjacency witnesses are red on sealed source and green with the exact candidate; typed mixed-key refusal and doneWhen zero are preserved. Candidate sha256: ${candidate_hashes}"             --kind evidence             --evidence "github-actions:${GITHUB_RUN_ID}"
-          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v2             --attempt "A1-v2 exact candidate: UTF-8/SQLite-BINARY text order, split comparator consistency, merge sort and adjacency delegation, numeric/TEXT compatibility and exact typed refusal; focused tests, red controls, doneWhen and scoped guardrails green in GitHub Actions run ${GITHUB_RUN_ID}."
-
-      - name: Restore product tree and preserve only Quest record
+      - name: Request independent Copilot review
         shell: bash
         env:
-          BRANCH: quest/0-3-queryable-core-foundation
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git restore --             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js
-
-          changed="$(git status --porcelain | awk '{print $2}' | sort)"
-          expected="solve/quests/partition-key-ordering-owner-completion-v2/log.ndjson"
-          if [ "$changed" != "$expected" ]; then
-            echo "Unexpected post-attempt mutation set:"
-            printf '%s\n' "$changed"
-            exit 1
-          fi
-
-          git fetch origin "$BRANCH"
-          remote_sha="$(git rev-parse "origin/$BRANCH")"
-          if [ "$remote_sha" != "$GITHUB_SHA" ]; then
-            echo "Branch advanced from event SHA $GITHUB_SHA to $remote_sha; refusing stale attempt push"
-            exit 1
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- solve/quests/partition-key-ordering-owner-completion-v2/log.ndjson
-          git commit -m "quest: record exact A1-v2 candidate attempt"
-          git push origin HEAD:refs/heads/"$BRANCH"
+          gh pr edit 77 --repo psvensson/lagrange --add-reviewer @copilot
+          gh pr view 77 --repo psvensson/lagrange             --json number,state,isDraft,headRefOid,url,reviewRequests
