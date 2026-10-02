@@ -52,6 +52,17 @@ jobs:
           else
             echo "refreshed=false" >> "$GITHUB_OUTPUT"
           fi
+      - name: Exact candidate fingerprints
+        if: steps.refresh.outputs.refreshed != 'true'
+        run: |
+          sha256sum \
+            src/partition/split-key-comparator.js \
+            src/partition/partition-split-merge-manager-core-methods.js \
+            src/partition/partition-split-merge-manager-evaluation-methods.js \
+            test/partition/routing-key-comparator.test.js \
+            test/partition/merge-auto-execution.test.js \
+            scripts/checks/partition-key-ordering-owner-completion-v7.js
+
       - name: Controlled negatives on rejected A1 candidates
         if: steps.refresh.outputs.refreshed != 'true'
         shell: bash
