@@ -1,10 +1,4 @@
-name: quest-a1-v4-seal-and-attempt
-# retry after completing metadata literal owner
-# retry after metadata value owner fix
-# retry after v4 static-ratchet repair
-# retry after merge table-ID witness lifecycle fix
-# final pre-seal category-complete retry
-# all isolated controls pinned
+name: quest-a1-v5-seal-and-attempt
 
 on:
   push:
@@ -18,9 +12,8 @@ permissions:
 
 jobs:
   prove:
-    name: seal and prove consolidated A1-v4
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 25
     steps:
       - name: Checkout exact event SHA
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -48,14 +41,21 @@ jobs:
             test/shards/resource-classes.json \
             test/shards/subsystem-classes.json
 
-      - name: Record v3 rejection, supersede it, and seal v4
+      - name: Record final v4 rejection, supersede it, and seal v5
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v3             --verification "REJECT: category-complete Copilot reviews PR #83 and PR #84 found residual A1-v3 defects: same-reference unsupported/non-finite bypass, inherited/accessor/iterator split metadata, mutable String table-ID sorting, and non-isolated intrinsic controls."             --verifier subagent:github-copilot-pr83-pr84             --verdict reject
-          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v3             --superseded "Category-complete independent review found production and harness gaps outside the sealed v3 predicate; preserve v3 and continue as consolidated v4."             --by partition-key-ordering-owner-completion-v4
-          node scripts/solve.js start --id partition-key-ordering-owner-completion-v4
-          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v4
+          node scripts/solve.js note \
+            --id partition-key-ordering-owner-completion-v4 \
+            --verification "REJECT: final category-complete Copilot PR #86 review of exact v4 candidate head 0b8689a7fc25a51c175670d6e2c8e479d8cffa1a found raw numeric subtraction returning noncanonical/non-finite derived results, falsey non-string table IDs normalized to absence, missing enumerable Object/Array prototype-pollution coverage, and combined rather than isolated Object descriptor/hasOwn controls." \
+            --verifier subagent:github-copilot-pr86 \
+            --verdict reject
+          node scripts/solve.js note \
+            --id partition-key-ordering-owner-completion-v4 \
+            --superseded "Final category-complete review found two production and two verifier gaps outside the immutable v4 predicate; preserve v4 and continue as v5." \
+            --by partition-key-ordering-owner-completion-v5
+          node scripts/solve.js start --id partition-key-ordering-owner-completion-v5
+          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v5
 
       - name: Baseline scoped guardrails
         shell: bash
@@ -71,54 +71,72 @@ jobs:
           node scripts/check-runtime-grammar-contracts.js "${files[@]}"
           node scripts/check-file-size-thresholds.js
 
-      - name: Install v4 witnesses and prove reviewed defects red
+      - name: Install v5 witnesses
         shell: bash
         run: |
           set -euo pipefail
-          evidence=solve/quests/partition-key-ordering-owner-completion-v4/evidence
-          cp "$evidence/candidate-test-routing-key-comparator.test.js"             test/partition/routing-key-comparator.test.js
-          cp "$evidence/candidate-test-merge-auto-execution.test.js"             test/partition/merge-auto-execution.test.js
+          evidence=solve/quests/partition-key-ordering-owner-completion-v5/evidence
+          cp "$evidence/candidate-test-routing-key-comparator.test.js" \
+            test/partition/routing-key-comparator.test.js
+          cp "$evidence/candidate-test-merge-auto-execution.test.js" \
+            test/partition/merge-auto-execution.test.js
+
+      - name: Prove exact rejected v4 candidate against v5 findings
+        shell: bash
+        run: |
+          set -euo pipefail
+          v4=solve/quests/partition-key-ordering-owner-completion-v4/evidence
+          cp "$v4/candidate-src-split-key-comparator.js" \
+            src/partition/split-key-comparator.js
+          cp "$v4/candidate-src-split-merge-core.js" \
+            src/partition/partition-split-merge-manager-core-methods.js
+          cp "$v4/candidate-src-split-merge-evaluation.js" \
+            src/partition/partition-split-merge-manager-evaluation-methods.js
 
           set +e
-          node --test test/partition/routing-key-comparator.test.js             > /tmp/a1-v4-routing-red.log 2>&1
+          node --test test/partition/routing-key-comparator.test.js \
+            > /tmp/a1-v5-routing-v4-red.log 2>&1
           routing_status=$?
-          node test/partition/merge-auto-execution.test.js             > /tmp/a1-v4-merge-red.log 2>&1
+          node test/partition/merge-auto-execution.test.js \
+            > /tmp/a1-v5-merge-v4-red.log 2>&1
           merge_status=$?
-          node scripts/checks/partition-key-ordering-owner-completion-v4.js             > /tmp/a1-v4-probe-red.log 2>&1
+          node scripts/checks/partition-key-ordering-owner-completion-v5.js \
+            > /tmp/a1-v5-probe-v4-red.log 2>&1
           probe_status=$?
           set -e
 
-          cat /tmp/a1-v4-routing-red.log
-          cat /tmp/a1-v4-merge-red.log
-          cat /tmp/a1-v4-probe-red.log
+          cat /tmp/a1-v5-routing-v4-red.log
+          cat /tmp/a1-v5-merge-v4-red.log
+          cat /tmp/a1-v5-probe-v4-red.log
+
           test "$routing_status" -ne 0
           test "$merge_status" -ne 0
           test "$probe_status" -ne 0
+          grep -E "not ok.*finite numeric comparisons return canonical finite comparator values" \
+            /tmp/a1-v5-routing-v4-red.log >/dev/null
+          grep -E "not ok.*merge table IDs preserve falsey values" \
+            /tmp/a1-v5-merge-v4-red.log >/dev/null
 
-          grep -E "not ok.*unsupported identical and non-finite"             /tmp/a1-v4-routing-red.log >/dev/null
-          grep -E "not ok.*text routing order matches SQLite BINARY"             /tmp/a1-v4-routing-red.log >/dev/null
-          grep -E "not ok.*captures Number.isFinite"             /tmp/a1-v4-routing-red.log >/dev/null
-          grep -E "not ok.*captures numeric conversion"             /tmp/a1-v4-routing-red.log >/dev/null
-          grep -E "not ok.*captures RegExp.test"             /tmp/a1-v4-routing-red.log >/dev/null
-          grep -E "not ok.*captures Error constructor"             /tmp/a1-v4-routing-red.log >/dev/null
-          grep -E "not ok.*captures Buffer.compare"             /tmp/a1-v4-routing-red.log >/dev/null
-          grep -E "not ok.*captures Buffer.isBuffer"             /tmp/a1-v4-routing-red.log >/dev/null
-          grep -E "not ok.*captures Buffer.from"             /tmp/a1-v4-routing-red.log >/dev/null
-          grep -E "not ok.*split target routing captures Array.isArray"             /tmp/a1-v4-routing-red.log >/dev/null
-          grep -E "not ok.*split target metadata ignores inherited accessors"             /tmp/a1-v4-routing-red.log >/dev/null
-          grep -E "not ok.*merge sort table IDs ignore mutable String"             /tmp/a1-v4-merge-red.log >/dev/null
-          grep -E "not ok.*adjacency delegates mixed-key refusal"             /tmp/a1-v4-merge-red.log >/dev/null
+          grep -E "ok [0-9]+ - split target routing captures Object.getOwnPropertyDescriptor" \
+            /tmp/a1-v5-routing-v4-red.log >/dev/null
+          grep -E "ok [0-9]+ - split target routing captures Object.hasOwn" \
+            /tmp/a1-v5-routing-v4-red.log >/dev/null
+          grep -E "ok [0-9]+ - split metadata ignores enumerable Object and Array prototype pollution" \
+            /tmp/a1-v5-routing-v4-red.log >/dev/null
 
-      - name: Install consolidated v4 source candidate
+      - name: Install v5 source candidate
         shell: bash
         run: |
           set -euo pipefail
-          evidence=solve/quests/partition-key-ordering-owner-completion-v4/evidence
-          cp "$evidence/candidate-src-split-key-comparator.js"             src/partition/split-key-comparator.js
-          cp "$evidence/candidate-src-split-merge-core.js"             src/partition/partition-split-merge-manager-core-methods.js
-          cp "$evidence/candidate-src-split-merge-evaluation.js"             src/partition/partition-split-merge-manager-evaluation-methods.js
+          evidence=solve/quests/partition-key-ordering-owner-completion-v5/evidence
+          cp "$evidence/candidate-src-split-key-comparator.js" \
+            src/partition/split-key-comparator.js
+          cp "$evidence/candidate-src-split-merge-core.js" \
+            src/partition/partition-split-merge-manager-core-methods.js
+          cp "$evidence/candidate-src-split-merge-evaluation.js" \
+            src/partition/partition-split-merge-manager-evaluation-methods.js
 
-      - name: Prove v4 candidate green
+      - name: Prove v5 candidate green
         shell: bash
         run: |
           set -euo pipefail
@@ -126,8 +144,8 @@ jobs:
           node test/partition/split-key-comparator.test.js
           node test/partition/merge-auto-execution.test.js
           node test/partition/partition-split-merge-manager.test.js
-          node scripts/checks/partition-key-ordering-owner-completion-v4.js
-          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v4
+          node scripts/checks/partition-key-ordering-owner-completion-v5.js
+          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v5
 
       - name: Candidate guardrails
         shell: bash
@@ -142,16 +160,29 @@ jobs:
           node scripts/check-guideline-literals.js "${files[@]}"
           node scripts/check-runtime-grammar-contracts.js "${files[@]}"
           node scripts/check-file-size-thresholds.js
-          npx eslint "${files[@]}"             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js
+          npx eslint "${files[@]}" \
+            test/partition/routing-key-comparator.test.js \
+            test/partition/merge-auto-execution.test.js
           git diff --check
 
-      - name: Record v4 content-bound attempt
+      - name: Record v5 content-bound attempt
         shell: bash
         run: |
           set -euo pipefail
-          candidate_hashes="$(sha256sum             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js | tr '\n' ';')"
-          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v4             --finding "A1-v4 GitHub Actions run ${GITHUB_RUN_ID}: same-reference/non-finite refusal, SQLite-BINARY order, isolated mutable intrinsics, own-data/accessor/iterator-safe split metadata, coercion-free table-ID sorting and merge adjacency are red on reviewed baseline and green on the exact consolidated candidate. Candidate sha256: ${candidate_hashes}"             --kind evidence             --evidence "github-actions:${GITHUB_RUN_ID}"
-          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v4             --attempt "A1-v4 consolidates all category-complete A1 review findings; focused tests, isolated controls, doneWhen and scoped guardrails are green in GitHub Actions run ${GITHUB_RUN_ID}."
+          candidate_hashes="$(sha256sum \
+            src/partition/split-key-comparator.js \
+            src/partition/partition-split-merge-manager-core-methods.js \
+            src/partition/partition-split-merge-manager-evaluation-methods.js \
+            test/partition/routing-key-comparator.test.js \
+            test/partition/merge-auto-execution.test.js | tr '\n' ';')"
+          node scripts/solve.js note \
+            --id partition-key-ordering-owner-completion-v5 \
+            --finding "A1-v5 GitHub Actions run ${GITHUB_RUN_ID}: exact rejected v4 candidate is right-reason red for canonical finite numeric results and falsey/non-own table-ID handling; new prototype-pollution and isolated Object-intrinsic witnesses are engaged at their real consumers; exact v5 candidate is green. Candidate sha256: ${candidate_hashes}" \
+            --kind evidence \
+            --evidence "github-actions:${GITHUB_RUN_ID}"
+          node scripts/solve.js note \
+            --id partition-key-ordering-owner-completion-v5 \
+            --attempt "A1-v5 closes final PR #86 findings: canonical finite -1/0/1 numeric comparison, own-data table-ID reads preserving falsey values for validation, explicit Object/Array prototype-pollution coverage, and isolated Object intrinsic controls; focused tests, doneWhen and guardrails green in GitHub Actions run ${GITHUB_RUN_ID}."
 
       - name: Restore product tree and preserve Solver records
         shell: bash
@@ -159,10 +190,18 @@ jobs:
           BRANCH: quest/0-3-queryable-core-foundation
         run: |
           set -euo pipefail
-          git restore --             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js
+          git restore -- \
+            src/partition/split-key-comparator.js \
+            src/partition/partition-split-merge-manager-core-methods.js \
+            src/partition/partition-split-merge-manager-evaluation-methods.js \
+            test/partition/routing-key-comparator.test.js \
+            test/partition/merge-auto-execution.test.js
 
           changed="$(git status --porcelain | awk '{print $2}' | sort)"
-          expected="$(printf '%s\n'             solve/quests/partition-key-ordering-owner-completion-v3/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v4/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v4/quest.json | sort)"
+          expected="$(printf '%s\n' \
+            solve/quests/partition-key-ordering-owner-completion-v4/log.ndjson \
+            solve/quests/partition-key-ordering-owner-completion-v5/log.ndjson \
+            solve/quests/partition-key-ordering-owner-completion-v5/quest.json | sort)"
           if [ "$changed" != "$expected" ]; then
             echo "Unexpected post-attempt mutation set:"
             printf '%s\n' "$changed"
@@ -178,6 +217,9 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add --             solve/quests/partition-key-ordering-owner-completion-v3/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v4/quest.json             solve/quests/partition-key-ordering-owner-completion-v4/log.ndjson
-          git commit -m "quest: seal and record consolidated A1-v4 attempt"
+          git add -- \
+            solve/quests/partition-key-ordering-owner-completion-v4/log.ndjson \
+            solve/quests/partition-key-ordering-owner-completion-v5/quest.json \
+            solve/quests/partition-key-ordering-owner-completion-v5/log.ndjson
+          git commit -m "quest: seal and record A1-v5 attempt"
           git push origin HEAD:refs/heads/"$BRANCH"
