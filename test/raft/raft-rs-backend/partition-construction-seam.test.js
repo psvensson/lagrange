@@ -8,7 +8,7 @@ import Database from 'better-sqlite3';
 
 import {PartitionService} from
   '../../../src/partition/partition-service.js';
-import {RaftRsWasmProvider} from '../../../src/raft/raft-rs-provider.js';
+import {createRaftRsOperationPort} from '../../../src/raft/raft-rs-operation-port.js';
 import {RAFT_ROLE} from '../../../src/raft/constants.js';
 import {RAFT_OPERATION_PORT_METHODS} from
   '../../../src/raft/raft-operation-port.js';
@@ -30,7 +30,6 @@ const RETIRED_REQUEST_FIELDS = Object.freeze([
   'initialTerm',
   RAFT_OPERATION_PORT_REQUEST.APPLY_TRANSACTION_ROLLED_BACK,
 ]);
-const PORT_FACTORY_METHOD = 'createPartitionPort';
 const PARTITION_ID = 'seam-partition';
 const REPLICA_ID = 'replica-seam-1';
 const TIMING = Object.freeze({
@@ -157,7 +156,7 @@ test('the request carries the partition requirements and no retired field',
 
 test('the rs-raft backend returns the frozen semantic port contract', () => {
   const request = minimalPartitionRequest();
-  const port = new RaftRsWasmProvider()[PORT_FACTORY_METHOD](request);
+  const port = createRaftRsOperationPort(request);
   try {
     assert.equal(Object.getPrototypeOf(port), null);
     assert.equal(Object.isFrozen(port), true);
@@ -183,15 +182,14 @@ test('a single-replica partition observes rs-raft leadership through the port',
     }
   });
 
-test('the rs-raft backend refuses missing named requirements', () => {
-  const provider = new RaftRsWasmProvider();
-  assert.equal(typeof provider[PORT_FACTORY_METHOD], 'function');
+test('the rs-raft operation port refuses missing named requirements', () => {
+  assert.equal(typeof createRaftRsOperationPort, 'function');
   for (const field of [
     'groupId', 'peerId', 'durableStorage', 'timing', 'sendToPeer',
     'resolvePeerAddress', 'applyCommittedEntry', 'bootstrapPeerIds',
   ]) {
     const request = minimalPartitionRequest({[field]: undefined});
-    assert.throws(() => provider.createPartitionPort(request),
+    assert.throws(() => createRaftRsOperationPort(request),
       (error) => error.message.includes(field));
     request.durableStorage?.close();
   }
