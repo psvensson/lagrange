@@ -7,6 +7,7 @@ import {
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
 import {
+  copyDenseOwnDataArray,
   copyDenseOwnDataRecordArray,
 } from '../utils/strict-own-data.js';
 import {KeyRange} from './key-range-manager.js';
@@ -31,6 +32,7 @@ const INVALID_EVALUATION_TABLE_ID =
   'Partition evaluation table IDs must be primitive strings';
 const INVALID_EVALUATION_PARTITION_LIST =
   'Partition evaluation rows must be a bounded dense own-data array';
+const MAX_EVALUATION_CONTEXT_VALUES = 1_024;
 const MAX_EVALUATION_PARTITION_ROWS = 1_000_000;
 const LOCAL_STR_DESCRIPTOR_VALUE = 'value';
 const LOCAL_STR_TABLE_ID_SNAKE = 'table_id';
@@ -60,13 +62,35 @@ function appendOwnArrayValue(array, value) {
   });
 }
 
+function readBoundedCanonicalArrayLength(values, maxLength) {
+  if (isProxy(values) ||
+      !arrayIsArray(values) ||
+      objectGetPrototypeOf(values) !== canonicalArrayPrototype) {
+    return null;
+  }
+  const length = readOwnDataValue(values, 'length');
+  return numberIsSafeInteger(length) &&
+    length >= 0 &&
+    length <= maxLength ?
+    length :
+    null;
+}
+
 function cloneStringArray(values) {
-  if (!arrayIsArray(values) || isProxy(values)) {
+  const length = readBoundedCanonicalArrayLength(
+    values,
+    MAX_EVALUATION_CONTEXT_VALUES,
+  );
+  if (length === null) {
+    return [];
+  }
+  const source = copyDenseOwnDataArray(values);
+  if (source === null) {
     return [];
   }
   const cloned = [];
-  for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
-    const value = values[valueIndex];
+  for (let valueIndex = 0; valueIndex < length; valueIndex += 1) {
+    const value = source[valueIndex];
     const normalizedValue =
       typeof value === LOCAL_STR_STRING ? value : '';
     if (!normalizedValue || arrayIncludes(cloned, normalizedValue)) {
@@ -119,15 +143,16 @@ function compareEvaluationTableIds(left, right) {
 }
 
 function cloneEvaluationPartitionRows(partitions) {
-  if (isProxy(partitions) ||
-      !arrayIsArray(partitions) ||
-      objectGetPrototypeOf(partitions) !== canonicalArrayPrototype) {
-    throw new TypeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
-  }
-  const length = readOwnDataValue(partitions, 'length');
-  if (!numberIsSafeInteger(length) ||
-      length < 0 ||
-      length > MAX_EVALUATION_PARTITION_ROWS) {
+  const length = readBoundedCanonicalArrayLength(
+    partitions,
+    MAX_EVALUATION_PARTITION_ROWS,
+  );
+  if (length === null) {
+    if (isProxy(partitions) ||
+        !arrayIsArray(partitions) ||
+        objectGetPrototypeOf(partitions) !== canonicalArrayPrototype) {
+      throw new TypeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
+    }
     throw new RangeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
   }
   const rows = copyDenseOwnDataRecordArray(partitions);
