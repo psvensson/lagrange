@@ -44,15 +44,16 @@ against the resulting exact head.
 
 ## Stage A — query access foundation
 
-### A1 — `partition-key-ordering-owner-completion-v2` — ACTIVE
+### A1 — `partition-key-ordering-owner-completion-v3` — ACTIVE
 
 **Roadmap:** `RM-0.3-qs-typed-key-ordering`.
 
-This supersedes the initially sealed
-`partition-key-ordering-owner-completion` Quest. The original probe is kept
-immutable as historical evidence; v2 incorporates the independent review
-finding that UTF-8/BINARY order needs a non-BMP discriminator and exact typed
-refusal checking.
+This supersedes both earlier A1 seals; those predicates remain immutable
+historical evidence. V2 established the non-BMP UTF-8/BINARY discriminator and
+isolated merge-adjacency control. Category-complete review then found four
+remaining gaps that v3 closes: actual sort/adjacency expressions rather than
+token presence, exact mismatch witnesses, unsupported-value refusal before
+coercion, and independence from mutable JavaScript intrinsics.
 
 **Current falsifier:** current main still has both a locale-sensitive string
 order in `compareRoutingKeys` and a raw
