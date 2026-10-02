@@ -1,0 +1,58 @@
+{
+  "schema": "solve-quest/2",
+  "id": "locking-read-wait-policy-seal",
+  "statement": "Phase 0.3 locking reads use one deterministic fail-fast reservation-conflict policy: the partition transaction participant owns acquire/conflict/release of durable replicated reservations, DistributedTransactionCoordinator owns transaction lifetime and cross-participant rollback/recovery, a conflicting reservation returns a typed refusal instead of entering a waiter queue, any multi-participant reservation conflict aborts and rolls back the whole transaction so no hold-and-wait state exists, timeout/cancellation/commit/rollback/recovery release through transaction ownership, and deadlock is impossible in the initial slice because no wait graph is created.",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "specRef": "solve/specs/release-0-3-queryable-core/tasks.md#B1",
+    "planDoc": "architecture/postgres-locking-reads.md"
+  },
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/locking-read-wait-policy-seal.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-pg-local-authority",
+      "statement": "PG wire transports the locking-read semantic only; no PG-session-local mutex, lock map, retry loop or cache is lock authority."
+    },
+    {
+      "id": "participant-conflict-owner",
+      "statement": "The partition transaction participant is the only owner of reservation acquire/conflict/release at the data owner."
+    },
+    {
+      "id": "dtc-lifecycle-owner",
+      "statement": "DistributedTransactionCoordinator owns transaction lifetime, participant enlistment, timeout, cancellation, whole-transaction rollback and recovery re-drive."
+    },
+    {
+      "id": "fail-fast-initial-slice",
+      "statement": "A reservation held by another transaction produces a typed immediate conflict refusal. Phase 0.3 creates no waiter queue and no wake-up correctness path."
+    },
+    {
+      "id": "no-hold-and-wait",
+      "statement": "If any participant refuses a reservation, the whole transaction is rolled back and all earlier reservations are released; no transaction retains reservations while waiting on another transaction."
+    },
+    {
+      "id": "deadlock-by-construction",
+      "statement": "Because the initial slice never waits while holding reservations, there is no wait-for graph and no deadlock detector/timeout-as-deadlock-breaker."
+    },
+    {
+      "id": "reservation-no-local-ttl",
+      "statement": "A participant must not independently expire an unresolved reservation on its local clock. Commit, rollback, timeout, cancellation or recovery resolution owns release."
+    },
+    {
+      "id": "typed-outcomes",
+      "statement": "Contention, transaction timeout, cancellation and abort remain distinguishable typed outcomes."
+    },
+    {
+      "id": "later-wait-policy-supersedes",
+      "statement": "Any future blocking WAIT/NOWAIT/SKIP LOCKED policy with waiter wake-up semantics must supersede this seal rather than grow a second authority beside it."
+    }
+  ],
+  "sealedAt": "dbffe2fdd7c32502ddf3f65a62bb0ac56bf97b04",
+  "status": "superseded",
+  "supersededBy": "locking-read-wait-policy-seal-v2"
+}

@@ -1,0 +1,48 @@
+{
+  "schema": "solve-quest/2",
+  "id": "locking-read-wait-policy-seal-v2",
+  "statement": "Phase 0.3 locking reads use one deterministic fail-fast reservation-conflict policy with machine/prose semantic agreement: participant owns acquire/conflict and emits typed contention; DistributedTransactionCoordinator owns the follow-on whole-transaction conflict abort, confirms rollback/release of earlier reservations before terminal transaction_aborted, owns timeout/cancellation/commit/rollback/recovery, no waiter queue or local TTL exists, and the architecture document and machine-readable policy encode the same owner/action/outcome table.",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "specRef": "solve/specs/release-0-3-queryable-core/tasks.md#B1",
+    "planDoc": "architecture/postgres-locking-reads.md"
+  },
+  "verificationTemplates": [
+    "concurrency-serialization",
+    "recovery-replay"
+  ],
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/locking-read-wait-policy-seal-v2.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "supersedes-b1",
+      "statement": "Supersedes sealed locking-read-wait-policy-seal after PR #91 found missing conflict-abort ownership and a policy/prose consistency gap. Preserve the original seal unchanged."
+    },
+    {
+      "id": "participant-conflict",
+      "statement": "Partition transaction participant alone owns reservation acquire/conflict and returns typed locking_read_reservation_conflict without waiting."
+    },
+    {
+      "id": "dtc-conflict-abort",
+      "statement": "DistributedTransactionCoordinator alone owns the follow-on conflict abort: rollback whole transaction, confirm participant reservation release, then emit terminal transaction_aborted with contention cause."
+    },
+    {
+      "id": "no-hold-and-wait",
+      "statement": "No waiter queue, wake owner or hold-and-wait state exists; deadlock is impossible by construction in the initial slice."
+    },
+    {
+      "id": "no-local-ttl",
+      "statement": "Participants never independently expire unresolved reservations; release authority is transaction resolution."
+    },
+    {
+      "id": "semantic-consistency",
+      "statement": "The machine-readable policy and architecture prose/table must agree on owners, actions, outcomes, fail-fast/no-wait, deadlock, TTL, PG-wire ownership and future supersession."
+    }
+  ],
+  "sealedAt": "785b0fa92b7abf48bfc9aeaa8de2b8e7d9ffb608"
+}
