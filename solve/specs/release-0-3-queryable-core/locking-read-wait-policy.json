@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "scope": "phase_0_3_select_for_update",
+  "conflictMode": "fail_fast_refusal",
+  "waitQueue": false,
+  "wakeOwner": "none_no_waiters",
+  "deadlockPolicy": "impossible_no_wait_graph",
+  "transactionOwner": "DistributedTransactionCoordinator",
+  "participantOwner": "partition_transaction_participant",
+  "multiParticipantConflict": "rollback_whole_transaction",
+  "releaseAuthority": "transaction_resolution",
+  "reservationPersistence": "durable_replicated_until_transaction_resolution",
+  "localExpiry": "forbidden",
+  "typedOutcomes": {
+    "contention": "locking_read_reservation_conflict",
+    "timeout": "transaction_timeout",
+    "cancellation": "transaction_cancelled",
+    "abort": "transaction_aborted"
+  },
+  "invariants": [
+    "PG wire transports locking-read intent but owns no lock state.",
+    "A reservation conflict never enters a waiter queue in the Phase 0.3 slice.",
+    "A transaction never retains reservations while waiting on another transaction.",
+    "A conflict on any participant causes whole-transaction rollback and release of earlier reservations.",
+    "Participant-local clocks never expire unresolved reservations independently.",
+    "Crash/restart preserves unresolved reservation authority until transaction recovery resolves it.",
+    "Future blocking waits, NOWAIT, SKIP LOCKED, or wake queues require a superseding policy."
+  ],
+  "transitions": {
+    "acquire": {
+      "owner": "partition_transaction_participant",
+      "action": "create_durable_replicated_reservation",
+      "outcome": "reservation_acquired"
+    },
+    "same_transaction_reacquire": {
+      "owner": "partition_transaction_participant",
+      "action": "idempotent_reacquire_existing_reservation",
+      "outcome": "reservation_already_owned"
+    },
+    "conflict": {
+      "owner": "partition_transaction_participant",
+      "action": "refuse_without_waiting_and_report_owner_conflict",
+      "outcome": "typed_locking_read_reservation_conflict"
+    },
+    "timeout": {
+      "owner": "DistributedTransactionCoordinator",
+      "action": "rollback_transaction_and_release_all_participant_reservations",
+      "outcome": "typed_transaction_timeout"
+    },
+    "cancellation": {
+      "owner": "DistributedTransactionCoordinator",
+      "action": "rollback_transaction_and_release_all_participant_reservations",
+      "outcome": "typed_transaction_cancelled"
+    },
+    "commit": {
+      "owner": "DistributedTransactionCoordinator",
+      "action": "commit_transaction_then_release_participant_reservations",
+      "outcome": "committed_and_released"
+    },
+    "rollback": {
+      "owner": "DistributedTransactionCoordinator",
+      "action": "rollback_transaction_then_release_participant_reservations",
+      "outcome": "rolled_back_and_released"
+    },
+    "crash": {
+      "owner": "partition_transaction_participant",
+      "action": "retain_durable_reservation_state_for_transaction_recovery",
+      "outcome": "unresolved_reservation_preserved"
+    },
+    "recovery": {
+      "owner": "DistributedTransactionCoordinator",
+      "action": "replay_terminal_decision_or_rollback_then_reconcile_participant_reservations",
+      "outcome": "transaction_resolved_and_reservations_reconciled"
+    }
+  },
+  "excludedFromInitialSlice": [
+    "blocking_wait",
+    "waiter_queue",
+    "deadlock_detector",
+    "for_no_key_update",
+    "for_share",
+    "for_key_share",
+    "nowait",
+    "skip_locked"
+  ]
+}
