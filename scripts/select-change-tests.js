@@ -117,6 +117,11 @@ const UNIQUE_TESTS_SUFFIX = ' unique test(s)';
 const USAGE =
   'usage: node scripts/select-change-tests.js [--base <sha>] [--head <sha>] ' +
   '[--explain] [--list]\n';
+const RELEASE_PROOF_ID = 'release-full-v1';
+const PROOF_AUTHORITY_SCRIPT = 'scripts/proof-authority.js';
+const PROOF_CHECK_COMMAND = 'check';
+const JSON_FLAG = '--json';
+const RELEASE_PROOF_REUSED_PREFIX = 'RELEASE PROOF REUSED';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -583,6 +588,35 @@ function parseInvocation(argv) {
   };
 }
 
+function defaultReleaseProofCheck(sha, proofRoot = root) {
+  if (typeof sha !== 'string' || sha.length === 0) return false;
+  const checked = spawnSync(process.execPath, [
+    path.join(proofRoot, PROOF_AUTHORITY_SCRIPT),
+    PROOF_CHECK_COMMAND,
+    RELEASE_PROOF_ID,
+    sha,
+    JSON_FLAG,
+  ], {
+    cwd: proofRoot,
+    encoding: UTF8,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  return checked.status === 0;
+}
+
+export function releaseProofSatisfiesRefusal(
+  plan,
+  {
+    sha = null,
+    check = defaultReleaseProofCheck,
+  } = {},
+) {
+  return plan?.kind === SELECTION_REFUSED &&
+    plan?.refusalCode === REFUSAL_RELEASE_PROOF_REQUIRED &&
+    typeof check === 'function' &&
+    check(sha) === true;
+}
+
 function main() {
   const invocation = parseInvocation(arraySlice(process.argv, 2));
   if (!invocation.valid) {
@@ -604,6 +638,13 @@ function main() {
     return;
   }
   if (plan.kind === SELECTION_REFUSED) {
+    const sha = headSha();
+    if (releaseProofSatisfiesRefusal(plan, {sha})) {
+      process.stdout.write(
+        `${RELEASE_PROOF_REUSED_PREFIX}: ${RELEASE_PROOF_ID} ${sha}${NEWLINE}`,
+      );
+      return;
+    }
     process.stderr.write(renderRefusal(plan));
     process.exitCode = 1;
     return;
