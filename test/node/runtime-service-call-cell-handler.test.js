@@ -11,6 +11,10 @@ import {
   CALL_CELL_ROUTE_ERROR_CODE,
   CALL_CELL_ROUTE_MESSAGE_TYPE,
   CALL_CELL_ROUTE_OPERATION,
+  CALL_OUTCOME_CLASS,
+  CallCellRoutingError,
+  createCallRoutingFailure,
+  publicCallOutcomeOf,
 } from '../../src/service/call-cell-routing-contract.js';
 
 const NODE_ID = 'node-a';
@@ -243,4 +247,50 @@ test('runtime-service-handler dispatches call cell envelopes to the ' +
   assert.equal(response.componentResult, CALL_RESULT);
   assert.equal(invocations.length, 1);
   assert.equal(invocations[0].exportName, 'run');
+});
+
+test('call Cell handler marks a typed retryable failure raised after the ' +
+  'invocation started as invoked (uncertain, never retry-safe)', async () => {
+  const {handler} = createHandlerFixture({
+    serviceRuntimeLifecycle: {
+      async health() {
+        return {status: 'healthy'};
+      },
+      async invoke() {
+        throw new CallCellRoutingError(
+          CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE,
+          'target moved while the component was running',
+          {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
+        );
+      },
+    },
+  });
+  const response = await handleCallCellInvocation(
+    handler, createCallEnvelope());
+  const outcome = response.invocationOutcome;
+  assert.equal(outcome.code, CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE);
+  assert.equal(outcome.invoked, true);
+  const surfaced = createCallRoutingFailure(outcome.code, outcome.message, {
+    classification: outcome.classification,
+    invoked: outcome.invoked,
+  });
+  assert.equal(publicCallOutcomeOf(surfaced).outcomeClass,
+    CALL_OUTCOME_CLASS.OUTCOME_UNCERTAIN);
+  assert.equal(publicCallOutcomeOf(surfaced).retrySafe, false);
+});
+
+test('call Cell handler refuses a route of another tenant as an ' +
+  'authorization failure before anything runs', async () => {
+  const {handler, invocations} = createHandlerFixture();
+  const payload = createCallPayload({
+    route: createCallRoute({tenantId: 'tenant-other'}),
+  });
+  const response = await handleCallCellInvocation(
+    handler, createCallEnvelope(payload));
+  const outcome = response.invocationOutcome;
+  assert.equal(outcome.code, CALL_CELL_ROUTE_ERROR_CODE.AUTHORIZATION_FAILED);
+  assert.equal(outcome.classification,
+    CALL_CELL_ROUTE_CLASSIFICATION.TERMINAL);
+  assert.equal(outcome.invoked, false);
+  assert.equal(invocations.length, 0);
 });

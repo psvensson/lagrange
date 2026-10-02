@@ -413,7 +413,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
             mockPartition.initialize = async () => {};
             mockPartition.shutdown = async () => {};
 
-            return mockPartition;
+            return bindRegisteredReplicaHandler(mockPartition, options);
           },
           dataDir: mkdtempSync(joinPath(tmpdir(), 'lagrange-itest-data-')),
         });

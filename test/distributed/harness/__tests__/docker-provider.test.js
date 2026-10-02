@@ -9,8 +9,10 @@
 
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
+import {mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
 import {PassThrough} from 'node:stream';
-import {fileURLToPath} from 'node:url';
 import fc from 'fast-check';
 import {
   DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
@@ -19,11 +21,6 @@ import {
 } from '../docker-provider.js';
 import {CONTAINER_ENV_KEYS, PORTS} from '../constants.js';
 
-const arrayEvery = Function.call.bind(Array.prototype.every);
-const arrayIncludes = Function.call.bind(Array.prototype.includes);
-const arraySome = Function.call.bind(Array.prototype.some);
-const setHas = Function.call.bind(Set.prototype.has);
-const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const RESOURCE_SNAPSHOT_CONTAINER_ID = 'container-resource';
 const RESOURCE_SNAPSHOT_STORAGE_PATH = '/data';
 const RESOURCE_SNAPSHOT_STORAGE_COMMAND = Object.freeze([
@@ -37,16 +34,6 @@ const RESOURCE_SNAPSHOT_INVALID_OUTPUTS = Object.freeze([
   '4096',
   '4096\t/other\n',
   '4096\t/data\n8192\t/other\n',
-]);
-const REPOSITORY_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
-const BUILD_CONTEXT_EXACT_FILES = new Set([
-  'Dockerfile',
-  'package-lock.json',
-  'package.json',
-]);
-const BUILD_CONTEXT_DIRECTORY_PREFIXES = Object.freeze([
-  'src/',
-  'vendor/raft-rs-wasm/',
 ]);
 
 test('Unit: followed log errors flush a partial line before detach notification',
@@ -633,7 +620,24 @@ test('Unit: inspectContainerIfExists returns null for missing containers', async
   });
 });
 
+// buildImage reads the context's Dockerfile to derive the build context
+// (docker-build-context.js), so these cases build from a real temp context.
+const TEST_DOCKERFILE = [
+  'FROM node:22-slim',
+  'COPY package.json package-lock.json ./',
+  'COPY src/ ./src/',
+  '',
+].join('\n');
+
+function createBuildContext(t) {
+  const contextPath = mkdtempSync(path.join(tmpdir(), 'docker-provider-'));
+  t.teardown(() => rmSync(contextPath, {force: true, recursive: true}));
+  writeFileSync(path.join(contextPath, 'Dockerfile'), TEST_DOCKERFILE);
+  return contextPath;
+}
+
 test('Unit: buildImage reports errors with build output', async (t) => {
+  const contextPath = createBuildContext(t);
   await t.test(
     'throws error including build output when build stream contains error',
     async () => {
@@ -650,7 +654,7 @@ test('Unit: buildImage reports errors with build output', async (t) => {
       ];
 
       await assert.rejects(
-        () => provider.buildImage('/project', 'myimage:latest'),
+        () => provider.buildImage(contextPath, 'myimage:latest'),
         (err) => {
           assert.ok(
             err.message.includes('build failed'),
@@ -684,7 +688,7 @@ test('Unit: buildImage reports errors with build output', async (t) => {
       };
 
       await assert.rejects(
-        () => provider.buildImage('/project', 'myimage:v2'),
+        () => provider.buildImage(contextPath, 'myimage:v2'),
         (err) => {
           assert.ok(
             err.message.includes('build failed'),
@@ -706,6 +710,7 @@ test('Unit: buildImage reports errors with build output', async (t) => {
 });
 
 test('Unit: buildImage passes labels to docker build options', async (t) => {
+  const contextPath = createBuildContext(t);
   await t.test(
     'sends explicit build-context entries required by dockerode tar packing',
     async () => {
@@ -721,35 +726,17 @@ test('Unit: buildImage passes labels to docker build options', async (t) => {
       provider._collectBuildOutput = async () => [];
 
       await provider.buildImage(
-        REPOSITORY_ROOT,
+        contextPath,
         'myimage:context',
         'Dockerfile',
         null,
         {'ddb.git-hash': 'abc1234'},
       );
 
-      assert.strictEqual(capturedBuildContext.context, REPOSITORY_ROOT);
-      assert.ok(arrayIncludes(capturedBuildContext.src, 'Dockerfile'));
-      assert.ok(arrayIncludes(capturedBuildContext.src, 'package-lock.json'));
-      assert.ok(arrayIncludes(capturedBuildContext.src, 'package.json'));
-      assert.ok(arrayIncludes(capturedBuildContext.src, 'src/index.js'));
-      assert.ok(arrayIncludes(capturedBuildContext.src,
-        'vendor/raft-rs-wasm/artifact-digest.json',
-      ));
-      assert.ok(arrayIncludes(capturedBuildContext.src,
-        'vendor/raft-rs-wasm/pkg/package.json',
-      ));
-      assert.ok(arrayIncludes(capturedBuildContext.src,
-        'vendor/raft-rs-wasm/pkg/raft_wasm.js',
-      ));
-      assert.ok(arrayIncludes(capturedBuildContext.src,
-        'vendor/raft-rs-wasm/pkg/raft_wasm_bg.wasm',
-      ));
-      assert.ok(arrayEvery(capturedBuildContext.src, (entry) =>
-        setHas(BUILD_CONTEXT_EXACT_FILES, entry) ||
-        arraySome(BUILD_CONTEXT_DIRECTORY_PREFIXES, (prefix) =>
-          stringStartsWith(entry, prefix))));
-      assert.ok(!arrayIncludes(capturedBuildContext.src, '.dockerignore'));
+      assert.deepStrictEqual(capturedBuildContext, {
+        context: contextPath,
+        src: ['Dockerfile', 'package-lock.json', 'package.json', 'src'],
+      });
       assert.deepStrictEqual(capturedBuildOptions, {
         t: 'myimage:context',
         dockerfile: 'Dockerfile',
@@ -771,7 +758,7 @@ test('Unit: buildImage passes labels to docker build options', async (t) => {
       provider._collectBuildOutput = async () => [];
 
       await provider.buildImage(
-        '/project',
+        contextPath,
         'myimage:labeled',
         'Dockerfile',
         null,

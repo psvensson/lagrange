@@ -41,6 +41,7 @@ class SQLQueryEngineProvisioningDeadlineMethods {
     }
     return this.waitForProvisionTargetNodeIds({
       partitionId: options.partitionId,
+      schemaJobId: options.schemaJobId,
       requiredReplicaCount: options.requiredReplicaCount,
       timeoutBudget: options.timeoutBudget,
       failOnTimeout: false,

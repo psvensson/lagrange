@@ -5,6 +5,7 @@ proof: deterministic
 roadmapRow: RM-0.1-fs-rolling-restart
 graduatesTo: membership-lifecycle-placement-hard-cutover
 quests:
+  - application-write-formation-authority
   - cold-node-authority-reacquisition-pressure
   - executor-active-services-cache-handoff
   - formation-background-release-owner-closure

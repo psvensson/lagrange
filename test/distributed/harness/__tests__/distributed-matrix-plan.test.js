@@ -16,7 +16,7 @@ const arrayMap = Function.call.bind(Array.prototype.map);
 
 const RUN_ID = '20260924T151500Z';
 const REPORT_ROOT = 'test-output/reports/distributed-matrix';
-const EXPECTED_CANONICAL_COUNT = 24;
+const EXPECTED_CANONICAL_COUNT = 25;
 const EXPECTED_TOPOLOGY_ENTRIES = [
   'local-three-node.json|rolling-restart',
   'local.json|partition-kill-heal-under-load',

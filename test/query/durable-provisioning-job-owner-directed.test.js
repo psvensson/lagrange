@@ -266,6 +266,10 @@ function createRuntime(options) {
     nowFn: () => clock.value,
   });
   coordinator.ensureOperationLedgerSelfMoveSerialized = async () => null;
+  // The in-memory durable gateway is the only mutation route in this
+  // directed world; the coordinator's route observation sees it as live.
+  coordinator.observeReplicaOperationMutationRoute = () =>
+    ({allowed: true, retryAfterMs: 0});
   coordinator.persistOperationUpdate = async (operation) => {
     const key = `${TABLES.REPLICA_OPERATIONS}:${operation.operationId}`;
     gateway.rows.set(key, {

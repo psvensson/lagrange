@@ -169,5 +169,15 @@ export function createProvisioningReadyService(nodeSource) {
     async getNodeReadiness(nodeId) {
       return buildReadiness(nodeId);
     },
+    // A healthy readiness owner's planning projection is live; report the
+    // stable CURRENT identity so admission observation sees live currency.
+    readCurrentPlanningProjectionIdentity(nodeId) {
+      return Object.freeze({
+        nodeId,
+        globalPlanningGeneration: 0,
+        nodePlanningGeneration: 0,
+        saturated: false,
+      });
+    },
   };
 }

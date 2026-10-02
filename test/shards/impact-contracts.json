@@ -627,6 +627,73 @@
         "test/rebalancer/replace-real-group-scheduling.test.js",
         "test/rebalancer/replace-witness-boundary.test.js"
       ]
+    },
+    "public-application-database-seam": {
+      "description": "The public Application Database seam (createEmbeddedLagrange -> openApplicationDatabase -> query/transaction): public result shape, typed errors, statement policy, and behaviour through embedded processes.",
+      "owners": [
+        "src/query/application-database.js",
+        "src/query/application-database-result.js",
+        "src/query/application-database-error.js",
+        "src/query/application-database-statement-policy.js",
+        "src/query/application-database-input.js",
+        "src/embedded-lagrange.js",
+        "src/public-api.js"
+      ],
+      "tests": [
+        "test/query/application-database.test.js",
+        "test/release/embedded-node-worker-contract.test.js",
+        "test/integration/public-application-database-multinode.integration.test.js",
+        "test/integration/public-application-database-transaction-facade.integration.test.js",
+        "test/integration/public-consumer-contract-ratchet.integration.test.js",
+        "test/release/public-consumer-contract-ratchet.test.js",
+        "test/test-helpers/topology-leak-check.test.js"
+      ]
+    },
+    "test-listener-port-block": {
+      "description": "A runtime's test listener ports are one allocator block whose admin and transport ports the listener-port model derives from the REST port (getTestListenerPorts); changing the allocator or the port model must re-run the block witness.",
+      "owners": [
+        "src/test-helpers/port-allocator.js",
+        "src/config/listener-port-model.js"
+      ],
+      "tests": [
+        "test/test-helpers/port-allocator.test.js"
+      ]
+    },
+    "public-seam-durability-certification-source": {
+      "description": "The fixed rs-raft partition construction path makes the provider-neutral public-seam durability scenario eligible as CANDIDATE; the scenario must not consult the retired provider-selection compatibility surface.",
+      "owners": [
+        "src/partition/partition-service-core-base.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+        "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js"
+      ]
+    },
+    "harness-docker-build-context": {
+      "description": "The distributed-harness image build context is derived from the Dockerfile's COPY sources; changing either must re-run the parity falsifier.",
+      "owners": [
+        "Dockerfile",
+        "test/distributed/harness/docker-build-context.js"
+      ],
+      "tests": [
+        "test/distributed/harness/__tests__/docker-build-context.test.js",
+        "test/distributed/harness/__tests__/docker-provider.test.js"
+      ]
+    },
+    "public-call-outcome-class": {
+      "description": "The call routing contract is the one owner of the public outcome class of a failed CALL (derived from its classification, the per-dispatch invoked flag and the invocation-level execution evidence the call invoker records); the lifecycle command owner's failure projection is the one place that class, retrySafe and the topology-free message reach the PostgreSQL wire, and the public seam proof observes them through a real pg client.",
+      "owners": [
+        "src/service/call-cell-routing-contract.js",
+        "src/service/call-cell-invoker.js",
+        "src/service/service-lifecycle-command-failure.js",
+        "src/service/service-lifecycle-command-owner.js"
+      ],
+      "tests": [
+        "test/service/call-cell-public-outcome.test.js",
+        "test/service/call-cell-invoker.test.js",
+        "test/integration/call-cell-public-outcome-adversarial.integration.test.js",
+        "test/integration/public-binding-cell-invocation-seam.integration.test.js"
+      ]
     }
   },
   "coupledPairs": {

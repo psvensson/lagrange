@@ -1,3 +1,7 @@
+import {
+  QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE,
+} from '../query/query-execution-budget.js';
+
 import {isReroutableWriteError} from '../constants/errors.js';
 import {isReroutableWriteFailureCode} from
   '../partition/partition-write-kernel.js';
@@ -92,6 +96,73 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       }
     }
 
+    bindPriorMutationDeliveryAttemptResult(failureResult) {
+      return {
+        ...(failureResult && typeof failureResult === 'object' ?
+          failureResult : {}),
+        success: false,
+        error: this.getOperationPersistErrorMessage(failureResult),
+        priorMutationDeliveryMayHaveBeenAttempted: true,
+      };
+    }
+
+    async resolveOperationMutationRetryableStep(result, context) {
+      const {operationCreationInsert} = context;
+      const preSubmissionRouteUnavailable =
+        result?.deliveryDisposition ===
+          QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE;
+      let priorMutationDeliveryMayHaveBeenAttempted =
+        context.priorMutationDeliveryMayHaveBeenAttempted;
+      if (operationCreationInsert && !preSubmissionRouteUnavailable) {
+        priorMutationDeliveryMayHaveBeenAttempted = true;
+      }
+      let step = {
+        retry: true,
+        result,
+        priorMutationDeliveryMayHaveBeenAttempted,
+      };
+      if (!this.isRetryableOperationPersistError(result)) {
+        step = {
+          retry: false,
+          priorMutationDeliveryMayHaveBeenAttempted,
+          terminal: operationCreationInsert &&
+              preSubmissionRouteUnavailable &&
+              priorMutationDeliveryMayHaveBeenAttempted ?
+            this.bindPriorMutationDeliveryAttemptResult(result) : result,
+        };
+      }
+      if (step.retry) {
+        const recoveredAfterRetryableFailure =
+          typeof context.options?.onRetryableFailure === 'function' ?
+            (await context.options.onRetryableFailure(result)) === true :
+            false;
+        if (recoveredAfterRetryableFailure) {
+          step = {
+            retry: false,
+            priorMutationDeliveryMayHaveBeenAttempted,
+            terminal: {success: true, recoveredAfterRetryableFailure: true},
+          };
+        }
+      }
+      // Creation INSERT is one-shot once delivery may have occurred. A
+      // zero-candidate answer is re-entry only when this invocation is
+      // proven pre-submission. Lifecycle UPDATEs retain bounded retry after
+      // the same proof because no mutation was submitted.
+      if (
+        step.retry &&
+        operationCreationInsert &&
+        preSubmissionRouteUnavailable
+      ) {
+        step = {
+          retry: false,
+          priorMutationDeliveryMayHaveBeenAttempted,
+          terminal: priorMutationDeliveryMayHaveBeenAttempted ?
+            this.bindPriorMutationDeliveryAttemptResult(result) : result,
+        };
+      }
+      return step;
+    }
+
     async executeReplicaOperationGatewayMutationWithRetry(
       mutation,
       options = {},
@@ -99,26 +170,33 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     ) {
       const startedAt = this.timeSource.now();
       let retryAttempt = 0;
+      let priorMutationDeliveryMayHaveBeenAttempted = false;
       const shouldRetryDeferredCanonicalMutation =
         this.canUseReplicaOperationMutationIngress(mutation?.operation);
+      const operationCreationInsert =
+        mutation?.operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT;
       while (true) {
         const result = await this.executeReplicaOperationGatewayMutationAttempt(
           mutation, options, fallback, retryAttempt);
-        if (result.success || !this.isRetryableOperationPersistError(result)) {
+        if (result.success) {
           return result;
         }
-        const recoveredAfterRetryableFailure =
-          typeof options?.onRetryableFailure === 'function' ?
-            (await options.onRetryableFailure(result)) === true :
-            false;
-        if (recoveredAfterRetryableFailure) {
-          return {success: true, recoveredAfterRetryableFailure: true};
+        const step = await this.resolveOperationMutationRetryableStep(result, {
+          operationCreationInsert,
+          options,
+          priorMutationDeliveryMayHaveBeenAttempted,
+        });
+        priorMutationDeliveryMayHaveBeenAttempted =
+          step.priorMutationDeliveryMayHaveBeenAttempted;
+        if (!step.retry) {
+          return step.terminal;
         }
+        const scanResult = step.result;
         if (
-          this.shouldShortCircuitDeferredMutationRetry(result) &&
+          this.shouldShortCircuitDeferredMutationRetry(scanResult) &&
           !shouldRetryDeferredCanonicalMutation
         ) {
-          return result;
+          return scanResult;
         }
         const elapsedMs = this.timeSource.now() - startedAt;
         const remainingMs = this.resolveOperationMutationRemainingRetryMs(
@@ -126,19 +204,19 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           options.timeoutBudget,
         );
         if (remainingMs <= 0) {
-          return result;
+          return scanResult;
         }
-        if (this.shouldRotateOperationMutationSessionOnRetry(result, options)) {
+        if (this.shouldRotateOperationMutationSessionOnRetry(scanResult, options)) {
           retryAttempt += 1;
         }
         // Stop re-arming the backoff once the owning coordinator is shutting
         // down (otherwise this retry timer keeps the event loop alive).
         if (typeof this.isShuttingDownRequested === 'function' &&
             this.isShuttingDownRequested()) {
-          return result;
+          return scanResult;
         }
         const waitMs = Math.min(
-          this.resolveOperationMutationRetryDelayMs(result),
+          this.resolveOperationMutationRetryDelayMs(scanResult),
           remainingMs,
         );
         await this.waitForOperationPersistRetry(waitMs);
@@ -363,6 +441,15 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         errorResult.outcome.length > 0
       ) {
         error.outcome = errorResult.outcome;
+      }
+      if (
+        typeof errorResult?.deliveryDisposition === 'string' &&
+        errorResult.deliveryDisposition.length > 0
+      ) {
+        error.deliveryDisposition = errorResult.deliveryDisposition;
+      }
+      if (errorResult?.priorMutationDeliveryMayHaveBeenAttempted === true) {
+        error.priorMutationDeliveryMayHaveBeenAttempted = true;
       }
       if (errorResult?.cause && !error.cause) {
         error.cause = errorResult.cause;

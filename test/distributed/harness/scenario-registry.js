@@ -34,6 +34,10 @@ const CANONICAL_SCENARIO_MATRIX = Object.freeze([
   }),
   Object.freeze({
     config: 'local-three-node.json',
+    name: 'public-seam-durability',
+  }),
+  Object.freeze({
+    config: 'local-three-node.json',
     name: 'rolling-restart',
   }),
   Object.freeze({

@@ -6,8 +6,7 @@
  */
 
 import Docker from 'dockerode';
-import {createWriteStream, readdirSync} from 'node:fs';
-import path from 'node:path';
+import {createWriteStream} from 'node:fs';
 import {Writable} from 'node:stream';
 import {
   PORTS,
@@ -16,6 +15,7 @@ import {
   RESOURCE_DEFAULTS,
   CONTAINER_LOG_TAIL_LINES,
 } from './constants.js';
+import {buildImageContext} from './docker-build-context.js';
 import {resolveDockerMemoryWorkingSetBytes} from
   './container-memory-working-set.js';
 const localText = Object.freeze({
@@ -78,62 +78,9 @@ const STORAGE_USAGE_ARGUMENT_SEPARATOR = '--';
 const STORAGE_USAGE_FIELD_SEPARATOR = '\t';
 const STORAGE_USAGE_BYTE_COUNT_PATTERN = /^(?:0|[1-9]\d*)$/u;
 const STORAGE_LIMIT_PATTERN = /(?:^|,)size=(\d+)(?:,|$)/u;
-const BUILD_CONTEXT_DIRECTORIES = Object.freeze([
-  'src',
-  'vendor/raft-rs-wasm',
-]);
 const CONTAINER_COMMAND_FIELD = 'Cmd';
 const CONTAINER_ENTRYPOINT_FIELD = 'Entrypoint';
 const HOST_NETWORK_MODE = 'host';
-// dockerode already receives an explicit allowlist. Sending .dockerignore in
-// that tar makes its broad `**` rule remove recursively requested directories
-// before the daemon can apply the later negations.
-const BUILD_CONTEXT_STATIC_ENTRIES = Object.freeze([
-  'package-lock.json',
-  'package.json',
-]);
-
-function appendBuildContextDirectoryFiles(entries, contextPath, relativePath) {
-  const directory = path.join(contextPath, relativePath);
-  let directoryEntries;
-  try {
-    directoryEntries = readdirSync(directory, {withFileTypes: true});
-  } catch {
-    entries.push(relativePath);
-    return;
-  }
-  for (let index = 0; index < directoryEntries.length; index += 1) {
-    const entry = directoryEntries[index];
-    const child = path.join(relativePath, entry.name);
-    if (entry.isDirectory()) {
-      appendBuildContextDirectoryFiles(entries, contextPath, child);
-    } else {
-      entries.push(child);
-    }
-  }
-}
-
-function buildImageContext(contextPath, dockerfile) {
-  const requested = [
-    ...BUILD_CONTEXT_STATIC_ENTRIES,
-    dockerfile,
-  ];
-  for (const directory of BUILD_CONTEXT_DIRECTORIES) {
-    appendBuildContextDirectoryFiles(requested, contextPath, directory);
-  }
-  const entries = Array.from(new Set(
-    requested.filter(
-      (entry) => typeof entry === 'string' && entry.length > ZERO,
-    ),
-  ))
-    .sort();
-
-  return {
-    context: contextPath,
-    src: entries,
-  };
-}
-
 function normalizeContainerOptions(options) {
   return {
     name: options.name,

@@ -78,6 +78,15 @@ const PERCENT = 100;
 const EXIT_FAILURE = 1;
 const EXIT_SUCCESS = 0;
 const CANNOT_DIFF_PROBLEM = 'cannot diff the proof range';
+// The same digest-pinned dataset prerequisite CI's gate workflow provisions
+// before npm test (.github/workflows/full-gate.yml); the materialised gate
+// checkout has no gitignored data/ tree, so the stage provisions it here.
+const MOVIELENS_DATA_RELATIVE_PATH = 'data/examples/movielens-100k/u.data';
+const MOVIELENS_DIGEST =
+  '06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490';
+const MOVIELENS_FETCH_SCRIPT =
+  'examples/service-data-affinity/download-movielens.js';
+const SHA_BINARY = 'sha256sum';
 const LABEL_CORPUS_RECEIPT = 'whole-corpus receipt for';
 const LABEL_CORPUS_RECEIPT_SKIPPED = 'whole-corpus receipt not recorded:';
 // The proof authority owns this contract (scripts/proof-authority.js exports
@@ -205,6 +214,32 @@ function runClassifiedCone(tests) {
     stdio: [...STDIO_INPUT_THEN_INHERIT],
   });
   return result.status ?? EXIT_FAILURE;
+}
+
+export function provisionDatasetFixtures(options = {}) {
+  const {exists = fs.existsSync} = options;
+  const dataPath = path.join(root, MOVIELENS_DATA_RELATIVE_PATH);
+  const expectedDigestLine =
+    `${MOVIELENS_DIGEST}  ${MOVIELENS_DATA_RELATIVE_PATH}${NEWLINE}`;
+  if (exists(dataPath)) {
+    const digestCheck = spawnSync(SHA_BINARY, ['--check'],
+      {cwd: root, input: expectedDigestLine, encoding: UTF8});
+    if ((digestCheck.status ?? EXIT_FAILURE) === EXIT_SUCCESS) {
+      return EXIT_SUCCESS;
+    }
+  }
+  process.stdout.write(
+    `${LOG_PREFIX} provisioning ${MOVIELENS_DATA_RELATIVE_PATH} ` +
+    `(digest-pinned, the CI gate prerequisite)${NEWLINE}`);
+  const fetchResult = spawnSync(process.execPath, [MOVIELENS_FETCH_SCRIPT],
+    {cwd: root, stdio: 'inherit'});
+  if ((fetchResult.status ?? EXIT_FAILURE) !== EXIT_SUCCESS) {
+    process.stdout.write(`${LOG_PREFIX} dataset provisioning failed${NEWLINE}`);
+    return fetchResult.status ?? EXIT_FAILURE;
+  }
+  const digestCheck = spawnSync(SHA_BINARY, ['--check'],
+    {cwd: root, input: expectedDigestLine, encoding: UTF8});
+  return digestCheck.status ?? EXIT_FAILURE;
 }
 
 function runFullCorpus() {
@@ -336,6 +371,11 @@ function main() {
   // --explain exits 0 even on a REFUSED plan: for the gate a refusal is not
   // an error but the full-corpus branch, and the decision above says so.
   if (explain) return;
+  const datasetStatus = provisionDatasetFixtures();
+  if (datasetStatus !== EXIT_SUCCESS) {
+    process.exitCode = datasetStatus;
+    return;
+  }
   process.exitCode = runDecision(plan, decision);
 }
 

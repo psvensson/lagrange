@@ -18,6 +18,10 @@ import {
 import {
   buildProvisioningCompletionSummary,
 } from './provisioning-completion-summary.js';
+import {shouldRetainDurableSchemaPlanningOperations} from
+  './durable-schema-planning-retention.js';
+import {buildSchemaProvisioningChildIntent} from
+  './schema-provisioning-child-intent.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -26,12 +30,6 @@ const LOCAL_NUM_ONE_THOUSAND = 1000;
 const LOCAL_STR_DISPATCH_OPERATIONS = 'dispatch_operations';
 const LOCAL_STR_WAIT_REPLICA_METADATA = 'wait_replica_metadata';
 const LOCAL_STR_WAIT_MINIMUM_REPLICA_METADATA = 'wait_minimum_replica_metadata';
-
-function buildSchemaProvisioningChildIntentId(jobId, targetNodeId, kind) {
-  const normalizedJobId = String(jobId || '').trim();
-  if (!normalizedJobId) return null;
-  return `${normalizedJobId}:${kind}:${String(targetNodeId || '').trim()}`;
-}
 
 const {
   CONTROL_PLANE_MUTATION_WORK_CLASS,
@@ -138,7 +136,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       routingReadinessDimension,
     );
     if (routableNodeIds.length >= minimumRoutableReplicaCount) {
-      return this.buildProvisioningCompletionSummary({
+      return buildProvisioningCompletionSummary({
         requestedReplicaCount,
         resolvedReplicaCount: targetReplicaCount,
         minimumRoutableReplicaCount,
@@ -162,6 +160,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         Math.max(1, minimumRoutableReplicaCount);
       let convergenceResult = await this.waitForProvisionTargetNodeIds({
         partitionId,
+        schemaJobId: context?.schemaJobId,
         requiredReplicaCount: convergenceRequiredReplicaCount,
         timeoutBudget,
         failOnTimeout: false,
@@ -176,6 +175,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       const transientHoldRewaitResult =
         await this.waitOutWholeClusterTransientProvisioningHold({
           partitionId,
+          schemaJobId: context?.schemaJobId,
           requiredReplicaCount: convergenceRequiredReplicaCount,
           timeoutBudget,
           explicitTargetNodeIds,
@@ -281,6 +281,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       typeof this.rebalanceCoordinator.checkProvisioningAdmission ===
       'function';
     const admittedTargetNodeIds = [];
+    const operationCreationAdmissionByTargetNodeId = new Map();
     const precheckedTargetNodeIds = new Set();
     if (
       supportsAdmissionPrecheck &&
@@ -298,6 +299,20 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
             typeof targetNodeId === LOCAL_STR_STRING && targetNodeId.length > 0,
         ),
       );
+      for (const plan of Array.isArray(
+        admissionConvergence.admittedTargetPlans,
+      ) ? admissionConvergence.admittedTargetPlans : []) {
+        if (
+          typeof plan?.targetNodeId === LOCAL_STR_STRING &&
+          plan.targetNodeId.length > 0 &&
+          plan.operationCreationAdmission
+        ) {
+          operationCreationAdmissionByTargetNodeId.set(
+            plan.targetNodeId,
+            plan.operationCreationAdmission,
+          );
+        }
+      }
       rejectedTargetNodePlans.push(
         ...admissionConvergence.rejectedTargetNodePlans,
       );
@@ -313,6 +328,10 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       }
 
       let admissionDecision = null;
+      const childIntent = buildSchemaProvisioningChildIntent(
+        context?.schemaJobId,
+        targetNodeId,
+      );
       try {
         admissionDecision =
           await this.rebalanceCoordinator.checkProvisioningAdmission({
@@ -321,6 +340,10 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
             entityType: SERVICE_TYPE.PARTITION,
             entityId: partitionId,
             nodeId: targetNodeId,
+            controlPlaneMutationWorkClass:
+              CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
+            operationIntentId: childIntent.operationIntentId,
+            replicaIntentId: childIntent.replicaIntentId,
           });
       } catch (error) {
         if (!this.isProvisioningAdmissionDeniedError(error)) {
@@ -335,6 +358,12 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
 
       if (admissionDecision?.allowed === true) {
         admittedTargetNodeIds.push(targetNodeId);
+        if (admissionDecision.operationCreationAdmission) {
+          operationCreationAdmissionByTargetNodeId.set(
+            targetNodeId,
+            admissionDecision.operationCreationAdmission,
+          );
+        }
         continue;
       }
 
@@ -428,14 +457,18 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
 
       try {
         await context?.assertProvisioningOwnership?.();
+        const childIntent = buildSchemaProvisioningChildIntent(
+          context?.schemaJobId,
+          targetNodeId,
+        );
         const operation = await this.rebalanceCoordinator.createOperation({
           type: OperationType.ADD,
           partitionId,
           entityType: SERVICE_TYPE.PARTITION,
           entityId: partitionId,
           nodeId: targetNodeId,
-          skipProvisioningAdmissionRecheck:
-            precheckedTargetNodeIds.has(targetNodeId),
+          operationCreationAdmission:
+            operationCreationAdmissionByTargetNodeId.get(targetNodeId) || null,
           controlPlaneMutationWorkClass:
             CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
           // Initial partition provisioning executes these operations inline
@@ -443,16 +476,8 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           // bootstrap cohort is stamped, then skip the redundant local trigger.
           deferDispatchUntilBootstrapTopology: true,
           emitOperationCreated: false,
-          operationIntentId: buildSchemaProvisioningChildIntentId(
-            context?.schemaJobId,
-            targetNodeId,
-            'operation',
-          ),
-          replicaIntentId: buildSchemaProvisioningChildIntentId(
-            context?.schemaJobId,
-            targetNodeId,
-            'replica',
-          ),
+          operationIntentId: childIntent.operationIntentId,
+          replicaIntentId: childIntent.replicaIntentId,
           parentWorkflowFenceToken:
             context?.schemaOwnerFenceToken ?? null,
         });
@@ -530,11 +555,20 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           },
         );
       } else {
-        await this.abortProvisioningPlanningOperations(
-          partitionId,
-          createdPlanningOperations,
-          QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_ABORTED_PRE_DISPATCH,
-        );
+        const retryable = !hasExplicitMinimumRoutableReplicaCount;
+        const retainDurableSchemaPlanningOperations =
+          retryable &&
+          shouldRetainDurableSchemaPlanningOperations(
+            context,
+            createdPlanningOperations,
+          );
+        if (!retainDurableSchemaPlanningOperations) {
+          await this.abortProvisioningPlanningOperations(
+            partitionId,
+            createdPlanningOperations,
+            QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_ABORTED_PRE_DISPATCH,
+          );
+        }
         this.throwProvisioningInsufficientTargets({
           partitionId,
           targetReplicaCount,
@@ -551,7 +585,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
             ),
           rejectedTargetNodePlans,
           maximumProvisionableReplicaCount,
-          retryable: !hasExplicitMinimumRoutableReplicaCount,
+          retryable,
         });
       }
     }
@@ -735,7 +769,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       partitionId,
       routingReadinessDimension,
     );
-    return this.buildProvisioningCompletionSummary({
+    return buildProvisioningCompletionSummary({
       requestedReplicaCount,
       resolvedReplicaCount: targetReplicaCount,
       minimumRoutableReplicaCount,
@@ -745,10 +779,6 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       reasonCodes: provisioningReasonCodes,
       retryAfterMs: provisioningRetryAfterMs,
     });
-  }
-
-  buildProvisioningCompletionSummary(options = {}) {
-    return buildProvisioningCompletionSummary(options);
   }
 
   /**
