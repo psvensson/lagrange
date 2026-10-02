@@ -1,6 +1,7 @@
 import {
   PRESSURE_GOVERNOR_ACTION,
 } from '../control-plane/pressure-governor.js';
+import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {
   SPLIT_MERGE_EVENT,
   SPLIT_MERGE_LOG_MSG,
@@ -12,6 +13,7 @@ const LOCAL_STR_WORKFLOW_EXECUTION = 'workflow_execution';
 const LOCAL_STR_OBJECT = 'object';
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayIsArray = Array.isArray;
+const objectCreate = Object.create;
 const objectDefineProperty = Object.defineProperty;
 
 /**
@@ -147,20 +149,21 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         }
       };
       const appendContext = (context) => {
-        if (!context || typeof context !== 'object') {
+        const canonicalContext = copyStrictOwnDataRecord(context);
+        if (canonicalContext === null) {
           return;
         }
         appendValues(
           merged.reasonCodes,
-          arrayIsArray(context.reasonCodes) ?
-            context.reasonCodes :
-            [context.reasonCode, context.reason],
+          arrayIsArray(canonicalContext.reasonCodes) ?
+            canonicalContext.reasonCodes :
+            [canonicalContext.reasonCode, canonicalContext.reason],
         );
         appendValues(
           merged.partitionIds,
-          arrayIsArray(context.partitionIds) ?
-            context.partitionIds :
-            [context.partitionId],
+          arrayIsArray(canonicalContext.partitionIds) ?
+            canonicalContext.partitionIds :
+            [canonicalContext.partitionId],
         );
       };
 
@@ -175,13 +178,16 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
      * @return {string}
      */
     resolveEvaluationTrigger(preflightOptions = {}) {
-      const trigger = String(
-        preflightOptions?.triggerReason ||
-        preflightOptions?.reasonCode ||
-        preflightOptions?.reason ||
-        defaultEvaluationTrigger,
-      );
-      return trigger.length > 0 ? trigger : defaultEvaluationTrigger;
+      for (const candidate of [
+        preflightOptions?.triggerReason,
+        preflightOptions?.reasonCode,
+        preflightOptions?.reason,
+      ]) {
+        if (typeof candidate === 'string' && candidate.length > 0) {
+          return candidate;
+        }
+      }
+      return defaultEvaluationTrigger;
     },
 
     /**
@@ -307,6 +313,9 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
      * @return {Promise<Object>}
      */
     async evaluateAllPartitions(preflightOptions = {}) {
+      const evaluationOptions =
+        copyStrictOwnDataRecord(preflightOptions) ||
+        objectCreate(null);
       if (this.state !== operationState.IDLE) {
         this.logger.debug(SPLIT_MERGE_LOG_MSG.SKIPPING_EVAL_BUSY, {
           state: this.state,
@@ -315,9 +324,9 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
       }
 
       const evaluationStartedAtMs =
-        this.recordEvaluationStart(preflightOptions);
+        this.recordEvaluationStart(evaluationOptions);
       const bypassSplitPressure =
-        this.shouldBypassSplitPressure(preflightOptions);
+        this.shouldBypassSplitPressure(evaluationOptions);
       const pressureDecision = this.evaluateSplitPressure();
       if (
         !bypassSplitPressure &&
@@ -325,7 +334,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
       ) {
         this.requestEvaluation({
           reasonCode: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
-          partitionIds: preflightOptions.partitionIds,
+          partitionIds: evaluationOptions.partitionIds,
         });
         const results = {
           evaluated: false,
@@ -376,7 +385,10 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           return results;
         }
         results.partitionsEvaluated = partitions.length;
-        const targetNodeId = preflightOptions.targetNodeId || null;
+        const targetNodeId =
+          typeof evaluationOptions.targetNodeId === 'string' ?
+            evaluationOptions.targetNodeId :
+            null;
 
         for (let partitionIndex = 0;
           partitionIndex < partitions.length;
