@@ -23,6 +23,13 @@ const COMPARISON_RESULT = Object.freeze({
 });
 const SUPPORTED_KEY_TYPE_LIST = 'number/string/buffer';
 const TEXT_ENCODING = 'utf8';
+const SPLIT_METADATA_FIELD = Object.freeze({
+  SPLIT_KEY: 'splitKey',
+  TARGET_PARTITION_IDS: 'targetPartitionIds',
+  LENGTH: 'length',
+  LEFT_INDEX: '0',
+  RIGHT_INDEX: '1',
+});
 const ErrorCtor = Error;
 const arrayIsArray = Array.isArray;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
@@ -110,20 +117,20 @@ function readOwnDataValue(record, key) {
 }
 
 function readTargetPartitionIds(metadata) {
-  const targetPartitionIds = readOwnDataValue(metadata, 'targetPartitionIds');
+  const targetPartitionIds = readOwnDataValue(metadata, SPLIT_METADATA_FIELD.TARGET_PARTITION_IDS);
   if (!arrayIsArray(targetPartitionIds)) {
     return {leftPartitionId: undefined, rightPartitionId: undefined};
   }
   const lengthDescriptor =
-    objectGetOwnPropertyDescriptor(targetPartitionIds, 'length');
+    objectGetOwnPropertyDescriptor(targetPartitionIds, SPLIT_METADATA_FIELD.LENGTH);
   if (!lengthDescriptor ||
       !objectHasOwn(lengthDescriptor, 'value') ||
       lengthDescriptor.value < 2) {
     return {leftPartitionId: undefined, rightPartitionId: undefined};
   }
   return {
-    leftPartitionId: readOwnDataValue(targetPartitionIds, '0'),
-    rightPartitionId: readOwnDataValue(targetPartitionIds, '1'),
+    leftPartitionId: readOwnDataValue(targetPartitionIds, SPLIT_METADATA_FIELD.LEFT_INDEX),
+    rightPartitionId: readOwnDataValue(targetPartitionIds, SPLIT_METADATA_FIELD.RIGHT_INDEX),
   };
 }
 
@@ -141,7 +148,7 @@ export function resolveSplitTargetPartitionId(value, metadata = {}) {
   if (value === null || value === void 0) {
     return rightPartitionId;
   }
-  const splitKey = readOwnDataValue(metadata, 'splitKey');
+  const splitKey = readOwnDataValue(metadata, SPLIT_METADATA_FIELD.SPLIT_KEY);
   return compareSplitKey(value, splitKey) < COMPARISON_RESULT.EQUAL ?
     leftPartitionId :
     rightPartitionId;
