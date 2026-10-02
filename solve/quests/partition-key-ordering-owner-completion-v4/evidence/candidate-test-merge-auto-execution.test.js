@@ -131,6 +131,7 @@ test('merge sort table IDs ignore mutable String and reject coercion', (t) => {
   );
   t.equal(coercionCalls, 0, 'table ID comparison never coerces hostile metadata');
   manager.shutdown();
+  t.end();
 });
 
 test('merge auto-execution - adjacency sorting uses SQLite BINARY key order',
