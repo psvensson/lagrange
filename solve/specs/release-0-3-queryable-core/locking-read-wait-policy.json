@@ -7,7 +7,7 @@
   "deadlockPolicy": "impossible_no_wait_graph",
   "transactionOwner": "DistributedTransactionCoordinator",
   "participantOwner": "partition_transaction_participant",
-  "multiParticipantConflict": "rollback_whole_transaction",
+  "multiParticipantConflict": "participant_refusal_then_dtc_rollback_whole_transaction_and_confirm_release",
   "releaseAuthority": "transaction_resolution",
   "reservationPersistence": "durable_replicated_until_transaction_resolution",
   "localExpiry": "forbidden",
@@ -21,10 +21,10 @@
     "PG wire transports locking-read intent but owns no lock state.",
     "A reservation conflict never enters a waiter queue in the Phase 0.3 slice.",
     "A transaction never retains reservations while waiting on another transaction.",
-    "A conflict on any participant causes whole-transaction rollback and release of earlier reservations.",
     "Participant-local clocks never expire unresolved reservations independently.",
     "Crash/restart preserves unresolved reservation authority until transaction recovery resolves it.",
-    "Future blocking waits, NOWAIT, SKIP LOCKED, or wake queues require a superseding policy."
+    "Future blocking waits, NOWAIT, SKIP LOCKED, or wake queues require a superseding policy.",
+    "A conflict on any participant first returns typed contention from that participant, then DistributedTransactionCoordinator rolls back the whole transaction, confirms release of earlier reservations, and emits transaction_aborted with the contention cause."
   ],
   "transitions": {
     "acquire": {
@@ -71,6 +71,11 @@
       "owner": "DistributedTransactionCoordinator",
       "action": "replay_terminal_decision_or_rollback_then_reconcile_participant_reservations",
       "outcome": "transaction_resolved_and_reservations_reconciled"
+    },
+    "conflict_abort": {
+      "owner": "DistributedTransactionCoordinator",
+      "action": "on_participant_conflict_rollback_whole_transaction_wait_for_release_acknowledgements_then_report_terminal_abort",
+      "outcome": "transaction_aborted"
     }
   },
   "excludedFromInitialSlice": [
