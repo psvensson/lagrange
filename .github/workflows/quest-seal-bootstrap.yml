@@ -1,6 +1,7 @@
 name: quest-a1-v3-seal-and-attempt
 # retry after v3 lint repair
 # generated-state producers run once; generated-only commit skips duplicate pre-commit regeneration
+# retry after Reflect intrinsic witness
 
 on:
   push:
