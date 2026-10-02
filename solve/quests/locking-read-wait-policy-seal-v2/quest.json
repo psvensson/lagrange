@@ -43,5 +43,6 @@
       "id": "semantic-consistency",
       "statement": "The machine-readable policy and architecture prose/table must agree on owners, actions, outcomes, fail-fast/no-wait, deadlock, TTL, PG-wire ownership and future supersession."
     }
-  ]
+  ],
+  "sealedAt": "785b0fa92b7abf48bfc9aeaa8de2b8e7d9ffb608"
 }
