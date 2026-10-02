@@ -135,14 +135,12 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         partitionIds: [],
       };
       const appendValues = (target, values) => {
-        if (!arrayIsArray(values)) {
-          return;
-        }
-        for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
-          const value = values[valueIndex];
-          const normalizedValue =
-            typeof value === 'string' ? value : '';
-          if (!normalizedValue || arrayIncludes(target, normalizedValue)) {
+        const canonicalValues = cloneStringArray(values);
+        for (let valueIndex = 0;
+          valueIndex < canonicalValues.length;
+          valueIndex += 1) {
+          const normalizedValue = canonicalValues[valueIndex];
+          if (arrayIncludes(target, normalizedValue)) {
             continue;
           }
           appendOwnArrayValue(target, normalizedValue);
