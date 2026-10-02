@@ -22,6 +22,7 @@ const COMPARISON_RESULT = Object.freeze({
   EQUAL: 0,
 });
 const SUPPORTED_KEY_TYPE_LIST = 'number/string/buffer';
+const TEXT_ENCODING = 'utf8';
 
 function resolveSplitKeyType(value) {
   if (typeof value === SPLIT_KEY_TYPE.NUMBER && Number.isFinite(value)) {
@@ -34,6 +35,13 @@ function resolveSplitKeyType(value) {
     return SPLIT_KEY_TYPE.BUFFER;
   }
   return null;
+}
+
+function compareBinaryText(left, right) {
+  return Buffer.compare(
+    Buffer.from(String(left), TEXT_ENCODING),
+    Buffer.from(String(right), TEXT_ENCODING),
+  );
 }
 
 /**
@@ -69,13 +77,10 @@ export function compareSplitKey(value, splitKey) {
   if (splitKeyType === SPLIT_KEY_TYPE.BUFFER) {
     return Buffer.compare(value, splitKey);
   }
-  if (value < splitKey) {
-    return COMPARISON_RESULT.LEFT;
+  if (splitKeyType === SPLIT_KEY_TYPE.NUMBER) {
+    return value - splitKey;
   }
-  if (value > splitKey) {
-    return COMPARISON_RESULT.RIGHT;
-  }
-  return COMPARISON_RESULT.EQUAL;
+  return compareBinaryText(value, splitKey);
 }
 
 /**
@@ -112,7 +117,7 @@ function isTextEncodedNumber(value) {
 function compareWithinType(keyType, a, b) {
   if (keyType === SPLIT_KEY_TYPE.BUFFER) return Buffer.compare(a, b);
   if (keyType === SPLIT_KEY_TYPE.NUMBER) return a - b;
-  return a.localeCompare(b);
+  return compareBinaryText(a, b);
 }
 
 function isAbsentKey(value) {
@@ -142,9 +147,9 @@ function compareNumberWithTextEncodedNumber(a, b, aType, bType) {
  * Routing order for partition keys: the one comparator behind
  * KeyRange.compareKeys, PartitionResolver.compareValues and
  * QueryGroup.compareValues. Null sorts first. Two keys of one declared
- * type compare within that type (numbers numerically, strings by
- * localeCompare as before, buffers bytewise); two values of one other
- * runtime type keep the String order they had. A number against a
+ * type compare within that type (numbers numerically, strings by the
+ * SQLite BINARY-compatible UTF-8 byte order, buffers bytewise); two values
+ * of one other runtime type keep deterministic bytewise String order. A number against a
  * text-encoded number compares numerically: the partitions system table
  * declares partition_key_start/end as TEXT, so a split's numeric median
  * comes back as '500' while the routed key is the number the SQL AST
@@ -165,7 +170,7 @@ export function compareRoutingKeys(a, b) {
   const numericOrder = compareNumberWithTextEncodedNumber(a, b, aType, bType);
   if (numericOrder !== null) return numericOrder;
   if (aType === null && bType === null && typeof a === typeof b) {
-    return String(a).localeCompare(String(b));
+    return compareBinaryText(a, b);
   }
   throw new Error(
     PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch(
