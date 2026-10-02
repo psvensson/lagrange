@@ -17,6 +17,10 @@ const EXPECTED_CONTENTION_OUTCOME = 'locking_read_reservation_conflict';
 const TRANSITION_NAME_SEPARATOR = '_';
 const ARCHITECTURE_TRANSITION_SEPARATOR = '-';
 const SCRIPT_NEWLINE = '\n';
+const objectEntries = Object.entries;
+const objectKeys = Object.keys;
+const stringIncludes = Function.call.bind(String.prototype.includes);
+const stringReplaceAll = Function.call.bind(String.prototype.replaceAll);
 const REQUIRED_TRANSITIONS = Object.freeze({
   acquire: EXPECTED_PARTICIPANT_OWNER,
   same_transaction_reacquire: EXPECTED_PARTICIPANT_OWNER,
@@ -69,7 +73,7 @@ const policy=readJson(POLICY_PATH);
 const architecture=readText(ARCHITECTURE_PATH);
 let metric=0;
 if (!policy || typeof policy !== 'object') {
-  metric += Object.keys(REQUIRED_TRANSITIONS).length;
+  metric += objectKeys(REQUIRED_TRANSITIONS).length;
 } else {
   metric += policy.version === EXPECTED_POLICY_VERSION ? 0 : 1;
   metric += policy.conflictMode === EXPECTED_CONFLICT_MODE ? 0 : 1;
@@ -82,23 +86,27 @@ if (!policy || typeof policy !== 'object') {
   metric += policy.typedOutcomes?.abort === EXPECTED_ABORT_OUTCOME ? 0 : 1;
   metric += policy.typedOutcomes?.contention ===
     EXPECTED_CONTENTION_OUTCOME ? 0 : 1;
-  for (const [name, owner] of Object.entries(REQUIRED_TRANSITIONS)) {
+  for (const [name, owner] of objectEntries(REQUIRED_TRANSITIONS)) {
     metric += validTransition(policy.transitions?.[name], owner) ? 0 : 1;
   }
 }
 for (const fragment of REQUIRED_ARCHITECTURE_FRAGMENTS) {
-  metric += architecture.includes(fragment) ? 0 : 1;
+  metric += stringIncludes(architecture, fragment) ? 0 : 1;
 }
 if (policy) {
-  for (const [name, owner] of Object.entries(REQUIRED_TRANSITIONS)) {
+  for (const [name, owner] of objectEntries(REQUIRED_TRANSITIONS)) {
     const row = policy.transitions?.[name];
     if (!row) continue;
-    metric += architecture.includes(name.replaceAll(
-      TRANSITION_NAME_SEPARATOR,
-      ARCHITECTURE_TRANSITION_SEPARATOR,
-    )) ? 0 : 1;
-    metric += architecture.includes(owner) ? 0 : 1;
-    metric += architecture.includes(row.outcome) ? 0 : 1;
+    metric += stringIncludes(
+      architecture,
+      stringReplaceAll(
+        name,
+        TRANSITION_NAME_SEPARATOR,
+        ARCHITECTURE_TRANSITION_SEPARATOR,
+      ),
+    ) ? 0 : 1;
+    metric += stringIncludes(architecture, owner) ? 0 : 1;
+    metric += stringIncludes(architecture, row.outcome) ? 0 : 1;
   }
 }
 process.stdout.write(String(metric) + SCRIPT_NEWLINE);
