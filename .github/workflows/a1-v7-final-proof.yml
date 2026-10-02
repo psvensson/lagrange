@@ -1,0 +1,126 @@
+name: a1-v7-final-proof
+on:
+  push:
+    branches:
+      - review/a1-v7-final-freeze
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TAP_TIMEOUT_FLOOR: '120'
+      LAGRANGE_TEST_MACHINE_FACTOR: '3'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Generated metadata is exact-head current
+        run: |
+          npm run -s test:metadata:refresh
+          git diff --exit-code -- \
+            test/shards/primary-classes.json \
+            test/shards/resource-classes.json \
+            test/shards/subsystem-classes.json \
+            test/shards/impact-graph-seal.json \
+            solve/changes/global-owner-debt-inventory/inventory.json
+      - name: Exact candidate fingerprints
+        run: |
+          sha256sum \
+            src/partition/partition-split-merge-manager.js \
+            src/partition/split-key-comparator.js \
+            src/partition/partition-split-merge-manager-core-methods.js \
+            src/partition/partition-split-merge-manager-evaluation-methods.js \
+            src/partition/partition-split-merge-manager-transition-methods.js \
+            test/partition/routing-key-comparator.test.js \
+            test/partition/merge-auto-execution.test.js \
+            scripts/checks/partition-key-ordering-owner-completion-v7.js
+      - name: Controlled negatives on rejected A1 candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          for spec in \
+            "e0a84ca06b0d377d405a69d7c5bbc57ad5714f77:v6-rejected" \
+            "9fcc09739a31a248297eb16eae3724c4e61fbfc6:v7-rejected"; do
+            ref="${spec%%:*}"
+            label="${spec##*:}"
+            wt="$RUNNER_TEMP/$label"
+            git worktree add --detach "$wt" "$ref"
+            ln -s "$GITHUB_WORKSPACE/node_modules" "$wt/node_modules"
+            cp scripts/checks/partition-key-ordering-owner-completion-v7.js \
+              "$wt/scripts/checks/partition-key-ordering-owner-completion-v7.js"
+            set +e
+            (
+              cd "$wt"
+              node scripts/checks/partition-key-ordering-owner-completion-v7.js
+            ) >"$RUNNER_TEMP/$label.out" 2>"$RUNNER_TEMP/$label.err"
+            status=$?
+            set -e
+            cat "$RUNNER_TEMP/$label.err"
+            cat "$RUNNER_TEMP/$label.out"
+            if [ "$status" -eq 0 ]; then
+              echo "::error::$label unexpectedly satisfies the v7 closure probe"
+              exit 1
+            fi
+            if [ "$label" = "v6-rejected" ]; then
+              grep -Eq 'table-id-validation-before-(missing|null|undefined)' \
+                "$RUNNER_TEMP/$label.err" &&
+              grep -q 'evaluation-array-iterator-isolation' \
+                "$RUNNER_TEMP/$label.err" &&
+              grep -q 'evaluation-array-sort-capture' \
+                "$RUNNER_TEMP/$label.err" || {
+                  echo "::error::$label did not reproduce all named v6 defects"
+                  exit 1
+                }
+            else
+              grep -q 'evaluation-array-iterator-isolation' \
+                "$RUNNER_TEMP/$label.err" &&
+              grep -q 'evaluation-array-isarray-capture' \
+                "$RUNNER_TEMP/$label.err" || {
+                  echo "::error::$label did not reproduce the named v7 defects"
+                  exit 1
+                }
+            fi
+            git worktree remove --force "$wt"
+          done
+      - name: A1 v6 preserved closure
+        run: node scripts/checks/partition-key-ordering-owner-completion-v6.js
+      - name: A1 v7 closure
+        run: node scripts/checks/partition-key-ordering-owner-completion-v7.js
+      - name: Focused behavior
+        run: npm run test:file -- test/partition/routing-key-comparator.test.js test/partition/merge-auto-execution.test.js
+      - name: Complexity ratchet
+        run: |
+          npm run test:complexity
+          npm run test:complexity:scoped -- \
+            src/partition/partition-split-merge-manager.js \
+            src/partition/split-key-comparator.js \
+            src/partition/partition-split-merge-manager-core-methods.js \
+            src/partition/partition-split-merge-manager-evaluation-methods.js \
+            src/partition/partition-split-merge-manager-transition-methods.js
+      - name: File-size admission
+        run: npm run audit:file-size
+      - name: Landing-path ESLint and guideline guards
+        shell: bash
+        run: |
+          paths=(
+            src/partition/partition-split-merge-manager.js
+            src/partition/split-key-comparator.js
+            src/partition/partition-split-merge-manager-core-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js
+            src/partition/partition-split-merge-manager-transition-methods.js
+            test/partition/routing-key-comparator.test.js
+            test/partition/merge-auto-execution.test.js
+          )
+          node node_modules/eslint/bin/eslint.js --no-warn-ignored --no-error-on-unmatched-pattern "${paths[@]}"
+          node scripts/check-guideline-literals.js "${paths[@]}"
+          node scripts/check-guideline-decision-boundaries.js "${paths[@]}"
+          node scripts/check-guideline-ambient-intrinsics.js "${paths[@]}"
+          node scripts/check-guideline-silent-catch.js "${paths[@]}"
