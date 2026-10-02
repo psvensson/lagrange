@@ -1,5 +1,4 @@
-name: quest-seal-bootstrap
-# preservation-fast-path active
+name: quest-a1-cloud-replay
 
 on:
   push:
@@ -12,10 +11,10 @@ permissions:
   contents: write
 
 jobs:
-  seal:
-    name: regenerate metadata then seal partition-key ordering quest
+  replay:
+    name: replay A1 red-green candidate
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout exact feature branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -28,41 +27,107 @@ jobs:
         shell: bash
         run: npm ci
 
-      - name: Refresh and commit generated test metadata
+      - name: Baseline scoped guardrails
         shell: bash
         run: |
           set -euo pipefail
-          npm run -s test:metadata:refresh
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet --             test/shards/primary-classes.json             test/shards/resource-classes.json             test/shards/subsystem-classes.json             test/shards/impact-graph-seal.json; then
-            git add --               test/shards/primary-classes.json               test/shards/resource-classes.json               test/shards/subsystem-classes.json               test/shards/impact-graph-seal.json
-            git commit -m "test: refresh metadata for 0.3 Quest planning"
-          fi
+          files=(
+            src/partition/split-key-comparator.js
+            src/partition/partition-split-merge-manager-core-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js
+          )
+          npm run -s test:metrics:scoped -- "${files[@]}"
+          node scripts/check-guideline-literals.js "${files[@]}"
+          node scripts/check-runtime-grammar-contracts.js "${files[@]}"
+          node scripts/check-file-size-thresholds.js
 
-      - name: Seal Quest on the exact metadata-current HEAD
+      - name: Install witnesses and prove red on current source
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/solve.js start --id partition-key-ordering-owner-completion
+          evidence=solve/quests/partition-key-ordering-owner-completion/evidence
+          cp "$evidence/candidate-test-routing-key-comparator.test.js"             test/partition/routing-key-comparator.test.js
+          cp "$evidence/candidate-test-merge-auto-execution.test.js"             test/partition/merge-auto-execution.test.js
+
+          set +e
+          node --test test/partition/routing-key-comparator.test.js             > /tmp/a1-routing-red.log 2>&1
+          routing_status=$?
+          node test/partition/merge-auto-execution.test.js             > /tmp/a1-merge-red.log 2>&1
+          merge_status=$?
+          set -e
+
+          cat /tmp/a1-routing-red.log
+          cat /tmp/a1-merge-red.log
+
+          if [ "$routing_status" -eq 0 ]; then
+            echo "routing witness unexpectedly green before source change"
+            exit 1
+          fi
+          if [ "$merge_status" -eq 0 ]; then
+            echo "merge witness unexpectedly green before source change"
+            exit 1
+          fi
+          grep -E "not ok.*text routing order matches SQLite BINARY"             /tmp/a1-routing-red.log >/dev/null
+          grep -E "not ok.*adjacency sorting uses SQLite BINARY key order"             /tmp/a1-merge-red.log >/dev/null
+
+      - name: Install source candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=solve/quests/partition-key-ordering-owner-completion/evidence
+          cp "$evidence/candidate-src-split-key-comparator.js"             src/partition/split-key-comparator.js
+          cp "$evidence/candidate-src-split-merge-core.js"             src/partition/partition-split-merge-manager-core-methods.js
+          cp "$evidence/candidate-src-split-merge-evaluation.js"             src/partition/partition-split-merge-manager-evaluation-methods.js
+
+      - name: Prove green candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test/partition/routing-key-comparator.test.js
+          node test/partition/split-key-comparator.test.js
+          node test/partition/merge-auto-execution.test.js
+          node test/partition/partition-split-merge-manager.test.js
+          node scripts/checks/partition-key-ordering-owner-completion.js
           node scripts/solve.js probe --id partition-key-ordering-owner-completion
 
-      - name: Refuse unexpected post-seal mutations
+      - name: Candidate scoped guardrails
         shell: bash
         run: |
           set -euo pipefail
+          files=(
+            src/partition/split-key-comparator.js
+            src/partition/partition-split-merge-manager-core-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js
+          )
+          npm run -s test:metrics:scoped -- "${files[@]}"
+          node scripts/check-guideline-literals.js "${files[@]}"
+          node scripts/check-runtime-grammar-contracts.js "${files[@]}"
+          node scripts/check-file-size-thresholds.js
+          npx eslint             "${files[@]}"             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js
+
+      - name: Record Quest evidence and attempt
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion             --finding "A1 controlled negative on GitHub Actions run ${GITHUB_RUN_ID}: the SQLite-BINARY routing witness and Unicode merge-adjacency witness were both red on sealed source and green with the candidate; the direct doneWhen checker reached zero."             --kind evidence             --evidence "github-actions:${GITHUB_RUN_ID}"
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion             --attempt "A1 candidate completes the partition-key order owner: deterministic UTF-8 byte/BINARY text ordering, merge sort and adjacency delegate to compareRoutingKeys, existing numeric/TEXT compatibility and typed refusal remain green; red-before/green-after witnesses, focused partition tests, doneWhen and scoped guardrails all passed in GitHub Actions run ${GITHUB_RUN_ID}."
+
+      - name: Restore product tree and preserve only Quest record
+        shell: bash
+        run: |
+          set -euo pipefail
+          git restore --             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js
+
           changed="$(git status --porcelain | awk '{print $2}' | sort)"
-          expected="$(printf '%s\n'             solve/quests/partition-key-ordering-owner-completion/log.ndjson             solve/quests/partition-key-ordering-owner-completion/quest.json | sort)"
+          expected="solve/quests/partition-key-ordering-owner-completion/log.ndjson"
           if [ "$changed" != "$expected" ]; then
-            echo "Unexpected post-seal mutation set:"
+            echo "Unexpected post-replay mutation set:"
             printf '%s\n' "$changed"
             exit 1
           fi
 
-      - name: Commit and preserve exact Solver seal
-        shell: bash
-        run: |
-          set -euo pipefail
-          git add --             solve/quests/partition-key-ordering-owner-completion/quest.json             solve/quests/partition-key-ordering-owner-completion/log.ndjson
-          git commit -m "quest: seal partition-key ordering owner completion"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- solve/quests/partition-key-ordering-owner-completion/log.ndjson
+          git commit -m "quest: record A1 cloud replay attempt"
           git push origin HEAD:refs/heads/quest/0-3-queryable-core-foundation
