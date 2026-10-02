@@ -43,7 +43,8 @@ function cloneStringArray(values) {
     return [];
   }
   const cloned = [];
-  for (const value of values) {
+  for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
+    const value = values[valueIndex];
     const normalizedValue = String(value || '');
     if (!normalizedValue || cloned.includes(normalizedValue)) {
       continue;
@@ -155,7 +156,7 @@ class PartitionSplitMergeManagerCoreMethods {
    */
   resolveEvaluationReasonCodes(preflightOptions = {}) {
     return cloneStringArray(
-      Array.isArray(preflightOptions?.reasonCodes) ?
+      arrayIsArray(preflightOptions?.reasonCodes) ?
         preflightOptions.reasonCodes :
         [preflightOptions?.reasonCode, preflightOptions?.reason],
     );
