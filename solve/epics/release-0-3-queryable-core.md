@@ -10,6 +10,7 @@ doneWhen:
 quests:
   - partition-key-ordering-owner-completion
   - partition-key-ordering-owner-completion-v2
+  - partition-key-ordering-owner-completion-v3
 authorizes:
   - architecture
   - docs/development/agpl-feature-map.md
@@ -193,12 +194,17 @@ The first source Quest was initially sealed as
 `partition-key-ordering-owner-completion`; Copilot's pre-seal review found
 that its doneWhen checker could admit incomplete UTF-8/BINARY semantics. That
 sealed Quest is superseded rather than mutating its predicate in place.
-The active A1 Quest is
-`partition-key-ordering-owner-completion-v2`. It is intentionally small and
-safe beside rs-raft closeout: finish the existing comparison owner's current
-boundary, remove the merge-adjacency duplicate, and prove SQLite-compatible
-string ordering while preserving the already-landed numeric/TEXT and typed
-mixed-space behavior.
+A1-v2 was subsequently rejected by category-complete independent review:
+its closure probe could be satisfied by unrelated owner tokens, unsupported
+same-type values still reached String coercion, its behavioral mismatch witness
+was too broad, and the comparator still resolved mutable intrinsics at call
+time. Its adjacency controlled negative was repaired and preserved before the
+Quest was superseded.
+
+The active A1 Quest is now
+`partition-key-ordering-owner-completion-v3`. It keeps the already-proven
+SQLite-BINARY and adjacency behavior while requiring actual owner expressions,
+exact typed refusal before coercion, and module-captured intrinsic independence.
 
 After that, the safe-before-cutover access foundation proceeds through persisted
 boundary representation, declared PK consumption, compound-PK narrowing, local
