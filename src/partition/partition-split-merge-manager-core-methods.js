@@ -331,7 +331,7 @@ class PartitionSplitMergeManagerCoreMethods {
       return null;
     }
     const snakeCaseKey = readOwnDataValue(partition, 'partition_key_start');
-    if (snakeCaseKey !== undefined && snakeCaseKey !== null) {
+    if (snakeCaseKey !== undefined) {
       return snakeCaseKey;
     }
     return readOwnDataValue(partition, 'partitionKeyStart') ?? null;
@@ -348,7 +348,7 @@ class PartitionSplitMergeManagerCoreMethods {
       return null;
     }
     const snakeCaseKey = readOwnDataValue(partition, 'partition_key_end');
-    if (snakeCaseKey !== undefined && snakeCaseKey !== null) {
+    if (snakeCaseKey !== undefined) {
       return snakeCaseKey;
     }
     return readOwnDataValue(partition, 'partitionKeyEnd') ?? null;
