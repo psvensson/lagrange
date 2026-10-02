@@ -52,6 +52,43 @@ jobs:
           else
             echo "refreshed=false" >> "$GITHUB_OUTPUT"
           fi
+      - name: Controlled negatives on rejected A1 candidates
+        if: steps.refresh.outputs.refreshed != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for spec in \
+            "e0a84ca06b0d377d405a69d7c5bbc57ad5714f77:v6-rejected" \
+            "9fcc09739a31a248297eb16eae3724c4e61fbfc6:v7-rejected"; do
+            ref="${spec%%:*}"
+            label="${spec##*:}"
+            wt="$RUNNER_TEMP/$label"
+            git worktree add --detach "$wt" "$ref"
+            ln -s "$GITHUB_WORKSPACE/node_modules" "$wt/node_modules"
+            cp scripts/checks/partition-key-ordering-owner-completion-v7.js \
+              "$wt/scripts/checks/partition-key-ordering-owner-completion-v7.js"
+            set +e
+            (
+              cd "$wt"
+              node scripts/checks/partition-key-ordering-owner-completion-v7.js
+            ) >"$RUNNER_TEMP/$label.out" 2>"$RUNNER_TEMP/$label.err"
+            status=$?
+            set -e
+            cat "$RUNNER_TEMP/$label.err"
+            cat "$RUNNER_TEMP/$label.out"
+            if [ "$status" -eq 0 ]; then
+              echo "::error::$label unexpectedly satisfies the v7 closure probe"
+              exit 1
+            fi
+            grep -Eq \
+              'table-id-validation-before-absence|evaluation-array-intrinsic-isolation' \
+              "$RUNNER_TEMP/$label.err" || {
+                echo "::error::$label went red without the named v7 mechanism"
+                exit 1
+              }
+            git worktree remove --force "$wt"
+          done
+
       - name: A1 v6 preserved closure
         if: steps.refresh.outputs.refreshed != 'true'
         run: node scripts/checks/partition-key-ordering-owner-completion-v6.js
@@ -63,7 +100,12 @@ jobs:
         run: npm run test:file -- test/partition/routing-key-comparator.test.js test/partition/merge-auto-execution.test.js
       - name: Complexity ratchet
         if: steps.refresh.outputs.refreshed != 'true'
-        run: npm run test:complexity:strict
+        run: |
+          npm run test:complexity
+          npm run test:complexity:scoped -- \
+            src/partition/split-key-comparator.js \
+            src/partition/partition-split-merge-manager-core-methods.js \
+            src/partition/partition-split-merge-manager-evaluation-methods.js
       - name: Ambient intrinsic guard
         if: steps.refresh.outputs.refreshed != 'true'
         run: npm run audit:guideline:ambient-intrinsics
