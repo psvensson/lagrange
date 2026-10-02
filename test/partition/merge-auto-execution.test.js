@@ -140,6 +140,7 @@ test('merge auto-execution - table-id sort is stable after String mutation',
       {cwd: process.cwd(), encoding: 'utf8'},
     );
     t.equal(result.status, 0, result.stderr || result.stdout);
+    t.end();
   });
 
 test('merge auto-execution - adjacency sorting uses SQLite BINARY key order',
