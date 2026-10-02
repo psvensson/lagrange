@@ -277,17 +277,21 @@ test('merge table ID validation happens before absent ordering', (t) => {
   t.end();
 });
 
-test('merge sorting ignores partition iterators and captures Array.prototype.sort',
-  (t) => {
-    const {manager} = buildManager({executeMergeCandidate: null});
+test('merge evaluation ignores source iterators and captures array intrinsics',
+  async (t) => {
     const rows = [
-      {...buildPartitionRow('b-p1', null, null), table_id: 'table-b'},
-      {...buildPartitionRow('a-p1', null, null), table_id: 'table-a'},
+      {...buildPartitionRow('users-p2', 'm', null), table_id: 'tbl-users'},
+      {...buildPartitionRow('users-p1', null, 'm'), table_id: 'tbl-users'},
     ];
+    const {manager} = buildManager({
+      listPartitions: () => rows,
+      executeMergeCandidate: null,
+    });
     const originalOwnIterator =
       Object.getOwnPropertyDescriptor(rows, Symbol.iterator);
     const originalSort = Array.prototype.sort;
-    let sortedIds;
+    const originalIsArray = Array.isArray;
+    let results;
     try {
       Object.defineProperty(rows, Symbol.iterator, {
         configurable: true,
@@ -298,9 +302,10 @@ test('merge sorting ignores partition iterators and captures Array.prototype.sor
       Array.prototype.sort = () => {
         throw new Error('mutable Array.prototype.sort must not execute');
       };
-      sortedIds = manager.sortEvaluationPartitions(rows)
-        .map((row) => row.partition_id);
+      Array.isArray = () => false;
+      results = await manager.evaluateAllPartitions();
     } finally {
+      Array.isArray = originalIsArray;
       Array.prototype.sort = originalSort;
       if (originalOwnIterator) {
         Object.defineProperty(rows, Symbol.iterator, originalOwnIterator);
@@ -309,7 +314,66 @@ test('merge sorting ignores partition iterators and captures Array.prototype.sor
       }
       manager.shutdown();
     }
-    t.same(sortedIds, ['a-p1', 'b-p1']);
+    t.same(results.mergeCandidates, [
+      {leftId: 'users-p1', rightId: 'users-p2'},
+    ]);
+    t.end();
+  });
+
+test('merge evaluation copy ignores inherited numeric setters and key accessors',
+  async (t) => {
+    const rows = [
+      buildPartitionRow('users-p1', null, 'm'),
+      buildPartitionRow('users-p2', 'm', null),
+    ];
+    let inheritedSetterCalls = 0;
+    let keyAccessorCalls = 0;
+    const accessorRow = rows[1];
+    const ownStart = accessorRow.partition_key_start;
+    Reflect.deleteProperty(accessorRow, 'partition_key_start');
+    Object.defineProperty(accessorRow, 'partition_key_start', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        keyAccessorCalls += 1;
+        return ownStart;
+      },
+    });
+    Object.defineProperty(accessorRow, 'partitionKeyStart', {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: ownStart,
+    });
+    const priorPrototypeIndex =
+      Object.getOwnPropertyDescriptor(Array.prototype, '0');
+    try {
+      Object.defineProperty(Array.prototype, '0', {
+        configurable: true,
+        set() {
+          inheritedSetterCalls += 1;
+        },
+      });
+      const {manager} = buildManager({
+        listPartitions: () => rows,
+        executeMergeCandidate: null,
+      });
+      const results = await manager.evaluateAllPartitions();
+      t.same(results.mergeCandidates, [
+        {leftId: 'users-p1', rightId: 'users-p2'},
+      ]);
+      t.equal(inheritedSetterCalls, 0,
+        'copy defines own numeric slots without prototype setters');
+      t.equal(keyAccessorCalls, 0,
+        'partition-key accessors are not invoked');
+      manager.shutdown();
+    } finally {
+      if (priorPrototypeIndex) {
+        Object.defineProperty(Array.prototype, '0', priorPrototypeIndex);
+      } else {
+        Reflect.deleteProperty(Array.prototype, '0');
+      }
+    }
     t.end();
   });
 
