@@ -13,6 +13,8 @@ const EXPECTED_PARTICIPANT_OWNER = 'partition_transaction_participant';
 const EXPECTED_MULTI_PARTICIPANT_CONFLICT = 'rollback_whole_transaction';
 const EXPECTED_RELEASE_AUTHORITY = 'transaction_resolution';
 const EXPECTED_WAKE_OWNER = 'none_no_waiters';
+const MISSING_POLICY_SCALAR_PROBLEMS = 8;
+const SCRIPT_NEWLINE = '\n';
 const REQUIRED_TRANSITIONS = Object.freeze([
   'acquire',
   'same_transaction_reacquire',
@@ -44,7 +46,7 @@ function readText(filePath) {
 
 function countPolicyProblems(policy) {
   if (!policy || typeof policy !== 'object') {
-    return REQUIRED_TRANSITIONS.length + 8;
+    return REQUIRED_TRANSITIONS.length + MISSING_POLICY_SCALAR_PROBLEMS;
   }
   let problems = 0;
   problems += policy.version === EXPECTED_POLICY_VERSION ? 0 : 1;
@@ -84,5 +86,5 @@ if (!architecture.includes(ARCHITECTURE_MARKER) ||
     !architecture.includes(POLICY_PATH)) {
   metric += 1;
 }
-process.stdout.write(String(metric) + '\n');
+process.stdout.write(String(metric) + SCRIPT_NEWLINE);
 process.exitCode = metric === 0 ? 0 : 1;
