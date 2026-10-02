@@ -124,7 +124,7 @@ test('unsupported same-type objects fail closed before coercion', () => {
   );
   assert.equal(coercionCalls, 0, 'unsupported values are rejected before coercion');
   assert.throws(
-    () => compareRoutingKeys(new String('a'), new String('b')),
+    () => compareRoutingKeys(Object('a'), Object('b')),
     {message: EXPECTED_OBJECT_MISMATCH},
     'boxed strings are not admitted as primitive partition keys',
   );
