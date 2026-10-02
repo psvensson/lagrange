@@ -252,6 +252,67 @@ test('merge table ID reads capture Object.hasOwn', (t) => {
   t.end();
 });
 
+test('merge table ID validation happens before absent ordering', (t) => {
+  const {manager} = buildManager({executeMergeCandidate: null});
+  const invalidIds = [false, 0, Object('boxed-table')];
+  for (const invalidTableId of invalidIds) {
+    const invalidRow = {
+      ...buildPartitionRow('invalid-p1', null, null),
+      table_id: invalidTableId,
+    };
+    const absentRow = buildPartitionRow('absent-p1', null, null);
+    Reflect.deleteProperty(absentRow, 'table_id');
+    t.throws(
+      () => manager.sortEvaluationPartitions([absentRow, invalidRow]),
+      TypeError,
+      'invalid right table ID is rejected before left absence orders it',
+    );
+    t.throws(
+      () => manager.sortEvaluationPartitions([invalidRow, absentRow]),
+      TypeError,
+      'invalid left table ID is rejected before right absence orders it',
+    );
+  }
+  manager.shutdown();
+  t.end();
+});
+
+test('merge sorting ignores partition iterators and captures Array.prototype.sort',
+  (t) => {
+    const {manager} = buildManager({executeMergeCandidate: null});
+    const rows = [
+      {...buildPartitionRow('b-p1', null, null), table_id: 'table-b'},
+      {...buildPartitionRow('a-p1', null, null), table_id: 'table-a'},
+    ];
+    const originalOwnIterator =
+      Object.getOwnPropertyDescriptor(rows, Symbol.iterator);
+    const originalSort = Array.prototype.sort;
+    let sortedIds;
+    try {
+      Object.defineProperty(rows, Symbol.iterator, {
+        configurable: true,
+        value() {
+          throw new Error('partition iterator must not execute');
+        },
+      });
+      Array.prototype.sort = () => {
+        throw new Error('mutable Array.prototype.sort must not execute');
+      };
+      sortedIds = manager.sortEvaluationPartitions(rows)
+        .map((row) => row.partition_id);
+    } finally {
+      Array.prototype.sort = originalSort;
+      if (originalOwnIterator) {
+        Object.defineProperty(rows, Symbol.iterator, originalOwnIterator);
+      } else {
+        Reflect.deleteProperty(rows, Symbol.iterator);
+      }
+      manager.shutdown();
+    }
+    t.same(sortedIds, ['a-p1', 'b-p1']);
+    t.end();
+  });
+
 test('merge auto-execution - adjacency sorting uses SQLite BINARY key order',
   async (t) => {
     const {manager} = buildManager({
