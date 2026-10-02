@@ -1,0 +1,55 @@
+name: a1-v3-request-independent-review
+
+on:
+  push:
+    branches:
+      - review/a1-v3-partition-key-ordering-current
+    paths:
+      - .github/workflows/a1-v3-request-review.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  request:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact trigger SHA
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Remove request workflow and request review on clean head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: review/a1-v3-partition-key-ordering-current
+        run: |
+          set -euo pipefail
+          git fetch origin "$BRANCH"
+          remote_sha="$(git rev-parse "origin/$BRANCH")"
+          if [ "$remote_sha" != "$GITHUB_SHA" ]; then
+            echo "Branch advanced from trigger SHA $GITHUB_SHA to $remote_sha; refusing stale request"
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/a1-v3-request-review.yml
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m "review: remove Copilot request workflow"
+          git push origin HEAD:refs/heads/"$BRANCH"
+
+          clean_sha="$(git rev-parse HEAD)"
+          remote_clean_sha="$(gh pr view 83 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
+          if [ "$remote_clean_sha" != "$clean_sha" ]; then
+            echo "PR #83 head mismatch after cleanup: local $clean_sha remote $remote_clean_sha"
+            exit 1
+          fi
+
+          gh pr edit 83 --repo psvensson/lagrange --add-reviewer @copilot
+          gh pr view 83 --repo psvensson/lagrange \
+            --json number,state,isDraft,headRefOid,url,reviewRequests
