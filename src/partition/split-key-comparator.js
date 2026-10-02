@@ -7,6 +7,8 @@
 // within one declared key type and rejects mixed-type key spaces with a
 // typed outcome; nothing may fall back to coercion.
 
+import {Buffer as NodeBuffer} from 'node:buffer';
+
 import {
   PARTITION_SERVICE_ERROR_MSG,
 } from './partition-service-constants.js';
@@ -23,24 +25,30 @@ const COMPARISON_RESULT = Object.freeze({
 });
 const SUPPORTED_KEY_TYPE_LIST = 'number/string/buffer';
 const TEXT_ENCODING = 'utf8';
+const arrayIsArray = Array.isArray;
+const bufferCompare = NodeBuffer.compare;
+const bufferFrom = NodeBuffer.from;
+const bufferIsBuffer = NodeBuffer.isBuffer;
+const numberIsFinite = Number.isFinite;
+const numberCoerce = Number;
 
 function resolveSplitKeyType(value) {
-  if (typeof value === SPLIT_KEY_TYPE.NUMBER && Number.isFinite(value)) {
+  if (typeof value === SPLIT_KEY_TYPE.NUMBER && numberIsFinite(value)) {
     return SPLIT_KEY_TYPE.NUMBER;
   }
   if (typeof value === SPLIT_KEY_TYPE.STRING) {
     return SPLIT_KEY_TYPE.STRING;
   }
-  if (Buffer.isBuffer(value)) {
+  if (bufferIsBuffer(value)) {
     return SPLIT_KEY_TYPE.BUFFER;
   }
   return null;
 }
 
 function compareBinaryText(left, right) {
-  return Buffer.compare(
-    Buffer.from(String(left), TEXT_ENCODING),
-    Buffer.from(String(right), TEXT_ENCODING),
+  return bufferCompare(
+    bufferFrom(left, TEXT_ENCODING),
+    bufferFrom(right, TEXT_ENCODING),
   );
 }
 
@@ -75,7 +83,7 @@ export function compareSplitKey(value, splitKey) {
     );
   }
   if (splitKeyType === SPLIT_KEY_TYPE.BUFFER) {
-    return Buffer.compare(value, splitKey);
+    return bufferCompare(value, splitKey);
   }
   if (splitKeyType === SPLIT_KEY_TYPE.NUMBER) {
     return value - splitKey;
@@ -91,11 +99,13 @@ export function compareSplitKey(value, splitKey) {
  * @return {string} Target child partition ID.
  */
 export function resolveSplitTargetPartitionId(value, metadata = {}) {
-  const [leftPartitionId, rightPartitionId] = Array.isArray(
-    metadata?.targetPartitionIds,
-  ) ?
-    metadata.targetPartitionIds :
-    [];
+  const targetPartitionIds = metadata?.targetPartitionIds;
+  const leftPartitionId = arrayIsArray(targetPartitionIds) ?
+    targetPartitionIds[0] :
+    undefined;
+  const rightPartitionId = arrayIsArray(targetPartitionIds) ?
+    targetPartitionIds[1] :
+    undefined;
   if (value === null || value === void 0) {
     return rightPartitionId;
   }
@@ -107,15 +117,17 @@ export function resolveSplitTargetPartitionId(value, metadata = {}) {
 export {SPLIT_KEY_TYPE};
 
 const TEXT_ENCODED_NUMBER_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/u;
+const textEncodedNumberMatches =
+  TEXT_ENCODED_NUMBER_PATTERN.test.bind(TEXT_ENCODED_NUMBER_PATTERN);
 
 function isTextEncodedNumber(value) {
   return typeof value === SPLIT_KEY_TYPE.STRING &&
-    TEXT_ENCODED_NUMBER_PATTERN.test(value) &&
-    Number.isFinite(Number(value));
+    textEncodedNumberMatches(value) &&
+    numberIsFinite(numberCoerce(value));
 }
 
 function compareWithinType(keyType, a, b) {
-  if (keyType === SPLIT_KEY_TYPE.BUFFER) return Buffer.compare(a, b);
+  if (keyType === SPLIT_KEY_TYPE.BUFFER) return bufferCompare(a, b);
   if (keyType === SPLIT_KEY_TYPE.NUMBER) return a - b;
   return compareBinaryText(a, b);
 }
@@ -134,11 +146,11 @@ function compareAbsentKeys(a, b) {
 }
 
 function compareNumberWithTextEncodedNumber(a, b, aType, bType) {
-  if (aType === SPLIT_KEY_TYPE.NUMBER && isTextEncodedNumber(b)) {
-    return a - Number(b);
+  if (aType === SPLIT_KEY_TYPE.NUMBER && isTextEncodednumberCoerce(b)) {
+    return a - numberCoerce(b);
   }
-  if (bType === SPLIT_KEY_TYPE.NUMBER && isTextEncodedNumber(a)) {
-    return Number(a) - b;
+  if (bType === SPLIT_KEY_TYPE.NUMBER && isTextEncodednumberCoerce(a)) {
+    return numberCoerce(a) - b;
   }
   return null;
 }
@@ -148,8 +160,8 @@ function compareNumberWithTextEncodedNumber(a, b, aType, bType) {
  * KeyRange.compareKeys, PartitionResolver.compareValues and
  * QueryGroup.compareValues. Null sorts first. Two keys of one declared
  * type compare within that type (numbers numerically, strings by the
- * SQLite BINARY-compatible UTF-8 byte order, buffers bytewise); two values
- * of one other runtime type keep deterministic bytewise String order. A number against a
+ * SQLite BINARY-compatible UTF-8 byte order, buffers bytewise). Unsupported
+ * primitive/boxed/exotic values are refused rather than coerced. A number against a
  * text-encoded number compares numerically: the partitions system table
  * declares partition_key_start/end as TEXT, so a split's numeric median
  * comes back as '500' while the routed key is the number the SQL AST
@@ -169,9 +181,6 @@ export function compareRoutingKeys(a, b) {
   if (aType !== null && aType === bType) return compareWithinType(aType, a, b);
   const numericOrder = compareNumberWithTextEncodedNumber(a, b, aType, bType);
   if (numericOrder !== null) return numericOrder;
-  if (aType === null && bType === null && typeof a === typeof b) {
-    return compareBinaryText(a, b);
-  }
   throw new Error(
     PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch(
       aType || typeof a,

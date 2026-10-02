@@ -12,6 +12,7 @@
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {Buffer as NodeBuffer} from 'node:buffer';
 import Database from 'better-sqlite3';
 import {KeyRange} from '../../src/partition/key-range-manager.js';
 import {PartitionResolver} from '../../src/query/partition-resolver.js';
@@ -19,6 +20,7 @@ import {QueryGroup} from '../../src/live-query/live-query-group.js';
 import {
   compareRoutingKeys,
   compareSplitKey,
+  resolveSplitTargetPartitionId,
 } from '../../src/partition/split-key-comparator.js';
 
 const TABLE = 'items';
@@ -127,5 +129,84 @@ test('text routing order matches SQLite BINARY, including supplementary Unicode'
     }
   } finally {
     database.close();
+  }
+});
+
+
+test('unsupported boxed and exotic routing keys fail closed without coercion', () => {
+  let coercions = 0;
+  const hostile = {
+    [Symbol.toPrimitive]() {
+      coercions += 1;
+      throw new Error('hostile coercion executed');
+    },
+    toString() {
+      coercions += 1;
+      throw new Error('hostile toString executed');
+    },
+  };
+  const cases = [
+    [Object('a'), Object('b')],
+    [Object(1), Object(2)],
+    [true, false],
+    [Symbol('a'), Symbol('b')],
+    [hostile, {}],
+  ];
+  for (const [left, right] of cases) {
+    assert.throws(
+      () => compareRoutingKeys(left, right),
+      MISMATCH_PATTERN,
+      'unsupported same-runtime-type values must be refused, never coerced',
+    );
+  }
+  assert.equal(coercions, 0, 'hostile coercion hooks are never invoked');
+});
+
+test('routing order is stable after mutable intrinsics are replaced', () => {
+  const original = {
+    globalString: globalThis.String,
+    bufferFrom: NodeBuffer.from,
+    bufferCompare: NodeBuffer.compare,
+    bufferIsBuffer: NodeBuffer.isBuffer,
+    numberIsFinite: Number.isFinite,
+    arrayIsArray: Array.isArray,
+    regexpTest: RegExp.prototype.test,
+  };
+  const leftBuffer = NodeBuffer.from('a');
+  const rightBuffer = NodeBuffer.from('b');
+
+  try {
+    globalThis.String = () => {
+      throw new Error('mutated String');
+    };
+    NodeBuffer.from = () => {
+      throw new Error('mutated Buffer.from');
+    };
+    NodeBuffer.compare = () => {
+      throw new Error('mutated Buffer.compare');
+    };
+    NodeBuffer.isBuffer = () => false;
+    Number.isFinite = () => false;
+    Array.isArray = () => false;
+    RegExp.prototype.test = () => false;
+
+    assert.ok(compareRoutingKeys('a', 'b') < 0);
+    assert.ok(compareRoutingKeys(leftBuffer, rightBuffer) < 0);
+    assert.ok(compareRoutingKeys(RIGHT_KEY, STORED_TEXT_BOUNDARY) > 0);
+    assert.equal(
+      resolveSplitTargetPartitionId(
+        20,
+        {splitKey: 10, targetPartitionIds: ['left', 'right']},
+      ),
+      'right',
+    );
+  } finally {
+    globalThis.String = original.globalString;
+    NodeBuffer.from = original.bufferFrom;
+    NodeBuffer.compare = original.bufferCompare;
+    NodeBuffer.isBuffer = original.bufferIsBuffer;
+    Number.isFinite = original.numberIsFinite;
+    Array.isArray = original.arrayIsArray;
+    RegExp.prototype.test = original.regexpTest;
   }
 });
