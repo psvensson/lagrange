@@ -34,8 +34,8 @@ on:
 
 # Lane-scoped tap budget: the hosted 2-vCPU VM is ~3x slower than the dev
 # corpus was tuned on, and single tests near tap's 30s default cross it
-# there with green assertions (see release.yml note and epic
-# ci-vm-admission-baseline). The 600s per-file kill still bounds hangs.
+# there with green assertions (see the release.yml note). The 600s per-file
+# kill still bounds hangs.
 # A FLOOR, not a cap: the runner (run-test-files.js) lifts undeclared files
 # to it and keeps a file's own larger `{timeout}` declaration, so a 300s
 # integration test is never cut to 120s. An explicit TAP_TIMEOUT would win
