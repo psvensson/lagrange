@@ -110,7 +110,7 @@ function readOwnDataValue(record, key) {
     return undefined;
   }
   const descriptor = objectGetOwnPropertyDescriptor(record, key);
-  if (!descriptor || !objectHasOwn(descriptor, 'value')) {
+  if (!descriptor || !objectHasOwn(descriptor, LOCAL_STR_DESCRIPTOR_VALUE)) {
     return undefined;
   }
   return descriptor.value;
@@ -124,7 +124,7 @@ function readTargetPartitionIds(metadata) {
   const lengthDescriptor =
     objectGetOwnPropertyDescriptor(targetPartitionIds, SPLIT_METADATA_FIELD.LENGTH);
   if (!lengthDescriptor ||
-      !objectHasOwn(lengthDescriptor, 'value') ||
+      !objectHasOwn(lengthDescriptor, LOCAL_STR_DESCRIPTOR_VALUE) ||
       lengthDescriptor.value < 2) {
     return {leftPartitionId: undefined, rightPartitionId: undefined};
   }
