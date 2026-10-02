@@ -52,5 +52,6 @@
       "id": "static-ratchets",
       "statement": "Capture relevant file-scoped complexity, literal/runtime-grammar and file-size status before production edits and finish with no increased guardrail debt; generated test metadata is refreshed through its producer, never edited by hand."
     }
-  ]
+  ],
+  "sealedAt": "23e0dd5778fd8e952d13997eec9806c4c8028217"
 }
