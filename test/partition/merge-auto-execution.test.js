@@ -404,7 +404,10 @@ test('merge evaluation captures Array.prototype push and includes', async (t) =>
   ];
   const {manager} = buildManager({
     listPartitions: () => rows,
-    executeMergeCandidate: null,
+    executeMergeCandidate: async () => ({
+      success: true,
+      workflowId: 'merge-wf',
+    }),
   });
   const originalPush = Array.prototype.push;
   const originalIncludes = Array.prototype.includes;
@@ -415,6 +418,7 @@ test('merge evaluation captures Array.prototype push and includes', async (t) =>
     Array.prototype.push = function(...values) {
       if (values.some((value) =>
         value === 'write_activity' ||
+        value?.workflowId === 'merge-wf' ||
         (value && value.leftId === 'users-p1' &&
           value.rightId === 'users-p2'))) {
         pushTrapCalls += 1;
@@ -441,7 +445,10 @@ test('merge evaluation captures Array.prototype push and includes', async (t) =>
   t.same(results.mergeCandidates, [
     {leftId: 'users-p1', rightId: 'users-p2'},
   ]);
-  t.equal(pushTrapCalls, 0, 'evaluation never consults live Array.prototype.push');
+  t.equal(results.executedMerges.length, 1,
+    'auto-executed merge reaches the transition outcome owner');
+  t.equal(pushTrapCalls, 0,
+    'evaluation and transition outcomes never consult live Array.prototype.push');
   t.equal(includesTrapCalls, 0,
     'evaluation never consults live Array.prototype.includes');
   t.end();
