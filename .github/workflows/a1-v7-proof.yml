@@ -80,12 +80,25 @@ jobs:
               echo "::error::$label unexpectedly satisfies the v7 closure probe"
               exit 1
             fi
-            grep -Eq \
-              'table-id-validation-before-absence|evaluation-array-intrinsic-isolation' \
-              "$RUNNER_TEMP/$label.err" || {
-                echo "::error::$label went red without the named v7 mechanism"
-                exit 1
-              }
+            if [ "$label" = "v6-rejected" ]; then
+              grep -Eq 'table-id-validation-before-(missing|null|undefined)' \
+                "$RUNNER_TEMP/$label.err" &&
+              grep -q 'evaluation-array-iterator-isolation' \
+                "$RUNNER_TEMP/$label.err" &&
+              grep -q 'evaluation-array-sort-capture' \
+                "$RUNNER_TEMP/$label.err" || {
+                  echo "::error::$label did not reproduce all named v6 defects"
+                  exit 1
+                }
+            else
+              grep -q 'evaluation-array-iterator-isolation' \
+                "$RUNNER_TEMP/$label.err" &&
+              grep -q 'evaluation-array-isarray-capture' \
+                "$RUNNER_TEMP/$label.err" || {
+                  echo "::error::$label did not reproduce the live-path v7 rejection"
+                  exit 1
+                }
+            fi
             git worktree remove --force "$wt"
           done
 
