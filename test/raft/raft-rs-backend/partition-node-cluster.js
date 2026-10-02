@@ -249,7 +249,7 @@ class PartitionNodeCluster {
 
   /**
    * Fixture-only lifecycle actuation, kept separate from the returned value.
-   * The redesigned tree replaces the legacy provider fallback with the
+   * The redesigned tree replaces the retired backend fallback with the
    * lifecycle-administration test fixture command.
    * @param {string} replicaId - The replica.
    * @param {string} reason - Why its logical identity is terminal.
