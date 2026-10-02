@@ -1,0 +1,31 @@
+name: b1-locking-policy-seal
+on:
+  push:
+    branches:
+      - quest/0-3-locking-read-wait-policy-seal
+permissions:
+  contents: write
+concurrency:
+  group: b1-locking-policy-seal
+  cancel-in-progress: true
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Seal B1 Quest against red policy probe
+        run: |
+          node scripts/solve.js start --id locking-read-wait-policy-seal
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -- solve/quests/locking-read-wait-policy-seal
+          git commit -m "0.3 B1: seal locking-read wait policy"
+          git push origin HEAD:quest/0-3-locking-read-wait-policy-seal
