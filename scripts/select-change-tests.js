@@ -122,6 +122,7 @@ const PROOF_AUTHORITY_SCRIPT = 'scripts/proof-authority.js';
 const PROOF_CHECK_COMMAND = 'check';
 const JSON_FLAG = '--json';
 const RELEASE_PROOF_REUSED_PREFIX = 'RELEASE PROOF REUSED';
+const FULL_GIT_SHA_PATTERN = /^[0-9a-f]{40}$/u;
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -613,6 +614,8 @@ export function releaseProofSatisfiesRefusal(
 ) {
   return plan?.kind === SELECTION_REFUSED &&
     plan?.refusalCode === REFUSAL_RELEASE_PROOF_REQUIRED &&
+    typeof sha === 'string' &&
+    FULL_GIT_SHA_PATTERN.test(sha) &&
     typeof check === 'function' &&
     check(sha) === true;
 }
