@@ -122,10 +122,11 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         partitionIds: [],
       };
       const appendValues = (target, values) => {
-        if (!Array.isArray(values)) {
+        if (!arrayIsArray(values)) {
           return;
         }
-        for (const value of values) {
+        for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
+          const value = values[valueIndex];
           const normalizedValue = String(value || '');
           if (!normalizedValue || target.includes(normalizedValue)) {
             continue;
@@ -139,13 +140,13 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         }
         appendValues(
           merged.reasonCodes,
-          Array.isArray(context.reasonCodes) ?
+          arrayIsArray(context.reasonCodes) ?
             context.reasonCodes :
             [context.reasonCode, context.reason],
         );
         appendValues(
           merged.partitionIds,
-          Array.isArray(context.partitionIds) ?
+          arrayIsArray(context.partitionIds) ?
             context.partitionIds :
             [context.partitionId],
         );
@@ -417,7 +418,10 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         }
 
         let splitExecutionAttempts = 0;
-        for (const partitionId of results.splitCandidates) {
+        for (let splitIndex = 0;
+          splitIndex < results.splitCandidates.length;
+          splitIndex += 1) {
+          const partitionId = results.splitCandidates[splitIndex];
           if (
             splitExecutionAttempts >=
               this.maxAutoExecuteSplitsPerEvaluation
@@ -563,7 +567,10 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
      */
     async executeMergeCandidatesWithinBudget(results, bypassPressure) {
       let mergeExecutionAttempts = 0;
-      for (const candidate of results.mergeCandidates) {
+      for (let mergeIndex = 0;
+        mergeIndex < results.mergeCandidates.length;
+        mergeIndex += 1) {
+        const candidate = results.mergeCandidates[mergeIndex];
         if (
           mergeExecutionAttempts >=
             this.maxAutoExecuteMergesPerEvaluation
