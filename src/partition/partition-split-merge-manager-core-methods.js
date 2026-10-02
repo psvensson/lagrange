@@ -23,6 +23,7 @@ const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
 const REACTIVE_EVALUATION_TRIGGER = 'reactive_request';
 const REACTIVE_PRESSURE_BYPASS_REASON_WRITE_ACTIVITY = 'write_activity';
+const stringCoerce = String;
 
 function cloneStringArray(values) {
   if (!Array.isArray(values)) {
@@ -49,8 +50,8 @@ function compareEvaluationTableIds(left, right) {
   if (right === null || right === undefined) {
     return 1;
   }
-  const leftId = String(left);
-  const rightId = String(right);
+  const leftId = stringCoerce(left);
+  const rightId = stringCoerce(right);
   if (leftId < rightId) {
     return -1;
   }

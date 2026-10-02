@@ -81,6 +81,26 @@ test('merge auto-execution - eligible adjacent pair executes through the ' +
 });
 
 
+test('merge auto-execution - table-id sorting is stable after String mutation',
+  async (t) => {
+    const originalString = globalThis.String;
+    try {
+      globalThis.String = () => {
+        throw new Error('mutated String');
+      };
+      const {manager} = buildManager({
+        executeMergeCandidate: null,
+      });
+      const results = await manager.evaluateAllPartitions();
+      t.same(results.mergeCandidates, [
+        {leftId: 'users-p1', rightId: 'users-p2'},
+      ]);
+      manager.shutdown();
+    } finally {
+      globalThis.String = originalString;
+    }
+  });
+
 test('merge auto-execution - adjacency sorting uses SQLite BINARY key order',
   async (t) => {
     const {manager} = buildManager({
