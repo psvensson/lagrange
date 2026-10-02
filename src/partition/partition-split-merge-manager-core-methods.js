@@ -1,3 +1,4 @@
+import {types as nodeUtilTypes} from 'node:util';
 import {SERVICE_TYPE} from '../constants/index.js';
 import {ADMISSION_DECISION} from '../rebalancer/storage-capacity-constants.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
@@ -5,7 +6,11 @@ import {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
+import {
+  copyDenseOwnDataArray,
+} from '../utils/strict-own-data.js';
 import {KeyRange} from './key-range-manager.js';
+import {compareRoutingKeys} from './split-key-comparator.js';
 import {
   PARTITION_TRANSITION_STATE,
   SPLIT_MERGE_ERROR_MSG,
@@ -22,20 +27,192 @@ const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
 const REACTIVE_EVALUATION_TRIGGER = 'reactive_request';
 const REACTIVE_PRESSURE_BYPASS_REASON_WRITE_ACTIVITY = 'write_activity';
+const INVALID_EVALUATION_TABLE_ID =
+  'Partition evaluation table IDs must be primitive strings';
+const INVALID_EVALUATION_PARTITION_LIST =
+  'Partition evaluation rows must be a bounded dense own-data array';
+const MAX_EVALUATION_CONTEXT_VALUES = 1_024;
+const MAX_EVALUATION_PARTITION_ROWS = 1_000_000;
+const LOCAL_STR_DESCRIPTOR_VALUE = 'value';
+const LOCAL_STR_TABLE_ID_SNAKE = 'table_id';
+const LOCAL_STR_TABLE_ID_CAMEL = 'tableId';
+const LOCAL_STR_PARTITION_ID_SNAKE = 'partition_id';
+const LOCAL_STR_PARTITION_ID_CAMEL = 'partitionId';
+const LOCAL_STR_LENGTH = 'length';
+const LOCAL_STR_PARTITION_KEY_START_SNAKE = 'partition_key_start';
+const LOCAL_STR_PARTITION_KEY_START_CAMEL = 'partitionKeyStart';
+const LOCAL_STR_PARTITION_KEY_END_SNAKE = 'partition_key_end';
+const LOCAL_STR_PARTITION_KEY_END_CAMEL = 'partitionKeyEnd';
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayIsArray = Array.isArray;
+const arraySort = Array.prototype.sort;
+const canonicalArrayPrototype = Array.prototype;
+const isProxy = nodeUtilTypes.isProxy.bind(nodeUtilTypes);
+const numberIsSafeInteger = Number.isSafeInteger;
+const objectDefineProperty = Object.defineProperty;
+const objectGetPrototypeOf = Object.getPrototypeOf;
+const objectCreate = Object.create;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const reflectApply = Reflect.apply;
+const reflectOwnKeys = Reflect.ownKeys;
+const RangeErrorCtor = RangeError;
+const TypeErrorCtor = TypeError;
+
+function appendOwnArrayValue(array, value) {
+  objectDefineProperty(array, array.length, {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value,
+  });
+}
+
+function readBoundedCanonicalArrayLength(values, maxLength) {
+  if (isProxy(values) ||
+      !arrayIsArray(values) ||
+      objectGetPrototypeOf(values) !== canonicalArrayPrototype) {
+    return null;
+  }
+  const length = readOwnDataValue(values, LOCAL_STR_LENGTH);
+  return numberIsSafeInteger(length) &&
+    length >= 0 &&
+    length <= maxLength ?
+    length :
+    null;
+}
 
 function cloneStringArray(values) {
-  if (!Array.isArray(values)) {
+  const length = readBoundedCanonicalArrayLength(
+    values,
+    MAX_EVALUATION_CONTEXT_VALUES,
+  );
+  if (length === null) {
+    return [];
+  }
+  const source = copyDenseOwnDataArray(values);
+  if (source === null) {
     return [];
   }
   const cloned = [];
-  for (const value of values) {
-    const normalizedValue = String(value || '');
-    if (!normalizedValue || cloned.includes(normalizedValue)) {
+  for (let valueIndex = 0; valueIndex < length; valueIndex += 1) {
+    const value = source[valueIndex];
+    const normalizedValue =
+      typeof value === LOCAL_STR_STRING ? value : '';
+    if (!normalizedValue || arrayIncludes(cloned, normalizedValue)) {
       continue;
     }
-    cloned.push(normalizedValue);
+    appendOwnArrayValue(cloned, normalizedValue);
   }
   return cloned;
+}
+
+function readOwnDataValue(record, key) {
+  if (!record || typeof record !== LOCAL_STR_OBJECT || isProxy(record)) {
+    return undefined;
+  }
+  try {
+    const descriptor = objectGetOwnPropertyDescriptor(record, key);
+    if (!descriptor || !objectHasOwn(descriptor, LOCAL_STR_DESCRIPTOR_VALUE)) {
+      return undefined;
+    }
+    return descriptor.value;
+  } catch {
+    return undefined;
+  }
+}
+
+function compareAbsentEvaluationTableIds(left, right) {
+  const leftAbsent = left === null || left === undefined;
+  const rightAbsent = right === null || right === undefined;
+  if (leftAbsent && rightAbsent) return 0;
+  if (leftAbsent) return -1;
+  if (rightAbsent) return 1;
+  return null;
+}
+
+function assertEvaluationTableId(value) {
+  if (value !== null &&
+      value !== undefined &&
+      typeof value !== LOCAL_STR_STRING) {
+    throw new TypeErrorCtor(INVALID_EVALUATION_TABLE_ID);
+  }
+}
+
+function compareEvaluationTableIds(left, right) {
+  assertEvaluationTableId(left);
+  assertEvaluationTableId(right);
+  const absentOrder = compareAbsentEvaluationTableIds(left, right);
+  if (absentOrder !== null) return absentOrder;
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
+function copyEvaluationPartitionRow(partition) {
+  if (!partition ||
+      typeof partition !== LOCAL_STR_OBJECT ||
+      isProxy(partition)) {
+    throw new TypeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
+  }
+  let keys;
+  try {
+    keys = reflectOwnKeys(partition);
+  } catch {
+    throw new TypeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
+  }
+  const copy = objectCreate(null);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (typeof key !== LOCAL_STR_STRING) {
+      continue;
+    }
+    const descriptor = objectGetOwnPropertyDescriptor(partition, key);
+    if (!descriptor ||
+        descriptor.enumerable !== true ||
+        !objectHasOwn(descriptor, LOCAL_STR_DESCRIPTOR_VALUE)) {
+      continue;
+    }
+    objectDefineProperty(copy, key, {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: descriptor.value,
+    });
+  }
+  return copy;
+}
+
+function cloneEvaluationPartitionRows(partitions) {
+  const length = readBoundedCanonicalArrayLength(
+    partitions,
+    MAX_EVALUATION_PARTITION_ROWS,
+  );
+  if (length === null) {
+    if (isProxy(partitions) ||
+        !arrayIsArray(partitions) ||
+        objectGetPrototypeOf(partitions) !== canonicalArrayPrototype) {
+      throw new TypeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
+    }
+    throw new RangeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
+  }
+  const source = copyDenseOwnDataArray(partitions);
+  if (source === null) {
+    throw new TypeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
+  }
+  return source;
+}
+
+function canonicalizeEvaluationPartitionRows(partitions) {
+  const source = cloneEvaluationPartitionRows(partitions);
+  const rows = [];
+  for (let index = 0; index < source.length; index += 1) {
+    appendOwnArrayValue(rows, copyEvaluationPartitionRow(source[index]));
+  }
+  return rows;
+}
+
+function sortArrayWithCapturedIntrinsic(values, compareFn) {
+  return reflectApply(arraySort, values, [compareFn]);
 }
 
 class PartitionSplitMergeManagerCoreMethods {
@@ -82,7 +259,7 @@ class PartitionSplitMergeManagerCoreMethods {
    */
   resolveEvaluationReasonCodes(preflightOptions = {}) {
     return cloneStringArray(
-      Array.isArray(preflightOptions?.reasonCodes) ?
+      arrayIsArray(preflightOptions?.reasonCodes) ?
         preflightOptions.reasonCodes :
         [preflightOptions?.reasonCode, preflightOptions?.reason],
     );
@@ -103,8 +280,10 @@ class PartitionSplitMergeManagerCoreMethods {
         REACTIVE_EVALUATION_TRIGGER) {
       return false;
     }
-    return this.resolveEvaluationReasonCodes(preflightOptions)
-      .includes(REACTIVE_PRESSURE_BYPASS_REASON_WRITE_ACTIVITY);
+    return arrayIncludes(
+      this.resolveEvaluationReasonCodes(preflightOptions),
+      REACTIVE_PRESSURE_BYPASS_REASON_WRITE_ACTIVITY,
+    );
   }
 
   /**
@@ -175,12 +354,38 @@ class PartitionSplitMergeManagerCoreMethods {
   async loadEvaluationPartitions() {
     if (typeof this.listPartitions === LOCAL_STR_FUNCTION) {
       const partitions = await this.listPartitions();
-      return Array.isArray(partitions) ? partitions : [];
+      return arrayIsArray(partitions) ? partitions : [];
     }
     if (!this.keyRangeManager) {
       return [];
     }
     return this.keyRangeManager.getAllPartitions();
+  }
+
+  /**
+   * Copy an evaluation partition list through own array data properties only.
+   * This is the boundary between an externally supplied list and the
+   * split/merge owner: iterators, inherited numeric slots and accessors are not
+   * evaluation authority.
+   * @param {*} partitions
+   * @return {Array<Object>}
+   * @private
+   */
+  normalizeEvaluationPartitions(partitions) {
+    return cloneEvaluationPartitionRows(partitions);
+  }
+
+  /**
+   * Canonicalize evaluation rows after the sealed array-copy boundary.
+   * The public/helper seam preserves row identity; the live evaluator uses
+   * null-prototype own-data copies so later awaits cannot observe hostile
+   * accessors, inherited fields, proxies, or source mutation.
+   * @param {*} partitions
+   * @return {Array<Object>}
+   * @private
+   */
+  canonicalizeEvaluationPartitions(partitions) {
+    return canonicalizeEvaluationPartitionRows(partitions);
   }
 
   /**
@@ -196,7 +401,18 @@ class PartitionSplitMergeManagerCoreMethods {
     if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
       return null;
     }
-    return partition.partition_id || partition.partitionId || null;
+    const snakeCaseId = readOwnDataValue(
+      partition,
+      LOCAL_STR_PARTITION_ID_SNAKE,
+    );
+    if (snakeCaseId !== undefined && snakeCaseId !== null) {
+      return typeof snakeCaseId === LOCAL_STR_STRING ? snakeCaseId : null;
+    }
+    const camelCaseId = readOwnDataValue(
+      partition,
+      LOCAL_STR_PARTITION_ID_CAMEL,
+    );
+    return typeof camelCaseId === LOCAL_STR_STRING ? camelCaseId : null;
   }
 
   /**
@@ -209,7 +425,18 @@ class PartitionSplitMergeManagerCoreMethods {
     if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
       return null;
     }
-    return partition.table_id || partition.tableId || null;
+    const snakeCaseId = readOwnDataValue(
+      partition,
+      LOCAL_STR_TABLE_ID_SNAKE,
+    );
+    if (snakeCaseId !== undefined && snakeCaseId !== null) {
+      return snakeCaseId;
+    }
+    const camelCaseId = readOwnDataValue(
+      partition,
+      LOCAL_STR_TABLE_ID_CAMEL,
+    );
+    return camelCaseId ?? null;
   }
 
   /**
@@ -222,7 +449,11 @@ class PartitionSplitMergeManagerCoreMethods {
     if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
       return null;
     }
-    return partition.partition_key_start ?? partition.partitionKeyStart ?? null;
+    const snakeCaseKey = readOwnDataValue(partition, LOCAL_STR_PARTITION_KEY_START_SNAKE);
+    if (snakeCaseKey !== undefined) {
+      return snakeCaseKey;
+    }
+    return readOwnDataValue(partition, LOCAL_STR_PARTITION_KEY_START_CAMEL) ?? null;
   }
 
   /**
@@ -235,33 +466,11 @@ class PartitionSplitMergeManagerCoreMethods {
     if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
       return null;
     }
-    return partition.partition_key_end ?? partition.partitionKeyEnd ?? null;
-  }
-
-  /**
-   * Compare partition key values with NULL representing unbounded edges.
-   * @param {*} left - Left key.
-   * @param {*} right - Right key.
-   * @return {number} Sort order.
-   * @private
-   */
-  comparePartitionKeys(left, right) {
-    if (left === right) {
-      return 0;
+    const snakeCaseKey = readOwnDataValue(partition, LOCAL_STR_PARTITION_KEY_END_SNAKE);
+    if (snakeCaseKey !== undefined) {
+      return snakeCaseKey;
     }
-    if (left === null || left === undefined) {
-      return -1;
-    }
-    if (right === null || right === undefined) {
-      return 1;
-    }
-    if (left < right) {
-      return -1;
-    }
-    if (left > right) {
-      return 1;
-    }
-    return 0;
+    return readOwnDataValue(partition, LOCAL_STR_PARTITION_KEY_END_CAMEL) ?? null;
   }
 
   /**
@@ -288,21 +497,20 @@ class PartitionSplitMergeManagerCoreMethods {
    * @private
    */
   sortEvaluationPartitions(partitions) {
-    return [...partitions]
-      .filter((partition) => partition && typeof partition === LOCAL_STR_OBJECT)
-      .sort((left, right) => {
-        const tableOrder = this.comparePartitionKeys(
-          this.getPartitionTableId(left),
-          this.getPartitionTableId(right),
-        );
-        if (tableOrder !== 0) {
-          return tableOrder;
-        }
-        return this.comparePartitionKeys(
-          this.getPartitionStartKey(left),
-          this.getPartitionStartKey(right),
-        );
-      });
+    const rows = canonicalizeEvaluationPartitionRows(partitions);
+    return sortArrayWithCapturedIntrinsic(rows, (left, right) => {
+      const tableOrder = compareEvaluationTableIds(
+        this.getPartitionTableId(left),
+        this.getPartitionTableId(right),
+      );
+      if (tableOrder !== 0) {
+        return tableOrder;
+      }
+      return compareRoutingKeys(
+        this.getPartitionStartKey(left),
+        this.getPartitionStartKey(right),
+      );
+    });
   }
 
   /**
@@ -546,4 +754,7 @@ function createPartitionSplitMergeManagerCoreMethods() {
   return methods;
 }
 
-export {createPartitionSplitMergeManagerCoreMethods};
+export {
+  cloneStringArray,
+  createPartitionSplitMergeManagerCoreMethods,
+};
