@@ -174,7 +174,6 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     const bySimilarityKey = new Map();
 
     for (const historicalReport of historyReports) {
-
       const scenarioSummaries = Array.isArray(
         historicalReport?.standardSummary?.scenarios,
       ) ?
@@ -197,7 +196,6 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         }
 
         bySimilarityKey.set(similarityKey, {
-          provider: reportProvider,
           reportPath: historicalReport?.path || null,
           reportTimestamp: historicalReport?.timestamp || null,
           scenario: scenarioSummary?.scenario || null,
