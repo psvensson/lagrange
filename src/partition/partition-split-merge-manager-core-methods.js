@@ -28,6 +28,8 @@ const INVALID_EVALUATION_TABLE_ID =
 const LOCAL_STR_DESCRIPTOR_VALUE = 'value';
 const LOCAL_STR_TABLE_ID_SNAKE = 'table_id';
 const LOCAL_STR_TABLE_ID_CAMEL = 'tableId';
+const LOCAL_STR_PARTITION_ID_SNAKE = 'partition_id';
+const LOCAL_STR_PARTITION_ID_CAMEL = 'partitionId';
 const arrayIsArray = Array.isArray;
 const arraySort = Array.prototype.sort;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
@@ -280,7 +282,17 @@ class PartitionSplitMergeManagerCoreMethods {
     if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
       return null;
     }
-    return partition.partition_id || partition.partitionId || null;
+    const snakeCaseId = readOwnDataValue(
+      partition,
+      LOCAL_STR_PARTITION_ID_SNAKE,
+    );
+    if (snakeCaseId !== undefined && snakeCaseId !== null) {
+      return snakeCaseId;
+    }
+    return readOwnDataValue(
+      partition,
+      LOCAL_STR_PARTITION_ID_CAMEL,
+    ) ?? null;
   }
 
   /**
