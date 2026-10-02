@@ -9,7 +9,7 @@ correlation behavior.
 ## Primary Owners
 
 - `MessageRouter` owns local and remote message delivery semantics.
-- `RouterDeliveryManager` owns delivery lifecycle and pending responses.
+- `MessageRouter` owns delivery lifecycle; `message-router-delivery-behaviors.js` owns local/remote delivery selection and `message-router-pending-response-ledger.js` owns pending responses.
 - `RouterServerManager` owns server-side router setup.
 - `ConnectionPool` owns connection reuse and lifecycle.
 - `TransportRegistry` owns provider registration.
