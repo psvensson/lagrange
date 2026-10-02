@@ -59,6 +59,14 @@
     {
       "id": "rs-raft-isolation",
       "statement": "No Raft runtime, consensus transport, lifecycle, membership or formation behavior changes."
+    },
+    {
+      "id": "absent-peer-matrix",
+      "statement": "The invalid-table-ID witness distinguishes all three supported absent shapes — missing property, own null and own undefined — in both operand directions; none may bypass primitive-string validation of the non-absent peer."
+    },
+    {
+      "id": "own-data-evaluation-row-fields",
+      "statement": "Partition IDs and partition start/end keys used by the live split/merge evaluator come only from own data properties with snake/camel fallback. Inherited values and accessors are not evaluation, sorting or adjacency authority and are never invoked."
     }
   ]
 }
