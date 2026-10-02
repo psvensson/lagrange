@@ -181,7 +181,7 @@ function structuralProblemCount() {
   if (regExpTest(DUPLICATE_METHOD_PATTERN, mergeEvaluationSource)) problems += 1;
   if (!regExpTest(SORT_OWNER_PATTERN, mergeCoreSource)) problems += 1;
   if (!regExpTest(ADJACENCY_OWNER_PATTERN, mergeEvaluationSource)) problems += 1;
-  if (!partitioningDoc.includes('SQLite BINARY-compatible UTF-8 byte order')) {
+  if (!partitioningDoc.includes('BINARY-compatible UTF-8 byte ordering')) {
     problems += 1;
   }
   if (partitioningDoc.includes('String#localeCompare')) problems += 1;
