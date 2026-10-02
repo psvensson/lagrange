@@ -376,7 +376,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           mergeDeferred: [],
         };
 
-        const partitions = this.normalizeEvaluationPartitions(
+        const partitions = this.canonicalizeEvaluationPartitions(
           await this.loadEvaluationPartitions(),
         );
         if (partitions.length === 0) {
