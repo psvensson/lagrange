@@ -15,7 +15,7 @@ function managerForProbe() {
   });
 }
 
-function tableIdValidationProblems(manager) {
+async function tableIdValidationProblems() {
   let problems = 0;
   for (const invalidTableId of [false, 0, Object('boxed-table')]) {
     const invalid = {
@@ -30,35 +30,43 @@ function tableIdValidationProblems(manager) {
       partition_key_end: null,
     };
     for (const rows of [[absent, invalid], [invalid, absent]]) {
+      const manager = managerForProbe();
+      manager.listPartitions = () => rows;
       try {
-        manager.sortEvaluationPartitions(rows);
+        await manager.evaluateAllPartitions();
         problems += 1;
       } catch (error) {
         if (!(error instanceof TypeError)) problems += 1;
+      } finally {
+        manager.shutdown();
       }
     }
   }
   return problems;
 }
 
-function arrayIntrinsicProblems(manager) {
+async function arrayIntrinsicProblems() {
   const rows = [
     {
       partition_id: 'b',
-      table_id: 'table-b',
-      partition_key_start: null,
+      table_id: 'table-a',
+      partition_key_start: 'm',
       partition_key_end: null,
     },
     {
       partition_id: 'a',
       table_id: 'table-a',
       partition_key_start: null,
-      partition_key_end: null,
+      partition_key_end: 'm',
     },
   ];
   const priorIterator = Object.getOwnPropertyDescriptor(rows, Symbol.iterator);
   const priorSort = Array.prototype.sort;
+  const priorIsArray = Array.isArray;
+  const priorApply = Reflect.apply;
   let problems = 0;
+  const manager = managerForProbe();
+  manager.listPartitions = () => rows;
   try {
     Object.defineProperty(rows, Symbol.iterator, {
       configurable: true,
@@ -69,35 +77,37 @@ function arrayIntrinsicProblems(manager) {
     Array.prototype.sort = () => {
       throw new Error('live Array.prototype.sort executed');
     };
-    const ordered = manager.sortEvaluationPartitions(rows);
-    if (ordered.length !== 2 ||
-        ordered[0]?.partition_id !== 'a' ||
-        ordered[1]?.partition_id !== 'b') {
+    Array.isArray = () => false;
+    Reflect.apply = () => {
+      throw new Error('live Reflect.apply executed');
+    };
+    const results = await manager.evaluateAllPartitions();
+    if (results.mergeCandidates.length !== 1 ||
+        results.mergeCandidates[0]?.leftId !== 'a' ||
+        results.mergeCandidates[0]?.rightId !== 'b') {
       problems += 1;
     }
   } catch {
     problems += 1;
   } finally {
+    Reflect.apply = priorApply;
+    Array.isArray = priorIsArray;
     Array.prototype.sort = priorSort;
     if (priorIterator) {
       Object.defineProperty(rows, Symbol.iterator, priorIterator);
     } else {
       Reflect.deleteProperty(rows, Symbol.iterator);
     }
+    manager.shutdown();
   }
   return problems;
 }
 
-const manager = managerForProbe();
 let metric = 0;
-try {
-  metric += tableIdValidationProblems(manager);
-  metric += arrayIntrinsicProblems(manager);
-} finally {
-  manager.shutdown();
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-}
+metric += await tableIdValidationProblems();
+metric += await arrayIntrinsicProblems();
+ConfigurationManager.resetInstance();
+LoggingService.resetInstance();
 
 if (metric !== 0) {
   process.stderr.write(
