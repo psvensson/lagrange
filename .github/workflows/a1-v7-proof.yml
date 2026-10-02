@@ -1,6 +1,7 @@
 # exact-head semantic reproof after generated metadata refresh
 # semantic reproof on refreshed A1-v7 tree
 name: a1-v7-proof
+# final semantic proof after alias-fallback metadata refresh
 # final generated-state-current proof trigger
 
 on:
