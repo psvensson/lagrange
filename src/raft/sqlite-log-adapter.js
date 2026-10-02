@@ -588,7 +588,6 @@ class SQLiteLogAdapter {
     ).run(SQLITE_RAFT_STATE_KEY.COMMITTED_INDEX, String(index));
     this._committedIndexCache = index;
   }
-
 }
 
 installSQLiteLogAdapterQueryApi(SQLiteLogAdapter);

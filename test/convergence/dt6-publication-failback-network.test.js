@@ -95,7 +95,7 @@ function hostPublisher(net, consensus, nodeId, store) {
         candidate: {
           publicationEpoch: term,
           publishedActiveNodeIds: EXPECTED,
-          publisherNodeId: raft.address,
+          publisherNodeId: nodeId,
           requiredAckNodeIds: EXPECTED,
           acknowledgedNodeIds: EXPECTED,
         },
