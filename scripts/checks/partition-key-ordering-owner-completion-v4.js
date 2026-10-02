@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import {PARTITION_SERVICE_ERROR_MSG} from '../../src/partition/partition-service-constants.js';
-import {compareRoutingKeys, resolveSplitTargetPartitionId} from '../../src/partition/split-key-comparator.js';
+import {
+  compareRoutingKeys,
+  compareSplitKey,
+  resolveSplitTargetPartitionId,
+} from '../../src/partition/split-key-comparator.js';
 
 const UTF8='utf8';
 const bufferCompare=Buffer.compare.bind(Buffer);
@@ -16,8 +20,10 @@ const DUPLICATE_METHOD_PATTERN=/\bcomparePartitionKeys\s*\(/u;
 const UNSUPPORTED_FALLBACK_PATTERN=/aType\s*===\s*null\s*&&\s*bType\s*===\s*null/u;
 const EARLY_EQUALITY_PATTERN=/if\s*\(\s*a\s*===\s*b\s*\)\s*return\s+COMPARISON_RESULT\.EQUAL/u;
 const TARGET_DESTRUCTURING_PATTERN=/const\s*\[\s*leftPartitionId\s*,\s*rightPartitionId\s*\]/u;
-const DIRECT_MUTABLE_INTRINSIC_PATTERN=/(?:\b(?:Buffer\.(?:compare|from|isBuffer)|Number\.isFinite|Array\.isArray)\s*\(|\bnew\s+Error\s*\()/u;
-const TARGET_INDEX_OWNER_PATTERN=/const\s+targetPartitionIds\s*=\s*metadata\?\.targetPartitionIds;[\s\S]*?arrayIsArray\(targetPartitionIds\)[\s\S]*?targetPartitionIds\[0\][\s\S]*?arrayIsArray\(targetPartitionIds\)[\s\S]*?targetPartitionIds\[1\]/u;
+const DIRECT_MUTABLE_INTRINSIC_PATTERN=/(?:\b(?:Buffer\.(?:compare|from|isBuffer)|Number\.isFinite|Array\.isArray|Object\.(?:getOwnPropertyDescriptor|hasOwn))\s*\(|\bnew\s+Error\s*\()/u;
+const TARGET_INDEX_OWNER_PATTERN=/readOwnDataValue\(metadata,\s*'targetPartitionIds'\)[\s\S]*?arrayIsArray\(targetPartitionIds\)[\s\S]*?objectGetOwnPropertyDescriptor\(targetPartitionIds,\s*'length'\)[\s\S]*?readOwnDataValue\(targetPartitionIds,\s*'0'\)[\s\S]*?readOwnDataValue\(targetPartitionIds,\s*'1'\)/u;
+const TABLE_ID_STRING_COERCION_PATTERN=/function\s+compareEvaluationTableIds\([^)]*\)[\s\S]*?\bString\s*\(/u;
+const TABLE_ID_PRIMITIVE_GUARD_PATTERN=/function\s+compareEvaluationTableIds\([^)]*\)[\s\S]*?typeof\s+left\s*!==\s*LOCAL_STR_STRING[\s\S]*?typeof\s+right\s*!==\s*LOCAL_STR_STRING/u;
 const SORT_OWNER_PATTERN=/sortEvaluationPartitions\(partitions\)[\s\S]*?return\s+compareRoutingKeys\(\s*this\.getPartitionStartKey\(left\),\s*this\.getPartitionStartKey\(right\),\s*\);/u;
 const ADJACENCY_OWNER_PATTERN=/!this\.keyRangeManager\s*&&\s*compareRoutingKeys\(\s*this\.getPartitionEndKey\(leftPartition\),\s*this\.getPartitionStartKey\(rightPartition\),\s*\)\s*!==\s*0/u;
 const TEXT_CASES=Object.freeze([Object.freeze(['Z','a']),Object.freeze(['a','A']),Object.freeze(['z','~']),Object.freeze(['0','A']),Object.freeze(['\uE000','\u{10000}'])]);
@@ -43,8 +49,33 @@ function exactRefusalProblemCount(){
   if(coercionCalls!==0)problems+=1;
   if(compareRoutingKeys('same','same')!==0)problems+=1;
   if(compareRoutingKeys(7,7)!==0)problems+=1;
-  if(compareRoutingKeys(-0,0)!==0)problems+=1;
+  if(!Object.is(compareRoutingKeys(-0,0),0))problems+=1;
+  if(!Object.is(compareSplitKey(-0,0),0))problems+=1;
   if(compareRoutingKeys(null,null)!==0)problems+=1;
+  return problems;
+}
+function metadataSafetyProblemCount(){
+  let problems=0;
+  let accessorCalls=0;
+  let iteratorCalls=0;
+  const ids=['left','right'];
+  ids[Symbol.iterator]=()=>{iteratorCalls+=1;throw new Error('iterator executed');};
+  const metadata={};
+  Object.defineProperty(metadata,'splitKey',{configurable:true,value:10});
+  Object.defineProperty(metadata,'targetPartitionIds',{configurable:true,value:ids});
+  try{
+    if(resolveSplitTargetPartitionId(20,metadata)!=='right')problems+=1;
+  }catch(_error){problems+=1;}
+  if(iteratorCalls!==0)problems+=1;
+
+  const accessorMetadata={};
+  Object.defineProperty(accessorMetadata,'splitKey',{configurable:true,get(){accessorCalls+=1;return 10;}});
+  Object.defineProperty(accessorMetadata,'targetPartitionIds',{configurable:true,get(){accessorCalls+=1;return ['left','right'];}});
+  try{resolveSplitTargetPartitionId(20,accessorMetadata);problems+=1;}catch(_error){}
+  if(accessorCalls!==0)problems+=1;
+
+  const inherited=Object.create({splitKey:10,targetPartitionIds:['left','right']});
+  try{resolveSplitTargetPartitionId(20,inherited);problems+=1;}catch(_error){}
   return problems;
 }
 function intrinsicStabilityProblemCount(){
@@ -57,6 +88,8 @@ function intrinsicStabilityProblemCount(){
   const originalArrayIsArray=Array.isArray;
   const originalArrayIteratorDescriptor=Object.getOwnPropertyDescriptor(Array.prototype,Symbol.iterator);
   const originalRegExpTestDescriptor=Object.getOwnPropertyDescriptor(RegExp.prototype,'test');
+  const originalGetOwnPropertyDescriptor=Object.getOwnPropertyDescriptor;
+  const originalHasOwn=Object.hasOwn;
   const originalError=globalThis.Error;
   const leftBuffer=bufferFrom('a');
   const rightBuffer=bufferFrom('b');
@@ -70,6 +103,8 @@ function intrinsicStabilityProblemCount(){
     originalNumber.isFinite=()=>false;
     globalThis.Number=()=>NaN;
     Array.isArray=()=>false;
+    Object.getOwnPropertyDescriptor=()=>{throw new Error('mutated descriptor lookup');};
+    Object.hasOwn=()=>false;
     Reflect.defineProperty(Array.prototype,Symbol.iterator,{configurable:true,writable:true,value:()=>{throw new Error('mutated Array iterator executed');}});
     Reflect.defineProperty(RegExp.prototype,'test',{configurable:true,writable:true,value:()=>false});
     globalThis.Error=class CorruptedError extends originalError{constructor(){super('corrupted mutable Error');}};
@@ -85,6 +120,8 @@ function intrinsicStabilityProblemCount(){
     Reflect.defineProperty(RegExp.prototype,'test',originalRegExpTestDescriptor);
     Reflect.defineProperty(Array.prototype,Symbol.iterator,originalArrayIteratorDescriptor);
     Array.isArray=originalArrayIsArray;
+    Object.getOwnPropertyDescriptor=originalGetOwnPropertyDescriptor;
+    Object.hasOwn=originalHasOwn;
     globalThis.Error=originalError;
     originalNumber.isFinite=originalNumberIsFinite;
     globalThis.Number=originalNumber;
@@ -103,7 +140,10 @@ function behavioralProblemCount(){
   let problems=0;
   for(const [left,right] of TEXT_CASES)if(sign(compareRoutingKeys(left,right))!==sign(sqliteBinaryTextCompare(left,right)))problems+=1;
   if(compareRoutingKeys(RIGHT_NUMERIC_KEY,STORED_NUMERIC_BOUNDARY)<=0)problems+=1;
-  return problems+exactRefusalProblemCount()+intrinsicStabilityProblemCount();
+  return problems+
+    exactRefusalProblemCount()+
+    metadataSafetyProblemCount()+
+    intrinsicStabilityProblemCount();
 }
 function structuralProblemCount(){
   const comparatorSource=fs.readFileSync(COMPARATOR_URL,UTF8);
@@ -117,6 +157,8 @@ function structuralProblemCount(){
   if(regExpTest(TARGET_DESTRUCTURING_PATTERN,comparatorSource))problems+=1;
   if(!regExpTest(TARGET_INDEX_OWNER_PATTERN,comparatorSource))problems+=1;
   if(regExpTest(DIRECT_MUTABLE_INTRINSIC_PATTERN,comparatorSource))problems+=1;
+  if(regExpTest(TABLE_ID_STRING_COERCION_PATTERN,mergeCoreSource))problems+=1;
+  if(!regExpTest(TABLE_ID_PRIMITIVE_GUARD_PATTERN,mergeCoreSource))problems+=1;
   if(regExpTest(DUPLICATE_METHOD_PATTERN,mergeCoreSource))problems+=1;
   if(regExpTest(DUPLICATE_METHOD_PATTERN,mergeEvaluationSource))problems+=1;
   if(!regExpTest(SORT_OWNER_PATTERN,mergeCoreSource))problems+=1;
