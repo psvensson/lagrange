@@ -21,7 +21,7 @@ const UNSUPPORTED_FALLBACK_PATTERN=/aType\s*===\s*null\s*&&\s*bType\s*===\s*null
 const EARLY_EQUALITY_PATTERN=/if\s*\(\s*a\s*===\s*b\s*\)\s*return\s+COMPARISON_RESULT\.EQUAL/u;
 const TARGET_DESTRUCTURING_PATTERN=/const\s*\[\s*leftPartitionId\s*,\s*rightPartitionId\s*\]/u;
 const DIRECT_MUTABLE_INTRINSIC_PATTERN=/(?:\b(?:Buffer\.(?:compare|from|isBuffer)|Number\.isFinite|Array\.isArray|Object\.(?:getOwnPropertyDescriptor|hasOwn))\s*\(|\bnew\s+Error\s*\()/u;
-const TARGET_INDEX_OWNER_PATTERN=/readOwnDataValue\(metadata,\s*'targetPartitionIds'\)[\s\S]*?arrayIsArray\(targetPartitionIds\)[\s\S]*?objectGetOwnPropertyDescriptor\(targetPartitionIds,\s*'length'\)[\s\S]*?readOwnDataValue\(targetPartitionIds,\s*'0'\)[\s\S]*?readOwnDataValue\(targetPartitionIds,\s*'1'\)/u;
+const TARGET_INDEX_OWNER_PATTERN=/readOwnDataValue\(metadata,\s*SPLIT_METADATA_FIELD\.TARGET_PARTITION_IDS\)[\s\S]*?arrayIsArray\(targetPartitionIds\)[\s\S]*?objectGetOwnPropertyDescriptor\(targetPartitionIds,\s*SPLIT_METADATA_FIELD\.LENGTH\)[\s\S]*?readOwnDataValue\(targetPartitionIds,\s*SPLIT_METADATA_FIELD\.LEFT_INDEX\)[\s\S]*?readOwnDataValue\(targetPartitionIds,\s*SPLIT_METADATA_FIELD\.RIGHT_INDEX\)/u;
 const TABLE_ID_STRING_COERCION_PATTERN=/function\s+compareEvaluationTableIds\([^)]*\)[\s\S]*?\bString\s*\(/u;
 const TABLE_ID_EARLY_EQUALITY_PATTERN=/function\s+compareEvaluationTableIds\([^)]*\)\s*\{\s*if\s*\(\s*left\s*===\s*right\s*\)/u;
 const TABLE_ID_PRIMITIVE_GUARD_PATTERN=/function\s+compareEvaluationTableIds\([^)]*\)[\s\S]*?typeof\s+left\s*!==\s*LOCAL_STR_STRING[\s\S]*?typeof\s+right\s*!==\s*LOCAL_STR_STRING/u;
