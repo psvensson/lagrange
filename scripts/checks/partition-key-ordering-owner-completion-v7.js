@@ -34,6 +34,9 @@ async function tableIdValidationProblems() {
       manager.listPartitions = () => rows;
       try {
         await manager.evaluateAllPartitions();
+        process.stderr.write(
+          'table-id-validation-before-absence: predecessor accepted invalid table ID\n',
+        );
         problems += 1;
       } catch (error) {
         if (!(error instanceof TypeError)) problems += 1;
@@ -87,7 +90,11 @@ async function arrayIntrinsicProblems() {
         results.mergeCandidates[0]?.rightId !== 'b') {
       problems += 1;
     }
-  } catch {
+  } catch (error) {
+    process.stderr.write(
+      'evaluation-array-intrinsic-isolation: ' +
+      String(error?.message || error) + '\n',
+    );
     problems += 1;
   } finally {
     Reflect.apply = priorApply;
