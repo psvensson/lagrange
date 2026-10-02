@@ -1,0 +1,52 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-key-ordering-owner-completion",
+  "statement": "Partition-key ordering has one complete owner: compareRoutingKeys supplies deterministic SQLite-BINARY-compatible TEXT/string order while preserving the already-landed numeric-vs-text-encoded-number order and typed mixed-space refusal; KeyRange, PartitionResolver, QueryGroup and split/merge adjacency consume that owner for partition keys, and no merge-adjacency raw relational partition-key comparator remains.",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "roadmapRow": "RM-0.3-qs-typed-key-ordering",
+    "specRef": "solve/specs/release-0-3-queryable-core/tasks.md#A1",
+    "planDoc": "solve/epics/release-0-3-queryable-core.md"
+  },
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/partition-key-ordering-owner-completion.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "preexisting-numeric-contract",
+      "statement": "Preserve the solved numeric-key-routing contract: a number against a text-encoded numeric partition boundary compares numerically, number/number remains numeric, and an unrelated mixed key space is refused rather than coerced."
+    },
+    {
+      "id": "sqlite-binary-text-order",
+      "statement": "The 0.3 persisted TEXT-key baseline is deterministic SQLite BINARY-compatible order, not host-locale collation. The implementation and behavioral witness must agree with the real SQLite ordering used to choose/order partition boundaries."
+    },
+    {
+      "id": "single-partition-key-order-owner",
+      "statement": "Merge adjacency, KeyRange, PartitionResolver and QueryGroup consume the same partition-key ordering owner. A table-id sort may use a separate stable identifier comparator but must not become or reuse a second partition-key semantic owner."
+    },
+    {
+      "id": "no-boundary-format-migration",
+      "statement": "Do not absorb numeric precision, persisted type metadata, encoding migration or old-boundary revalidation into this Quest. Record any additional representation finding for planned Quest partition-key-boundary-representation."
+    },
+    {
+      "id": "rs-raft-isolation",
+      "statement": "This Quest changes no Raft runtime, consensus transport, replica lifecycle, membership or formation behavior. It may be developed while raft-rs-full-cutover finishes, but it is not merged to shared main ahead of that cutover's exact-head closeout."
+    },
+    {
+      "id": "behavioral-red-on-revert",
+      "statement": "Add deterministic behavioral witnesses for SQLite/BINARY string order and merge-adjacency owner consumption. Reverting each load-bearing semantic change must make the corresponding witness red; the structural doneWhen checker alone is not sufficient proof."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "Any src/ change requires an independent verification newer than the last attempt. The verifier attacks duplicate comparison owners, coercion/locale dependence, hostile mixed input, and controlled-negative fidelity, with concrete evidence paths."
+    },
+    {
+      "id": "static-ratchets",
+      "statement": "Capture relevant file-scoped complexity, literal/runtime-grammar and file-size status before production edits and finish with no increased guardrail debt; generated test metadata is refreshed through its producer, never edited by hand."
+    }
+  ]
+}
