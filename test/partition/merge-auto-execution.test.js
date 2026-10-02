@@ -280,75 +280,115 @@ test('merge table ID validation happens before absent ordering',
     t.end();
   });
 
-test('merge evaluation ignores a hostile source iterator and captures Array.isArray',
-  async (t) => {
-    const rows = [
-      buildPartitionRow('users-p2', 'm', null),
-      buildPartitionRow('users-p1', null, 'm'),
-    ];
-    const {manager} = buildManager({
-      listPartitions: () => rows,
-      executeMergeCandidate: null,
-    });
-    const originalOwnIterator =
-      Object.getOwnPropertyDescriptor(rows, Symbol.iterator);
-    const originalIsArray = Array.isArray;
-    let results;
-    try {
-      Object.defineProperty(rows, Symbol.iterator, {
-        configurable: true,
-        value() {
-          throw new Error('partition iterator must not execute');
-        },
-      });
-      Array.isArray = () => false;
-      results = await manager.evaluateAllPartitions();
-    } finally {
-      Array.isArray = originalIsArray;
-      if (originalOwnIterator) {
-        Object.defineProperty(rows, Symbol.iterator, originalOwnIterator);
-      } else {
-        Reflect.deleteProperty(rows, Symbol.iterator);
-      }
-      manager.shutdown();
-    }
-    t.same(results.mergeCandidates, [
-      {leftId: 'users-p1', rightId: 'users-p2'},
-    ]);
-    t.end();
+test('merge evaluation ignores a hostile source iterator', async (t) => {
+  const rows = [
+    buildPartitionRow('users-p2', 'm', null),
+    buildPartitionRow('users-p1', null, 'm'),
+  ];
+  const {manager} = buildManager({
+    listPartitions: () => rows,
+    executeMergeCandidate: null,
   });
+  const originalOwnIterator =
+    Object.getOwnPropertyDescriptor(rows, Symbol.iterator);
+  let results;
+  try {
+    Object.defineProperty(rows, Symbol.iterator, {
+      configurable: true,
+      value() {
+        throw new Error('partition iterator must not execute');
+      },
+    });
+    results = await manager.evaluateAllPartitions();
+  } finally {
+    if (originalOwnIterator) {
+      Object.defineProperty(rows, Symbol.iterator, originalOwnIterator);
+    } else {
+      Reflect.deleteProperty(rows, Symbol.iterator);
+    }
+    manager.shutdown();
+  }
+  t.same(results.mergeCandidates, [
+    {leftId: 'users-p1', rightId: 'users-p2'},
+  ]);
+  t.end();
+});
 
-test('merge evaluation captures Array.prototype.sort and Reflect.apply',
-  async (t) => {
-    const rows = [
-      buildPartitionRow('users-p2', 'm', null),
-      buildPartitionRow('users-p1', null, 'm'),
-    ];
-    const {manager} = buildManager({
-      listPartitions: () => rows,
-      executeMergeCandidate: null,
-    });
-    const originalSort = Array.prototype.sort;
-    const originalApply = Reflect.apply;
-    let results;
-    try {
-      Array.prototype.sort = () => {
-        throw new Error('mutable Array.prototype.sort must not execute');
-      };
-      Reflect.apply = () => {
-        throw new Error('mutable Reflect.apply must not execute');
-      };
-      results = await manager.evaluateAllPartitions();
-    } finally {
-      Reflect.apply = originalApply;
-      Array.prototype.sort = originalSort;
-      manager.shutdown();
-    }
-    t.same(results.mergeCandidates, [
-      {leftId: 'users-p1', rightId: 'users-p2'},
-    ]);
-    t.end();
+test('merge evaluation captures Array.isArray', async (t) => {
+  const rows = [
+    buildPartitionRow('users-p2', 'm', null),
+    buildPartitionRow('users-p1', null, 'm'),
+  ];
+  const {manager} = buildManager({
+    listPartitions: () => rows,
+    executeMergeCandidate: null,
   });
+  const original = Array.isArray;
+  let results;
+  try {
+    Array.isArray = () => false;
+    results = await manager.evaluateAllPartitions();
+  } finally {
+    Array.isArray = original;
+    manager.shutdown();
+  }
+  t.same(results.mergeCandidates, [
+    {leftId: 'users-p1', rightId: 'users-p2'},
+  ]);
+  t.end();
+});
+
+test('merge evaluation captures Array.prototype.sort', async (t) => {
+  const rows = [
+    buildPartitionRow('users-p2', 'm', null),
+    buildPartitionRow('users-p1', null, 'm'),
+  ];
+  const {manager} = buildManager({
+    listPartitions: () => rows,
+    executeMergeCandidate: null,
+  });
+  const original = Array.prototype.sort;
+  let results;
+  try {
+    Array.prototype.sort = () => {
+      throw new Error('mutable Array.prototype.sort must not execute');
+    };
+    results = await manager.evaluateAllPartitions();
+  } finally {
+    Array.prototype.sort = original;
+    manager.shutdown();
+  }
+  t.same(results.mergeCandidates, [
+    {leftId: 'users-p1', rightId: 'users-p2'},
+  ]);
+  t.end();
+});
+
+test('merge evaluation captures Reflect.apply', async (t) => {
+  const rows = [
+    buildPartitionRow('users-p2', 'm', null),
+    buildPartitionRow('users-p1', null, 'm'),
+  ];
+  const {manager} = buildManager({
+    listPartitions: () => rows,
+    executeMergeCandidate: null,
+  });
+  const original = Reflect.apply;
+  let results;
+  try {
+    Reflect.apply = () => {
+      throw new Error('mutable Reflect.apply must not execute');
+    };
+    results = await manager.evaluateAllPartitions();
+  } finally {
+    Reflect.apply = original;
+    manager.shutdown();
+  }
+  t.same(results.mergeCandidates, [
+    {leftId: 'users-p1', rightId: 'users-p2'},
+  ]);
+  t.end();
+});
 
 test('evaluation row copying captures Reflect.defineProperty and bypasses inherited setters',
   (t) => {
