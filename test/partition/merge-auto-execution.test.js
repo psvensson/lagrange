@@ -563,6 +563,36 @@ test('merge evaluation rejects proxy lists and rows before descriptor traps', as
   t.end();
 });
 
+test('merge evaluation rejects proxy request context without invoking traps', async (t) => {
+  let trapCalls = 0;
+  const context = new Proxy({
+    reasonCodes: ['write_activity'],
+    triggerReason: 'reactive_request',
+  }, {
+    ownKeys() {
+      trapCalls += 1;
+      throw new Error('request-context proxy trap executed');
+    },
+    getOwnPropertyDescriptor() {
+      trapCalls += 1;
+      throw new Error('request-context descriptor trap executed');
+    },
+    get() {
+      trapCalls += 1;
+      throw new Error('request-context get trap executed');
+    },
+  });
+  const {manager} = buildManager({executeMergeCandidate: null});
+  const results = await manager.evaluateAllPartitions(context);
+  t.same(results.mergeCandidates, [
+    {leftId: 'users-p1', rightId: 'users-p2'},
+  ]);
+  t.equal(trapCalls, 0,
+    'request-context proxy is discarded before any trap can execute');
+  manager.shutdown();
+  t.end();
+});
+
 test('merge evaluation bounds the source partition array before scanning', async (t) => {
   const rows = [];
   rows.length = 1_000_001;
