@@ -8,7 +8,6 @@ doneWhen:
   args:
     file: solve/oracle/release-0-3-queryable-core.json
 quests:
-  - partition-key-ordering-owner-completion
   - partition-key-ordering-owner-completion-v2
   - partition-key-ordering-owner-completion-v3
 authorizes:
