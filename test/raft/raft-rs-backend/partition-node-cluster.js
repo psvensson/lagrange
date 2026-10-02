@@ -1,6 +1,6 @@
 // A cluster whose peers are real partition operation ports: each one is what
-// `provider.createPartitionPort(request)` returned for a request shaped
-// exactly as `PartitionService` shapes it.
+// `createRaftRsOperationPort(request)` returned for a request shaped exactly
+// as `PartitionService` shapes it.
 //
 // Nothing here is a raft-rs concept. The driver hands each peer the group's
 // own requirements - the RAFT_OPERATION_PORT_REQUEST fields PartitionService
@@ -9,7 +9,7 @@
 // its own, and a transport
 // that moves envelopes between inboxes. It owns no Raft logic, no peer
 // identity, no configuration and no expectation: the peer ids the core uses
-// are the ones the backend registered, and the driver asks the backend for
+// are the ones raft-rs registered, and the driver asks the backend for
 // them rather than choosing them.
 
 import fs from 'node:fs';
@@ -29,7 +29,7 @@ import {setActualCoreEntryObserver} from
   '../../../src/raft/raft-rs-runtime-owner.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
-import {RaftRsWasmProvider} from '../../../src/raft/raft-rs-provider.js';
+import {createRaftRsOperationPort} from '../../../src/raft/raft-rs-operation-port.js';
 
 const TEMP_PREFIX = 'raft-rs-real-partition-';
 const DB_SUFFIX = '.sqlite';
@@ -99,7 +99,6 @@ class PartitionNodeCluster {
     setActualCoreEntryObserver((observation) => {
       this.coreEntries.push(observation);
     });
-    this.provider = new RaftRsWasmProvider();
     this.replicas = new Map();
     for (const replicaId of this.replicaIds) {
       this.replicas.set(replicaId, this.buildReplica(replicaId, replicaIds));
@@ -214,7 +213,7 @@ class PartitionNodeCluster {
       replicaId, dbFile, db, request, node: null});
     replica.extraRequest = extraRequest;
     this.replicas.set(replicaId, replica);
-    replica.node = this.provider.createPartitionPort(request);
+    replica.node = createRaftRsOperationPort(request);
     return replica;
   }
 
@@ -228,7 +227,7 @@ class PartitionNodeCluster {
 
   /**
    * @param {string} replicaId - The replica.
-   * @return {Object} The node the backend returned for it.
+   * @return {Object} The node the operation port for it.
    */
   node(replicaId) {
     return this.replica(replicaId).node;
@@ -404,7 +403,7 @@ class PartitionNodeCluster {
   }
 
   /**
-   * Propose one command through the node the backend returned.
+   * Propose one command through the node the operation port.
    * @param {string} replicaId - The proposing replica.
    * @param {*} command - The command (a JSON value).
    * @return {Object} The node's named outcome.
