@@ -13,12 +13,10 @@ quests:
   - formation-harness-model-from-contracts
   - formation-calibration-run
   - formation-contracts-registration
-  - formation-sim
   - seed-formation-decoupling
   - five-node-cold-formation-certification
   - seed-replica-production-scheduling-defaults
   - learner-promotion-guard-inputs-observed
-  - critical-spread-overflow-disagreement-replay
 authorizes:
   - examples/service-data-affinity
   - scripts/checks/formation-health.js

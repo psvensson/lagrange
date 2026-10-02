@@ -8,7 +8,6 @@ quests:
   - restore-deterministic-cloud-gate-nondeterminism-defects
   - restore-deterministic-cloud-gate-resource-sensitive-execution-contract
   - restore-deterministic-cloud-gate-hosted-gate-repeatably-green
-  - restore-deterministic-cloud-gate
 authorizes:
   - scripts/checks
   - .github/workflows
