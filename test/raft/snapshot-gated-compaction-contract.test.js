@@ -62,32 +62,10 @@ function registerCompactionContract(name, createFixture) {
         compactionCalls += 1;
         return originalCompaction();
       };
-      await adapter.removeEntriesAfter(1);
+      adapter.removeFrom(2);
       t.equal(compactionCalls, 0, 'conflict-tail truncation cannot invoke compaction');
       t.ok(await adapter.get(1), 'conflict truncation preserves oldest committed entry');
       t.equal(adapter.committedIndex, ENTRY_COUNT, 'truncation cannot regress commit');
-    } finally {
-      fixture.close();
-    }
-  });
-}
-
-function registerInvalidTruncationContract(name, createFixture) {
-  test(`${name} rejects non-index truncation inputs without coercion`, async (t) => {
-    const fixture = createFixture();
-    const {adapter} = fixture;
-    try {
-      for (let index = 1; index <= 4; index += 1) {
-        await adapter.saveCommand({type: 'invalid-truncation', index}, TERM, index);
-      }
-      await adapter.commit(3);
-      for (const invalidIndex of INVALID_TRUNCATION_INDEXES) {
-        await adapter.removeEntriesAfter(invalidIndex);
-        t.equal((await adapter.getEntriesAfter(0)).length, 4,
-          `removeEntriesAfter preserves log for ${String(invalidIndex)}`);
-        t.equal(adapter.committedIndex, 3,
-          `removeEntriesAfter preserves commit for ${String(invalidIndex)}`);
-      }
     } finally {
       fixture.close();
     }
@@ -117,4 +95,3 @@ test('SQLite inclusive and partition truncation reject non-index inputs', async 
 });
 
 registerCompactionContract('SQLite adapter', sqliteFixture);
-registerInvalidTruncationContract('SQLite adapter', sqliteFixture);
