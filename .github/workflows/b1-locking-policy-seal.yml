@@ -4,28 +4,31 @@ on:
     branches:
       - quest/0-3-locking-read-wait-policy-seal
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: b1-locking-policy-seal
   cancel-in-progress: true
 jobs:
-  seal:
+  proof:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          persist-credentials: true
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - name: Seal B1 Quest against red policy probe
+      - name: Sealed B1 policy probe
+        run: node scripts/checks/locking-read-wait-policy-seal.js
+      - name: B1 checker ESLint
+        run: node node_modules/eslint/bin/eslint.js --no-warn-ignored scripts/checks/locking-read-wait-policy-seal.js
+      - name: B1 checker guideline guards
         run: |
-          node scripts/solve.js start --id locking-read-wait-policy-seal
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -- solve/quests/locking-read-wait-policy-seal
-          git commit -m "0.3 B1: seal locking-read wait policy"
-          git push origin HEAD:quest/0-3-locking-read-wait-policy-seal
+          node scripts/check-guideline-literals.js scripts/checks/locking-read-wait-policy-seal.js
+          node scripts/check-guideline-decision-boundaries.js scripts/checks/locking-read-wait-policy-seal.js
+          node scripts/check-guideline-ambient-intrinsics.js scripts/checks/locking-read-wait-policy-seal.js
+          node scripts/check-guideline-silent-catch.js scripts/checks/locking-read-wait-policy-seal.js
+      - name: Policy is design-only
+        run: |
+          git diff --exit-code 09fd1965ccba075d185936306f81799bbae6a50a...HEAD --             architecture/postgres-locking-reads.md             scripts/checks/locking-read-wait-policy-seal.js             solve/epics/release-0-3-queryable-core.md             solve/quests/locking-read-wait-policy-seal             solve/specs/release-0-3-queryable-core/locking-read-wait-policy.json             .github/workflows/b1-locking-policy-seal.yml
