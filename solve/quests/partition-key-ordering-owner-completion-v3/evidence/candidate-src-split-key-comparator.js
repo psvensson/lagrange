@@ -25,6 +25,8 @@ const SUPPORTED_KEY_TYPE_LIST = 'number/string/buffer';
 const TEXT_ENCODING = 'utf8';
 const ErrorCtor = Error;
 const arrayIsArray = Array.isArray;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
 const bufferCompare = Buffer.compare.bind(Buffer);
 const bufferFrom = Buffer.from.bind(Buffer);
 const bufferIsBuffer = Buffer.isBuffer.bind(Buffer);
@@ -91,23 +93,52 @@ export function compareSplitKey(value, splitKey) {
   return compareBinaryText(value, splitKey);
 }
 
+function readOwnDataValue(record, key) {
+  if (record === null || typeof record !== 'object') {
+    return undefined;
+  }
+  const descriptor = objectGetOwnPropertyDescriptor(record, key);
+  if (!descriptor || !objectHasOwn(descriptor, 'value')) {
+    return undefined;
+  }
+  return descriptor.value;
+}
+
+function readTargetPartitionIds(metadata) {
+  const targetPartitionIds = readOwnDataValue(metadata, 'targetPartitionIds');
+  if (!arrayIsArray(targetPartitionIds)) {
+    return {leftPartitionId: undefined, rightPartitionId: undefined};
+  }
+  const lengthDescriptor =
+    objectGetOwnPropertyDescriptor(targetPartitionIds, 'length');
+  if (!lengthDescriptor ||
+      !objectHasOwn(lengthDescriptor, 'value') ||
+      lengthDescriptor.value < 2) {
+    return {leftPartitionId: undefined, rightPartitionId: undefined};
+  }
+  return {
+    leftPartitionId: readOwnDataValue(targetPartitionIds, '0'),
+    rightPartitionId: readOwnDataValue(targetPartitionIds, '1'),
+  };
+}
+
 /**
  * Resolve the child partition ID for one partition-key value through the
- * typed comparator.
+ * typed comparator. Split metadata is consumed from own data properties
+ * only; inherited/accessor fields and iterator behavior are never semantic
+ * input to routing.
  * @param {*} value - Primary-key value.
  * @param {Object} metadata - Split metadata (splitKey, targetPartitionIds).
  * @return {string} Target child partition ID.
  */
 export function resolveSplitTargetPartitionId(value, metadata = {}) {
-  const [leftPartitionId, rightPartitionId] = arrayIsArray(
-    metadata?.targetPartitionIds,
-  ) ?
-    metadata.targetPartitionIds :
-    [];
+  const {leftPartitionId, rightPartitionId} =
+    readTargetPartitionIds(metadata);
   if (value === null || value === void 0) {
     return rightPartitionId;
   }
-  return compareSplitKey(value, metadata.splitKey) < COMPARISON_RESULT.EQUAL ?
+  const splitKey = readOwnDataValue(metadata, 'splitKey');
+  return compareSplitKey(value, splitKey) < COMPARISON_RESULT.EQUAL ?
     leftPartitionId :
     rightPartitionId;
 }
