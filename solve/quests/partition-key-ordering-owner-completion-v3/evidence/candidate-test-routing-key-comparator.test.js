@@ -138,9 +138,11 @@ test('routing comparator uses module-captured intrinsics', () => {
   const originalNumber = globalThis.Number;
   const originalNumberIsFinite = originalNumber.isFinite;
   const originalRegExpTest = RegExp.prototype.test;
+  const originalError = globalThis.Error;
   const leftBuffer = originalBufferFrom('a');
   const rightBuffer = originalBufferFrom('b');
   let outcomes = null;
+  let mixedMessage = null;
 
   try {
     Buffer.compare = () => 0;
@@ -152,17 +154,28 @@ test('routing comparator uses module-captured intrinsics', () => {
     originalNumber.isFinite = () => false;
     globalThis.Number = () => Number.NaN;
     RegExp.prototype.test = () => false;
+    globalThis.Error = class CorruptedError extends originalError {
+      constructor() {
+        super('corrupted mutable Error');
+      }
+    };
 
     outcomes = {
       text: compareRoutingKeys('a', 'b'),
       numericText: compareRoutingKeys(RIGHT_KEY, STORED_TEXT_BOUNDARY),
       buffer: compareRoutingKeys(leftBuffer, rightBuffer),
     };
+    try {
+      compareRoutingKeys(RIGHT_KEY, NON_NUMERIC_TEXT);
+    } catch (error) {
+      mixedMessage = error?.message || null;
+    }
   } finally {
     Buffer.compare = originalBufferCompare;
     Buffer.from = originalBufferFrom;
     Buffer.isBuffer = originalBufferIsBuffer;
     RegExp.prototype.test = originalRegExpTest;
+    globalThis.Error = originalError;
     originalNumber.isFinite = originalNumberIsFinite;
     globalThis.Number = originalNumber;
     globalThis.String = originalString;
@@ -174,6 +187,11 @@ test('routing comparator uses module-captured intrinsics', () => {
     'numeric/TEXT ordering ignores later intrinsic mutation',
   );
   assert.ok(outcomes.buffer < 0, 'buffer ordering ignores later intrinsic mutation');
+  assert.equal(
+    mixedMessage,
+    EXPECTED_NUMBER_STRING_MISMATCH,
+    'typed refusal ignores later Error-constructor mutation',
+  );
 });
 
 
