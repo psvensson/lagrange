@@ -120,26 +120,26 @@ test('gap 2: the truncation witness TRIPS inside (boundary, committedIndex]',
         'fixture: committedIndex sits above the boundary');
 
       const blockedBefore = adapter.committedTruncationBlockedCount;
-      adapter.removeEntriesAfter(fixture.boundaryIndex + 1);
+      adapter.removeFrom(fixture.boundaryIndex + 2);
       t.equal(adapter.committedTruncationBlockedCount, blockedBefore + 1,
-        'an exclusive truncation inside (boundary, committedIndex] trips');
+        'an inclusive truncation inside (boundary, committedIndex] trips');
       t.same(adapter.lastCommittedTruncationBlocked && {
         requestedIndex:
           adapter.lastCommittedTruncationBlocked.requestedIndex,
         committedIndex:
           adapter.lastCommittedTruncationBlocked.committedIndex,
       }, {
-        requestedIndex: fixture.boundaryIndex + 1,
+        requestedIndex: fixture.boundaryIndex + 2,
         committedIndex,
       }, 'the witness records the anomalous request');
       t.ok(await adapter.get(fixture.boundaryIndex + 2),
         'the committed suffix survives (clamped, not deleted)');
 
-      adapter.removeFrom(fixture.boundaryIndex + 2);
+      adapter.removeFrom(fixture.boundaryIndex + 1);
       t.equal(adapter.committedTruncationBlockedCount, blockedBefore + 2,
-        'an inclusive truncation inside (boundary, committedIndex] trips');
+        'a second inclusive truncation inside the committed suffix trips');
 
-      adapter.removeEntriesAfter(fixture.boundaryIndex);
+      adapter.removeFrom(fixture.boundaryIndex);
       t.equal(adapter.committedTruncationBlockedCount, blockedBefore + 2,
         'a truncation at or below the boundary clamps SILENTLY (no trip)');
     } finally {
