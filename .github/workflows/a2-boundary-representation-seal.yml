@@ -22,7 +22,7 @@ jobs:
       - run: npm ci
       - name: Seal red A2 Quest
         run: |
-          node scripts/solve.js start partition-boundary-representation
+          node scripts/solve.js start --id partition-boundary-representation
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add solve/quests/partition-boundary-representation/quest.json solve/quests/partition-boundary-representation/log.ndjson
