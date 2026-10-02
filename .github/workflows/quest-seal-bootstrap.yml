@@ -1,4 +1,4 @@
-name: quest-a1-v2-seal
+name: quest-a1-v2-candidate
 
 on:
   push:
@@ -11,10 +11,10 @@ permissions:
   contents: write
 
 jobs:
-  seal:
-    name: supersede A1 and seal reviewed A1-v2
+  candidate:
+    name: prove and preserve A1-v2 candidate
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout exact event SHA
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -33,39 +33,128 @@ jobs:
         shell: bash
         run: npm ci
 
-      - name: Refresh and commit generated test metadata
+      - name: Confirm sealed A1-v2 baseline is red
         shell: bash
         run: |
           set -euo pipefail
-          npm run -s test:metadata:refresh
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet --             test/shards/primary-classes.json             test/shards/resource-classes.json             test/shards/subsystem-classes.json             test/shards/impact-graph-seal.json; then
-            git add --               test/shards/primary-classes.json               test/shards/resource-classes.json               test/shards/subsystem-classes.json               test/shards/impact-graph-seal.json
-            git commit -m "test: refresh metadata for reviewed A1-v2 probe"
-          fi
-
-      - name: Supersede old A1 and seal A1-v2 on exact metadata-current HEAD
-        shell: bash
-        run: |
-          set -euo pipefail
-          node scripts/solve.js note             --id partition-key-ordering-owner-completion             --superseded "Independent pre-seal Copilot review found the sealed checker incomplete for UTF-8/BINARY non-BMP ordering and exact typed-refusal discrimination; preserve that predicate and continue as v2."             --by partition-key-ordering-owner-completion-v2
-          node scripts/solve.js start --id partition-key-ordering-owner-completion-v2
           node scripts/solve.js probe --id partition-key-ordering-owner-completion-v2
-
-      - name: Refuse unexpected mutations
-        shell: bash
-        run: |
-          set -euo pipefail
-          changed="$(git status --porcelain | awk '{print $2}' | sort)"
-          expected="$(printf '%s\n'             solve/quests/partition-key-ordering-owner-completion/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v2/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v2/quest.json | sort)"
-          if [ "$changed" != "$expected" ]; then
-            echo "Unexpected Solver mutation set:"
-            printf '%s\n' "$changed"
+          set +e
+          node scripts/checks/partition-key-ordering-owner-completion-v2.js
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "A1-v2 baseline unexpectedly green before candidate installation"
             exit 1
           fi
 
-      - name: Preserve reviewed seal if branch is unchanged
+      - name: Baseline scoped guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            src/partition/split-key-comparator.js
+            src/partition/partition-split-merge-manager-core-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js
+          )
+          npm run -s test:metrics:scoped -- "${files[@]}"
+          node scripts/check-guideline-literals.js "${files[@]}"
+          node scripts/check-runtime-grammar-contracts.js "${files[@]}"
+          node scripts/check-file-size-thresholds.js
+
+      - name: Install witnesses and prove controlled negative
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=solve/quests/partition-key-ordering-owner-completion/evidence
+          cp "$evidence/candidate-test-routing-key-comparator.test.js"             test/partition/routing-key-comparator.test.js
+          cp "$evidence/candidate-test-merge-auto-execution.test.js"             test/partition/merge-auto-execution.test.js
+
+          set +e
+          node --test test/partition/routing-key-comparator.test.js             > /tmp/a1-v2-routing-red.log 2>&1
+          routing_status=$?
+          node test/partition/merge-auto-execution.test.js             > /tmp/a1-v2-merge-red.log 2>&1
+          merge_status=$?
+          set -e
+
+          cat /tmp/a1-v2-routing-red.log
+          cat /tmp/a1-v2-merge-red.log
+
+          if [ "$routing_status" -eq 0 ]; then
+            echo "routing witness unexpectedly green on sealed source"
+            exit 1
+          fi
+          if [ "$merge_status" -eq 0 ]; then
+            echo "merge witness unexpectedly green on sealed source"
+            exit 1
+          fi
+          grep -E "not ok.*text routing order matches SQLite BINARY"             /tmp/a1-v2-routing-red.log >/dev/null
+          grep -E "not ok.*adjacency sorting uses SQLite BINARY key order"             /tmp/a1-v2-merge-red.log >/dev/null
+
+      - name: Install source candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=solve/quests/partition-key-ordering-owner-completion/evidence
+          cp "$evidence/candidate-src-split-key-comparator.js"             src/partition/split-key-comparator.js
+          cp "$evidence/candidate-src-split-merge-core.js"             src/partition/partition-split-merge-manager-core-methods.js
+          cp "$evidence/candidate-src-split-merge-evaluation.js"             src/partition/partition-split-merge-manager-evaluation-methods.js
+
+      - name: Prove green candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test/partition/routing-key-comparator.test.js
+          node test/partition/split-key-comparator.test.js
+          node test/partition/merge-auto-execution.test.js
+          node test/partition/partition-split-merge-manager.test.js
+          node scripts/checks/partition-key-ordering-owner-completion-v2.js
+          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v2
+
+      - name: Candidate scoped guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            src/partition/split-key-comparator.js
+            src/partition/partition-split-merge-manager-core-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js
+          )
+          npm run -s test:metrics:scoped -- "${files[@]}"
+          node scripts/check-guideline-literals.js "${files[@]}"
+          node scripts/check-runtime-grammar-contracts.js "${files[@]}"
+          node scripts/check-file-size-thresholds.js
+          npx eslint             "${files[@]}"             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js
+          git diff --check
+
+      - name: Record A1-v2 evidence and attempt while five-file diff is live
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v2             --finding "A1-v2 controlled negative on GitHub Actions run ${GITHUB_RUN_ID}: real SQLite BINARY including U+E000/U+10000 and merge-adjacency witnesses are red on the sealed source and green with the candidate; exact typed mixed-key refusal and direct doneWhen metric zero are preserved."             --kind evidence             --evidence "github-actions:${GITHUB_RUN_ID}"
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v2             --attempt "A1-v2 candidate completes the partition-key order owner: UTF-8/SQLite-BINARY text order, split comparator consistency, merge sort and adjacency delegation, numeric/TEXT compatibility and exact typed refusal; focused tests, red controls, doneWhen and scoped guardrails all pass in GitHub Actions run ${GITHUB_RUN_ID}."
+
+      - name: Refresh generated metadata for candidate
+        shell: bash
+        run: npm run -s test:metadata:refresh
+
+      - name: Refuse unexpected candidate mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          allowed='^(src/partition/(split-key-comparator\.js|partition-split-merge-manager-core-methods\.js|partition-split-merge-manager-evaluation-methods\.js)|test/partition/(routing-key-comparator\.test\.js|merge-auto-execution\.test\.js)|solve/quests/partition-key-ordering-owner-completion-v2/log\.ndjson|test/shards/(primary-classes\.json|resource-classes\.json|subsystem-classes\.json|impact-graph-seal\.json))$'
+          changed="$(git status --porcelain | awk '{print $2}' | sort)"
+          printf '%s\n' "$changed"
+          for required in             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js             solve/quests/partition-key-ordering-owner-completion-v2/log.ndjson; do
+            printf '%s\n' "$changed" | grep -Fx "$required" >/dev/null
+          done
+          unexpected="$(printf '%s\n' "$changed" | grep -Ev "$allowed" || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Unexpected candidate mutation set:"
+            printf '%s\n' "$unexpected"
+            exit 1
+          fi
+
+      - name: Commit and preserve candidate if branch is unchanged
         shell: bash
         env:
           BRANCH: quest/0-3-queryable-core-foundation
@@ -74,9 +163,11 @@ jobs:
           git fetch origin "$BRANCH"
           remote_sha="$(git rev-parse "origin/$BRANCH")"
           if [ "$remote_sha" != "$GITHUB_SHA" ]; then
-            echo "Branch advanced from event SHA $GITHUB_SHA to $remote_sha; refusing stale seal push"
+            echo "Branch advanced from event SHA $GITHUB_SHA to $remote_sha; refusing stale candidate push"
             exit 1
           fi
-          git add --             solve/quests/partition-key-ordering-owner-completion/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v2/quest.json             solve/quests/partition-key-ordering-owner-completion-v2/log.ndjson
-          git commit -m "quest: supersede A1 and seal reviewed A1-v2"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js             solve/quests/partition-key-ordering-owner-completion-v2/log.ndjson             test/shards/primary-classes.json             test/shards/resource-classes.json             test/shards/subsystem-classes.json             test/shards/impact-graph-seal.json
+          git commit -m "feat: complete A1-v2 partition-key ordering owner"
           git push origin HEAD:refs/heads/"$BRANCH"
