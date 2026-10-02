@@ -35,7 +35,6 @@ const LOCAL_STR_LEGACY_RAFT_LOG_SCHEMA_DETECTED_MANUAL_M = 'Legacy raft log sche
 const LOCAL_STR_INSERT_OR_REPLACE_INTO_RAFT_LOG_LOG_INDE = 'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)';
 const LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX = 'DELETE FROM _raft_log WHERE log_index >= ?';
 const LOCAL_STR_UPDATE_RAFT_LOG_SET_COMMAND_WHERE_LOG_IN = 'UPDATE _raft_log SET command = ? WHERE log_index = ?';
-const LOCAL_STR_1JYKG = 'DELETE FROM _raft_log WHERE log_index > ?';
 const LOCAL_STR_DELETE_COMMITTED_PREFIX =
   'DELETE FROM _raft_log WHERE log_index <= ?';
 const LOCAL_STR_COMMITTED_TRUNCATION_REFUSED =
@@ -411,88 +410,6 @@ class SQLiteLogAdapter {
   }
 
   /**
-   * Acknowledge a command from a follower.
-   * Required by consensus owners for quorum tracking.
-   * Requirements: 12.2
-   * @param {number} index - Index of entry
-   * @param {string} address - Address of follower
-   * @return {Object} Updated entry
-   */
-  commandAck(index, address) {
-    // Follower-ack recency actuals for the durability-fitness successor
-    // probe (CL-039: never shed leadership without a viable successor).
-    // Self-acks are stamped at saveCommand, not here, so every commandAck
-    // address is a genuine peer.
-    const ackAddress = String(address || '').trim();
-    if (ackAddress.length > 0 && ackAddress !== this.node?.address) {
-      if (!this.lastFollowerAckAtByAddress) {
-        this.lastFollowerAckAtByAddress = new Map();
-      }
-      this.lastFollowerAckAtByAddress.set(ackAddress, this.timeSource.now());
-    }
-    if (!this.isOpen()) {
-      return {responses: []};
-    }
-    const row = this.db.prepare(
-      'SELECT command FROM _raft_log WHERE log_index = ?',
-    ).get(index);
-
-    if (!row) {
-      return {responses: []};
-    }
-
-    const entry = this.readEntryRow(row);
-
-    // Add acknowledgment if not already present
-    if (!entry.responses) {
-      entry.responses = [];
-    }
-    const existingIndex = entry.responses.findIndex((r) => r.address === address);
-    if (existingIndex === -1) {
-      entry.responses.push({address, ack: true});
-    }
-
-    // Update in SQLite
-    this.db.prepare(
-      LOCAL_STR_UPDATE_RAFT_LOG_SET_COMMAND_WHERE_LOG_IN,
-    ).run(JSON.stringify(entry), index);
-    // CL-018: do NOT advance the watermark here. An ack is not a commit —
-    // the premature set made getUncommittedEntriesUpToIndex(index) return
-    // an empty suffix in the same quorum check that was about to commit
-    // this very entry (fatal once the scan was watermark-bounded), and it
-    // was the source of the old watermark-regression wart. The watermark
-    // advances in commit().
-
-    return entry;
-  }
-
-  /**
-   * Get uncommitted entries up to index.
-   * Required by consensus owners for commit processing.
-   * Requirements: 12.2
-   * @param {number} index - Max index
-   * @param {number} _term - Term (unused)
-   * @return {Array} Uncommitted entries
-   */
-  getUncommittedEntriesUpToIndex(index, _term) {
-    if (!this.isOpen()) {
-      return [];
-    }
-    const committedIndex = this.getCommittedIndex();
-    // CL-018: rows at or below the committed watermark are committed by
-    // raft's prefix-commit semantics — scanning and JSON-parsing them on
-    // every heartbeat was the top self-time frame in the seed freeze
-    // windows. Bound the scan to the genuinely-uncommitted suffix.
-    const rows = this.db.prepare(
-      'SELECT log_index, term, command FROM _raft_log WHERE log_index <= ? AND log_index > ? ORDER BY log_index',
-    ).all(index, committedIndex);
-
-    return rows
-      .map((row) => this.readEntryRow(row, committedIndex))
-      .filter((entry) => !entry.committed);
-  }
-
-  /**
    * Commit an entry.
    * Required by consensus owners for commit processing.
    * Requirements: 12.2
@@ -569,42 +486,7 @@ class SQLiteLogAdapter {
   }
 
   // getEntryInfoBefore / getEntryBefore / getEntriesAfter live in the
-  // callback-api mixin (boundary-aware since raft-snapshot-atomic-install).
-
-  /**
-   * Remove all entries after index.
-   * Required by consensus owners for log truncation.
-   * Requirements: 12.2
-   * @param {number} index - Index to remove after
-   */
-  removeEntriesAfter(index) {
-    if (!this.isOpen()) {
-      return;
-    }
-    // Raft-safety invariant (CL-040/041/042 class): committed entries are
-    // permanent and MUST NEVER be truncated — deleting a committed entry
-    // destroys agreed history and, cluster-wide across a quorum, is the
-    // cardinal Raft safety violation. Conflict truncation
-    // (index.js) calls this UNGUARDED; a truncation whose floor falls below
-    // committedIndex therefore silently deleted committed entries and produced
-    // the replica_operations-p1 log HOLE (committedIndex advanced to 228 while
-    // entries 192-228 were deleted on a quorum), which froze the durable
-    // watermark at the first gap and wedged the ledger leader forever.
-    //
-    // Clamp the deletion floor to committedIndex so only the UNCOMMITTED
-    // conflicting suffix is ever removed. This is a NO-OP on the normal path
-    // (a legitimate conflict is always above the committed prefix, so
-    // index >= committedIndex and the clamp does nothing); it only bites the
-    // anomalous case, where refusing to delete committed history is the correct
-    // Raft response, not obeying it. truncateConflictingSameIndexTail already
-    // may guard individual callers, but the invariant belongs at the
-    // adapter so EVERY caller is covered.
-    if (!isValidRaftLogIndex(index)) {
-      return;
-    }
-    const safeIndex = this.safeExclusiveTruncationIndex(index);
-    this.db.prepare(LOCAL_STR_1JYKG).run(safeIndex);
-  }
+  // query-api mixin (boundary-aware since raft-snapshot-atomic-install).
 
   // compactCommittedEntries (the S5 proof-gated decision table — the
   // proofless call keeps the frozen refusal), refreshSnapshotBoundaryFromStore
@@ -643,20 +525,6 @@ class SQLiteLogAdapter {
         },
       );
     }
-  }
-
-  safeExclusiveTruncationIndex(index) {
-    const committedIndex = this.refreshCommittedIndexCacheFromStore();
-    // A truncation aimed at or below the snapshot boundary is a legitimate,
-    // expected consequence of has() answering compacted lineage — clamp it
-    // silently instead of tripping the committed-truncation raft-safety
-    // witness, which stays reserved for genuinely anomalous requests in
-    // (boundary, committedIndex).
-    const boundary = this.getSnapshotBoundary().lastIncludedIndex;
-    if (index < committedIndex && index > boundary) {
-      this.recordCommittedTruncationBlock(index, committedIndex);
-    }
-    return Math.max(index, committedIndex);
   }
 
   safeInclusiveTruncationIndex(index) {
@@ -713,10 +581,8 @@ class SQLiteLogAdapter {
       return;
     }
     // CL-018: the raft committedIndex is monotonic by definition. The
-    // leader's commandAck calls this for EVERY ack — including catch-up
-    // acks at OLD indexes, which used to REGRESS the persisted watermark
-    // until the next head ack (CL-015 adjacent finding #2). Clamp here so
-    // every caller is monotonic.
+    // Stale callers can still present an older observed index after a newer
+    // durable commit. Clamp here so every caller is monotonic.
     const current = this.refreshCommittedIndexCacheFromStore();
     if (index <= current) {
       return;
@@ -727,15 +593,6 @@ class SQLiteLogAdapter {
     this._committedIndexCache = index;
   }
 
-  /**
-   * End/cleanup the log adapter.
-   * Called when the consensus/storage owner is ended.
-   * For SQLite, we don't close the database here as it's managed externally.
-   */
-  end() {
-    // No-op for SQLite - database is managed by PartitionService
-    // The database will be closed when PartitionService.shutdown() is called
-  }
 }
 
 installSQLiteLogAdapterQueryApi(SQLiteLogAdapter);
