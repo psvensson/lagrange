@@ -78,7 +78,7 @@
     },
     {
       "id": "merge-table-id-coercion-free",
-      "statement": "Split/merge evaluation table IDs are primitive strings. Sorting never consults mutable global String and never coerces object/exotic table IDs; unsupported table metadata fails closed before Symbol.toPrimitive or toString can execute."
+      "statement": "Merge sorting accepts only absent or primitive-string table IDs, validates non-absent types before equality, never consults mutable global String, and never invokes user-controlled coercion for table identity."
     },
     {
       "id": "isolated-intrinsic-controls",
@@ -86,7 +86,7 @@
     },
     {
       "id": "merge-table-id-no-coercion",
-      "statement": "Merge sorting accepts only absent or primitive-string table IDs, never consults mutable global String, and never invokes user-controlled coercion for table identity."
+      "statement": "Merge sorting accepts only absent or primitive-string table IDs, validates non-absent types before equality, never consults mutable global String, and never invokes user-controlled coercion for table identity."
     }
   ]
 }
