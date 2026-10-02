@@ -38,6 +38,11 @@ const LOCAL_STR_TABLE_ID_SNAKE = 'table_id';
 const LOCAL_STR_TABLE_ID_CAMEL = 'tableId';
 const LOCAL_STR_PARTITION_ID_SNAKE = 'partition_id';
 const LOCAL_STR_PARTITION_ID_CAMEL = 'partitionId';
+const LOCAL_STR_LENGTH = 'length';
+const LOCAL_STR_PARTITION_KEY_START_SNAKE = 'partition_key_start';
+const LOCAL_STR_PARTITION_KEY_START_CAMEL = 'partitionKeyStart';
+const LOCAL_STR_PARTITION_KEY_END_SNAKE = 'partition_key_end';
+const LOCAL_STR_PARTITION_KEY_END_CAMEL = 'partitionKeyEnd';
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayIsArray = Array.isArray;
 const arraySort = Array.prototype.sort;
@@ -69,7 +74,7 @@ function readBoundedCanonicalArrayLength(values, maxLength) {
       objectGetPrototypeOf(values) !== canonicalArrayPrototype) {
     return null;
   }
-  const length = readOwnDataValue(values, 'length');
+  const length = readOwnDataValue(values, LOCAL_STR_LENGTH);
   return numberIsSafeInteger(length) &&
     length >= 0 &&
     length <= maxLength ?
@@ -444,11 +449,11 @@ class PartitionSplitMergeManagerCoreMethods {
     if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
       return null;
     }
-    const snakeCaseKey = readOwnDataValue(partition, 'partition_key_start');
+    const snakeCaseKey = readOwnDataValue(partition, LOCAL_STR_PARTITION_KEY_START_SNAKE);
     if (snakeCaseKey !== undefined) {
       return snakeCaseKey;
     }
-    return readOwnDataValue(partition, 'partitionKeyStart') ?? null;
+    return readOwnDataValue(partition, LOCAL_STR_PARTITION_KEY_START_CAMEL) ?? null;
   }
 
   /**
@@ -461,11 +466,11 @@ class PartitionSplitMergeManagerCoreMethods {
     if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
       return null;
     }
-    const snakeCaseKey = readOwnDataValue(partition, 'partition_key_end');
+    const snakeCaseKey = readOwnDataValue(partition, LOCAL_STR_PARTITION_KEY_END_SNAKE);
     if (snakeCaseKey !== undefined) {
       return snakeCaseKey;
     }
-    return readOwnDataValue(partition, 'partitionKeyEnd') ?? null;
+    return readOwnDataValue(partition, LOCAL_STR_PARTITION_KEY_END_CAMEL) ?? null;
   }
 
   /**
