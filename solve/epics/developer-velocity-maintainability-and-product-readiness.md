@@ -31,4 +31,13 @@ legacyStatus: active
 
 # Developer Velocity, Maintainability, and Product Readiness
 
-> Retired planning record. This legacy epic is terminal `superseded` and is retained only as a front-matter tombstone so historical Quest records can still resolve its epic id. Executable history remains in the linked Quest logs and Git history. Do not open new work here.
+> Retired planning record. This legacy epic is terminal `superseded`. Executable history remains in the linked Quest logs and Git history. The historical section headings below are retained only so sealed Quest `specRef` anchors continue to resolve.
+
+### V1 — Developer Smoke Proof
+### V2a — Primary Test Classification Manifest
+### V4a — Impact Graph / Proof-Cone Owner
+### V4b — Proof-Cone Shadow Validation
+### V4c — Selective Quest-Landing Cutover
+### M1 — Global Owner-Debt Inventory
+### A1 — Fresh Historical Artifact Census
+### A2a/A2b — Historical Payload Migration
