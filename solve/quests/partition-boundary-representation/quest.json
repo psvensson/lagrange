@@ -1,0 +1,48 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-boundary-representation",
+  "statement": "Partition boundaries preserve exact declared-key semantics across median selection, persistence, restart/readback and routing: INTEGER keys beyond JavaScript Number safe range remain exact and correctly ordered; TEXT/BLOB boundaries retain their declared representation; persisted boundary rows carry enough type authority to decode without heuristic coercion; and legacy ambiguous boundaries are explicitly migrated or fail closed for revalidation before they can route.",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "roadmapRow": "RM-0.3-qs-boundary-representation",
+    "specRef": "solve/specs/release-0-3-queryable-core/tasks.md#A2",
+    "planDoc": "solve/epics/release-0-3-queryable-core.md"
+  },
+  "verificationTemplates": [
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/partition-boundary-representation.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "exact-large-integer",
+      "statement": "An INTEGER primary key above 2^53 survives split-median selection, persisted partition boundary representation, restart/readback and routing comparison without rounding, textual ambiguity or order inversion."
+    },
+    {
+      "id": "declared-type-authority",
+      "statement": "Boundary decoding uses declared/persisted key type authority; it does not infer INTEGER versus TEXT from lexical shape."
+    },
+    {
+      "id": "scoped-safe-integer",
+      "statement": "Do not globally enable SQLite safe-integer mode for all query results. Exact-integer handling is scoped to the boundary/median owner so unrelated JSON/result-size paths do not receive BigInt unexpectedly."
+    },
+    {
+      "id": "legacy-revalidation",
+      "statement": "Existing ambiguous TEXT-era boundary rows are migrated with authoritative type information or fail closed until explicitly revalidated; old ambiguous rows never silently become routing authority."
+    },
+    {
+      "id": "a1-preservation",
+      "statement": "Preserve the sealed A1 comparator contract, SQLite BINARY TEXT ordering, numeric/TEXT compatibility during migration, and actual KeyRange/PartitionResolver/QueryGroup/split-merge owner usage."
+    },
+    {
+      "id": "rs-raft-isolation",
+      "statement": "No Raft runtime, consensus, membership, formation or lifecycle behavior changes."
+    }
+  ]
+}
