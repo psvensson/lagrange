@@ -852,9 +852,11 @@ describe('benchmark regression gate helpers', () => {
             timestamp: '2026-02-17T12:00:00.000Z',
           },
         ],
-        {          benchmarkGate: {
+        {
+          benchmarkGate: {
             enabled: true,
-            maxThroughputRegressionRatio: 0.1,            parityMismatchPolicy: 'fail',
+            maxThroughputRegressionRatio: 0.1,
+            parityMismatchPolicy: 'fail',
           },
         },
       );
@@ -906,9 +908,11 @@ describe('benchmark regression gate helpers', () => {
             timestamp: '2026-02-17T12:00:00.000Z',
           },
         ],
-        {          benchmarkGate: {
+        {
+          benchmarkGate: {
             enabled: true,
-            maxThroughputRegressionRatio: 0.1,            parityMismatchPolicy: 'warn',
+            maxThroughputRegressionRatio: 0.1,
+            parityMismatchPolicy: 'warn',
           },
         },
       );
