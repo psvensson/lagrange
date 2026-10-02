@@ -1,0 +1,54 @@
+name: a1-v4-request-independent-review
+
+on:
+  push:
+    branches:
+      - review/a1-v4-partition-key-ordering-final
+    paths:
+      - .github/workflows/a1-v4-request-review.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  request:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact event SHA
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Restore clean review tree and request Copilot
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_TREE_HEAD: 0b8689a7fc25a51c175670d6e2c8e479d8cffa1a
+          BRANCH: review/a1-v4-partition-key-ordering-final
+        run: |
+          set -euo pipefail
+          expected_tree="$(git rev-parse "$EXPECTED_TREE_HEAD^{tree}")"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/a1-v4-request-review.yml
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m "review: remove A1-v4 review request workflow"
+          actual_tree="$(git rev-parse HEAD^{tree})"
+          if [ "$actual_tree" != "$expected_tree" ]; then
+            echo "Clean review tree changed: expected $expected_tree, got $actual_tree"
+            exit 1
+          fi
+          clean_sha="$(git rev-parse HEAD)"
+          git push origin HEAD:refs/heads/"$BRANCH"
+          remote_sha="$(gh pr view 86 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
+          if [ "$remote_sha" != "$clean_sha" ]; then
+            echo "PR #86 head mismatch after push: expected $clean_sha, got $remote_sha"
+            exit 1
+          fi
+          gh pr comment 86 --repo psvensson/lagrange --body "@copilot Re-review exact clean head `$clean_sha` only. It has the identical Git tree and exact A1-v4 candidate bytes as finalized head `$EXPECTED_TREE_HEAD`. Perform REVIEW ONLY using the sealed Quest `partition-key-ordering-owner-completion-v4`, `.github/skills/code-review/SKILL.md`, and both mandatory categories `harness-fidelity` + `adversarial-js-intrinsics`. Enumerate every checklist item with evidence paths and end with exact-head ACCEPT or REJECT. Do not modify files."
+          gh pr edit 86 --repo psvensson/lagrange --add-reviewer @copilot
+          gh pr view 86 --repo psvensson/lagrange --json number,state,isDraft,headRefOid,url,reviewRequests
