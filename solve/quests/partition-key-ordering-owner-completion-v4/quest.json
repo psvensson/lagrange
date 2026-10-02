@@ -1,0 +1,72 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-key-ordering-owner-completion-v4",
+  "statement": "Partition-key ordering has one complete hostile-input-safe owner: supported values are validated before equality, SQLite-BINARY-compatible UTF-8 ordering and numeric/TEXT routing are preserved, unsupported/non-finite/boxed/exotic same-reference values fail closed before coercion, mutable JavaScript intrinsics cannot change comparison or split-target routing, split target selection does not consume array iteration, and KeyRange, PartitionResolver, QueryGroup plus split/merge sort and adjacency use the actual owned comparator expressions.",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "roadmapRow": "RM-0.3-qs-typed-key-ordering",
+    "specRef": "solve/specs/release-0-3-queryable-core/tasks.md#A1",
+    "planDoc": "solve/epics/release-0-3-queryable-core.md"
+  },
+  "verificationTemplates": [
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/partition-key-ordering-owner-completion-v4.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "supersedes-reviewed-v3",
+      "statement": "Supersedes partition-key-ordering-owner-completion-v3 after category-complete Copilot PR #84 found two residual defects not measured by the sealed v3 predicate: pre-validation same-reference equality admitted unsupported/non-finite values, and the captured Array.isArray witness never engaged split-target resolution while destructuring still consumed Array iteration. Preserve v3's sealed predicate and evidence unchanged."
+    },
+    {
+      "id": "validation-before-equality",
+      "statement": "Absent bounds and supported equal number/string/Buffer keys may compare equal only through their typed paths. Unsupported, boxed, exotic, boolean, Symbol and non-finite numeric values must not bypass validation merely because both operands are identical."
+    },
+    {
+      "id": "array-authenticity",
+      "statement": "Split-target resolution uses the module-captured Array.isArray result and indexed access to targetPartitionIds; it must remain correct after Array.isArray and Array.prototype[Symbol.iterator] are replaced, with no destructuring/iterator dependency."
+    },
+    {
+      "id": "sqlite-binary-text-order",
+      "statement": "Primitive string keys use deterministic SQLite BINARY-compatible UTF-8 byte order, including BMP/non-BMP cases that differ from JavaScript UTF-16 relational order."
+    },
+    {
+      "id": "typed-refusal-before-coercion",
+      "statement": "Only finite number, primitive string, Buffer, absent bounds and the explicit numeric-vs-text-encoded-number compatibility case are comparable. Unsupported values fail closed with the exact typed split-key mismatch before user-controlled coercion."
+    },
+    {
+      "id": "intrinsics-independent",
+      "statement": "Partition-key comparison and split-target routing capture every mutable intrinsic they need at module load. Replacing Buffer, Number, String, RegExp.test, Error, Array.isArray or Array iteration after import must not alter valid outcomes."
+    },
+    {
+      "id": "actual-owner-expression",
+      "statement": "The doneWhen predicate and behavioral witnesses prove the actual split/merge sort and adjacency expressions call compareRoutingKeys; unrelated/dead tokens cannot satisfy closure."
+    },
+    {
+      "id": "preexisting-numeric-contract",
+      "statement": "Preserve numeric-key-routing: finite number/number stays numeric and a number against a text-encoded numeric persisted boundary compares numerically. Persisted large-integer representation remains A2."
+    },
+    {
+      "id": "no-boundary-format-migration",
+      "statement": "Persisted type metadata, exact large-integer representation, encoding migration and old-boundary revalidation remain A2."
+    },
+    {
+      "id": "rs-raft-isolation",
+      "statement": "No Raft runtime, consensus transport, lifecycle, membership or formation behavior changes."
+    },
+    {
+      "id": "controlled-negatives",
+      "statement": "SQLite/non-BMP order, exact mismatch, same-reference refusal, mutable-intrinsic split-target routing and merge adjacency each need right-reason red controls where isolated controls are available."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "Any src/ candidate needs category-complete independent verification newer than the last v4 attempt covering both sealed verificationTemplates with evidence paths."
+    }
+  ]
+}
