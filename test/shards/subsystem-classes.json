@@ -28,7 +28,7 @@
   "censusSize": 2182,
   "digest": "fnv1a32-0e6e9ffc",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-741752d9",
+  "observationDigest": "fnv1a32-406b32d2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8652,6 +8652,9 @@
         "package.json",
         "src/admin/static/playback-viewer.html",
         "src/entrypoint-runtime-provenance.js",
+        "src/raft/constants.js",
+        "src/raft/raft-packet-utils.js",
+        "src/raft/sqlite-log-adapter.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/config-parser.js"
       ],
