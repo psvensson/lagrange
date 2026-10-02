@@ -1,3 +1,4 @@
+import {types as nodeUtilTypes} from 'node:util';
 import {SERVICE_TYPE} from '../constants/index.js';
 import {ADMISSION_DECISION} from '../rebalancer/storage-capacity-constants.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
@@ -5,6 +6,9 @@ import {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
+import {
+  copyDenseOwnDataRecordArray,
+} from '../utils/strict-own-data.js';
 import {KeyRange} from './key-range-manager.js';
 import {compareRoutingKeys} from './split-key-comparator.js';
 import {
@@ -25,6 +29,9 @@ const REACTIVE_EVALUATION_TRIGGER = 'reactive_request';
 const REACTIVE_PRESSURE_BYPASS_REASON_WRITE_ACTIVITY = 'write_activity';
 const INVALID_EVALUATION_TABLE_ID =
   'Partition evaluation table IDs must be primitive strings';
+const INVALID_EVALUATION_PARTITION_LIST =
+  'Partition evaluation rows must be a bounded dense own-data array';
+const MAX_EVALUATION_PARTITION_ROWS = 1_000_000;
 const LOCAL_STR_DESCRIPTOR_VALUE = 'value';
 const LOCAL_STR_TABLE_ID_SNAKE = 'table_id';
 const LOCAL_STR_TABLE_ID_CAMEL = 'tableId';
@@ -32,36 +39,57 @@ const LOCAL_STR_PARTITION_ID_SNAKE = 'partition_id';
 const LOCAL_STR_PARTITION_ID_CAMEL = 'partitionId';
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayIsArray = Array.isArray;
-const arrayPush = Function.call.bind(Array.prototype.push);
 const arraySort = Array.prototype.sort;
+const canonicalArrayPrototype = Array.prototype;
+const isProxy = nodeUtilTypes.isProxy.bind(nodeUtilTypes);
+const numberIsSafeInteger = Number.isSafeInteger;
+const objectDefineProperty = Object.defineProperty;
+const objectGetPrototypeOf = Object.getPrototypeOf;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
 const reflectApply = Reflect.apply;
-const reflectDefineProperty = Reflect.defineProperty;
+const RangeErrorCtor = RangeError;
 const TypeErrorCtor = TypeError;
 
+function appendOwnArrayValue(array, value) {
+  objectDefineProperty(array, array.length, {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value,
+  });
+}
+
 function cloneStringArray(values) {
-  if (!arrayIsArray(values)) {
+  if (!arrayIsArray(values) || isProxy(values)) {
     return [];
   }
   const cloned = [];
   for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
     const value = values[valueIndex];
-    const normalizedValue = String(value || '');
+    const normalizedValue =
+      typeof value === LOCAL_STR_STRING ? value : '';
     if (!normalizedValue || arrayIncludes(cloned, normalizedValue)) {
       continue;
     }
-    arrayPush(cloned, normalizedValue);
+    appendOwnArrayValue(cloned, normalizedValue);
   }
   return cloned;
 }
 
 function readOwnDataValue(record, key) {
-  const descriptor = objectGetOwnPropertyDescriptor(record, key);
-  if (!descriptor || !objectHasOwn(descriptor, LOCAL_STR_DESCRIPTOR_VALUE)) {
+  if (!record || typeof record !== LOCAL_STR_OBJECT || isProxy(record)) {
     return undefined;
   }
-  return descriptor.value;
+  try {
+    const descriptor = objectGetOwnPropertyDescriptor(record, key);
+    if (!descriptor || !objectHasOwn(descriptor, LOCAL_STR_DESCRIPTOR_VALUE)) {
+      return undefined;
+    }
+    return descriptor.value;
+  } catch {
+    return undefined;
+  }
 }
 
 function compareAbsentEvaluationTableIds(left, right) {
@@ -91,21 +119,20 @@ function compareEvaluationTableIds(left, right) {
 }
 
 function cloneEvaluationPartitionRows(partitions) {
-  if (!arrayIsArray(partitions)) {
-    return [];
+  if (isProxy(partitions) ||
+      !arrayIsArray(partitions) ||
+      objectGetPrototypeOf(partitions) !== canonicalArrayPrototype) {
+    throw new TypeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
   }
-  const rows = [];
   const length = readOwnDataValue(partitions, 'length');
-  for (let index = 0; index < length; index += 1) {
-    const partition = readOwnDataValue(partitions, index);
-    if (partition && typeof partition === LOCAL_STR_OBJECT) {
-      reflectDefineProperty(rows, rows.length, {
-        configurable: true,
-        enumerable: true,
-        writable: true,
-        value: partition,
-      });
-    }
+  if (!numberIsSafeInteger(length) ||
+      length < 0 ||
+      length > MAX_EVALUATION_PARTITION_ROWS) {
+    throw new RangeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
+  }
+  const rows = copyDenseOwnDataRecordArray(partitions);
+  if (rows === null) {
+    throw new TypeErrorCtor(INVALID_EVALUATION_PARTITION_LIST);
   }
   return rows;
 }
