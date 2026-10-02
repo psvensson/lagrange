@@ -1,0 +1,101 @@
+name: a2-boundary-recon
+
+on:
+  push:
+    branches:
+      - recon/a2-boundary-representation-2026-10-02
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Measure parser and SQLite integer boundaries
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import Database from 'better-sqlite3';
+          import {SQLParser} from './src/query/sql-parser.js';
+
+          const intended = '9007199254740993';
+          const jsNumber = Number(intended);
+          console.log(JSON.stringify({
+            observation: 'js-number',
+            intended,
+            jsNumber,
+            safe: Number.isSafeInteger(jsNumber),
+            rendered: String(jsNumber),
+          }));
+
+          for (const dialect of ['sqlite', 'postgresql']) {
+            const sql = 'SELECT * FROM items WHERE id = ' + intended;
+            const ast = new SQLParser(sql, {dialect}).parse();
+            console.log(JSON.stringify({
+              observation: 'parser-literal',
+              dialect,
+              intended,
+              where: ast.where,
+            }));
+          }
+
+          const db = new Database(':memory:');
+          db.exec('CREATE TABLE t_text (v TEXT); CREATE TABLE t_int (v INTEGER);');
+
+          const big = BigInt(intended);
+          const cases = [
+            ['text-number', 't_text', jsNumber],
+            ['text-string', 't_text', intended],
+            ['text-bigint', 't_text', big],
+            ['int-number', 't_int', jsNumber],
+            ['int-string', 't_int', intended],
+            ['int-bigint', 't_int', big],
+          ];
+
+          for (const [name, table, value] of cases) {
+            db.exec('DELETE FROM ' + table);
+            let insertError = null;
+            try {
+              db.prepare('INSERT INTO ' + table + ' (v) VALUES (?)').run(value);
+            } catch (error) {
+              insertError = String(error?.message || error);
+            }
+            let ordinary = null;
+            let safe = null;
+            if (!insertError) {
+              ordinary = db.prepare('SELECT v, typeof(v) AS storage_type FROM ' + table).get();
+              const statement = db.prepare('SELECT v, typeof(v) AS storage_type FROM ' + table);
+              statement.safeIntegers(true);
+              safe = statement.get();
+            }
+            console.log(JSON.stringify({
+              observation: 'sqlite-roundtrip',
+              name,
+              inputType: typeof value,
+              input: String(value),
+              insertError,
+              ordinary: ordinary && {
+                value: String(ordinary.v),
+                jsType: typeof ordinary.v,
+                storageType: ordinary.storage_type,
+              },
+              safe: safe && {
+                value: String(safe.v),
+                jsType: typeof safe.v,
+                storageType: safe.storage_type,
+              },
+            }));
+          }
+
+          db.close();
+          NODE
