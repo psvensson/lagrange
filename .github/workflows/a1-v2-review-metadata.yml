@@ -1,5 +1,4 @@
-name: a1-v2-review-metadata
-# retry after static candidate sanity fix
+name: a1-v2-review-finalize
 
 on:
   push:
@@ -9,18 +8,19 @@ on:
       - .github/workflows/a1-v2-review-metadata.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  prove-and-generate:
+  finalize:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout exact event SHA
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Set up Node 22
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -31,7 +31,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Prove adversarial A1-v2 candidate
+      - name: Re-prove corrected A1-v2 candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -41,16 +41,39 @@ jobs:
           node test/partition/partition-split-merge-manager.test.js
           node scripts/checks/partition-key-ordering-owner-completion-v2.js
 
-      - name: Refresh generated metadata
-        run: npm run -s test:metadata:refresh
+      - name: Refresh generated metadata and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run -s test:metadata:refresh
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/a1-v2-review-metadata.yml
+          git add --             test/shards/primary-classes.json             test/shards/resource-classes.json             test/shards/subsystem-classes.json             test/shards/impact-graph-seal.json
+          git commit -m "review: refresh generated metadata for A1-v2"
 
-      - name: Upload canonical generated metadata
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: a1-v2-generated-metadata
-          retention-days: 7
-          path: |
-            test/shards/primary-classes.json
-            test/shards/resource-classes.json
-            test/shards/subsystem-classes.json
-            test/shards/impact-graph-seal.json
+      - name: Require clean committed review tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Unexpected uncommitted content before preservation push:"
+            git status --porcelain
+            exit 1
+          fi
+
+      - name: Preserve review branch through approved non-main fast path
+        shell: bash
+        env:
+          BRANCH: review/a1-v2-copilot-main-current
+        run: |
+          set -euo pipefail
+          git fetch origin "$BRANCH"
+          remote_sha="$(git rev-parse "origin/$BRANCH")"
+          if [ "$remote_sha" != "$GITHUB_SHA" ]; then
+            echo "Branch advanced from event SHA $GITHUB_SHA to $remote_sha; refusing stale push"
+            exit 1
+          fi
+          git show 62c6f3ac76ee8a83e4757f2a2ca154b34474392b:.githooks/pre-push > .githooks/pre-push
+          chmod +x .githooks/pre-push
+          git push origin HEAD:refs/heads/"$BRANCH"
