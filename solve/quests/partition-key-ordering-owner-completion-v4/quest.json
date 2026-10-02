@@ -1,7 +1,7 @@
 {
   "schema": "solve-quest/2",
   "id": "partition-key-ordering-owner-completion-v4",
-  "statement": "Partition-key ordering has one complete hostile-input-safe owner: supported values are validated before equality, SQLite-BINARY-compatible UTF-8 ordering and numeric/TEXT routing are preserved, unsupported/non-finite/boxed/exotic same-reference values fail closed before coercion, mutable JavaScript intrinsics cannot change comparison or split-target routing, split target selection does not consume array iteration, and KeyRange, PartitionResolver, QueryGroup plus split/merge sort and adjacency use the actual owned comparator expressions.",
+  "statement": "Partition-key ordering has one complete hostile-input-safe owner: supported values are validated before equality, finite numeric comparisons return canonical zero, SQLite-BINARY-compatible UTF-8 ordering and numeric/TEXT routing are preserved, unsupported/non-finite/boxed/exotic values fail closed before coercion, split metadata is consumed from own data properties without accessors or iteration, mutable JavaScript intrinsics cannot change comparison or split-target routing, merge table IDs are compared as primitive strings without coercion, and KeyRange, PartitionResolver, QueryGroup plus split/merge sort and adjacency use the actual owned comparator expressions.",
   "epic": "release-0-3-queryable-core",
   "links": {
     "roadmapRow": "RM-0.3-qs-typed-key-ordering",
@@ -67,6 +67,22 @@
     {
       "id": "source-change-independent-verification",
       "statement": "Any src/ candidate needs category-complete independent verification newer than the last v4 attempt covering both sealed verificationTemplates with evidence paths."
+    },
+    {
+      "id": "canonical-numeric-zero",
+      "statement": "Every equal numeric comparison returns canonical +0, including -0 versus 0, through both compareRoutingKeys and compareSplitKey; JavaScript -0 is not a distinct comparator result."
+    },
+    {
+      "id": "split-metadata-own-data",
+      "statement": "resolveSplitTargetPartitionId consumes splitKey and targetPartitionIds only from own data properties, does not invoke accessors, does not accept inherited routing metadata, validates the real Array without iterator/destructuring semantics, and captures its descriptor/own-property intrinsics at module load."
+    },
+    {
+      "id": "merge-table-id-coercion-free",
+      "statement": "Split/merge evaluation table IDs are primitive strings. Sorting never consults mutable global String and never coerces object/exotic table IDs; unsupported table metadata fails closed before Symbol.toPrimitive or toString can execute."
+    },
+    {
+      "id": "isolated-intrinsic-controls",
+      "statement": "Each mutable intrinsic or metadata seam has an isolated witness where feasible, so one early failure cannot mask Buffer, Number, RegExp, Error, Array, Object-descriptor, iterator, or manager-String regressions."
     }
   ]
 }
