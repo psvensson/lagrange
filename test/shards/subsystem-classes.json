@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 141,
     "solver-tooling": 7,
-    "storage-partition": 145,
-    "storage-raft": 103,
+    "storage-partition": 144,
+    "storage-raft": 100,
     "test-infrastructure": 138,
     "transactions": 15,
-    "transport-messaging": 90,
+    "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2190,
-  "digest": "fnv1a32-2de26f00",
+  "censusSize": 2182,
+  "digest": "fnv1a32-0e6e9ffc",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-69e9fa77",
+  "observationDigest": "fnv1a32-741752d9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1054,7 +1054,6 @@
     "test/message-group/message-group-target-resolver.test.js": "transport-messaging",
     "test/message-group/metadata-cache-removal.test.js": "transport-messaging",
     "test/message-group/no-silent-delivery-failures.property.test.js": "transport-messaging",
-    "test/message-group/raft-packet-detection.property.test.js": "transport-messaging",
     "test/message-group/raft-response-address-validation.test.js": "transport-messaging",
     "test/message-group/retry-exponential-backoff.property.test.js": "transport-messaging",
     "test/message-group/system-cache-query-service.test.js": "transport-messaging",
@@ -1234,7 +1233,6 @@
     "test/partition/proposal-queue-size-invariant.property.test.js": "storage-partition",
     "test/partition/proposal-queue.test.js": "storage-partition",
     "test/partition/raft-leadership-stability.property.test.js": "storage-partition",
-    "test/partition/raft-message-delivery.property.test.js": "storage-partition",
     "test/partition/raft-rs-transport-demux.test.js": "storage-partition",
     "test/partition/range-integrity-validation.property.test.js": "storage-partition",
     "test/partition/replica-operations-schema-migration.test.js": "storage-partition",
@@ -1411,8 +1409,6 @@
     "test/query/wasm-call-adapter.test.js": "query-sql",
     "test/query/write-path-internal-pacing.test.js": "query-sql",
     "test/query/write-tracking-recursion-guard.test.js": "query-sql",
-    "test/raft/append-ack-packet-detection.test.js": "storage-raft",
-    "test/raft/append-fail-packet-detection.test.js": "storage-raft",
     "test/raft/authoritative-row-mutation-helper.test.js": "storage-raft",
     "test/raft/authoritative-row-mutation-outcome-classifier.test.js": "storage-raft",
     "test/raft/bulk-transfer-socket-adapter.test.js": "storage-raft",
@@ -1484,7 +1480,6 @@
     "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js": "storage-raft",
     "test/raft/replica-voter-readiness.test.js": "storage-raft",
-    "test/raft/shared-raft-detection-consistency.property.test.js": "storage-raft",
     "test/raft/snapshot-boundary-observability.test.js": "storage-raft",
     "test/raft/snapshot-cadence.test.js": "storage-raft",
     "test/raft/snapshot-catchup-cluster-identity.test.js": "storage-raft",
@@ -2125,9 +2120,6 @@
     "test/transport/node-registration-creates-endpoint.property.test.js": "transport-messaging",
     "test/transport/outbound-saturation-warn-rate-limit.test.js": "transport-messaging",
     "test/transport/owner-retry-budget.test.js": "transport-messaging",
-    "test/transport/pending-response-round-trip.property.test.js": "transport-messaging",
-    "test/transport/raft-delivery-path.property.test.js": "transport-messaging",
-    "test/transport/router-delivery-manager.test.js": "transport-messaging",
     "test/transport/router-server-manager.test.js": "transport-messaging",
     "test/transport/routing-correctness.property.test.js": "transport-messaging",
     "test/transport/rpc-client.test.js": "transport-messaging",
@@ -12634,16 +12626,6 @@
     "test/transport/node-registration-creates-endpoint.property.test.js": {
       "files": [
         "test/test-helpers/endpoint-incarnation-fixture.js"
-      ]
-    },
-    "test/transport/pending-response-round-trip.property.test.js": {
-      "files": [
-        "src/transport/router-delivery-manager.js"
-      ]
-    },
-    "test/transport/raft-delivery-path.property.test.js": {
-      "files": [
-        "src/transport/router-delivery-manager.js"
       ]
     },
     "test/transport/service-response-correlation.property.test.js": {
