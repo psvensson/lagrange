@@ -728,9 +728,11 @@ describe('benchmark regression gate helpers', () => {
             timestamp: '2026-02-17T12:00:00.000Z',
           },
         ],
-        {          benchmarkGate: {
+        {
+          benchmarkGate: {
             enabled: true,
-            maxThroughputRegressionRatio: 0.1,          },
+            maxThroughputRegressionRatio: 0.1,
+          },
         },
       );
 
@@ -761,8 +763,10 @@ describe('benchmark regression gate helpers', () => {
           },
         },
         [],
-        {          benchmarkGate: {
-            enabled: true,            minimumThroughputRatioSutToBaseline: 0.1,
+        {
+          benchmarkGate: {
+            enabled: true,
+            minimumThroughputRatioSutToBaseline: 0.1,
           },
         },
       );
@@ -800,8 +804,10 @@ describe('benchmark regression gate helpers', () => {
           },
         },
         [],
-        {          benchmarkGate: {
-            enabled: true,            minimumThroughputRatioSutToBaseline: 0.1,
+        {
+          benchmarkGate: {
+            enabled: true,
+            minimumThroughputRatioSutToBaseline: 0.1,
           },
         },
       );

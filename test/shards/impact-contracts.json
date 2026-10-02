@@ -515,10 +515,9 @@
       ]
     },
     "partition-raft-operation-port": {
-      "description": "The rs-raft provider is the partition's only consensus backend: PartitionService builds its operation-only port through the fixed rs-raft factory (no selection, no provider injection) and consumes semantic operations, typed outcomes and immutable snapshots without a live node/control graph; a refused campaign or peer admission is the port's typed answer, never reported as done; every write the replica did not take is answered by the write kernel's builders, typed with its entry: a pending write released when its replica stops leading, at its commit deadline or at shutdown with what the replica knows of it (outcome unknown once handed to consensus; not leader, deadline passed or service shut down otherwise), a proposal queue at capacity as backpressure with the queue's retry time, a proposal the port refused with the port's reason, and a router holding the answer routes it again by its code (an unknown outcome only under its own entryId); a group held on a contained unexpected throw is named once in the partition's log at error level with its message, and its end once at info.",
+      "description": "The raft-rs runtime is the partition's only consensus backend: PartitionService builds its operation-only port through the fixed raft-rs operation-port owner (no selection and no alternate runtime injection) and consumes semantic operations, typed outcomes and immutable snapshots without a live node/control graph; a refused campaign or peer admission is the port's typed answer, never reported as done; every write the replica did not take is answered by the write kernel's builders, typed with its entry: a pending write released when its replica stops leading, at its commit deadline or at shutdown with what the replica knows of it (outcome unknown once handed to consensus; not leader, deadline passed or service shut down otherwise), a proposal queue at capacity as backpressure with the queue's retry time, a proposal the port refused with the port's reason, and a router holding the answer routes it again by its code (an unknown outcome only under its own entryId); a group held on a contained unexpected throw is named once in the partition's log at error level with its message, and its end once at info.",
       "owners": [
         "src/raft/raft-operation-port.js",
-        "src/raft/raft-rs-provider.js",
         "src/raft/raft-rs-operation-port.js",
         "src/partition/partition-service-core-base.js",
         "src/partition/partition-service-raft-init-base.js",
@@ -1073,13 +1072,12 @@
       ]
     },
     "partition-raft-operation-port": {
-      "description": "The rs-raft provider and the PartitionService consumer must agree on the exact frozen semantic port and its typed outcomes, with no node/control fallback and no second provider on either side.",
+      "description": "The raft-rs operation-port owner and the PartitionService consumer must agree on the exact frozen semantic port and its typed outcomes, with no node/control fallback and no second consensus runtime on either side.",
       "endpoints": [
         {
-          "id": "provider-port-construction",
+          "id": "operation-port-construction",
           "owners": [
             "src/raft/raft-operation-port.js",
-            "src/raft/raft-rs-provider.js",
             "src/raft/raft-rs-operation-port.js"
           ]
         },
