@@ -9,6 +9,9 @@
 
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
+import {mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
 import {PassThrough} from 'node:stream';
 import fc from 'fast-check';
 import {
@@ -617,7 +620,24 @@ test('Unit: inspectContainerIfExists returns null for missing containers', async
   });
 });
 
+// buildImage reads the context's Dockerfile to derive the build context
+// (docker-build-context.js), so these cases build from a real temp context.
+const TEST_DOCKERFILE = [
+  'FROM node:22-slim',
+  'COPY package.json package-lock.json ./',
+  'COPY src/ ./src/',
+  '',
+].join('\n');
+
+function createBuildContext(t) {
+  const contextPath = mkdtempSync(path.join(tmpdir(), 'docker-provider-'));
+  t.teardown(() => rmSync(contextPath, {force: true, recursive: true}));
+  writeFileSync(path.join(contextPath, 'Dockerfile'), TEST_DOCKERFILE);
+  return contextPath;
+}
+
 test('Unit: buildImage reports errors with build output', async (t) => {
+  const contextPath = createBuildContext(t);
   await t.test(
     'throws error including build output when build stream contains error',
     async () => {
@@ -634,7 +654,7 @@ test('Unit: buildImage reports errors with build output', async (t) => {
       ];
 
       await assert.rejects(
-        () => provider.buildImage('/project', 'myimage:latest'),
+        () => provider.buildImage(contextPath, 'myimage:latest'),
         (err) => {
           assert.ok(
             err.message.includes('build failed'),
@@ -668,7 +688,7 @@ test('Unit: buildImage reports errors with build output', async (t) => {
       };
 
       await assert.rejects(
-        () => provider.buildImage('/project', 'myimage:v2'),
+        () => provider.buildImage(contextPath, 'myimage:v2'),
         (err) => {
           assert.ok(
             err.message.includes('build failed'),
@@ -690,6 +710,7 @@ test('Unit: buildImage reports errors with build output', async (t) => {
 });
 
 test('Unit: buildImage passes labels to docker build options', async (t) => {
+  const contextPath = createBuildContext(t);
   await t.test(
     'sends explicit build-context entries required by dockerode tar packing',
     async () => {
@@ -705,7 +726,7 @@ test('Unit: buildImage passes labels to docker build options', async (t) => {
       provider._collectBuildOutput = async () => [];
 
       await provider.buildImage(
-        '/project',
+        contextPath,
         'myimage:context',
         'Dockerfile',
         null,
@@ -713,7 +734,7 @@ test('Unit: buildImage passes labels to docker build options', async (t) => {
       );
 
       assert.deepStrictEqual(capturedBuildContext, {
-        context: '/project',
+        context: contextPath,
         src: ['Dockerfile', 'package-lock.json', 'package.json', 'src'],
       });
       assert.deepStrictEqual(capturedBuildOptions, {
@@ -737,7 +758,7 @@ test('Unit: buildImage passes labels to docker build options', async (t) => {
       provider._collectBuildOutput = async () => [];
 
       await provider.buildImage(
-        '/project',
+        contextPath,
         'myimage:labeled',
         'Dockerfile',
         null,

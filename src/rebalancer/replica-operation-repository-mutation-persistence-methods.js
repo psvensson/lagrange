@@ -151,6 +151,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
                 ignoreExisting: true,
                 disableSystemWriteSession:
                   isLedgerSelfCoupledOperationInsert(operation),
+                beforeAttempt: options.beforeAttempt,
                 onRetryableFailure: (errorResult) =>
                   this.recoverPersistedReplicaOperationMutation(
                     operation,

@@ -31,17 +31,10 @@ import {
 } from './committed-membership-bootstrap-read.js';
 
 const LOCAL_STR_REBALANCECOORDINATOR_IS_SHUTTING_DOWN = 'RebalanceCoordinator is shutting down';
-const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_FAILED_TO_PRIME_COORDINATOR_CREATED_OPER = 'Failed to prime coordinator-created operation progress';
 const RESERVATION_CREATE_FAILED_FOR_OPERATION_PREFIX =
   'Storage reservation creation failed for operation ';
 const RESERVATION_INSERT_REJECTED_FALLBACK = 'reservation insert rejected';
 const RUNTIME_TARGET_CLAIM_RETRY_LIMIT = 8;
-const OWNER_PROGRESS_STEP_METHOD = Object.freeze({
-  ARM: 'armCoordinatorCreatedOperation',
-  DISPATCH_AFTER_CREATE_BUDGET_TURN:
-    'dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn',
-});
 const INVALID_RUNTIME_SERVICE_TARGET_IDENTITY =
   'INVALID_RUNTIME_SERVICE_TARGET_IDENTITY';
 
@@ -143,8 +136,8 @@ class RebalanceCoordinatorOperationCreation {
    *   coordinator-created dispatch trigger after persistence.
    * @param {boolean} [move.deferDispatchUntilBootstrapTopology] - Persist the
    *   operation as non-dispatchable until its bootstrap cohort is complete.
-   * @param {boolean} [move.skipProvisioningAdmissionRecheck] - Reuse an
-   *   immediately preceding admitted provisioning probe for this target.
+   * @param {Object} [move.operationCreationAdmission] - Immutable admission
+   *   observation previously issued by this coordinator owner.
    * @return {Promise<Object>} Created or existing operation record.
    */
   async createOperation(move) {
@@ -244,20 +237,12 @@ class RebalanceCoordinatorOperationCreation {
    * @return {Promise<Object>} Admission decision payload.
    */
   async checkProvisioningAdmission(move) {
-    // The precheck must PREDICT createOperation's admission. The ledger
-    // interlock rejects at CREATION time (createOperationInternal), and a
-    // precheck that admits what creation then refuses turns whole-cluster
-    // transient formation holds into instant client failures: run-24/25's
-    // provisioning convergence wait polls THIS method, saw storage-only
-    // admission, exited on the first probe, and every createOperation was
-    // still interlock-deferred — the CREATE TABLE failed in one pass while
-    // the hold would have cleared inside the provisioning budget.
-    const ledgerInterlockDeferral =
-      await this.resolveProvisioningLedgerInterlockDeferral(move);
-    if (ledgerInterlockDeferral) {
-      return ledgerInterlockDeferral;
-    }
-    return this.provisioningAdmissionPolicy.checkProvisioningAdmission(move);
+    const operationCreationAdmission =
+      await this.observeOperationCreationAdmission(move);
+    return Object.freeze({
+      ...operationCreationAdmission,
+      operationCreationAdmission,
+    });
   }
 
   /**
@@ -299,6 +284,95 @@ class RebalanceCoordinatorOperationCreation {
       };
     }
     return null;
+  }
+
+  async buildOperationBootstrapTopology(context) {
+    const {
+      normalizedMoveType,
+      entityType,
+      entityId,
+      partitionId,
+      targetNodeId,
+      targetReplicaId,
+    } = context;
+
+    if (
+      (entityType !== SERVICE_TYPE.MESSAGE_GROUP &&
+        entityType !== SERVICE_TYPE.PARTITION) ||
+      (normalizedMoveType !== OperationType.ADD &&
+        normalizedMoveType !== OperationType.REPLACE)
+    ) {
+      return null;
+    }
+    if (entityType === SERVICE_TYPE.PARTITION) {
+      return context.deferredBootstrap === true ? null :
+        buildCommittedBootstrapTopology({
+          partitionId,
+          targetNodeId,
+          targetReplicaId,
+          readStamp: () => readCommittedMembershipStamp(this, partitionId),
+          readAddressBook: () => this.readBootstrapServiceRows(context),
+        });
+    }
+
+    const serviceRows = await this.readBootstrapServiceRows(context);
+    if (!Array.isArray(serviceRows) || serviceRows.length === 0) {
+      throw new Error(
+        `Cannot create ${entityType} operation for ${entityId} without existing canonical topology`,
+      );
+    }
+
+    const topology = buildReplicatedServiceBootstrapTopology({
+      serviceType: entityType,
+      serviceRows,
+      targetReplicaId,
+      targetNodeId,
+    });
+    const replicaIds = topology?.replicaIds || [];
+    const peerAddresses = topology?.peerAddresses || [];
+
+    if (
+      replicaIds.length <= 1 ||
+      peerAddresses.length < replicaIds.length
+    ) {
+      throw new Error(
+        `Canonical topology for ${entityType} ${entityId} is incomplete`,
+      );
+    }
+
+    return {
+      replicaIds,
+      peerAddresses,
+    };
+  }
+
+  async readBootstrapServiceRows({partitionId, entityType, entityId}) {
+    const cacheServiceRows = this.repository.getEntityServiceRows({
+      partitionId,
+      entityType,
+      entityId,
+    });
+    let authoritativeObservation = null;
+    try {
+      authoritativeObservation =
+        await this.getAuthoritativeEntityServiceRowsObservation({
+          partitionId,
+          entityType,
+          entityId,
+        });
+    } catch (_error) {
+      // An owner read error is indistinguishable from an unavailable owner
+      // here: fall back to the cache view, exactly like an unavailable
+      // observation.
+      authoritativeObservation = null;
+    }
+    return authoritativeObservation?.available === true &&
+      authoritativeObservation.rows.length > 0 ?
+      this.mergeEntityServiceRows(
+        cacheServiceRows,
+        authoritativeObservation.rows,
+      ) :
+      cacheServiceRows;
   }
 
   /**
@@ -387,57 +461,59 @@ class RebalanceCoordinatorOperationCreation {
       }
     }
 
-    await this.ensureOperationLedgerSelfMoveSerialized({
-      move,
-      normalizedMoveType,
-      entityType,
-      entityId,
-      partitionId,
-      registerDurableSelfMoveIntent: true,
-    });
-    await this.ensureNoConflictingInFlightReplaceForRemove({
-      move,
-      normalizedMoveType,
-      entityType,
-      entityId,
-      partitionId,
-    });
-    await this.ensurePriorityControlPlaneRemoveLaneAvailable({
-      move,
-      normalizedMoveType,
-      entityType,
-      entityId,
-      partitionId,
-    });
-    await this.ensurePrioritySurplusRemovePlacementFenceAllowed({
-      move,
-      normalizedMoveType,
-      entityType,
-      entityId,
-      partitionId,
-    });
-    await this.ensureEntityAddLikeCreateLaneAvailable({
-      move,
-      normalizedMoveType,
-      entityType,
-      entityId,
-      partitionId,
-    });
+    if (move?.operationCreationAdmission?.allowed !== true) {
+      await this.ensureOperationLedgerSelfMoveSerialized({
+        move,
+        normalizedMoveType,
+        entityType,
+        entityId,
+        partitionId,
+        registerDurableSelfMoveIntent: true,
+      });
+      await this.ensureNoConflictingInFlightReplaceForRemove({
+        move,
+        normalizedMoveType,
+        entityType,
+        entityId,
+        partitionId,
+      });
+      await this.ensurePriorityControlPlaneRemoveLaneAvailable({
+        move,
+        normalizedMoveType,
+        entityType,
+        entityId,
+        partitionId,
+      });
+      await this.ensurePrioritySurplusRemovePlacementFenceAllowed({
+        move,
+        normalizedMoveType,
+        entityType,
+        entityId,
+        partitionId,
+      });
+      await this.ensureEntityAddLikeCreateLaneAvailable({
+        move,
+        normalizedMoveType,
+        entityType,
+        entityId,
+        partitionId,
+      });
 
-    await this.ensureCriticalPartitionCreateLaneAvailable({
-      move,
-      normalizedMoveType,
-      entityType,
-      entityId,
-      partitionId,
-    });
-    await this.ensureCreateTopologyGuardAllowed({
-      move,
-      normalizedMoveType,
-      entityType,
-      entityId,
-      partitionId,
-    });
+      await this.ensureCriticalPartitionCreateLaneAvailable({
+        move,
+        normalizedMoveType,
+        entityType,
+        entityId,
+        partitionId,
+      });
+      await this.ensureCreateTopologyGuardAllowed({
+        move,
+        normalizedMoveType,
+        entityType,
+        entityId,
+        partitionId,
+      });
+    }
 
     const recordContext = {
       move,
@@ -465,158 +541,6 @@ class RebalanceCoordinatorOperationCreation {
     }
 
     return this.createOperationRecordInternal(recordContext);
-  }
-
-  /**
-   * Build the bootstrap topology a create dispatch carries.
-   *
-   * A partition join (ADD, REPLACE, formation) is stamped with the group's
-   * committed configuration as its leader answers it (owner decision O1):
-   * the stamp is the new replica's bootstrap membership, the replica list it
-   * yields is an address-hint list, and services rows are only the address
-   * book. A read that fails refuses the creation before anything persists. A
-   * founding cohort (deferred until its bootstrap topology) is stamped
-   * GENESIS by its provisioner instead.
-   *
-   * Message-group operations (liferaft, out of O1) keep the services-row
-   * cohort and fail closed when it is missing.
-   *
-   * @param {Object} context
-   * @return {Promise<Object|null>} {replicaIds, peerAddresses,
-   *   bootstrapMembership?} or null.
-   * @private
-   */
-  async buildOperationBootstrapTopology(context) {
-    const {
-      normalizedMoveType,
-      entityType,
-      entityId,
-      partitionId,
-      targetNodeId,
-      targetReplicaId,
-    } = context;
-
-    if (
-      (entityType !== SERVICE_TYPE.MESSAGE_GROUP &&
-        entityType !== SERVICE_TYPE.PARTITION) ||
-      (normalizedMoveType !== OperationType.ADD &&
-        normalizedMoveType !== OperationType.REPLACE)
-    ) {
-      return null;
-    }
-    if (entityType === SERVICE_TYPE.PARTITION) {
-      return context.deferredBootstrap === true ? null :
-        buildCommittedBootstrapTopology({
-          partitionId,
-          targetNodeId,
-          targetReplicaId,
-          readStamp: () => readCommittedMembershipStamp(this, partitionId),
-          readAddressBook: () => this.readBootstrapServiceRows(context),
-        });
-    }
-
-    const serviceRows = await this.readBootstrapServiceRows(context);
-    if (!Array.isArray(serviceRows) || serviceRows.length === 0) {
-      throw new Error(
-        `Cannot create ${entityType} operation for ${entityId} without existing canonical topology`,
-      );
-    }
-
-    const topology = buildReplicatedServiceBootstrapTopology({
-      serviceType: entityType,
-      serviceRows,
-      targetReplicaId,
-      targetNodeId,
-    });
-    const replicaIds = topology?.replicaIds || [];
-    const peerAddresses = topology?.peerAddresses || [];
-
-    if (
-      replicaIds.length <= 1 ||
-      peerAddresses.length < replicaIds.length
-    ) {
-      throw new Error(
-        `Canonical topology for ${entityType} ${entityId} is incomplete`,
-      );
-    }
-
-    return {
-      replicaIds,
-      peerAddresses,
-    };
-  }
-
-  /**
-   * The entity's services rows: the cache view merged with the
-   * services-owner's authoritative rows when that read is available.
-   * @param {Object} context - {partitionId, entityType, entityId}.
-   * @return {Promise<Array<Object>>}
-   * @private
-   */
-  async readBootstrapServiceRows({partitionId, entityType, entityId}) {
-    const cacheServiceRows = this.repository.getEntityServiceRows({
-      partitionId,
-      entityType,
-      entityId,
-    });
-    let authoritativeObservation = null;
-    try {
-      authoritativeObservation =
-        await this.getAuthoritativeEntityServiceRowsObservation({
-          partitionId,
-          entityType,
-          entityId,
-        });
-    } catch (_error) {
-      // An owner read error is indistinguishable from an unavailable owner
-      // here: fall back to the cache view, exactly like an unavailable
-      // observation.
-      authoritativeObservation = null;
-    }
-    return authoritativeObservation?.available === true &&
-      authoritativeObservation.rows.length > 0 ?
-      this.mergeEntityServiceRows(
-        cacheServiceRows,
-        authoritativeObservation.rows,
-      ) :
-      cacheServiceRows;
-  }
-
-  /**
-   * Resolve the authoritative operation that won a persistence collision.
-   * Deterministic intent IDs take precedence over the broader in-flight key.
-   *
-   * @param {Object} context
-   * @return {Promise<Object|null>}
-   * @private
-   */
-  async queryExistingOperationAfterInsertConflict(context) {
-    const {
-      operationIntentId,
-      operationId,
-      partitionId,
-      targetNodeId,
-      entityType,
-      entityId,
-      normalizedMove,
-    } = context;
-
-    if (operationIntentId) {
-      const existingByDeterministicId =
-        await this.repository.queryAuthoritativeOperationById(operationId);
-      if (existingByDeterministicId) {
-        return existingByDeterministicId;
-      }
-    }
-
-    return this.queryExistingInFlightOperation(
-      partitionId,
-      targetNodeId,
-      entityType,
-      entityId,
-      normalizedMove,
-      STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
-    );
   }
 
   /**
@@ -650,16 +574,17 @@ class RebalanceCoordinatorOperationCreation {
         null;
     let operationReplicaId = move.replicaId || null;
 
-    // Resolve the real partition size ONCE before operation creation so
-    // admission evaluation and reservation creation share the same
-    // resolved estimate (audit findings 2+16). Resolved ahead of the
-    // skip-recheck branch so the reservation estimate is always real.
-    const resolvedEntitySizeBytes = this.resolveEntitySizeBytes({
-      entityType,
-      entityId,
-    });
+    // Resolve the real partition size once so admission evaluation and
+    // reservation creation share the same estimate (audit findings 2+16).
+    // Observed creates take the value from their final effect-boundary
+    // revalidation; legacy creates resolve it on this path.
+    let resolvedEntitySizeBytes = null;
 
-    if (move?.skipProvisioningAdmissionRecheck !== true) {
+    if (move?.operationCreationAdmission?.allowed !== true) {
+      resolvedEntitySizeBytes = this.resolveEntitySizeBytes({
+        entityType,
+        entityId,
+      });
       await this.ensureProvisioningAdmissionAllowed({
         move: normalizedMove,
         entityType,
@@ -810,22 +735,28 @@ class RebalanceCoordinatorOperationCreation {
     });
 
     // Persist via SQL engine (writes to partition leader)
+    const persistenceResult = await this.persistNewOperationAtAdmissionBoundary(
+      operation,
+      move,
+      // Deterministic-intent creators (move.operationIntentId — the
+      // schema-provisioning jobs mint one id per (job, target)) are
+      // idempotent re-creates by construction: a zero-change collision
+      // whose leader row carries the SAME operation id is the prior
+      // attempt's durable row, so take the EXISTING disposition instead
+      // of demanding fresh-timestamp visibility the advanced row can
+      // never satisfy (round-7 root cause; the strict fail-closed
+      // contract stays for non-intent creators).
+      context.replaceIntentIdentity || operation.targetClaimKey ||
+        move.operationIntentId ?
+        {returnDisposition: true} :
+        undefined,
+    );
+    if (persistenceResult.operationCreationAdmission) {
+      resolvedEntitySizeBytes =
+        persistenceResult.operationCreationAdmission.resolvedEntitySizeBytes;
+    }
     const persistResult = normalizeOperationPersistResult(
-      await this.persistNewOperation(
-        operation,
-        // Deterministic-intent creators (move.operationIntentId — the
-        // schema-provisioning jobs mint one id per (job, target)) are
-        // idempotent re-creates by construction: a zero-change collision
-        // whose leader row carries the SAME operation id is the prior
-        // attempt's durable row, so take the EXISTING disposition instead
-        // of demanding fresh-timestamp visibility the advanced row can
-        // never satisfy (round-7 root cause; the strict fail-closed
-        // contract stays for non-intent creators).
-        context.replaceIntentIdentity || operation.targetClaimKey ||
-          move.operationIntentId ?
-          {returnDisposition: true} :
-          undefined,
-      ),
+      persistenceResult.persistResult,
     );
     if (
       persistResult.disposition ===
@@ -899,84 +830,6 @@ class RebalanceCoordinatorOperationCreation {
     }
 
     return operation;
-  }
-
-  /**
-   * Newly created locally owned operations should not depend solely on cache
-   * visibility or external listeners before leaving PENDING. Prime the
-   * owner-side transition lane best-effort while keeping dispatch ownership on
-   * the canonical event/read-model paths. Under a concurrent-create budget
-   * turn the arm context defers the physical dispatch to
-   * dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn.
-   *
-   * @param {Object|null} operation
-   * @param {Object} [armContext={}] typed owner arm context
-   *   (operation-workflow-owner-create-budget-dispatch.js)
-   * @return {Promise<boolean>}
-   * @private
-   */
-  async armCoordinatorCreatedOperationProgress(operation, armContext = {}) {
-    return this.runCoordinatorCreatedOperationProgressStep(
-      operation,
-      OWNER_PROGRESS_STEP_METHOD.ARM,
-      (workflowOwner) =>
-        workflowOwner.armCoordinatorCreatedOperation(operation, armContext),
-    );
-  }
-
-  /**
-   * Dispatch the DISPATCH_AFTER_CLAIM operation the budget-turn arm retained,
-   * after the create-budget turn is released; best-effort with the same
-   * failure observability as the arm (the owner's retry lanes keep the wake
-   * obligation).
-   *
-   * @param {Object|null} operation
-   * @return {Promise<boolean>}
-   * @private
-   */
-  async dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn(operation) {
-    return this.runCoordinatorCreatedOperationProgressStep(
-      operation,
-      OWNER_PROGRESS_STEP_METHOD.DISPATCH_AFTER_CREATE_BUDGET_TURN,
-      (workflowOwner) =>
-        workflowOwner.dispatchCoordinatorCreatedOperationAfterCreateBudgetTurn(
-          operation.operationId,
-        ),
-    );
-  }
-
-  /**
-   * @param {Object|null} operation
-   * @param {string} ownerMethodName workflow-owner method the step needs
-   * @param {Function} invokeStep receives the workflow owner
-   * @return {Promise<boolean>}
-   * @private
-   */
-  async runCoordinatorCreatedOperationProgressStep(
-    operation,
-    ownerMethodName,
-    invokeStep,
-  ) {
-    if (
-      !operation?.operationId ||
-      typeof this.workflowOwner?.[ownerMethodName] !== LOCAL_STR_FUNCTION
-    ) {
-      return false;
-    }
-    try {
-      return await invokeStep(this.workflowOwner);
-    } catch (error) {
-      this.logger.warn(
-        LOCAL_STR_FAILED_TO_PRIME_COORDINATOR_CREATED_OPER,
-        {
-          operationId: operation.operationId,
-          partitionId: operation.partitionId || null,
-          workflowStep: operation.workflowStep || null,
-          error: error?.message || String(error),
-        },
-      );
-      return false;
-    }
   }
 }
 

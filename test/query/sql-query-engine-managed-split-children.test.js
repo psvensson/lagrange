@@ -6,6 +6,12 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+// Hardware-relative budget scaling: CI's ordinary lane runs on a slower host
+// (LAGRANGE_TEST_MACHINE_FACTOR=3); a tight real-clock provisioning budget
+// must scale with the machine factor the same way the integration files
+// already scale theirs (doctrine: hardware-relative-convergence-budget).
+import {scaleByMachineFactor} from
+  '../integration/helpers/test-machine-factor.js';
 import {
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
@@ -417,6 +423,11 @@ test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
       reasonCodes: ['control_plane_write_unhealthy'],
     }],
   };
+  const admittedOperationCreationObservation = Object.freeze({
+    allowed: true,
+    contractState: 'ready',
+    nextAction: 'proceed',
+  });
   const rebalanceCoordinator = {
     async checkProvisioningAdmission(move) {
       checkedTargetNodeIds.push(move.nodeId);
@@ -429,10 +440,10 @@ test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
     async createOperation(move) {
       createdTargetMoves.push({
         nodeId: move.nodeId,
-        skipProvisioningAdmissionRecheck:
-          move.skipProvisioningAdmissionRecheck === true,
+        operationCreationAdmission:
+          move.operationCreationAdmission || null,
       });
-      if (move.skipProvisioningAdmissionRecheck !== true) {
+      if (!move.operationCreationAdmission) {
         const error = new Error(`Provisioning admission denied on ${move.nodeId}`);
         error.admissionResult = deniedAdmissionResult;
         throw error;
@@ -476,6 +487,10 @@ test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
     admissionConvergence: {
       candidateTargetNodeIds: [localNodeId, 'node-b', 'node-c'],
       admittedTargetNodeIds: [localNodeId],
+      admittedTargetPlans: [{
+        targetNodeId: localNodeId,
+        operationCreationAdmission: admittedOperationCreationObservation,
+      }],
       rejectedTargetNodePlans: [
         {
           targetNodeId: 'node-b',
@@ -503,7 +518,7 @@ test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
     createdTargetMoves,
     [{
       nodeId: localNodeId,
-      skipProvisioningAdmissionRecheck: true,
+      operationCreationAdmission: admittedOperationCreationObservation,
     }],
     'bootstrap creation should reuse the admitted precheck target instead of re-admitting it',
   );
@@ -610,7 +625,7 @@ test('SQLQueryEngine - provisionInitialTablePartition fails when the full ' +
     controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
-    tablePartitionProvisioningTimeoutMs: 40,
+    tablePartitionProvisioningTimeoutMs: scaleByMachineFactor(40),
     tablePartitionProvisioningPollIntervalMs: 5,
   });
 
@@ -637,7 +652,7 @@ test('SQLQueryEngine - provisionInitialTablePartition fails when the full ' +
     'only the local replica should have become routable in the regression setup',
   );
   t.ok(
-    durationMs >= 40 && durationMs < 1000,
+    durationMs >= scaleByMachineFactor(40) && durationMs < 1000,
     'provisioning should fail on the configured timeout instead of succeeding early',
   );
 });

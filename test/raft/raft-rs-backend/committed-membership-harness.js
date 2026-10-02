@@ -32,6 +32,9 @@ import {
   TABLES,
 } from '../../../src/constants/index.js';
 import {
+  applyRebalanceCoordinatorOperationCreationAdmissionMethods,
+} from '../../../src/rebalancer/rebalance-coordinator-operation-creation-admission.js';
+import {
   applyRebalanceCoordinatorOperationCreationMethods,
 } from '../../../src/rebalancer/rebalance-coordinator-operation-creation.js';
 import {
@@ -59,6 +62,7 @@ const SILENT = Object.freeze({
 const REPLICA_HANDLER_SUFFIX = '/service/replica-handler';
 
 class CreationOwner {}
+applyRebalanceCoordinatorOperationCreationAdmissionMethods(CreationOwner);
 applyRebalanceCoordinatorOperationCreationMethods(CreationOwner);
 applyRebalanceCoordinatorOperationReadMethods(CreationOwner);
 

@@ -14,6 +14,7 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
+  createAllowAllStorageAdmissionService,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
@@ -523,6 +524,79 @@ export function createRemotePriorityVisibilityCoordinator() {
     transactionCoordinator: createMockTransactionCoordinator(),
     enableTimeouts: false,
   });
+}
+
+export function createRemoteHandoffCoordinator({
+  authoritativeRead,
+  deferredTimers,
+  deliver,
+  executeQuery,
+}) {
+  const coordinator = new RebalanceCoordinator({
+    nodeId: 'node-source',
+    systemTableCache: {
+      get() {
+        return null;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+      ) {
+        return authoritativeRead(tableName, sql, params);
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      async readRows(tableName, sql, params = []) {
+        return authoritativeRead(tableName, sql, params);
+      },
+      async readAuthoritativeRows(tableName, sql, params = []) {
+        return authoritativeRead(tableName, sql, params);
+      },
+      async executeQuery(sql, params = []) {
+        return executeQuery(sql, params);
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery(sql, params = []) {
+        return executeQuery(sql, params);
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: 1};
+      },
+    },
+    storageAccountingService: {
+      estimateReplicaBytes() {
+        return 1024;
+      },
+    },
+    storageAdmissionService: createAllowAllStorageAdmissionService(),
+    messageRouter: {
+      deliver,
+    },
+    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    transactionCoordinator: createMockTransactionCoordinator(),
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    enableTimeouts: false,
+  });
+  coordinator.initialize();
+  return coordinator;
 }
 
 export function buildRemotePriorityVisibilityOperation() {

@@ -21,6 +21,7 @@ import {
 } from './test-helpers.js';
 import {
   createRecentIntentPolicyCoordinator,
+  createRemoteHandoffCoordinator,
   RECENT_INTENT_NON_PRIORITY_OPERATION_ID,
   RECENT_INTENT_NON_PRIORITY_PARTITION_ID,
   RECENT_INTENT_POLICY_TARGET_NODE_ID,
@@ -38,6 +39,7 @@ import {
   REMOTE_HANDOFF_TEST_INITIAL_NOW_MS,
   REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS,
 } from './coordinator-created-operation-progress-remote-handoff-fixture-builders.js';
+import {createAllowAllStorageAdmissionService} from './test-helpers.js';
 
 export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
   test,
@@ -48,7 +50,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
     const operationRows = new Map();
     const deferredTimers = [];
     const deliveries = [];
-
     const authoritativeRead = async (tableName, sql, params = []) => {
       if (tableName === 'replica_operations' &&
           String(sql).includes('WHERE operation_id = ?')) {
@@ -110,79 +111,23 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
     };
 
     let deliveryAttempt = 0;
-    const coordinator = new RebalanceCoordinator({
-      nodeId: 'node-source',
-      systemTableCache: {
-        get() {
-          return null;
-        },
-        getAll() {
-          return [];
-        },
-        filter() {
-          return [];
-        },
-      },
-      cdcIntegrationService: {
-        async waitForCacheUpdate() {},
-        async executeAuthoritativeSystemTableRead(
-          tableName,
-          sql,
-          params,
-        ) {
-          return authoritativeRead(tableName, sql, params);
-        },
-      },
-      controlPlaneSystemTableGateway: {
-        async readRows(tableName, sql, params = []) {
-          return authoritativeRead(tableName, sql, params);
-        },
-        async readAuthoritativeRows(tableName, sql, params = []) {
-          return authoritativeRead(tableName, sql, params);
-        },
-        async executeQuery(sql, params = []) {
-          return executeQuery(sql, params);
-        },
-      },
-      sqlQueryEngine: {
-        async executeQuery(sql, params = []) {
-          return executeQuery(sql, params);
-        },
-      },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {minReplicaCount: 1};
-        },
-      },
-      storageAccountingService: {
-        estimateReplicaBytes() {
-          return 1024;
-        },
-      },
-      messageRouter: {
-        async deliver(target, payload) {
-          deliveries.push({target, payload});
-          deliveryAttempt += 1;
-          if (deliveryAttempt === 1) {
-            const error = new Error('connection unavailable');
-            error.deferRetry = true;
-            error.retryAfterMs = 250;
-            throw error;
-          }
-          return {acknowledged: true};
-        },
-      },
-      controlPlaneReadinessService: createMockControlPlaneReadinessService(),
-      transactionCoordinator: createMockTransactionCoordinator(),
-      setTimeoutFn(fn, delayMs) {
-        const handle = {fn, delayMs};
-        deferredTimers.push(handle);
-        return handle;
-      },
-      clearTimeoutFn() {},
-      enableTimeouts: false,
+    const deliver = async (target, payload) => {
+      deliveries.push({target, payload});
+      deliveryAttempt += 1;
+      if (deliveryAttempt === 1) {
+        const error = new Error('connection unavailable');
+        error.deferRetry = true;
+        error.retryAfterMs = 250;
+        throw error;
+      }
+      return {acknowledged: true};
+    };
+    const coordinator = createRemoteHandoffCoordinator({
+      authoritativeRead,
+      deferredTimers,
+      deliver,
+      executeQuery,
     });
-    coordinator.initialize();
 
     try {
       const operation = await coordinator.createOperation({
@@ -192,7 +137,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         entityId: 'sql_write_operations-p1',
         nodeId: 'node-target',
         replicaId: 'sql_write_operations-p1-r1',
-        skipProvisioningAdmissionRecheck: true,
       });
 
       await new Promise((resolve) => {
@@ -304,6 +248,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           return 1024;
         },
       },
+      storageAdmissionService: createAllowAllStorageAdmissionService(),
       messageRouter: {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
@@ -489,6 +434,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           return 1024;
         },
       },
+      storageAdmissionService: createAllowAllStorageAdmissionService(),
       messageRouter: {
         async deliver(target, payload) {
           deliveries.push({target, payload});
@@ -515,7 +461,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         entityId: 'control_plane_publications-p1',
         nodeId: 'node-target',
         replicaId: 'control_plane_publications-p1-r1',
-        skipProvisioningAdmissionRecheck: true,
       });
 
       await new Promise((resolve) => {
@@ -674,6 +619,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           return 1024;
         },
       },
+      storageAdmissionService: createAllowAllStorageAdmissionService(),
       messageRouter: {
         async deliver(target, payload) {
           deliveries.push({target, payload});
@@ -700,7 +646,6 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         entityId: 'control_plane_publications-p1',
         nodeId: 'node-target',
         replicaId: 'control_plane_publications-p1-r1',
-        skipProvisioningAdmissionRecheck: true,
       });
 
       await new Promise((resolve) => {

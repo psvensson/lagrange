@@ -328,16 +328,23 @@ test('run-25: the provisioning PRECHECK consults the ledger interlock — a ' +
   const {applyRebalanceCoordinatorOperationCreationMethods} = await import(
     '../../src/rebalancer/rebalance-coordinator-operation-creation.js'
   );
+  const {applyRebalanceCoordinatorOperationCreationAdmissionMethods} =
+    await import(
+      '../../src/rebalancer/rebalance-coordinator-operation-creation-admission.js'
+    );
   class CoordinatorFixture {
     constructor() {
       // Storage admission always admits — run-25's live shape.
       this.provisioningAdmissionPolicy = {
-        async checkProvisioningAdmission() {
-          return {
-            allowed: true,
-            decisionType: 'admitted',
-            admissionResult: {allowed: true, decisionType: 'admitted'},
-          };
+        async ensureProvisioningAdmissionAllowed() {},
+      };
+      this.controlPlaneReadinessService = {
+        readCurrentPlanningProjectionIdentity() {
+          return Object.freeze({
+            globalPlanningGeneration: 1,
+            nodePlanningGeneration: 1,
+            saturated: false,
+          });
         },
       };
     }
@@ -371,7 +378,20 @@ test('run-25: the provisioning PRECHECK consults the ledger interlock — a ' +
     createConcurrentOperationBudgetError(normalizedMoveType, budget, options) {
       return new Error(options.message);
     }
+    async ensureNoConflictingInFlightReplaceForRemove() {}
+    async ensurePriorityControlPlaneRemoveLaneAvailable() {}
+    async ensurePrioritySurplusRemovePlacementFenceAllowed() {}
+    async ensureEntityAddLikeCreateLaneAvailable() {}
+    async ensureCriticalPartitionCreateLaneAvailable() {}
+    async ensureCreateTopologyGuardAllowed() {}
+    resolveEntitySizeBytes() {
+      return 0;
+    }
+    assertLocalControlPlaneMutationReady() {}
   }
+  applyRebalanceCoordinatorOperationCreationAdmissionMethods(
+    CoordinatorFixture,
+  );
   applyRebalanceCoordinatorOperationCreationMethods(CoordinatorFixture);
   const {applyRebalanceCoordinatorLedgerInterlockAdmissionMethods:
     applyInterlock} = await import(
@@ -379,6 +399,7 @@ test('run-25: the provisioning PRECHECK consults the ledger interlock — a ' +
   );
   applyInterlock(CoordinatorFixture);
   const coordinator = new CoordinatorFixture();
+  coordinator.observeReplicaOperationMutationRoute = () => ({allowed: true});
 
   const decision = await coordinator.checkProvisioningAdmission({
     type: 'ADD',

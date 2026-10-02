@@ -24,12 +24,14 @@ import {
   CALL_CELL_ROUTE_CLASSIFICATION,
   CALL_CELL_ROUTE_ERROR_CODE,
   assertCallBaseInvocationId,
+  callFailureProvesNoExecution,
   createCallInvocationIdentity,
   createCallReduceInvocationId,
   createCallRoutingFailure,
   createCallSlotInvocationId,
   normalizeCallComponentResult,
   normalizeEmittedPartialEntries,
+  recordInvocationExecutionStarted,
 } from './call-cell-routing-contract.js';
 import {
   SHARD_TASK_STATUS,
@@ -281,8 +283,10 @@ class CallCellInvoker {
   // to run concurrently: every step is keyed by the slot's own wire
   // identity and coordination row, and publication order never affects
   // the complete-set gate.
-  async _runShardSlot(request, telemetry) {
+  async _runShardSlot(request, telemetry, executionEvidence) {
     const delivery = await this._dispatchShardRun(request, telemetry);
+    // A processed delivery means this shard's run export executed.
+    executionEvidence.started = true;
     // The published slot partial is the shard's EMITTED partial set (the
     // bounded call-context emit log), normalized fail-closed into the
     // coordinator's {groupKey, aggValue} entries. The run export's own
@@ -332,9 +336,15 @@ class CallCellInvoker {
       selectedPartitionCount: 0,
       shardDispatchMs: 0,
     };
+    // Invocation-level execution evidence for the public outcome class: a
+    // failure surfaced from one dispatch says nothing about the other
+    // shards (or a reduce) of the same invocation that already ran.
+    const executionEvidence = {started: false};
     try {
-      return await this._invokeWithTelemetry(request, telemetry);
+      return await this._invokeWithTelemetry(
+        request, telemetry, executionEvidence);
     } catch (error) {
+      if (executionEvidence.started) recordInvocationExecutionStarted(error);
       telemetry.failureCode = typeof error?.code === 'string' ?
         error.code :
         CALL_INVOKER_TELEMETRY_UNTYPED_FAILURE;
@@ -347,7 +357,7 @@ class CallCellInvoker {
 
   async _invokeWithTelemetry(
     {name, argumentsJson, securityContext, deadlineMs,
-      invocationId: suppliedInvocationId}, telemetry) {
+      invocationId: suppliedInvocationId}, telemetry, executionEvidence) {
     const resolution = this._routeResolver.resolve({
       invocationId: `${RESOLVE_PROBE_PREFIX}${name}`,
       name,
@@ -426,7 +436,8 @@ class CallCellInvoker {
         slotRequest.shard.hostTopology?.hostNodeId,
       deadlineMs,
       limit: this._maxConcurrentShardRuns,
-      runSlot: (slotRequest) => this._runShardSlot(slotRequest, telemetry),
+      runSlot: (slotRequest) =>
+        this._runShardSlot(slotRequest, telemetry, executionEvidence),
       slots: batches.map((shard, slotIndex) => ({
         argumentsJson,
         deadlineMs,
@@ -446,6 +457,11 @@ class CallCellInvoker {
     const rejected = dispatchOutcome.settled.find(
       (entry) => entry.status === SHARD_TASK_STATUS.REJECTED);
     if (rejected) {
+      if (dispatchOutcome.settled.some((entry) =>
+        entry.status === SHARD_TASK_STATUS.REJECTED &&
+        !callFailureProvesNoExecution(entry.reason))) {
+        executionEvidence.started = true;
+      }
       throw rejected.reason;
     }
     if (dispatchOutcome.unadmitted.length > 0) {

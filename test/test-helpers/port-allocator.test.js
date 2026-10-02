@@ -98,3 +98,36 @@ test('createPortAllocator allocates distinct ports for colliding ids across proc
       ]);
     }
   });
+
+test('createPortAllocator reserves consecutive port blocks that never ' +
+  'overlap later reservations', async (t) => {
+  const {createPortAllocator} =
+    await import('../../src/test-helpers/port-allocator.js');
+  const allocator = createPortAllocator(`port-block-${randomUUID()}`);
+  const first = allocator.getPortBlock(3);
+  t.equal(first.length, 3, 'a block has the requested length');
+  t.same(first, [first[0], first[0] + 1, first[0] + 2],
+    'a block is consecutive');
+  const single = allocator.getPort();
+  const second = allocator.getPortBlock(3);
+  const taken = new Set([...first, single]);
+  t.notOk(second.some((port) => taken.has(port)),
+    'a later block never reuses a reserved port');
+  t.notOk(first.includes(single), 'a later single port is outside the block');
+});
+
+test('createPortAllocator reserves one runtime listener block the ' +
+  'listener-port model derives from its REST port', async (t) => {
+  const {createPortAllocator} =
+    await import('../../src/test-helpers/port-allocator.js');
+  const {resolveListenerPorts} =
+    await import('../../src/config/listener-port-model.js');
+  const allocator = createPortAllocator(`listener-block-${randomUUID()}`);
+  const ports = allocator.getListenerPorts();
+  t.same(ports, resolveListenerPorts({restApiPort: ports.restApiPort}),
+    'admin and transport are what a peer derives from the REST port');
+  const next = allocator.getListenerPorts();
+  const taken = new Set(Object.values(ports));
+  t.notOk(Object.values(next).some((port) => taken.has(port)),
+    'a second runtime never shares a listener port with the first');
+});

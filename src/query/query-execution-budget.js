@@ -1,5 +1,8 @@
 import {ERRORS} from '../constants/index.js';
 
+const QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE =
+  'pre_submission_route_unavailable';
+
 const QUERY_EXECUTION_BUDGET_FIELD = Object.freeze({
   DELIVERY_SOURCE: 'deliverySource',
   DELIVERY_PRIORITY: 'deliveryPriority',
@@ -101,6 +104,8 @@ export function resolvePartitionRetryDelayMs(
     Math.max(defaultRetryDelayMs, failureDetails.retryAfterMs) :
     defaultRetryDelayMs;
 }
+
+export {QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE};
 
 export function createPartitionExecutionBudget({
   executionOptions = {},

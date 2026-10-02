@@ -22,6 +22,10 @@ import {
   DEFAULT_TEST_FILE_ID,
   TEST_HOST,
 } from './port-allocator-constants.js';
+import {
+  LISTENER_PORT_ENV,
+  resolveListenerPorts,
+} from '../config/listener-port-model.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_UTF8 = 'utf8';
@@ -292,6 +296,61 @@ function reservePort(requestedPort, testFileId) {
   });
 }
 
+function isBlockFree(reservations, firstPort, count) {
+  if (firstPort + count > PORT_RANGE_END) {
+    return false;
+  }
+  for (let index = 0; index < count; index++) {
+    if (reservations[String(firstPort + index)]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Reserve `count` CONSECUTIVE ports across concurrent test worker
+ * processes, for runtimes that derive sibling listener ports from one base
+ * (for example REST, admin = REST + 1, transport = REST + 2).
+ *
+ * @param {number} requestedPort - Preferred first-port candidate.
+ * @param {number} count - Block length.
+ * @param {string} testFileId - Allocator owner identifier.
+ * @return {number[]} Reserved consecutive ports, lowest first.
+ */
+function reservePortBlock(requestedPort, count, testFileId) {
+  registerExitCleanup();
+
+  return withAllocatorLock(() => {
+    const state = loadAllocatorState();
+    pruneDeadReservations(state);
+    const reservations = state.reservations || {};
+    const startOffset =
+      ((requestedPort - PORT_RANGE_START) % TOTAL_PORTS + TOTAL_PORTS) %
+      TOTAL_PORTS;
+
+    for (let attempt = 0; attempt < TOTAL_PORTS; attempt++) {
+      const firstPort =
+        PORT_RANGE_START + ((startOffset + attempt) % TOTAL_PORTS);
+      if (!isBlockFree(reservations, firstPort, count)) {
+        continue;
+      }
+      const block = [];
+      for (let index = 0; index < count; index++) {
+        const port = firstPort + index;
+        reservations[String(port)] = {pid: process.pid, testFileId};
+        processReservedPorts.add(port);
+        block.push(port);
+      }
+      state.reservations = reservations;
+      saveAllocatorState(state);
+      return block;
+    }
+
+    throw new Error(LOCAL_STR_NO_AVAILABLE_TEST_PORTS_REMAIN_IN_ALLOCA);
+  });
+}
+
 /**
  * Get a unique port for a test.
  *
@@ -314,6 +373,61 @@ export function getTestPort(testFileId = DEFAULT_TEST_FILE_ID) {
 
   filePortOffsets.set(processScopedTestFileId, currentOffset + 1);
   return reservePort(basePort + currentOffset, processScopedTestFileId);
+}
+
+/**
+ * Get `count` unique CONSECUTIVE ports for a test, drawn from the same
+ * per-file range as getTestPort.
+ *
+ * @param {number} count - Block length.
+ * @param {string} [testFileId] - Optional test file identifier.
+ * @return {number[]} Consecutive reserved ports, lowest first.
+ */
+function getTestPortBlock(count, testFileId = DEFAULT_TEST_FILE_ID) {
+  const processScopedTestFileId = getProcessScopedTestFileId(testFileId);
+  const basePort = getBasePort(processScopedTestFileId);
+  const currentOffset = filePortOffsets.get(processScopedTestFileId) || 0;
+
+  if (currentOffset + count > PORTS_PER_TEST_FILE) {
+    throw new Error(
+      `Port range exhausted for test file: ${testFileId}. ` +
+      `Maximum ${PORTS_PER_TEST_FILE} ports per file.`,
+    );
+  }
+
+  filePortOffsets.set(processScopedTestFileId, currentOffset + count);
+  return reservePortBlock(
+    basePort + currentOffset,
+    count,
+    processScopedTestFileId,
+  );
+}
+
+// One reserved port per listener a runtime opens (REST, admin WS,
+// transport WS).
+const NODE_LISTENER_PORT_COUNT = Object.keys(LISTENER_PORT_ENV).length;
+
+/**
+ * Reserve the listener ports of one runtime as a consecutive block and let
+ * the listener-port model derive the admin and transport ports from the REST
+ * port, so every consumer that derives a peer's transport address from its
+ * bare REST address (src/config/listener-port-model.js) reaches the port
+ * the runtime actually listens on.
+ *
+ * @param {string} [testFileId] - Optional test file identifier.
+ * @return {{restApiPort: number, adminWebSocketPort: number,
+ *   transportWebSocketPort: number}} The runtime's listener ports.
+ */
+function getTestListenerPorts(testFileId = DEFAULT_TEST_FILE_ID) {
+  const block = getTestPortBlock(NODE_LISTENER_PORT_COUNT, testFileId);
+  const ports = resolveListenerPorts({restApiPort: block[0]});
+  if (!block.includes(ports.adminWebSocketPort) ||
+      !block.includes(ports.transportWebSocketPort)) {
+    throw new RangeError(
+      `listener ports ${JSON.stringify(ports)} fall outside the reserved ` +
+      `block ${JSON.stringify(block)}`);
+  }
+  return ports;
 }
 
 /**
@@ -392,6 +506,24 @@ export function createPortAllocator(testFileId) {
      */
     getPort() {
       return getTestPort(testFileId);
+    },
+
+    /**
+     * Get `count` consecutive unique ports for this test file.
+     * @param {number} count - Block length.
+     * @returns {number[]} Consecutive ports, lowest first.
+     */
+    getPortBlock(count) {
+      return getTestPortBlock(count, testFileId);
+    },
+
+    /**
+     * Reserve one runtime's listener ports (see getTestListenerPorts).
+     * @returns {{restApiPort: number, adminWebSocketPort: number,
+     *   transportWebSocketPort: number}} The runtime's listener ports.
+     */
+    getListenerPorts() {
+      return getTestListenerPorts(testFileId);
     },
 
     /**
