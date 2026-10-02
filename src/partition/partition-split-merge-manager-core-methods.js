@@ -6,6 +6,7 @@ import {
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
 import {KeyRange} from './key-range-manager.js';
+import {compareRoutingKeys} from './split-key-comparator.js';
 import {
   PARTITION_TRANSITION_STATE,
   SPLIT_MERGE_ERROR_MSG,
@@ -36,6 +37,27 @@ function cloneStringArray(values) {
     cloned.push(normalizedValue);
   }
   return cloned;
+}
+
+function compareEvaluationTableIds(left, right) {
+  if (left === right) {
+    return 0;
+  }
+  if (left === null || left === undefined) {
+    return -1;
+  }
+  if (right === null || right === undefined) {
+    return 1;
+  }
+  const leftId = String(left);
+  const rightId = String(right);
+  if (leftId < rightId) {
+    return -1;
+  }
+  if (leftId > rightId) {
+    return 1;
+  }
+  return 0;
 }
 
 class PartitionSplitMergeManagerCoreMethods {
@@ -239,32 +261,6 @@ class PartitionSplitMergeManagerCoreMethods {
   }
 
   /**
-   * Compare partition key values with NULL representing unbounded edges.
-   * @param {*} left - Left key.
-   * @param {*} right - Right key.
-   * @return {number} Sort order.
-   * @private
-   */
-  comparePartitionKeys(left, right) {
-    if (left === right) {
-      return 0;
-    }
-    if (left === null || left === undefined) {
-      return -1;
-    }
-    if (right === null || right === undefined) {
-      return 1;
-    }
-    if (left < right) {
-      return -1;
-    }
-    if (left > right) {
-      return 1;
-    }
-    return 0;
-  }
-
-  /**
    * Normalize a key range from either a KeyRange or a plain object.
    * Treat omitted bounds as unbounded edges.
    * @param {KeyRange|Object|null} range - Range descriptor.
@@ -291,14 +287,14 @@ class PartitionSplitMergeManagerCoreMethods {
     return [...partitions]
       .filter((partition) => partition && typeof partition === LOCAL_STR_OBJECT)
       .sort((left, right) => {
-        const tableOrder = this.comparePartitionKeys(
+        const tableOrder = compareEvaluationTableIds(
           this.getPartitionTableId(left),
           this.getPartitionTableId(right),
         );
         if (tableOrder !== 0) {
           return tableOrder;
         }
-        return this.comparePartitionKeys(
+        return compareRoutingKeys(
           this.getPartitionStartKey(left),
           this.getPartitionStartKey(right),
         );

@@ -12,11 +12,16 @@
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import Database from 'better-sqlite3';
+import {
+  PARTITION_SERVICE_ERROR_MSG,
+} from '../../src/partition/partition-service-constants.js';
 import {KeyRange} from '../../src/partition/key-range-manager.js';
 import {PartitionResolver} from '../../src/query/partition-resolver.js';
 import {QueryGroup} from '../../src/live-query/live-query-group.js';
 import {
   compareRoutingKeys,
+  compareSplitKey,
 } from '../../src/partition/split-key-comparator.js';
 
 const TABLE = 'items';
@@ -27,7 +32,19 @@ const STORED_TEXT_BOUNDARY = '500.0';
 const LEFT_KEY = 250;
 const RIGHT_KEY = 1000;
 const NON_NUMERIC_TEXT = 'abc';
-const MISMATCH_PATTERN = /type mismatch|mixed|mismatch/iu;
+const EXPECTED_NUMBER_STRING_MISMATCH =
+  PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch('number', 'string');
+const EXPECTED_OBJECT_MISMATCH =
+  PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch('object', 'object');
+const SQLITE_BINARY_TEXT_VALUES = Object.freeze([
+  'Z',
+  'a',
+  'A',
+  'z',
+  '~',
+  '\uE000',
+  '\u{10000}',
+]);
 
 function splitPartitions(boundary = TEXT_BOUNDARY) {
   return [
@@ -75,10 +92,152 @@ test('one comparator owns routing order for ranges, the resolver and live querie
 });
 
 test('a mixed key space that is not a text-encoded number is refused, never coerced', async () => {
-  assert.throws(() => compareRoutingKeys(RIGHT_KEY, NON_NUMERIC_TEXT), MISMATCH_PATTERN,
-    'the owner refuses number vs non-numeric text');
-  assert.throws(() => new KeyRange(NON_NUMERIC_TEXT, null).contains(RIGHT_KEY),
-    MISMATCH_PATTERN, 'KeyRange surfaces the same typed outcome');
-  assert.throws(() => new PartitionResolver().compareValues(RIGHT_KEY, NON_NUMERIC_TEXT),
-    MISMATCH_PATTERN, 'PartitionResolver surfaces the same typed outcome');
+  assert.throws(
+    () => compareRoutingKeys(RIGHT_KEY, NON_NUMERIC_TEXT),
+    {message: EXPECTED_NUMBER_STRING_MISMATCH},
+    'the owner refuses number vs non-numeric text',
+  );
+  assert.throws(
+    () => new KeyRange(NON_NUMERIC_TEXT, null).contains(RIGHT_KEY),
+    {message: EXPECTED_NUMBER_STRING_MISMATCH},
+    'KeyRange surfaces the same typed outcome',
+  );
+  assert.throws(
+    () => new PartitionResolver().compareValues(RIGHT_KEY, NON_NUMERIC_TEXT),
+    {message: EXPECTED_NUMBER_STRING_MISMATCH},
+    'PartitionResolver surfaces the same typed outcome',
+  );
+});
+
+test('unsupported same-type objects fail closed before coercion', () => {
+  let coercionCalls = 0;
+  const hostile = {
+    [Symbol.toPrimitive]() {
+      coercionCalls += 1;
+      throw new Error('hostile coercion executed');
+    },
+  };
+
+  assert.throws(
+    () => compareRoutingKeys(hostile, {}),
+    {message: EXPECTED_OBJECT_MISMATCH},
+  );
+  assert.equal(coercionCalls, 0, 'unsupported values are rejected before coercion');
+  assert.throws(
+    () => compareRoutingKeys(Object('a'), Object('b')),
+    {message: EXPECTED_OBJECT_MISMATCH},
+    'boxed strings are not admitted as primitive partition keys',
+  );
+});
+
+test('routing comparator uses module-captured intrinsics', () => {
+  const originalBufferCompare = Buffer.compare;
+  const originalBufferFrom = Buffer.from;
+  const originalBufferIsBuffer = Buffer.isBuffer;
+  const originalString = globalThis.String;
+  const originalNumber = globalThis.Number;
+  const originalNumberIsFinite = originalNumber.isFinite;
+  const originalArrayIsArray = Array.isArray;
+  const originalRegExpTestDescriptor =
+    Object.getOwnPropertyDescriptor(RegExp.prototype, 'test');
+  const originalError = globalThis.Error;
+  const leftBuffer = originalBufferFrom('a');
+  const rightBuffer = originalBufferFrom('b');
+  let outcomes = null;
+  let mixedMessage = null;
+
+  try {
+    Buffer.compare = () => 0;
+    Buffer.from = () => {
+      throw new Error('mutated Buffer.from executed');
+    };
+    Buffer.isBuffer = () => false;
+    globalThis.String = () => 'corrupted';
+    originalNumber.isFinite = () => false;
+    globalThis.Number = () => Number.NaN;
+    Array.isArray = () => false;
+    Reflect.defineProperty(RegExp.prototype, 'test', {
+      configurable: true,
+      writable: true,
+      value: () => false,
+    });
+    globalThis.Error = class CorruptedError extends originalError {
+      constructor() {
+        super('corrupted mutable Error');
+      }
+    };
+
+    outcomes = {
+      text: compareRoutingKeys('a', 'b'),
+      numericText: compareRoutingKeys(RIGHT_KEY, STORED_TEXT_BOUNDARY),
+      buffer: compareRoutingKeys(leftBuffer, rightBuffer),
+    };
+    try {
+      compareRoutingKeys(RIGHT_KEY, NON_NUMERIC_TEXT);
+    } catch (error) {
+      mixedMessage = error?.message || null;
+    }
+  } finally {
+    Buffer.compare = originalBufferCompare;
+    Buffer.from = originalBufferFrom;
+    Buffer.isBuffer = originalBufferIsBuffer;
+    Reflect.defineProperty(
+      RegExp.prototype,
+      'test',
+      originalRegExpTestDescriptor,
+    );
+    Array.isArray = originalArrayIsArray;
+    globalThis.Error = originalError;
+    originalNumber.isFinite = originalNumberIsFinite;
+    globalThis.Number = originalNumber;
+    globalThis.String = originalString;
+  }
+
+  assert.ok(outcomes.text < 0, 'text ordering ignores later intrinsic mutation');
+  assert.ok(
+    outcomes.numericText > 0,
+    'numeric/TEXT ordering ignores later intrinsic mutation',
+  );
+  assert.ok(outcomes.buffer < 0, 'buffer ordering ignores later intrinsic mutation');
+  assert.equal(
+    mixedMessage,
+    EXPECTED_NUMBER_STRING_MISMATCH,
+    'typed refusal ignores later Error-constructor mutation',
+  );
+});
+
+
+test('text routing order matches SQLite BINARY, including supplementary Unicode', () => {
+  const database = new Database(':memory:');
+  try {
+    database.exec('CREATE TABLE routing_keys (value TEXT NOT NULL)');
+    const insert = database.prepare(
+      'INSERT INTO routing_keys (value) VALUES (?)',
+    );
+    const insertAll = database.transaction((values) => {
+      for (const value of values) {
+        insert.run(value);
+      }
+    });
+    insertAll(SQLITE_BINARY_TEXT_VALUES);
+
+    const sqliteOrder = database.prepare(
+      'SELECT value FROM routing_keys ORDER BY value COLLATE BINARY',
+    ).all().map((row) => row.value);
+    const routingOrder = [...SQLITE_BINARY_TEXT_VALUES].sort(compareRoutingKeys);
+
+    assert.deepEqual(
+      routingOrder,
+      sqliteOrder,
+      'the routing owner must reproduce SQLite BINARY text order',
+    );
+    for (let index = 0; index < sqliteOrder.length - 1; index += 1) {
+      assert.ok(
+        compareSplitKey(sqliteOrder[index], sqliteOrder[index + 1]) < 0,
+        'strict split comparison must preserve the same text order',
+      );
+    }
+  } finally {
+    database.close();
+  }
 });
