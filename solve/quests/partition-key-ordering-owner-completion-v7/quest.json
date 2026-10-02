@@ -68,5 +68,6 @@
       "id": "own-data-evaluation-row-fields",
       "statement": "Partition IDs and partition start/end keys used by the live split/merge evaluator come only from own data properties with snake/camel fallback. Inherited values and accessors are not evaluation, sorting or adjacency authority and are never invoked."
     }
-  ]
+  ],
+  "sealedAt": "230cf8d1054fa4d9554afc0d11d82835966554fe"
 }
