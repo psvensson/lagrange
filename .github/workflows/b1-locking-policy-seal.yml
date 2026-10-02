@@ -30,5 +30,15 @@ jobs:
           node scripts/check-guideline-ambient-intrinsics.js scripts/checks/locking-read-wait-policy-seal.js
           node scripts/check-guideline-silent-catch.js scripts/checks/locking-read-wait-policy-seal.js
       - name: Policy is design-only
+        shell: bash
         run: |
-          git diff --exit-code 09fd1965ccba075d185936306f81799bbae6a50a...HEAD --             architecture/postgres-locking-reads.md             scripts/checks/locking-read-wait-policy-seal.js             solve/epics/release-0-3-queryable-core.md             solve/quests/locking-read-wait-policy-seal             solve/specs/release-0-3-queryable-core/locking-read-wait-policy.json             .github/workflows/b1-locking-policy-seal.yml
+          set -euo pipefail
+          unexpected="$(
+            git diff --name-only 09fd1965ccba075d185936306f81799bbae6a50a...HEAD |
+              grep -Ev '^(.github/workflows/b1-locking-policy-seal\.yml|architecture/postgres-locking-reads\.md|scripts/checks/locking-read-wait-policy-seal\.js|solve/epics/release-0-3-queryable-core\.md|solve/quests/locking-read-wait-policy-seal/|solve/specs/release-0-3-queryable-core/locking-read-wait-policy\.json) ||
+              true
+          )"
+          if [ -n "$unexpected" ]; then
+            printf 'unexpected B1 path(s):\n%s\n' "$unexpected" >&2
+            exit 1
+          fi
