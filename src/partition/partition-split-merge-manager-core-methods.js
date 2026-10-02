@@ -288,12 +288,13 @@ class PartitionSplitMergeManagerCoreMethods {
       LOCAL_STR_PARTITION_ID_SNAKE,
     );
     if (snakeCaseId !== undefined && snakeCaseId !== null) {
-      return snakeCaseId;
+      return typeof snakeCaseId === LOCAL_STR_STRING ? snakeCaseId : null;
     }
-    return readOwnDataValue(
+    const camelCaseId = readOwnDataValue(
       partition,
       LOCAL_STR_PARTITION_ID_CAMEL,
-    ) ?? null;
+    );
+    return typeof camelCaseId === LOCAL_STR_STRING ? camelCaseId : null;
   }
 
   /**
