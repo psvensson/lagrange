@@ -23,6 +23,9 @@ const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
 const REACTIVE_EVALUATION_TRIGGER = 'reactive_request';
 const REACTIVE_PRESSURE_BYPASS_REASON_WRITE_ACTIVITY = 'write_activity';
+const INVALID_EVALUATION_TABLE_ID =
+  'Partition evaluation table IDs must be primitive strings';
+const TypeErrorCtor = TypeError;
 
 function cloneStringArray(values) {
   if (!Array.isArray(values)) {
@@ -49,12 +52,14 @@ function compareEvaluationTableIds(left, right) {
   if (right === null || right === undefined) {
     return 1;
   }
-  const leftId = String(left);
-  const rightId = String(right);
-  if (leftId < rightId) {
+  if (typeof left !== LOCAL_STR_STRING ||
+      typeof right !== LOCAL_STR_STRING) {
+    throw new TypeErrorCtor(INVALID_EVALUATION_TABLE_ID);
+  }
+  if (left < right) {
     return -1;
   }
-  if (leftId > rightId) {
+  if (left > right) {
     return 1;
   }
   return 0;
