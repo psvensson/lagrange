@@ -12,11 +12,13 @@
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import Database from 'better-sqlite3';
 import {KeyRange} from '../../src/partition/key-range-manager.js';
 import {PartitionResolver} from '../../src/query/partition-resolver.js';
 import {QueryGroup} from '../../src/live-query/live-query-group.js';
 import {
   compareRoutingKeys,
+  compareSplitKey,
 } from '../../src/partition/split-key-comparator.js';
 
 const TABLE = 'items';
@@ -28,6 +30,15 @@ const LEFT_KEY = 250;
 const RIGHT_KEY = 1000;
 const NON_NUMERIC_TEXT = 'abc';
 const MISMATCH_PATTERN = /type mismatch|mixed|mismatch/iu;
+const SQLITE_BINARY_TEXT_VALUES = Object.freeze([
+  'Z',
+  'a',
+  'A',
+  'z',
+  '~',
+  '\uE000',
+  '\u{10000}',
+]);
 
 function splitPartitions(boundary = TEXT_BOUNDARY) {
   return [
@@ -81,4 +92,40 @@ test('a mixed key space that is not a text-encoded number is refused, never coer
     MISMATCH_PATTERN, 'KeyRange surfaces the same typed outcome');
   assert.throws(() => new PartitionResolver().compareValues(RIGHT_KEY, NON_NUMERIC_TEXT),
     MISMATCH_PATTERN, 'PartitionResolver surfaces the same typed outcome');
+});
+
+
+test('text routing order matches SQLite BINARY, including supplementary Unicode', () => {
+  const database = new Database(':memory:');
+  try {
+    database.exec('CREATE TABLE routing_keys (value TEXT NOT NULL)');
+    const insert = database.prepare(
+      'INSERT INTO routing_keys (value) VALUES (?)',
+    );
+    const insertAll = database.transaction((values) => {
+      for (const value of values) {
+        insert.run(value);
+      }
+    });
+    insertAll(SQLITE_BINARY_TEXT_VALUES);
+
+    const sqliteOrder = database.prepare(
+      'SELECT value FROM routing_keys ORDER BY value COLLATE BINARY',
+    ).all().map((row) => row.value);
+    const routingOrder = [...SQLITE_BINARY_TEXT_VALUES].sort(compareRoutingKeys);
+
+    assert.deepEqual(
+      routingOrder,
+      sqliteOrder,
+      'the routing owner must reproduce SQLite BINARY text order',
+    );
+    for (let index = 0; index < sqliteOrder.length - 1; index += 1) {
+      assert.ok(
+        compareSplitKey(sqliteOrder[index], sqliteOrder[index + 1]) < 0,
+        'strict split comparison must preserve the same text order',
+      );
+    }
+  } finally {
+    database.close();
+  }
 });
