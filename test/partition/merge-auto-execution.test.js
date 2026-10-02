@@ -357,11 +357,13 @@ test('merge evaluation captures Array.prototype.sort', async (t) => {
   const original = Array.prototype.sort;
   let results;
   try {
+    // eslint-disable-next-line no-extend-native -- adversarial intrinsic fixture
     Array.prototype.sort = () => {
       throw new Error('mutable Array.prototype.sort must not execute');
     };
     results = await manager.evaluateAllPartitions();
   } finally {
+    // eslint-disable-next-line no-extend-native -- restore adversarial fixture
     Array.prototype.sort = original;
     manager.shutdown();
   }
@@ -415,6 +417,7 @@ test('merge evaluation captures Array.prototype push and includes', async (t) =>
   let includesTrapCalls = 0;
   let results;
   try {
+    // eslint-disable-next-line no-extend-native -- adversarial intrinsic fixture
     Array.prototype.push = function(...values) {
       if (values.some((value) =>
         value === 'write_activity' ||
@@ -426,6 +429,7 @@ test('merge evaluation captures Array.prototype push and includes', async (t) =>
       }
       return originalPush.apply(this, values);
     };
+    // eslint-disable-next-line no-extend-native -- adversarial intrinsic fixture
     Array.prototype.includes = function(value, fromIndex) {
       if (value === 'write_activity') {
         includesTrapCalls += 1;
@@ -438,7 +442,9 @@ test('merge evaluation captures Array.prototype push and includes', async (t) =>
       triggerReason: 'reactive_request',
     });
   } finally {
+    // eslint-disable-next-line no-extend-native -- restore adversarial fixture
     Array.prototype.includes = originalIncludes;
+    // eslint-disable-next-line no-extend-native -- restore adversarial fixture
     Array.prototype.push = originalPush;
     manager.shutdown();
   }
@@ -454,7 +460,7 @@ test('merge evaluation captures Array.prototype push and includes', async (t) =>
   t.end();
 });
 
-test('merge evaluation live copy ignores sparse inherited rows and captures Reflect.defineProperty',
+test('merge evaluation rejects sparse or custom-prototype source arrays without inherited reads',
   async (t) => {
     const rows = [];
     rows.length = 3;
@@ -470,85 +476,209 @@ test('merge evaluation live copy ignores sparse inherited rows and captures Refl
       },
     });
     Object.setPrototypeOf(rows, hostilePrototype);
-
     const {manager} = buildManager({
       listPartitions: () => rows,
       executeMergeCandidate: null,
     });
-    const originalDefineProperty = Reflect.defineProperty;
-    let defineTrapCalls = 0;
-    let results;
-    try {
-      Reflect.defineProperty = (target, key, descriptor) => {
-        if (Array.isArray(target) && /^\\d+$/u.test(String(key))) {
-          defineTrapCalls += 1;
-          throw new Error('live Reflect.defineProperty must not execute');
-        }
-        return originalDefineProperty(target, key, descriptor);
-      };
-      results = await manager.evaluateAllPartitions();
-    } finally {
-      Reflect.defineProperty = originalDefineProperty;
-      manager.shutdown();
-    }
-    t.same(results.mergeCandidates, [
-      {leftId: 'users-p1', rightId: 'users-p2'},
-    ]);
+    await t.rejects(manager.evaluateAllPartitions(), TypeError);
     t.equal(inheritedIndexReads, 0,
-      'sparse inherited numeric rows are not evaluation authority');
-    t.equal(defineTrapCalls, 0,
-      'evaluation copy uses the captured Reflect.defineProperty intrinsic');
+      'inherited numeric rows are rejected before they can be read');
+    manager.shutdown();
     t.end();
   });
 
-test('evaluation row copying captures Reflect.defineProperty and bypasses inherited setters',
-  (t) => {
-    const rows = [
-      buildPartitionRow('users-p1', null, 'm'),
+test('merge evaluation uses the captured own-slot definition primitive', async (t) => {
+  const rows = [
+    buildPartitionRow('users-p1', null, 'm'),
+    buildPartitionRow('users-p2', 'm', null),
+  ];
+  const {manager} = buildManager({
+    listPartitions: () => rows,
+    executeMergeCandidate: null,
+  });
+  const originalDefineProperty = Object.defineProperty;
+  let trapCalls = 0;
+  let results;
+  try {
+    Object.defineProperty = (target, key, descriptor) => {
+      if (Array.isArray(target) && /^\d+$/u.test(String(key))) {
+        trapCalls += 1;
+        throw new Error('live Object.defineProperty must not execute');
+      }
+      return originalDefineProperty(target, key, descriptor);
+    };
+    results = await manager.evaluateAllPartitions();
+  } finally {
+    Object.defineProperty = originalDefineProperty;
+    manager.shutdown();
+  }
+  t.same(results.mergeCandidates, [
+    {leftId: 'users-p1', rightId: 'users-p2'},
+  ]);
+  t.equal(trapCalls, 0,
+    'evaluation uses module-load captured own-slot definitions');
+  t.end();
+});
+
+test('merge evaluation rejects proxy lists and rows before descriptor traps', async (t) => {
+  let listTrapCalls = 0;
+  const proxyRows = new Proxy([
+    buildPartitionRow('users-p1', null, 'm'),
+    buildPartitionRow('users-p2', 'm', null),
+  ], {
+    getOwnPropertyDescriptor() {
+      listTrapCalls += 1;
+      throw new Error('proxy list descriptor trap executed');
+    },
+  });
+  const {manager: listManager} = buildManager({
+    listPartitions: () => proxyRows,
+    executeMergeCandidate: null,
+  });
+  await t.rejects(listManager.evaluateAllPartitions(), TypeError);
+  t.equal(listTrapCalls, 0, 'proxy list is rejected before descriptor reads');
+  listManager.shutdown();
+
+  let rowTrapCalls = 0;
+  const proxyRow = new Proxy(buildPartitionRow('users-p1', null, 'm'), {
+    ownKeys() {
+      rowTrapCalls += 1;
+      throw new Error('proxy row ownKeys trap executed');
+    },
+    getOwnPropertyDescriptor() {
+      rowTrapCalls += 1;
+      throw new Error('proxy row descriptor trap executed');
+    },
+  });
+  const {manager: rowManager} = buildManager({
+    listPartitions: () => [
+      proxyRow,
       buildPartitionRow('users-p2', 'm', null),
-    ];
-    const {manager} = buildManager({executeMergeCandidate: null});
+    ],
+    executeMergeCandidate: null,
+  });
+  await t.rejects(rowManager.evaluateAllPartitions(), TypeError);
+  t.equal(rowTrapCalls, 0, 'proxy row is rejected before own-data inspection');
+  rowManager.shutdown();
+  t.end();
+});
+
+test('merge evaluation bounds the source partition array before scanning', async (t) => {
+  const rows = [];
+  rows.length = 1_000_001;
+  const {manager} = buildManager({
+    listPartitions: () => rows,
+    executeMergeCandidate: null,
+  });
+  await t.rejects(manager.evaluateAllPartitions(), RangeError);
+  manager.shutdown();
+  t.end();
+});
+
+
+test('merge evaluation result buckets bypass inherited numeric setters', async (t) => {
+  const priorPrototypeIndex =
+    Object.getOwnPropertyDescriptor(Array.prototype, '0');
+  const defineProperty = Object.defineProperty;
+  let resultSetterCalls = 0;
+  const {manager} = buildManager({
+    executeMergeCandidate: async () => ({
+      success: true,
+      workflowId: 'merge-wf',
+    }),
+  });
+  try {
+    // eslint-disable-next-line no-extend-native -- adversarial prototype setter fixture
+    Object.defineProperty(Array.prototype, '0', {
+      configurable: true,
+      set(value) {
+        if (value?.leftId === 'users-p1' ||
+            value?.workflowId === 'merge-wf') {
+          resultSetterCalls += 1;
+        }
+        defineProperty(this, '0', {
+          configurable: true,
+          enumerable: true,
+          writable: true,
+          value,
+        });
+      },
+    });
+    const results = await manager.evaluateAllPartitions();
+    t.same(results.mergeCandidates, [
+      {leftId: 'users-p1', rightId: 'users-p2'},
+    ]);
+    t.equal(results.executedMerges.length, 1);
+  } finally {
+    if (priorPrototypeIndex) {
+      // eslint-disable-next-line no-extend-native -- restore adversarial fixture
+      Object.defineProperty(Array.prototype, '0', priorPrototypeIndex);
+    } else {
+      Reflect.deleteProperty(Array.prototype, '0');
+    }
+    manager.shutdown();
+  }
+  t.equal(resultSetterCalls, 0,
+    'result buckets define own slots instead of invoking inherited setters');
+  t.end();
+});
+
+test('reactive merge execution options ignore mutable Object.assign and prototype setters',
+  async (t) => {
+    const originalAssign = Object.assign;
+    const priorWorkClass = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'workClass',
+    );
     let inheritedSetterCalls = 0;
-    const priorPrototypeIndex =
-      Object.getOwnPropertyDescriptor(Array.prototype, '0');
-    const originalDefineProperty = Reflect.defineProperty;
-    let copied;
+    let receivedOptions = null;
+    const {manager} = buildManager({
+      executeMergeCandidate: async (_candidate, options) => {
+        receivedOptions = options;
+        return {success: true, workflowId: 'merge-wf'};
+      },
+    });
     try {
-      Object.defineProperty(Array.prototype, '0', {
+      Object.assign = () => {
+        throw new Error('live Object.assign must not execute');
+      };
+      // eslint-disable-next-line no-extend-native -- adversarial prototype setter fixture
+      Object.defineProperty(Object.prototype, 'workClass', {
         configurable: true,
         set() {
           inheritedSetterCalls += 1;
         },
       });
-      Reflect.defineProperty = () => {
-        throw new Error('mutable Reflect.defineProperty must not execute');
-      };
-      copied = manager.normalizeEvaluationPartitions(rows);
+      const results = await manager.evaluateAllPartitions({
+        reasonCodes: ['write_activity'],
+        triggerReason: 'reactive_request',
+      });
+      t.equal(results.executedMerges.length, 1);
     } finally {
-      Reflect.defineProperty = originalDefineProperty;
-      if (priorPrototypeIndex) {
-        Object.defineProperty(Array.prototype, '0', priorPrototypeIndex);
+      Object.assign = originalAssign;
+      if (priorWorkClass) {
+        // eslint-disable-next-line no-extend-native -- restore adversarial fixture
+        Object.defineProperty(Object.prototype, 'workClass', priorWorkClass);
       } else {
-        Reflect.deleteProperty(Array.prototype, '0');
+        Reflect.deleteProperty(Object.prototype, 'workClass');
       }
       manager.shutdown();
     }
     t.equal(inheritedSetterCalls, 0,
-      'copy defines own numeric slots without prototype setters');
-    t.equal(copied.length, 2);
-    t.equal(copied[0].partition_id, 'users-p1');
+      'critical work class is defined as an own data property');
+    t.equal(receivedOptions?.workClass, 'critical',
+      'reactive merge preserves critical work-class propagation');
+    t.equal(Object.getPrototypeOf(receivedOptions), null,
+      'execution options are canonical null-prototype data');
     t.end();
   });
 
-test('merge adjacency ignores partition-key accessors and inherited key fields',
+
+test('merge evaluation rejects accessor-backed partition boundary rows without invoking getters',
   async (t) => {
     let keyAccessorCalls = 0;
     const left = buildPartitionRow('users-p1', null, 'm');
     const right = buildPartitionRow('users-p2', 'm', null);
-    const leftEnd = left.partition_key_end;
-    const rightStart = right.partition_key_start;
-    Reflect.deleteProperty(left, 'partition_key_end');
-    Reflect.deleteProperty(right, 'partition_key_start');
     Object.defineProperty(left, 'partition_key_end', {
       configurable: true,
       enumerable: true,
@@ -557,52 +687,20 @@ test('merge adjacency ignores partition-key accessors and inherited key fields',
         return 'wrong-left-end';
       },
     });
-    Object.defineProperty(right, 'partition_key_start', {
-      configurable: true,
-      enumerable: true,
-      get() {
-        keyAccessorCalls += 1;
-        return 'wrong-right-start';
-      },
-    });
-    Object.defineProperty(left, 'partitionKeyEnd', {
-      configurable: true,
-      enumerable: true,
-      writable: true,
-      value: leftEnd,
-    });
-    Object.defineProperty(right, 'partitionKeyStart', {
-      configurable: true,
-      enumerable: true,
-      writable: true,
-      value: rightStart,
-    });
-    const inherited = Object.create({partition_key_start: 'inherited'});
-    inherited.partition_id = 'inherited-p1';
-    inherited.table_id = 'tbl-users';
-    inherited.partition_key_end = null;
     const {manager} = buildManager({
       listPartitions: () => [left, right],
       executeMergeCandidate: null,
     });
-    const results = await manager.evaluateAllPartitions();
-    t.same(results.mergeCandidates, [
-      {leftId: 'users-p1', rightId: 'users-p2'},
-    ]);
-    t.equal(keyAccessorCalls, 0, 'partition-key accessors are never invoked');
-    t.equal(manager.getPartitionStartKey(inherited), null,
-      'inherited partition-key fields are not accepted');
+    await t.rejects(manager.evaluateAllPartitions(), TypeError);
+    t.equal(keyAccessorCalls, 0, 'boundary getter is never invoked');
     manager.shutdown();
     t.end();
   });
 
-test('evaluation partition IDs ignore accessors and inherited fields',
+test('merge evaluation rejects accessor/custom-prototype partition IDs without traps',
   async (t) => {
     let idAccessorCalls = 0;
     const left = buildPartitionRow('users-p1', null, 'm');
-    const right = buildPartitionRow('users-p2', 'm', null);
-
-    Reflect.deleteProperty(left, 'partition_id');
     Object.defineProperty(left, 'partition_id', {
       configurable: true,
       enumerable: true,
@@ -611,26 +709,16 @@ test('evaluation partition IDs ignore accessors and inherited fields',
         return 'wrong-left-id';
       },
     });
-    left.partitionId = 'users-p1';
-
     const inheritedRight = Object.assign(
       Object.create({partition_id: 'wrong-inherited-id'}),
-      right,
+      buildPartitionRow('users-p2', 'm', null),
     );
-    Reflect.deleteProperty(inheritedRight, 'partition_id');
-    inheritedRight.partitionId = 'users-p2';
-
     const {manager} = buildManager({
       listPartitions: () => [left, inheritedRight],
       executeMergeCandidate: null,
     });
-    const results = await manager.evaluateAllPartitions();
-    t.same(results.mergeCandidates, [
-      {leftId: 'users-p1', rightId: 'users-p2'},
-    ]);
-    t.equal(idAccessorCalls, 0, 'partition-ID accessors are never invoked');
-    t.equal(manager.getPartitionId(inheritedRight), 'users-p2',
-      'inherited partition IDs are not evaluation authority');
+    await t.rejects(manager.evaluateAllPartitions(), TypeError);
+    t.equal(idAccessorCalls, 0, 'partition-ID getter is never invoked');
     manager.shutdown();
     t.end();
   });
