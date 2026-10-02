@@ -531,6 +531,19 @@ test('evaluation partition IDs ignore accessors and inherited fields',
     t.end();
   });
 
+test('evaluation partition IDs reject boxed and exotic own values', (t) => {
+  const {manager} = buildManager({executeMergeCandidate: null});
+  for (const invalidId of [Object('boxed-id'), Symbol('invalid-id'), 7]) {
+    const row = buildPartitionRow('placeholder', null, null);
+    row.partition_id = invalidId;
+    row.partitionId = 'fallback-must-not-win';
+    t.equal(manager.getPartitionId(row), null,
+      'invalid authoritative snake-case ID fails closed without alias fallback');
+  }
+  manager.shutdown();
+  t.end();
+});
+
 test('snake-case null boundaries stay authoritative over camel aliases', (t) => {
   const {manager} = buildManager({executeMergeCandidate: null});
   const row = buildPartitionRow('users-p1', null, null);
