@@ -1,57 +1,82 @@
 ---
-name: lagrange-code-review
-description: Adversarial, content-bound review protocol for Lagrange Quest source changes.
+name: code-review
+description: Adversarially review Lagrange pull requests using the sealed Solver Quest, repository verification templates, controlled-negative evidence, and exact-head identity. Use for every Lagrange code review, especially source changes tied to solve/quests.
 ---
 
 # Lagrange code review
 
-When reviewing a pull request that implements or verifies a Lagrange Solver
-Quest, review the **exact current PR head** and treat the Quest declaration as
-the acceptance contract.
+Review the pull request as an independent verifier, not as an implementation assistant.
 
-1. Read the active `solve/quests/<id>/quest.json`, its `log.ndjson`, the
-   owning epic, and the changed source/tests before reaching a verdict.
-2. Identify every applicable category from
-   `docs/development/verification-templates/INDEX.md`. Run the full checklist
-   for every applicable category in one review round. Do not stop at the first
-   defect.
-3. Every finding and every claimed pass needs a concrete evidence path:
-   source line, test name, Quest log entry, workflow run, or immutable candidate
-   hash. Do not accept "tests pass" as semantic proof.
-4. For red-before/green-after controls, apply the harness-fidelity checklist.
-   Confirm the red reaches the named behavioral assertion for the claimed
-   mechanism and that the green uses the same fixture/path.
-5. For comparator/guard/contract code handling hostile JavaScript values, apply
-   the adversarial-js-intrinsics checklist. Reject accidental coercion,
-   locale dependence, prototype/accessor surprises, or a broad "any throw"
-   standing in for a typed outcome when those are reachable on the changed
-   boundary.
-6. Attack semantic ownership: search changed callers for a surviving duplicate
-   comparator/decision path, fallback, direct raw comparison, or local escape
-   hatch. A helper rename is not owner convergence.
-7. Check Quest scope. Reject unrelated architecture changes, hidden migration,
-   raft/runtime/formation changes, or broader compatibility changes that the
-   Quest did not authorize.
-8. A review is content-bound. State the reviewed commit SHA in the summary.
-   If the head changes after review, the old verdict is not approval of the
-   new candidate.
-9. Return all findings grouped by applicable verification category. If there
-   are no blocking findings, say so explicitly and list the evidence paths
-   supporting the approval.
+## Establish the review subject
 
-For `partition-key-ordering-owner-completion-v2`, the mandatory verification
-bar is:
+1. Record the exact pull-request head commit SHA being reviewed.
+2. Enumerate every changed path.
+3. If the PR names a Solver Quest, read its `solve/quests/<id>/quest.json` and
+   append-only `log.ndjson`. Treat the sealed statement, constraints and
+   doneWhen predicate as the verification contract.
+4. Reject conclusions or workflow evidence that belong to a different source
+   candidate SHA unless the Quest log explicitly content-binds the exact files
+   being reviewed.
 
-- **harness-fidelity**: red source must fail the SQLite-BINARY routing assertion
-  and the merge-adjacency assertion for the intended mechanism; the current
-  candidate must make both green without changing the pass criterion.
-- **adversarial-js-intrinsics / typed-input edge**: string comparison must be
-  deterministic UTF-8/SQLite-BINARY (including U+E000 vs U+10000), numeric
-  against text-encoded numeric must remain numeric, and unrelated mixed key
-  spaces must retain the exact typed split-key mismatch outcome.
-- **owner convergence**: KeyRange, PartitionResolver, QueryGroup, split/merge
-  ordering and split/merge adjacency must consume the same partition-key order
-  owner. Table-id ordering is a distinct identifier concern and must not become
-  a second partition-key comparator.
-- **scope**: no persisted-boundary format migration, type-metadata migration,
-  Raft, consensus transport, formation, membership, or lifecycle change.
+## Load the applicable verification templates
+
+Read `docs/development/verification-templates/INDEX.md`, classify the diff,
+and load every matching checklist. Do not add unrelated templates merely to
+make the review longer.
+
+Typical mappings include:
+
+- new/changed tests, fixtures, A/B or red-on-revert controls:
+  `harness-fidelity.md`;
+- guards, comparators, validators, hostile JavaScript input:
+  `adversarial-js-intrinsics.md`;
+- registered cross-owner semantic seams:
+  `owner-interaction.md`;
+- retry/re-drive loops: `retry-loops.md`;
+- recovery/replay: `recovery-replay.md`;
+- concurrency/serialization: `concurrency-serialization.md`;
+- transport/delivery: `transport-delivery.md`;
+- timers/sweeps: `sweep-timer.md`;
+- admission/hold predicates: `admission-gating.md`;
+- formation-vs-steady-state dependencies: `formation-circularity.md`.
+
+## Category-complete review
+
+For every applicable checklist category:
+
+1. enumerate ALL findings in the same review round; never stop at the first;
+2. give each checklist item a verdict: PASS, FAIL, or NOT APPLICABLE;
+3. attach a concrete evidence path to every verdict: file:line, test name,
+   Solver log entry, or immutable workflow run;
+4. distinguish production-semantic defects from test/probe/harness defects;
+5. explicitly search for bypasses, fallback logic, duplicate semantic owners,
+   coercions and compatibility paths around the claimed change.
+
+## Controlled-negative fidelity
+
+When a Quest relies on red-before/green-after or red-on-revert evidence:
+
+- verify the red control reaches the claimed production mechanism and the named
+  behavioral assertion;
+- reject import/setup/missing-method/timeout-before-engagement failures as
+  non-proofs;
+- verify the green run uses the exact candidate bytes under review;
+- verify any source/test fingerprints in the Quest log match the reviewed
+  candidate.
+
+A green CI run alone is never terminal evidence for a new semantic claim.
+
+## Final verification summary
+
+End the review with one compact section containing:
+
+- exact reviewed head SHA;
+- applicable verification categories;
+- all findings grouped by category;
+- any inherited/out-of-scope findings clearly separated;
+- verdict: `ACCEPT` only if every applicable load-bearing item passes,
+  otherwise `REJECT`;
+- evidence paths supporting the verdict.
+
+Do not approve merely because the implementation is small or the focused tests
+are green. Prefer a concrete rejection to an ungrounded approval.
