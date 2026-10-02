@@ -287,6 +287,21 @@ test('merge table ID validation happens before absent ordering',
     t.end();
   });
 
+test('sealed normalization preserves safe row identity while copying array slots',
+  (t) => {
+    const rows = [
+      buildPartitionRow('users-p1', null, 'm'),
+      buildPartitionRow('users-p2', 'm', null),
+    ];
+    const {manager} = buildManager({executeMergeCandidate: null});
+    const normalized = manager.normalizeEvaluationPartitions(rows);
+    t.not(normalized, rows, 'array identity is copied');
+    t.equal(normalized[0], rows[0], 'safe first row identity is preserved');
+    t.equal(normalized[1], rows[1], 'safe second row identity is preserved');
+    manager.shutdown();
+    t.end();
+  });
+
 test('merge evaluation ignores a hostile source iterator', async (t) => {
   const rows = [
     buildPartitionRow('users-p2', 'm', null),
