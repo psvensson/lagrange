@@ -9,6 +9,7 @@ doneWhen:
     file: solve/oracle/release-0-3-queryable-core.json
 quests:
   - partition-key-ordering-owner-completion-v7
+  - locking-read-wait-policy-seal
 authorizes:
   - architecture
   - docs/development/agpl-feature-map.md
