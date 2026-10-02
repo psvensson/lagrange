@@ -1,4 +1,5 @@
 name: a2-boundary-representation-seal
+# trigger red seal measurement
 on:
   push:
     branches:
