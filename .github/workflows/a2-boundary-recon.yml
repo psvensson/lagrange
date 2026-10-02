@@ -6,16 +6,17 @@ on:
       - recon/a2-boundary-representation-2026-10-02
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   measure:
+    if: ${{ !contains(github.event.head_commit.message, '[a2-recon-recorded]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          persist-credentials: false
+          persist-credentials: true
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
@@ -24,7 +25,8 @@ jobs:
       - name: Measure parser and SQLite integer boundaries
         shell: bash
         run: |
-          node --input-type=module <<'NODE'
+          set -o pipefail
+          node --input-type=module <<'NODE' | tee a2-boundary-recon-output.jsonl
           import Database from 'better-sqlite3';
           import {SQLParser} from './src/query/sql-parser.js';
 
@@ -99,3 +101,13 @@ jobs:
 
           db.close();
           NODE
+
+      - name: Record measured evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add a2-boundary-recon-output.jsonl
+          git commit -m "recon: record A2 boundary measurements [a2-recon-recorded]"
+          git push origin HEAD:recon/a2-boundary-representation-2026-10-02
