@@ -109,6 +109,25 @@ test('merge auto-execution - adjacency sorting uses SQLite BINARY key order',
     manager.shutdown();
   });
 
+test('merge auto-execution - adjacency delegates mixed-key refusal to routing owner',
+  async (t) => {
+    const {manager} = buildManager({
+      listPartitions: () => [
+        buildPartitionRow('users-p1', null, 1000),
+        buildPartitionRow('users-p2', 'abc', null),
+      ],
+      executeMergeCandidate: null,
+    });
+
+    await t.rejects(
+      manager.evaluateAllPartitions(),
+      /Split key type mismatch|mixed-type key spaces/iu,
+      'mixed boundary types must fail closed through the partition-key order owner',
+    );
+
+    manager.shutdown();
+  });
+
 test('merge auto-execution - bounded per evaluation; overflow candidates ' +
     'are deferred with backpressure', async (t) => {
   const {manager, executedCandidates} = buildManager({
