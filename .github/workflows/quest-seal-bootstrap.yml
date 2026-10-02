@@ -1,4 +1,4 @@
-name: quest-a1-v2-request-re-review
+name: quest-a1-v3-seal-and-attempt
 
 on:
   push:
@@ -8,25 +8,161 @@ on:
       - .github/workflows/quest-seal-bootstrap.yml
 
 permissions:
-  contents: read
-  pull-requests: write
+  contents: write
 
 jobs:
-  request:
-    name: request Copilot re-review of repaired A1-v2 candidate
+  prove:
+    name: seal A1-v3 and prove hardened candidate
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 30
     steps:
-      - name: Request independent Copilot re-review
+      - name: Checkout exact event SHA
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Refresh generated metadata before sealing
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          reviewed_sha="50199bb8a5890913906b14892d74d4ba8712e5e0"
-          actual_sha="$(gh pr view 77 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
-          if [ "$actual_sha" != "$reviewed_sha" ]; then
-            echo "PR #77 head changed: expected $reviewed_sha, got $actual_sha"
+          npm run -s test:metadata:refresh
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet --             test/shards/primary-classes.json             test/shards/resource-classes.json             test/shards/subsystem-classes.json             test/shards/impact-graph-seal.json; then
+            git add --               test/shards/primary-classes.json               test/shards/resource-classes.json               test/shards/subsystem-classes.json               test/shards/impact-graph-seal.json
+            git commit -m "test: refresh metadata for A1-v3 seal"
+          fi
+
+      - name: Record v2 category-complete rejection and seal v3
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v2             --verification "REJECT: category-complete Copilot reviews PR #78/#79 found token-only structural ownership checks, broad mismatch acceptance, unsupported same-type String coercion, mutable intrinsic lookup, and the now-repaired adjacency witness gap."             --verifier subagent:github-copilot-pr78-pr79             --verdict reject
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v2             --superseded "Category-complete independent review found hostile-input and verifier-fidelity defects outside the sealed v2 predicate; preserve v2 and continue as v3."             --by partition-key-ordering-owner-completion-v3
+          node scripts/solve.js start --id partition-key-ordering-owner-completion-v3
+          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v3
+
+      - name: Baseline scoped guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            src/partition/split-key-comparator.js
+            src/partition/partition-split-merge-manager-core-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js
+          )
+          npm run -s test:metrics:scoped -- "${files[@]}"
+          node scripts/check-guideline-literals.js "${files[@]}"
+          node scripts/check-runtime-grammar-contracts.js "${files[@]}"
+          node scripts/check-file-size-thresholds.js
+
+      - name: Install v3 witnesses and prove sealed source red
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=solve/quests/partition-key-ordering-owner-completion-v3/evidence
+          cp "$evidence/candidate-test-routing-key-comparator.test.js"             test/partition/routing-key-comparator.test.js
+          cp "$evidence/candidate-test-merge-auto-execution.test.js"             test/partition/merge-auto-execution.test.js
+
+          set +e
+          node --test test/partition/routing-key-comparator.test.js             > /tmp/a1-v3-routing-red.log 2>&1
+          routing_status=$?
+          node test/partition/merge-auto-execution.test.js             > /tmp/a1-v3-merge-red.log 2>&1
+          merge_status=$?
+          node scripts/checks/partition-key-ordering-owner-completion-v3.js             > /tmp/a1-v3-probe-red.log 2>&1
+          probe_status=$?
+          set -e
+
+          cat /tmp/a1-v3-routing-red.log
+          cat /tmp/a1-v3-merge-red.log
+          cat /tmp/a1-v3-probe-red.log
+          test "$routing_status" -ne 0
+          test "$merge_status" -ne 0
+          test "$probe_status" -ne 0
+          grep -E "not ok.*text routing order matches SQLite BINARY"             /tmp/a1-v3-routing-red.log >/dev/null
+          grep -E "not ok.*routing comparator uses module-captured intrinsics|not ok.*unsupported same-type objects"             /tmp/a1-v3-routing-red.log >/dev/null
+          grep -E "not ok.*adjacency delegates mixed-key refusal"             /tmp/a1-v3-merge-red.log >/dev/null
+
+      - name: Install hardened source candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=solve/quests/partition-key-ordering-owner-completion-v3/evidence
+          cp "$evidence/candidate-src-split-key-comparator.js"             src/partition/split-key-comparator.js
+          cp "$evidence/candidate-src-split-merge-core.js"             src/partition/partition-split-merge-manager-core-methods.js
+          cp "$evidence/candidate-src-split-merge-evaluation.js"             src/partition/partition-split-merge-manager-evaluation-methods.js
+
+      - name: Prove hardened candidate green
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test/partition/routing-key-comparator.test.js
+          node test/partition/split-key-comparator.test.js
+          node test/partition/merge-auto-execution.test.js
+          node test/partition/partition-split-merge-manager.test.js
+          node scripts/checks/partition-key-ordering-owner-completion-v3.js
+          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v3
+
+      - name: Candidate guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            src/partition/split-key-comparator.js
+            src/partition/partition-split-merge-manager-core-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js
+          )
+          npm run -s test:metrics:scoped -- "${files[@]}"
+          node scripts/check-guideline-literals.js "${files[@]}"
+          node scripts/check-runtime-grammar-contracts.js "${files[@]}"
+          node scripts/check-file-size-thresholds.js
+          npx eslint "${files[@]}"             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js
+          git diff --check
+
+      - name: Record v3 content-bound attempt
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_hashes="$(sha256sum             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js | tr '\n' ';')"
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v3             --finding "A1-v3 GitHub Actions run ${GITHUB_RUN_ID}: SQLite-BINARY/non-BMP ordering, exact typed refusal, unsupported-object non-coercion, mutable-intrinsic independence and isolated adjacency delegation are red on sealed source and green on the exact hardened candidate. Candidate sha256: ${candidate_hashes}"             --kind evidence             --evidence "github-actions:${GITHUB_RUN_ID}"
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v3             --attempt "A1-v3 hardened candidate closes all category-complete v2 review findings; focused tests, controlled negatives, doneWhen and scoped guardrails are green in GitHub Actions run ${GITHUB_RUN_ID}."
+
+      - name: Restore product tree and preserve Solver records
+        shell: bash
+        env:
+          BRANCH: quest/0-3-queryable-core-foundation
+        run: |
+          set -euo pipefail
+          git restore --             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js
+
+          changed="$(git status --porcelain | awk '{print $2}' | sort)"
+          expected="$(printf '%s\n'             solve/quests/partition-key-ordering-owner-completion-v2/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v3/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v3/quest.json | sort)"
+          if [ "$changed" != "$expected" ]; then
+            echo "Unexpected post-attempt mutation set:"
+            printf '%s\n' "$changed"
             exit 1
           fi
-          gh pr edit 77 --repo psvensson/lagrange --add-reviewer @copilot
+
+          git fetch origin "$BRANCH"
+          remote_sha="$(git rev-parse "origin/$BRANCH")"
+          if [ "$remote_sha" != "$GITHUB_SHA" ]; then
+            echo "Branch advanced from event SHA $GITHUB_SHA to $remote_sha; refusing stale push"
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --             solve/quests/partition-key-ordering-owner-completion-v2/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v3/quest.json             solve/quests/partition-key-ordering-owner-completion-v3/log.ndjson
+          git commit -m "quest: seal and record hardened A1-v3 attempt"
+          git push origin HEAD:refs/heads/"$BRANCH"
