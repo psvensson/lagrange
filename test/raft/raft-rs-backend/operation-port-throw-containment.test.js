@@ -25,7 +25,7 @@ import {
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   '../../../src/raft/raft-operation-port-request.js';
-import {RaftRsWasmProvider} from '../../../src/raft/raft-rs-provider.js';
+import {createRaftRsOperationPort} from '../../../src/raft/raft-rs-operation-port.js';
 import * as runtimeConstants from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {recoveryRetryWindowMsOf} from
@@ -58,7 +58,7 @@ function sleep(ms) {
 function lonePort(groupId, {deferElection}) {
   const db = new Database(IN_MEMORY);
   const replicaId = `${groupId}-r1`;
-  const port = new RaftRsWasmProvider().createPartitionPort({
+  const port = createRaftRsOperationPort({
     [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: groupId,
     [RAFT_OPERATION_PORT_REQUEST.PEER_ID]: replicaId,
     [RAFT_OPERATION_PORT_REQUEST.PEER_ADDRESS]: `containment://${replicaId}`,
