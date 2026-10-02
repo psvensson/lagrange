@@ -44,16 +44,19 @@ against the resulting exact head.
 
 ## Stage A — query access foundation
 
-### A1 — `partition-key-ordering-owner-completion-v3` — ACTIVE
+### A1 — `partition-key-ordering-owner-completion-v4` — ACTIVE
 
 **Roadmap:** `RM-0.3-qs-typed-key-ordering`.
 
-This supersedes both earlier A1 seals; those predicates remain immutable
+This supersedes the earlier A1 seals; every sealed predicate remains immutable
 historical evidence. V2 established the non-BMP UTF-8/BINARY discriminator and
-isolated merge-adjacency control. Category-complete review then found four
-remaining gaps that v3 closes: actual sort/adjacency expressions rather than
-token presence, exact mismatch witnesses, unsupported-value refusal before
-coercion, and independence from mutable JavaScript intrinsics.
+isolated merge-adjacency control. V3 closed the first category-complete review
+round: actual owner expressions, exact mismatch witnesses, refusal before
+coercion and mutable-intrinsic capture. A later category-complete v3 review
+found two residual cases outside that sealed predicate: same-reference
+unsupported/non-finite values could return equality before validation, and
+split-target destructuring still used Array iteration while the Array.isArray
+mutation was never exercised. V4 closes exactly those two gaps.
 
 **Current falsifier:** current main still has both a locale-sensitive string
 order in `compareRoutingKeys` and a raw
