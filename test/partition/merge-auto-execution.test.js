@@ -703,6 +703,8 @@ test('reactive merge execution options ignore mutable Object.assign and prototyp
       'workClass',
     );
     let inheritedSetterCalls = 0;
+    let criticalAssignCalls = 0;
+    let executedMergeCount = null;
     let receivedOptions = null;
     const {manager} = buildManager({
       executeMergeCandidate: async (_candidate, options) => {
@@ -717,7 +719,7 @@ test('reactive merge execution options ignore mutable Object.assign and prototyp
             Object.getOwnPropertyDescriptor(source, 'workClass') :
             null;
           if (descriptor?.value === 'critical') {
-            throw new Error('live Object.assign must not execute');
+            criticalAssignCalls += 1;
           }
         }
         return originalAssign(target, ...sources);
@@ -733,7 +735,7 @@ test('reactive merge execution options ignore mutable Object.assign and prototyp
         reasonCodes: ['write_activity'],
         triggerReason: 'reactive_request',
       });
-      t.equal(results.executedMerges.length, 1);
+      executedMergeCount = results.executedMerges.length;
     } finally {
       Object.assign = originalAssign;
       if (priorWorkClass) {
@@ -744,6 +746,10 @@ test('reactive merge execution options ignore mutable Object.assign and prototyp
       }
       manager.shutdown();
     }
+    t.equal(criticalAssignCalls, 0,
+      'critical work class never flows through live Object.assign');
+    t.equal(executedMergeCount, 1,
+      'reactive merge still executes under the adversarial witness');
     t.equal(inheritedSetterCalls, 0,
       'critical work class is defined as an own data property');
     t.equal(receivedOptions?.workClass, 'critical',
