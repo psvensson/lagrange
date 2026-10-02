@@ -135,6 +135,31 @@ transaction timeout, cancellation, and transaction abort must not collapse into
 one generic retry result. This lets callers decide whether and when to retry
 without moving retry correctness into PG wire.
 
+### Exact machine-readable transition mirror
+
+This prose mirrors the machine policy literally so ownership cannot drift.
+There is **no waiter queue** and there is no participant **local TTL** release
+authority. On conflict the coordinator must **confirm release** of reservations
+held by earlier participants before the terminal abort is observable.
+
+| Transition | Owner identifier | Action | Outcome identifier |
+| --- | --- | --- | --- |
+| acquire | `partition_transaction_participant` | create durable replicated reservation | `reservation_acquired` |
+| same-transaction-reacquire | `partition_transaction_participant` | idempotently reuse the existing transaction reservation | `reservation_already_owned` |
+| conflict | `partition_transaction_participant` | refuse without waiting and report the owning-transaction conflict | `typed_locking_read_reservation_conflict` |
+| conflict-abort | `DistributedTransactionCoordinator` | roll back the whole transaction, confirm release acknowledgements, then report terminal abort | `transaction_aborted` |
+| timeout | `DistributedTransactionCoordinator` | roll back the transaction and release every participant reservation | `typed_transaction_timeout` |
+| cancellation | `DistributedTransactionCoordinator` | roll back the transaction and release every participant reservation | `typed_transaction_cancelled` |
+| commit | `DistributedTransactionCoordinator` | commit, then release participant reservations | `committed_and_released` |
+| rollback | `DistributedTransactionCoordinator` | roll back, then release participant reservations | `rolled_back_and_released` |
+| crash | `partition_transaction_participant` | retain durable unresolved reservation state for recovery | `unresolved_reservation_preserved` |
+| recovery | `DistributedTransactionCoordinator` | replay the terminal decision or rollback and reconcile reservations | `transaction_resolved_and_reservations_reconciled` |
+
+The participant-level contention outcome remains
+`locking_read_reservation_conflict`; `transaction_aborted` is the later
+coordinator-owned terminal outcome after whole-transaction rollback and release
+confirmation.
+
 Blocking wait semantics, `NOWAIT`, `SKIP LOCKED`, and additional PostgreSQL
 row-lock strengths are not silently layered on this policy. Introducing a
 waiter queue or wake-up owner requires a superseding policy because it would
