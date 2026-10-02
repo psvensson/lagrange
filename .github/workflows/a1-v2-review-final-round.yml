@@ -1,5 +1,5 @@
 name: a1-v2-review-final-round
-# retry with assertion after hostile intrinsic restoration
+# retry with hostile String mutation isolated from TAP parser
 
 on:
   push:

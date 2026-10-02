@@ -7,6 +7,8 @@
  * buckets, and the loop stays inert when no owner is wired.
  */
 
+import {spawnSync} from 'node:child_process';
+
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   DEFAULT_MAX_AUTO_EXECUTE_MERGES_PER_EVALUATION,
@@ -83,24 +85,61 @@ test('merge auto-execution - eligible adjacent pair executes through the ' +
 
 test('merge auto-execution - table-id sort is stable after String mutation',
   (t) => {
-    const {manager} = buildManager({executeMergeCandidate: null});
-    const partitions = [
-      {...buildPartitionRow('users-b', null, null), table_id: 'tbl-b'},
-      {...buildPartitionRow('users-a', null, null), table_id: 'tbl-a'},
-    ];
-    const originalString = globalThis.String;
-    let sortedTableIds;
-    try {
-      globalThis.String = () => {
-        throw new Error('mutated String');
-      };
-      sortedTableIds = manager.sortEvaluationPartitions(partitions)
-        .map((partition) => partition.table_id);
-    } finally {
-      globalThis.String = originalString;
-      manager.shutdown();
-    }
-    t.same(sortedTableIds, ['tbl-a', 'tbl-b']);
+    const script = `
+      import {PartitionSplitMergeManager} from
+        './src/partition/partition-split-merge-manager.js';
+      import {ConfigurationManager} from
+        './src/config/configuration-manager.js';
+      import {LoggingService} from './src/logging/logging-service.js';
+
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+      ConfigurationManager.getInstance().initialize({node: {id: 'test-node'}});
+      LoggingService.getInstance().initialize({level: 'error'});
+
+      const manager = new PartitionSplitMergeManager({
+        executeMergeCandidate: null,
+      });
+      const partitions = [
+        {
+          partition_id: 'users-b',
+          table_id: 'tbl-b',
+          partition_key_start: null,
+          partition_key_end: null,
+          size_bytes: 64,
+        },
+        {
+          partition_id: 'users-a',
+          table_id: 'tbl-a',
+          partition_key_start: null,
+          partition_key_end: null,
+          size_bytes: 64,
+        },
+      ];
+      const originalString = globalThis.String;
+      let sortedTableIds;
+      try {
+        globalThis.String = () => {
+          throw new Error('mutated String');
+        };
+        sortedTableIds = manager.sortEvaluationPartitions(partitions)
+          .map((partition) => partition.table_id);
+      } finally {
+        globalThis.String = originalString;
+        manager.shutdown();
+        ConfigurationManager.resetInstance();
+        LoggingService.resetInstance();
+      }
+      if (sortedTableIds.join(',') !== 'tbl-a,tbl-b') {
+        process.exitCode = 2;
+      }
+    `;
+    const result = spawnSync(
+      process.execPath,
+      ['--input-type=module', '--eval', script],
+      {cwd: process.cwd(), encoding: 'utf8'},
+    );
+    t.equal(result.status, 0, result.stderr || result.stdout);
   });
 
 test('merge auto-execution - adjacency sorting uses SQLite BINARY key order',
