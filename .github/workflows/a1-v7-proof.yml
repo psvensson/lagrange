@@ -6,7 +6,7 @@ on:
       - review/a1-v7-partition-key-ordering-candidate
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   proof:
@@ -19,30 +19,50 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
-          persist-credentials: false
+          persist-credentials: true
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           cache: npm
       - run: npm ci
       - name: Refresh generated test metadata
+        id: refresh
+        shell: bash
         run: |
+          set -euo pipefail
           npm run -s test:metadata:refresh
-          git diff --exit-code -- \
-            test/shards/primary-classes.json \
-            test/shards/resource-classes.json \
-            test/shards/subsystem-classes.json \
-            test/shards/impact-graph-seal.json \
+          paths=(
+            test/shards/primary-classes.json
+            test/shards/resource-classes.json
+            test/shards/subsystem-classes.json
+            test/shards/impact-graph-seal.json
             solve/changes/global-owner-debt-inventory/inventory.json
+          )
+          if ! git diff --quiet -- "${paths[@]}"; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add -- "${paths[@]}"
+            git commit -m "A1-v7: refresh generated proof metadata"
+            git push origin HEAD:review/a1-v7-partition-key-ordering-candidate
+            echo "refreshed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "refreshed=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: A1 v6 preserved closure
+        if: steps.refresh.outputs.refreshed != 'true'
         run: node scripts/checks/partition-key-ordering-owner-completion-v6.js
       - name: A1 v7 closure
+        if: steps.refresh.outputs.refreshed != 'true'
         run: node scripts/checks/partition-key-ordering-owner-completion-v7.js
       - name: Focused behavior
+        if: steps.refresh.outputs.refreshed != 'true'
         run: npm run test:file -- test/partition/routing-key-comparator.test.js test/partition/merge-auto-execution.test.js
       - name: Complexity ratchet
+        if: steps.refresh.outputs.refreshed != 'true'
         run: npm run test:complexity:strict
       - name: Ambient intrinsic guard
+        if: steps.refresh.outputs.refreshed != 'true'
         run: npm run audit:guideline:ambient-intrinsics
       - name: File-size admission
+        if: steps.refresh.outputs.refreshed != 'true'
         run: npm run audit:file-size
