@@ -23,6 +23,7 @@ const LOCAL_STR_EXECUTED = 'executed';
 const LOCAL_STR_DEFERRED = 'deferred';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_SPLIT_PLAN = 'split_plan';
+const LOCAL_STR_WORK_CLASS = 'workClass';
 const arrayIsArray = Array.isArray;
 const objectCreate = Object.create;
 const objectDefineProperty = Object.defineProperty;
@@ -51,7 +52,7 @@ function copyExecutionOptions(options) {
 }
 
 function applyReactiveExecutionOptions(executionOptions) {
-  objectDefineProperty(executionOptions, 'workClass', {
+  objectDefineProperty(executionOptions, LOCAL_STR_WORK_CLASS, {
     configurable: true,
     enumerable: true,
     writable: true,
