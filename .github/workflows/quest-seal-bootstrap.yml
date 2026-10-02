@@ -14,7 +14,7 @@ jobs:
   seal:
     name: seal partition-key ordering quest
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout exact feature branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -22,6 +22,10 @@ jobs:
           ref: quest/0-3-queryable-core-foundation
           fetch-depth: 0
           persist-credentials: true
+
+      - name: Install repository dependencies
+        shell: bash
+        run: npm ci
 
       - name: Seal Quest on the exact checkout
         shell: bash
@@ -50,6 +54,8 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add --             solve/quests/partition-key-ordering-owner-completion/quest.json             solve/quests/partition-key-ordering-owner-completion/log.ndjson
+          git add -- \
+            solve/quests/partition-key-ordering-owner-completion/quest.json \
+            solve/quests/partition-key-ordering-owner-completion/log.ndjson
           git commit -m "quest: seal partition-key ordering owner completion"
           git push origin HEAD:refs/heads/quest/0-3-queryable-core-foundation
