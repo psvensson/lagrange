@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: a1-v7-proof-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   proof:
     runs-on: ubuntu-24.04
