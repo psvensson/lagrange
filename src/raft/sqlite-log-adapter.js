@@ -376,10 +376,6 @@ class SQLiteLogAdapter {
       term,
       index,
       committed: false,
-      responses: [{
-        address: this.node ? this.node.address : 'unknown',
-        ack: true,
-      }],
       command,
     };
 
