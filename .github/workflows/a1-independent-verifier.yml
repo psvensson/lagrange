@@ -1,0 +1,218 @@
+name: a1-independent-verifier
+
+on:
+  push:
+    branches:
+      - review/a1-partition-key-ordering
+    paths:
+      - .github/workflows/a1-independent-verifier.yml
+
+permissions:
+  contents: read
+  models: read
+
+jobs:
+  verify:
+    name: GPT-4.1 adversarial A1 verification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Build review dossier
+        shell: bash
+        env:
+          BASE_SHA: b5ca38e336da1c613414d2e4b9bf52ee835e9798
+        run: |
+          set -euo pipefail
+          {
+            cat .github/copilot-instructions.md
+            printf '\n\n# Quest statement\n\n'
+            node -e "const q=require('./solve/quests/partition-key-ordering-owner-completion/quest.json'); console.log(q.statement); console.log(JSON.stringify(q.constraints,null,2));"
+            printf '\n\n# Candidate diff against source-clean Quest branch\n\n'
+            git diff --no-ext-diff --unified=120 "$BASE_SHA"...HEAD --               src/partition/split-key-comparator.js               src/partition/partition-split-merge-manager-core-methods.js               src/partition/partition-split-merge-manager-evaluation-methods.js               test/partition/routing-key-comparator.test.js               test/partition/merge-auto-execution.test.js
+            printf '\n\n# Candidate files with stable line numbers\n\n'
+            for file in               src/partition/split-key-comparator.js               src/partition/partition-split-merge-manager-core-methods.js               src/partition/partition-split-merge-manager-evaluation-methods.js               test/partition/routing-key-comparator.test.js               test/partition/merge-auto-execution.test.js; do
+              printf '\n## %s\n' "$file"
+              nl -ba "$file"
+            done
+            cat <<'EOF'
+
+# Required output
+
+Return ONLY one JSON object, with no markdown fence or surrounding prose:
+
+{
+  "verdict": "approve" | "reject",
+  "categories": [
+    {
+      "id": "single-owner",
+      "verdict": "pass" | "fail",
+      "evidence": ["path:line - concrete observation"],
+      "findings": ["specific defect, or empty"]
+    },
+    {
+      "id": "sqlite-binary",
+      "verdict": "pass" | "fail",
+      "evidence": ["path:line - concrete observation"],
+      "findings": []
+    },
+    {
+      "id": "existing-contracts",
+      "verdict": "pass" | "fail",
+      "evidence": ["path:line - concrete observation"],
+      "findings": []
+    },
+    {
+      "id": "controlled-negative",
+      "verdict": "pass" | "fail",
+      "evidence": ["path:line - concrete observation"],
+      "findings": []
+    },
+    {
+      "id": "scope",
+      "verdict": "pass" | "fail",
+      "evidence": ["path:line - concrete observation"],
+      "findings": []
+    },
+    {
+      "id": "implementation-hazards",
+      "verdict": "pass" | "fail",
+      "evidence": ["path:line - concrete observation"],
+      "findings": []
+    }
+  ],
+  "findings": [
+    {
+      "severity": "critical" | "high" | "medium" | "low",
+      "category": "one of the category ids",
+      "path": "repository path",
+      "line": 0,
+      "summary": "short defect",
+      "rationale": "why it violates the Quest or can fail"
+    }
+  ],
+  "summary": "category-complete conclusion"
+}
+
+Rules:
+- Enumerate every finding you can reach; do not stop at the first.
+- "approve" is allowed only when all six categories pass and findings is empty.
+- Do not reward intent. Judge only the supplied source, tests, and diff.
+- Treat tests as evidence only when they actually discriminate the old and new behavior.
+- A stylistic preference is not a finding.
+EOF
+          } > /tmp/a1-review-prompt.txt
+
+      - name: Run independent GitHub Models review
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const prompt = fs.readFileSync('/tmp/a1-review-prompt.txt', 'utf8');
+          const response = await fetch(
+            'https://models.github.ai/inference/chat/completions',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+              },
+              body: JSON.stringify({
+                model: 'openai/gpt-4.1',
+                temperature: 0,
+                max_tokens: 7000,
+                messages: [
+                  {
+                    role: 'system',
+                    content:
+                      'You are an independent adversarial code verifier. ' +
+                      'Your job is to falsify the candidate if possible, ' +
+                      'not to help implement it. Follow the requested JSON schema exactly.',
+                  },
+                  {role: 'user', content: prompt},
+                ],
+              }),
+            },
+          );
+          const raw = await response.text();
+          if (!response.ok) {
+            console.error(raw);
+            process.exit(1);
+          }
+          const envelope = JSON.parse(raw);
+          let content = String(envelope.choices?.[0]?.message?.content || '').trim();
+          content = content
+            .replace(/^\`\`\`json\s*/u, '')
+            .replace(/^\`\`\`\s*/u, '')
+            .replace(/\s*\`\`\`$/u, '');
+          const review = JSON.parse(content);
+          fs.writeFileSync('/tmp/a1-independent-review.json',
+            JSON.stringify(review, null, 2) + '\n');
+          NODE
+
+      - name: Validate category-complete verdict
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const review = JSON.parse(
+            fs.readFileSync('/tmp/a1-independent-review.json', 'utf8'),
+          );
+          const required = new Set([
+            'single-owner',
+            'sqlite-binary',
+            'existing-contracts',
+            'controlled-negative',
+            'scope',
+            'implementation-hazards',
+          ]);
+          const categories = Array.isArray(review.categories) ? review.categories : [];
+          for (const category of categories) {
+            required.delete(category?.id);
+            if (!['pass', 'fail'].includes(category?.verdict)) {
+              throw new Error(`invalid category verdict: ${category?.id}`);
+            }
+            if (!Array.isArray(category?.evidence) || category.evidence.length === 0) {
+              throw new Error(`missing evidence: ${category?.id}`);
+            }
+            if (!Array.isArray(category?.findings)) {
+              throw new Error(`missing findings array: ${category?.id}`);
+            }
+          }
+          if (required.size !== 0) {
+            throw new Error(
+              `missing review categories: ${[...required].join(', ')}`,
+            );
+          }
+          if (!['approve', 'reject'].includes(review.verdict)) {
+            throw new Error('invalid overall verdict');
+          }
+          if (!Array.isArray(review.findings)) {
+            throw new Error('missing overall findings array');
+          }
+          if (
+            review.verdict === 'approve' &&
+            (review.findings.length !== 0 ||
+              categories.some((category) => category.verdict !== 'pass'))
+          ) {
+            throw new Error('approve is inconsistent with category/findings state');
+          }
+          console.log(JSON.stringify(review, null, 2));
+          NODE
+
+      - name: Upload independent review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: a1-independent-review
+          path: /tmp/a1-independent-review.json
+          retention-days: 14
