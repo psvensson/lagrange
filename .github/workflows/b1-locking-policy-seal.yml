@@ -19,23 +19,30 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - name: Sealed B1 policy probe
-        run: node scripts/checks/locking-read-wait-policy-seal.js
-      - name: B1 checker ESLint
-        run: node node_modules/eslint/bin/eslint.js --no-warn-ignored scripts/checks/locking-read-wait-policy-seal.js
-      - name: B1 checker guideline guards
+      - name: Sealed B1-v2 semantic consistency probe
+        run: node scripts/checks/locking-read-wait-policy-seal-v2.js
+      - name: B1 checkers ESLint
         run: |
-          node scripts/check-guideline-literals.js scripts/checks/locking-read-wait-policy-seal.js
-          node scripts/check-guideline-decision-boundaries.js scripts/checks/locking-read-wait-policy-seal.js
-          node scripts/check-guideline-ambient-intrinsics.js scripts/checks/locking-read-wait-policy-seal.js
-          node scripts/check-guideline-silent-catch.js scripts/checks/locking-read-wait-policy-seal.js
+          node node_modules/eslint/bin/eslint.js --no-warn-ignored \
+            scripts/checks/locking-read-wait-policy-seal.js \
+            scripts/checks/locking-read-wait-policy-seal-v2.js
+      - name: B1 checkers guideline guards
+        run: |
+          paths=(
+            scripts/checks/locking-read-wait-policy-seal.js
+            scripts/checks/locking-read-wait-policy-seal-v2.js
+          )
+          node scripts/check-guideline-literals.js "${paths[@]}"
+          node scripts/check-guideline-decision-boundaries.js "${paths[@]}"
+          node scripts/check-guideline-ambient-intrinsics.js "${paths[@]}"
+          node scripts/check-guideline-silent-catch.js "${paths[@]}"
       - name: Policy is design-only
         shell: bash
         run: |
           set -euo pipefail
           unexpected="$(
             git diff --name-only 09fd1965ccba075d185936306f81799bbae6a50a...HEAD |
-              grep -Ev '^(.github/workflows/b1-locking-policy-seal\.yml|architecture/postgres-locking-reads\.md|scripts/checks/locking-read-wait-policy-seal\.js|solve/epics/release-0-3-queryable-core\.md|solve/quests/locking-read-wait-policy-seal/|solve/specs/release-0-3-queryable-core/locking-read-wait-policy\.json) ||
+              grep -Ev '^(.github/workflows/b1-locking-policy-seal\.yml|architecture/postgres-locking-reads\.md|scripts/checks/locking-read-wait-policy-seal(-v2)?\.js|solve/epics/release-0-3-queryable-core\.md|solve/quests/locking-read-wait-policy-seal(-v2)?/|solve/specs/release-0-3-queryable-core/locking-read-wait-policy\.json)$' ||
               true
           )"
           if [ -n "$unexpected" ]; then
