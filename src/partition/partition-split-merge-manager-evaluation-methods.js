@@ -10,6 +10,7 @@ import {compareRoutingKeys} from './split-key-comparator.js';
 
 const LOCAL_STR_WORKFLOW_EXECUTION = 'workflow_execution';
 const LOCAL_STR_OBJECT = 'object';
+const arrayIsArray = Array.isArray;
 
 /**
  * Resolve one results-list length for evaluation summary diagnostics.
@@ -17,7 +18,7 @@ const LOCAL_STR_OBJECT = 'object';
  * @return {number}
  */
 function countResultList(value) {
-  return Array.isArray(value) ? value.length : 0;
+  return arrayIsArray(value) ? value.length : 0;
 }
 
 function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
@@ -351,7 +352,9 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           mergeDeferred: [],
         };
 
-        const partitions = await this.loadEvaluationPartitions();
+        const partitions = this.normalizeEvaluationPartitions(
+          await this.loadEvaluationPartitions(),
+        );
         if (partitions.length === 0) {
           this.recordEvaluationSuccess(
             results,
@@ -362,7 +365,10 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         results.partitionsEvaluated = partitions.length;
         const targetNodeId = preflightOptions.targetNodeId || null;
 
-        for (const partition of partitions) {
+        for (let partitionIndex = 0;
+          partitionIndex < partitions.length;
+          partitionIndex += 1) {
+          const partition = partitions[partitionIndex];
           const partitionId = this.getPartitionId(partition);
           if (!partitionId) {
             continue;
