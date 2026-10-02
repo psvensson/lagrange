@@ -6,6 +6,7 @@ import {
   SPLIT_MERGE_LOG_MSG,
   SPLIT_MERGE_REASON,
 } from './partition-constants.js';
+import {compareRoutingKeys} from './split-key-comparator.js';
 
 const LOCAL_STR_WORKFLOW_EXECUTION = 'workflow_execution';
 const LOCAL_STR_OBJECT = 'object';
@@ -488,7 +489,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           }
           if (
             !this.keyRangeManager &&
-            this.comparePartitionKeys(
+            compareRoutingKeys(
               this.getPartitionEndKey(leftPartition),
               this.getPartitionStartKey(rightPartition),
             ) !== 0

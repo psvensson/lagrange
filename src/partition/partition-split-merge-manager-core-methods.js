@@ -6,6 +6,7 @@ import {
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
 import {KeyRange} from './key-range-manager.js';
+import {compareRoutingKeys} from './split-key-comparator.js';
 import {
   PARTITION_TRANSITION_STATE,
   SPLIT_MERGE_ERROR_MSG,
@@ -22,6 +23,14 @@ const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
 const REACTIVE_EVALUATION_TRIGGER = 'reactive_request';
 const REACTIVE_PRESSURE_BYPASS_REASON_WRITE_ACTIVITY = 'write_activity';
+const INVALID_EVALUATION_TABLE_ID =
+  'Partition evaluation table IDs must be primitive strings';
+const LOCAL_STR_DESCRIPTOR_VALUE = 'value';
+const LOCAL_STR_TABLE_ID_SNAKE = 'table_id';
+const LOCAL_STR_TABLE_ID_CAMEL = 'tableId';
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const TypeErrorCtor = TypeError;
 
 function cloneStringArray(values) {
   if (!Array.isArray(values)) {
@@ -36,6 +45,34 @@ function cloneStringArray(values) {
     cloned.push(normalizedValue);
   }
   return cloned;
+}
+
+function readOwnDataValue(record, key) {
+  const descriptor = objectGetOwnPropertyDescriptor(record, key);
+  if (!descriptor || !objectHasOwn(descriptor, LOCAL_STR_DESCRIPTOR_VALUE)) {
+    return undefined;
+  }
+  return descriptor.value;
+}
+
+function compareAbsentEvaluationTableIds(left, right) {
+  const leftAbsent = left === null || left === undefined;
+  const rightAbsent = right === null || right === undefined;
+  if (leftAbsent && rightAbsent) return 0;
+  if (leftAbsent) return -1;
+  if (rightAbsent) return 1;
+  return null;
+}
+
+function compareEvaluationTableIds(left, right) {
+  const absentOrder = compareAbsentEvaluationTableIds(left, right);
+  if (absentOrder !== null) return absentOrder;
+  if (typeof left !== LOCAL_STR_STRING ||
+      typeof right !== LOCAL_STR_STRING) {
+    throw new TypeErrorCtor(INVALID_EVALUATION_TABLE_ID);
+  }
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
 }
 
 class PartitionSplitMergeManagerCoreMethods {
@@ -209,7 +246,18 @@ class PartitionSplitMergeManagerCoreMethods {
     if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
       return null;
     }
-    return partition.table_id || partition.tableId || null;
+    const snakeCaseId = readOwnDataValue(
+      partition,
+      LOCAL_STR_TABLE_ID_SNAKE,
+    );
+    if (snakeCaseId !== undefined && snakeCaseId !== null) {
+      return snakeCaseId;
+    }
+    const camelCaseId = readOwnDataValue(
+      partition,
+      LOCAL_STR_TABLE_ID_CAMEL,
+    );
+    return camelCaseId ?? null;
   }
 
   /**
@@ -239,32 +287,6 @@ class PartitionSplitMergeManagerCoreMethods {
   }
 
   /**
-   * Compare partition key values with NULL representing unbounded edges.
-   * @param {*} left - Left key.
-   * @param {*} right - Right key.
-   * @return {number} Sort order.
-   * @private
-   */
-  comparePartitionKeys(left, right) {
-    if (left === right) {
-      return 0;
-    }
-    if (left === null || left === undefined) {
-      return -1;
-    }
-    if (right === null || right === undefined) {
-      return 1;
-    }
-    if (left < right) {
-      return -1;
-    }
-    if (left > right) {
-      return 1;
-    }
-    return 0;
-  }
-
-  /**
    * Normalize a key range from either a KeyRange or a plain object.
    * Treat omitted bounds as unbounded edges.
    * @param {KeyRange|Object|null} range - Range descriptor.
@@ -291,14 +313,14 @@ class PartitionSplitMergeManagerCoreMethods {
     return [...partitions]
       .filter((partition) => partition && typeof partition === LOCAL_STR_OBJECT)
       .sort((left, right) => {
-        const tableOrder = this.comparePartitionKeys(
+        const tableOrder = compareEvaluationTableIds(
           this.getPartitionTableId(left),
           this.getPartitionTableId(right),
         );
         if (tableOrder !== 0) {
           return tableOrder;
         }
-        return this.comparePartitionKeys(
+        return compareRoutingKeys(
           this.getPartitionStartKey(left),
           this.getPartitionStartKey(right),
         );
