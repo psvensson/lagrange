@@ -397,6 +397,103 @@ test('merge evaluation captures Reflect.apply', async (t) => {
   t.end();
 });
 
+test('merge evaluation captures Array.prototype push and includes', async (t) => {
+  const rows = [
+    buildPartitionRow('users-p2', 'm', null),
+    buildPartitionRow('users-p1', null, 'm'),
+  ];
+  const {manager} = buildManager({
+    listPartitions: () => rows,
+    executeMergeCandidate: null,
+  });
+  const originalPush = Array.prototype.push;
+  const originalIncludes = Array.prototype.includes;
+  let pushTrapCalls = 0;
+  let includesTrapCalls = 0;
+  let results;
+  try {
+    Array.prototype.push = function(...values) {
+      if (values.some((value) =>
+        value === 'write_activity' ||
+        (value && value.leftId === 'users-p1' &&
+          value.rightId === 'users-p2'))) {
+        pushTrapCalls += 1;
+        throw new Error('live Array.prototype.push must not execute');
+      }
+      return originalPush.apply(this, values);
+    };
+    Array.prototype.includes = function(value, fromIndex) {
+      if (value === 'write_activity') {
+        includesTrapCalls += 1;
+        throw new Error('live Array.prototype.includes must not execute');
+      }
+      return originalIncludes.call(this, value, fromIndex);
+    };
+    results = await manager.evaluateAllPartitions({
+      reasonCodes: ['write_activity'],
+      triggerReason: 'reactive_request',
+    });
+  } finally {
+    Array.prototype.includes = originalIncludes;
+    Array.prototype.push = originalPush;
+    manager.shutdown();
+  }
+  t.same(results.mergeCandidates, [
+    {leftId: 'users-p1', rightId: 'users-p2'},
+  ]);
+  t.equal(pushTrapCalls, 0, 'evaluation never consults live Array.prototype.push');
+  t.equal(includesTrapCalls, 0,
+    'evaluation never consults live Array.prototype.includes');
+  t.end();
+});
+
+test('merge evaluation live copy ignores sparse inherited rows and captures Reflect.defineProperty',
+  async (t) => {
+    const rows = [];
+    rows.length = 3;
+    rows[0] = buildPartitionRow('users-p1', null, 'm');
+    rows[2] = buildPartitionRow('users-p2', 'm', null);
+    let inheritedIndexReads = 0;
+    const hostilePrototype = Object.create(Array.prototype);
+    Object.defineProperty(hostilePrototype, '1', {
+      configurable: true,
+      get() {
+        inheritedIndexReads += 1;
+        return buildPartitionRow('inherited-p1', 'a', 'b');
+      },
+    });
+    Object.setPrototypeOf(rows, hostilePrototype);
+
+    const {manager} = buildManager({
+      listPartitions: () => rows,
+      executeMergeCandidate: null,
+    });
+    const originalDefineProperty = Reflect.defineProperty;
+    let defineTrapCalls = 0;
+    let results;
+    try {
+      Reflect.defineProperty = (target, key, descriptor) => {
+        if (Array.isArray(target) && /^\\d+$/u.test(String(key))) {
+          defineTrapCalls += 1;
+          throw new Error('live Reflect.defineProperty must not execute');
+        }
+        return originalDefineProperty(target, key, descriptor);
+      };
+      results = await manager.evaluateAllPartitions();
+    } finally {
+      Reflect.defineProperty = originalDefineProperty;
+      manager.shutdown();
+    }
+    t.same(results.mergeCandidates, [
+      {leftId: 'users-p1', rightId: 'users-p2'},
+    ]);
+    t.equal(inheritedIndexReads, 0,
+      'sparse inherited numeric rows are not evaluation authority');
+    t.equal(defineTrapCalls, 0,
+      'evaluation copy uses the captured Reflect.defineProperty intrinsic');
+    t.end();
+  });
+
 test('evaluation row copying captures Reflect.defineProperty and bypasses inherited setters',
   (t) => {
     const rows = [
