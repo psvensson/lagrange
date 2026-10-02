@@ -24,7 +24,6 @@ const LOCAL_STR_DEFERRED = 'deferred';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_SPLIT_PLAN = 'split_plan';
 const LOCAL_STR_WORK_CLASS = 'workClass';
-const LOCAL_STR_WORK_CLASS = 'workClass';
 const arrayIsArray = Array.isArray;
 const objectCreate = Object.create;
 const objectDefineProperty = Object.defineProperty;
