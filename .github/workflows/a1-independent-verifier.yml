@@ -6,22 +6,32 @@ on:
       - review/a1-partition-key-ordering
     paths:
       - .github/workflows/a1-independent-verifier.yml
+      - .github/scripts/a1-independent-verifier.mjs
 
 permissions: write-all
 
 jobs:
   verify:
-    name: Copilot CLI verifier smoke
+    name: Copilot CLI adversarial A1 verification
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Checkout
+      - name: Checkout candidate
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Install Copilot CLI
         run: npm install -g @github/copilot
 
-      - name: Ask Copilot
+      - name: Run independent verifier
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: copilot -p "Return only the word OK." -s
+        run: node .github/scripts/a1-independent-verifier.mjs
+
+      - name: Upload independent review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: a1-independent-review
+          path: /tmp/a1-independent-review.json
+          retention-days: 14
