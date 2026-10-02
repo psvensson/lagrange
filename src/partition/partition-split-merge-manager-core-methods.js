@@ -30,7 +30,9 @@ const LOCAL_STR_TABLE_ID_SNAKE = 'table_id';
 const LOCAL_STR_TABLE_ID_CAMEL = 'tableId';
 const LOCAL_STR_PARTITION_ID_SNAKE = 'partition_id';
 const LOCAL_STR_PARTITION_ID_CAMEL = 'partitionId';
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayIsArray = Array.isArray;
+const arrayPush = Function.call.bind(Array.prototype.push);
 const arraySort = Array.prototype.sort;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
@@ -46,10 +48,10 @@ function cloneStringArray(values) {
   for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
     const value = values[valueIndex];
     const normalizedValue = String(value || '');
-    if (!normalizedValue || cloned.includes(normalizedValue)) {
+    if (!normalizedValue || arrayIncludes(cloned, normalizedValue)) {
       continue;
     }
-    cloned.push(normalizedValue);
+    arrayPush(cloned, normalizedValue);
   }
   return cloned;
 }
@@ -177,8 +179,10 @@ class PartitionSplitMergeManagerCoreMethods {
         REACTIVE_EVALUATION_TRIGGER) {
       return false;
     }
-    return this.resolveEvaluationReasonCodes(preflightOptions)
-      .includes(REACTIVE_PRESSURE_BYPASS_REASON_WRITE_ACTIVITY);
+    return arrayIncludes(
+      this.resolveEvaluationReasonCodes(preflightOptions),
+      REACTIVE_PRESSURE_BYPASS_REASON_WRITE_ACTIVITY,
+    );
   }
 
   /**
