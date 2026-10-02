@@ -44,7 +44,7 @@ against the resulting exact head.
 
 ## Stage A — query access foundation
 
-### A1 — `partition-key-ordering-owner-completion-v5` — ACTIVE
+### A1 — `partition-key-ordering-owner-completion-v6` — ACTIVE
 
 **Roadmap:** `RM-0.3-qs-typed-key-ordering`.
 
@@ -61,7 +61,11 @@ items: numeric comparison returned raw subtraction magnitudes (and could
 overflow to Infinity from finite extremes); falsey non-string table IDs were
 normalized to absence before validation; enumerable Object/Array prototype
 pollution lacked an explicit fixture; and Object.getOwnPropertyDescriptor /
-Object.hasOwn controls were combined. V5 closes exactly those four findings.
+Object.hasOwn controls were combined. V5 closed those four findings and reached
+a sealed 18 → 0 candidate. A newer category-complete PR #87 review then found
+one last hostile-input case: invalid/non-finite keys paired with null/undefined
+could return from absent-bound ordering before validation. V6 closes exactly
+that invalid-versus-absent gap while preserving all v5 behavior.
 
 **Current falsifier:** current main still has both a locale-sensitive string
 order in `compareRoutingKeys` and a raw
