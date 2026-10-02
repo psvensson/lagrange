@@ -137,7 +137,9 @@ test('routing comparator uses module-captured intrinsics', () => {
   const originalString = globalThis.String;
   const originalNumber = globalThis.Number;
   const originalNumberIsFinite = originalNumber.isFinite;
-  const originalRegExpTest = RegExp.prototype.test;
+  const originalArrayIsArray = Array.isArray;
+  const originalRegExpTestDescriptor =
+    Object.getOwnPropertyDescriptor(RegExp.prototype, 'test');
   const originalError = globalThis.Error;
   const leftBuffer = originalBufferFrom('a');
   const rightBuffer = originalBufferFrom('b');
@@ -153,7 +155,12 @@ test('routing comparator uses module-captured intrinsics', () => {
     globalThis.String = () => 'corrupted';
     originalNumber.isFinite = () => false;
     globalThis.Number = () => Number.NaN;
-    RegExp.prototype.test = () => false;
+    Array.isArray = () => false;
+    Object.defineProperty(RegExp.prototype, 'test', {
+      configurable: true,
+      writable: true,
+      value: () => false,
+    });
     globalThis.Error = class CorruptedError extends originalError {
       constructor() {
         super('corrupted mutable Error');
@@ -174,7 +181,12 @@ test('routing comparator uses module-captured intrinsics', () => {
     Buffer.compare = originalBufferCompare;
     Buffer.from = originalBufferFrom;
     Buffer.isBuffer = originalBufferIsBuffer;
-    RegExp.prototype.test = originalRegExpTest;
+    Object.defineProperty(
+      RegExp.prototype,
+      'test',
+      originalRegExpTestDescriptor,
+    );
+    Array.isArray = originalArrayIsArray;
     globalThis.Error = originalError;
     originalNumber.isFinite = originalNumberIsFinite;
     globalThis.Number = originalNumber;
