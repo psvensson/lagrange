@@ -12,6 +12,10 @@ const EXPECTED_DTC_OWNER = 'DistributedTransactionCoordinator';
 const EXPECTED_PARTICIPANT_OWNER = 'partition_transaction_participant';
 const EXPECTED_RELEASE_AUTHORITY = 'transaction_resolution';
 const EXPECTED_WAKE_OWNER = 'none_no_waiters';
+const EXPECTED_ABORT_OUTCOME = 'transaction_aborted';
+const EXPECTED_CONTENTION_OUTCOME = 'locking_read_reservation_conflict';
+const TRANSITION_NAME_SEPARATOR = '_';
+const ARCHITECTURE_TRANSITION_SEPARATOR = '-';
 const SCRIPT_NEWLINE = '\n';
 const REQUIRED_TRANSITIONS = Object.freeze({
   acquire: EXPECTED_PARTICIPANT_OWNER,
@@ -75,9 +79,9 @@ if (!policy || typeof policy !== 'object') {
   metric += policy.participantOwner === EXPECTED_PARTICIPANT_OWNER ? 0 : 1;
   metric += policy.releaseAuthority === EXPECTED_RELEASE_AUTHORITY ? 0 : 1;
   metric += policy.wakeOwner === EXPECTED_WAKE_OWNER ? 0 : 1;
-  metric += policy.typedOutcomes?.abort === 'transaction_aborted' ? 0 : 1;
+  metric += policy.typedOutcomes?.abort === EXPECTED_ABORT_OUTCOME ? 0 : 1;
   metric += policy.typedOutcomes?.contention ===
-    'locking_read_reservation_conflict' ? 0 : 1;
+    EXPECTED_CONTENTION_OUTCOME ? 0 : 1;
   for (const [name, owner] of Object.entries(REQUIRED_TRANSITIONS)) {
     metric += validTransition(policy.transitions?.[name], owner) ? 0 : 1;
   }
@@ -89,7 +93,10 @@ if (policy) {
   for (const [name, owner] of Object.entries(REQUIRED_TRANSITIONS)) {
     const row = policy.transitions?.[name];
     if (!row) continue;
-    metric += architecture.includes(name.replaceAll('_', '-')) ? 0 : 1;
+    metric += architecture.includes(name.replaceAll(
+      TRANSITION_NAME_SEPARATOR,
+      ARCHITECTURE_TRANSITION_SEPARATOR,
+    )) ? 0 : 1;
     metric += architecture.includes(owner) ? 0 : 1;
     metric += architecture.includes(row.outcome) ? 0 : 1;
   }
