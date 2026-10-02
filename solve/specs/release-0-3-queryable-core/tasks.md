@@ -44,7 +44,7 @@ against the resulting exact head.
 
 ## Stage A — query access foundation
 
-### A1 — `partition-key-ordering-owner-completion-v4` — ACTIVE
+### A1 — `partition-key-ordering-owner-completion-v5` — ACTIVE
 
 **Roadmap:** `RM-0.3-qs-typed-key-ordering`.
 
@@ -52,11 +52,16 @@ This supersedes the earlier A1 seals; every sealed predicate remains immutable
 historical evidence. V2 established the non-BMP UTF-8/BINARY discriminator and
 isolated merge-adjacency control. V3 closed the first category-complete review
 round: actual owner expressions, exact mismatch witnesses, refusal before
-coercion and mutable-intrinsic capture. A later category-complete v3 review
-found two residual cases outside that sealed predicate: same-reference
-unsupported/non-finite values could return equality before validation, and
-split-target destructuring still used Array iteration while the Array.isArray
-mutation was never exercised. V4 closes exactly those two gaps.
+coercion and mutable-intrinsic capture. V4 then closed validation-before-equality,
+own-data/iterator-free split metadata, coercion-free table-ID comparison and
+isolated intrinsic coverage, reaching a sealed 34 → 0 candidate.
+
+Final category-complete review of exact v4 candidate PR #86 found four remaining
+items: numeric comparison returned raw subtraction magnitudes (and could
+overflow to Infinity from finite extremes); falsey non-string table IDs were
+normalized to absence before validation; enumerable Object/Array prototype
+pollution lacked an explicit fixture; and Object.getOwnPropertyDescriptor /
+Object.hasOwn controls were combined. V5 closes exactly those four findings.
 
 **Current falsifier:** current main still has both a locale-sensitive string
 order in `compareRoutingKeys` and a raw
