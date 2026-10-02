@@ -268,8 +268,9 @@
         "src/raft/snapshot-checkpoint-store.js",
         "src/raft/snapshot-compaction.js",
         "src/raft/snapshot-retention.js",
-        "src/raft/sqlite-log-adapter-callback-api.js",
-        "src/raft/sqlite-log-adapter.js"
+        "src/raft/sqlite-log-adapter-query-api.js",
+        "src/raft/sqlite-log-adapter.js",
+        "src/raft/sqlite-raft-state-constants.js"
       ],
       "knownDetectors": [
         "test/raft/snapshot-compaction-catchup-integration.test.js",
