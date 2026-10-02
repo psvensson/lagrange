@@ -10,7 +10,9 @@ import {compareRoutingKeys} from './split-key-comparator.js';
 
 const LOCAL_STR_WORKFLOW_EXECUTION = 'workflow_execution';
 const LOCAL_STR_OBJECT = 'object';
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayIsArray = Array.isArray;
+const arrayPush = Function.call.bind(Array.prototype.push);
 
 /**
  * Resolve one results-list length for evaluation summary diagnostics.
@@ -128,10 +130,10 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
           const value = values[valueIndex];
           const normalizedValue = String(value || '');
-          if (!normalizedValue || target.includes(normalizedValue)) {
+          if (!normalizedValue || arrayIncludes(target, normalizedValue)) {
             continue;
           }
-          target.push(normalizedValue);
+          arrayPush(target, normalizedValue);
         }
       };
       const appendContext = (context) => {
@@ -394,7 +396,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
                   partitionId,
                   targetNodeId,
                 });
-              results.splitCandidates.push(partitionId);
+              arrayPush(results.splitCandidates, partitionId);
             } else {
               this.logger.warn(
                 SPLIT_MERGE_LOG_MSG.SPLIT_DEFERRED_CAPACITY, {
@@ -402,7 +404,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
                   targetNodeId,
                   reason: preflight.reason,
                 });
-              results.splitDeferred.push({
+              arrayPush(results.splitDeferred, {
                 partitionId,
                 reason: preflight.reason,
                 admissionResult: preflight.admissionResult,
@@ -413,7 +415,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
               });
             }
           } else {
-            results.splitCandidates.push(partitionId);
+            arrayPush(results.splitCandidates, partitionId);
           }
         }
 
@@ -435,7 +437,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
                   this.maxAutoExecuteSplitsPerEvaluation,
               },
             );
-            results.splitDeferred.push({
+            arrayPush(results.splitDeferred, {
               partitionId,
               reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
             });
@@ -464,7 +466,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
               error: error.message,
               phase: LOCAL_STR_WORKFLOW_EXECUTION,
             });
-            results.splitErrors.push({
+            arrayPush(results.splitErrors, {
               partitionId,
               error: error.message,
             });
@@ -514,7 +516,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           if (this.evaluateMergeCriteria(
             leftId, rightId, leftMetrics, rightMetrics, policy,
           )) {
-            results.mergeCandidates.push({leftId, rightId});
+            arrayPush(results.mergeCandidates, {leftId, rightId});
             this.logger.debug(
               SPLIT_MERGE_LOG_MSG.MERGE_ELIGIBLE_UNDER_PRESSURE, {
                 leftId,
@@ -585,7 +587,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
                 this.maxAutoExecuteMergesPerEvaluation,
             },
           );
-          results.mergeDeferred.push({
+          arrayPush(results.mergeDeferred, {
             leftId: candidate.leftId,
             rightId: candidate.rightId,
             reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
@@ -612,7 +614,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
             error: error.message,
             phase: LOCAL_STR_WORKFLOW_EXECUTION,
           });
-          results.mergeErrors.push({
+          arrayPush(results.mergeErrors, {
             leftId: candidate.leftId,
             rightId: candidate.rightId,
             error: error.message,
