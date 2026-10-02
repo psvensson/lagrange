@@ -81,23 +81,26 @@ test('merge auto-execution - eligible adjacent pair executes through the ' +
 });
 
 
-test('merge auto-execution - table-id sorting is stable after String mutation',
-  async (t) => {
+test('merge auto-execution - table-id sort is stable after String mutation',
+  (t) => {
+    const {manager} = buildManager({executeMergeCandidate: null});
+    const partitions = [
+      {...buildPartitionRow('users-b', null, null), table_id: 'tbl-b'},
+      {...buildPartitionRow('users-a', null, null), table_id: 'tbl-a'},
+    ];
     const originalString = globalThis.String;
     try {
       globalThis.String = () => {
         throw new Error('mutated String');
       };
-      const {manager} = buildManager({
-        executeMergeCandidate: null,
-      });
-      const results = await manager.evaluateAllPartitions();
-      t.same(results.mergeCandidates, [
-        {leftId: 'users-p1', rightId: 'users-p2'},
-      ]);
-      manager.shutdown();
+      const sorted = manager.sortEvaluationPartitions(partitions);
+      t.same(
+        sorted.map((partition) => partition.table_id),
+        ['tbl-a', 'tbl-b'],
+      );
     } finally {
       globalThis.String = originalString;
+      manager.shutdown();
     }
   });
 
