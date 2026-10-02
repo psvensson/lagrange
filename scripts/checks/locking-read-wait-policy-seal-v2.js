@@ -87,12 +87,12 @@ for (const fragment of REQUIRED_ARCHITECTURE_FRAGMENTS) {
 }
 if (policy) {
   for (const [name, owner] of Object.entries(REQUIRED_TRANSITIONS)) {
-    const row=policy.transitions?.[name];
+    const row = policy.transitions?.[name];
     if (!row) continue;
-    metric += architecture.includes(name.replaceAll('_','-')) ? 0 : 1;
+    metric += architecture.includes(name.replaceAll('_', '-')) ? 0 : 1;
     metric += architecture.includes(owner) ? 0 : 1;
     metric += architecture.includes(row.outcome) ? 0 : 1;
   }
 }
-process.stdout.write(String(metric)+SCRIPT_NEWLINE);
-process.exitCode=metric===0?0:1;
+process.stdout.write(String(metric) + SCRIPT_NEWLINE);
+process.exitCode = metric === 0 ? 0 : 1;
