@@ -531,6 +531,19 @@ test('evaluation partition IDs ignore accessors and inherited fields',
     t.end();
   });
 
+test('snake-case null boundaries stay authoritative over camel aliases', (t) => {
+  const {manager} = buildManager({executeMergeCandidate: null});
+  const row = buildPartitionRow('users-p1', null, null);
+  row.partitionKeyStart = 'wrong-start';
+  row.partitionKeyEnd = 'wrong-end';
+  t.equal(manager.getPartitionStartKey(row), null,
+    'null snake-case start remains the unbounded lower edge');
+  t.equal(manager.getPartitionEndKey(row), null,
+    'null snake-case end remains the unbounded upper edge');
+  manager.shutdown();
+  t.end();
+});
+
 test('merge auto-execution - adjacency sorting uses SQLite BINARY key order',
   async (t) => {
     const {manager} = buildManager({
