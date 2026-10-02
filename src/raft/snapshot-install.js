@@ -25,7 +25,7 @@ import {
 } from '../runtime/oci-host-agent-durable-files.js';
 
 import {SQLiteLogAdapter} from './sqlite-log-adapter.js';
-import {SQLITE_RAFT_STATE_KEY} from './sqlite-log-adapter-callback-api.js';
+import {SQLITE_RAFT_STATE_KEY} from './sqlite-raft-state-constants.js';
 import {
   RAFT_CHECKPOINT_APPLIED_STATE_KEY,
   RAFT_CHECKPOINT_PAYLOAD_FILE,
