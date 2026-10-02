@@ -8,7 +8,7 @@ doneWhen:
   args:
     file: solve/oracle/release-0-3-queryable-core.json
 quests:
-  - partition-key-ordering-owner-completion-v5
+  - partition-key-ordering-owner-completion-v6
 authorizes:
   - architecture
   - docs/development/agpl-feature-map.md
@@ -214,11 +214,15 @@ non-string table IDs could be normalized to absence) plus two verification
 gaps (no explicit enumerable prototype-pollution fixture and combined rather
 than isolated Object intrinsic controls).
 
+A1-v5 closed all four PR #86 findings and reached a sealed 18 → 0 candidate
+with green focused tests and guardrails. Its newer category-complete PR #87
+review found one remaining production hole outside the immutable predicate:
+absent-bound ordering ran before validation of the non-absent peer, so invalid
+or non-finite values paired with null/undefined could bypass typed refusal.
+
 The active A1 Quest is now
-`partition-key-ordering-owner-completion-v5`. It preserves every v4-proven
-ordering/ownership property while requiring canonical -1/0/1 comparator
-results, own-data table-ID reads that preserve falsey values for validation,
-explicit prototype-pollution fixtures, and isolated Object intrinsic controls.
+`partition-key-ordering-owner-completion-v6`. It preserves the whole v5
+candidate and closes only that invalid-versus-absent ordering gap.
 
 After that, the safe-before-cutover access foundation proceeds through persisted
 boundary representation, declared PK consumption, compound-PK narrowing, local
