@@ -16,8 +16,16 @@ import {
   PARTITION_TRANSITION_STATE,
   SPLIT_MERGE_REASON,
 } from '../../src/partition/partition-constants.js';
+import {
+  PARTITION_SERVICE_ERROR_MSG,
+} from '../../src/partition/partition-service-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+
+const SQLITE_BINARY_EARLIER_KEY = '\uE000';
+const UTF16_EARLIER_BUT_SQLITE_LATER_KEY = '\u{10000}';
+const EXPECTED_ADJACENCY_MISMATCH =
+  PARTITION_SERVICE_ERROR_MSG.splitKeyTypeMismatch('number', 'string');
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -76,6 +84,54 @@ test('merge auto-execution - eligible adjacent pair executes through the ' +
 
   manager.shutdown();
 });
+
+
+test('merge auto-execution - adjacency sorting uses SQLite BINARY key order',
+  async (t) => {
+    const {manager} = buildManager({
+      listPartitions: () => [
+        buildPartitionRow(
+          'users-p3',
+          UTF16_EARLIER_BUT_SQLITE_LATER_KEY,
+          null,
+        ),
+        buildPartitionRow('users-p1', null, SQLITE_BINARY_EARLIER_KEY),
+        buildPartitionRow(
+          'users-p2',
+          SQLITE_BINARY_EARLIER_KEY,
+          UTF16_EARLIER_BUT_SQLITE_LATER_KEY,
+        ),
+      ],
+      executeMergeCandidate: null,
+    });
+
+    const results = await manager.evaluateAllPartitions();
+    t.same(results.mergeCandidates, [
+      {leftId: 'users-p1', rightId: 'users-p2'},
+      {leftId: 'users-p2', rightId: 'users-p3'},
+    ]);
+
+    manager.shutdown();
+  });
+
+test('merge auto-execution - adjacency delegates mixed-key refusal to routing owner',
+  async (t) => {
+    const {manager} = buildManager({
+      listPartitions: () => [
+        buildPartitionRow('users-p1', null, 1000),
+        buildPartitionRow('users-p2', 'abc', null),
+      ],
+      executeMergeCandidate: null,
+    });
+
+    await t.rejects(
+      manager.evaluateAllPartitions(),
+      {message: EXPECTED_ADJACENCY_MISMATCH},
+      'mixed boundary types must fail closed through the partition-key order owner',
+    );
+
+    manager.shutdown();
+  });
 
 test('merge auto-execution - bounded per evaluation; overflow candidates ' +
     'are deferred with backpressure', async (t) => {
