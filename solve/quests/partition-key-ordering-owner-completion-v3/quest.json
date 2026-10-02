@@ -60,5 +60,6 @@
       "id": "source-change-independent-verification",
       "statement": "Any src/ candidate needs a category-complete independent verification newer than the last attempt, covering both sealed verificationTemplates with concrete evidence paths."
     }
-  ]
+  ],
+  "sealedAt": "ed3d7e379329f9835f1397bf4763c8636efde5ce"
 }
