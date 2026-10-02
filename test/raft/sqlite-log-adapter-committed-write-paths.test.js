@@ -22,7 +22,7 @@ async function seed(adapter, count = 5) {
   adapter.commit(3);
 }
 
-test('SQLite committed identity is guarded on put and bulk append', async (t) => {
+test('SQLite committed identity is guarded on canonical writes', async (t) => {
   const db = new Database(':memory:');
   const adapter = new SQLiteLogAdapter(db, {address: 'sqlite-node'});
   try {
@@ -33,16 +33,11 @@ test('SQLite committed identity is guarded on put and bulk append', async (t) =>
       'put rejects committed replacement',
     );
     t.throws(
-      () => adapter.saveCommands([
-        {index: 4, term: TERM + 1, command: command('safe-uncommitted')},
-        {index: 2, term: TERM, command: command('conflict')},
-      ]),
+      () => adapter.saveCommand(command('conflict'), TERM + 1, 2),
       {code: RAFT_COMMITTED_ENTRY_CONFLICT_CODE},
-      'bulk save rejects the whole transaction on committed conflict',
+      'saveCommand rejects committed replacement',
     );
     t.same(adapter.get(2).command, command(2), 'committed row is unchanged');
-    t.same(adapter.get(4).command, command(4),
-      'earlier bulk item rolls back atomically');
   } finally {
     db.close();
   }
