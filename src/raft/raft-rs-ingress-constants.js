@@ -43,7 +43,25 @@ const RAFT_RS_MESSAGE_TYPE_RANGE = Object.freeze({
 // raft-rs's own RawNode::transfer_leader steps (from = the transferee); the
 // binding exports no transfer call, so the runtime owner steps this message.
 const RAFT_RS_MESSAGE_TYPE = Object.freeze({
+  HUP: 0,
+  BEAT: 1,
+  PROPOSE: 2,
+  APPEND: 3,
+  APPEND_RESPONSE: 4,
+  REQUEST_VOTE: 5,
+  REQUEST_VOTE_RESPONSE: 6,
+  SNAPSHOT: 7,
+  HEARTBEAT: 8,
+  HEARTBEAT_RESPONSE: 9,
+  UNREACHABLE: 10,
+  SNAPSHOT_STATUS: 11,
+  CHECK_QUORUM: 12,
   TRANSFER_LEADER: 13,
+  TIMEOUT_NOW: 14,
+  READ_INDEX: 15,
+  READ_INDEX_RESPONSE: 16,
+  REQUEST_PRE_VOTE: 17,
+  REQUEST_PRE_VOTE_RESPONSE: 18,
 });
 
 // The message fields the binding parses as a 64-bit decimal string.
