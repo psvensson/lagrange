@@ -152,34 +152,103 @@ test('unsupported identical and non-finite keys validate before equality', () =>
   assert.equal(compareRoutingKeys(null, null), 0);
 });
 
-test('routing comparator uses module-captured intrinsics', () => {
-  const originalBufferCompare = Buffer.compare;
-  const originalBufferFrom = Buffer.from;
-  const originalBufferIsBuffer = Buffer.isBuffer;
-  const originalString = globalThis.String;
-  const originalNumber = globalThis.Number;
-  const originalNumberIsFinite = originalNumber.isFinite;
-  const originalArrayIsArray = Array.isArray;
-  const originalArrayIteratorDescriptor =
-    Object.getOwnPropertyDescriptor(Array.prototype, Symbol.iterator);
-  const originalRegExpTestDescriptor =
-    Object.getOwnPropertyDescriptor(RegExp.prototype, 'test');
-  const originalError = globalThis.Error;
-  const leftBuffer = originalBufferFrom('a');
-  const rightBuffer = originalBufferFrom('b');
-  const targetPartitionIds = ['left', 'right'];
-  let outcomes = null;
-  let mixedMessage = null;
+test('routing comparator captures Number.isFinite', () => {
+  const original = Number.isFinite;
+  try {
+    Number.isFinite = () => false;
+    assert.ok(compareRoutingKeys(1000, 500) > 0);
+  } finally {
+    Number.isFinite = original;
+  }
+});
 
+test('routing comparator captures numeric conversion', () => {
+  const OriginalNumber = globalThis.Number;
+  function CorruptedNumber() {
+    return OriginalNumber.NaN;
+  }
+  CorruptedNumber.isFinite = OriginalNumber.isFinite;
+  try {
+    globalThis.Number = CorruptedNumber;
+    assert.ok(compareRoutingKeys(RIGHT_KEY, STORED_TEXT_BOUNDARY) > 0);
+  } finally {
+    globalThis.Number = OriginalNumber;
+  }
+});
+
+test('routing comparator captures RegExp.test', () => {
+  const original =
+    Object.getOwnPropertyDescriptor(RegExp.prototype, 'test');
+  try {
+    Reflect.defineProperty(RegExp.prototype, 'test', {
+      configurable: true,
+      writable: true,
+      value: () => false,
+    });
+    assert.ok(compareRoutingKeys(RIGHT_KEY, STORED_TEXT_BOUNDARY) > 0);
+  } finally {
+    Reflect.defineProperty(RegExp.prototype, 'test', original);
+  }
+});
+
+test('routing comparator captures Error constructor', () => {
+  const OriginalError = globalThis.Error;
+  try {
+    globalThis.Error = class CorruptedError extends OriginalError {
+      constructor() {
+        super('corrupted mutable Error');
+      }
+    };
+    assert.throws(
+      () => compareRoutingKeys(RIGHT_KEY, NON_NUMERIC_TEXT),
+      {message: EXPECTED_NUMBER_STRING_MISMATCH},
+    );
+  } finally {
+    globalThis.Error = OriginalError;
+  }
+});
+
+test('routing comparator captures Buffer.compare', () => {
+  const original = Buffer.compare;
+  const left = Buffer.from('a');
+  const right = Buffer.from('b');
   try {
     Buffer.compare = () => 0;
+    assert.ok(compareRoutingKeys(left, right) < 0);
+  } finally {
+    Buffer.compare = original;
+  }
+});
+
+test('routing comparator captures Buffer.isBuffer', () => {
+  const original = Buffer.isBuffer;
+  const left = Buffer.from([0x80]);
+  const right = Buffer.from([0x81]);
+  try {
+    Buffer.isBuffer = () => false;
+    assert.ok(compareRoutingKeys(left, right) < 0);
+  } finally {
+    Buffer.isBuffer = original;
+  }
+});
+
+test('routing comparator captures Buffer.from for binary text order', () => {
+  const original = Buffer.from;
+  try {
     Buffer.from = () => {
       throw new Error('mutated Buffer.from executed');
     };
-    Buffer.isBuffer = () => false;
-    globalThis.String = () => 'corrupted';
-    originalNumber.isFinite = () => false;
-    globalThis.Number = () => Number.NaN;
+    assert.ok(compareRoutingKeys('\uE000', '\u{10000}') < 0);
+  } finally {
+    Buffer.from = original;
+  }
+});
+
+test('split target routing captures Array.isArray and ignores iterator', () => {
+  const originalIsArray = Array.isArray;
+  const originalIterator =
+    Object.getOwnPropertyDescriptor(Array.prototype, Symbol.iterator);
+  try {
     Array.isArray = () => false;
     Reflect.defineProperty(Array.prototype, Symbol.iterator, {
       configurable: true,
@@ -188,68 +257,96 @@ test('routing comparator uses module-captured intrinsics', () => {
         throw new Error('mutated Array iterator executed');
       },
     });
-    Reflect.defineProperty(RegExp.prototype, 'test', {
-      configurable: true,
-      writable: true,
-      value: () => false,
-    });
-    globalThis.Error = class CorruptedError extends originalError {
-      constructor() {
-        super('corrupted mutable Error');
-      }
-    };
-
-    outcomes = {
-      text: compareRoutingKeys('a', 'b'),
-      numericText: compareRoutingKeys(RIGHT_KEY, STORED_TEXT_BOUNDARY),
-      buffer: compareRoutingKeys(leftBuffer, rightBuffer),
-      splitTarget: resolveSplitTargetPartitionId(
+    assert.equal(
+      resolveSplitTargetPartitionId(
         20,
-        {splitKey: 10, targetPartitionIds},
+        {splitKey: 10, targetPartitionIds: ['left', 'right']},
       ),
-    };
-    try {
-      compareRoutingKeys(RIGHT_KEY, NON_NUMERIC_TEXT);
-    } catch (error) {
-      mixedMessage = error?.message || null;
-    }
-  } finally {
-    Buffer.compare = originalBufferCompare;
-    Buffer.from = originalBufferFrom;
-    Buffer.isBuffer = originalBufferIsBuffer;
-    Reflect.defineProperty(
-      RegExp.prototype,
-      'test',
-      originalRegExpTestDescriptor,
+      'right',
     );
+  } finally {
+    Array.isArray = originalIsArray;
     Reflect.defineProperty(
       Array.prototype,
       Symbol.iterator,
-      originalArrayIteratorDescriptor,
+      originalIterator,
     );
-    Array.isArray = originalArrayIsArray;
-    globalThis.Error = originalError;
-    originalNumber.isFinite = originalNumberIsFinite;
-    globalThis.Number = originalNumber;
-    globalThis.String = originalString;
   }
+});
 
-  assert.ok(outcomes.text < 0, 'text ordering ignores later intrinsic mutation');
-  assert.ok(
-    outcomes.numericText > 0,
-    'numeric/TEXT ordering ignores later intrinsic mutation',
+test('split target metadata ignores inherited accessors and array iterators', () => {
+  let accessorCalls = 0;
+  let iteratorCalls = 0;
+  const targetPartitionIds = ['left', 'right'];
+  targetPartitionIds[Symbol.iterator] = () => {
+    iteratorCalls += 1;
+    throw new Error('iterator should not run');
+  };
+
+  const metadata = {};
+  Object.defineProperty(metadata, 'splitKey', {
+    configurable: true,
+    enumerable: true,
+    value: 10,
+  });
+  Object.defineProperty(metadata, 'targetPartitionIds', {
+    configurable: true,
+    enumerable: true,
+    value: targetPartitionIds,
+  });
+  assert.equal(resolveSplitTargetPartitionId(20, metadata), 'right');
+  assert.equal(iteratorCalls, 0);
+
+  const accessorMetadata = {};
+  Object.defineProperty(accessorMetadata, 'splitKey', {
+    configurable: true,
+    get() {
+      accessorCalls += 1;
+      return 10;
+    },
+  });
+  Object.defineProperty(accessorMetadata, 'targetPartitionIds', {
+    configurable: true,
+    get() {
+      accessorCalls += 1;
+      return ['left', 'right'];
+    },
+  });
+  assert.throws(
+    () => resolveSplitTargetPartitionId(20, accessorMetadata),
+    /type mismatch/iu,
   );
-  assert.ok(outcomes.buffer < 0, 'buffer ordering ignores later intrinsic mutation');
-  assert.equal(
-    outcomes.splitTarget,
-    'right',
-    'split-target resolution ignores replaced Array.isArray and iterator',
+  assert.equal(accessorCalls, 0);
+
+  const inheritedMetadata = Object.create({
+    splitKey: 10,
+    targetPartitionIds: ['left', 'right'],
+  });
+  assert.throws(
+    () => resolveSplitTargetPartitionId(20, inheritedMetadata),
+    /type mismatch/iu,
   );
-  assert.equal(
-    mixedMessage,
-    EXPECTED_NUMBER_STRING_MISMATCH,
-    'typed refusal ignores later Error-constructor mutation',
-  );
+});
+
+test('split target routing captures descriptor intrinsics', () => {
+  const originalDescriptor = Object.getOwnPropertyDescriptor;
+  const originalHasOwn = Object.hasOwn;
+  try {
+    Object.getOwnPropertyDescriptor = () => {
+      throw new Error('mutated getOwnPropertyDescriptor');
+    };
+    Object.hasOwn = () => false;
+    assert.equal(
+      resolveSplitTargetPartitionId(
+        20,
+        {splitKey: 10, targetPartitionIds: ['left', 'right']},
+      ),
+      'right',
+    );
+  } finally {
+    Object.getOwnPropertyDescriptor = originalDescriptor;
+    Object.hasOwn = originalHasOwn;
+  }
 });
 
 
