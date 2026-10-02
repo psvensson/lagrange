@@ -4,7 +4,7 @@ on:
     branches:
       - review/a1-v7-seal-baseline
 permissions:
-  contents: read
+  contents: write
 jobs:
   probe:
     runs-on: ubuntu-24.04
@@ -12,11 +12,28 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          persist-credentials: false
+          persist-credentials: true
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           cache: npm
       - run: npm ci
       - name: Measure sealed v7 predicate
-        run: node scripts/checks/partition-key-ordering-owner-completion-v7.js
+        shell: bash
+        run: |
+          set +e
+          output="$(node scripts/checks/partition-key-ordering-owner-completion-v7.js 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          metric="$(printf '%s\n' "$output" | tail -n 1)"
+          test "$status" -ne 0
+          test "$metric" != "0"
+          printf '%s\n' "$metric" > .a1-v7-seal-metric.txt
+          if ! git diff --quiet -- .a1-v7-seal-metric.txt; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add .a1-v7-seal-metric.txt
+            git commit -m "A1-v7: record seal baseline metric"
+            git push origin HEAD:review/a1-v7-seal-baseline
+          fi
