@@ -43,18 +43,20 @@ function cloneStringArray(values) {
 }
 
 function compareEvaluationTableIds(left, right) {
-  if (left === right) {
-    return 0;
-  }
-  if (left === null || left === undefined) {
-    return -1;
-  }
-  if (right === null || right === undefined) {
-    return 1;
+  const leftAbsent = left === null || left === undefined;
+  const rightAbsent = right === null || right === undefined;
+  if (leftAbsent || rightAbsent) {
+    if (leftAbsent && rightAbsent) {
+      return 0;
+    }
+    return leftAbsent ? -1 : 1;
   }
   if (typeof left !== LOCAL_STR_STRING ||
       typeof right !== LOCAL_STR_STRING) {
     throw new TypeErrorCtor(INVALID_EVALUATION_TABLE_ID);
+  }
+  if (left === right) {
+    return 0;
   }
   if (left < right) {
     return -1;
