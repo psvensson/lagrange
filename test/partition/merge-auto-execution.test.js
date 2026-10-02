@@ -89,19 +89,18 @@ test('merge auto-execution - table-id sort is stable after String mutation',
       {...buildPartitionRow('users-a', null, null), table_id: 'tbl-a'},
     ];
     const originalString = globalThis.String;
+    let sortedTableIds;
     try {
       globalThis.String = () => {
         throw new Error('mutated String');
       };
-      const sorted = manager.sortEvaluationPartitions(partitions);
-      t.same(
-        sorted.map((partition) => partition.table_id),
-        ['tbl-a', 'tbl-b'],
-      );
+      sortedTableIds = manager.sortEvaluationPartitions(partitions)
+        .map((partition) => partition.table_id);
     } finally {
       globalThis.String = originalString;
       manager.shutdown();
     }
+    t.same(sortedTableIds, ['tbl-a', 'tbl-b']);
   });
 
 test('merge auto-execution - adjacency sorting uses SQLite BINARY key order',
