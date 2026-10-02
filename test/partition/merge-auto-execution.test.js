@@ -19,6 +19,9 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
+const SQLITE_BINARY_EARLIER_KEY = '\uE000';
+const UTF16_EARLIER_BUT_SQLITE_LATER_KEY = '\u{10000}';
+
 beforeEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
@@ -76,6 +79,35 @@ test('merge auto-execution - eligible adjacent pair executes through the ' +
 
   manager.shutdown();
 });
+
+
+test('merge auto-execution - adjacency sorting uses SQLite BINARY key order',
+  async (t) => {
+    const {manager} = buildManager({
+      listPartitions: () => [
+        buildPartitionRow(
+          'users-p3',
+          UTF16_EARLIER_BUT_SQLITE_LATER_KEY,
+          null,
+        ),
+        buildPartitionRow('users-p1', null, SQLITE_BINARY_EARLIER_KEY),
+        buildPartitionRow(
+          'users-p2',
+          SQLITE_BINARY_EARLIER_KEY,
+          UTF16_EARLIER_BUT_SQLITE_LATER_KEY,
+        ),
+      ],
+      executeMergeCandidate: null,
+    });
+
+    const results = await manager.evaluateAllPartitions();
+    t.same(results.mergeCandidates, [
+      {leftId: 'users-p1', rightId: 'users-p2'},
+      {leftId: 'users-p2', rightId: 'users-p3'},
+    ]);
+
+    manager.shutdown();
+  });
 
 test('merge auto-execution - bounded per evaluation; overflow candidates ' +
     'are deferred with backpressure', async (t) => {
