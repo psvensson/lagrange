@@ -28,8 +28,11 @@ const INVALID_EVALUATION_TABLE_ID =
 const LOCAL_STR_DESCRIPTOR_VALUE = 'value';
 const LOCAL_STR_TABLE_ID_SNAKE = 'table_id';
 const LOCAL_STR_TABLE_ID_CAMEL = 'tableId';
+const arrayIsArray = Array.isArray;
+const arraySort = Array.prototype.sort;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
+const reflectApply = Reflect.apply;
 const TypeErrorCtor = TypeError;
 
 function cloneStringArray(values) {
@@ -64,15 +67,40 @@ function compareAbsentEvaluationTableIds(left, right) {
   return null;
 }
 
-function compareEvaluationTableIds(left, right) {
-  const absentOrder = compareAbsentEvaluationTableIds(left, right);
-  if (absentOrder !== null) return absentOrder;
-  if (typeof left !== LOCAL_STR_STRING ||
-      typeof right !== LOCAL_STR_STRING) {
+function assertEvaluationTableId(value) {
+  if (value !== null &&
+      value !== undefined &&
+      typeof value !== LOCAL_STR_STRING) {
     throw new TypeErrorCtor(INVALID_EVALUATION_TABLE_ID);
   }
+}
+
+function compareEvaluationTableIds(left, right) {
+  assertEvaluationTableId(left);
+  assertEvaluationTableId(right);
+  const absentOrder = compareAbsentEvaluationTableIds(left, right);
+  if (absentOrder !== null) return absentOrder;
   if (left === right) return 0;
   return left < right ? -1 : 1;
+}
+
+function cloneEvaluationPartitionRows(partitions) {
+  if (!arrayIsArray(partitions)) {
+    return [];
+  }
+  const rows = [];
+  const length = readOwnDataValue(partitions, 'length');
+  for (let index = 0; index < length; index += 1) {
+    const partition = readOwnDataValue(partitions, index);
+    if (partition && typeof partition === LOCAL_STR_OBJECT) {
+      rows[rows.length] = partition;
+    }
+  }
+  return rows;
+}
+
+function sortArrayWithCapturedIntrinsic(values, compareFn) {
+  return reflectApply(arraySort, values, [compareFn]);
 }
 
 class PartitionSplitMergeManagerCoreMethods {
@@ -310,21 +338,20 @@ class PartitionSplitMergeManagerCoreMethods {
    * @private
    */
   sortEvaluationPartitions(partitions) {
-    return [...partitions]
-      .filter((partition) => partition && typeof partition === LOCAL_STR_OBJECT)
-      .sort((left, right) => {
-        const tableOrder = compareEvaluationTableIds(
-          this.getPartitionTableId(left),
-          this.getPartitionTableId(right),
-        );
-        if (tableOrder !== 0) {
-          return tableOrder;
-        }
-        return compareRoutingKeys(
-          this.getPartitionStartKey(left),
-          this.getPartitionStartKey(right),
-        );
-      });
+    const rows = cloneEvaluationPartitionRows(partitions);
+    return sortArrayWithCapturedIntrinsic(rows, (left, right) => {
+      const tableOrder = compareEvaluationTableIds(
+        this.getPartitionTableId(left),
+        this.getPartitionTableId(right),
+      );
+      if (tableOrder !== 0) {
+        return tableOrder;
+      }
+      return compareRoutingKeys(
+        this.getPartitionStartKey(left),
+        this.getPartitionStartKey(right),
+      );
+    });
   }
 
   /**
