@@ -120,6 +120,15 @@ test('merge sort table IDs ignore mutable String and reject coercion', (t) => {
     TypeError,
     'non-string table IDs fail closed',
   );
+  const sameHostileRows = [
+    {...buildPartitionRow('bad-p1', null, null), table_id: hostileTableId},
+    {...buildPartitionRow('bad-p2', 'm', null), table_id: hostileTableId},
+  ];
+  t.throws(
+    () => manager.sortEvaluationPartitions(sameHostileRows),
+    TypeError,
+    'same-reference non-string table IDs validate before equality',
+  );
   t.equal(coercionCalls, 0, 'table ID comparison never coerces hostile metadata');
   manager.shutdown();
 });
