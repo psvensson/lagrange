@@ -178,16 +178,18 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
      * @return {string}
      */
     resolveEvaluationTrigger(preflightOptions = {}) {
-      for (const candidate of [
-        preflightOptions?.triggerReason,
-        preflightOptions?.reasonCode,
-        preflightOptions?.reason,
-      ]) {
-        if (typeof candidate === 'string' && candidate.length > 0) {
-          return candidate;
-        }
+      const triggerReason = preflightOptions?.triggerReason;
+      if (typeof triggerReason === 'string' && triggerReason.length > 0) {
+        return triggerReason;
       }
-      return defaultEvaluationTrigger;
+      const reasonCode = preflightOptions?.reasonCode;
+      if (typeof reasonCode === 'string' && reasonCode.length > 0) {
+        return reasonCode;
+      }
+      const reason = preflightOptions?.reason;
+      return typeof reason === 'string' && reason.length > 0 ?
+        reason :
+        defaultEvaluationTrigger;
     },
 
     /**
