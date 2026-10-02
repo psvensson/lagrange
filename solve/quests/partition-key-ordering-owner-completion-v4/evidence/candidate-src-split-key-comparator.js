@@ -29,6 +29,7 @@ const SPLIT_METADATA_FIELD = Object.freeze({
   LENGTH: 'length',
   LEFT_INDEX: '0',
   RIGHT_INDEX: '1',
+  VALUE: 'value',
 });
 const ErrorCtor = Error;
 const arrayIsArray = Array.isArray;
@@ -110,7 +111,7 @@ function readOwnDataValue(record, key) {
     return undefined;
   }
   const descriptor = objectGetOwnPropertyDescriptor(record, key);
-  if (!descriptor || !objectHasOwn(descriptor, LOCAL_STR_DESCRIPTOR_VALUE)) {
+  if (!descriptor || !objectHasOwn(descriptor, SPLIT_METADATA_FIELD.VALUE)) {
     return undefined;
   }
   return descriptor.value;
@@ -124,7 +125,7 @@ function readTargetPartitionIds(metadata) {
   const lengthDescriptor =
     objectGetOwnPropertyDescriptor(targetPartitionIds, SPLIT_METADATA_FIELD.LENGTH);
   if (!lengthDescriptor ||
-      !objectHasOwn(lengthDescriptor, LOCAL_STR_DESCRIPTOR_VALUE) ||
+      !objectHasOwn(lengthDescriptor, SPLIT_METADATA_FIELD.VALUE) ||
       lengthDescriptor.value < 2) {
     return {leftPartitionId: undefined, rightPartitionId: undefined};
   }
