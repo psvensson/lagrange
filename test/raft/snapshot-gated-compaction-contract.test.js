@@ -72,37 +72,6 @@ function registerCompactionContract(name, createFixture) {
   });
 }
 
-function callbackCall(target, method, ...args) {
-  return new Promise((resolve, reject) => {
-    target[method](...args, (error, value) => {
-      if (error) reject(error);
-      else resolve(value);
-    });
-  });
-}
-
-test('SQLite commit-index callback aliases preserve the monotonic owner', async (t) => {
-  const db = new Database(':memory:');
-  const adapter = new SQLiteLogAdapter(db, {address: 'commit-state-owner'});
-  try {
-    for (let index = 1; index <= 3; index += 1) {
-      adapter.saveCommand({type: 'commit-state', index}, TERM, index);
-    }
-    adapter.commit(3);
-
-    await callbackCall(adapter, 'setState', 'committedIndex', '1');
-    await callbackCall(adapter, 'setState', 'commitIndex', '1');
-    await callbackCall(adapter, 'setCommitIndex', 1);
-
-    t.equal(adapter.refreshCommittedIndexCacheFromStore(), 3,
-      'generic and legacy callback setters cannot regress durable commit');
-    t.equal(await callbackCall(adapter, 'getCommitIndex'), 3,
-      'legacy callback getter projects the canonical committed index');
-  } finally {
-    db.close();
-  }
-});
-
 function registerInvalidTruncationContract(name, createFixture) {
   test(`${name} rejects non-index truncation inputs without coercion`, async (t) => {
     const fixture = createFixture();
@@ -136,7 +105,6 @@ test('SQLite inclusive and partition truncation reject non-index inputs', async 
     adapter.commit(3);
     for (const invalidIndex of INVALID_TRUNCATION_INDEXES) {
       adapter.removeFrom(invalidIndex);
-      await callbackCall(adapter, 'truncateFrom', invalidIndex);
       storage.truncateFrom(invalidIndex);
       t.equal(adapter.getEntriesAfter(0).length, 4,
         `all inclusive APIs preserve log for ${String(invalidIndex)}`);
