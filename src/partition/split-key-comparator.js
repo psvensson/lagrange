@@ -146,10 +146,10 @@ function compareAbsentKeys(a, b) {
 }
 
 function compareNumberWithTextEncodedNumber(a, b, aType, bType) {
-  if (aType === SPLIT_KEY_TYPE.NUMBER && isTextEncodednumberCoerce(b)) {
+  if (aType === SPLIT_KEY_TYPE.NUMBER && isTextEncodedNumber(b)) {
     return a - numberCoerce(b);
   }
-  if (bType === SPLIT_KEY_TYPE.NUMBER && isTextEncodednumberCoerce(a)) {
+  if (bType === SPLIT_KEY_TYPE.NUMBER && isTextEncodedNumber(a)) {
     return numberCoerce(a) - b;
   }
   return null;
