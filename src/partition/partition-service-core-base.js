@@ -9,7 +9,7 @@ import {
   retireRaftPeerFromAuthoritativeServiceChange,
   resolveLiveRaftLeaderAddressForPeer,
 } from './partition-service-raft-peer-cache-reconciliation.js';
-import {RaftRsWasmProvider} from '../raft/raft-rs-provider.js';
+import {createRaftRsOperationPort} from '../raft/raft-rs-operation-port.js';
 import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
 import {isLivePartitionServiceRow} from '../constants/service.js';
@@ -48,9 +48,6 @@ const {
   isMetadataPublicationLifecycleReady,
   normalizePublishedRaftRole,
 } = PARTITION_SERVICE_SHARED;
-// The one consensus backend a partition runs on. Stateless and frozen, so
-// one instance serves every partition in the process.
-const RAFT_RS_PROVIDER = Object.freeze(new RaftRsWasmProvider());
 // COPY, never the caller's array: this list is mutated in place by raft peer
 // reconciliation, and callers hand in the shared system-table declaration.
 // Taking it by reference made a minted replacement replica append to the
@@ -444,7 +441,7 @@ class PartitionServiceCoreBase extends EventEmitter {
    * @return {Object} The frozen operation port.
    */
   createOperationPort(request) {
-    return RAFT_RS_PROVIDER.createPartitionPort(request);
+    return createRaftRsOperationPort(request);
   }
   isMetadataPublicationReady() {
     if (!this.metadataPublicationReadinessState) {
