@@ -18,7 +18,6 @@ quests:
   - workflow-budget
   - epic-board-curation
   - ratchet-realignment
-  - test-file-content-receipts
   - raft-ownership
   - proof-authority-integrity
   - gate-work-consolidation
