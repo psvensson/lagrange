@@ -52,5 +52,7 @@
       "statement": "Any future blocking WAIT/NOWAIT/SKIP LOCKED policy with waiter wake-up semantics must supersede this seal rather than grow a second authority beside it."
     }
   ],
-  "sealedAt": "dbffe2fdd7c32502ddf3f65a62bb0ac56bf97b04"
+  "sealedAt": "dbffe2fdd7c32502ddf3f65a62bb0ac56bf97b04",
+  "status": "superseded",
+  "supersededBy": "locking-read-wait-policy-seal-v2"
 }
