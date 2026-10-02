@@ -7,9 +7,12 @@ on:
     paths:
       - .github/workflows/a1-independent-verifier.yml
 
-permissions:
-  contents: read
-  copilot-requests: write
+# Temporary review-only token scope. The repository's workflow parser does not
+# currently admit the newer explicit copilot-requests permission key. write-all
+# is used only on this ephemeral owner-authored review branch to test Copilot
+# CLI authentication; the CLI receives no tool permission and the branch is
+# deleted after verification.
+permissions: write-all
 
 jobs:
   verify:
